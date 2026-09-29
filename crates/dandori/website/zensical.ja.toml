@@ -22,6 +22,7 @@ nav = [
   { "タスクが呼ぶもの" = "tasks.md" },
   { "エージェント" = "agents.md" },
   { "何を検査するか" = "checks.md" },
+  { "ワークフローを図にする" = "diagrams.md" },
   { "プラットフォーム別のビルド" = "platforms.md" },
   { "例で見る" = "examples.md" },
   { "どうやって確かめているか" = "assurance.md" },
@@ -98,7 +99,11 @@ pygments_lang_class = true
 [project.markdown_extensions.flowlexer]
 
 [project.markdown_extensions.pymdownx.details]
+# A ```mermaid fence is drawn as a Mermaid chart: the picture `dandori doc` gives a pull request.
 [project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
 [project.markdown_extensions.pymdownx.emoji]
 emoji_generator = "zensical.extensions.emoji.to_svg"
 emoji_index = "zensical.extensions.emoji.twemoji"

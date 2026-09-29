@@ -214,3 +214,9 @@ A variable's range is that of every value put in it, anywhere in the flow. Since
 arithmetic, a range travels as it is, from where a value comes to where it goes. On Temporal, adding
 a range or narrowing one changes what a running workflow does when its values fall outside, so it
 ships as a new version or through Worker Deployment Versioning.
+
+## See it drawn
+
+`dandori doc` draws the workflow this page has read: [the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel.html),
+where each scenario lights up the way its run goes. [Draw a workflow](diagrams.md) says what is on
+the picture.

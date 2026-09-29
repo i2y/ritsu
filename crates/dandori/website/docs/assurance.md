@@ -107,6 +107,15 @@ run again, at most twice, and the test says so.
   call, in the same text from both languages, and an AWS error must come back by the name the task
   declares (`NotFoundException`).
 
+## The pictures
+
+What `dandori doc` writes for the examples, the flows of tests/flows and a first draft with errors
+is held word for word to golden files, and the pages of the examples on this site to what it writes
+now. On every scenario, the way a run lights up must hold together: every step it lit is reached by
+an edge it lit, and every arm and handler it took, and every way round and out of a loop, lights up
+an edge. Every Mermaid chart is drawn by Mermaid 11 and 12 in headless Chrome, and in Chrome a page
+lights up what its data says.
+
 ## What is left out
 
 The durable functions test runner cannot time a call out on cue, so the scenarios with a timeout are
@@ -135,14 +144,15 @@ $ uv pip install --python tools/agents/.venv/bin/python -r tools/agents/requirem
 $ npm install --prefix tools/wire
 $ uv venv --python 3.13 tools/wire/.venv
 $ uv pip install --python tools/wire/.venv/bin/python -r tools/wire/requirements.txt
+$ npm install --prefix tools/mermaid
 $ sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind 0.33+, kubectl)
 $ docker pull localstack/localstack:4.14.0
 $ DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
-A test that cannot find rulec, Node, the tools, the cluster, the `argo` command or the image of
-LocalStack prints a `SKIP:` line and passes, so read the output with `-- --nocapture`. The whole
+A test that cannot find rulec, Node, the tools, the cluster, the `argo` command, the image of
+LocalStack or Chrome prints a `SKIP:` line and passes, so read the output with `-- --nocapture`. The whole
 `cargo test` takes two to four minutes; `tools/argo/setup.sh` sets Argo's controller up for it, to
 look at a workflow again a second after a change rather than ten, on the node image of kind 0.33.0.
 `DANDORI_FLOW=<part of a path>` runs only the flows whose path
-has it, and `DANDORI_BLESS=1` rewrites the golden files and records the kept histories anew.
+has it, and `DANDORI_BLESS=1` rewrites the golden files and the site's pages of the examples, and records the kept histories anew.

@@ -51,6 +51,10 @@ WorkflowTemplate はコントローラーが実際に動かしますが、Pod �
 
 既定の `Transport` のそれ以外の部分（TypeScript の `fetch` と AWS SDK、Python の標準ライブラリと boto3）は、シナリオの HTTP・Lambda・AWS の呼び出しを、ローカルに立てたモックへ送ります。HTTP と Lambda の Invoke に応答するサーバーと、SNS と SQS を受け持つ moto です。届いたリクエストは呼び出しのとおりでなければならず、二つの言語は同じ文字列を送らなければなりません。AWS のエラーは、タスクが宣言した名前（`NotFoundException`）で返ってこなければなりません。
 
+## 図
+
+`dandori doc` が、例、tests/flows のフロー、エラーのある下書きについて書く Markdown は、golden のファイルと一字ずつ比べます。このサイトに置いた例のページも、いまの出力と同じでなければなりません。どのシナリオでも、実行が光らせるところはつながっていなければなりません。光ったステップには光った辺が入り、選んだ分岐、入ったハンドラ、ループの戻りと出口には、光った辺がなければなりません。Mermaid の図は headless Chrome の中で Mermaid 11 と 12 に描かせて、すべて描けることを確かめ、Chrome でページを開くと、ページのデータどおりに光ることも確かめます。
+
 ## 外しているもの
 
 durable functions のテストランナーは、狙った呼び出しをタイムアウトさせられません。そのため、タイムアウトを含むシナリオはそこでは外します。Argo と pydantic-graph のランナーもタスクをタイムアウトさせられませんが、コールバックのタイムアウトは起こせます。pydantic-graph では応答しないことで、Argo では待ちにタイムアウトしたときの値を渡すことで起こします。Temporal ではどちらも起こせます。
@@ -75,9 +79,10 @@ $ uv pip install --python tools/agents/.venv/bin/python -r tools/agents/requirem
 $ npm install --prefix tools/wire
 $ uv venv --python 3.13 tools/wire/.venv
 $ uv pip install --python tools/wire/.venv/bin/python -r tools/wire/requirements.txt
+$ npm install --prefix tools/mermaid
 $ sh tools/argo/setup.sh        # Argo Workflows の入った kind のクラスタ（docker、kind 0.33 以上、kubectl）
 $ docker pull localstack/localstack:4.14.0
 $ DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
-rulec、Node、`tools/` の中身、クラスタ、`argo` コマンド、LocalStack のイメージのどれかが見つからないテストは、`SKIP:` の行を出して通ってしまいます。`-- --nocapture` を付けて出力を読んでください。`cargo test` 全体は 2〜4 分かかります。`tools/argo/setup.sh` は、kind 0.33.0 のノードイメージの上で、Argo のコントローラーがワークフローの変化を見直すまでの間隔を 10 秒から 1 秒に縮めます。`DANDORI_FLOW=<パスの一部>` を付けると、パスにそれを含むフローだけを流します。`DANDORI_BLESS=1` を付けると、診断の golden ファイルを書き直し、残しておく履歴を取り直します。
+rulec、Node、`tools/` の中身、クラスタ、`argo` コマンド、LocalStack のイメージ、Chrome のどれかが見つからないテストは、`SKIP:` の行を出して通ってしまいます。`-- --nocapture` を付けて出力を読んでください。`cargo test` 全体は 2〜4 分かかります。`tools/argo/setup.sh` は、kind 0.33.0 のノードイメージの上で、Argo のコントローラーがワークフローの変化を見直すまでの間隔を 10 秒から 1 秒に縮めます。`DANDORI_FLOW=<パスの一部>` を付けると、パスにそれを含むフローだけを流します。`DANDORI_BLESS=1` を付けると、診断と図の golden ファイルと、サイトの例のページを書き直し、残しておく履歴を取り直します。

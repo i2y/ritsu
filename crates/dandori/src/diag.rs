@@ -32,11 +32,39 @@ pub struct Step {
     pub line: usize,
     pub en: String,
     pub ja: String,
+    /// the place in the flow, for `doc` to draw the run on it; None for what happens outside it
+    pub at: Option<At>,
+}
+
+/// Where in the flow a step of a run happened.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum At {
+    /// a statement, by its site
+    Stmt(usize),
+    /// a match takes its arm, by the arm's place in the match
+    Arm(usize, usize),
+    /// a call's error goes to its handler, by the handler's place under the call
+    Handler(usize, usize),
+    /// a call fails with an error nothing at the call takes
+    Fails(usize),
+    /// a cancellation stops the run at a call or a wait
+    Cancelled(usize),
+    OnFailure,
+    OnCancel,
+    /// the flow runs to its end, and so do `on failure` and `on cancel`
+    FlowEnd,
+    OnFailureEnd,
+    OnCancelEnd,
 }
 
 impl Step {
     pub fn new(line: usize, en: impl Into<String>, ja: impl Into<String>) -> Step {
-        Step { line, en: en.into(), ja: ja.into() }
+        Step { line, en: en.into(), ja: ja.into(), at: None }
+    }
+
+    pub fn at(mut self, at: At) -> Step {
+        self.at = Some(at);
+        self
     }
 }
 

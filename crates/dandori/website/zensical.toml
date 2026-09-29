@@ -23,6 +23,7 @@ nav = [
   { "What a task calls" = "tasks.md" },
   { Agents = "agents.md" },
   { "What it checks" = "checks.md" },
+  { "Draw a workflow" = "diagrams.md" },
   { "Build for a platform" = "platforms.md" },
   { Examples = "examples.md" },
   { "How it is checked" = "assurance.md" },
@@ -96,7 +97,11 @@ pygments_lang_class = true
 [project.markdown_extensions.flowlexer]
 
 [project.markdown_extensions.pymdownx.details]
+# A ```mermaid fence is drawn as a Mermaid chart: the picture `dandori doc` gives a pull request.
 [project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
 [project.markdown_extensions.pymdownx.emoji]
 emoji_generator = "zensical.extensions.emoji.to_svg"
 emoji_index = "zensical.extensions.emoji.twemoji"

@@ -1,0 +1,9 @@
+{
+  "name": "dandori-mermaid-check",
+  "private": true,
+  "description": "Mermaid, two majors of it, for tests/doc.rs to draw the flowcharts `dandori doc` writes in headless Chrome and see that each one draws",
+  "dependencies": {
+    "mermaid-11": "npm:mermaid@11.17.2",
+    "mermaid-12": "npm:mermaid@12.0.0"
+  }
+}

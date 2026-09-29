@@ -13,7 +13,9 @@ website/
 ├── sync.sh             # copies the pictures and the stylesheet into docs-ja/
 ├── serve.sh            # previews build/ under /dandori/, with caching off
 ├── docs/               # the English pages, the pictures and the stylesheet
+│   └── doc/            # the examples as `dandori doc --format html` draws them
 ├── docs-ja/            # the Japanese pages
+│   └── doc/            # the same, drawn with `--lang ja`
 └── tools/
     ├── flowlexer.py    # colours the ```flow blocks
     └── make_overview.py  # draws the overview on the home page
@@ -34,7 +36,13 @@ other by hand.
   line cut short with `…` must have its pieces, in that order, on one real line.
 - `reference/codes.md` in both languages lists every code the checker has and no other, and the
   pages that say how many there are say the right number.
+- every ```` ```mermaid ```` block is word for word in a golden file of `tests/doc`, which
+  `tests/doc.rs` holds to what `dandori doc` writes. Take a chart from a golden file.
 - `tools/flowlexer.py`'s `KEYWORDS` are `src/syntax.rs`'s, word for word.
+
+`tests/doc.rs` (which needs rulec, and Chrome for two of its tests) holds `docs/doc` and
+`docs-ja/doc` to what `dandori doc --format html` writes for the examples now; after a change to
+`doc`, `DANDORI_BLESS=1 cargo test --test doc` writes them anew.
 
 The agent skill (`skills/dandori`) carries copies of the English pages. After changing one, run
 `skills/sync.sh`; `tests/skill.rs` fails until the copies match.

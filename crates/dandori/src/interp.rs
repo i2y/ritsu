@@ -61,6 +61,33 @@ struct Run<'a> {
     pending: Option<Pending>,
     /// for every answer taken: the task that took it, and whether it waits for a callback
     callees: Vec<CallInfo>,
+    /// what the run went through, in order
+    visits: Vec<Visit>,
+}
+
+/// One thing a run went through, for `doc` to draw the run on the flow.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Visit {
+    /// a statement starts, by its site
+    Stmt(usize),
+    /// a match takes its arm, by the arm's place in the match
+    Arm(usize, usize),
+    /// a try of a call comes back: `ok`, the kind of the error, or `cancel`
+    Answer(usize, String),
+    /// a call's error goes to its handler, by the handler's place under the call
+    Handler(usize, usize),
+    /// a call's error goes on with nothing at the call to take it
+    Unhandled(usize),
+    /// a round of a loop starts: the loop's site, and the round, from 0
+    Round(usize, u64),
+    /// a loop runs out of rounds or of items, without a `break`
+    Done(usize),
+    OnFailure,
+    OnCancel,
+    /// the flow runs to its end, and so do `on failure` and `on cancel`
+    FlowEnd,
+    OnFailureEnd,
+    OnCancelEnd,
 }
 
 /// Which task a call was, for a test that has to leave some answers out.
@@ -91,13 +118,18 @@ pub fn run(m: &Model, sc: &Value, view: View) -> Result<Value, String> {
 
 /// The run, and for every answer the calls took, which task took it and how it came out.
 pub fn run_traced(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>), String> {
-    run_all(m, sc, view).map(|(v, calls, _)| (v, calls))
+    run_all(m, sc, view).map(|r| (r.trace, r.callees))
+}
+
+/// The run, and everything it went through, in order.
+pub fn run_visits(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<Visit>), String> {
+    run_all(m, sc, view).map(|r| (r.trace, r.visits))
 }
 
 /// Each case's state when the run ends, by the case's name: null for a case the run did not
 /// start. What Temporal's query `dandori.status` says of the cases then.
 pub fn cases_at_end(m: &Model, sc: &Value, view: View) -> Result<Map<String, Value>, String> {
-    let (_, _, vars) = run_all(m, sc, view)?;
+    let vars = run_all(m, sc, view)?.vars;
     Ok(m.cases
         .iter()
         .map(|c| {
@@ -107,7 +139,14 @@ pub fn cases_at_end(m: &Model, sc: &Value, view: View) -> Result<Map<String, Val
         .collect())
 }
 
-fn run_all(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>, BTreeMap<String, Value>), String> {
+struct Ran {
+    trace: Value,
+    callees: Vec<CallInfo>,
+    vars: BTreeMap<String, Value>,
+    visits: Vec<Visit>,
+}
+
+fn run_all(m: &Model, sc: &Value, view: View) -> Result<Ran, String> {
     let answers = sc["answers"].as_array().cloned().unwrap_or_default();
     let mut r = Run {
         m,
@@ -126,6 +165,7 @@ fn run_all(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>, B
         par_depth: 0,
         pending: None,
         callees: vec![],
+        visits: vec![],
     };
     for (v, _) in &m.vars {
         r.vars.insert(v.clone(), Value::Null);
@@ -145,6 +185,7 @@ fn run_all(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>, B
         let flow = m.flow.clone();
         if let Ctl::Next = r.block(&flow) {
             if r.end.is_none() {
+                r.visits.push(Visit::FlowEnd);
                 r.end = Some(json!({ "succeed": Value::Null }));
             }
         }
@@ -153,7 +194,11 @@ fn run_all(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>, B
             r.cancelled = false;
             r.in_on_cancel = true;
             if let Some(block) = m.on_cancel.clone() {
+                r.visits.push(Visit::OnCancel);
                 let _ = r.block(&block);
+                if r.end.is_none() {
+                    r.visits.push(Visit::OnCancelEnd);
+                }
             }
             if r.end.is_none() {
                 r.end = Some(json!({ "cancel": Value::Null }));
@@ -163,7 +208,7 @@ fn run_all(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>, B
     if let Some(e) = r.error {
         return Err(e);
     }
-    Ok((json!({ "steps": r.steps, "end": r.end }), r.callees, r.vars))
+    Ok(Ran { trace: json!({ "steps": r.steps, "end": r.end }), callees: r.callees, vars: r.vars, visits: r.visits })
 }
 
 impl<'a> Run<'a> {
@@ -202,6 +247,7 @@ impl<'a> Run<'a> {
             self.error = Some("the run took more than 20000 steps".into());
             return Ctl::Stop;
         }
+        self.visits.push(Visit::Stmt(s.site));
         match &s.kind {
             TK::Pass => Ctl::Next,
             TK::Break => Ctl::Break,
@@ -250,8 +296,10 @@ impl<'a> Run<'a> {
                 let mut out = Vec::new();
                 match parallel {
                     None => {
+                        let mut broke = false;
                         for (i, it) in items.iter().enumerate() {
                             self.rounds.push(i as u64);
+                            self.visits.push(Visit::Round(s.site, i as u64));
                             self.vars.insert(var.clone(), it.clone());
                             let c = self.block(body);
                             if let (Ctl::Next, Some((_, y))) = (&c, result) {
@@ -261,10 +309,16 @@ impl<'a> Run<'a> {
                             }
                             self.rounds.pop();
                             match c {
-                                Ctl::Break => break,
+                                Ctl::Break => {
+                                    broke = true;
+                                    break;
+                                }
                                 Ctl::Stop => return Ctl::Stop,
                                 Ctl::Next => {}
                             }
+                        }
+                        if !broke {
+                            self.visits.push(Visit::Done(s.site));
                         }
                     }
                     Some(_) => {
@@ -274,6 +328,7 @@ impl<'a> Run<'a> {
                                 self.vars.insert(l.clone(), Value::Null);
                             }
                             self.rounds.push(i as u64);
+                            self.visits.push(Visit::Round(s.site, i as u64));
                             self.vars.insert(var.clone(), it.clone());
                             self.par_depth += 1;
                             let _ = self.block(body);
@@ -302,6 +357,7 @@ impl<'a> Run<'a> {
                         if let Some(p) = first {
                             return self.raise(p);
                         }
+                        self.visits.push(Visit::Done(s.site));
                     }
                 }
                 if let Some((r, _)) = result {
@@ -313,20 +369,22 @@ impl<'a> Run<'a> {
                 let mut n: u64 = 0;
                 while n < *times as u64 {
                     self.rounds.push(n);
+                    self.visits.push(Visit::Round(s.site, n));
                     let c = self.block(body);
                     self.rounds.pop();
                     match c {
-                        Ctl::Break => break,
+                        Ctl::Break => return Ctl::Next,
                         Ctl::Stop => return Ctl::Stop,
                         Ctl::Next => {}
                     }
                     n += 1;
                 }
+                self.visits.push(Visit::Done(s.site));
                 Ctl::Next
             }
             TK::Match { expr, arms } => {
                 let v = self.value(expr);
-                for a in arms {
+                for (i, a) in arms.iter().enumerate() {
                     let hit = (a.none && v.is_null())
                         || (a.some.is_some() && !v.is_null())
                         || a.values.iter().any(|x| match &v {
@@ -335,6 +393,7 @@ impl<'a> Run<'a> {
                             _ => false,
                         });
                     if hit {
+                        self.visits.push(Visit::Arm(s.site, i));
                         if let Some(n) = &a.some {
                             self.vars.insert(n.clone(), v.clone());
                         }
@@ -388,6 +447,14 @@ impl<'a> Run<'a> {
                 Callee::Task(t) => (Some(*t), m.tasks[*t].callback),
                 Callee::Rule(_) => (None, false),
             };
+            let kind = if ans.get("cancel").is_some() {
+                "cancel"
+            } else if ans.get("ok").is_some() {
+                "ok"
+            } else {
+                ans["error"].as_str().unwrap_or("failure")
+            };
+            self.visits.push(Visit::Answer(s.site, kind.to_string()));
             if ans.get("cancel").is_some() {
                 self.callees.push(CallInfo { task, callback, kind: Some("cancel".into()) });
                 self.steps.push(json!({ "call": wire, "answer": { "cancel": true } }));
@@ -467,7 +534,7 @@ impl<'a> Run<'a> {
                 Ctl::Next
             }
             Err(err) => {
-                for h in handlers {
+                for (j, h) in handlers.iter().enumerate() {
                     let hit = h.errors.iter().any(|e| match e {
                         HErr::Failure => true,
                         HErr::Timeout => err.kind == "timeout",
@@ -478,9 +545,11 @@ impl<'a> Run<'a> {
                         }
                     });
                     if hit {
+                        self.visits.push(Visit::Handler(s.site, j));
                         return self.block(&h.body);
                     }
                 }
+                self.visits.push(Visit::Unhandled(s.site));
                 self.raise(Pending::Task(err))
             }
         }
@@ -506,10 +575,12 @@ impl<'a> Run<'a> {
             if let Some(block) = m.on_failure.clone() {
                 self.in_on_failure = true;
                 self.vars.insert("dd_error".into(), json!({ "Error": err.target_name, "Cause": SCRIPTED_CAUSE }));
+                self.visits.push(Visit::OnFailure);
                 match self.block(&block) {
                     Ctl::Stop => return Ctl::Stop,
                     _ => {
                         if self.end.is_none() {
+                            self.visits.push(Visit::OnFailureEnd);
                             let name = err.target_name.clone();
                             self.fail(&name, SCRIPTED_CAUSE);
                         }

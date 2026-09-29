@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="dandori doc">
+<title>inquiry v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #8c959f; --node: #f6f8fa; --stroke: #59636e; --ok: #1a7f37; --bad: #cf222e; --lit: #0969da; --litbg: #ddf4ff; --sel: #9a6700; --border: #d1d9e0; --code: #eff2f5; --side: #f6f8fa; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #6e7681; --node: #151b23; --stroke: #9198a1; --ok: #3fb950; --bad: #f85149; --lit: #4493f8; --litbg: #0c2d6b; --sel: #d29922; --border: #3d444d; --code: #262c36; --side: #0f141b; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+.app { height: 100vh; display: flex; flex-direction: column; }
+code, pre, .dl, .ln { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+code { font-size: .9em; background: var(--code); padding: .08em .3em; border-radius: 4px; }
+header.top { padding: 12px 16px 10px; border-bottom: 1px solid var(--border); }
+header.top h1 { margin: 0; font-size: 18px; }
+header.top h1 code { background: none; padding: 0; font-size: 1em; }
+header.top .ver { color: var(--muted); font-weight: 400; font-size: 14px; }
+header.top .file { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+header.top .file code { background: none; padding: 0; }
+header.top .desc { margin: 6px 0 0; max-width: 72em; font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; }
+header.top .desc.open { -webkit-line-clamp: unset; }
+.banner { margin: 8px 0 0; padding: 6px 10px; border: 1px solid var(--bad); border-radius: 6px; color: var(--bad); font-size: 13px; }
+.grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr) minmax(18rem, 26rem); }
+.side, .detail { overflow: auto; padding: 12px 14px; background: var(--side); }
+.side { border-right: 1px solid var(--border); }
+.detail { border-left: 1px solid var(--border); }
+.side h2 { font-size: 13px; margin: 4px 0 6px; text-transform: none; }
+.side section + section { margin-top: 16px; }
+.note { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+ul.groups, ul.checks, ul.legend, ul.facts, ol.steps { list-style: none; margin: 0; padding: 0; }
+.group { margin: 0 0 10px; }
+.gl { font-size: 12px; margin-bottom: 3px; }
+.gl code { background: none; padding: 0; }
+.gl.ok code { color: var(--ok); } .gl.bad code { color: var(--bad); }
+.gn { color: var(--muted); font-size: 11px; }
+.gn::before { content: "× "; }
+.runs { display: flex; flex-wrap: wrap; gap: 4px; }
+button.run { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-width: 2.2em; padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--fg); cursor: pointer; }
+button.run:hover, button.check:hover { border-color: var(--lit); }
+button.run[aria-pressed="true"] { background: var(--lit); border-color: var(--lit); color: #fff; }
+.picking button.run { opacity: .35; }
+.picking button.run.through { opacity: 1; border-color: var(--lit); }
+button.check { display: block; width: 100%; text-align: left; font: inherit; font-size: 12px; padding: 5px 7px; margin: 0 0 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+button.check[aria-pressed="true"] { border-color: var(--lit); box-shadow: 0 0 0 1px var(--lit); }
+.code { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.code.err { color: var(--bad); } .code.warn { color: var(--sel); }
+.dl { color: var(--muted); font-size: 11px; }
+.canvas { overflow: auto; padding: 14px; display: flex; flex-wrap: wrap; gap: 24px; align-content: flex-start; align-items: flex-start; outline: none; }
+figure.panel { margin: 0; }
+figure.panel figcaption { margin: 0 0 2px 6px; font-size: 12px; color: var(--muted); }
+figure.panel figcaption code { background: none; padding: 0; }
+.dd-svg { display: block; }
+.dd-svg text { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; fill: var(--fg); }
+.n { cursor: pointer; }
+.n .shape { fill: var(--node); stroke: var(--stroke); stroke-width: 1.2; }
+.n .side { fill: none; stroke: var(--stroke); stroke-width: 1.2; }
+.n .t.sub { fill: var(--muted); font-size: 11px; }
+.n .ln { fill: var(--muted); font-size: 10px; }
+.k-succeed .shape, .n.ok .shape { stroke: var(--ok); stroke-width: 2; }
+.k-fail .shape, .n.bad .shape { stroke: var(--bad); stroke-width: 2; }
+.k-start .shape { stroke-width: 2; }
+.k-entry .shape { stroke-dasharray: 5 3; stroke-width: 1.6; }
+.frame { cursor: pointer; }
+.frame .shape { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 6 4; }
+.frame .ft { fill: var(--muted); }
+.e path { fill: none; stroke: var(--line); stroke-width: 1.3; marker-end: url(#dd-arrow); }
+.e.inner path { marker-end: none; }
+.e.dash path { stroke-dasharray: 5 4; }
+.e .el { fill: var(--muted); font-size: 11px; }
+.ah { fill: var(--line); } .ah.lit { fill: var(--lit); }
+.tick circle { fill: var(--bg); stroke: var(--bad); stroke-width: 1.2; }
+.tick text { fill: var(--bad); font-size: 10px; font-weight: 700; text-anchor: middle; }
+.n:focus { outline: none; } .frame:focus { outline: none; }
+.n.sel .shape, .n:focus-visible .shape { stroke: var(--sel); stroke-width: 3; }
+.frame.sel .shape, .frame:focus-visible .shape { stroke: var(--sel); stroke-width: 2.2; }
+.running .n, .running .e, .running .frame { opacity: .22; transition: opacity .12s; }
+.running .lit { opacity: 1; }
+.running .n.lit .shape { stroke: var(--lit); stroke-width: 2.4; fill: var(--litbg); }
+.running .frame.lit .shape { stroke: var(--lit); }
+.running .e.lit path { stroke: var(--lit); stroke-width: 2.4; marker-end: url(#dd-arrow-lit); }
+.running .e.lit .el { fill: var(--lit); font-weight: 600; }
+.running .tick.lit circle { fill: var(--bad); }
+.running .tick.lit text { fill: var(--bg); }
+.count { fill: var(--lit); font-weight: 700; font-size: 11px; }
+.detail h2.dh { font-size: 14px; margin: 2px 0 8px; }
+.detail h2.dh code { background: none; padding: 0; font-size: 13px; }
+.detail h3 { font-size: 12px; color: var(--muted); margin: 14px 0 4px; font-weight: 600; }
+pre.src, pre.diag { margin: 0; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; overflow: auto; white-space: pre; }
+pre.src .ln { color: var(--muted); }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; margin: 10px 0 0; font-size: 12.5px; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+ul.facts li { font-size: 12.5px; margin: 2px 0; }
+ol.steps li { font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+ol.steps .ln { color: var(--muted); font-size: 11px; display: inline-block; min-width: 2.4em; }
+ol.steps code { background: none; padding: 0; }
+.round { color: var(--muted); font-size: 11px; }
+.chip { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 0 5px; border-radius: 9px; border: 1px solid var(--border); white-space: nowrap; }
+.chip.ok { color: var(--ok); border-color: var(--ok); } .chip.bad { color: var(--bad); border-color: var(--bad); } .chip.cancel { color: var(--sel); border-color: var(--sel); }
+p.through { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+ul.legend li { display: flex; gap: 8px; align-items: center; font-size: 12.5px; margin: 5px 0; }
+ul.legend svg { flex: none; }
+.lg { fill: var(--node); stroke: var(--stroke); stroke-width: 1.2; }
+.lg.frame { fill: none; stroke: var(--line); stroke-dasharray: 4 3; }
+.lg.ok { stroke: var(--ok); stroke-width: 2; } .lg.bad { stroke: var(--bad); stroke-width: 2; }
+.lg-e { stroke: var(--line); stroke-width: 1.4; fill: none; } .lg-e.dash { stroke-dasharray: 4 3; }
+.lg-tick { fill: var(--bg); stroke: var(--bad); stroke-width: 1.2; }
+.lg-tick-t { fill: var(--bad); font: 700 10px sans-serif; text-anchor: middle; }
+.tables { padding: 16px; border-top: 1px solid var(--border); overflow: auto; }
+.tables h2 { font-size: 15px; margin: 8px 0; }
+.tables table { border-collapse: collapse; font-size: 12.5px; margin-bottom: 16px; }
+.tables th, .tables td { border: 1px solid var(--border); padding: 4px 8px; vertical-align: top; text-align: left; }
+.tables td.num { text-align: right; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.tables th { background: var(--side); }
+@media (max-width: 900px) {
+  .app { height: auto; display: block; }
+  .grid { display: block; }
+  .side, .detail { border: 0; border-bottom: 1px solid var(--border); }
+  .canvas { max-height: 80vh; }
+}
+@media print { .side, .detail { display: none; } .grid { display: block; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="dd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,1 L10,5 L0,9 z"/></marker><marker id="dd-arrow-lit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah lit" d="M0,1 L10,5 L0,9 z"/></marker></defs></svg>
+<div class="app">
+<header class="top"><h1><code>inquiry</code> <span class="ver">v1</span></h1><p class="file"><code>examples/inquiry/temporal/inquiry.flow</code> · dandori doc</p><p class="desc" title="An agent reads a customer's inquiry for its kind, an order number and its point; a rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Agents read and write (a model the company runs itself reads, Claude writes); the rule decides. Written for Temporal: the agents are activities dandori writes, the reading sent to the company's Ollama, which serves Open Responses (`url`), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write">An agent reads a customer's inquiry for its kind, an order number and its point; a rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Agents read and write (a model the company runs itself reads, Claude writes); the rule decides. Written for Temporal: the agents are activities dandori writes, the reading sent to the company's Ollama, which serves Open Responses (`url`), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write</p></header>
+<main class="grid">
+<nav class="side" aria-label="runs"><section><h2>Scenarios</h2><p class="note">13 scenarios that together take every arm and every handler of an error, grouped by how they end. Pick one to light up the way it goes.</p><ul class="groups"><li class="group"><div class="gl ok"><code>52 succeed ticket_id = by_hand.ticket_id, desk = general</code> <span class="gn">2</span></div><div class="runs"><button class="run" data-run="1" aria-pressed="false">2</button><button class="run" data-run="11" aria-pressed="false">12</button></div></li><li class="group"><div class="gl ok"><code>61 succeed ticket_id = t.ticket_id, desk = decision.desk</code> <span class="gn">2</span></div><div class="runs"><button class="run" data-run="0" aria-pressed="false">1</button><button class="run" data-run="8" aria-pressed="false">9</button></div></li><li class="group"><div class="gl bad"><code>fails with failure</code> <span class="gn">3</span></div><div class="runs"><button class="run" data-run="2" aria-pressed="false">3</button><button class="run" data-run="3" aria-pressed="false">4</button><button class="run" data-run="7" aria-pressed="false">8</button></div></li><li class="group"><div class="gl bad"><code>fail Dandori.BadResponse: an answer not of the declared type</code> <span class="gn">6</span></div><div class="runs"><button class="run" data-run="4" aria-pressed="false">5</button><button class="run" data-run="5" aria-pressed="false">6</button><button class="run" data-run="6" aria-pressed="false">7</button><button class="run" data-run="9" aria-pressed="false">10</button><button class="run" data-run="10" aria-pressed="false">11</button><button class="run" data-run="12" aria-pressed="false">13</button></div></li></ul></section></nav>
+<section class="canvas" tabindex="-1"><figure class="panel" data-panel="flow"><figcaption><code>flow</code></figcaption><svg class="dd-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 921 832" width="921" height="832"><g class="frames"></g><g class="edges"><g class="e" data-id="flow-13"><path d="M238.5,42.0 L238.5,70.0"/></g><g class="e dash" data-id="flow-2"><path d="M442.0,100.0 L687.5,100.0 L687.5,156.0"/><text class="el" x="693.5" y="115.0"><tspan x="693.5" dy="0">on failure</tspan></text></g><g class="e" data-id="flow-1"><path d="M687.5,216.0 L687.5,244.0"/></g><g class="e" data-id="flow-5"><path d="M238.5,130.0 L238.5,300.0"/></g><g class="e" data-id="flow-6"><path d="M238.5,344.0 L238.5,372.0"/></g><g class="e" data-id="flow-7"><path d="M238.5,400.0 L238.5,428.0"/></g><g class="e" data-id="flow-3"><path d="M238.5,462.0 L238.5,488.0"/><text class="el" x="244.5" y="476.0"><tspan x="244.5" dy="0">some order_id</tspan></text></g><g class="e" data-id="flow-8"><path d="M238.5,516.0 L238.5,544.0"/></g><g class="e" data-id="flow-9"><path d="M350.5,445.0 L495.0,445.0 L495.0,488.0 L495.0,534.0 L238.5,534.0 L238.5,544.0"/><text class="el" x="501.0" y="460.0"><tspan x="501.0" dy="0">none</tspan></text></g><g class="e dash" data-id="flow-4"><path d="M358.0,574.0 L462.5,574.0 L462.5,630.0"/><text class="el" x="468.5" y="589.0"><tspan x="468.5" dy="0">on failure</tspan></text></g><g class="e" data-id="flow-10"><path d="M238.5,604.0 L238.5,686.0"/></g><g class="e" data-id="flow-11"><path d="M462.5,658.0 L462.5,676.0 L238.5,676.0 L238.5,686.0"/></g><g class="e" data-id="flow-12"><path d="M238.5,746.0 L238.5,774.0"/></g></g><g class="nodes"><g class="n k-start" data-id="start" tabindex="0"><rect class="shape" x="186.0" y="14.0" width="105.0" height="28.0" rx="14.0"/><text class="t" x="202.0" y="32.0">inquiry v1</text></g><g class="n k-call" data-id="s1" tabindex="0"><rect class="shape" x="35.0" y="70.0" width="407.0" height="60.0" rx="4"/><text class="t" x="45.0" y="88.0"><tspan class="ln">49</tspan> reading = read_inquiry(…)</text><text class="t sub" x="45.0" y="104.0">agent · gpt-oss:20b · http://ollama.internal:11434/v1</text><text class="t sub" x="45.0" y="120.0">retry 2 times every 10 seconds · timeout 1 minute</text></g><g class="n k-call" data-id="s2" tabindex="0"><rect class="shape" x="571.5" y="156.0" width="232.0" height="60.0" rx="4"/><text class="t" x="581.5" y="174.0"><tspan class="ln">51</tspan> by_hand = file_ticket(…)</text><text class="t sub" x="581.5" y="190.0">a task you write</text><text class="t sub" x="581.5" y="206.0">retry 2 times every 5 seconds</text><g class="tick"><title>timeout, failure → the workflow fails</title><circle cx="803.5" cy="165.0" r="6.5"/><text x="803.5" y="168.5">!</text></g></g><g class="n k-succeed" data-id="s3" tabindex="0"><rect class="shape" x="468.0" y="244.0" width="439.0" height="28.0" rx="14.0"/><text class="t" x="484.0" y="262.0"><tspan class="ln">52</tspan> succeed ticket_id = by_hand.ticket_id, desk = general</text></g><g class="n k-rule" data-id="s4" tabindex="0"><rect class="shape" x="102.0" y="300.0" width="273.0" height="44.0" rx="3"/><path class="side" d="M108.0,300.0 V344.0 M369.0,300.0 V344.0"/><text class="t" x="118.0" y="318.0"><tspan class="ln">53</tspan> decision = routing(…)</text><text class="t sub" x="118.0" y="334.0">rule inquiry_routing.rule · local</text><g class="tick"><title>timeout, failure → the workflow fails</title><circle cx="375.0" cy="309.0" r="6.5"/><text x="375.0" y="312.5">!</text></g></g><g class="n k-let" data-id="s5" tabindex="0"><rect class="shape" x="47.0" y="372.0" width="383.0" height="28.0" rx="4"/><text class="t" x="57.0" y="390.0"><tspan class="ln">54</tspan> let subject = &quot;An inquiry about {reading.kind}&quot;</text></g><g class="n k-match" data-id="s6" tabindex="0"><polygon class="shape" points="126.5,445.0 139.5,428.0 337.5,428.0 350.5,445.0 337.5,462.0 139.5,462.0"/><text class="t" x="148.5" y="449.0"><tspan class="ln">55</tspan> match reading.order_id</text></g><g class="n k-let" data-id="s7" tabindex="0"><rect class="shape" x="14.0" y="488.0" width="449.0" height="28.0" rx="4"/><text class="t" x="24.0" y="506.0"><tspan class="ln">56</tspan> let subject = &quot;An inquiry about {reading.kind} (order {…</text></g><g class="n k-call" data-id="s9" tabindex="0"><rect class="shape" x="119.0" y="544.0" width="239.0" height="60.0" rx="4"/><text class="t" x="129.0" y="562.0"><tspan class="ln">58</tspan> draft = draft_reply(…)</text><text class="t sub" x="129.0" y="578.0">agent claude · claude-sonnet-5</text><text class="t sub" x="129.0" y="594.0">timeout 1 minute</text></g><g class="n k-let" data-id="s10" tabindex="0"><rect class="shape" x="384.0" y="630.0" width="157.0" height="28.0" rx="4"/><text class="t" x="394.0" y="648.0"><tspan class="ln">59</tspan> let draft = none</text></g><g class="n k-call" data-id="s11" tabindex="0"><rect class="shape" x="122.5" y="686.0" width="232.0" height="60.0" rx="4"/><text class="t" x="132.5" y="704.0"><tspan class="ln">60</tspan> t = file_ticket(…)</text><text class="t sub" x="132.5" y="720.0">a task you write</text><text class="t sub" x="132.5" y="736.0">retry 2 times every 5 seconds</text><g class="tick"><title>timeout, failure → the workflow fails</title><circle cx="354.5" cy="695.0" r="6.5"/><text x="354.5" y="698.5">!</text></g></g><g class="n k-succeed" data-id="s12" tabindex="0"><rect class="shape" x="19.0" y="774.0" width="439.0" height="28.0" rx="14.0"/><text class="t" x="35.0" y="792.0"><tspan class="ln">61</tspan> succeed ticket_id = t.ticket_id, desk = decision.desk</text></g></g></svg></figure></section>
+<aside class="detail" id="dd-detail" aria-live="polite"></aside>
+</main>
+</div>
+<section class="tables"><h2>Calls</h2><table><thead><tr><th>Line</th><th>Call</th><th>Calls</th><th>Retries</th><th>Timeout</th><th>When it fails</th></tr></thead><tbody><tr><td class="num">49</td><td><code>reading = read_inquiry(…)</code></td><td><code>agent · gpt-oss:20b · http://ollama.internal:11434/v1</code></td><td>2 times every 10 seconds (failure, timeout)</td><td>1 minute</td><td><code>timeout</code>, <code>failure</code> → line 50</td></tr><tr><td class="num">51</td><td><code>by_hand = file_ticket(…)</code></td><td>a task you write, <code>key</code></td><td>2 times every 5 seconds (failure, timeout)</td><td>—</td><td><code>timeout</code>, <code>failure</code> → the workflow fails</td></tr><tr><td class="num">53</td><td><code>decision = routing(…)</code></td><td>rule <code>inquiry_routing.rule</code>, a local activity on Temporal</td><td>2 times, after 1 second and 2 (failure)</td><td>—</td><td><code>timeout</code>, <code>failure</code> → the workflow fails</td></tr><tr><td class="num">58</td><td><code>draft = draft_reply(…)</code></td><td><code>agent claude · claude-sonnet-5</code></td><td>—</td><td>1 minute</td><td><code>timeout</code>, <code>failure</code> → line 59</td></tr><tr><td class="num">60</td><td><code>t = file_ticket(…)</code></td><td>a task you write, <code>key</code></td><td>2 times every 5 seconds (failure, timeout)</td><td>—</td><td><code>timeout</code>, <code>failure</code> → the workflow fails</td></tr></tbody></table><h2>Ends</h2><table><thead><tr><th>Line</th><th>End</th></tr></thead><tbody><tr><td class="num">52</td><td><code>succeed ticket_id = by_hand.ticket_id, desk = general</code></td></tr><tr><td class="num">61</td><td><code>succeed ticket_id = t.ticket_id, desk = decision.desk</code></td></tr></tbody></table></section>
+<template id="t-default"><h2 class="dh">Reading the picture</h2><p>Pick a step to see what the checker knows there. Pick a scenario on the left to light up the way its run goes; the number beside a step is how often the run passes it.</p><ul class="legend"><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg" x="2" y="2" width="26" height="13" rx="2"/></svg><span>a task</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg" x="2" y="2" width="26" height="13" rx="2"/><path class="lg" d="M6,2 V15 M24,2 V15"/></svg><span>a rule</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><polygon class="lg" points="7,2 28,2 23,15 2,15"/></svg><span>a task whose value comes from outside: an event, or the answer to a callback</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><polygon class="lg" points="1,8.5 7,2 23,2 29,8.5 23,15 7,15"/></svg><span>a match</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg" x="2" y="2" width="26" height="13" rx="6.5"/></svg><span>a wait</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg frame" x="2" y="2" width="26" height="13" rx="3"/></svg><span>a loop, around the steps it repeats</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg ok" x="2" y="2" width="12" height="13" rx="6"/><rect class="lg bad" x="16" y="2" width="12" height="13" rx="6"/></svg><span>an end: succeed, fail</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><path class="lg-e dash" d="M2,8.5 H28"/></svg><span>an error the call handles</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><circle class="lg-tick" cx="15" cy="8.5" r="6"/><text class="lg-tick-t" x="15" y="12">!</text></svg><span>a call with an error it does not handle</span></li></ul></template>
+<template id="t-start"><h2 class="dh"><code>inquiry v1</code></h2><p>An agent reads a customer's inquiry for its kind, an order number and its point; a rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Agents read and write (a model the company runs itself reads, Claude writes); the rule decides. Written for Temporal: the agents are activities dandori writes, the reading sent to the company's Ollama, which serves Open Responses (`url`), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write</p><dl class="facts"><dt>Inputs</dt><dd><code>inquiry: Inquiry</code></dd><dt>Outputs</dt><dd><code>ticket_id: string</code>, <code>desk: routing.desk</code></dd><dt>File</dt><dd><code>examples/inquiry/temporal/inquiry.flow</code></dd></dl></template>
+<template id="t-s1"><h2 class="dh"><code>reading = read_inquiry(…)</code> <span class="dl">line 49</span></h2><pre class="src"><span class="ln">  49</span>  let reading = read_inquiry(text: inquiry.text)
+<span class="ln">  50</span>    on failure =&gt;
+</pre><dl class="facts"><dt>Calls</dt><dd><code>agent · gpt-oss:20b · http://ollama.internal:11434/v1</code></dd><dt>Retries</dt><dd>2 times every 10 seconds (failure, timeout)</dd><dt>Timeout</dt><dd>1 minute</dd><dt>When it fails</dt><dd><code>timeout</code>, <code>failure</code> → line 50</dd></dl><h3>The task</h3><pre class="src"><span class="ln">  27</span>  # A model on the company's own Ollama reads the text, through Open Responses; the schema of
+<span class="ln">  28</span>  # Reading holds its answer to one of the rule's kinds.
+<span class="ln">  29</span>  task read_inquiry(text: string) -&gt; Reading
+<span class="ln">  30</span>    agent &quot;Read the text of a customer's inquiry, choose its kind, take out the order number if one is written, and sum up its point in one sentence. If no order number is written, give null.&quot;
+<span class="ln">  31</span>    model &quot;gpt-oss:20b&quot;
+<span class="ln">  32</span>    effort low
+<span class="ln">  33</span>    url &quot;http://ollama.internal:11434/v1&quot;
+<span class="ln">  34</span>    timeout 60 seconds
+<span class="ln">  35</span>    retry 2 times every 10 seconds
+</pre></template>
+<template id="t-s2"><h2 class="dh"><code>by_hand = file_ticket(…)</code> <span class="dl">line 51</span></h2><pre class="src"><span class="ln">  51</span>  let by_hand = file_ticket(inquiry_id: inquiry.id, desk: general, within: 24, subject: &quot;An inquiry that could not be read&quot;, text: inquiry.text, draft: none)
+</pre><dl class="facts"><dt>Calls</dt><dd>a task you write, <code>key</code></dd><dt>Retries</dt><dd>2 times every 5 seconds (failure, timeout)</dd><dt>When it fails</dt><dd><code>timeout</code>, <code>failure</code> → the workflow fails</dd></dl><h3>The task</h3><pre class="src"><span class="ln">  43</span>  # The ticket goes into the desk's system through its client library, in code you write.
+<span class="ln">  44</span>  task file_ticket(inquiry_id: string, desk: routing.desk, within: duration[h], subject: string, text: string, draft: string?) -&gt; Ticket
+<span class="ln">  45</span>    key
+<span class="ln">  46</span>    retry 2 times every 5 seconds
+</pre></template>
+<template id="t-s3"><h2 class="dh"><code>succeed ticket_id = by_hand.ticket_id, desk = general</code> <span class="dl">line 52</span></h2><pre class="src"><span class="ln">  52</span>  succeed ticket_id = by_hand.ticket_id, desk = general
+</pre></template>
+<template id="t-s4"><h2 class="dh"><code>decision = routing(…)</code> <span class="dl">line 53</span></h2><pre class="src"><span class="ln">  53</span>  let decision = routing(kind: reading.kind, member: inquiry.member)
+</pre><dl class="facts"><dt>Calls</dt><dd>rule <code>inquiry_routing.rule</code>, a local activity on Temporal</dd><dt>Retries</dt><dd>2 times, after 1 second and 2 (failure)</dd><dt>When it fails</dt><dd><code>timeout</code>, <code>failure</code> → the workflow fails</dd></dl><h3>The rule</h3><pre class="src"><span class="ln">   4</span>  use rule routing from &quot;../rules/inquiry_routing.rule&quot;
+<span class="ln">   5</span>    local
+</pre></template>
+<template id="t-s5"><h2 class="dh"><code>let subject = &quot;An inquiry about {reading.kind}&quot;</code> <span class="dl">line 54</span></h2><pre class="src"><span class="ln">  54</span>  let subject = &quot;An inquiry about {reading.kind}&quot;
+</pre></template>
+<template id="t-s6"><h2 class="dh"><code>match reading.order_id</code> <span class="dl">line 55</span></h2><pre class="src"><span class="ln">  55</span>  match reading.order_id
+<span class="ln">  56</span>    some order_id =&gt; let subject = &quot;An inquiry about {reading.kind} (order {order_id})&quot;
+<span class="ln">  57</span>    none =&gt; pass
+</pre></template>
+<template id="t-s7"><h2 class="dh"><code>let subject = &quot;An inquiry about {reading.kind} (order {…</code> <span class="dl">line 56</span></h2><pre class="src"><span class="ln">  56</span>  some order_id =&gt; let subject = &quot;An inquiry about {reading.kind} (order {order_id})&quot;
+</pre></template>
+<template id="t-s9"><h2 class="dh"><code>draft = draft_reply(…)</code> <span class="dl">line 58</span></h2><pre class="src"><span class="ln">  58</span>  let draft = draft_reply(kind: reading.kind, point: reading.point, order_id: reading.order_id, within: decision.within)
+<span class="ln">  59</span>    on failure =&gt; let draft: string? = none
+</pre><dl class="facts"><dt>Calls</dt><dd><code>agent claude · claude-sonnet-5</code></dd><dt>Timeout</dt><dd>1 minute</dd><dt>When it fails</dt><dd><code>timeout</code>, <code>failure</code> → line 59</dd></dl><h3>The task</h3><pre class="src"><span class="ln">  37</span>  task draft_reply(kind: routing.kind, point: string, order_id: string?, within: duration[h]) -&gt; string
+<span class="ln">  38</span>    agent claude &quot;Draft the first reply to the inquiry, politely, in three sentences at most. `within` is the number of hours before the reply is due. Promise nothing that cannot be kept.&quot;
+<span class="ln">  39</span>    model &quot;claude-sonnet-5&quot;
+<span class="ln">  40</span>    effort medium
+<span class="ln">  41</span>    timeout 60 seconds
+</pre></template>
+<template id="t-s10"><h2 class="dh"><code>let draft = none</code> <span class="dl">line 59</span></h2><pre class="src"><span class="ln">  59</span>  on failure =&gt; let draft: string? = none
+</pre></template>
+<template id="t-s11"><h2 class="dh"><code>t = file_ticket(…)</code> <span class="dl">line 60</span></h2><pre class="src"><span class="ln">  60</span>  let t = file_ticket(inquiry_id: inquiry.id, desk: decision.desk, within: decision.within, subject: subject, text: inquiry.text, draft: draft)
+</pre><dl class="facts"><dt>Calls</dt><dd>a task you write, <code>key</code></dd><dt>Retries</dt><dd>2 times every 5 seconds (failure, timeout)</dd><dt>When it fails</dt><dd><code>timeout</code>, <code>failure</code> → the workflow fails</dd></dl><h3>The task</h3><pre class="src"><span class="ln">  43</span>  # The ticket goes into the desk's system through its client library, in code you write.
+<span class="ln">  44</span>  task file_ticket(inquiry_id: string, desk: routing.desk, within: duration[h], subject: string, text: string, draft: string?) -&gt; Ticket
+<span class="ln">  45</span>    key
+<span class="ln">  46</span>    retry 2 times every 5 seconds
+</pre></template>
+<template id="t-s12"><h2 class="dh"><code>succeed ticket_id = t.ticket_id, desk = decision.desk</code> <span class="dl">line 61</span></h2><pre class="src"><span class="ln">  61</span>  succeed ticket_id = t.ticket_id, desk = decision.desk
+</pre></template>
+<template id="t-fin"><h2 class="dh"><code>end: succeeds</code></h2><p>The flow runs to its end, and the workflow succeeds.</p></template>
+<template id="t-run-0"><h2 class="dh">scenario 1 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">53</span> <code>decision = routing(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">54</span> <code>let subject = &quot;An inquiry about {reading.kind}&quot;</code></li><li><span class="ln">55</span> <code>match reading.order_id</code> → <code>none</code></li><li><span class="ln">58</span> <code>draft = draft_reply(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">60</span> <code>t = file_ticket(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>succeed ticket_id = t.ticket_id, desk = decision.desk</code></li></ol></template>
+<template id="t-run-1"><h2 class="dh">scenario 2 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → <code>on failure</code></li><li><span class="ln">51</span> <code>by_hand = file_ticket(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">52</span> <code>succeed ticket_id = by_hand.ticket_id, desk = general</code></li></ol></template>
+<template id="t-run-2"><h2 class="dh">scenario 3 <span class="chip bad">fails with failure</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → <code>on failure</code></li><li><span class="ln">51</span> <code>by_hand = file_ticket(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → not handled here</li></ol></template>
+<template id="t-run-3"><h2 class="dh">scenario 4 <span class="chip bad">fails with failure</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip bad">failure</span> <span class="chip ok">ok</span></li><li><span class="ln">53</span> <code>decision = routing(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → not handled here</li></ol></template>
+<template id="t-run-4"><h2 class="dh">scenario 5 <span class="chip bad">fail Dandori.BadResponse: an answer not of the declared type</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<template id="t-run-5"><h2 class="dh">scenario 6 <span class="chip bad">fail Dandori.BadResponse: an answer not of the declared type</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">53</span> <code>decision = routing(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<template id="t-run-6"><h2 class="dh">scenario 7 <span class="chip bad">fail Dandori.BadResponse: an answer not of the declared type</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">53</span> <code>decision = routing(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<template id="t-run-7"><h2 class="dh">scenario 8 <span class="chip bad">fails with failure</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">53</span> <code>decision = routing(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">54</span> <code>let subject = &quot;An inquiry about {reading.kind}&quot;</code></li><li><span class="ln">55</span> <code>match reading.order_id</code> → <code>some order_id</code></li><li><span class="ln">56</span> <code>let subject = &quot;An inquiry about {reading.kind} (order {…</code></li><li><span class="ln">58</span> <code>draft = draft_reply(…)</code> <span class="chip bad">failure</span> → <code>on failure</code></li><li><span class="ln">59</span> <code>let draft = none</code></li><li><span class="ln">60</span> <code>t = file_ticket(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → not handled here</li></ol></template>
+<template id="t-run-8"><h2 class="dh">scenario 9 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">53</span> <code>decision = routing(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">54</span> <code>let subject = &quot;An inquiry about {reading.kind}&quot;</code></li><li><span class="ln">55</span> <code>match reading.order_id</code> → <code>none</code></li><li><span class="ln">58</span> <code>draft = draft_reply(…)</code> <span class="chip bad">failure</span> → <code>on failure</code></li><li><span class="ln">59</span> <code>let draft = none</code></li><li><span class="ln">60</span> <code>t = file_ticket(…)</code> <span class="chip bad">failure</span> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>succeed ticket_id = t.ticket_id, desk = decision.desk</code></li></ol></template>
+<template id="t-run-9"><h2 class="dh">scenario 10 <span class="chip bad">fail Dandori.BadResponse: an answer not of the declared type</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">53</span> <code>decision = routing(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">54</span> <code>let subject = &quot;An inquiry about {reading.kind}&quot;</code></li><li><span class="ln">55</span> <code>match reading.order_id</code> → <code>none</code></li><li><span class="ln">58</span> <code>draft = draft_reply(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<template id="t-run-10"><h2 class="dh">scenario 11 <span class="chip bad">fail Dandori.BadResponse: an answer not of the declared type</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">53</span> <code>decision = routing(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">54</span> <code>let subject = &quot;An inquiry about {reading.kind}&quot;</code></li><li><span class="ln">55</span> <code>match reading.order_id</code> → <code>none</code></li><li><span class="ln">58</span> <code>draft = draft_reply(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">60</span> <code>t = file_ticket(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<template id="t-run-11"><h2 class="dh">scenario 12 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → <code>on failure</code></li><li><span class="ln">51</span> <code>by_hand = file_ticket(…)</code> <span class="chip bad">failure</span> <span class="chip ok">ok</span></li><li><span class="ln">52</span> <code>succeed ticket_id = by_hand.ticket_id, desk = general</code></li></ol></template>
+<template id="t-run-12"><h2 class="dh">scenario 13 <span class="chip bad">fail Dandori.BadResponse: an answer not of the declared type</span></h2><ol class="steps"><li><span class="ln">49</span> <code>reading = read_inquiry(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → <code>on failure</code></li><li><span class="ln">51</span> <code>by_hand = file_ticket(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<script type="application/json" id="dd-data">{"runs":[{"nodes":["s1","s11","s12","s4","s5","s6","s9","start"],"edges":["flow-10","flow-12","flow-13","flow-5","flow-6","flow-7","flow-9"],"counts":{"s1":1,"s11":1,"s12":1,"s4":1,"s5":1,"s6":1,"s9":1},"failed":[]},{"nodes":["s1","s2","s3","start"],"edges":["flow-1","flow-13","flow-2"],"counts":{"s1":1,"s2":1,"s3":1},"failed":[]},{"nodes":["s1","s2","start"],"edges":["flow-13","flow-2"],"counts":{"s1":1,"s2":1},"failed":["s2"]},{"nodes":["s1","s4","start"],"edges":["flow-13","flow-5"],"counts":{"s1":1,"s4":1},"failed":["s4"]},{"nodes":["s1","start"],"edges":["flow-13"],"counts":{"s1":1},"failed":[]},{"nodes":["s1","s4","start"],"edges":["flow-13","flow-5"],"counts":{"s1":1,"s4":1},"failed":[]},{"nodes":["s1","s4","start"],"edges":["flow-13","flow-5"],"counts":{"s1":1,"s4":1},"failed":[]},{"nodes":["s1","s10","s11","s4","s5","s6","s7","s9","start"],"edges":["flow-11","flow-13","flow-3","flow-4","flow-5","flow-6","flow-7","flow-8"],"counts":{"s1":1,"s10":1,"s11":1,"s4":1,"s5":1,"s6":1,"s7":1,"s9":1},"failed":["s11"]},{"nodes":["s1","s10","s11","s12","s4","s5","s6","s9","start"],"edges":["flow-11","flow-12","flow-13","flow-4","flow-5","flow-6","flow-7","flow-9"],"counts":{"s1":1,"s10":1,"s11":1,"s12":1,"s4":1,"s5":1,"s6":1,"s9":1},"failed":[]},{"nodes":["s1","s4","s5","s6","s9","start"],"edges":["flow-13","flow-5","flow-6","flow-7","flow-9"],"counts":{"s1":1,"s4":1,"s5":1,"s6":1,"s9":1},"failed":[]},{"nodes":["s1","s11","s4","s5","s6","s9","start"],"edges":["flow-10","flow-13","flow-5","flow-6","flow-7","flow-9"],"counts":{"s1":1,"s11":1,"s4":1,"s5":1,"s6":1,"s9":1},"failed":[]},{"nodes":["s1","s2","s3","start"],"edges":["flow-1","flow-13","flow-2"],"counts":{"s1":1,"s2":1,"s3":1},"failed":[]},{"nodes":["s1","s2","start"],"edges":["flow-13","flow-2"],"counts":{"s1":1,"s2":1},"failed":[]}],"checks":[],"through":"{k} of the {n} scenarios pass here."}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('dd-data').textContent);
+  var canvas = document.querySelector('.canvas');
+  var detail = document.getElementById('dd-detail');
+  var side = document.querySelector('.side');
+  var SVG = 'http://www.w3.org/2000/svg';
+  var state = { node: null, run: null, check: null };
+  function all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+  function byId(id) { return all('[data-id="' + id + '"]'); }
+  function show(id) {
+    var t = document.getElementById('t-' + id) || document.getElementById('t-default');
+    detail.replaceChildren(t.content.cloneNode(true));
+  }
+  function unlight() {
+    canvas.classList.remove('running');
+    all('.lit').forEach(function (e) { e.classList.remove('lit'); });
+    all('.count').forEach(function (e) { e.remove(); });
+    all('button[aria-pressed="true"]').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+  }
+  function light(l) {
+    canvas.classList.add('running');
+    l.nodes.forEach(function (id) { byId(id).forEach(function (e) { e.classList.add('lit'); }); });
+    l.edges.forEach(function (id) { byId(id).forEach(function (e) { e.classList.add('lit'); }); });
+    l.failed.forEach(function (id) { byId(id).forEach(function (e) { var t = e.querySelector('.tick'); if (t) t.classList.add('lit'); }); });
+    Object.keys(l.counts).forEach(function (id) {
+      var n = l.counts[id];
+      if (n < 2) return;
+      byId(id).forEach(function (g) {
+        if (!g.classList.contains('n')) return;
+        var b = g.querySelector('.shape').getBBox();
+        var t = document.createElementNS(SVG, 'text');
+        t.setAttribute('class', 'count');
+        t.setAttribute('x', b.x + b.width + 5);
+        t.setAttribute('y', b.y + b.height - 3);
+        t.textContent = '×' + n;
+        g.appendChild(t);
+      });
+    });
+  }
+  function unpick() {
+    all('.n.sel, .frame.sel').forEach(function (e) { e.classList.remove('sel'); });
+    side.classList.remove('picking');
+    all('button.run.through').forEach(function (b) { b.classList.remove('through'); });
+  }
+  function pick(id) {
+    unpick();
+    byId(id).forEach(function (e) { if (e.classList.contains('n') || e.classList.contains('frame')) e.classList.add('sel'); });
+    show(id);
+    if (data.runs.length) {
+      var k = 0;
+      data.runs.forEach(function (r, i) {
+        if (r.nodes.indexOf(id) >= 0) { k++; var b = document.querySelector('button.run[data-run="' + i + '"]'); if (b) b.classList.add('through'); }
+      });
+      side.classList.add('picking');
+      var p = document.createElement('p');
+      p.className = 'through';
+      p.textContent = data.through.replace('{k}', k).replace('{n}', data.runs.length);
+      detail.appendChild(p);
+    }
+  }
+  function remember() {
+    var h = state.run !== null ? 'run=' + (state.run + 1) : state.check !== null ? 'check=' + (state.check + 1) : '';
+    if (state.node) h += (h ? '&' : '') + 'node=' + state.node;
+    try { history.replaceState(null, '', h ? '#' + h : location.pathname + location.search); } catch (e) {}
+  }
+  function run(k) {
+    unlight();
+    state.run = k; state.check = null;
+    light(data.runs[k]);
+    var b = document.querySelector('button.run[data-run="' + k + '"]');
+    if (b) b.setAttribute('aria-pressed', 'true');
+    if (!state.node) show('run-' + k);
+  }
+  function check(k) {
+    unlight();
+    state.check = k; state.run = null;
+    light(data.checks[k]);
+    var b = document.querySelector('button.check[data-check="' + k + '"]');
+    if (b) b.setAttribute('aria-pressed', 'true');
+    if (!state.node) show('check-' + k);
+  }
+  function node(id) { state.node = id; pick(id); }
+  function reset() { state = { node: null, run: null, check: null }; unlight(); unpick(); show('default'); remember(); }
+  side.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button');
+    if (!b) return;
+    state.node = null; unpick();
+    if (b.dataset.run !== undefined) { if (state.run === +b.dataset.run) { reset(); return; } run(+b.dataset.run); show('run-' + b.dataset.run); }
+    if (b.dataset.check !== undefined) { if (state.check === +b.dataset.check) { reset(); return; } check(+b.dataset.check); show('check-' + b.dataset.check); }
+    remember();
+  });
+  canvas.addEventListener('click', function (ev) {
+    var g = ev.target.closest('.n, .frame');
+    if (!g) { if (state.node) { state.node = null; unpick(); if (state.run !== null) show('run-' + state.run); else if (state.check !== null) show('check-' + state.check); else show('default'); remember(); } return; }
+    node(g.dataset.id);
+    remember();
+  });
+  canvas.addEventListener('keydown', function (ev) {
+    var g = ev.target.closest && ev.target.closest('.n, .frame');
+    if (g && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); node(g.dataset.id); remember(); }
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') reset(); });
+  var desc = document.querySelector('header.top .desc');
+  if (desc) desc.addEventListener('click', function () { desc.classList.toggle('open'); });
+  function fromHash() {
+    var h = {};
+    location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p[0]) h[p[0]] = decodeURIComponent(p[1] || ''); });
+    if (h.run !== undefined && data.runs[+h.run - 1]) run(+h.run - 1);
+    else if (h.check !== undefined && data.checks[+h.check - 1]) check(+h.check - 1);
+    if (h.node && document.getElementById('t-' + h.node)) node(h.node);
+    else if (h.run === undefined && h.check === undefined) show('default');
+  }
+  fromHash();
+})();
+</script>
+</body>
+</html>

@@ -5,10 +5,75 @@
 //! never be taken, a variable read before it is set, an event sent where the machine
 //! refuses it, and a case left in a state that is not final when the workflow ends.
 
-use crate::diag::{Diag, Severity, Step};
+use crate::diag::{At, Diag, Severity, Step};
 use crate::model::*;
 use crate::rulec::Outcome;
 use std::collections::{BTreeMap, BTreeSet};
+
+/// What the walk knows at each statement and at each end, for `doc` to show beside the flow.
+#[derive(Clone, Debug, Default)]
+pub struct Facts {
+    /// by a statement's site, as the statement starts: what each case can be there, by the case's
+    /// place in the model; a statement no run reaches is not here
+    pub at: BTreeMap<usize, Vec<CaseFact>>,
+    /// by where the workflow ends: what each case can be by then, the events on the other side
+    /// included, as the check of an end (E020) sees it
+    pub ends: BTreeMap<Ending, Vec<CaseFact>>,
+}
+
+/// What a case can be at a point: whether it has been started, and the states its record can say.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CaseFact {
+    pub started: Tri,
+    /// in the order of the machine's states
+    pub states: Vec<String>,
+    /// handed over as it is, by `fail … leaving`
+    pub leaving: bool,
+}
+
+/// A place where the workflow ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Ending {
+    /// a `succeed` or a `fail`, by its site
+    Stmt(usize),
+    /// the flow runs to its end
+    Flow,
+    /// `on failure` runs to its end, and the workflow fails with the error that started it
+    OnFailure,
+    /// `on cancel` runs to its end, and the workflow ends cancelled
+    OnCancel,
+}
+
+impl Ending {
+    /// The place of the last step of a run that ends here.
+    fn at(self) -> At {
+        match self {
+            Ending::Stmt(site) => At::Stmt(site),
+            Ending::Flow => At::FlowEnd,
+            Ending::OnFailure => At::OnFailureEnd,
+            Ending::OnCancel => At::OnCancelEnd,
+        }
+    }
+}
+
+/// For each case: whether it has been started, the states, and whether it is handed over.
+type Seen = Vec<(Tri, BTreeSet<usize>, bool)>;
+
+fn merge_seen<K: Ord>(into: &mut BTreeMap<K, Seen>, key: K, now: Seen) {
+    use std::collections::btree_map::Entry;
+    match into.entry(key) {
+        Entry::Vacant(v) => {
+            v.insert(now);
+        }
+        Entry::Occupied(mut o) => {
+            for (was, n) in o.get_mut().iter_mut().zip(now) {
+                was.0 = tri(was.0, n.0);
+                was.1.extend(n.1);
+                was.2 |= n.2;
+            }
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tri {
@@ -164,15 +229,20 @@ pub struct Flow<'a> {
     monitors: BTreeMap<usize, (usize, BTreeSet<usize>)>,
     in_on_failure: bool,
     in_on_cancel: bool,
+    /// what each case can be as each statement starts, over every time the walk gets there
+    seen: BTreeMap<usize, Seen>,
+    /// and at each end
+    ends: BTreeMap<Ending, Seen>,
 }
 
 pub struct FlowResult {
     pub diags: Vec<Diag>,
     pub monitors: BTreeMap<usize, (usize, Vec<String>)>,
+    pub facts: Facts,
 }
 
 pub fn analyze(m: &Model) -> FlowResult {
-    let mut f = Flow { m, diags: BTreeMap::new(), loops: vec![], failures: vec![], cancels: vec![], monitors: BTreeMap::new(), in_on_failure: false, in_on_cancel: false };
+    let mut f = Flow { m, diags: BTreeMap::new(), loops: vec![], failures: vec![], cancels: vec![], monitors: BTreeMap::new(), in_on_failure: false, in_on_cancel: false, seen: BTreeMap::new(), ends: BTreeMap::new() };
     let mut start = Abs { live: true, set: BTreeMap::new(), cases: vec![], narrow: BTreeMap::new(), path: vec![] };
     for (v, _) in &m.vars {
         let is_input = m.inputs.iter().any(|(i, _)| i == v);
@@ -190,7 +260,7 @@ pub fn analyze(m: &Model) -> FlowResult {
                     .with_path(end.path.clone()),
             );
         } else {
-            f.exit(&end, line, &[], Exit::End);
+            f.exit(&end, line, &[], Exit::End, Ending::Flow);
         }
     }
     let failures = std::mem::take(&mut f.failures);
@@ -203,11 +273,11 @@ pub fn analyze(m: &Model) -> FlowResult {
             }
             if entry.live {
                 let line = block.first().map(|s| s.line).unwrap_or(1);
-                let entry = entry.step(Step::new(line, "on failure", "on failure"));
+                let entry = entry.step(Step::new(line, "on failure", "on failure").at(At::OnFailure));
                 let end = f.stmts(block, entry);
                 if end.live {
                     let line = block.last().map(|s| s.line).unwrap_or(1);
-                    f.exit(&end, line, &[], Exit::FailEnd);
+                    f.exit(&end, line, &[], Exit::FailEnd, Ending::OnFailure);
                 }
             }
             let inner = std::mem::take(&mut f.failures);
@@ -224,11 +294,11 @@ pub fn analyze(m: &Model) -> FlowResult {
         }
         if entry.live {
             let line = block.first().map(|s| s.line).unwrap_or(1);
-            let entry = entry.step(Step::new(line, "on cancel", "on cancel"));
+            let entry = entry.step(Step::new(line, "on cancel", "on cancel").at(At::OnCancel));
             let end = f.stmts(block, entry);
             if end.live {
                 let line = block.last().map(|s| s.line).unwrap_or(1);
-                f.exit(&end, line, &[], Exit::CancelEnd);
+                f.exit(&end, line, &[], Exit::CancelEnd, Ending::OnCancel);
             }
         }
         let inner = std::mem::take(&mut f.failures);
@@ -242,9 +312,16 @@ pub fn analyze(m: &Model) -> FlowResult {
             (*site, (*c, set.iter().map(|s| mc.states[*s].clone()).collect()))
         })
         .collect();
+    let named = |seen: &Seen| -> Vec<CaseFact> {
+        seen.iter()
+            .enumerate()
+            .map(|(c, (started, states, leaving))| CaseFact { started: *started, states: states.iter().map(|s| m.machine(c).states[*s].clone()).collect(), leaving: *leaving })
+            .collect()
+    };
+    let facts = Facts { at: f.seen.iter().map(|(site, s)| (*site, named(s))).collect(), ends: f.ends.iter().map(|(e, s)| (*e, named(s))).collect() };
     let mut diags: Vec<Diag> = f.diags.into_values().collect();
     diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
-    FlowResult { diags, monitors }
+    FlowResult { diags, monitors, facts }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -436,31 +513,39 @@ impl<'a> Flow<'a> {
         a
     }
 
+    /// Keep what each case can be as the statement starts, joined with the other times the walk got here.
+    fn note(&mut self, site: usize, a: &Abs) {
+        let now: Seen = a.cases.iter().map(|c| (c.started, c.states.keys().cloned().collect(), false)).collect();
+        merge_seen(&mut self.seen, site, now);
+    }
+
     fn stmt(&mut self, s: &TStmt, a: Abs) -> Abs {
+        self.note(s.site, &a);
+        let here = At::Stmt(s.site);
         match &s.kind {
             TK::Call { target, callee, args, handlers } => self.call(s, target.as_ref(), callee, args, handlers, a),
             TK::Match { expr, arms } => self.matching(s, expr, arms, a),
             TK::Wait { seconds } => {
-                let a = a.step(Step::new(s.line, format!("wait {}", show_dur(*seconds)), format!("{} 待つ", show_dur_ja(*seconds))));
-                self.cancel_point(&a, s.line, "wait");
+                let a = a.step(Step::new(s.line, format!("wait {}", show_dur(*seconds)), format!("{} 待つ", show_dur_ja(*seconds))).at(here));
+                self.cancel_point(&a, s, "wait");
                 a
             }
             TK::WaitUntil { at } => {
                 self.check_reads(at, &a, s.line);
                 let shown = show(at);
-                let a = a.step(Step::new(s.line, format!("wait until {shown}"), format!("{shown} まで待つ")));
-                self.cancel_point(&a, s.line, "wait");
+                let a = a.step(Step::new(s.line, format!("wait until {shown}"), format!("{shown} まで待つ")).at(here));
+                self.cancel_point(&a, s, "wait");
                 a
             }
             TK::Assign { name, expr } => {
                 self.check_reads(expr, &a, s.line);
-                let mut a = a.step(Step::new(s.line, format!("{name} = {}", show(expr)), format!("{name} = {}", show(expr))));
+                let mut a = a.step(Step::new(s.line, format!("{name} = {}", show(expr)), format!("{name} = {}", show(expr))).at(here));
                 Flow::assign(&mut a, name);
                 a
             }
             TK::For { var, list, max, parallel, body, result, locals } => {
                 self.check_reads(list, &a, s.line);
-                let entry = a.step(Step::new(s.line, format!("for {var} in {} (at most {max})", show(list)), format!("for {var} in {}（{max} 個まで）", show(list))));
+                let entry = a.step(Step::new(s.line, format!("for {var} in {} (at most {max})", show(list)), format!("for {var} in {}（{max} 個まで）", show(list))).at(here));
                 match parallel {
                     None => {
                         // like `repeat`, but the list may be empty, so the loop can also end before a round
@@ -524,7 +609,7 @@ impl<'a> Flow<'a> {
                 }
             }
             TK::Repeat { times, body } => {
-                let mut head = a.clone().step(Step::new(s.line, format!("repeat (at most {times} times)"), format!("repeat（{times} 回まで）")));
+                let mut head = a.clone().step(Step::new(s.line, format!("repeat (at most {times} times)"), format!("repeat（{times} 回まで）")).at(here));
                 let mut rounds = 0;
                 loop {
                     rounds += 1;
@@ -544,7 +629,7 @@ impl<'a> Flow<'a> {
             }
             TK::Pass => a,
             TK::Break => {
-                let a2 = a.step(Step::new(s.line, "break", "break"));
+                let a2 = a.step(Step::new(s.line, "break", "break").at(here));
                 if let Some(l) = self.loops.last_mut() {
                     l.push(a2);
                 }
@@ -554,14 +639,14 @@ impl<'a> Flow<'a> {
                 for (_, e) in fields {
                     self.check_reads(e, &a, s.line);
                 }
-                self.exit(&a, s.line, &[], Exit::Succeed);
+                self.exit(&a, s.line, &[], Exit::Succeed, Ending::Stmt(s.site));
                 Abs::dead()
             }
             TK::Fail { error, leaving, cause } => {
                 if let Some(c) = cause {
                     self.check_reads(c, &a, s.line);
                 }
-                self.exit(&a, s.line, leaving, Exit::Fail(error.clone()));
+                self.exit(&a, s.line, leaving, Exit::Fail(error.clone()), Ending::Stmt(s.site));
                 Abs::dead()
             }
         }
@@ -569,7 +654,15 @@ impl<'a> Flow<'a> {
 
     /// The checks at an end of the workflow. The runs in `a` stop just before the end, so
     /// that the events of the other side that can still come show before it.
-    fn exit(&mut self, a: &Abs, line: usize, leaving: &[usize], how: Exit) {
+    fn exit(&mut self, a: &Abs, line: usize, leaving: &[usize], how: Exit, ending: Ending) {
+        let now: Seen = (0..self.m.cases.len())
+            .map(|c| {
+                let cabs = &a.cases[c];
+                let states = if cabs.started == Tri::No { BTreeSet::new() } else { self.closure(c, &cabs.states).keys().cloned().collect() };
+                (cabs.started, states, leaving.contains(&c))
+            })
+            .collect();
+        merge_seen(&mut self.ends, ending, now);
         for c in 0..self.m.cases.len() {
             if leaving.contains(&c) || a.cases[c].started == Tri::No {
                 continue;
@@ -605,7 +698,7 @@ impl<'a> Flow<'a> {
                 Exit::FailEnd => ("`on failure` ends and the workflow fails".to_string(), "`on failure` が終わり、ワークフローが失敗する".to_string()),
                 Exit::CancelEnd => ("`on cancel` ends and the workflow ends cancelled".to_string(), "`on cancel` が終わり、ワークフローがキャンセルで終わる".to_string()),
             };
-            p.push(Step::new(line, xen, xja));
+            p.push(Step::new(line, xen, xja).at(ending.at()));
             self.push(Diag::error("E020", line, 1, en, ja).with_path(p));
         }
     }
@@ -669,7 +762,7 @@ impl<'a> Flow<'a> {
         let mut other_err = a.clone();
         match target {
             Some(Target::Let(v)) => {
-                ok = ok.step(Step::new(s.line, format!("{v} = {callee_name}(…)"), format!("{v} = {callee_name}(…)")));
+                ok = ok.step(Step::new(s.line, format!("{v} = {callee_name}(…)"), format!("{v} = {callee_name}(…)")).at(At::Stmt(s.site)));
                 Flow::assign(&mut ok, v);
             }
             Some(Target::Case(c)) => {
@@ -712,12 +805,12 @@ impl<'a> Flow<'a> {
                         let mut st2 = BTreeMap::new();
                         for (st, p) in states {
                             let mut np = p;
-                            np.push(Step::new(s.line, format!("{}: {cn} starts in {}", t.name, self.state_name(c, st)), format!("{}: {cn} が {} で始まる", t.name, self.state_name(c, st))));
+                            np.push(Step::new(s.line, format!("{}: {cn} starts in {}", t.name, self.state_name(c, st)), format!("{}: {cn} が {} で始まる", t.name, self.state_name(c, st))).at(At::Stmt(s.site)));
                             st2.insert(st, np);
                         }
                         self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(st2.keys().cloned());
                         ok.cases[c] = CaseAbs { started: Tri::Yes, unstarted: None, states: st2 };
-                        ok.path.push(Step::new(s.line, format!("{}: {cn} starts", t.name), format!("{}: {cn} が始まる", t.name)));
+                        ok.path.push(Step::new(s.line, format!("{}: {cn} starts", t.name), format!("{}: {cn} が始まる", t.name)).at(At::Stmt(s.site)));
                         Flow::assign(&mut ok, &cn);
                         if !t.key {
                             self.push(Diag::warning(
@@ -749,11 +842,14 @@ impl<'a> Flow<'a> {
                                     continue;
                                 }
                                 let mut np = p.clone();
-                                np.push(Step::new(
-                                    s.line,
-                                    format!("{}: {cn} {} → {}", t.name, self.state_name(c, *st), self.state_name(c, o.next)),
-                                    format!("{}: {cn} が {} → {}", t.name, self.state_name(c, *st), self.state_name(c, o.next)),
-                                ));
+                                np.push(
+                                    Step::new(
+                                        s.line,
+                                        format!("{}: {cn} {} → {}", t.name, self.state_name(c, *st), self.state_name(c, o.next)),
+                                        format!("{}: {cn} が {} → {}", t.name, self.state_name(c, *st), self.state_name(c, o.next)),
+                                    )
+                                    .at(At::Stmt(s.site)),
+                                );
                                 match next.get(&o.next) {
                                     Some(q) if q.len() <= np.len() => {}
                                     _ => {
@@ -771,7 +867,7 @@ impl<'a> Flow<'a> {
                         } else {
                             self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(next.keys().cloned());
                             ok.cases[c].states = next.clone();
-                            ok.path.push(Step::new(s.line, format!("{}: {event}", t.name), format!("{}: {event}", t.name)));
+                            ok.path.push(Step::new(s.line, format!("{}: {event}", t.name), format!("{}: {event}", t.name)).at(At::Stmt(s.site)));
                             Flow::assign(&mut ok, &cn);
                         }
                         if !refusing.is_empty() {
@@ -803,7 +899,15 @@ impl<'a> Flow<'a> {
                                     }
                                     let mut r = a.clone();
                                     r.cases[c].states = refusing.clone();
-                                    refused = Some(r.step(Step::new(s.line, format!("{}: {event} is refused ({err})", t.name), format!("{}: {event} が拒否される（{err}）", t.name))));
+                                    // the refusal goes to the handler that names it alone, else to one that takes it
+                                    let named = HErr::Declared(err.clone());
+                                    let at = handlers
+                                        .iter()
+                                        .position(|h| h.errors == [named.clone()])
+                                        .or_else(|| handlers.iter().position(|h| h.errors.contains(&named) || h.errors.contains(&HErr::Failure)))
+                                        .map(|j| At::Handler(s.site, j))
+                                        .unwrap_or(At::Stmt(s.site));
+                                    refused = Some(r.step(Step::new(s.line, format!("{}: {event} is refused ({err})", t.name), format!("{}: {event} が拒否される（{err}）", t.name)).at(at)));
                                 }
                             }
                         } else if let Some(err) = &refused_err {
@@ -833,14 +937,14 @@ impl<'a> Flow<'a> {
                         let mut seen = BTreeMap::new();
                         for (st, p) in &now {
                             let mut np = p.clone();
-                            np.push(Step::new(s.line, format!("{}: {cn} is {}", t.name, self.state_name(c, *st)), format!("{}: {cn} は {}", t.name, self.state_name(c, *st))));
+                            np.push(Step::new(s.line, format!("{}: {cn} is {}", t.name, self.state_name(c, *st)), format!("{}: {cn} は {}", t.name, self.state_name(c, *st))).at(At::Stmt(s.site)));
                             seen.insert(*st, np);
                         }
                         self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(seen.keys().cloned());
                         ok.cases[c].states = seen;
                         ok.cases[c].started = Tri::Yes;
                         ok.cases[c].unstarted = None;
-                        ok.path.push(Step::new(s.line, format!("{}: look at {cn}", t.name), format!("{}: {cn} を見る", t.name)));
+                        ok.path.push(Step::new(s.line, format!("{}: look at {cn}", t.name), format!("{}: {cn} を見る", t.name)).at(At::Stmt(s.site)));
                         Flow::assign(&mut ok, &cn);
                     }
                     None => {}
@@ -868,14 +972,14 @@ impl<'a> Flow<'a> {
             .map(|(_, n)| n.clone())
             .collect();
         if !unhandled.is_empty() {
-            let fa = other_err.clone().step(Step::new(s.line, format!("{callee_name} fails ({})", unhandled.join(", ")), format!("{callee_name} が失敗する（{}）", unhandled.join("・"))));
+            let fa = other_err.clone().step(Step::new(s.line, format!("{callee_name} fails ({})", unhandled.join(", ")), format!("{callee_name} が失敗する（{}）", unhandled.join("・"))).at(At::Fails(s.site)));
             self.failures.push((fa, s.line, callee_name.clone()));
         }
         // a cancellation that comes while the call is out: it may or may not have gone through
-        self.cancel_point(&other_err, s.line, &callee_name);
+        self.cancel_point(&other_err, s, &callee_name);
 
         let mut after = ok;
-        for h in handlers {
+        for (j, h) in handlers.iter().enumerate() {
             let names: Vec<String> = h
                 .errors
                 .iter()
@@ -898,7 +1002,7 @@ impl<'a> Flow<'a> {
                         en = join(&en, r);
                     }
                 }
-                en.step(Step::new(h.line, format!("{callee_name} fails: on {}", names.join(", ")), format!("{callee_name} が失敗する: on {}", names.join(", "))))
+                en.step(Step::new(h.line, format!("{callee_name} fails: on {}", names.join(", ")), format!("{callee_name} が失敗する: on {}", names.join(", "))).at(At::Handler(s.site, j)))
             };
             let end = self.stmts(&h.body, entry);
             after = join(&after, &end);
@@ -907,12 +1011,12 @@ impl<'a> Flow<'a> {
     }
 
     /// A cancellation can stop the run here, outside `on cancel`, which it does not reach.
-    fn cancel_point(&mut self, a: &Abs, line: usize, what: &str) {
+    fn cancel_point(&mut self, a: &Abs, s: &TStmt, what: &str) {
         if self.in_on_cancel || self.m.on_cancel.is_none() {
             return;
         }
-        let at = a.clone().step(Step::new(line, format!("the workflow is cancelled ({what})"), format!("ワークフローがキャンセルされる（{what}）")));
-        self.cancels.push((at, line, what.to_string()));
+        let at = a.clone().step(Step::new(s.line, format!("the workflow is cancelled ({what})"), format!("ワークフローがキャンセルされる（{what}）")).at(At::Cancelled(s.site)));
+        self.cancels.push((at, s.line, what.to_string()));
     }
 
     fn need_started(&mut self, c: usize, a: &Abs, line: usize) -> bool {
@@ -990,7 +1094,7 @@ impl<'a> Flow<'a> {
         let listed: Vec<String> = possible.keys().cloned().collect();
         let mut covered: BTreeSet<String> = BTreeSet::new();
         let mut after = Abs::dead();
-        for arm in arms {
+        for (i, arm) in arms.iter().enumerate() {
             let mut vals: Vec<String> = arm.values.clone();
             if arm.none {
                 vals.push("none".into());
@@ -1018,9 +1122,9 @@ impl<'a> Flow<'a> {
             let here: Vec<String> = vals.iter().filter(|v| possible.contains_key(*v)).cloned().collect();
             if here.is_empty() {
                 // an arm that cannot be taken is still checked, as if it could be
-                inner = inner.step(Step::new(arm.line, format!("match {key}: {}", vals.join(", ")), format!("match {key}: {}", vals.join(", "))));
+                inner = inner.step(Step::new(arm.line, format!("match {key}: {}", vals.join(", ")), format!("match {key}: {}", vals.join(", "))).at(At::Arm(s.site, i)));
             } else {
-                inner = inner.step(Step::new(arm.line, format!("match {key}: {}", here.join(", ")), format!("match {key}: {}", here.join(", "))));
+                inner = inner.step(Step::new(arm.line, format!("match {key}: {}", here.join(", ")), format!("match {key}: {}", here.join(", "))).at(At::Arm(s.site, i)));
             }
             match case_state {
                 Some(c) => {
@@ -1045,7 +1149,7 @@ impl<'a> Flow<'a> {
                     if !key.is_empty() && !here.is_empty() {
                         let vals: BTreeMap<String, Path> = here.iter().filter_map(|v| possible.get(v).map(|p| {
                             let mut p = p.clone();
-                            p.push(Step::new(arm.line, format!("match {key}: {v}"), format!("match {key}: {v}")));
+                            p.push(Step::new(arm.line, format!("match {key}: {v}"), format!("match {key}: {v}")).at(At::Arm(s.site, i)));
                             (v.clone(), p)
                         })).collect();
                         if let Some(p) = vals.values().min_by_key(|p| p.len()) {

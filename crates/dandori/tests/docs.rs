@@ -1,9 +1,10 @@
 //! The README, the site (website/docs, website/docs-ja) and the agent skill (skills/dandori) show
 //! what the tool does: every diagnostic on them is word for word in a golden file of
-//! tests/fixtures, which the fixtures test holds to the checker; every line of `.flow` on them is
-//! a line of an example or a test flow; the codes pages list every code the checker has, and no
-//! other; and the highlighter of the site knows the keywords of the language as src/syntax.rs
-//! has them.
+//! tests/fixtures, which the fixtures test holds to the checker; every Mermaid chart on them is word
+//! for word in a golden file of tests/doc, which tests/doc.rs holds to `dandori doc`; every line of
+//! `.flow` on them is a line of an example or a test flow; the codes pages list every code the
+//! checker has, and no other; and the highlighter of the site knows the keywords of the language as
+//! src/syntax.rs has them.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -84,6 +85,29 @@ fn the_diagnostics_on_the_pages_are_what_the_checker_prints() {
         assert!(seen > 0, "no diagnostic in {place}: were the fences changed?");
     }
     assert!(wrong.is_empty(), "not what any golden file in tests/fixtures holds:\n{}", wrong.join("\n"));
+}
+
+#[test]
+fn the_charts_on_the_pages_are_what_doc_draws() {
+    let goldens: Vec<String> = files(&root().join("tests/doc"), "md").iter().map(|p| fs::read_to_string(p).unwrap()).collect();
+    let mut wrong = Vec::new();
+    let mut seen = 0;
+    for (_, files) in pages() {
+        for f in files {
+            for (info, lines) in fenced(&fs::read_to_string(&f).unwrap()) {
+                if info != "mermaid" {
+                    continue;
+                }
+                seen += 1;
+                let chart = format!("```mermaid\n{}\n```", lines.join("\n"));
+                if !goldens.iter().any(|g| g.contains(&chart)) {
+                    wrong.push(format!("{}: {}", shown(&f), lines.get(1).map(|l| l.trim()).unwrap_or("")));
+                }
+            }
+        }
+    }
+    assert!(seen >= 2, "no Mermaid chart on the site's pages: were the fences changed?");
+    assert!(wrong.is_empty(), "not what any golden file in tests/doc holds:\n{}", wrong.join("\n"));
 }
 
 #[test]

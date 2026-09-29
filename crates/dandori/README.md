@@ -107,10 +107,14 @@ dandori check <file.flow>...
 dandori build <file.flow> --target temporal|temporal-python|asl|durable|argo|pydantic-graph [--out <dir>]
 dandori scenarios <file.flow> [--out <dir>]
 dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]
+dandori doc <file.flow> [--format html] [--out <dir>]
 ```
 
 `--lang ja` prints the messages in Japanese. `build` refuses what its platform cannot do (E050),
-and a workflow whose one run can outgrow the platform (E040).
+and a workflow whose one run can outgrow the platform (E040). `doc` draws the workflow for the
+person who reviews it: Mermaid charts that GitHub draws in a pull request, with tables of every
+call and every way the workflow can end, or one HTML page on which each scenario lights up the way
+its run goes ([the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel.html)).
 
 | Target | What `build` writes |
 |---|---|

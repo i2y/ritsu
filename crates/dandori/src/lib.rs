@@ -11,6 +11,8 @@ pub mod aws;
 pub mod check;
 pub mod contract;
 pub mod diag;
+pub mod doc;
+pub mod draw;
 pub mod flow;
 pub mod interp;
 pub mod lower;

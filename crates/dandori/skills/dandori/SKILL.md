@@ -1,6 +1,6 @@
 ---
 name: dandori
-description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents and code of your own, checked before they run and built for Temporal (TypeScript or Python), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W101-W104) has to be fixed; or when a `.flow` has to be built for a platform and its generated code wired up.
+description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents and code of your own, checked before they run and built for Temporal (TypeScript or Python), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
 compatibility: Requires the `dandori` binary on PATH (`cargo install --path .` in a clone of https://github.com/i2y/dandori). A workflow that uses rules (`use rule`) also needs `rulec` (`brew install i2y/tap/rulec`).
 license: MIT OR Apache-2.0
 ---
@@ -52,9 +52,15 @@ to read dandori's source.
    `002.json`, …) that together take every arm, every handler of an error, and every way a case
    can move. `dandori run <file.flow> --scenario <dir>/001.json` plays one in the reference
    interpreter and prints each call with its answer, and how the run ended.
-5. **Build it:** `dandori build <file.flow> --target temporal --out <dir>`. A build refuses what its
+5. **Show it to a person:** `dandori doc <file.flow> > <file>.md` draws the flow as Mermaid
+   charts, with a table of every call (what it calls, its retries, where each of its errors goes)
+   and of every way the workflow can end, with the state each case is left in. Put it in the pull
+   request, where GitHub draws the charts, for the person who reviews the workflow.
+   `--format html` writes one page on which each scenario lights up the way its run goes.
+   [diagrams.md](diagrams.md) says what is on the picture.
+6. **Build it:** `dandori build <file.flow> --target temporal --out <dir>`. A build refuses what its
    platform cannot do (E050) and a run that can outgrow the platform (E040).
-6. **Wire it up:** write the tasks that are yours (the `OwnTasks` the generated code asks for), give
+7. **Wire it up:** write the tasks that are yours (the `OwnTasks` the generated code asks for), give
    the `Transport` (`io.ts`, `io.py`) its credentials, and start the generated worker, or deploy what
    the target wrote. When the
    workflow calls rules, `rulec gen <rule> --out rulec` writes the code the generated wrappers
@@ -282,7 +288,8 @@ Ask instead of guessing:
 
 Ask with the run the checker gives, in the reader's terms: "If the card is declined, the workflow
 fails with the PaymentIntent still requires_payment_method. Should it cancel the PaymentIntent
-first, or hand it to staff as it is?"
+first, or hand it to staff as it is?" The page `dandori doc --format html` writes lights that run
+up on the picture, when a person would rather see it.
 
 ## 4. From a diagnostic to a fix
 
@@ -358,6 +365,7 @@ written for Temporal, for AWS and for pydantic-graph.
 | [agents.md](agents.md) | agent tasks: typed answers, OpenAI, Open Responses, Claude |
 | [checks.md](checks.md) | what the checker looks at, with a diagnostic |
 | [codes.md](codes.md) | every diagnostic code and what it finds |
+| [diagrams.md](diagrams.md) | `dandori doc`: the workflow drawn for the person who reviews it |
 | [commands.md](commands.md) | the commands, the flags, the exit codes |
 | [platforms.md](platforms.md) | what each target writes and how it runs |
 | [examples.md](examples.md) | the five examples and how their versions differ |

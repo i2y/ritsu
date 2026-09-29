@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="dandori doc">
+<title>review v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #8c959f; --node: #f6f8fa; --stroke: #59636e; --ok: #1a7f37; --bad: #cf222e; --lit: #0969da; --litbg: #ddf4ff; --sel: #9a6700; --border: #d1d9e0; --code: #eff2f5; --side: #f6f8fa; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #6e7681; --node: #151b23; --stroke: #9198a1; --ok: #3fb950; --bad: #f85149; --lit: #4493f8; --litbg: #0c2d6b; --sel: #d29922; --border: #3d444d; --code: #262c36; --side: #0f141b; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+.app { height: 100vh; display: flex; flex-direction: column; }
+code, pre, .dl, .ln { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+code { font-size: .9em; background: var(--code); padding: .08em .3em; border-radius: 4px; }
+header.top { padding: 12px 16px 10px; border-bottom: 1px solid var(--border); }
+header.top h1 { margin: 0; font-size: 18px; }
+header.top h1 code { background: none; padding: 0; font-size: 1em; }
+header.top .ver { color: var(--muted); font-weight: 400; font-size: 14px; }
+header.top .file { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+header.top .file code { background: none; padding: 0; }
+header.top .desc { margin: 6px 0 0; max-width: 72em; font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; }
+header.top .desc.open { -webkit-line-clamp: unset; }
+.banner { margin: 8px 0 0; padding: 6px 10px; border: 1px solid var(--bad); border-radius: 6px; color: var(--bad); font-size: 13px; }
+.grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr) minmax(18rem, 26rem); }
+.side, .detail { overflow: auto; padding: 12px 14px; background: var(--side); }
+.side { border-right: 1px solid var(--border); }
+.detail { border-left: 1px solid var(--border); }
+.side h2 { font-size: 13px; margin: 4px 0 6px; text-transform: none; }
+.side section + section { margin-top: 16px; }
+.note { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+ul.groups, ul.checks, ul.legend, ul.facts, ol.steps { list-style: none; margin: 0; padding: 0; }
+.group { margin: 0 0 10px; }
+.gl { font-size: 12px; margin-bottom: 3px; }
+.gl code { background: none; padding: 0; }
+.gl.ok code { color: var(--ok); } .gl.bad code { color: var(--bad); }
+.gn { color: var(--muted); font-size: 11px; }
+.gn::before { content: "× "; }
+.runs { display: flex; flex-wrap: wrap; gap: 4px; }
+button.run { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-width: 2.2em; padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--fg); cursor: pointer; }
+button.run:hover, button.check:hover { border-color: var(--lit); }
+button.run[aria-pressed="true"] { background: var(--lit); border-color: var(--lit); color: #fff; }
+.picking button.run { opacity: .35; }
+.picking button.run.through { opacity: 1; border-color: var(--lit); }
+button.check { display: block; width: 100%; text-align: left; font: inherit; font-size: 12px; padding: 5px 7px; margin: 0 0 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+button.check[aria-pressed="true"] { border-color: var(--lit); box-shadow: 0 0 0 1px var(--lit); }
+.code { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.code.err { color: var(--bad); } .code.warn { color: var(--sel); }
+.dl { color: var(--muted); font-size: 11px; }
+.canvas { overflow: auto; padding: 14px; display: flex; flex-wrap: wrap; gap: 24px; align-content: flex-start; align-items: flex-start; outline: none; }
+figure.panel { margin: 0; }
+figure.panel figcaption { margin: 0 0 2px 6px; font-size: 12px; color: var(--muted); }
+figure.panel figcaption code { background: none; padding: 0; }
+.dd-svg { display: block; }
+.dd-svg text { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; fill: var(--fg); }
+.n { cursor: pointer; }
+.n .shape { fill: var(--node); stroke: var(--stroke); stroke-width: 1.2; }
+.n .side { fill: none; stroke: var(--stroke); stroke-width: 1.2; }
+.n .t.sub { fill: var(--muted); font-size: 11px; }
+.n .ln { fill: var(--muted); font-size: 10px; }
+.k-succeed .shape, .n.ok .shape { stroke: var(--ok); stroke-width: 2; }
+.k-fail .shape, .n.bad .shape { stroke: var(--bad); stroke-width: 2; }
+.k-start .shape { stroke-width: 2; }
+.k-entry .shape { stroke-dasharray: 5 3; stroke-width: 1.6; }
+.frame { cursor: pointer; }
+.frame .shape { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 6 4; }
+.frame .ft { fill: var(--muted); }
+.e path { fill: none; stroke: var(--line); stroke-width: 1.3; marker-end: url(#dd-arrow); }
+.e.inner path { marker-end: none; }
+.e.dash path { stroke-dasharray: 5 4; }
+.e .el { fill: var(--muted); font-size: 11px; }
+.ah { fill: var(--line); } .ah.lit { fill: var(--lit); }
+.tick circle { fill: var(--bg); stroke: var(--bad); stroke-width: 1.2; }
+.tick text { fill: var(--bad); font-size: 10px; font-weight: 700; text-anchor: middle; }
+.n:focus { outline: none; } .frame:focus { outline: none; }
+.n.sel .shape, .n:focus-visible .shape { stroke: var(--sel); stroke-width: 3; }
+.frame.sel .shape, .frame:focus-visible .shape { stroke: var(--sel); stroke-width: 2.2; }
+.running .n, .running .e, .running .frame { opacity: .22; transition: opacity .12s; }
+.running .lit { opacity: 1; }
+.running .n.lit .shape { stroke: var(--lit); stroke-width: 2.4; fill: var(--litbg); }
+.running .frame.lit .shape { stroke: var(--lit); }
+.running .e.lit path { stroke: var(--lit); stroke-width: 2.4; marker-end: url(#dd-arrow-lit); }
+.running .e.lit .el { fill: var(--lit); font-weight: 600; }
+.running .tick.lit circle { fill: var(--bad); }
+.running .tick.lit text { fill: var(--bg); }
+.count { fill: var(--lit); font-weight: 700; font-size: 11px; }
+.detail h2.dh { font-size: 14px; margin: 2px 0 8px; }
+.detail h2.dh code { background: none; padding: 0; font-size: 13px; }
+.detail h3 { font-size: 12px; color: var(--muted); margin: 14px 0 4px; font-weight: 600; }
+pre.src, pre.diag { margin: 0; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; overflow: auto; white-space: pre; }
+pre.src .ln { color: var(--muted); }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; margin: 10px 0 0; font-size: 12.5px; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+ul.facts li { font-size: 12.5px; margin: 2px 0; }
+ol.steps li { font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+ol.steps .ln { color: var(--muted); font-size: 11px; display: inline-block; min-width: 2.4em; }
+ol.steps code { background: none; padding: 0; }
+.round { color: var(--muted); font-size: 11px; }
+.chip { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 0 5px; border-radius: 9px; border: 1px solid var(--border); white-space: nowrap; }
+.chip.ok { color: var(--ok); border-color: var(--ok); } .chip.bad { color: var(--bad); border-color: var(--bad); } .chip.cancel { color: var(--sel); border-color: var(--sel); }
+p.through { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+ul.legend li { display: flex; gap: 8px; align-items: center; font-size: 12.5px; margin: 5px 0; }
+ul.legend svg { flex: none; }
+.lg { fill: var(--node); stroke: var(--stroke); stroke-width: 1.2; }
+.lg.frame { fill: none; stroke: var(--line); stroke-dasharray: 4 3; }
+.lg.ok { stroke: var(--ok); stroke-width: 2; } .lg.bad { stroke: var(--bad); stroke-width: 2; }
+.lg-e { stroke: var(--line); stroke-width: 1.4; fill: none; } .lg-e.dash { stroke-dasharray: 4 3; }
+.lg-tick { fill: var(--bg); stroke: var(--bad); stroke-width: 1.2; }
+.lg-tick-t { fill: var(--bad); font: 700 10px sans-serif; text-anchor: middle; }
+.tables { padding: 16px; border-top: 1px solid var(--border); overflow: auto; }
+.tables h2 { font-size: 15px; margin: 8px 0; }
+.tables table { border-collapse: collapse; font-size: 12.5px; margin-bottom: 16px; }
+.tables th, .tables td { border: 1px solid var(--border); padding: 4px 8px; vertical-align: top; text-align: left; }
+.tables td.num { text-align: right; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.tables th { background: var(--side); }
+@media (max-width: 900px) {
+  .app { height: auto; display: block; }
+  .grid { display: block; }
+  .side, .detail { border: 0; border-bottom: 1px solid var(--border); }
+  .canvas { max-height: 80vh; }
+}
+@media print { .side, .detail { display: none; } .grid { display: block; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="dd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,1 L10,5 L0,9 z"/></marker><marker id="dd-arrow-lit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah lit" d="M0,1 L10,5 L0,9 z"/></marker></defs></svg>
+<div class="app">
+<header class="top"><h1><code>review</code> <span class="ver">v1</span></h1><p class="file"><code>examples/review/temporal/review.flow</code> · dandori doc</p><p class="desc" title="Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for Temporal: scoring runs on the workers of its own task queue, which may be written in another language, and so does the notice; the approver's tool answers the callback by the update the generated client sends">Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for Temporal: scoring runs on the workers of its own task queue, which may be written in another language, and so does the notice; the approver's tool answers the callback by the update the generated client sends</p></header>
+<main class="grid">
+<nav class="side" aria-label="runs"><section><h2>シナリオ</h2><p class="note">すべての分岐と、エラーを処理するすべての箇所を通る 10 本のシナリオを、終わり方ごとにまとめています。選ぶと、その実行が通るところが光ります。</p><ul class="groups"><li class="group"><div class="gl bad"><code>41 fail Unscorable</code> <span class="gn">1</span></div><div class="runs"><button class="run" data-run="1" aria-pressed="false">2</button></div></li><li class="group"><div class="gl bad"><code>46 fail NoAnswer</code> <span class="gn">1</span></div><div class="runs"><button class="run" data-run="6" aria-pressed="false">7</button></div></li><li class="group"><div class="gl ok"><code>48 succeed verdict = approve</code> <span class="gn">1</span></div><div class="runs"><button class="run" data-run="5" aria-pressed="false">6</button></div></li><li class="group"><div class="gl ok"><code>50 succeed verdict = r.verdict</code> <span class="gn">1</span></div><div class="runs"><button class="run" data-run="0" aria-pressed="false">1</button></div></li><li class="group"><div class="gl bad"><code>failure で失敗する</code> <span class="gn">4</span></div><div class="runs"><button class="run" data-run="2" aria-pressed="false">3</button><button class="run" data-run="3" aria-pressed="false">4</button><button class="run" data-run="7" aria-pressed="false">8</button><button class="run" data-run="9" aria-pressed="false">10</button></div></li><li class="group"><div class="gl bad"><code>fail Dandori.BadResponse: 宣言した型に合わない結果</code> <span class="gn">2</span></div><div class="runs"><button class="run" data-run="4" aria-pressed="false">5</button><button class="run" data-run="8" aria-pressed="false">9</button></div></li></ul></section></nav>
+<section class="canvas" tabindex="-1"><figure class="panel" data-panel="flow"><figcaption><code>flow</code></figcaption><svg class="dd-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 834 704" width="834" height="704"><g class="frames"></g><g class="edges"><g class="e" data-id="flow-9"><path d="M138.5,42.0 L138.5,70.0"/></g><g class="e dash" data-id="flow-1"><path d="M258.0,100.0 L468.0,100.0 L468.0,156.0"/><text class="el" x="474.0" y="115.0"><tspan x="474.0" dy="0">on unscorable</tspan></text></g><g class="e" data-id="flow-6"><path d="M138.5,130.0 L138.5,228.0"/></g><g class="e" data-id="flow-5"><path d="M225.0,245.0 L427.5,245.0 L427.5,288.0"/><text class="el" x="433.5" y="260.0"><tspan x="433.5" dy="0">hold</tspan></text></g><g class="e dash" data-id="flow-2"><path d="M565.0,318.0 L705.5,318.0 L705.5,374.0"/><text class="el" x="711.5" y="333.0"><tspan x="711.5" dy="0">on timeout</tspan></text></g><g class="e" data-id="flow-3"><path d="M427.5,348.0 L427.5,446.0"/></g><g class="e" data-id="flow-4"><path d="M427.5,490.0 L427.5,518.0"/></g><g class="e" data-id="flow-7"><path d="M138.5,262.0 L138.5,288.0 L138.5,574.0"/><text class="el" x="144.5" y="276.0"><tspan x="144.5" dy="0">approve, reject</tspan></text></g><g class="e" data-id="flow-8"><path d="M138.5,618.0 L138.5,646.0"/></g></g><g class="nodes"><g class="n k-start" data-id="start" tabindex="0"><rect class="shape" x="89.5" y="14.0" width="98.0" height="28.0" rx="14.0"/><text class="t" x="105.5" y="32.0">review v1</text></g><g class="n k-call" data-id="s1" tabindex="0"><rect class="shape" x="19.0" y="70.0" width="239.0" height="60.0" rx="4"/><text class="t" x="29.0" y="88.0"><tspan class="ln">40</tspan> r = score(…)</text><text class="t sub" x="29.0" y="104.0">自分で書くタスク</text><text class="t sub" x="29.0" y="120.0">retry 2 times every 10 seconds</text><g class="tick"><title>unscorable → 41 行目; timeout, failure → ワークフローが失敗する</title><circle cx="258.0" cy="79.0" r="6.5"/><text x="258.0" y="82.5">!</text></g></g><g class="n k-fail" data-id="s2" tabindex="0"><rect class="shape" x="284.0" y="156.0" width="368.0" height="44.0" rx="15.0"/><text class="t" x="300.0" y="174.0"><tspan class="ln">41</tspan> fail Unscorable</text><text class="t sub" x="300.0" y="190.0">&quot;Could not score application {application.id}&quot;</text></g><g class="n k-match" data-id="s3" tabindex="0"><polygon class="shape" points="52.0,245.0 65.0,228.0 212.0,228.0 225.0,245.0 212.0,262.0 65.0,262.0"/><text class="t" x="74.0" y="249.0"><tspan class="ln">42</tspan> match r.verdict</text></g><g class="n k-receive" data-id="s5" tabindex="0"><polygon class="shape" points="299.0,288.0 565.0,288.0 556.0,348.0 290.0,348.0"/><text class="t" x="308.0" y="306.0"><tspan class="ln">45</tspan> a = ask_for_approval(…)</text><text class="t sub" x="308.0" y="322.0">自分で書くタスク（応答はコールバック）</text><text class="t sub" x="308.0" y="338.0">timeout 3 days</text><g class="tick"><title>timeout → 46 行目; failure → ワークフローが失敗する</title><circle cx="565.0" cy="297.0" r="6.5"/><text x="565.0" y="300.5">!</text></g></g><g class="n k-fail" data-id="s6" tabindex="0"><rect class="shape" x="591.0" y="374.0" width="229.0" height="44.0" rx="15.0"/><text class="t" x="607.0" y="392.0"><tspan class="ln">46</tspan> fail NoAnswer</text><text class="t sub" x="607.0" y="408.0">&quot;No approval in three days&quot;</text></g><g class="n k-call" data-id="s7" tabindex="0"><rect class="shape" x="367.0" y="446.0" width="121.0" height="44.0" rx="4"/><text class="t" x="377.0" y="464.0"><tspan class="ln">47</tspan> notify(…)</text><text class="t sub" x="377.0" y="480.0">自分で書くタスク</text><g class="tick"><title>timeout, failure → ワークフローが失敗する</title><circle cx="488.0" cy="455.0" r="6.5"/><text x="488.0" y="458.5">!</text></g></g><g class="n k-succeed" data-id="s8" tabindex="0"><rect class="shape" x="310.5" y="518.0" width="234.0" height="28.0" rx="14.0"/><text class="t" x="326.5" y="536.0"><tspan class="ln">48</tspan> succeed verdict = approve</text></g><g class="n k-call" data-id="s9" tabindex="0"><rect class="shape" x="78.0" y="574.0" width="121.0" height="44.0" rx="4"/><text class="t" x="88.0" y="592.0"><tspan class="ln">49</tspan> notify(…)</text><text class="t sub" x="88.0" y="608.0">自分で書くタスク</text><g class="tick"><title>timeout, failure → ワークフローが失敗する</title><circle cx="199.0" cy="583.0" r="6.5"/><text x="199.0" y="586.5">!</text></g></g><g class="n k-succeed" data-id="s10" tabindex="0"><rect class="shape" x="14.0" y="646.0" width="249.0" height="28.0" rx="14.0"/><text class="t" x="30.0" y="664.0"><tspan class="ln">50</tspan> succeed verdict = r.verdict</text></g></g></svg></figure></section>
+<aside class="detail" id="dd-detail" aria-live="polite"></aside>
+</main>
+</div>
+<section class="tables"><h2>呼び出し</h2><table><thead><tr><th>行</th><th>呼び出し</th><th>呼ぶもの</th><th>リトライ</th><th>タイムアウト</th><th>失敗したとき</th></tr></thead><tbody><tr><td class="num">40</td><td><code>r = score(…)</code></td><td>自分で書くタスク, <code>idempotent</code></td><td>10 秒おきに 2 回（failure, timeout）</td><td>—</td><td><code>unscorable</code> → 41 行目<br><code>timeout</code>, <code>failure</code> → ワークフローが失敗する</td></tr><tr><td class="num">45</td><td><code>a = ask_for_approval(…)</code></td><td>自分で書くタスク（応答はコールバック）</td><td>—</td><td>3 日</td><td><code>timeout</code> → 46 行目<br><code>failure</code> → ワークフローが失敗する</td></tr><tr><td class="num">47</td><td><code>notify(…)</code></td><td>自分で書くタスク, <code>idempotent</code></td><td>—</td><td>—</td><td><code>timeout</code>, <code>failure</code> → ワークフローが失敗する</td></tr><tr><td class="num">49</td><td><code>notify(…)</code></td><td>自分で書くタスク, <code>idempotent</code></td><td>—</td><td>—</td><td><code>timeout</code>, <code>failure</code> → ワークフローが失敗する</td></tr></tbody></table><h2>終わり方</h2><table><thead><tr><th>行</th><th>終わり方</th></tr></thead><tbody><tr><td class="num">41</td><td><code>fail Unscorable</code> &quot;Could not score application {application.id}&quot;</td></tr><tr><td class="num">46</td><td><code>fail NoAnswer</code> &quot;No approval in three days&quot;</td></tr><tr><td class="num">48</td><td><code>succeed verdict = approve</code></td></tr><tr><td class="num">50</td><td><code>succeed verdict = r.verdict</code></td></tr></tbody></table></section>
+<template id="t-default"><h2 class="dh">図の読み方</h2><p>ステップを選ぶと、そこで検査が知っていることが出ます。左のシナリオを選ぶと、その実行が通るところが光ります。ステップの横の数は、その実行が通った回数です。</p><ul class="legend"><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg" x="2" y="2" width="26" height="13" rx="2"/></svg><span>タスク</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg" x="2" y="2" width="26" height="13" rx="2"/><path class="lg" d="M6,2 V15 M24,2 V15"/></svg><span>規則</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><polygon class="lg" points="7,2 28,2 23,15 2,15"/></svg><span>外から値が届くタスク（イベントやコールバックの応答）</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><polygon class="lg" points="1,8.5 7,2 23,2 29,8.5 23,15 7,15"/></svg><span>match</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg" x="2" y="2" width="26" height="13" rx="6.5"/></svg><span>待ち</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg frame" x="2" y="2" width="26" height="13" rx="3"/></svg><span>ループ（繰り返すステップを囲む）</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg ok" x="2" y="2" width="12" height="13" rx="6"/><rect class="lg bad" x="16" y="2" width="12" height="13" rx="6"/></svg><span>終わり（succeed、fail）</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><path class="lg-e dash" d="M2,8.5 H28"/></svg><span>呼び出しがその場で処理するエラー</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><circle class="lg-tick" cx="15" cy="8.5" r="6"/><text class="lg-tick-t" x="15" y="12">!</text></svg><span>その場で処理しないエラーがある呼び出し</span></li></ul></template>
+<template id="t-start"><h2 class="dh"><code>review v1</code></h2><p>Send an application to be scored, and when the score says hold, wait for a person's approval. Every task is one you write. Written for Temporal: scoring runs on the workers of its own task queue, which may be written in another language, and so does the notice; the approver's tool answers the callback by the update the generated client sends</p><dl class="facts"><dt>入力</dt><dd><code>application: Application</code></dd><dt>出力</dt><dd><code>verdict: Verdict</code></dd><dt>ファイル</dt><dd><code>examples/review/temporal/review.flow</code></dd></dl></template>
+<template id="t-s1"><h2 class="dh"><code>r = score(…)</code> <span class="dl">40 行目</span></h2><pre class="src"><span class="ln">  40</span>  let r = score(application_id: application.id, amount: application.amount)
+<span class="ln">  41</span>    on unscorable =&gt; fail Unscorable &quot;Could not score application {application.id}&quot;
+</pre><dl class="facts"><dt>呼ぶもの</dt><dd>自分で書くタスク, <code>idempotent</code></dd><dt>リトライ</dt><dd>10 秒おきに 2 回（failure, timeout）</dd><dt>失敗したとき</dt><dd><code>unscorable</code> → 41 行目<br><code>timeout</code>, <code>failure</code> → ワークフローが失敗する</dd></dl><h3>タスクの宣言</h3><pre class="src"><span class="ln">  23</span>  # Scoring runs on workers of its own, which may be written in another language.
+<span class="ln">  24</span>  task score(application_id: string, amount: int) -&gt; Score
+<span class="ln">  25</span>    queue &quot;scoring&quot;
+<span class="ln">  26</span>    errors unscorable
+<span class="ln">  27</span>    retry 2 times every 10 seconds
+<span class="ln">  28</span>    idempotent
+</pre></template>
+<template id="t-s2"><h2 class="dh"><code>fail Unscorable</code> <span class="dl">41 行目</span></h2><pre class="src"><span class="ln">  41</span>  on unscorable =&gt; fail Unscorable &quot;Could not score application {application.id}&quot;
+</pre></template>
+<template id="t-s3"><h2 class="dh"><code>match r.verdict</code> <span class="dl">42 行目</span></h2><pre class="src"><span class="ln">  42</span>  match r.verdict
+<span class="ln">  43</span>    approve, reject =&gt; pass
+<span class="ln">  44</span>    hold =&gt;
+</pre></template>
+<template id="t-s5"><h2 class="dh"><code>a = ask_for_approval(…)</code> <span class="dl">45 行目</span></h2><pre class="src"><span class="ln">  45</span>  let a = ask_for_approval(application_id: application.id, points: r.points)
+<span class="ln">  46</span>    on timeout =&gt; fail NoAnswer &quot;No approval in three days&quot;
+</pre><dl class="facts"><dt>呼ぶもの</dt><dd>自分で書くタスク（応答はコールバック）</dd><dt>タイムアウト</dt><dd>3 日</dd><dt>失敗したとき</dt><dd><code>timeout</code> → 46 行目<br><code>failure</code> → ワークフローが失敗する</dd></dl><h3>タスクの宣言</h3><pre class="src"><span class="ln">  30</span>  # Someone approves in a tool of their own, and the answer comes back with the callback's id.
+<span class="ln">  31</span>  task ask_for_approval(application_id: string, points: int) -&gt; Approval
+<span class="ln">  32</span>    callback
+<span class="ln">  33</span>    timeout 3 days
+</pre></template>
+<template id="t-s6"><h2 class="dh"><code>fail NoAnswer</code> <span class="dl">46 行目</span></h2><pre class="src"><span class="ln">  46</span>  on timeout =&gt; fail NoAnswer &quot;No approval in three days&quot;
+</pre></template>
+<template id="t-s7"><h2 class="dh"><code>notify(…)</code> <span class="dl">47 行目</span></h2><pre class="src"><span class="ln">  47</span>  notify(application_id: application.id, text: &quot;{a.approver} approved application {application.id}&quot;)
+</pre><dl class="facts"><dt>呼ぶもの</dt><dd>自分で書くタスク, <code>idempotent</code></dd><dt>失敗したとき</dt><dd><code>timeout</code>, <code>failure</code> → ワークフローが失敗する</dd></dl><h3>タスクの宣言</h3><pre class="src"><span class="ln">  35</span>  task notify(application_id: string, text: string)
+<span class="ln">  36</span>    queue &quot;notify&quot;
+<span class="ln">  37</span>    idempotent
+</pre></template>
+<template id="t-s8"><h2 class="dh"><code>succeed verdict = approve</code> <span class="dl">48 行目</span></h2><pre class="src"><span class="ln">  48</span>  succeed verdict = approve
+</pre></template>
+<template id="t-s9"><h2 class="dh"><code>notify(…)</code> <span class="dl">49 行目</span></h2><pre class="src"><span class="ln">  49</span>  notify(application_id: application.id, text: &quot;Application {application.id} was reviewed: {r.verdict}&quot;)
+</pre><dl class="facts"><dt>呼ぶもの</dt><dd>自分で書くタスク, <code>idempotent</code></dd><dt>失敗したとき</dt><dd><code>timeout</code>, <code>failure</code> → ワークフローが失敗する</dd></dl><h3>タスクの宣言</h3><pre class="src"><span class="ln">  35</span>  task notify(application_id: string, text: string)
+<span class="ln">  36</span>    queue &quot;notify&quot;
+<span class="ln">  37</span>    idempotent
+</pre></template>
+<template id="t-s10"><h2 class="dh"><code>succeed verdict = r.verdict</code> <span class="dl">50 行目</span></h2><pre class="src"><span class="ln">  50</span>  succeed verdict = r.verdict
+</pre></template>
+<template id="t-fin"><h2 class="dh"><code>終わり（成功）</code></h2><p>flow が最後まで走り、ワークフローは成功します。</p></template>
+<template id="t-run-0"><h2 class="dh">シナリオ 1 <span class="chip ok">成功</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">42</span> <code>match r.verdict</code> → <code>approve, reject</code></li><li><span class="ln">49</span> <code>notify(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">50</span> <code>succeed verdict = r.verdict</code></li></ol></template>
+<template id="t-run-1"><h2 class="dh">シナリオ 2 <span class="chip bad">Unscorable で失敗する</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip bad">unscorable</span> → <code>on unscorable</code></li><li><span class="ln">41</span> <code>fail Unscorable</code></li></ol></template>
+<template id="t-run-2"><h2 class="dh">シナリオ 3 <span class="chip bad">failure で失敗する</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → ここでは処理しない</li></ol></template>
+<template id="t-run-3"><h2 class="dh">シナリオ 4 <span class="chip bad">failure で失敗する</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip bad">failure</span> <span class="chip ok">ok</span></li><li><span class="ln">42</span> <code>match r.verdict</code> → <code>approve, reject</code></li><li><span class="ln">49</span> <code>notify(…)</code> <span class="chip bad">failure</span> → ここでは処理しない</li></ol></template>
+<template id="t-run-4"><h2 class="dh">シナリオ 5 <span class="chip bad">fail Dandori.BadResponse: 宣言した型に合わない結果</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<template id="t-run-5"><h2 class="dh">シナリオ 6 <span class="chip ok">成功</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">42</span> <code>match r.verdict</code> → <code>hold</code></li><li><span class="ln">45</span> <code>a = ask_for_approval(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">47</span> <code>notify(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">48</span> <code>succeed verdict = approve</code></li></ol></template>
+<template id="t-run-6"><h2 class="dh">シナリオ 7 <span class="chip bad">NoAnswer で失敗する</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">42</span> <code>match r.verdict</code> → <code>hold</code></li><li><span class="ln">45</span> <code>a = ask_for_approval(…)</code> <span class="chip bad">timeout</span> → <code>on timeout</code></li><li><span class="ln">46</span> <code>fail NoAnswer</code></li></ol></template>
+<template id="t-run-7"><h2 class="dh">シナリオ 8 <span class="chip bad">failure で失敗する</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip bad">failure</span> <span class="chip ok">ok</span></li><li><span class="ln">42</span> <code>match r.verdict</code> → <code>hold</code></li><li><span class="ln">45</span> <code>a = ask_for_approval(…)</code> <span class="chip bad">failure</span> → ここでは処理しない</li></ol></template>
+<template id="t-run-8"><h2 class="dh">シナリオ 9 <span class="chip bad">fail Dandori.BadResponse: 宣言した型に合わない結果</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">42</span> <code>match r.verdict</code> → <code>hold</code></li><li><span class="ln">45</span> <code>a = ask_for_approval(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<template id="t-run-9"><h2 class="dh">シナリオ 10 <span class="chip bad">failure で失敗する</span></h2><ol class="steps"><li><span class="ln">40</span> <code>r = score(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">42</span> <code>match r.verdict</code> → <code>hold</code></li><li><span class="ln">45</span> <code>a = ask_for_approval(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">47</span> <code>notify(…)</code> <span class="chip bad">failure</span> → ここでは処理しない</li></ol></template>
+<script type="application/json" id="dd-data">{"runs":[{"nodes":["s1","s10","s3","s9","start"],"edges":["flow-6","flow-7","flow-8","flow-9"],"counts":{"s1":1,"s10":1,"s3":1,"s9":1},"failed":[]},{"nodes":["s1","s2","start"],"edges":["flow-1","flow-9"],"counts":{"s1":1,"s2":1},"failed":[]},{"nodes":["s1","start"],"edges":["flow-9"],"counts":{"s1":1},"failed":["s1"]},{"nodes":["s1","s3","s9","start"],"edges":["flow-6","flow-7","flow-9"],"counts":{"s1":1,"s3":1,"s9":1},"failed":["s9"]},{"nodes":["s1","start"],"edges":["flow-9"],"counts":{"s1":1},"failed":[]},{"nodes":["s1","s3","s5","s7","s8","start"],"edges":["flow-3","flow-4","flow-5","flow-6","flow-9"],"counts":{"s1":1,"s3":1,"s5":1,"s7":1,"s8":1},"failed":[]},{"nodes":["s1","s3","s5","s6","start"],"edges":["flow-2","flow-5","flow-6","flow-9"],"counts":{"s1":1,"s3":1,"s5":1,"s6":1},"failed":[]},{"nodes":["s1","s3","s5","start"],"edges":["flow-5","flow-6","flow-9"],"counts":{"s1":1,"s3":1,"s5":1},"failed":["s5"]},{"nodes":["s1","s3","s5","start"],"edges":["flow-5","flow-6","flow-9"],"counts":{"s1":1,"s3":1,"s5":1},"failed":[]},{"nodes":["s1","s3","s5","s7","start"],"edges":["flow-3","flow-5","flow-6","flow-9"],"counts":{"s1":1,"s3":1,"s5":1,"s7":1},"failed":["s7"]}],"checks":[],"through":"{n} 本のシナリオのうち {k} 本がここを通ります。"}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('dd-data').textContent);
+  var canvas = document.querySelector('.canvas');
+  var detail = document.getElementById('dd-detail');
+  var side = document.querySelector('.side');
+  var SVG = 'http://www.w3.org/2000/svg';
+  var state = { node: null, run: null, check: null };
+  function all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+  function byId(id) { return all('[data-id="' + id + '"]'); }
+  function show(id) {
+    var t = document.getElementById('t-' + id) || document.getElementById('t-default');
+    detail.replaceChildren(t.content.cloneNode(true));
+  }
+  function unlight() {
+    canvas.classList.remove('running');
+    all('.lit').forEach(function (e) { e.classList.remove('lit'); });
+    all('.count').forEach(function (e) { e.remove(); });
+    all('button[aria-pressed="true"]').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+  }
+  function light(l) {
+    canvas.classList.add('running');
+    l.nodes.forEach(function (id) { byId(id).forEach(function (e) { e.classList.add('lit'); }); });
+    l.edges.forEach(function (id) { byId(id).forEach(function (e) { e.classList.add('lit'); }); });
+    l.failed.forEach(function (id) { byId(id).forEach(function (e) { var t = e.querySelector('.tick'); if (t) t.classList.add('lit'); }); });
+    Object.keys(l.counts).forEach(function (id) {
+      var n = l.counts[id];
+      if (n < 2) return;
+      byId(id).forEach(function (g) {
+        if (!g.classList.contains('n')) return;
+        var b = g.querySelector('.shape').getBBox();
+        var t = document.createElementNS(SVG, 'text');
+        t.setAttribute('class', 'count');
+        t.setAttribute('x', b.x + b.width + 5);
+        t.setAttribute('y', b.y + b.height - 3);
+        t.textContent = '×' + n;
+        g.appendChild(t);
+      });
+    });
+  }
+  function unpick() {
+    all('.n.sel, .frame.sel').forEach(function (e) { e.classList.remove('sel'); });
+    side.classList.remove('picking');
+    all('button.run.through').forEach(function (b) { b.classList.remove('through'); });
+  }
+  function pick(id) {
+    unpick();
+    byId(id).forEach(function (e) { if (e.classList.contains('n') || e.classList.contains('frame')) e.classList.add('sel'); });
+    show(id);
+    if (data.runs.length) {
+      var k = 0;
+      data.runs.forEach(function (r, i) {
+        if (r.nodes.indexOf(id) >= 0) { k++; var b = document.querySelector('button.run[data-run="' + i + '"]'); if (b) b.classList.add('through'); }
+      });
+      side.classList.add('picking');
+      var p = document.createElement('p');
+      p.className = 'through';
+      p.textContent = data.through.replace('{k}', k).replace('{n}', data.runs.length);
+      detail.appendChild(p);
+    }
+  }
+  function remember() {
+    var h = state.run !== null ? 'run=' + (state.run + 1) : state.check !== null ? 'check=' + (state.check + 1) : '';
+    if (state.node) h += (h ? '&' : '') + 'node=' + state.node;
+    try { history.replaceState(null, '', h ? '#' + h : location.pathname + location.search); } catch (e) {}
+  }
+  function run(k) {
+    unlight();
+    state.run = k; state.check = null;
+    light(data.runs[k]);
+    var b = document.querySelector('button.run[data-run="' + k + '"]');
+    if (b) b.setAttribute('aria-pressed', 'true');
+    if (!state.node) show('run-' + k);
+  }
+  function check(k) {
+    unlight();
+    state.check = k; state.run = null;
+    light(data.checks[k]);
+    var b = document.querySelector('button.check[data-check="' + k + '"]');
+    if (b) b.setAttribute('aria-pressed', 'true');
+    if (!state.node) show('check-' + k);
+  }
+  function node(id) { state.node = id; pick(id); }
+  function reset() { state = { node: null, run: null, check: null }; unlight(); unpick(); show('default'); remember(); }
+  side.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button');
+    if (!b) return;
+    state.node = null; unpick();
+    if (b.dataset.run !== undefined) { if (state.run === +b.dataset.run) { reset(); return; } run(+b.dataset.run); show('run-' + b.dataset.run); }
+    if (b.dataset.check !== undefined) { if (state.check === +b.dataset.check) { reset(); return; } check(+b.dataset.check); show('check-' + b.dataset.check); }
+    remember();
+  });
+  canvas.addEventListener('click', function (ev) {
+    var g = ev.target.closest('.n, .frame');
+    if (!g) { if (state.node) { state.node = null; unpick(); if (state.run !== null) show('run-' + state.run); else if (state.check !== null) show('check-' + state.check); else show('default'); remember(); } return; }
+    node(g.dataset.id);
+    remember();
+  });
+  canvas.addEventListener('keydown', function (ev) {
+    var g = ev.target.closest && ev.target.closest('.n, .frame');
+    if (g && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); node(g.dataset.id); remember(); }
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') reset(); });
+  var desc = document.querySelector('header.top .desc');
+  if (desc) desc.addEventListener('click', function () { desc.classList.toggle('open'); });
+  function fromHash() {
+    var h = {};
+    location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p[0]) h[p[0]] = decodeURIComponent(p[1] || ''); });
+    if (h.run !== undefined && data.runs[+h.run - 1]) run(+h.run - 1);
+    else if (h.check !== undefined && data.checks[+h.check - 1]) check(+h.check - 1);
+    if (h.node && document.getElementById('t-' + h.node)) node(h.node);
+    else if (h.run === undefined && h.check === undefined) show('default');
+  }
+  fromHash();
+})();
+</script>
+</body>
+</html>

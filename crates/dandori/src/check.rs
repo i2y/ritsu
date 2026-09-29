@@ -49,23 +49,44 @@ pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
 }
 
 pub fn check_source(src: &str, path: &Path) -> Checked {
+    let (model, _, diags) = checked_parts(src, path);
+    let ok = !crate::diag::has_errors(&diags);
+    Checked { model: if ok { model } else { None }, diags }
+}
+
+/// What `doc` draws from: the model whenever its names and types resolve, even when the walk of
+/// the runs finds errors, so that the runs of those errors can be drawn on the flow; and what the
+/// walk knows at each statement. The model is None when the file does not parse or lower.
+pub struct Drawable {
+    pub model: Option<Model>,
+    pub facts: crate::flow::Facts,
+    pub diags: Vec<Diag>,
+}
+
+pub fn drawable(path: &Path) -> Result<(String, Drawable), String> {
+    let src = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let (model, facts, diags) = checked_parts(&src, path);
+    Ok((src, Drawable { model, facts, diags }))
+}
+
+fn checked_parts(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<Diag>) {
     CHECKING.with(|c| c.borrow_mut().push(path.canonicalize().unwrap_or_else(|_| path.to_path_buf())));
     let out = check_one(src, path);
     CHECKING.with(|c| c.borrow_mut().pop());
     out
 }
 
-fn check_one(src: &str, path: &Path) -> Checked {
+fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<Diag>) {
     let prog = match syntax::parse(src) {
         Ok(p) => p,
-        Err(d) => return Checked { model: None, diags: vec![d] },
+        Err(d) => return (None, Default::default(), vec![d]),
     };
     let (model, mut diags) = crate::lower::lower(&prog, path);
     let mut model = match model {
         Some(m) => m,
         None => {
             diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
-            return Checked { model: None, diags };
+            return (None, Default::default(), diags);
         }
     };
     let fr = crate::flow::analyze(&model);
@@ -74,8 +95,7 @@ fn check_one(src: &str, path: &Path) -> Checked {
     diags.extend(whole(&model));
     diags.extend(crate::ranges::check(&model));
     diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
-    let ok = !crate::diag::has_errors(&diags);
-    Checked { model: if ok { Some(model) } else { None }, diags }
+    (Some(model), fr.facts, diags)
 }
 
 fn whole(m: &Model) -> Vec<Diag> {

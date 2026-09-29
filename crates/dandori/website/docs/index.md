@@ -171,6 +171,27 @@ OpenRouter, …) can be called.
 </div>
 </div>
 
+<div class="dd-row" markdown>
+<div markdown>
+
+```text
+dandori doc hotel.flow > hotel.md
+dandori doc hotel.flow --format html > hotel.html
+```
+
+</div>
+<div markdown>
+
+### Drawn for the person who reviews it
+
+`dandori doc` draws a workflow: every call, match, wait and loop, with what each call does, where
+its errors go, what a case can be after it, and every way the workflow can end. As Markdown, it is a
+Mermaid flowchart that GitHub draws in a pull request; as one HTML page, each scenario lights up the
+way its run goes. [The hotel booking, drawn](doc/hotel.html) · [Draw a workflow](diagrams.md)
+
+</div>
+</div>
+
 ## Status
 
 Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, protobuf's binary

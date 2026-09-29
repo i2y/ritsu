@@ -16,9 +16,14 @@ Usage:
                                                   run the workflow in the reference interpreter against scripted answers,
                                                   and print the trace as the target would show it
   dandori scenarios <file.flow> [--out <dir>]     write scenarios that take every arm and every way a case can move
+  dandori doc <file.flow> [--format html] [--out <dir>]
+                                                  draw the workflow for the person who reviews it: the flow, what each
+                                                  call does and where its errors go, every way it can end; Markdown with
+                                                  Mermaid, or one HTML page where each scenario lights up the way it goes
 
 Flags:
   --format json   machine-facing JSON (check)
+  --format html   one HTML page (doc); Markdown by default
   --lang ja|en    language of the messages; else DANDORI_LANG, else en
 
 The rules are read with rulec: DANDORI_RULEC names the binary, else `rulec` on the PATH.
@@ -28,6 +33,7 @@ struct Args {
     cmd: String,
     files: Vec<PathBuf>,
     format_json: bool,
+    format_html: bool,
     lang: Lang,
     target: Option<String>,
     out: Option<PathBuf>,
@@ -40,14 +46,16 @@ fn parse_args() -> Result<Args, String> {
     if cmd == "--help" || cmd == "-h" || cmd == "help" {
         return Err(USAGE.to_string());
     }
-    let mut a = Args { cmd, files: vec![], format_json: false, lang: Lang::En, target: None, out: None, scenario: None };
+    let mut a = Args { cmd, files: vec![], format_json: false, format_html: false, lang: Lang::En, target: None, out: None, scenario: None };
     let mut lang_flag: Option<String> = None;
     while let Some(x) = it.next() {
         match x.as_str() {
             "--format" => match it.next().as_deref() {
                 Some("json") => a.format_json = true,
                 Some("text") => a.format_json = false,
-                _ => return Err("--format takes json or text".into()),
+                Some("html") => a.format_html = true,
+                Some("md") => a.format_html = false,
+                _ => return Err("--format takes json or text (check), html or md (doc)".into()),
             },
             "--lang" => lang_flag = Some(it.next().ok_or("--lang takes ja or en")?),
             "--target" => a.target = Some(it.next().ok_or("--target takes asl, temporal, temporal-python, durable, argo, pydantic-graph or reference")?),
@@ -75,6 +83,7 @@ fn main() -> ExitCode {
         "build" => cmd_build(&a),
         "run" => cmd_run(&a),
         "scenarios" => cmd_scenarios(&a),
+        "doc" => cmd_doc(&a),
         other => {
             eprintln!("unknown command {other}\n\n{USAGE}");
             2
@@ -264,4 +273,51 @@ fn cmd_scenarios(a: &Args) -> u8 {
         None => println!("{}", serde_json::to_string_pretty(&list).unwrap()),
     }
     0
+}
+
+fn cmd_doc(a: &Args) -> u8 {
+    let file = match a.files.as_slice() {
+        [f] => f.clone(),
+        _ => {
+            eprintln!("dandori doc <file.flow> [--format html] [--out <dir>]");
+            return 2;
+        }
+    };
+    let (src, drawn) = match check::drawable(&file) {
+        Ok(x) => x,
+        Err(msg) => {
+            eprintln!("{msg}");
+            return 2;
+        }
+    };
+    let shown = file.display().to_string();
+    for d in &drawn.diags {
+        eprint!("{}", d.render(&shown, &src, a.lang));
+    }
+    // a workflow whose names or types do not resolve has nothing to draw
+    let Some(model) = &drawn.model else { return 1 };
+    let input = dandori::doc::Input { m: model, src: &src, file: &shown, facts: &drawn.facts, diags: &drawn.diags, lang: a.lang };
+    let page = if a.format_html { dandori::doc::html(&input) } else { dandori::doc::markdown(&input) };
+    match &a.out {
+        Some(dir) => {
+            if let Err(e) = std::fs::create_dir_all(dir) {
+                eprintln!("cannot create {}: {e}", dir.display());
+                return 2;
+            }
+            let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| model.name.clone());
+            let p = dir.join(format!("{stem}.{}", if a.format_html { "html" } else { "md" }));
+            if let Err(e) = std::fs::write(&p, page) {
+                eprintln!("cannot write {}: {e}", p.display());
+                return 2;
+            }
+            println!("{}", p.display());
+        }
+        None => print!("{page}"),
+    }
+    // the page is written even so: the runs of the errors are on it
+    if diag::has_errors(&drawn.diags) {
+        1
+    } else {
+        0
+    }
 }

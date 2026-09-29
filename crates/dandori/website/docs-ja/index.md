@@ -148,6 +148,24 @@ task read_inquiry(text: string) -> Reading
 </div>
 </div>
 
+<div class="dd-row" markdown>
+<div markdown>
+
+```text
+dandori doc hotel.flow > hotel.md
+dandori doc hotel.flow --format html > hotel.html
+```
+
+</div>
+<div markdown>
+
+### レビューする人のために図にする
+
+`dandori doc` はワークフローを図にします。呼び出し・`match`・待ち・ループのすべてと、各呼び出しのすること、エラーの行き先、呼び出しのあと案件がとりうる状態、ワークフローの終わり方のすべてが載ります。Markdown なら、GitHub がプルリクエストの中で描く Mermaid のフローチャートに、HTML なら、シナリオごとに実行の通るところが光るページ一枚になります。[ホテルの予約の図](doc/hotel.html) · [ワークフローを図にする](diagrams.md)
+
+</div>
+</div>
+
 ## いまの状況
 
 まだ初期の段階です。次のものはまだありません。別々の処理を同時に走らせる Parallel、YAML で書いた OpenAPI の文書、protobuf のバイナリ形式と Connect のストリーム、ワークフロー自身が状態を持つ案件、規則の前提条件を値を作ったタスクの直後で確かめること。AWS の上や、本番構成の Temporal や Temporal Cloud の上ではまだ動かしておらず、Argo から caller のイメージで本物の Lambda・HTTP・AWS に送ることも、エージェントの呼び出しを本物の OpenAI や Anthropic に送ることもしていません。
