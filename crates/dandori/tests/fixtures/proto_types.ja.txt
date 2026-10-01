@@ -1,0 +1,22 @@
+エラー[E006]: tests/fixtures/proto_types.flow:9:11: `urgency` は規則と API の両方の名前です。別の名前を付けてください
+     9 | use proto urgency from "protos/types.proto"
+エラー[E016]: tests/fixtures/proto_types.flow:10:11: `.proto` はサービスの場所を言いません。`use proto shop` の下に `url "<場所>"` を書いてください
+    10 | use proto shop from "protos/shop/v1/order.proto"
+エラー[E006]: tests/fixtures/proto_types.flow:23:8: `types_Line` と `types.Line` は、生成するコードで同じ名前（`types_Line`）になります。`types_Line` の名前を変えてください
+    23 | record types_Line
+エラー[E002]: tests/fixtures/proto_types.flow:27:11: 型 `types.Stok` はありません
+    27 |   stock : types.Stok
+  = `types` のメッセージと列挙は Box・Everything・Everything.Nested・GetRequest・Line・Mode・Status・Ticket です
+エラー[E002]: tests/fixtures/proto_types.flow:30:13: `types.TypesService` は `types` のサービスで、メッセージでも列挙でもありません
+    30 |   service : types.TypesService
+エラー[E002]: tests/fixtures/proto_types.flow:33:12: 型 `stripe.PaymentIntent` はありません
+    33 |   intent : stripe.PaymentIntent
+  = 型を作れるのは、`use proto` で読んだ `.proto` からです。`stripe` は OpenAPI の記述で、そのスキーマからは型を作りません
+エラー[E003]: tests/fixtures/proto_types.flow:37:10: `tree.Tree` は、フィールド `children` を通して自分自身を含んでいます。レコードは自分自身を含められないので、自分を含むところを `json` にしたレコードを自分で書いてください
+    37 |   root : tree.Tree
+エラー[E016]: tests/fixtures/proto_types.flow:40:1: 引数 `quantity` は、`types` の TypesService/PutLine が受け取るものと合いません。範囲が書かれていませんが、受け取るのは `>=1 <=99` です
+    40 | task put_line(sku: string, quantity: int) -> types.Line
+エラー[E008]: tests/fixtures/proto_types.flow:48:10: `types.Status` の値（STATUS_OPEN・STATUS_CLOSED）は、`order_state.order` の状態（received・paid・shipped・delivered・cancelled）と違います
+    48 | case a : types.Ticket follows order_state.order
+エラー[E008]: tests/fixtures/proto_types.flow:51:9: `types.Status` の値（STATUS_OPEN・STATUS_CLOSED）は、`order_state.order` の状態（received・paid・shipped・delivered・cancelled）と違います
+    51 |   state status

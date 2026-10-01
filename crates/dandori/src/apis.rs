@@ -8,9 +8,10 @@
 //! so a large one (Stripe's) costs only what is looked at.
 
 use crate::model::*;
-use crate::proto::{PType, ProtoFile};
+use crate::proto::{PField, PType, ProtoFile};
 use serde_json::{json, Map, Value};
 use std::path::Path;
+use std::sync::Arc;
 
 /// A difference, in English and in Japanese.
 pub type Words = (String, String);
@@ -36,7 +37,8 @@ impl ApiKind {
 pub enum ApiDoc {
     OpenApi(Value),
     Smithy(Value),
-    Proto(ProtoFile),
+    /// shared, since types made from it are looked up while the flow's own are being made
+    Proto(Arc<ProtoFile>),
 }
 
 #[derive(Clone, Debug)]
@@ -49,7 +51,7 @@ pub struct Api {
 
 pub fn load(kind: ApiKind, path: &Path) -> Result<ApiDoc, String> {
     match kind {
-        ApiKind::Proto => crate::proto::load(path).map(ApiDoc::Proto),
+        ApiKind::Proto => crate::proto::load(path).map(|pf| ApiDoc::Proto(Arc::new(pf))),
         _ => {
             let text = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
             let v: Value = serde_json::from_str(&text).map_err(|e| format!("{} is not JSON ({e}); dandori reads an OpenAPI document or a Smithy model written as JSON", path.display()))?;
@@ -87,9 +89,78 @@ enum Node {
     Json(Value),
     /// a Smithy shape, by its id
     Shape(String),
-    Proto(PType),
-    ProtoList(PType),
+    /// a protobuf type, with what the field it is the type of is held to
+    Proto(PType, FieldRules),
+    /// the type of a `repeated` field, which a list of it holds
+    ProtoList(PType, FieldRules),
     Any,
+}
+
+/// What a protobuf field is held to by Protovalidate (`(buf.validate.field)`), as far as dandori
+/// reads it, which is as far as rulec does in its check of a contract (its DESIGN 15.132): the
+/// range of a whole number, and whether the field must be set. The other rules (the length of a
+/// string, the count of a list, CEL) are read as not there, which only makes a field look wider.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FieldRules {
+    /// the whole numbers the field lets through
+    pub range: Option<Range>,
+    /// the same for each item of a `repeated` field (`repeated.items`)
+    pub items: Option<Range>,
+    /// `required`: the field is always there
+    pub required: bool,
+}
+
+const INT_KINDS: &[&str] = &["int32", "int64", "uint32", "uint64", "sint32", "sint64", "fixed32", "fixed64", "sfixed32", "sfixed64"];
+
+/// The range the integer rules of one `(buf.validate.field)` tree let through, written as
+/// `{"int32": {"gte": 1}}` under whichever of the ten kinds: `gte` and `gt` (one above) for the low
+/// end, `lte` and `lt` (one below) for the high end, `const` for both. `ignore` with
+/// `IGNORE_IF_ZERO_VALUE`, or what it was called before, lets 0 through whatever the rest says.
+/// A low end above the high end means, to Protovalidate, what is outside them, which is not a
+/// range; that, an empty range, and `IGNORE_ALWAYS` give None.
+fn int_range(rules: &Value) -> Option<Range> {
+    let obj = INT_KINDS.iter().find_map(|k| rules.get(*k).filter(|v| v.is_object()))?;
+    if rules["ignore"].as_str() == Some("IGNORE_ALWAYS") {
+        return None;
+    }
+    let n = |k: &str| obj.get(k).and_then(|v| v.as_i64());
+    let (gt, gte, lt, lte) = (n("gt"), n("gte"), n("lt"), n("lte"));
+    if let Some(c) = n("const") {
+        return Some(Range::exactly(c));
+    }
+    if let (Some(a), Some(b)) = (gt.or(gte), lt.or(lte)) {
+        if a > b {
+            return None;
+        }
+    }
+    let lo = match (gt, gte) {
+        (Some(g), _) => Some(g.checked_add(1)?),
+        (None, g) => g,
+    };
+    let hi = match (lt, lte) {
+        (Some(l), _) => Some(l.checked_sub(1)?),
+        (None, l) => l,
+    };
+    if lo.is_none() && hi.is_none() {
+        return None;
+    }
+    let r = Range { lo, hi };
+    if let (Some(lo), Some(hi)) = (r.lo, r.hi) {
+        if lo > hi {
+            return None;
+        }
+    }
+    let zero_passes = matches!(rules["ignore"].as_str(), Some("IGNORE_IF_ZERO_VALUE" | "IGNORE_IF_UNPOPULATED" | "IGNORE_IF_DEFAULT_VALUE"));
+    Some(if zero_passes { r.hull(&Range::exactly(0)) } else { r })
+}
+
+/// What Protovalidate holds the field to: see `FieldRules`.
+pub fn field_rules(f: &PField) -> FieldRules {
+    FieldRules {
+        range: int_range(&f.rules),
+        items: int_range(&f.rules["repeated"]["items"]),
+        required: f.rules["required"].as_bool().unwrap_or(false),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -108,6 +179,8 @@ enum Shape {
     Object(Vec<Member>),
     /// any of these (OpenAPI's anyOf and oneOf)
     Choice(Vec<Node>),
+    /// protobuf: a type that no file read has, which an import that was not read may hold
+    Unread(String),
 }
 
 #[derive(Clone, Debug)]
@@ -142,7 +215,15 @@ pub struct Op<'a> {
     /// protobuf: the full name of the service and the method, for the Connect path
     pub procedure: Option<String>,
     pub streams: bool,
+    /// a field that says whether it is set is read into a type without `?` all the same: at the
+    /// entry of a workflow that implements a service, the workflow says what it needs (DESIGN 1.14)
+    presence_free: bool,
+    /// what the messages call the value read, in English and in Japanese: the answer of an operation
+    noun: (&'static str, &'static str),
 }
+
+/// How the messages of E016 call what an operation answers.
+const ANSWER: (&str, &str) = ("the answer", "レスポンス");
 
 /// The OpenAPI operation at `method` and `path`.
 pub fn openapi_op<'a>(api: &'a Api, method: &str, path: &str) -> Result<Op<'a>, Words> {
@@ -182,7 +263,7 @@ pub fn openapi_op<'a>(api: &'a Api, method: &str, path: &str) -> Result<Op<'a>, 
         Some(c) => Node::Json(c["schema"].clone()),
         None => Node::Any,
     });
-    Ok(Op { api, label, input, query, output, errors: responses.keys().cloned().collect(), token: None, form, procedure: None, streams: false })
+    Ok(Op { api, label, input, query, output, errors: responses.keys().cloned().collect(), token: None, form, procedure: None, streams: false, presence_free: false, noun: ANSWER })
 }
 
 /// The Smithy operation that Step Functions names `action` (`publish` for `Publish`).
@@ -200,7 +281,7 @@ pub fn smithy_op<'a>(api: &'a Api, action: &str) -> Result<Op<'a>, Words> {
     let token = op["input"]["target"].as_str().and_then(|t| shapes.get(t)).and_then(|s| s["members"].as_object()).and_then(|ms| {
         ms.iter().find(|(_, m)| m["traits"].get("smithy.api#idempotencyToken").is_some()).map(|(n, _)| n.clone())
     });
-    Ok(Op { api, label: local(id).to_string(), input, query: vec![], output, errors, token, form: false, procedure: None, streams: false })
+    Ok(Op { api, label: local(id).to_string(), input, query: vec![], output, errors, token, form: false, procedure: None, streams: false, presence_free: false, noun: ANSWER })
 }
 
 /// The method of a `.proto`'s service, written `Service/Method`.
@@ -213,14 +294,16 @@ pub fn proto_op<'a>(api: &'a Api, method: &str) -> Result<Op<'a>, Words> {
     Ok(Op {
         api,
         label: format!("{}/{}", service.name.rsplit('.').next().unwrap_or(&service.name), found.name),
-        input: Node::Proto(PType::Named(found.input.clone())),
+        input: Node::Proto(PType::Named(found.input.clone()), FieldRules::default()),
         query: vec![],
-        output: Some(Node::Proto(PType::Named(found.output.clone()))),
+        output: Some(Node::Proto(PType::Named(found.output.clone()), FieldRules::default())),
         errors: vec![],
         token: None,
         form: false,
         procedure: Some(format!("{}/{}", service.name, found.name)),
         streams: found.streams,
+        presence_free: false,
+        noun: ANSWER,
     })
 }
 
@@ -245,8 +328,8 @@ impl<'a> Op<'a> {
             (Node::Any, _) => Shape::Any,
             (Node::Json(s), ApiDoc::OpenApi(doc)) => openapi_shape(doc, s),
             (Node::Shape(id), ApiDoc::Smithy(doc)) => smithy_shape(doc, id),
-            (Node::Proto(t), ApiDoc::Proto(pf)) => proto_shape(pf, t),
-            (Node::ProtoList(t), ApiDoc::Proto(_)) => Shape::List(Node::Proto(t.clone())),
+            (Node::Proto(t, rules), ApiDoc::Proto(pf)) => proto_shape(pf, t, rules),
+            (Node::ProtoList(t, rules), ApiDoc::Proto(_)) => Shape::List(Node::Proto(t.clone(), FieldRules { range: rules.items, ..Default::default() })),
             _ => Shape::Any,
         }
     }
@@ -258,6 +341,14 @@ impl<'a> Op<'a> {
         let op = &self.label;
         if self.streams {
             out.push((format!("`{api}` {op} streams; `connect` calls a method that takes one message and answers one"), format!("`{api}` の {op} はストリームです。`connect` で呼べるのは、一つ受け取って一つ返すメソッドです")));
+            return out;
+        }
+        // a message nothing read has: what the task sends or reads cannot be held to it
+        if let Shape::Unread(u) = self.shape(&self.input) {
+            out.push((
+                format!("`{api}` {op} takes `{u}`, a type that is not known (a file it may be in was not read), so the parameters of `{}` cannot be held to it", task.name),
+                format!("`{api}` の {op} が受け取る `{u}` が分かりません（それがあるはずのファイルを読めませんでした）。`{}` の引数をそれに合わせて確かめられません", task.name),
+            ));
             return out;
         }
         // what goes: the path's and the query's parameters, and the body's
@@ -362,7 +453,10 @@ impl<'a> Op<'a> {
                 }
             }
             (Ty::Json, _) => Ok(()),
+            (_, Shape::Unread(u)) => Err(unknown_type(u)),
             (Ty::Str, Shape::Str(None)) | (Ty::Str, Shape::Bytes) => Ok(()),
+            // protobuf's JSON takes a 64-bit integer as a string, which is how a flow has it from an answer
+            (Ty::Str, Shape::Int { text: true, .. }) => Ok(()),
             (Ty::Str, Shape::Str(Some(vs))) => Err((format!("`{}` takes one of {}, and `string` can be anything; give it an enum", m.ty_name(t), vs.join(", ")), format!("受け取るのは {} のどれかで、`string` は何でもありえます。列挙にしてください", vs.join("・")))),
             (Ty::Enum(e), Shape::Str(vs)) => match (vs, m.enums[*e].values.iter().find(|v| vs.as_ref().is_some_and(|vs| !vs.contains(v)))) {
                 (_, Some(v)) => Err((format!("`{v}` of `{}` is not one of the values it takes ({})", m.enums[*e].name, vs.as_ref().unwrap().join(", ")), format!("`{}` の `{v}` は、受け取る値（{}）にありません", m.enums[*e].name, vs.as_ref().unwrap().join("・")))),
@@ -418,6 +512,7 @@ impl<'a> Op<'a> {
                 Ok(())
             }
             (Shape::Any, _) => Err((format!("it can be anything, which `{}` is not; declare it `json`", m.ty_name(t)), format!("何でもありえますが、`{}` はそうではありません。`json` にしてください", m.ty_name(t)))),
+            (Shape::Unread(u), _) => Err(unknown_type(u)),
             (Shape::Str(_), Ty::Str) | (Shape::Bytes, Ty::Str) | (Shape::Int { text: true, .. }, Ty::Str) => Ok(()),
             (Shape::Str(Some(vs)), Ty::Enum(e)) => {
                 let zero = self.proto_zero(n);
@@ -462,13 +557,15 @@ impl<'a> Op<'a> {
         for (f, ft) in &rd.fields {
             let Some(mb) = ms.iter().find(|x| x.name == *f) else {
                 let other = ms.iter().find(|x| x.alias.as_deref() == Some(f));
+                let (en, ja) = self.noun;
                 out.push(match other {
-                    Some(o) => (format!("the answer names `{f}` `{}`", o.name), format!("レスポンスでは `{f}` は `{}` という名前です", o.name)),
-                    None => (format!("the answer has no `{f}` (a field of `{}`)", rd.name), format!("レスポンスに `{f}`（`{}` のフィールド）はありません", rd.name)),
+                    Some(o) => (format!("{en} names `{f}` `{}`", o.name), format!("{ja}では `{f}` は `{}` という名前です", o.name)),
+                    None => (format!("{en} has no `{f}` (a field of `{}`)", rd.name), format!("{ja}に `{f}`（`{}` のフィールド）はありません", rd.name)),
                 });
                 continue;
             };
-            if (mb.optional_out || mb.nullable) && !matches!(ft, Ty::Opt(_) | Ty::Json) {
+            // at a workflow's entry, a field that may be left out is the workflow's to need or not
+            if (mb.nullable || (mb.optional_out && !self.presence_free)) && !matches!(ft, Ty::Opt(_) | Ty::Json) {
                 let (en, ja) = if mb.nullable { ("may be null", "は null のことがあります") } else { ("may be left out", "は無いことがあります") };
                 out.push((format!("`{f}` {en}; declare it `{}?`", m.ty_name(ft)), format!("`{f}` {ja}。`{}?` にしてください", m.ty_name(ft))));
                 continue;
@@ -485,7 +582,7 @@ impl<'a> Op<'a> {
     /// is not set, which a flow's enum need not have (the answer's check refuses it, if it comes).
     fn proto_zero(&self, n: &Node) -> Option<String> {
         match (n, &self.api.doc) {
-            (Node::Proto(PType::Named(e)), ApiDoc::Proto(pf)) => pf.enums.get(e).and_then(|vs| vs.first().cloned()),
+            (Node::Proto(PType::Named(e), _), ApiDoc::Proto(pf)) => pf.enums.get(e).and_then(|vs| vs.first().cloned()),
             _ => None,
         }
     }
@@ -493,12 +590,20 @@ impl<'a> Op<'a> {
     /// For `connect`: the zero values of the answer's fields that protobuf leaves out of JSON,
     /// and the same for the messages inside it: `{"f": {key: zero}, "m": {key: …}, "l": {key: …}}`.
     pub fn zeros(&self) -> Option<Value> {
-        let (ApiDoc::Proto(pf), Some(Node::Proto(PType::Named(msg)))) = (&self.api.doc, &self.output) else { return None };
-        Some(zeros_of(pf, msg, &mut vec![]))
+        let (ApiDoc::Proto(pf), Some(Node::Proto(PType::Named(msg), _))) = (&self.api.doc, &self.output) else { return None };
+        Some(zeros_of(pf, msg))
     }
 }
 
-fn zeros_of(pf: &ProtoFile, msg: &str, within: &mut Vec<String>) -> Value {
+/// The zero values of the fields of the message `msg` that protobuf leaves out of JSON when they
+/// are at them, and the same for the messages inside it: `{"f": {key: zero}, "m": {key: …}, "l": {key: …}}`.
+/// The names are the fields' JSON names. `fill` puts them back; it is what reading a message of
+/// `msg` from JSON does.
+pub fn zeros_of(pf: &ProtoFile, msg: &str) -> Value {
+    zeros_in(pf, msg, &mut vec![])
+}
+
+fn zeros_in(pf: &ProtoFile, msg: &str, within: &mut Vec<String>) -> Value {
     let mut f = Map::new();
     let mut ms = Map::new();
     let mut ls = Map::new();
@@ -514,7 +619,7 @@ fn zeros_of(pf: &ProtoFile, msg: &str, within: &mut Vec<String>) -> Value {
         if fl.repeated {
             f.insert(fl.json.clone(), json!([]));
             if let Some(n) = &message {
-                let sub = zeros_of(pf, n, within);
+                let sub = zeros_in(pf, n, within);
                 if sub.as_object().is_some_and(|o| !o.is_empty()) {
                     ls.insert(fl.json.clone(), sub);
                 }
@@ -522,7 +627,7 @@ fn zeros_of(pf: &ProtoFile, msg: &str, within: &mut Vec<String>) -> Value {
         } else if let PType::Map(..) = fl.ty {
             f.insert(fl.json.clone(), json!({}));
         } else if let Some(n) = &message {
-            let sub = zeros_of(pf, n, within);
+            let sub = zeros_in(pf, n, within);
             if sub.as_object().is_some_and(|o| !o.is_empty()) {
                 ms.insert(fl.json.clone(), sub);
             }
@@ -605,8 +710,59 @@ pub fn sparse(v: &Value, zeros: &Value) -> Value {
     Value::Object(out)
 }
 
+/// The message as protobuf's JSON writes it: each field that `zeros` names left out when it holds
+/// its zero value, in the message, in its messages and in the messages of its lists. What `fill`
+/// reads back: `fill(&omit_zeros(v, z), z)` is `v` when `v` has every field `z` names.
+pub fn omit_zeros(v: &Value, zeros: &Value) -> Value {
+    let Some(o) = v.as_object() else { return v.clone() };
+    let mut out = o.clone();
+    for (k, z) in zeros["f"].as_object().into_iter().flatten() {
+        if out.get(k) == Some(z) {
+            out.remove(k);
+        }
+    }
+    for (k, sub) in zeros["m"].as_object().into_iter().flatten() {
+        if let Some(x) = out.get(k).filter(|x| x.is_object()).cloned() {
+            out.insert(k.clone(), omit_zeros(&x, sub));
+        }
+    }
+    for (k, sub) in zeros["l"].as_object().into_iter().flatten() {
+        if let Some(a) = out.get(k).and_then(|x| x.as_array()).cloned() {
+            out.insert(k.clone(), Value::Array(a.iter().map(|x| omit_zeros(x, sub)).collect()));
+        }
+    }
+    Value::Object(out)
+}
+
 fn field_words(f: &str, (en, ja): Words) -> Words {
     (format!("in `{f}`, {en}"), format!("`{f}` で、{ja}"))
+}
+
+/// What differs where a `.proto` names a type that no file read has: nothing can be said of it
+/// but that, and `json` takes whatever it is.
+fn unknown_type(n: &str) -> Words {
+    (
+        format!("its type `{n}` is not known, since a file it may be in was not read; `json` takes it"),
+        format!("型 `{n}` が分かりません。それがあるはずのファイルを読めませんでした。`json` にすれば受け渡せます"),
+    )
+}
+
+/// The note for what a flow comes to of a `.proto` that imports files which were not read: which
+/// they are, and that the types in them cannot be used. None when every import was read.
+pub fn unread_note(pf: &ProtoFile) -> Option<Words> {
+    let files: Vec<String> = pf.unread.iter().map(|f| format!("`{f}`")).collect();
+    let (first, rest) = files.split_first()?;
+    let (en_list, ja_list, en_them) = match rest.split_last() {
+        None => (first.clone(), first.clone(), "it"),
+        Some((last, middle)) => {
+            let head = std::iter::once(first).chain(middle.iter()).map(|x| x.as_str()).collect::<Vec<_>>().join(", ");
+            (format!("{head} and {last}"), files.join("・"), "them")
+        }
+    };
+    Some((
+        format!("{en_list} could not be read, so the types in {en_them} cannot be used"),
+        format!("{ja_list} を読めなかったので、そこにある型は使えません"),
+    ))
 }
 
 fn within(rg: Option<Range>, min: Option<i64>, max: Option<i64>) -> Result<(), Words> {
@@ -636,6 +792,7 @@ fn describe(s: &Shape) -> String {
         Shape::Map(_) => "a map".into(),
         Shape::Object(_) => "an object".into(),
         Shape::Choice(_) => "one of several shapes".into(),
+        Shape::Unread(n) => format!("`{n}`, a type that is not known"),
     }
 }
 
@@ -654,6 +811,7 @@ fn describe_ja(s: &Shape) -> String {
         Shape::Map(_) => "マップ".into(),
         Shape::Object(_) => "オブジェクト".into(),
         Shape::Choice(_) => "いくつかの形のどれか".into(),
+        Shape::Unread(n) => format!("分からない型 `{n}`"),
     }
 }
 
@@ -769,49 +927,319 @@ fn smithy_shape(doc: &Value, id: &str) -> Shape {
     }
 }
 
-fn proto_shape(pf: &ProtoFile, t: &PType) -> Shape {
+fn proto_shape(pf: &ProtoFile, t: &PType, rules: &FieldRules) -> Shape {
+    let (min, max) = (rules.range.and_then(|r| r.lo), rules.range.and_then(|r| r.hi));
     match t {
         PType::Scalar(s) => match s.as_str() {
             "string" => Shape::Str(None),
             "bytes" => Shape::Bytes,
             "bool" => Shape::Bool,
             "double" | "float" => Shape::Float,
-            "int64" | "uint64" | "sint64" | "fixed64" | "sfixed64" => Shape::Int { text: true, min: None, max: None },
-            _ => Shape::Int { text: false, min: None, max: None },
+            "int64" | "uint64" | "sint64" | "fixed64" | "sfixed64" => Shape::Int { text: true, min, max },
+            _ => Shape::Int { text: false, min, max },
         },
-        PType::Map(_, v) => Shape::Map(Node::Proto((**v).clone())),
+        PType::Map(_, v) => Shape::Map(Node::Proto((**v).clone(), FieldRules::default())),
         PType::Named(n) => match n.as_str() {
             "google.protobuf.Timestamp" => Shape::Timestamp,
             "google.protobuf.Duration" | "google.protobuf.FieldMask" | "google.protobuf.StringValue" => Shape::Str(None),
-            "google.protobuf.Struct" | "google.protobuf.Value" | "google.protobuf.Any" => Shape::Any,
+            "google.protobuf.Struct" | "google.protobuf.Value" | "google.protobuf.Any" | "google.protobuf.NullValue" => Shape::Any,
             "google.protobuf.ListValue" => Shape::List(Node::Any),
             "google.protobuf.Empty" => Shape::Object(vec![]),
             "google.protobuf.DoubleValue" | "google.protobuf.FloatValue" => Shape::Float,
-            "google.protobuf.Int64Value" | "google.protobuf.UInt64Value" => Shape::Int { text: true, min: None, max: None },
-            "google.protobuf.Int32Value" | "google.protobuf.UInt32Value" => Shape::Int { text: false, min: None, max: None },
+            "google.protobuf.Int64Value" | "google.protobuf.UInt64Value" => Shape::Int { text: true, min, max },
+            "google.protobuf.Int32Value" | "google.protobuf.UInt32Value" => Shape::Int { text: false, min, max },
             "google.protobuf.BoolValue" => Shape::Bool,
             "google.protobuf.BytesValue" => Shape::Bytes,
             _ => {
                 if let Some(vs) = pf.enums.get(n) {
                     return Shape::Str(Some(vs.clone()));
                 }
+                if !pf.knows(n) {
+                    return Shape::Unread(n.clone());
+                }
                 Shape::Object(
                     pf.messages
                         .get(n)
                         .into_iter()
                         .flatten()
-                        .map(|fl| Member {
-                            name: fl.json.clone(),
-                            alias: (fl.name != fl.json).then(|| fl.name.clone()),
-                            required: false,
-                            nullable: false,
-                            optional_out: fl.presence,
-                            node: if fl.repeated { Node::ProtoList(fl.ty.clone()) } else { Node::Proto(fl.ty.clone()) },
+                        .map(|fl| {
+                            let rules = field_rules(fl);
+                            Member {
+                                name: fl.json.clone(),
+                                alias: (fl.name != fl.json).then(|| fl.name.clone()),
+                                required: rules.required,
+                                nullable: false,
+                                optional_out: fl.presence && !rules.required,
+                                node: if fl.repeated { Node::ProtoList(fl.ty.clone(), rules) } else { Node::Proto(fl.ty.clone(), rules) },
+                            }
                         })
                         .collect(),
                 )
             }
         },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Types made from a `.proto` (DESIGN 1.12)
+
+/// What a message's field, or a named message or enum, is to a flow: the one table by which a
+/// `.proto` is made into types and by which a task is held to it (`proto_shape` above reads the
+/// same things as shapes). `lower` turns it into a `Ty`.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MadeTy {
+    /// a 32-bit integer, in the range the field's rules let through
+    Int(Option<Range>),
+    Str,
+    Bool,
+    Timestamp,
+    Json,
+    /// a message, by its full name; `google.protobuf.Empty` too, which has no fields
+    Message(String),
+    Enum(String),
+    List(Box<MadeTy>),
+    Opt(Box<MadeTy>),
+    /// a type no file read has, which an import that was not read may hold: no type can be made of it
+    Unread(String),
+}
+
+/// A field of the record made from a message, by the key it has in JSON.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MadeField {
+    pub name: String,
+    pub ty: MadeTy,
+}
+
+/// What a type of a `.proto` is, with `range` for a 32-bit integer. A 64-bit integer is a
+/// `string`, for protobuf's JSON writes it as one; a `float` or a `double` is `json`, which has no
+/// fraction to be checked; a wrapper is the type inside it.
+fn made_elem(pf: &ProtoFile, t: &PType, range: Option<Range>) -> MadeTy {
+    match t {
+        PType::Scalar(s) => match s.as_str() {
+            "string" | "bytes" => MadeTy::Str,
+            "bool" => MadeTy::Bool,
+            "double" | "float" => MadeTy::Json,
+            "int64" | "uint64" | "sint64" | "fixed64" | "sfixed64" => MadeTy::Str,
+            _ => MadeTy::Int(range),
+        },
+        PType::Map(..) => MadeTy::Json,
+        PType::Named(n) => match n.as_str() {
+            "google.protobuf.Timestamp" => MadeTy::Timestamp,
+            "google.protobuf.Duration" | "google.protobuf.FieldMask" | "google.protobuf.StringValue" | "google.protobuf.BytesValue" => MadeTy::Str,
+            "google.protobuf.Struct" | "google.protobuf.Value" | "google.protobuf.ListValue" | "google.protobuf.Any" | "google.protobuf.NullValue" => MadeTy::Json,
+            "google.protobuf.Int32Value" | "google.protobuf.UInt32Value" => MadeTy::Int(range),
+            "google.protobuf.Int64Value" | "google.protobuf.UInt64Value" => MadeTy::Str,
+            "google.protobuf.DoubleValue" | "google.protobuf.FloatValue" => MadeTy::Json,
+            "google.protobuf.BoolValue" => MadeTy::Bool,
+            _ if pf.enums.contains_key(n) => MadeTy::Enum(n.clone()),
+            _ if !pf.knows(n) => MadeTy::Unread(n.clone()),
+            _ => MadeTy::Message(n.clone()),
+        },
+    }
+}
+
+/// What a type named in a `.proto` is when a flow names it (`warehouse.Stock`): as a field of it
+/// would be, without its `?`.
+pub fn made_named(pf: &ProtoFile, full: &str) -> MadeTy {
+    made_elem(pf, &PType::Named(full.to_string()), None)
+}
+
+/// The fields of the record made from the message `msg`, named by its full name. A field that
+/// says whether it is set is `T?`, unless it is `required` or its type is `json`, which has null
+/// for not set; a `repeated` field is a list, and a `map` is `json`.
+pub fn made_fields(pf: &ProtoFile, msg: &str) -> Vec<MadeField> {
+    pf.messages
+        .get(msg)
+        .into_iter()
+        .flatten()
+        .map(|fl| {
+            let rules = field_rules(fl);
+            let ty = if fl.repeated {
+                MadeTy::List(Box::new(made_elem(pf, &fl.ty, rules.items)))
+            } else {
+                let t = made_elem(pf, &fl.ty, rules.range);
+                if fl.presence && !rules.required && t != MadeTy::Json {
+                    MadeTy::Opt(Box::new(t))
+                } else {
+                    t
+                }
+            };
+            MadeField { name: fl.json.clone(), ty }
+        })
+        .collect()
+}
+
+/// The values of the enum `en` (full name) as a flow has them, which are their names in the `.proto`.
+/// The zero value is left out when its name says nothing was set: with the enum's own name
+/// (`Stock` is `STOCK_`) taken off the front, it is `unspecified` in any case. A zero value with
+/// another name is a value, and stays.
+pub fn made_enum_values(pf: &ProtoFile, en: &str) -> Vec<String> {
+    let values = pf.enums.get(en).cloned().unwrap_or_default();
+    let simple = en.rsplit('.').next().unwrap_or(en);
+    let prefix = format!("{}_", crate::rulec::upper_snake(simple));
+    values.into_iter().enumerate().filter(|(i, v)| !(*i == 0 && v.strip_prefix(&prefix).unwrap_or(v).eq_ignore_ascii_case("unspecified"))).map(|(_, v)| v).collect()
+}
+
+/// What a task is held to, of a type made from the message or enum `full` (E016's two directions):
+/// what is sent as `t` must be what the description takes, and what the description answers must be
+/// readable as `t`. Empty when the type made agrees with its description.
+pub fn made_fits(api: &Api, full: &str, m: &Model, t: &Ty) -> Vec<Words> {
+    let ApiDoc::Proto(_) = &api.doc else { return vec![] };
+    let node = Node::Proto(PType::Named(full.to_string()), FieldRules::default());
+    let op = Op { api, label: full.to_string(), input: node.clone(), query: vec![], output: Some(node.clone()), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free: false, noun: ANSWER };
+    let mut out = Vec::new();
+    if let Err(w) = op.sends(m, t, None, &node, &mut vec![]) {
+        out.push(w);
+    }
+    if let Err(w) = op.reads(&node, m, t, None, &mut vec![]) {
+        out.push(w);
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// The messages of a service a workflow implements (DESIGN 1.14)
+
+/// A message of a `.proto`, looked at whole: what a method of a service takes or answers, which a
+/// workflow that implements the service is held to (E017). Its fields are compared with the flow's
+/// types by the table E016 uses, in the direction the values go.
+pub struct MessageView<'a> {
+    api: &'a Api,
+    /// the message's full name: `shop.v1.FulfillRequest`
+    pub name: String,
+}
+
+/// The message `msg` (its full name) of the `.proto` `api` read.
+pub fn message<'a>(api: &'a Api, msg: &str) -> MessageView<'a> {
+    MessageView { api, name: msg.to_string() }
+}
+
+/// What a field of a message says of being set, beside whether it may be left out.
+pub struct FieldFacts {
+    pub required: bool,
+    /// `repeated`, or a `map`
+    pub list: bool,
+}
+
+/// How the messages of E017 call the value a message is read into.
+const MESSAGE: (&str, &str) = ("the message", "メッセージ");
+
+impl<'a> MessageView<'a> {
+    /// The message's name without its package, as a message names it: `FulfillRequest`.
+    pub fn simple(&self) -> &str {
+        self.name.rsplit('.').next().unwrap_or(&self.name)
+    }
+
+    fn pf(&self) -> &ProtoFile {
+        match &self.api.doc {
+            ApiDoc::Proto(pf) => pf,
+            _ => unreachable!("a .proto"),
+        }
+    }
+
+    /// Whether a file read has the message (a well-known type is known too).
+    pub fn known(&self) -> bool {
+        self.pf().knows(&self.name)
+    }
+
+    fn op(&self, presence_free: bool) -> Op<'a> {
+        let node = Node::Proto(PType::Named(self.name.clone()), FieldRules::default());
+        let label = self.simple().to_string();
+        Op { api: self.api, label, input: node.clone(), query: vec![], output: Some(node), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free, noun: MESSAGE }
+    }
+
+    fn members(&self, op: &Op) -> Vec<Member> {
+        match op.shape(&Node::Proto(PType::Named(self.name.clone()), FieldRules::default())) {
+            Shape::Object(ms) => ms,
+            _ => vec![],
+        }
+    }
+
+    /// The fields by their JSON names, in order, and whether each may be left out: it says whether
+    /// it is set (`optional`, a message, a member of a `oneof`) and is not `required`.
+    pub fn fields(&self) -> Vec<(String, bool)> {
+        self.members(&self.op(false)).into_iter().map(|mb| (mb.name, mb.optional_out)).collect()
+    }
+
+    /// What the field `json` says of being set: whether it is `required`, and whether it is a list
+    /// or a map, which say nothing of it.
+    pub fn field(&self, json: &str) -> Option<FieldFacts> {
+        let f = self.pf().messages.get(&self.name)?.iter().find(|f| f.json == json)?;
+        Some(FieldFacts { required: field_rules(f).required, list: f.repeated || matches!(f.ty, PType::Map(..)) })
+    }
+
+    /// Whether every value the field `json` has is one of `t` (in `rg`): what comes in. With
+    /// `presence_free`, a field that may be left out is read into a type without `?` all the same,
+    /// in the fields of the messages inside it too.
+    pub fn field_reads(&self, json: &str, m: &Model, t: &Ty, rg: Option<Range>, presence_free: bool) -> Result<(), Words> {
+        let op = self.op(presence_free);
+        let Some(mb) = self.members(&op).into_iter().find(|x| x.name == json) else { return Ok(()) };
+        if mb.optional_out && !presence_free && !matches!(t, Ty::Opt(_) | Ty::Json) {
+            return Err((format!("it may be left out; declare it `{}?`", m.ty_name(t)), format!("無いことがあります。`{}?` にしてください", m.ty_name(t))));
+        }
+        op.reads(&mb.node, m, t, rg, &mut vec![])
+    }
+
+    /// Whether every value of `t` (in `rg`) is one the field `json` takes: what goes out.
+    pub fn field_sends(&self, json: &str, m: &Model, t: &Ty, rg: Option<Range>) -> Result<(), Words> {
+        let op = self.op(false);
+        let Some(mb) = self.members(&op).into_iter().find(|x| x.name == json) else { return Ok(()) };
+        op.sends(m, t, rg, &mb.node, &mut vec![])
+    }
+
+    /// What differs when the whole message is read into `t` (in `rg`): for a record, one difference
+    /// for each field that differs; with `presence_free`, as `field_reads` says.
+    pub fn reads(&self, m: &Model, t: &Ty, rg: Option<Range>, presence_free: bool) -> Vec<Words> {
+        let op = self.op(presence_free);
+        let node = Node::Proto(PType::Named(self.name.clone()), FieldRules::default());
+        match (t, op.shape(&node)) {
+            (Ty::Record(r), Shape::Object(ms)) => op.fields(&ms, m, *r, &mut vec![]),
+            _ => op.reads(&node, m, t, rg, &mut vec![]).err().into_iter().collect(),
+        }
+    }
+
+    /// What differs between the fields of this message and those of `other`, by their JSON names:
+    /// a field one has and the other does not, and the type of one they both have, as a `.proto`
+    /// writes it (`optional int32`, `map<string, google.protobuf.Value>`, `repeated string`).
+    pub fn same_fields(&self, other: &MessageView) -> Vec<Words> {
+        let mine = self.pf().messages.get(&self.name).cloned().unwrap_or_default();
+        let theirs = other.pf().messages.get(&other.name).cloned().unwrap_or_default();
+        let theirs_name = &other.name;
+        let mut out = Vec::new();
+        for t in &theirs {
+            match mine.iter().find(|f| f.json == t.json) {
+                None => out.push((format!("it has no `{}`", t.json), format!("`{}` がありません", t.json))),
+                Some(f) => {
+                    let (a, b) = (field_text(self.pf(), f), field_text(other.pf(), t));
+                    if a != b {
+                        out.push((format!("`{}` is `{a}`, and in `{theirs_name}` it is `{b}`", f.json), format!("`{}` は `{a}` ですが、`{theirs_name}` では `{b}` です", f.json)));
+                    }
+                }
+            }
+        }
+        for f in mine.iter().filter(|f| !theirs.iter().any(|t| t.json == f.json)) {
+            out.push((format!("it has `{}`, which `{theirs_name}` does not", f.json), format!("`{theirs_name}` に無い `{}` があります", f.json)));
+        }
+        out
+    }
+}
+
+/// A field's type as a `.proto` writes it: `optional int32`, `repeated string`, `map<string, google.protobuf.Value>`.
+fn field_text(pf: &ProtoFile, f: &PField) -> String {
+    fn ty(t: &PType) -> String {
+        match t {
+            PType::Scalar(s) | PType::Named(s) => s.clone(),
+            PType::Map(k, v) => format!("map<{}, {}>", ty(k), ty(v)),
+        }
+    }
+    let t = ty(&f.ty);
+    let message = matches!(&f.ty, PType::Named(n) if !pf.enums.contains_key(n));
+    if f.repeated {
+        format!("repeated {t}")
+    } else if f.presence && !message {
+        format!("optional {t}")
+    } else {
+        t
     }
 }
 
@@ -831,4 +1259,151 @@ pub fn connect_status(code: &str) -> Option<u16> {
         "unauthenticated" => 401,
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn range(lo: Option<i64>, hi: Option<i64>) -> Option<Range> {
+        Some(Range { lo, hi })
+    }
+
+    #[test]
+    fn a_range_is_what_the_integer_rules_let_through() {
+        assert_eq!(int_range(&json!({"int32": {"gte": 1, "lte": 100}})), range(Some(1), Some(100)));
+        // gt is one above, lt one below
+        assert_eq!(int_range(&json!({"int32": {"gt": 0, "lt": 10}})), range(Some(1), Some(9)));
+        // either end alone, under any of the ten kinds
+        assert_eq!(int_range(&json!({"uint32": {"lte": 5}})), range(None, Some(5)));
+        assert_eq!(int_range(&json!({"sfixed64": {"gte": -3}})), range(Some(-3), None));
+        assert_eq!(int_range(&json!({"int32": {"const": 7}})), range(Some(7), Some(7)));
+        // a field ignored at its zero value lets 0 through, whatever the ends say
+        assert_eq!(int_range(&json!({"int32": {"gt": 0}, "ignore": "IGNORE_IF_ZERO_VALUE"})), range(Some(0), None));
+        assert_eq!(int_range(&json!({"int32": {"gte": 5, "lte": 9}, "ignore": "IGNORE_IF_UNPOPULATED"})), range(Some(0), Some(9)));
+        // what is outside two ends, an empty range, a field that is ignored, and no rule at all are not ranges
+        assert_eq!(int_range(&json!({"int32": {"gt": 10, "lt": 5}})), None);
+        assert_eq!(int_range(&json!({"int32": {"gt": 5, "lt": 6}})), None);
+        assert_eq!(int_range(&json!({"int32": {"gte": 1}, "ignore": "IGNORE_ALWAYS"})), None);
+        assert_eq!(int_range(&json!({"string": {"min_len": 1}})), None);
+        assert_eq!(int_range(&Value::Null), None);
+        // the rules of a string or a list say nothing of a number
+        assert_eq!(int_range(&json!({"int32": {"in": [1, 2]}})), None);
+    }
+
+    fn load(text: &str) -> ProtoFile {
+        crate::proto::load_text("t.proto", text).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    #[test]
+    fn the_zero_value_of_an_enum_is_left_out_when_its_name_says_nothing_was_set() {
+        let pf = load(
+            r#"syntax = "proto3"; package a.v1;
+            enum Stock { unspecified = 0; secured = 1; short = 2; }
+            enum MemberTier { MEMBER_TIER_UNSPECIFIED = 0; MEMBER_TIER_GOLD = 1; }
+            enum Mode { ACTIVE = 0; PAUSED = 1; }
+            enum State { STATE_UNKNOWN = 0; STATE_OPEN = 1; }
+            enum Counted { COUNTED_unspecified = 0; OTHER = 1; }
+            enum Bare { UNSPECIFIED = 0; ONE = 1; }
+            message Order { enum Status { STATUS_UNSPECIFIED = 0; STATUS_PAID = 1; } }"#,
+        );
+        let values = |e: &str| made_enum_values(&pf, e);
+        assert_eq!(values("a.v1.Stock"), ["secured", "short"]);
+        assert_eq!(values("a.v1.MemberTier"), ["MEMBER_TIER_GOLD"]);
+        // a zero value with another name is a value
+        assert_eq!(values("a.v1.Mode"), ["ACTIVE", "PAUSED"]);
+        assert_eq!(values("a.v1.State"), ["STATE_UNKNOWN", "STATE_OPEN"]);
+        // the prefix is the enum's own name in capitals, and any case of `unspecified` counts
+        assert_eq!(values("a.v1.Counted"), ["OTHER"]);
+        assert_eq!(values("a.v1.Bare"), ["ONE"]);
+        // a nested enum's prefix is its own name, not its message's
+        assert_eq!(values("a.v1.Order.Status"), ["STATUS_PAID"]);
+    }
+
+    #[test]
+    fn every_kind_of_field_is_what_the_design_says() {
+        let pf = load(&std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/protos/types.proto")).unwrap());
+        let fields = made_fields(&pf, "types.v1.Everything");
+        let ty = |name: &str| fields.iter().find(|f| f.name == name).unwrap_or_else(|| panic!("no field {name}")).ty.clone();
+        let opt = |t: MadeTy| MadeTy::Opt(Box::new(t));
+        let list = |t: MadeTy| MadeTy::List(Box::new(t));
+        assert_eq!(ty("name"), MadeTy::Str);
+        assert_eq!(ty("blob"), MadeTy::Str);
+        assert_eq!(ty("flag"), MadeTy::Bool);
+        assert_eq!(ty("count"), MadeTy::Int(None));
+        assert_eq!(ty("small"), MadeTy::Int(None));
+        // a 64-bit integer is a string, and a float or a double is json
+        assert_eq!(ty("big"), MadeTy::Str);
+        assert_eq!(ty("bigger"), MadeTy::Str);
+        assert_eq!(ty("ratio"), MadeTy::Json);
+        assert_eq!(ty("weight"), MadeTy::Json);
+        assert_eq!(ty("status"), MadeTy::Enum("types.v1.Status".into()));
+        assert_eq!(ty("mode"), MadeTy::Enum("types.v1.Mode".into()));
+        // what says whether it is set is `T?`, unless it is `required`
+        assert_eq!(ty("line"), opt(MadeTy::Message("types.v1.Line".into())));
+        assert_eq!(ty("requiredLine"), MadeTy::Message("types.v1.Line".into()));
+        assert_eq!(ty("lines"), list(MadeTy::Message("types.v1.Line".into())));
+        assert_eq!(ty("tags"), MadeTy::Json);
+        assert_eq!(ty("byName"), MadeTy::Json);
+        assert_eq!(ty("note"), opt(MadeTy::Str));
+        assert_eq!(ty("amount"), opt(MadeTy::Int(Some(Range { lo: Some(1), hi: None }))));
+        assert_eq!(ty("maybeStatus"), opt(MadeTy::Enum("types.v1.Status".into())));
+        assert_eq!(ty("requiredNote"), MadeTy::Str);
+        // a member of a oneof says whether it is set
+        assert_eq!(ty("byId"), opt(MadeTy::Str));
+        assert_eq!(ty("byNumber"), opt(MadeTy::Int(None)));
+        // well-known types
+        assert_eq!(ty("at"), opt(MadeTy::Timestamp));
+        assert_eq!(ty("span"), opt(MadeTy::Str));
+        assert_eq!(ty("extra"), MadeTy::Json);
+        assert_eq!(ty("value"), MadeTy::Json);
+        assert_eq!(ty("values"), MadeTy::Json);
+        assert_eq!(ty("anyThing"), MadeTy::Json);
+        assert_eq!(ty("nothing"), opt(MadeTy::Message("google.protobuf.Empty".into())));
+        assert_eq!(ty("wrapped"), opt(MadeTy::Int(None)));
+        assert_eq!(ty("wrappedBig"), opt(MadeTy::Str));
+        assert_eq!(ty("wrappedDouble"), MadeTy::Json);
+        assert_eq!(ty("wrappedText"), opt(MadeTy::Str));
+        assert_eq!(ty("times"), list(MadeTy::Timestamp));
+        assert_eq!(ty("nested"), opt(MadeTy::Message("types.v1.Everything.Nested".into())));
+        // the ranges of Line, and of the items of a list of numbers
+        let line = made_fields(&pf, "types.v1.Line");
+        let l = |name: &str| line.iter().find(|f| f.name == name).unwrap().ty.clone();
+        assert_eq!(l("quantity"), MadeTy::Int(range(Some(1), Some(99))));
+        assert_eq!(l("discount"), MadeTy::Int(range(Some(0), Some(50))));
+        assert_eq!(l("offset"), MadeTy::Int(range(Some(0), None)));
+        assert_eq!(l("outside"), MadeTy::Int(None));
+        assert_eq!(l("free"), MadeTy::Int(None));
+        assert_eq!(l("marks"), list(MadeTy::Int(range(Some(1), Some(5)))));
+        assert_eq!(l("fixed"), MadeTy::Int(range(Some(7), Some(7))));
+        assert_eq!(l("total"), MadeTy::Str);
+    }
+
+    #[test]
+    fn the_zero_values_are_those_of_the_fields_json_leaves_out() {
+        let pf = load(r#"syntax = "proto3"; package a.v1; message M { string s = 1; optional string o = 2; int32 n = 3; M inner = 4; repeated M more = 5; }"#);
+        let z = zeros_of(&pf, "a.v1.M");
+        assert_eq!(z["f"], json!({"s": "", "n": 0, "more": []}));
+        assert_eq!(fill(&json!({"o": "x"}), &z), json!({"o": "x", "s": "", "n": 0, "more": []}));
+    }
+
+    #[test]
+    fn what_is_left_out_at_its_zero_value_is_filled_back_in() {
+        let pf = load(
+            r#"syntax = "proto3"; package a.v1;
+            message Line { string sku = 1; int32 quantity = 2; bool gift = 3; }
+            message Order { string id = 1; int32 amount = 2; repeated Line lines = 3; Line first = 4; optional string note = 5; map<string, string> tags = 6; }"#,
+        );
+        let z = zeros_of(&pf, "a.v1.Order");
+        // every field at its zero value, in the message, in its message and in the messages of its list
+        let full = json!({"id": "", "amount": 0, "lines": [{"sku": "", "quantity": 0, "gift": false}, {"sku": "a", "quantity": 2, "gift": true}], "first": {"sku": "", "quantity": 3, "gift": false}, "note": "", "tags": {}});
+        let sparse = omit_zeros(&full, &z);
+        assert_eq!(sparse, json!({"lines": [{}, {"sku": "a", "quantity": 2, "gift": true}], "first": {"quantity": 3}, "note": ""}));
+        assert_eq!(fill(&sparse, &z), full);
+        // an empty list is left out, and filled back in empty
+        let empty = json!({"id": "x", "amount": 1, "lines": [], "note": null, "tags": {"a": "b"}});
+        assert_eq!(omit_zeros(&empty, &z), json!({"id": "x", "amount": 1, "note": null, "tags": {"a": "b"}}));
+        assert_eq!(fill(&omit_zeros(&empty, &z), &z), empty);
+    }
 }

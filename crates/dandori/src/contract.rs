@@ -62,8 +62,8 @@ pub fn check(pm: &Model, task: &TaskDef, cm: &Model) -> Vec<Diag> {
     out
 }
 
-/// The names the child's `fail`s end it with.
-fn fail_names(m: &Model) -> Vec<String> {
+/// The names a flow's `fail`s end it with: the child's, here; a service's `fails` are held to them too.
+pub(crate) fn fail_names(m: &Model) -> Vec<String> {
     m.all_stmts()
         .into_iter()
         .filter_map(|s| match &s.kind {

@@ -58,6 +58,9 @@ struct Ex<'a> {
     /// how many values have been made in this run, so that no two are alike and a target
     /// that mixes up the rounds of a loop, or two answers, shows it
     made_values: usize,
+    /// a workflow that implements a service: the input has its fields at their zero values, which
+    /// it goes without, as protobuf's JSON writes the request
+    sparse: bool,
 }
 
 pub fn generate(m: &Model) -> Vec<Value> {
@@ -96,6 +99,7 @@ pub fn generate(m: &Model) -> Vec<Value> {
             pending: None,
             done_loops: vec![],
             made_values: 0,
+            sparse: false,
         };
         ex.run();
         counts = std::mem::take(&mut ex.counts);
@@ -128,12 +132,95 @@ pub fn generate(m: &Model) -> Vec<Value> {
                 if let Some(j) = a.get("jev").and_then(|t| t.as_u64()).and_then(|t| m.tasks[t as usize].jev()) {
                     return json!({ "ok": render::jev_wire(j, &filled["ok"], a.get("low") == Some(&json!(true))) });
                 }
+                // a rule's service writes the record chosen as protobuf's JSON: zero values left out, numbers as strings
+                if let Some(c) = a.get("rule").and_then(|r| r.as_u64()).and_then(|r| m.rules[r as usize].connect.as_ref()) {
+                    return json!({ "ok": render::rule_wire(c, &filled["ok"]) });
+                }
+                // the value of an event or a callback, as protobuf's JSON writes the request a method of the service sends
+                if let Some(z) = a.get("omit") {
+                    return json!({ "ok": crate::apis::omit_zeros(&filled["ok"], z) });
+                }
                 filled
             })
             .collect();
         out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": answers, "covers": ex.labels.iter().collect::<Vec<_>>() }));
     }
+    // a workflow that implements a service: a request without a field the workflow needs, which
+    // says whether it is set, fails the run at once (DESIGN 1.14)
+    if let Some(n) = m.service.as_ref().and_then(|s| needed_presence(m, &s.input_zeros)) {
+        let whole = out.iter().find(|r| !r["covers"].as_array().is_some_and(|c| c.iter().any(|l| l == "input:zeros")));
+        if let Some(mut input) = whole.map(|r| r["input"].clone()) {
+            if let Some(o) = input.as_object_mut() {
+                o.remove(&n);
+            }
+            out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": [], "covers": ["input:absent"] }));
+        }
+    }
+    // a workflow that takes a `json`, as an input or as a field of one: the run that goes furthest again,
+    // its input as protobuf's JSON writes it when nothing is set. What may be absent is left out, a `json`
+    // and a `T?` that is none, and it reads as null on every platform (DESIGN 1.2)
+    if m.inputs.iter().any(|(_, t)| *t == Ty::Json || has_json_field(m, t)) {
+        let calls = |r: &Value| r["answers"].as_array().map_or(0, |a| a.len());
+        let furthest = out.iter().enumerate().max_by(|(i, a), (j, b)| calls(a).cmp(&calls(b)).then(j.cmp(i))).map(|(_, r)| r.clone());
+        if let Some(run) = furthest {
+            let mut input = Map::new();
+            for (n, t) in &m.inputs {
+                let v = &run["input"][n.as_str()];
+                match t {
+                    Ty::Json => {}
+                    Ty::Opt(_) if v.is_null() => {}
+                    _ => {
+                        input.insert(n.clone(), without_json(m, v, t, true));
+                    }
+                }
+            }
+            out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": run["answers"], "covers": ["input:left out"] }));
+        }
+    }
     out
+}
+
+/// Whether a value of type `t` holds a record with a `json` field, at any depth. (The items of a
+/// `list[json]` are values, not fields that may be left out.)
+fn has_json_field(m: &Model, t: &Ty) -> bool {
+    match t {
+        Ty::Opt(x) | Ty::List(x) => has_json_field(m, x),
+        Ty::Record(r) => m.records[*r].fields.iter().any(|(_, ft)| *ft == Ty::Json || has_json_field(m, ft)),
+        _ => false,
+    }
+}
+
+/// `v`, a value of type `t`, as protobuf's JSON writes it when no `json` field in it is set: the
+/// field is left out, in every record at every depth. With `nones`, so is a `T?` field that is none.
+fn without_json(m: &Model, v: &Value, t: &Ty, nones: bool) -> Value {
+    match (t, v) {
+        (Ty::Opt(x), _) => without_json(m, v, x, nones),
+        (Ty::List(x), Value::Array(a)) => Value::Array(a.iter().map(|i| without_json(m, i, x, nones)).collect()),
+        (Ty::Record(r), Value::Object(o)) => {
+            let mut out = Map::new();
+            for (k, x) in o {
+                match m.records[*r].fields.iter().find(|(f, _)| f == k).map(|(_, ft)| ft) {
+                    Some(Ty::Json) => {}
+                    Some(Ty::Opt(_)) if nones && x.is_null() => {}
+                    Some(ft) => {
+                        out.insert(k.clone(), without_json(m, x, ft, nones));
+                    }
+                    None => {
+                        out.insert(k.clone(), x.clone());
+                    }
+                }
+            }
+            Value::Object(out)
+        }
+        _ => v.clone(),
+    }
+}
+
+/// The first input, not `T?`, that a field of the request holds which says whether it is set (a
+/// message, `optional`, a member of a `oneof`: none that `zeros` fills). A `json` input is passed
+/// over: one that is not there is null, and the run goes on (the run with the input left out).
+fn needed_presence(m: &Model, zeros: &Value) -> Option<String> {
+    m.inputs.iter().find(|(n, t)| !matches!(t, Ty::Opt(_) | Ty::Json) && zeros["f"].get(n.as_str()).is_none()).map(|(n, _)| n.clone())
 }
 
 impl<'a> Ex<'a> {
@@ -418,7 +505,49 @@ impl<'a> Ex<'a> {
         for (n, _) in &self.m.inputs {
             o.insert(n.clone(), self.fill(self.vars.get(n).unwrap_or(&Value::Null)));
         }
-        Value::Object(o)
+        match (&self.m.service, self.sparse) {
+            // the request as protobuf's JSON writes it: what is at its zero value is left out
+            (Some(s), true) => crate::apis::omit_zeros(&Value::Object(o), &s.input_zeros),
+            _ => Value::Object(o),
+        }
+    }
+
+    /// Values for `fields` (in `ranges`) at the zero values `zeros` names (`apis::zeros_of`), where
+    /// their types take them: each field the zero value its JSON leaves out, a message inside
+    /// at its own zero values, a list of messages with one such message in it; the rest as
+    /// `template` makes them.
+    fn zero_fields(&mut self, fields: &[(String, Ty)], ranges: &dyn Fn(&str) -> Option<Range>, zeros: &Value) -> Map<String, Value> {
+        let m = self.m;
+        let mut o = Map::new();
+        for (f, ft) in fields {
+            let rg = ranges(f);
+            let record = |t: &Ty| match t {
+                Ty::Record(r) => Some(*r),
+                _ => None,
+            };
+            let v = if let (Some(z), Some(r)) = (zeros["m"].get(f), record(ft.inner())) {
+                self.zero_record(r, z)
+            } else if let (Some(z), Ty::List(elem)) = (zeros["l"].get(f), ft) {
+                match record(elem) {
+                    Some(r) => Value::Array(vec![self.zero_record(r, z)]),
+                    None => self.template(ft, f, rg),
+                }
+            } else {
+                match zeros["f"].get(f) {
+                    Some(z) if render::value_fits(m, z, ft, rg) => z.clone(),
+                    _ => self.template(ft, f, rg),
+                }
+            };
+            o.insert(f.clone(), v);
+        }
+        o
+    }
+
+    /// A value of the record `r` at the zero values `zeros` names: see `zero_fields`.
+    fn zero_record(&mut self, r: RecordId, zeros: &Value) -> Value {
+        let m = self.m;
+        let fields = m.records[r].fields.clone();
+        Value::Object(self.zero_fields(&fields, &|f| m.field_range(r, f), zeros))
     }
 
     fn value(&mut self, e: &TExpr) -> Value {
@@ -443,7 +572,23 @@ impl<'a> Ex<'a> {
             self.vars.insert(v.clone(), Value::Null);
         }
         let inputs = self.m.inputs.clone();
+        // a workflow that implements a service: an input at its zero values, which its JSON goes without
+        if let Some(s) = &self.m.service {
+            self.sparse = self.choose("input", 2) == 1;
+            if self.sparse {
+                self.labels.insert("input:zeros".into());
+                let m = self.m;
+                let zeros = s.input_zeros.clone();
+                let values = self.zero_fields(&inputs, &|n| m.input_ranges.get(n).copied(), &zeros);
+                for (n, v) in values {
+                    self.vars.insert(n, v);
+                }
+            }
+        }
         for (n, t) in &inputs {
+            if self.sparse {
+                continue;
+            }
             let v = self.template(t, n, self.m.input_ranges.get(n).copied());
             self.vars.insert(n.clone(), v);
         }
@@ -630,6 +775,34 @@ impl<'a> Ex<'a> {
         }
     }
 
+    /// The outputs of a rule at its service that its answer can leave out, with the zero value each
+    /// is then read as: a bool, which is false; a number whose range has 0 in it (or has none), which
+    /// is 0; a string, which is empty; an enum whose value 0 is one of the rule's (a contract's enum
+    /// can put a value of its own at 0), which is that value. An enum whose value 0 says that it is
+    /// not set is never at it.
+    fn zero_outputs(c: &RuleConnect, outputs: &RecordDef) -> Vec<(String, Value)> {
+        c.response
+            .iter()
+            .filter(|f| !f.optional)
+            .filter_map(|f| {
+                let range = outputs.ranges.get(&f.name);
+                match &f.kind {
+                    crate::rulec::WireKind::Bool => Some((f.name.clone(), json!(false))),
+                    crate::rulec::WireKind::Int if range.is_none_or(|r| r.contains(0)) => Some((f.name.clone(), json!(0))),
+                    crate::rulec::WireKind::Str => Some((f.name.clone(), json!(""))),
+                    kind @ crate::rulec::WireKind::Enum { .. } => kind.zero_value().map(|v| (f.name.clone(), json!(v))),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    /// The first enum output of a rule at its service whose value 0 says that it is not set, which no
+    /// value of the rule's is: an answer without it reads as that value, which the check refuses.
+    fn unset_output(c: &RuleConnect) -> Option<&crate::rulec::WireField> {
+        c.response.iter().find(|f| matches!(f.kind, crate::rulec::WireKind::Enum { .. }) && f.kind.zero_value().is_none())
+    }
+
     fn event_fix(&self, c: usize, event: &str, column: Option<&str>) -> Option<(usize, usize)> {
         let mc = self.m.machine(c);
         let axis = match column {
@@ -715,6 +888,19 @@ impl<'a> Ex<'a> {
             OutOfRange(Option<usize>),
             /// a Connect answer whose fields are at their zero values, which its JSON leaves out
             Zeros,
+            /// a Connect answer without its `json` fields: a `google.protobuf.Value` that is not set is left
+            /// out of its JSON, and reads as null
+            JsonLeftOut,
+            /// the value of an event or a callback that a method of the service sends, at its zero values,
+            /// which its JSON leaves out
+            AnswerZeros,
+            /// a rule's service answering with the outputs that are at their zero values (false, 0, an empty
+            /// string, an enum's value 0 when it is one of the rule's) left out of its JSON, which every
+            /// platform reads back as the zero values
+            RuleZeros,
+            /// a rule's service answering without one of the enum outputs, which reads as the enum's value
+            /// 0, when that says it is not set and no value of the rule's is: the answer's check refuses it
+            RuleUnset,
             /// a cancellation that comes while the call is out
             Cancelled,
             /// Jev's answer, less sure than the task asks: the task's error, from an answer
@@ -860,6 +1046,30 @@ impl<'a> Ex<'a> {
         };
         if let (Some(_), Some(_), true, None) = (&zeros, first_ok, target.is_some(), case) {
             ways.push(("zero values".into(), Way::Zeros));
+            if result_ty.as_ref().is_some_and(|ty| has_json_field(m, ty)) {
+                ways.push(("json left out".into(), Way::JsonLeftOut));
+            }
+        }
+        // what a method of the service sends a task: an event's value, a callback's answer
+        let answer_zeros = match callee {
+            Callee::Task(t) => m.tasks[*t].answer_zeros.clone(),
+            Callee::Rule(_) => None,
+        };
+        if let (Some(_), Some(_), true, None, Some(Ty::Record(_))) = (&answer_zeros, first_ok, target.is_some(), case, &result_ty) {
+            ways.push(("zero values".into(), Way::AnswerZeros));
+        }
+        // a rule called at its service: the outputs at their zero values left out, and an enum left out
+        let service = match callee {
+            Callee::Rule(r) => m.rules[*r].connect.as_ref().map(|c| (*r, c)),
+            Callee::Task(_) => None,
+        };
+        if let (Some((r, c)), true, Some(_)) = (service, target.is_some(), first_ok) {
+            if !Ex::zero_outputs(c, &m.records[m.rules[r].outputs]).is_empty() {
+                ways.push(("rule zero values".into(), Way::RuleZeros));
+            }
+            if Ex::unset_output(c).is_some() {
+                ways.push(("rule enum left out".into(), Way::RuleUnset));
+            }
         }
         // a workflow that says what to do when it is cancelled can be cancelled at any call, but not in `on cancel`
         if self.m.on_cancel.is_some() && !self.in_on_cancel {
@@ -879,10 +1089,12 @@ impl<'a> Ex<'a> {
             }
             v
         };
-        // an answer, which for a Jev task becomes Jev's response once its value is chosen
-        let ok = |v: &Value| match jev_task {
-            Some(t) => json!({ "ok": v, "jev": t }),
-            None => json!({ "ok": v }),
+        // an answer, which for a Jev task becomes Jev's response once its value is chosen, and for a
+        // rule at its service the body the service writes
+        let ok = |v: &Value| match (jev_task, service) {
+            (Some(t), _) => json!({ "ok": v, "jev": t }),
+            (None, Some((r, _))) => json!({ "ok": v, "rule": r }),
+            (None, None) => json!({ "ok": v }),
         };
         match way {
             Way::Ok(st) => {
@@ -914,9 +1126,51 @@ impl<'a> Ex<'a> {
                 self.halt(false)
             }
             Way::Malformed => {
-                // protobuf reads {} as a message at its zero values, so a Connect answer that does not fit is a list
-                self.answers.push(json!({ "ok": if zeros.is_some() { json!([]) } else { json!({}) } }));
+                // protobuf reads {} as a message at its zero values, so a Connect answer that does not fit
+                // is a list, and so is a value a method of the service sends
+                self.answers.push(json!({ "ok": if zeros.is_some() || service.is_some() || answer_zeros.is_some() { json!([]) } else { json!({}) } }));
                 self.halt(false)
+            }
+            Way::RuleZeros => {
+                // what the service leaves out is there when read: the outputs that can be zero are, and the rest is chosen as it is
+                let (r, c) = service.expect("a rule at its service");
+                let mut v = ok_answer(self, None);
+                for (f, zero) in Ex::zero_outputs(c, &m.records[m.rules[r].outputs]) {
+                    v[f] = zero;
+                }
+                self.answers.push(json!({ "ok": v, "rule": r }));
+                self.assign(target, v, None);
+                Ctl::Next
+            }
+            Way::RuleUnset => {
+                // an enum output is not in the body: it reads as the enum's value 0, which says it is not set and the check refuses
+                let (_, c) = service.expect("a rule at its service");
+                let v = ok_answer(self, None);
+                let mut wire = render::rule_wire(c, &self.fill(&v));
+                let left_out = Ex::unset_output(c).map(|f| f.json.clone()).expect("an enum output that can be unset");
+                wire.as_object_mut().expect("a body").remove(&left_out);
+                self.answers.push(json!({ "ok": wire }));
+                self.halt(false)
+            }
+            Way::AnswerZeros => {
+                // the value at its zero values, which the method's request goes without; read, they are there
+                let z = answer_zeros.as_ref().expect("a value a method of the service sends");
+                let Some(Ty::Record(r)) = &result_ty else { unreachable!("a record") };
+                let v = self.zero_record(*r, z);
+                self.answers.push(json!({ "ok": v, "omit": z }));
+                self.assign(target, v, None);
+                Ctl::Next
+            }
+            Way::JsonLeftOut => {
+                // every part there, lists with items, but the `json` fields, at every depth: what the answer's
+                // JSON goes without, which reads as null (or, for a map, as the empty map)
+                let z = zeros.as_ref().expect("a Connect task");
+                let ty = result_ty.as_ref().expect("an answer to read");
+                let v = self.full(ty, "value", m.answer_range(callee));
+                let wire = without_json(m, &v, ty, false);
+                self.answers.push(json!({ "ok": wire }));
+                self.assign(target, crate::apis::fill(&wire, z), None);
+                Ctl::Next
             }
             Way::Zeros => {
                 // every part there, lists with items, so that fields are left out at every depth
@@ -933,7 +1187,7 @@ impl<'a> Ex<'a> {
                     let field = m.cases[c].state_field.clone();
                     v[field] = json!(m.machine(c).states[st]);
                 }
-                self.answers.push(json!({ "ok": v }));
+                self.answers.push(ok(&v));
                 self.halt(false)
             }
             Way::Cancelled => {

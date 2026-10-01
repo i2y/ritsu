@@ -1,3 +1,5 @@
+error[E003]: tests/fixtures/agents.flow:26:8: `甲` contains itself, through `乙`; a record cannot, so give the field that holds itself the type `json`
+    26 |   乙 : 乙?
 error[E007]: tests/fixtures/agents.flow:56:3: an agent needs the model it uses; write it as `model "gpt-5.4-mini"`
     56 |   agent "読んでください。"
 error[E007]: tests/fixtures/agents.flow:60:3: `model` says which model an agent or Jev uses; this task has neither `agent` nor `jev`

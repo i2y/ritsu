@@ -92,9 +92,15 @@ logging.basicConfig(level=logging.ERROR)
 Runtime.set_default(Runtime(telemetry=TelemetryConfig(logging=LoggingConfig(filter=TelemetryFilter(core_level="ERROR", other_level="ERROR")))), error_if_already_set=True)
 
 # How long an activity or a child workflow gets here before it times out, and how long a stand-in
-# that the scenario times out keeps its activity busy.
-TIMEOUT = 5
-LATE = 10.0
+# that the scenario times out keeps its activity busy: until the server has timed it out. The server
+# keeps real time, and the whole test suite keeps the machine busy: 2 seconds were too few for an
+# activity that only answers, and then 5 were too few for a scenario that cancels the workflow (it does
+# that from inside the activity, and the cancellation has to be recorded and reach the workflow before the
+# activity's own timeout does: that took 4.9 seconds at the most in the 441 runs measured, and a run or two
+# ended in the timeout instead) and for a child workflow that asks an activity for its answer. (The TypeScript runner has the same numbers, to serve the activities of this one's workflow,
+# and the other way round.)
+TIMEOUT = int(os.environ.get("DANDORI_TEMPORAL_TIMEOUT", 20))
+LATE = float(TIMEOUT + 5)
 # How long an event is waited for here, at most: long enough for the runner to see the wait and send it.
 EVENT_SECONDS = 5
 
@@ -391,13 +397,23 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
             json.dump({rid: r["steps"] for rid, r in runs.items()}, f, ensure_ascii=False)
         return []
 
-    # the server fires a timer up to a second late unless told to shift its timers less
-    env = await WorkflowEnvironment.start_local(
-        ui=False,
-        dev_server_log_level="error",
-        dev_server_extra_args=["--dynamic-config-value", 'history.timerProcessorMaxTimeShift="10ms"'],
-        search_attributes=[cases_key],
-    )
+    # the server fires a timer up to a second late unless told to shift its timers less. With every flow's
+    # runner starting a dev server at once, a server can be later than the five seconds the SDK waits for it;
+    # nothing has been started on it, so it is started again, up to twice.
+    for attempt in range(1, 4):
+        try:
+            env = await WorkflowEnvironment.start_local(
+                ui=False,
+                dev_server_log_level="error",
+                dev_server_extra_args=["--dynamic-config-value", 'history.timerProcessorMaxTimeShift="10ms"'],
+                search_attributes=[cases_key],
+            )
+            break
+        except Exception as e:  # noqa: BLE001 - the SDK's error for this has no type of its own to name
+            if attempt == 3 or "did not start within" not in str(e):
+                raise
+            print(f"the dev server did not start in time; starting it again ({attempt})", file=sys.stderr, flush=True)
+            await asyncio.sleep(attempt)
     results = []
     other: asyncio.subprocess.Process | None = None
     try:
@@ -443,10 +459,34 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
                 if sending is not None:
                     await sending
                 settle_events(run)
-                # what the query and the search attribute say of the cases once the run is over
-                cases = (await client.status(env.client, r["id"]))["cases"]
-                shown = (await handle.describe()).typed_search_attributes.get(cases_key)
-                return {"end": end, "cases": cases, "shown": list(shown) if shown is not None else None, "histories": await runs_of(env.client, r["id"], handle.first_execution_run_id)}
+                # what the query and the search attribute say of the cases once the run is over; a query
+                # the workflow does not answer is a difference to show, and the other runs go on to their end
+                # The search attribute is what the server keeps of the cases as each of them moves, and the query is
+                # what the workflow says from its variables: at the end they say the same. When the query says
+                # something else (in the whole test it has now and then said the state before the last, or none),
+                # it is asked again, up to three times, and what it said is kept in `asked`, for the test to show.
+                def listed(c: dict[str, Any]) -> list[str] | None:
+                    items = sorted(f"{n}={s}" for n, s in c.items() if s is not None)
+                    return items or None
+
+                shown: list[str] | None = None
+                asked: list[dict[str, Any]] = []
+                for attempt in range(1, 5):
+                    try:
+                        cases = (await client.status(env.client, r["id"]))["cases"]
+                    except Exception as e:
+                        cases = {"the query failed": str(e)}
+                        break
+                    attribute = (await handle.describe()).typed_search_attributes.get(cases_key)
+                    shown = list(attribute) if attribute is not None else None
+                    if listed(cases) == (sorted(shown) if shown is not None else None) or attempt == 4:
+                        break
+                    asked.append(cases)
+                    await asyncio.sleep(0.25 * attempt)
+                if shown is None:
+                    attribute = (await handle.describe()).typed_search_attributes.get(cases_key)
+                    shown = list(attribute) if attribute is not None else None
+                return {"end": end, "cases": cases, "shown": shown, "asked": asked, "histories": await runs_of(env.client, r["id"], handle.first_execution_run_id)}
 
             ends = await asyncio.gather(*(one(r) for r in spec["runs"]))
             if other is not None:

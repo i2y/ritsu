@@ -1,11 +1,10 @@
-workflow fulfillment v1
+workflow fulfillment v1 implements shop.FulfillmentService
 description "Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released. Written for pydantic-graph: the graph runs in the Python process that takes the order. The warehouse's calls are functions dandori writes, by Connect, which send with the standard library; the arrangement of the delivery, the packing request, the notice and the audit log are functions you write; and the packing crew's answer comes to the callback in the same process. The wait for the packing holds the process, and a run the process loses is lost"
 
 use rule urgency from "../../order/rules/urgency.rule"
+use proto shop from "../specs/fulfillment.proto"
 use proto warehouse from "../specs/warehouse.proto"
   url "https://warehouse.example.com"
-
-enum Stock = secured | short
 
 record Line
   sku      : string
@@ -23,17 +22,12 @@ record Order
   gift   : Gift?
   extra  : json
 
-record Reservation
-  sku   : string
-  stock : Stock
-  id    : string?
-
 record Delivery
   tracking_number : string
 
 record PackingRequest
   order_id     : string
-  reservations : list[Reservation]
+  reservations : list[warehouse.ReserveResponse]
 
 record Packing
   boxes : int
@@ -42,11 +36,11 @@ inputs
   order : Order
 
 outputs
-  reservations    : list[Reservation]
+  reservations    : list[warehouse.ReserveResponse]
   tracking_number : string
 
 # The warehouse answers every reservation: secured with its id, or short when the stock is short.
-task reserve_stock(sku: string, quantity: int) -> Reservation
+task reserve_stock(sku: string, quantity: int) -> warehouse.ReserveResponse
   connect warehouse "StockService/Reserve"
   errors busy = resource_exhausted
   key
@@ -63,7 +57,7 @@ task arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: str
 
 # The packing crew's app gets the request and the callback's id from the function you write,
 # and answers the callback when the boxes are packed.
-task wait_for_packing(order_id: string, reservations: list[Reservation]) -> Packing
+task wait_for_packing(order_id: string, reservations: list[warehouse.ReserveResponse]) -> Packing
   callback
   timeout 2 days
 

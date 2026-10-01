@@ -48,8 +48,8 @@
 //
 // The server keeps real time, so the copy of the generated code that runs here waits far less:
 // every duration of the workflow's timers (dd.ms) is at most 10 ms, and an activity or a child
-// workflow gets 5 seconds before it times out (2 were too few when the whole test suite kept the
-// machine busy), but for one that hands on a callback's id: the scenarios never time it out, and
+// workflow gets 20 seconds before it times out (2 and then 5 were too few when the whole test suite kept the
+// machine busy, see TIMEOUT), but for one that hands on a callback's id: the scenarios never time it out, and
 // its stand-in answers the callback and sees a second answer refused before it returns, which
 // takes a few workflow tasks. An event is waited for 5 seconds at most, long enough for the
 // runner to see the wait and send it. The rounds of `for … in parallel` run one at a
@@ -81,12 +81,22 @@ const spec = replaying ? JSON.parse(fs.readFileSync(path.join(historiesDir, "spe
 /** The other language's runner, serving the activities: the command, when the workers here run only the workflows. */
 const activitiesBy = serving ? null : JSON.parse(process.env.DANDORI_ACTIVITIES_BY ?? "null");
 
-/** How long an activity or a child workflow gets here before it times out. */
-const TIMEOUT = "5 seconds";
+/**
+ * How long an activity or a child workflow gets here before it times out. The server keeps real time, and the
+ * whole test suite keeps the machine busy: 2 seconds were too few for an activity that only answers, and then
+ * 5 were too few for a scenario that cancels the workflow (it does that from inside the activity, and the
+ * cancellation has to be recorded and reach the workflow before the activity's own timeout does: that took 4.9
+ * seconds at the most in the 441 runs measured, and a run or two ended in the timeout instead)
+ * and for a child workflow that asks an activity for its answer. A scenario that times a call out waits for the
+ * server to do it, so that is this long, and 5 seconds more for the stand-in that holds the call. (The Python
+ * runner has the same numbers, to serve the activities of this one's workflow, and the other way round.)
+ */
+const TIMEOUT_SECONDS = Number(process.env.DANDORI_TEMPORAL_TIMEOUT ?? 20);
+const TIMEOUT = `${TIMEOUT_SECONDS} seconds`;
 /** How long an event is waited for here, at most: long enough for the runner to see the wait and send it. */
 const EVENT_MS = 5000;
-/** How long a stand-in that the scenario times out keeps its activity busy. */
-const LATE_MS = 10000;
+/** How long a stand-in that the scenario times out keeps its activity busy: until the server has timed it out. */
+const LATE_MS = (TIMEOUT_SECONDS + 5) * 1000;
 
 // A copy of the generated code: Node runs the activities' TypeScript by stripping the types and
 // wants the extension on a relative import; the rounds of a parallel loop run one at a time; the
@@ -439,7 +449,20 @@ async function runsOf(workflowId, firstRunId) {
 
 // the server fires a timer up to a second late unless told to shift its timers less
 let histories = [];
-env = await TestWorkflowEnvironment.createLocal({
+// With every flow's runner starting a dev server at once, a server can be later than the five seconds the SDK
+// waits for it. Nothing has been started on it, so it is started again, up to twice.
+async function startServer(options) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await TestWorkflowEnvironment.createLocal(options);
+    } catch (e) {
+      if (attempt >= 3 || !/did not start within/.test(String(e?.message ?? e))) throw e;
+      process.stderr.write(`the dev server did not start in time; starting it again (${attempt})\n`);
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
+    }
+  }
+}
+env = await startServer({
   server: { ui: false, log: { format: "pretty", level: "error" }, extraArgs: ["--dynamic-config-value", 'history.timerProcessorMaxTimeShift="10ms"'], searchAttributes: [CASES] },
 });
 const results = [];
@@ -485,13 +508,47 @@ try {
         }
         await sending;
         settleEvents(run);
-        // what the query and the search attribute say of the cases once the run is over
-        const cases = (await status(env.client, r.id)).cases;
-        const shown = (await handle.describe()).typedSearchAttributes.get(CASES) ?? null;
-        return { end, cases, shown, histories: await runsOf(r.id, handle.firstExecutionRunId) };
+        // what the query and the search attribute say of the cases once the run is over; a query
+        // the workflow does not answer is a difference to show, and the other runs go on to their end
+        // The search attribute is what the server keeps of the cases as each of them moves, and the query is what
+        // the workflow says from its variables: at the end they say the same. When the query says something else (in
+        // the whole test it has now and then said the state before the last, or none), it is asked again, up to three
+        // times, and what it said is kept in `asked`, for the test to show.
+        const attribute = async () => (await handle.describe()).typedSearchAttributes.get(CASES) ?? null;
+        const listed = (c) => {
+          const l = Object.entries(c).filter(([, s]) => s !== null).map(([n, s]) => `${n}=${s}`).sort();
+          return JSON.stringify(l.length === 0 ? null : l);
+        };
+        let cases;
+        let shown;
+        const asked = [];
+        for (let attempt = 1; ; attempt++) {
+          try {
+            cases = (await status(env.client, r.id)).cases;
+          } catch (e) {
+            cases = { "the query failed": String(e?.message ?? e) };
+            shown = await attribute();
+            break;
+          }
+          shown = await attribute();
+          if (listed(cases) === JSON.stringify(shown === null ? null : [...shown].sort()) || attempt > 3) break;
+          asked.push(cases);
+          await new Promise((ok) => setTimeout(ok, 250 * attempt));
+        }
+        return { end, cases, shown, asked, histories: await runsOf(r.id, handle.firstExecutionRunId) };
       }),
     );
-    spec.runs.forEach((r, i) => results.push({ steps: runs.get(r.id).steps, end: ends[i].end, cases: ends[i].cases, shown: ends[i].shown }));
+    spec.runs.forEach((r, i) => results.push({ steps: runs.get(r.id).steps, end: ends[i].end, cases: ends[i].cases, shown: ends[i].shown, asked: ends[i].asked }));
+    // DANDORI_TEMPORAL_DUMP=<directory>: the histories of the runs the scenario cancels, as the server has them, to read
+    // when one of them ends otherwise than the reference interpreter says
+    if (process.env.DANDORI_TEMPORAL_DUMP) {
+      fs.mkdirSync(process.env.DANDORI_TEMPORAL_DUMP, { recursive: true });
+      for (const [i, r] of spec.runs.entries()) {
+        if (!r.answers.some((a) => a.cancel === true)) continue;
+        const file = path.join(process.env.DANDORI_TEMPORAL_DUMP, `${path.basename(dir)}-${process.pid}-${r.id}.json`);
+        fs.writeFileSync(file, JSON.stringify({ end: ends[i].end, histories: ends[i].histories.map((h) => JSON.parse(historyToJSON(h))) }));
+      }
+    }
     histories = spec.runs.flatMap((r, i) => ends[i].histories.map((history, n) => ({ workflowId: r.id, file: n === 0 ? `${r.id}.json` : `${r.id}.${n + 1}.json`, history })));
   };
   // every worker runs until the runs are done

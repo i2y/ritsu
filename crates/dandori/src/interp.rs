@@ -173,7 +173,12 @@ fn run_all(m: &Model, sc: &Value, view: View) -> Result<Ran, String> {
     for (v, _) in &m.vars {
         r.vars.insert(v.clone(), Value::Null);
     }
-    let input = &sc["input"];
+    // a workflow that implements a service reads its input as protobuf reads the request: the zero
+    // values its JSON leaves out are there
+    let input = match &m.service {
+        Some(s) => crate::apis::fill(&sc["input"], &s.input_zeros),
+        None => sc["input"].clone(),
+    };
     let mut ok = true;
     for (n, t) in &m.inputs {
         let v = input.get(n).cloned().unwrap_or(Value::Null);
@@ -189,7 +194,7 @@ fn run_all(m: &Model, sc: &Value, view: View) -> Result<Ran, String> {
         if let Ctl::Next = r.block(&flow) {
             if r.end.is_none() {
                 r.visits.push(Visit::FlowEnd);
-                r.end = Some(json!({ "succeed": Value::Null }));
+                r.end = Some(json!({ "succeed": no_output(m) }));
             }
         }
         if r.cancelled && r.error.is_none() {
@@ -269,7 +274,7 @@ impl<'a> Run<'a> {
             }
             TK::Succeed { fields } => {
                 let out = if fields.is_empty() {
-                    Value::Null
+                    no_output(self.m)
                 } else {
                     let mut o = Map::new();
                     for (f, e) in fields {
@@ -479,12 +484,13 @@ impl<'a> Run<'a> {
                     }
                     break Ok(read);
                 }
-                // a Connect answer is read as protobuf reads it: the zero values its JSON leaves out are there
-                let zeros = match callee {
-                    Callee::Task(t) => m.tasks[*t].connect.as_ref(),
-                    Callee::Rule(_) => None,
-                };
-                break Ok(zeros.map(|z| crate::apis::fill(v, z)).unwrap_or_else(|| v.clone()));
+                // a Connect answer is read as protobuf reads it: the zero values its JSON leaves out are
+                // there; so is the value of an event or a callback that a method of the service sends
+                break Ok(match callee {
+                    Callee::Task(t) => m.tasks[*t].connect.as_ref().or(m.tasks[*t].answer_zeros.as_ref()).map(|z| crate::apis::fill(v, z)).unwrap_or_else(|| v.clone()),
+                    // a rule called at its service answers as the service writes it: read back as the rule's record
+                    Callee::Rule(r) => m.rules[*r].connect.as_ref().map(|c| render::rule_read(c, v)).unwrap_or_else(|| v.clone()),
+                });
             }
             let kind = ans["error"].as_str().unwrap_or("failure").to_string();
             let err = self.error_of(callee, &kind);
@@ -660,6 +666,16 @@ impl<'a> Run<'a> {
             out.push((names, r["MaxAttempts"].as_u64().unwrap_or(3) as u32, r["IntervalSeconds"].as_u64().unwrap_or(1), r["BackoffRate"].as_f64().unwrap_or(2.0)));
         }
         out
+    }
+}
+
+/// What a run that ends with no outputs ends with: null, but `{}` for a workflow that implements a
+/// service, whose response protobuf's JSON reads from an object and not from null.
+pub fn no_output(m: &Model) -> Value {
+    if m.service.is_some() {
+        json!({})
+    } else {
+        Value::Null
     }
 }
 

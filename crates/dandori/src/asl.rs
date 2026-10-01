@@ -40,6 +40,16 @@ fn claude_answer(m: &Model, t: &Ty) -> String {
 /// call's answer, say). It is written as JSONata, since asl-validator refuses a literal null.
 const NO_OUTPUT: &str = "{% null %}";
 
+/// The output of an execution that ends without outputs: null, which asl-validator takes only as an
+/// expression; and for a workflow that implements a service, an empty object, its response.
+fn no_output(m: &Model) -> &'static str {
+    if m.service.is_some() {
+        "{% {} %}"
+    } else {
+        NO_OUTPUT
+    }
+}
+
 pub const RULE_RETRY_INTERVAL: u64 = 1;
 pub const RULE_RETRY_BACKOFF: f64 = 2.0;
 
@@ -71,6 +81,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     ));
     errs.extend(crate::check::history_limit(m, Platform::StepFunctions));
     errs.extend(m.refuse_events(Platform::StepFunctions));
+    errs.extend(m.refuse_status(Platform::StepFunctions));
     for t in &m.tasks {
         match t.via(Platform::StepFunctions) {
             // refused above
@@ -141,9 +152,37 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     }
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
     for r in &called {
-        if m.rules[*r].lambda.is_none() {
-            let ru = &m.rules[*r];
-            errs.push(Diag::error("E050", ru.line, 1, format!("the rule `{}` is called, so it needs `lambda \"<function>\"` under `use rule`", ru.name), format!("規則 `{}` は呼ばれているので、`use rule` の下に `lambda \"<関数>\"` が要ります", ru.name)));
+        let ru = &m.rules[*r];
+        match (&ru.connect, &ru.lambda) {
+            // a rule at its service is an HTTP Task, which goes through a connection, and to HTTPS alone
+            (Some(c), _) => {
+                if ru.connection.is_none() {
+                    errs.push(Diag::error(
+                        "E050",
+                        ru.line,
+                        1,
+                        format!("Step Functions calls the rule `{}` by Connect through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` under `use rule`", ru.name),
+                        format!("Step Functions は規則 `{}` を Connect で HTTP Task から呼ぶので、`use rule` の下に `connection \"<EventBridge の接続の ARN>\"` が要ります", ru.name),
+                    ));
+                }
+                if !c.url.starts_with("https://") {
+                    errs.push(Diag::error(
+                        "E050",
+                        ru.line,
+                        1,
+                        format!("Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and the rule `{}` is served at `{}`", ru.name, c.url),
+                        format!("Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。規則 `{}` のサービスは `{}` です", ru.name, c.url),
+                    ));
+                }
+            }
+            (None, Some(_)) => {}
+            (None, None) => errs.push(Diag::error(
+                "E050",
+                ru.line,
+                1,
+                format!("the rule `{}` is called, so it needs `lambda \"<function>\"` or `connect \"<url>\"` under `use rule`", ru.name),
+                format!("規則 `{}` は呼ばれているので、`use rule` の下に `lambda \"<関数>\"` か `connect \"<URL>\"` が要ります", ru.name),
+            )),
         }
     }
     if !errs.is_empty() {
@@ -153,7 +192,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let mut g = Gen { m, states: Map::new(), used: BTreeSet::new(), loops: vec![], failure_entry: None, in_on_failure: false, round_failed: None };
     // the end states first, so that everything can point at them
     let done = g.name("done");
-    g.states.insert(done.clone(), json!({ "Type": "Succeed", "Output": NO_OUTPUT }));
+    g.states.insert(done.clone(), json!({ "Type": "Succeed", "Output": no_output(m) }));
     if let Some(block) = &m.on_failure {
         let rethrow = g.name("on failure end");
         g.states.insert(
@@ -168,7 +207,9 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let first = g.block(&m.flow, &done);
 
     // Start: every variable, the inputs from the execution's input. A parallel round's own
-    // variables belong to the round and are set at its start.
+    // variables belong to the round and are set at its start. An input the execution's input does
+    // not have is null here, since an expression that returns nothing fails the state
+    // (States.QueryEvaluationError); the check that follows refuses it, unless it may be absent (`T?`, `json`).
     let locals = parallel_locals(m);
     let mut assign = Map::new();
     for (v, _) in &m.vars {
@@ -176,7 +217,8 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
             continue;
         }
         if m.inputs.iter().any(|(i, _)| i == v) {
-            assign.insert(asl_var(v), json!(format!("{{% $states.input.{} %}}", render::jsonata_field(v))));
+            let x = format!("$states.input.{}", render::jsonata_field(v));
+            assign.insert(asl_var(v), json!(format!("{{% $exists({x}) ? {x} : null %}}")));
         } else {
             assign.insert(asl_var(v), Value::Null);
         }
@@ -188,7 +230,8 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let check_in = g.name("check input");
     let bad_in = g.name("bad input");
     g.states.insert(start.clone(), json!({ "Type": "Pass", "Comment": "set every variable; the inputs come from the execution's input", "Assign": assign, "Next": check_in }));
-    let conds: Vec<String> = m.inputs.iter().map(|(n, t)| jsonata_check(m, &format!("$states.input.{}", render::jsonata_field(n)), t, m.input_ranges.get(n).copied(), 0)).collect();
+    // a `json` input the execution's input does not have is null, which is a value of it: nothing to check
+    let conds: Vec<String> = m.inputs.iter().filter(|(_, t)| *t != Ty::Json).map(|(n, t)| jsonata_check(m, &format!("$states.input.{}", render::jsonata_field(n)), t, m.input_ranges.get(n).copied(), 0)).collect();
     if conds.is_empty() {
         g.states.insert(check_in.clone(), json!({ "Type": "Pass", "Next": first }));
     } else {
@@ -199,15 +242,29 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         g.states.insert(bad_in, json!({ "Type": "Fail", "Error": "Dandori.BadInput", "Cause": "the execution's input does not have the declared shape" }));
     }
 
-    let ordered = order(&g.states, &start);
+    // a workflow that implements a service reads its input as protobuf reads the request: the start
+    // and the check read the input with the zero values filled in that its JSON leaves out
+    let first_state = match &m.service {
+        Some(s) => {
+            let fill = g.name("fill input");
+            g.states.insert(
+                fill.clone(),
+                json!({ "Type": "Pass", "Comment": "fill in the zero values protobuf's JSON leaves out of the input", "Output": format!("{{% {} %}}", render::jsonata_fill("$states.input", &s.input_zeros)), "Next": start }),
+            );
+            fill
+        }
+        None => start,
+    };
+    let ordered = order(&g.states, &first_state);
     let mut top = Map::new();
     let comment = if m.description.is_empty() { format!("{} v{} (dandori)", m.name, m.version) } else { format!("{} v{}: {}", m.name, m.version, m.description) };
     top.insert("Comment".into(), json!(comment));
     top.insert("QueryLanguage".into(), json!("JSONata"));
-    top.insert("StartAt".into(), json!(start));
+    top.insert("StartAt".into(), json!(first_state));
     top.insert("States".into(), Value::Object(ordered));
     let mut files = vec![(format!("{}.asl.json", render::ident(&m.name)), serde_json::to_string_pretty(&Value::Object(top)).unwrap() + "\n")];
-    for r in called {
+    // the rules that are called at their services have no Lambda function to write
+    for r in called.into_iter().filter(|r| m.rules[*r].connect.is_none()) {
         files.push(lambda_handler(m, r));
     }
     Ok(files)
@@ -263,6 +320,15 @@ fn order(states: &Map<String, Value>, start: &str) -> Map<String, Value> {
         }
     }
     out
+}
+
+/// What a callback's answer reads as: as it comes, but for a callback that a method of the service
+/// the workflow implements answers, with the zero values filled in that its JSON leaves out.
+fn answered(task: &TaskDef) -> String {
+    match &task.answer_zeros {
+        Some(z) => render::jsonata_fill("$states.result", z),
+        None => "$states.result".to_string(),
+    }
 }
 
 fn arg_value(e: &TExpr) -> Value {
@@ -377,7 +443,7 @@ impl<'a> Gen<'a> {
                 st.insert("Type".into(), json!("Succeed"));
                 st.insert("Comment".into(), json!(format!("line {}", s.line)));
                 if fields.is_empty() {
-                    st.insert("Output".into(), json!(NO_OUTPUT));
+                    st.insert("Output".into(), json!(no_output(self.m)));
                 } else {
                     let mut out = Map::new();
                     for (f, e) in fields {
@@ -464,7 +530,7 @@ impl<'a> Gen<'a> {
                     let mut parts = Vec::new();
                     if a.none {
                         match expr {
-                            TExpr::Var { name, .. } if m_is_case(self.m, name) => parts.push(format!("${} = null", asl_var(name))),
+                            TExpr::Var { name, fields, .. } if m_is_case_state(self.m, name, fields) => parts.push(format!("${} = null", asl_var(name))),
                             _ => parts.push(format!("({x}) = null")),
                         }
                     }
@@ -625,9 +691,24 @@ impl<'a> Gen<'a> {
         }
         let (resource, arguments, result, timeout, retry) = match callee {
             Callee::Rule(r) => {
-                let f = m.rules[*r].lambda.clone().unwrap_or_default();
+                let ru = &m.rules[*r];
                 let retry = rule_retriers();
-                ("arn:aws:states:::lambda:invoke".to_string(), json!({ "FunctionName": f, "Payload": payload }), "$states.result.Payload".to_string(), None, Some(retry))
+                match &ru.connect {
+                    // the rule at its service: an HTTP Task, whose body is written from the arguments and whose answer is read as the rule's record
+                    Some(c) => {
+                        let mut w = Map::new();
+                        w.insert("ApiEndpoint".into(), json!(c.url));
+                        w.insert("Method".into(), json!("POST"));
+                        w.insert("InvocationConfig".into(), json!({ "ConnectionArn": ru.connection.clone().unwrap_or_default() }));
+                        w.insert("Headers".into(), json!({ "Connect-Protocol-Version": "1" }));
+                        w.insert("RequestBody".into(), render::jsonata_rule_request(c, args));
+                        ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), render::jsonata_rule_read(c, "$states.result.ResponseBody"), None, Some(retry))
+                    }
+                    None => {
+                        let f = ru.lambda.clone().unwrap_or_default();
+                        ("arn:aws:states:::lambda:invoke".to_string(), json!({ "FunctionName": f, "Payload": payload }), "$states.result.Payload".to_string(), None, Some(retry))
+                    }
+                }
             }
             Callee::Task(t) => {
                 let task = &m.tasks[*t];
@@ -639,7 +720,7 @@ impl<'a> Gen<'a> {
                         }
                         if task.callback {
                             payload.insert("task_token".into(), json!("{% $states.context.Task.Token %}"));
-                            ("arn:aws:states:::lambda:invoke.waitForTaskToken".to_string(), json!({ "FunctionName": f, "Payload": payload }), "$states.result".to_string(), task.timeout, retry)
+                            ("arn:aws:states:::lambda:invoke.waitForTaskToken".to_string(), json!({ "FunctionName": f, "Payload": payload }), answered(task), task.timeout, retry)
                         } else {
                             ("arn:aws:states:::lambda:invoke".to_string(), json!({ "FunctionName": f, "Payload": payload }), "$states.result.Payload".to_string(), task.timeout, retry)
                         }
@@ -652,7 +733,7 @@ impl<'a> Gen<'a> {
                             // the token goes in the message; whoever reads it answers with SendTaskSuccess
                             let body = args.iter().find(|(a, _)| a == "MessageBody").map(|(_, e)| jsonata_expr(e)).unwrap_or_else(|| "{}".into());
                             payload.insert("MessageBody".into(), json!(format!("{{% $merge([{body}, {{\"task_token\": $states.context.Task.Token}}]) %}}")));
-                            (format!("arn:aws:states:::{service}:{action}.waitForTaskToken"), Value::Object(payload), "$states.result".to_string(), task.timeout, retry)
+                            (format!("arn:aws:states:::{service}:{action}.waitForTaskToken"), Value::Object(payload), answered(task), task.timeout, retry)
                         } else {
                             (format!("arn:aws:states:::aws-sdk:{service}:{action}"), Value::Object(payload), "$states.result".to_string(), task.timeout, retry)
                         }
@@ -984,8 +1065,10 @@ fn jev_answer(j: &Jev) -> String {
     format!("({}; {{\"answer\": {answer}, \"low\": {low}}})", lets.join("; "))
 }
 
-fn m_is_case(m: &Model, name: &str) -> bool {
-    m.case_index(name).is_some()
+/// Whether `name.fields` is a case's state, which reads as none while the case has not started;
+/// another field of a case is read, and is absent, as any field is.
+fn m_is_case_state(m: &Model, name: &str, fields: &[String]) -> bool {
+    fields.len() == 1 && m.case_index(name).is_some_and(|c| m.cases[c].state_field == fields[0])
 }
 
 /// `retry` as ASL retriers. Without `on`, a task is retried on failures and timeouts but

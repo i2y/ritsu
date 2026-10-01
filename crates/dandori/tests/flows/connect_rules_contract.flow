@@ -1,0 +1,34 @@
+workflow 契約の列挙 v1
+description "契約の列挙を取り込んだ規則を Connect のサービスとして呼ぶ：口座の手数料の規則は、状態の列挙を契約（account.proto）から取り込む。契約の値には接頭辞が無く、0 番も「有効」という状態なので、サービスは「有効」の結果を JSON から省く。どのプラットフォームも、値の名前を rulec api から読み、省かれた状態を「有効」として読み、送るときは「有効」も名前（ACTIVE）を書いて送る"
+
+use rule 手数料 from "../fixtures/rules/account_fee.rule"
+  connect "https://rules.example.com"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+
+record 口座
+  id   : string
+  状態 : 手数料.口座の状態
+  残高 : money[円]  range >=0 <=10000000
+
+inputs
+  口座 : list[口座]
+
+outputs
+  手数料 : list[money[円]]
+
+task 手数料を引く(口座ID: string, 額: money[円], 次の状態: 手数料.口座の状態)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:charge-fee"
+  idempotent
+
+task 解約を記す(口座ID: string, 次の状態: 手数料.口座の状態)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:record-closing"
+  idempotent
+
+flow
+  let 額 = for 一口 in 口座 at most 2
+    let 決定 = 手数料(状態: 一口.状態, 残高: 一口.残高)
+    match 決定.次の状態
+      有効 => 手数料を引く(口座ID: 一口.id, 額: 決定.手数料, 次の状態: 決定.次の状態)
+      解約 => 解約を記す(口座ID: 一口.id, 次の状態: 決定.次の状態)
+    yield 決定.手数料
+  succeed 手数料 = 額

@@ -19,7 +19,8 @@ such as the check of each answer and the steps of each loop.
 
 The Markdown draws the flow, and `on failure` and `on cancel`, as Mermaid flowcharts, which GitHub
 draws in a pull request, an issue or a README. Under them, a table lists every call and another
-every way the workflow can end. The review example
+every way the workflow can end; for a workflow that implements a service, a table of the service's
+methods comes first, with what each does to a run ([Implement a service](services.md)). The review example
 ([examples/review/temporal](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.flow)),
 where Jev scores an application and a rule decides whether a person approves it:
 

@@ -47,6 +47,8 @@ pub enum Kind {
 pub struct Program {
     pub name: Option<Name>,
     pub version: u32,
+    /// `implements <api>.<Service>` on the `workflow` line: the service of a `.proto` the workflow implements
+    pub implements: Option<Vec<Name>>,
     pub description: Option<String>,
     pub kind: Kind,
     pub uses: Vec<UseRule>,
@@ -68,9 +70,14 @@ pub struct Program {
 pub struct UseRule {
     pub name: Name,
     pub path: String,
-    pub lambda: Option<String>,
+    /// `lambda "<function>"`, where it was written
+    pub lambda: Option<(String, Span)>,
     /// Temporal: the rule is called as a local activity
     pub local: bool,
+    /// `connect "<url>"`: the rule's Connect service is at this URL, and every platform calls it there
+    pub connect: Option<(String, Span)>,
+    /// `connection "<EventBridge connection>"`: how Step Functions' HTTP Task reaches the service
+    pub connection: Option<(String, Span)>,
 }
 
 #[derive(Clone, Debug)]
@@ -657,7 +664,7 @@ struct Parser {
 }
 
 const KEYWORDS: &[&str] = &[
-    "workflow", "description", "kind", "use", "rule", "from", "enum", "record", "inputs", "outputs", "task", "case",
+    "workflow", "implements", "description", "kind", "use", "rule", "from", "enum", "record", "inputs", "outputs", "task", "case",
     "follows", "flow", "on", "let", "match", "wait", "repeat", "break", "succeed", "fail", "leaving", "lambda", "http",
     "aws", "connection", "queue", "machine", "durable", "function", "image", "template", "errors", "retry", "timeout", "key", "idempotent",
     "starts", "sends", "observes", "refused", "callback", "held", "external", "state", "then", "true", "false", "until",
@@ -1238,6 +1245,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
     let mut prog = Program {
         name: None,
         version: 1,
+        implements: None,
         description: None,
         kind: Kind::Standard,
         uses: vec![],
@@ -1273,6 +1281,15 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 match n {
                     Some(n) => prog.version = n,
                     None => return Err(err(vsp, "write the version as v1, v2, ...", "バージョンは v1、v2 のように書きます")),
+                }
+                // the service of a `.proto` the workflow implements: `<api>.<Service>`
+                if cur.eat_kw("implements") {
+                    let isp = cur.span();
+                    let q = cur.qualname()?;
+                    if q.len() < 2 {
+                        return Err(err(isp, "write the service after the name `use proto` gave the `.proto`, as `implements shop.FulfillmentService`", "サービスは、`use proto` で付けた名前のあとに `implements shop.FulfillmentService` のように書きます"));
+                    }
+                    prog.implements = Some(q);
                 }
                 cur.expect_end()?;
                 prog.name = Some(name);
@@ -1333,24 +1350,37 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 p.pos += 1;
                 let mut lambda = None;
                 let mut local = false;
+                let mut connect = None;
+                let mut connection = None;
                 while let Some(cl) = p.cur_line() {
                     if cl.indent == 0 {
                         break;
                     }
                     let cl = cl.clone();
                     let mut cc = Cur::new(&cl);
+                    let at = cc.span();
                     if cc.eat_kw("lambda") {
-                        lambda = Some(cc.string("the Lambda function", "Lambda 関数")?.0);
+                        lambda = Some((cc.string("the Lambda function", "Lambda 関数")?.0, at));
+                        cc.expect_end()?;
+                    } else if cc.eat_kw("connect") {
+                        connect = Some((cc.string("the URL of the rule's service", "規則のサービスの URL")?.0, at));
+                        cc.expect_end()?;
+                    } else if cc.eat_kw("connection") {
+                        connection = Some((cc.string("the EventBridge connection", "EventBridge の接続")?.0, at));
                         cc.expect_end()?;
                     } else if cc.eat_kw("local") {
                         local = true;
                         cc.expect_end()?;
                     } else {
-                        return Err(err(cc.span(), "only `lambda \"<function>\"` and `local` can be written under `use rule`", "`use rule` の下に書けるのは `lambda \"<関数>\"` と `local` だけです"));
+                        return Err(err(
+                            cc.span(),
+                            "only `lambda \"<function>\"`, `connect \"<url>\"`, `connection \"<connection>\"` and `local` can be written under `use rule`",
+                            "`use rule` の下に書けるのは `lambda \"<関数>\"`・`connect \"<URL>\"`・`connection \"<接続>\"`・`local` だけです",
+                        ));
                     }
                     p.pos += 1;
                 }
-                prog.uses.push(UseRule { name, path, lambda, local });
+                prog.uses.push(UseRule { name, path, lambda, local, connect, connection });
             }
             "enum" => {
                 let name = cur.ident("the enum's name", "列挙の名前")?;

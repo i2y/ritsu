@@ -1,0 +1,8 @@
+error[E003]: tests/fixtures/self_holding.flow:6:12: `連絡先` contains itself, through `次`; a record cannot, so give the field that holds itself the type `json`
+     6 |   次   : 連絡先?
+error[E003]: tests/fixtures/self_holding.flow:10:10: `目次` contains itself, through `項目`; a record cannot, so give the field that holds itself the type `json`
+    10 |   項目   : list[目次]
+error[E003]: tests/fixtures/self_holding.flow:13:8: `輪` contains itself, through `自分`; a record cannot, so give the field that holds itself the type `json`
+    13 |   自分 : 輪
+error[E003]: tests/fixtures/self_holding.flow:16:8: `甲` contains itself, through `乙`; a record cannot, so give the field that holds itself the type `json`
+    16 |   乙 : 乙?

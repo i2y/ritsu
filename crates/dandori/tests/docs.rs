@@ -2,7 +2,8 @@
 //! what the tool does: every diagnostic on them is word for word in a golden file of
 //! tests/fixtures, which the fixtures test holds to the checker; every Mermaid chart on them is word
 //! for word in a golden file of tests/doc, which tests/doc.rs holds to `dandori doc`; every line of
-//! `.flow` on them is a line of an example or a test flow; the codes pages list every code the
+//! `.flow` on them is a line of an example or a test flow, and every line of `.proto` one of a
+//! `.proto` of the examples, the tests or dandori's options; the codes pages list every code the
 //! checker has, and no other; and the highlighter of the site knows the keywords of the language as
 //! src/syntax.rs has them.
 
@@ -151,6 +152,35 @@ fn the_flow_on_the_pages_is_from_the_examples() {
         assert!(seen > 0, "no flow in {place}: were the fences changed?");
     }
     assert!(wrong.is_empty(), "not a line of any .flow under examples/ or tests/:\n{}", wrong.join("\n"));
+}
+
+#[test]
+fn the_proto_on_the_pages_is_from_the_files() {
+    let mut real = BTreeSet::new();
+    for dir in ["examples", "tests", "proto"] {
+        for f in files(&root().join(dir), "proto") {
+            real.extend(fs::read_to_string(&f).unwrap().lines().map(|l| l.trim().to_string()));
+        }
+    }
+    let mut wrong = Vec::new();
+    let mut seen = 0;
+    for (_, files) in pages() {
+        for f in files {
+            for (info, lines) in fenced(&fs::read_to_string(&f).unwrap()) {
+                if info != "proto" {
+                    continue;
+                }
+                seen += 1;
+                for l in lines.iter().map(|l| l.trim()).filter(|l| !l.is_empty() && *l != "…") {
+                    if !real.contains(l) {
+                        wrong.push(format!("{}: {l}", shown(&f)));
+                    }
+                }
+            }
+        }
+    }
+    assert!(seen > 0, "no .proto on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "not a line of any .proto under examples/, tests/ or proto/:\n{}", wrong.join("\n"));
 }
 
 /// The codes the checker can give: every `"E…"` and `"W…"` of three digits in src/.

@@ -1,0 +1,87 @@
+// dandori's marks on a service that a `.flow` implements.
+//
+// A workflow's entry is written as a standard proto3 service, and the `.flow` says it
+// implements it: `workflow fulfillment v1 implements shop.FulfillmentService`. The service
+// names its workflow with the option `(dandori.v1.workflow)`, and each of its methods is one
+// of four ways a client reaches a run of it:
+//
+//   (dandori.v1.start)   starts a run: the request is the workflow's inputs, the response its
+//                        outputs, and `fails` the names a run can fail with (the `.flow`'s `fail`s)
+//   (dandori.v1.event)   sends a run the value an `event` task waits for: the request is that value
+//   (dandori.v1.answer)  answers a `callback` task: the request is its answer
+//   (dandori.v1.status)  asks a run where it is: the response is `Status` below, or a message
+//                        of the same fields
+//
+// dandori holds the `.flow` to the service when it checks it (E017): the inputs and the outputs,
+// the values of the events and of the answers, and the names of the failures.
+//
+// The methods are not served over HTTP. A value goes to and from a run as JSON, in the shape
+// protobuf's JSON mapping gives the message (protojson): on Temporal, a `json/plain` payload.
+// On Temporal, `start` is the workflow `<name>_v<version>`, `event` the Update `dandori.event`
+// with `{"event": <task>, "ok": <request>}`, `answer` the Update `dandori.answer` with
+// `{"callback_id": <id>, "ok": <request>}`, and `status` the query `dandori.status`. An event
+// or an answer can be an error too: `{"error": <name>, "message": <text>}` in place of `ok`.
+// A run fills in the zero values that protojson leaves out, of the start's request, of an
+// event and of an answer, before it checks them.
+//
+// dandori reads this file without it being at hand, as it reads Google's well-known types.
+// protoc and buf need it: copy it into your proto root as `dandori/v1/options.proto`.
+//
+// The extension numbers are in the range protobuf keeps for use within an organization
+// (50000 to 99999), and are not registered with protobuf's global extension registry.
+syntax = "proto3";
+
+package dandori.v1;
+
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/struct.proto";
+
+// The workflow that implements the service: the `.flow`'s `workflow <name> v<version>`.
+message WorkflowOptions {
+  // the name after `workflow`
+  string name = 1;
+  // the number after `v`
+  uint32 version = 2;
+}
+
+// The method that starts a run.
+message StartOptions {
+  // every name the `.flow`'s `fail`s end a run with, each once
+  repeated string fails = 1;
+}
+
+// A method that sends a run the value an `event` task waits for.
+message EventOptions {
+  // the name of the `event` task
+  string task = 1;
+}
+
+// A method that answers a `callback` task.
+message AnswerOptions {
+  // the name of the `callback` task
+  string task = 1;
+}
+
+// The method that asks a run where it is.
+message StatusOptions {}
+
+// Where a run is, as the query `dandori.status` answers.
+message Status {
+  // the line of the `.flow` whose call or wait the run is at; absent when it is at neither
+  optional int32 at = 1;
+  // each case's state, by the case's name: a string, or null for a case not started yet
+  map<string, google.protobuf.Value> cases = 2;
+  // the `event` tasks whose events the run waits for now
+  repeated string events = 3;
+}
+
+extend google.protobuf.ServiceOptions {
+  WorkflowOptions workflow = 50700;
+}
+
+extend google.protobuf.MethodOptions {
+  StartOptions start = 50701;
+  EventOptions event = 50702;
+  AnswerOptions answer = 50703;
+  StatusOptions status = 50704;
+}

@@ -34,18 +34,24 @@ outputs
 
 - `workflow hotel_stay v1` names the workflow and its version. On Temporal the version is part of
   the workflow type and the task queue (`hotel_stay_v1`), so a new version runs beside the old one
-  instead of replacing the code of the runs that are going on.
+  instead of replacing the code of the runs that are going on. The line can go on with
+  `implements <api>.<Service>`, when the workflow's entry is written as a service of a `.proto`
+  ([Implement a service](services.md)).
 - `use rule` reads a rule written in [rulec](https://github.com/i2y/rulec). `hold` decides how much
   to hold and whether the front desk looks first; `payment_intent` is Stripe's PaymentIntent written
-  down as a rulec state machine. Its enums and records are types here: `hold.room`.
+  down as a rulec state machine. Its enums and records are types here: `hold.room`. A rule can also be
+  called at the Connect service rulec writes for it ([A rule as a service](tasks.md#a-rule-as-a-service)).
 - `use openapi` reads an API description, and the tasks that call it are held to it
   ([API descriptions](tasks.md#api-descriptions)).
 - `inputs` and `outputs` are what a run starts with and ends with.
 
 The types are `int`, numbers with a unit such as `money[JPY, incl_tax]` (as rulec has them),
 `string`, `bool`, `timestamp`, enums, records, `list[T]`, `T?` for a value that may be absent, and
-`json` for a value passed along without being looked into. A number can also say what it may be,
-with a [range](#ranges).
+`json` for a value passed along without being looked into. A message or an enum of a `.proto` read
+by `use proto` is a type too, written after the name `use` gave it (`warehouse.ReserveResponse`;
+[Types from a .proto](tasks.md#types-from-a-proto)). A number can also say what it may be, with a
+[range](#ranges). A record cannot contain itself, directly or through others (E003); what has no
+fixed depth, a tree, is carried as `json`.
 
 ## Tasks
 

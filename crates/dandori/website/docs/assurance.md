@@ -23,7 +23,12 @@ handler, every way a case can move, and lists that are empty, short, and longer 
 takes. No two values in a scenario are alike, so a platform that mixes up two answers, or the rounds
 of a loop, shows it (a number with a range is picked inside it, where two may meet). The scenarios also
 give answers every platform must refuse: of the wrong shape, with a state the machine does not lead
-to, and with a number outside its range.
+to, and with a number outside its range. For a workflow that implements a service, they also give an
+input, and values of events and answers of callbacks that the service sends, with every field at its
+zero value left out, as protobuf's JSON writes them; a platform that does not fill them in reads
+another input, or another answer, from the reference's. And when the workflow reads a field that
+says whether it is set with an input that is not `T?`, one input goes without it, and every
+platform must end that run at once, with `Dandori.BadInput`.
 
 On Temporal, durable functions and pydantic-graph, the tasks dandori writes run with a stand-in
 `Transport` that records what they would send, so what they send is compared with what Step Functions
@@ -106,6 +111,34 @@ run again, at most twice, and the test says so.
   a server that answers HTTP and Lambda's Invoke, and moto for SNS and SQS. What arrives must be the
   call, in the same text from both languages, and an AWS error must come back by the name the task
   declares (`NotFoundException`).
+- A rule called at its service (`connect` under `use rule`) is an HTTP request on every platform, and the
+  scenarios answer it as the service writes: the record they chose as protobuf's JSON, with the zero
+  values left out and the numbers as strings. They also answer with the false and the 0 left out (and an
+  enum at value 0, when value 0 is one of the rule's values), with an enum left out whose value 0 is
+  none of them, with a number outside its range, with a body of the wrong shape, and with a failure.
+  Every platform must read the answer back as the rule's record, or end the call as the reference does.
+- What dandori reads from `rulec api` for a rule's service (the path, the fields of the request and the
+  response by their JSON names and kinds, each enum's values and its value 0, and the zero values the
+  response leaves out) is compared with the `.proto` that `rulec gen` writes for the same rule, read by
+  dandori's own reader, for every rule of the examples, and for two whose enum is a `.proto`'s
+  (`import proto`): one whose values carry the contract's prefix, and one whose values have none and
+  whose value 0 is a value of its own (`ACTIVE = 0`).
+- The service `rulec gen` writes for each of these rules runs as it is (`--http`, the standard library's
+  server, with the stubs that buf writes with the plugins of `tools/connect/.venv`), and every vector
+  `rulec vectors` writes is sent to it as dandori writes a request, every input written out. What
+  dandori reads of the answer must be the vector's output, and the header `rulec-source-sha256` of an
+  answer must be the rule's `source_sha256`. An input above a range, a name no value of the enum has, a
+  field the request does not have and a request without one of its inputs must each be refused with
+  `invalid_argument` and the status 400. The 350 vectors of the 13 rules were sent, 114 of them with an
+  input at its zero value, and the services refused 9 inputs above a range, 11 names, 13 fields and 13
+  requests without an input. With rulec 0.21.2 and before, whose `rulec api` does not say what a service
+  calls the values of its enums, the two rules of `.proto` enums are skipped, and so are the field and
+  the input left out, which the services of those rulecs do not refuse.
+- What a service answers is read as the rule's record in four places: the reference interpreter, the
+  TypeScript and the Python that dandori writes, and the JSONata of the state machine. 200 answers of
+  four rules must be read alike in all four, among them the ones a service would not write: a number
+  that is not a decimal or is more than 2^53 − 1, a name that no enum has (`constructor`, `__proto__`),
+  a field of another kind, a null, a body that is not an object. None of them may raise.
 - A Jev task's call is an HTTP request, and the stand-in answers it with Jev's response as TypeSafe's
   API reference shows it: for each question the choice, the score or the probability of yes, with how
   sure Jev is. The scenarios answer each Jev call exactly as sure as the task's `confidence` asks, then
@@ -118,6 +151,19 @@ run again, at most twice, and the test says so.
   also goes to TypeSafe for real, from the default `Transport` of TypeScript and of Python. The
   response must answer every question, and each answer must read into the task's type, or fail the
   call with the task's error when Jev is not sure enough. Without the key, nothing goes to TypeSafe.
+
+## The services
+
+What a workflow that implements a service takes and answers is held to protobuf itself. Each
+`.proto` of a service is built by protoc into descriptors, with the repository's
+`proto/dandori/v1/options.proto` as the file of dandori's options, and protobuf's Python
+(`json_format`, which refuses a field it does not know) reads with them every input the scenarios
+give, as the request of the method that starts a run; every output the reference interpreter ends a
+run with, as its response; every value of an event and every answer of a callback a method sends, as
+its request; and what the query `dandori.status` answers, as `dandori.v1.Status`. An input that
+protobuf writes back, its zero values left out, fills in to the input again. dandori's options pass
+buf's standard lint, and every `.proto` of a service in the examples and the tests builds with
+protoc.
 
 ## The pictures
 
@@ -177,13 +223,22 @@ $ uv pip install --python tools/agents/.venv/bin/python -r tools/agents/requirem
 $ npm install --prefix tools/wire
 $ uv venv --python 3.13 tools/wire/.venv
 $ uv pip install --python tools/wire/.venv/bin/python -r tools/wire/requirements.txt
+$ uv venv --python 3.13 tools/connect/.venv
+$ uv pip install --python tools/connect/.venv/bin/python -r tools/connect/requirements.txt
 $ npm install --prefix tools/mermaid
 $ sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind 0.33+, kubectl)
 $ docker pull localstack/localstack:4.14.0
 $ DANDORI_RULEC=/path/to/rulec cargo test
 ```
 
-A test that cannot find rulec, Node, the tools, the cluster, the `argo` command, the image of
+Run the tests with rulec 0.22.0 or later. The golden files of `dandori doc`, the pages of the site's
+examples and the playground's `presets.json` hold what rulec prints for the rules, `rulec doc` among it,
+and its version number is in that. With rulec 0.21.2 or before, three tests fail on that alone: the two
+that compare `dandori doc` with those files, and the one that compares the playground's answers with
+the command's. The tests that need `connect.enums`, which 0.22.0 is the first to print, print a `SKIP:`
+line.
+
+A test that cannot find rulec, Node, the tools, buf, protoc, the cluster, the `argo` command, the image of
 LocalStack or Chrome prints a `SKIP:` line and passes, so read the output with `-- --nocapture`. The whole
 `cargo test` takes two to four minutes; `tools/argo/setup.sh` sets Argo's controller up for it, to
 look at a workflow again a second after a change rather than ten, on the node image of kind 0.33.0.

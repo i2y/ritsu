@@ -1,0 +1,17 @@
+// Imported by shop/v1/order.proto, from the root of the module.
+syntax = "proto3";
+
+package common.v1;
+
+import "buf/validate/validate.proto";
+
+enum Currency {
+  CURRENCY_UNSPECIFIED = 0;
+  CURRENCY_JPY = 1;
+  CURRENCY_USD = 2;
+}
+
+message Money {
+  string units = 1;
+  int32 nanos = 2 [(buf.validate.field).int32 = {gte: 0, lte: 999999999}];
+}

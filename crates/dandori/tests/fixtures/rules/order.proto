@@ -1,0 +1,7 @@
+syntax = "proto3";
+package shop.v1;
+enum MemberTier {
+  MEMBER_TIER_UNSPECIFIED = 0;
+  MEMBER_TIER_BASIC = 1;
+  MEMBER_TIER_GOLD = 2;
+}

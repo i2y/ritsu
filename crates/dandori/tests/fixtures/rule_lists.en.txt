@@ -1,0 +1,6 @@
+error[E005]: tests/fixtures/rule_lists.flow:4:10: could not read the rule `rules/cart_shipping.rule`
+     4 | use rule 送料 from "rules/cart_shipping.rule"
+  = the rule walks a list of elements (`明細`), and dandori does not pass a rule a list yet
+error[E005]: tests/fixtures/rule_lists.flow:6:10: could not read the rule `rules/cart_shipping.rule`
+     6 | use rule 送料のサービス from "rules/cart_shipping.rule"
+  = the rule walks a list of elements (`明細`), and dandori does not pass a rule a list yet

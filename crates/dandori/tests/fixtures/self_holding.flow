@@ -1,0 +1,29 @@
+workflow self_holding v1
+description "自分を含むレコード：オプショナルな値を通す、リストを通す、自分のフィールドの型にそのまま自分を使う、二つのレコードが互いを含む。含むところを json にしたレコードは通る"
+
+record 連絡先
+  名前 : string
+  次   : 連絡先?
+
+record 目次
+  見出し : string
+  項目   : list[目次]
+
+record 輪
+  自分 : 輪
+
+record 甲
+  乙 : 乙?
+
+record 乙
+  甲 : 甲?
+
+record 木
+  名前 : string
+  子   : json
+
+inputs
+  木 : 木
+
+flow
+  pass

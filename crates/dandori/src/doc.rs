@@ -455,6 +455,9 @@ fn call_lines(i: &Input, target: Option<&Target>, callee: &Callee, args: &[(Stri
         Callee::Rule(r) => {
             let ru = &m.rules[*r];
             let mut how = format!("rule {}", rule_file(i, ru));
+            if ru.connect.is_some() {
+                how.push_str(" · connect");
+            }
             if ru.local {
                 how.push_str(" · local");
             }
@@ -743,9 +746,11 @@ fn call_row(i: &Input, s: &TStmt, target: Option<&Target>, callee: &Callee, args
     let (how, retries, timeout) = match callee {
         Callee::Rule(r) => {
             let ru = &m.rules[*r];
-            let mut how = match lang {
-                Lang::En => format!("rule `{}`", rule_file(i, ru)),
-                Lang::Ja => format!("規則 `{}`", rule_file(i, ru)),
+            let mut how = match (lang, &ru.connect) {
+                (Lang::En, None) => format!("rule `{}`", rule_file(i, ru)),
+                (Lang::Ja, None) => format!("規則 `{}`", rule_file(i, ru)),
+                (Lang::En, Some(c)) => format!("rule `{}`, by Connect at `{}`", rule_file(i, ru), c.base),
+                (Lang::Ja, Some(c)) => format!("規則 `{}`（Connect で `{}` に）", rule_file(i, ru), c.base),
             };
             if ru.local {
                 how.push_str(&tr(lang, ", a local activity on Temporal", "（Temporal ではローカルアクティビティ）"));
@@ -969,6 +974,9 @@ pub fn markdown(i: &Input) -> String {
             if !m.outputs.is_empty() {
                 let _ = write!(o, " Outputs: {}.", io(&m.outputs));
             }
+            if let Some(s) = &m.service {
+                let _ = write!(o, " It implements `{}` (`{}`).", s.name, s.file);
+            }
         }
         Lang::Ja => {
             let _ = write!(o, "`{}` を `dandori doc` で描いたものです。", i.file);
@@ -978,6 +986,9 @@ pub fn markdown(i: &Input) -> String {
             }
             if !m.outputs.is_empty() {
                 let _ = write!(o, "出力は {} です。", io(&m.outputs));
+            }
+            if let Some(s) = &m.service {
+                let _ = write!(o, "このワークフローは `{}`（`{}`）を実装します。", s.name, s.file);
             }
         }
     }
@@ -1032,6 +1043,17 @@ pub fn markdown(i: &Input) -> String {
         if p.key == "flow" {
             let _ = writeln!(o, "{}\n", legend_text(lang));
         }
+    }
+    if let Some(s) = &m.service {
+        let _ = writeln!(o, "## {}\n", tr(lang, "Service", "サービス"));
+        let _ = writeln!(o, "{}\n", tr(lang, "What each method of the service does to a run.", "サービスのメソッドと、それぞれが実行に対して何をするかです。"));
+        let _ = writeln!(o, "{}", tr(lang, "| Method | What it does | Task |", "| メソッド | 何をするか | タスク |"));
+        o.push_str("|---|---|---|\n");
+        for (name, what, task) in service_rows(s, lang) {
+            let task = task.map(|t| format!("`{t}`")).unwrap_or_default();
+            let _ = writeln!(o, "| `{name}` | {what} | {} |", dash(&task));
+        }
+        o.push('\n');
     }
     if !rows.is_empty() {
         let _ = writeln!(o, "## {}\n", tr(lang, "Calls", "呼び出し"));
@@ -1117,6 +1139,32 @@ pub fn markdown(i: &Input) -> String {
         o.push_str("```\n");
     }
     o
+}
+
+/// What each method of the service the workflow implements does to a run, as a sentence of the
+/// page's language, and the task it names: (the method, what it does, the task).
+fn service_rows(s: &ServiceUse, lang: Lang) -> Vec<(String, String, Option<String>)> {
+    s.methods
+        .iter()
+        .map(|mt| {
+            let (what, task) = match mt.marks.first() {
+                Some(Mark::Start { fails }) if fails.is_empty() => (tr(lang, "starts a run", "実行を始めます"), None),
+                Some(Mark::Start { fails }) => {
+                    let names: Vec<String> = fails.iter().map(|f| format!("`{f}`")).collect();
+                    let what = match lang {
+                        Lang::En => format!("starts a run; it can fail with {}", names.join(", ")),
+                        Lang::Ja => format!("実行を始めます。失敗の名前は {}", names.join("・")),
+                    };
+                    (what, None)
+                }
+                Some(Mark::Event { task }) => (tr(lang, "sends the event", "イベントを送ります"), Some(task.clone())),
+                Some(Mark::Answer { task }) => (tr(lang, "answers the callback", "コールバックに応答します"), Some(task.clone())),
+                Some(Mark::Status) => (tr(lang, "answers where a run is (the query `dandori.status`)", "実行がいまどこにいるかを答えます（クエリ `dandori.status`）"), None),
+                None => (String::new(), None),
+            };
+            (mt.name.clone(), what, task)
+        })
+        .collect()
 }
 
 fn dash(s: &str) -> &str {
@@ -1519,6 +1567,13 @@ impl<'a> Page<'a> {
                 }
                 if !m.outputs.is_empty() {
                     let _ = write!(o, "<dt>{}</dt><dd>{}</dd>", tr(lang, "Outputs", "出力"), io(&m.outputs));
+                }
+                if let Some(s) = &m.service {
+                    let methods: Vec<String> = service_rows(s, lang)
+                        .into_iter()
+                        .map(|(name, what, task)| format!("<li><code>{}</code>: {}{}</li>", esc(&name), inline(&what), task.map(|t| format!(" (<code>{}</code>)", esc(&t))).unwrap_or_default()))
+                        .collect();
+                    let _ = write!(o, "<dt>{}</dt><dd><code>{}</code> (<code>{}</code>)<ul class=\"facts\">{}</ul></dd>", tr(lang, "Service", "サービス"), esc(&s.name), esc(&s.file), methods.join(""));
                 }
                 let _ = write!(o, "<dt>{}</dt><dd><code>{}</code></dd></dl>", tr(lang, "File", "ファイル"), esc(i.file));
                 return o;

@@ -24,13 +24,14 @@ page() {
       -e 's|](\.\./checks\.md)|](checks.md)|g' \
       -e 's|](\.\./platforms\.md)|](platforms.md)|g' \
       -e 's|](\.\./diagrams\.md)|](diagrams.md)|g' \
+      -e 's|](\.\./services\.md)|](services.md)|g' \
       -e "s|](assurance\.md)|]($site/assurance/)|g" \
       -e "s|](install\.md)|]($site/install/)|g" \
       -e "s|](doc/|]($site/doc/|g" \
       "$1" | cat -s > "$2"
 }
 
-for p in tour tasks agents jev checks diagrams platforms examples design; do
+for p in tour tasks services agents jev checks diagrams platforms examples design; do
   page "$docs/$p.md" "$out/$p.md"
 done
 page "$docs/reference/commands.md" "$out/commands.md"

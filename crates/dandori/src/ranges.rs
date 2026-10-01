@@ -216,9 +216,9 @@ fn estimate(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr) -> Est {
             }
             let (r, f) = at.expect("a field was read");
             let rd = &m.records[r];
-            let (en, ja) = match rd.origin {
-                RecordOrigin::RuleOutputs(ix) => (format!("the output `{f}` of the rule `{}`", m.rules[ix].name), format!("規則 `{}` の出力 `{f}`", m.rules[ix].name)),
-                RecordOrigin::Local => (format!("the field `{f}` of `{}`", rd.name), format!("`{}` のフィールド `{f}`", rd.name)),
+            let (en, ja) = match &rd.origin {
+                RecordOrigin::RuleOutputs(ix) => (format!("the output `{f}` of the rule `{}`", m.rules[*ix].name), format!("規則 `{}` の出力 `{f}`", m.rules[*ix].name)),
+                RecordOrigin::Local | RecordOrigin::Proto { .. } => (format!("the field `{f}` of `{}`", rd.name), format!("`{}` のフィールド `{f}`", rd.name)),
             };
             Est::or(m.field_range(r, f), en, ja)
         }

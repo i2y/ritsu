@@ -1,0 +1,10 @@
+workflow unread v1 implements shop.UnreadService
+description "E017: the service's start takes a message of a file that could not be read"
+
+use proto shop from "services/unread.proto"
+
+inputs
+  id : string
+
+flow
+  pass

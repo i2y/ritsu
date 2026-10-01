@@ -1,0 +1,6 @@
+エラー[E005]: tests/fixtures/rule_lists.flow:4:10: 規則 `rules/cart_shipping.rule` を読めませんでした
+     4 | use rule 送料 from "rules/cart_shipping.rule"
+  = この規則は要素の並び（`明細`）をたどります。dandori はまだ、規則に並びを渡せません
+エラー[E005]: tests/fixtures/rule_lists.flow:6:10: 規則 `rules/cart_shipping.rule` を読めませんでした
+     6 | use rule 送料のサービス from "rules/cart_shipping.rule"
+  = この規則は要素の並び（`明細`）をたどります。dandori はまだ、規則に並びを渡せません

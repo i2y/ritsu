@@ -2,8 +2,10 @@
 //! and turn the statements into the checked tree of `model`. The run-dependent checks
 //! (states of cases, assignment, exhaustiveness, exits) are the second pass, in `flow`.
 
+use crate::apis::{ApiDoc, ApiKind, MadeTy};
 use crate::diag::Diag;
 use crate::model::*;
+use crate::proto::ProtoFile;
 use crate::rulec::{self, RType};
 use crate::syntax::{self, Block, Call, Expr, MachineUse, Part, Program, RangeDecl, Span, StmtKind, TypeExpr};
 use std::collections::{BTreeMap, BTreeSet};
@@ -22,6 +24,17 @@ pub struct Lowerer<'a> {
     m: Model,
     enum_ix: BTreeMap<String, EnumId>,
     record_ix: BTreeMap<String, RecordId>,
+    /// the enums made from a `.proto`: a case's state may be one
+    made_enums: BTreeSet<EnumId>,
+    /// where a type made from a `.proto` was first named, by its name in the flow
+    made_at: BTreeMap<String, Span>,
+    /// the fields of made records whose type no file read has (an import was not read): the record,
+    /// the field's key in JSON, and the type's name
+    made_unread: Vec<(String, String, String)>,
+    /// where each `use` names what it reads, by the name it gives
+    use_spans: BTreeMap<String, Span>,
+    /// the APIs whose missing `url` is already said
+    url_said: BTreeSet<String>,
     rule_ix: BTreeMap<String, usize>,
     task_ix: BTreeMap<String, usize>,
     var_ty: BTreeMap<String, Ty>,
@@ -38,6 +51,28 @@ pub struct Lowerer<'a> {
 
 fn e(code: &'static str, sp: Span, en: impl Into<String>, ja: impl Into<String>) -> Diag {
     Diag::error(code, sp.line, sp.col, en, ja)
+}
+
+/// The zero values protobuf's JSON leaves out of a rule's response: each field the rule always
+/// answers, by its JSON key (`apis::fill` reads this form). A number is the string `"0"`, as the
+/// 64-bit integer it is; an enum is the `.proto`'s name for its value 0: `<ENUM>_UNSPECIFIED`, which
+/// the check of the answer refuses, or a value of the rule's when a contract puts one at 0 (`ACTIVE`).
+fn rule_zeros(response: &[rulec::WireField]) -> serde_json::Value {
+    let mut f = serde_json::Map::new();
+    for w in response.iter().filter(|w| !w.optional) {
+        let zero = match &w.kind {
+            rulec::WireKind::Bool => serde_json::json!(false),
+            rulec::WireKind::Int => serde_json::json!("0"),
+            rulec::WireKind::Str => serde_json::json!(""),
+            rulec::WireKind::Enum { zero, .. } => serde_json::json!(zero),
+        };
+        f.insert(w.json.clone(), zero);
+    }
+    if f.is_empty() {
+        serde_json::json!({})
+    } else {
+        serde_json::json!({ "f": f })
+    }
 }
 
 pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
@@ -76,9 +111,15 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             on_cancel: None,
             on_cancel_line: 0,
             monitors: BTreeMap::new(),
+            service: None,
         },
         enum_ix: BTreeMap::new(),
         record_ix: BTreeMap::new(),
+        made_enums: BTreeSet::new(),
+        made_at: BTreeMap::new(),
+        made_unread: Vec::new(),
+        use_spans: BTreeMap::new(),
+        url_said: BTreeSet::new(),
         rule_ix: BTreeMap::new(),
         task_ix: BTreeMap::new(),
         var_ty: BTreeMap::new(),
@@ -95,6 +136,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     lw.local_types();
     lw.io();
     lw.tasks();
+    lw.service();
     lw.cases();
     lw.variables();
     if let Some((b, _)) = &prog.flow {
@@ -115,6 +157,10 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         lw.m.on_cancel = Some(t);
         lw.in_on_cancel = false;
     }
+    lw.recursive_records();
+    lw.unread_types();
+    lw.same_generated_names();
+    lw.made_enums_named_none();
     lw.parallel_scopes();
     lw.m.vars = lw.var_ty.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     let ok = !crate::diag::has_errors(&lw.diags);
@@ -142,16 +188,14 @@ impl<'a> Lowerer<'a> {
                 self.push(e("E006", *sp, format!("the API `{name}` is used twice"), format!("API `{name}` が二度読み込まれています")));
                 continue;
             }
+            // `<name>.<type>` would not say which it means
+            if self.rule_ix.contains_key(name) {
+                self.push(e("E006", *sp, format!("`{name}` names both a rule and an API; give them different names"), format!("`{name}` は規則と API の両方の名前です。別の名前を付けてください")));
+                continue;
+            }
+            self.use_spans.insert(name.clone(), *sp);
             match crate::apis::load(u.kind, &base.join(&u.path)) {
                 Ok(doc) => {
-                    if u.kind == crate::apis::ApiKind::Proto && u.url.is_none() {
-                        self.push(e(
-                            "E016",
-                            *sp,
-                            format!("a `.proto` does not say where the service is; write `url \"<where it is>\"` under `use proto {name}`"),
-                            format!("`.proto` はサービスの場所を言いません。`use proto {name}` の下に `url \"<場所>\"` を書いてください"),
-                        ));
-                    }
                     self.apis.insert(name.clone(), (u.kind, crate::apis::Api { name: name.clone(), doc, url: u.url.clone() }));
                 }
                 Err(msg) => self.push(e("E016", *sp, format!("could not read the API `{}`", u.path), format!("API `{}` を読めませんでした", u.path)).note(msg.clone(), msg)),
@@ -193,6 +237,18 @@ impl<'a> Lowerer<'a> {
                     continue;
                 }
             };
+            // a rule that walks a list takes it as an input of elements, which no type of dandori's is, at
+            // its service as in the code that goes with the workflow
+            if let Some(list) = &info.walks {
+                self.push(
+                    e("E005", *sp, format!("could not read the rule `{}`", u.path), format!("規則 `{}` を読めませんでした", u.path)).note(
+                        format!("the rule walks a list of elements (`{list}`), and dandori does not pass a rule a list yet"),
+                        format!("この規則は要素の並び（`{list}`）をたどります。dandori はまだ、規則に並びを渡せません"),
+                    ),
+                );
+                continue;
+            }
+            self.use_spans.insert(name.clone(), *sp);
             let ix = self.m.rules.len();
             for (en, values) in &info.enums {
                 let q = format!("{name}.{en}");
@@ -204,7 +260,62 @@ impl<'a> Lowerer<'a> {
             let rec = self.m.records.len();
             self.m.records.push(RecordDef { name: format!("{name}.outputs"), fields, ranges, origin: RecordOrigin::RuleOutputs(ix) });
             self.rule_ix.insert(name.clone(), ix);
-            self.m.rules.push(RuleUse { name: name.clone(), info, lambda: u.lambda.clone(), local: u.local, outputs: rec, line: sp.line });
+            let connect = self.rule_connect(u, &info);
+            self.m.rules.push(RuleUse {
+                name: name.clone(),
+                info,
+                lambda: u.lambda.as_ref().map(|(f, _)| f.clone()),
+                local: u.local,
+                connect,
+                connection: u.connection.as_ref().map(|(c, _)| c.clone()),
+                outputs: rec,
+                line: sp.line,
+            });
+        }
+    }
+
+    /// What `connect` under `use rule` says: the service's URL, and what `rulec api` says of its
+    /// request and its response. The ways of calling that do not go together are E007, each at the
+    /// second to say it.
+    fn rule_connect(&mut self, u: &syntax::UseRule, info: &rulec::RuleInfo) -> Option<RuleConnect> {
+        if let (Some((_, lsp)), Some((_, csp))) = (&u.lambda, &u.connect) {
+            let (first, second) = if (lsp.line, lsp.col) < (csp.line, csp.col) { (lsp, csp) } else { (csp, lsp) };
+            self.push(e(
+                "E007",
+                *second,
+                format!("the rule is already called another way (line {}); a rule is called by `lambda` or by `connect`", first.line),
+                format!("この規則の呼び出し方はもう書かれています（{} 行目）。規則の呼び出し方は `lambda` か `connect` のどちらか一つです", first.line),
+            ));
+        }
+        if let (Some((_, nsp)), None) = (&u.connection, &u.connect) {
+            self.push(e(
+                "E007",
+                *nsp,
+                "`connection` is for a rule called by `connect`; Step Functions invokes a rule's `lambda` without one",
+                "`connection` は `connect` で呼ぶ規則に書きます。`lambda` の規則は、Step Functions が接続なしで呼びます",
+            ));
+        }
+        let (url, csp) = u.connect.as_ref()?;
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            self.push(e(
+                "E007",
+                *csp,
+                "`connect` says where the rule's service is, with http:// or https://",
+                "`connect` には、規則のサービスの場所を http:// か https:// で書きます",
+            ));
+            return None;
+        }
+        match rulec::connect_shape(&info.api) {
+            Ok(shape) => {
+                let zeros = rule_zeros(&shape.response);
+                let base = url.trim_end_matches('/').to_string();
+                Some(RuleConnect { url: format!("{base}{}", shape.path), base, request: shape.request, response: shape.response, zeros })
+            }
+            Err((en, ja)) => {
+                // the rule is read, but its service is not: what `connect` calls cannot be said
+                self.push(e("E005", u.name.1, format!("could not read the rule `{}`", u.path), format!("規則 `{}` を読めませんでした", u.path)).note(en, ja));
+                None
+            }
         }
     }
 
@@ -262,10 +373,6 @@ impl<'a> Lowerer<'a> {
                     continue;
                 }
                 if let Some(t) = self.ty(&f.ty) {
-                    if t == Ty::Record(ix) {
-                        self.push(e("E003", f.ty.span(), "a record cannot contain itself", "レコードは自分自身を含められません"));
-                        continue;
-                    }
                     if let Some(rg) = self.range(&t, f.range.as_ref()) {
                         ranges.insert(f.name.0.clone(), rg);
                     }
@@ -312,6 +419,30 @@ impl<'a> Lowerer<'a> {
                     return Some(Ty::Record(*i));
                 }
                 let sp = parts[0].1;
+                // `<API>.<name>`: a message or an enum of the `.proto` that `use proto` read
+                if parts.len() >= 2 {
+                    if let Some((kind, _)) = self.apis.get(&parts[0].0) {
+                        let (kind, api) = (*kind, parts[0].0.clone());
+                        return match kind {
+                            ApiKind::Proto => self.made_type(&api, &parts[1..], &text, sp),
+                            _ => {
+                                let (what_en, what_ja) = match kind {
+                                    ApiKind::OpenApi => ("an OpenAPI document", "OpenAPI の記述"),
+                                    _ => ("a Smithy model", "Smithy のモデル"),
+                                };
+                                let (shapes_en, shapes_ja) = match kind {
+                                    ApiKind::OpenApi => ("schemas", "スキーマ"),
+                                    _ => ("shapes", "shape"),
+                                };
+                                self.push(e("E002", sp, format!("there is no type `{text}`"), format!("型 `{text}` はありません")).note(
+                                    format!("types are made from a `.proto` read by `use proto`; `{api}` is {what_en}, and its {shapes_en} are not made into types"),
+                                    format!("型を作れるのは、`use proto` で読んだ `.proto` からです。`{api}` は {what_ja}で、その{shapes_ja}からは型を作りません"),
+                                ));
+                                None
+                            }
+                        };
+                    }
+                }
                 let hint_en;
                 let hint_ja;
                 if parts.len() == 2 && self.rule_ix.contains_key(&parts[0].0) {
@@ -326,6 +457,315 @@ impl<'a> Lowerer<'a> {
                 self.push(e("E002", sp, format!("there is no type `{text}`"), format!("型 `{text}` はありません")).note(hint_en, hint_ja));
                 None
             }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Types made from a `.proto` (DESIGN 1.12)
+
+    /// What to say of the files a `.proto` imports and no file was read for, when the API is one.
+    fn unread_note_of(api: &crate::apis::Api) -> Option<(String, String)> {
+        match &api.doc {
+            ApiDoc::Proto(pf) => crate::apis::unread_note(pf),
+            _ => None,
+        }
+    }
+
+    /// The `.proto` the API `api` read, which is one.
+    fn proto_of(&self, api: &str) -> std::sync::Arc<ProtoFile> {
+        match self.apis.get(api) {
+            Some((_, crate::apis::Api { doc: ApiDoc::Proto(pf), .. })) => pf.clone(),
+            _ => unreachable!("an API read by `use proto`"),
+        }
+    }
+
+    /// The type a flow names `<api>.<rel>`: a message or an enum of the `.proto` the API read,
+    /// named from its package, or from the root (`common.v1.Money`) when it is of another
+    /// package. E002 when the `.proto` has no such name, with the names it has.
+    fn made_type(&mut self, api: &str, rel: &[syntax::Name], text: &str, sp: Span) -> Option<Ty> {
+        let pf = self.proto_of(api);
+        let rel_text = rel.iter().map(|p| p.0.as_str()).collect::<Vec<_>>().join(".");
+        let candidates: Vec<String> = if pf.package.is_empty() { vec![rel_text.clone()] } else { vec![format!("{}.{rel_text}", pf.package), rel_text.clone()] };
+        let named = |c: &String| pf.messages.contains_key(c) || pf.enums.contains_key(c) || crate::proto::WELL_KNOWN.contains(&c.as_str());
+        let Some(full) = candidates.iter().find(|c| named(c)).cloned() else {
+            if pf.services.iter().any(|sv| candidates.contains(&sv.name)) {
+                self.push(e(
+                    "E002",
+                    sp,
+                    format!("`{text}` is a service of `{api}`, not a message or an enum"),
+                    format!("`{text}` は `{api}` のサービスで、メッセージでも列挙でもありません"),
+                ));
+                return None;
+            }
+            let own = format!("{}.", pf.package);
+            let mut names: Vec<String> = pf.messages.keys().chain(pf.enums.keys()).map(|f| if pf.package.is_empty() { f.clone() } else { f.strip_prefix(&own).unwrap_or(f).to_string() }).collect();
+            names.sort();
+            names.dedup();
+            let more = names.len().saturating_sub(20);
+            names.truncate(20);
+            let (mut en, mut ja) = (names.join(", "), names.join("・"));
+            if more > 0 {
+                en.push_str(&format!(", and {more} more"));
+                ja.push_str(&format!("…ほか {more} 個"));
+            }
+            let mut d = e("E002", sp, format!("there is no type `{text}`"), format!("型 `{text}` はありません")).note(format!("the messages and enums of `{api}` are {en}"), format!("`{api}` のメッセージと列挙は {ja} です"));
+            // a file it may be in was not read
+            if let Some((nen, nja)) = crate::apis::unread_note(&pf) {
+                d = d.note(nen, nja);
+            }
+            self.push(d);
+            return None;
+        };
+        let made = crate::apis::made_named(&pf, &full);
+        Some(self.made_ty(api, &pf, &made, sp))
+    }
+
+    /// The type of what a `.proto` says, with the messages and enums it names made along the way.
+    fn made_ty(&mut self, api: &str, pf: &ProtoFile, t: &MadeTy, sp: Span) -> Ty {
+        match t {
+            MadeTy::Int(_) => Ty::Int,
+            MadeTy::Str => Ty::Str,
+            MadeTy::Bool => Ty::Bool,
+            MadeTy::Timestamp => Ty::Timestamp,
+            MadeTy::Json => Ty::Json,
+            MadeTy::Message(full) => Ty::Record(self.made_record(api, pf, full, sp)),
+            MadeTy::Enum(full) => Ty::Enum(self.made_enum(api, pf, full, sp)),
+            MadeTy::List(x) => Ty::List(Box::new(self.made_ty(api, pf, x, sp))),
+            MadeTy::Opt(x) => Ty::Opt(Box::new(self.made_ty(api, pf, x, sp))),
+            // said when the lowering is done (`unread_types`); `json` takes the place of what is not known
+            MadeTy::Unread(_) => Ty::Json,
+        }
+    }
+
+    /// How a flow names a type of the `.proto`: `warehouse.ReserveResponse` for one of the file's
+    /// own package, and from the root (`warehouse.common.v1.Money`) for one of another.
+    fn made_name(api: &str, pf: &ProtoFile, full: &str) -> String {
+        match full.strip_prefix(&format!("{}.", pf.package)) {
+            Some(rest) if !pf.package.is_empty() => format!("{api}.{rest}"),
+            _ => format!("{api}.{full}"),
+        }
+    }
+
+    fn made_enum(&mut self, api: &str, pf: &ProtoFile, full: &str, sp: Span) -> EnumId {
+        let name = Self::made_name(api, pf, full);
+        if let Some(i) = self.enum_ix.get(&name) {
+            return *i;
+        }
+        let values = crate::apis::made_enum_values(pf, full);
+        let ix = self.m.enums.len();
+        self.enum_ix.insert(name.clone(), ix);
+        self.made_enums.insert(ix);
+        self.made_at.entry(name.clone()).or_insert(sp);
+        self.m.enums.push(EnumDef { name, values });
+        ix
+    }
+
+    /// E006 for a made enum with a value `none`, which a `match` would read as the arm of an absent
+    /// value. It is said when the lowering is done, at the place the enum was first named: what
+    /// is lowered only to find a variable's type says nothing of what it finds.
+    fn made_enums_named_none(&mut self) {
+        let named: Vec<(String, Span)> = self
+            .made_enums
+            .iter()
+            .filter(|ix| self.m.enums[**ix].values.iter().any(|v| v == "none"))
+            .map(|ix| (self.m.enums[*ix].name.clone(), self.made_at.get(&self.m.enums[*ix].name).copied().unwrap_or(Span { line: 1, col: 1 })))
+            .collect();
+        for (name, sp) in named {
+            self.push(e(
+                "E006",
+                sp,
+                format!("the value `none` of `{name}` would be taken for an absent value in a `match`; write an enum of your own for it"),
+                format!("`{name}` の値 `none` は、`match` では値が無いことを表す語として読まれます。代わりに自分で列挙を書いてください"),
+            ));
+        }
+    }
+
+    fn made_record(&mut self, api: &str, pf: &ProtoFile, full: &str, sp: Span) -> RecordId {
+        let name = Self::made_name(api, pf, full);
+        if let Some(i) = self.record_ix.get(&name) {
+            return *i;
+        }
+        // named before its fields are made, so that a message that holds itself stops here
+        let ix = self.m.records.len();
+        self.record_ix.insert(name.clone(), ix);
+        self.made_at.entry(name.clone()).or_insert(sp);
+        self.m.records.push(RecordDef { name, fields: vec![], ranges: BTreeMap::new(), origin: RecordOrigin::Proto { api: api.to_string() } });
+        let mut fields = Vec::new();
+        let mut ranges = BTreeMap::new();
+        for f in crate::apis::made_fields(pf, full) {
+            fn range_of(t: &MadeTy) -> Option<Range> {
+                match t {
+                    MadeTy::Int(r) => *r,
+                    MadeTy::List(x) | MadeTy::Opt(x) => range_of(x),
+                    _ => None,
+                }
+            }
+            fn unread_in(t: &MadeTy) -> Option<&String> {
+                match t {
+                    MadeTy::Unread(n) => Some(n),
+                    MadeTy::List(x) | MadeTy::Opt(x) => unread_in(x),
+                    _ => None,
+                }
+            }
+            if let Some(u) = unread_in(&f.ty) {
+                let record = Self::made_name(api, pf, full);
+                self.made_unread.push((record, f.name.clone(), u.clone()));
+            }
+            let t = self.made_ty(api, pf, &f.ty, sp);
+            if let Some(r) = range_of(&f.ty) {
+                ranges.insert(f.name.clone(), r);
+            }
+            fields.push((f.name, t));
+        }
+        self.m.records[ix].fields = fields;
+        self.m.records[ix].ranges = ranges;
+        ix
+    }
+
+    /// E002 for a made record with a field whose type no file read has, which an import that was not
+    /// read may hold: the record cannot be made from what is known of it. Said when the lowering is
+    /// done, at the place the record was first named, since what is lowered only to find a
+    /// variable's type says nothing of what it finds. The way out is a record written by hand, with
+    /// `json` for the field.
+    fn unread_types(&mut self) {
+        let found = std::mem::take(&mut self.made_unread);
+        for (record, field, ty) in found {
+            let at = self.made_at.get(&record).copied().unwrap_or(Span { line: 1, col: 1 });
+            let mut d = e(
+                "E002",
+                at,
+                format!("`{record}` cannot be made: its field `{field}` is of the type `{ty}`, which is not known; write the record yourself, with `json` for `{field}`"),
+                format!("`{record}` を作れません。フィールド `{field}` の型 `{ty}` が分かりません。レコードを自分で書き、`{field}` は `json` にしてください"),
+            );
+            // the `.proto` the record is of, by the API it was made through
+            if let Some((nen, nja)) = record.split('.').next().and_then(|api| self.apis.get(api)).and_then(|(_, a)| match &a.doc {
+                ApiDoc::Proto(pf) => crate::apis::unread_note(pf),
+                _ => None,
+            }) {
+                d = d.note(nen, nja);
+            }
+            self.push(d);
+        }
+    }
+
+    /// E003 for a record that holds itself, through a field, a list, a value that may be absent, or
+    /// other records (a tree, or two that hold each other): one a flow declares and one made from a
+    /// message of a `.proto` alike. What a value of it is stays finite, but the scenarios and some
+    /// of the generators go on for ever on a type that holds itself, and Step Functions has no
+    /// function to check one with. The way out is `json` where it holds itself, in a record written
+    /// by hand.
+    fn recursive_records(&mut self) {
+        fn records_in(t: &Ty, out: &mut Vec<RecordId>) {
+            match t {
+                Ty::Record(r) => out.push(*r),
+                Ty::List(x) | Ty::Opt(x) => records_in(x, out),
+                _ => {}
+            }
+        }
+        let n = self.m.records.len();
+        // each record's fields, with the records they name
+        let edges: Vec<Vec<(String, RecordId)>> = self
+            .m
+            .records
+            .iter()
+            .map(|r| {
+                r.fields
+                    .iter()
+                    .flat_map(|(f, t)| {
+                        let mut named = Vec::new();
+                        records_in(t, &mut named);
+                        named.into_iter().map(move |q| (f.clone(), q))
+                    })
+                    .collect()
+            })
+            .collect();
+        let reach = |from: RecordId| -> BTreeSet<RecordId> {
+            let mut seen = BTreeSet::new();
+            let mut todo = vec![from];
+            while let Some(r) = todo.pop() {
+                for (_, q) in &edges[r] {
+                    if seen.insert(*q) {
+                        todo.push(*q);
+                    }
+                }
+            }
+            seen
+        };
+        let reaches: Vec<BTreeSet<RecordId>> = (0..n).map(reach).collect();
+        let mut said: BTreeSet<RecordId> = BTreeSet::new();
+        for r in 0..n {
+            // what a rule answers holds no record
+            if matches!(self.m.records[r].origin, RecordOrigin::RuleOutputs(_)) || !reaches[r].contains(&r) || said.contains(&r) {
+                continue;
+            }
+            // the records that hold each other with this one are said once
+            for q in 0..n {
+                if q == r || (reaches[r].contains(&q) && reaches[q].contains(&r)) {
+                    said.insert(q);
+                }
+            }
+            let name = self.m.records[r].name.clone();
+            let through = edges[r].iter().find(|(_, q)| *q == r || reaches[*q].contains(&r)).map(|(f, _)| f.clone()).unwrap_or_default();
+            if let RecordOrigin::Proto { .. } = self.m.records[r].origin {
+                let at = self.made_at.get(&name).copied().unwrap_or(Span { line: 1, col: 1 });
+                self.push(e(
+                    "E003",
+                    at,
+                    format!("`{name}` contains itself, through `{through}`; a record cannot, so write the record yourself, with `json` where it holds itself"),
+                    format!("`{name}` は、フィールド `{through}` を通して自分自身を含んでいます。レコードは自分自身を含められないので、自分を含むところを `json` にしたレコードを自分で書いてください"),
+                ));
+            } else {
+                // the type of the field, where the flow wrote it
+                let at = self.prog.records.iter().find(|d| d.name.0 == name).and_then(|d| d.fields.iter().find(|f| f.name.0 == through).map(|f| f.ty.span()).or(Some(d.name.1))).unwrap_or(Span { line: 1, col: 1 });
+                self.push(e(
+                    "E003",
+                    at,
+                    format!("`{name}` contains itself, through `{through}`; a record cannot, so give the field that holds itself the type `json`"),
+                    format!("`{name}` は、フィールド `{through}` を通して自分自身を含んでいます。レコードは自分自身を含められないので、自分を含むフィールドの型は `json` にしてください"),
+                ));
+            }
+        }
+    }
+
+    /// E006 for two types that have one name in the code dandori writes: a type's name there is
+    /// its name here with the dots turned to underscores, so `warehouse.Stock` and a `record
+    /// warehouse_Stock` are one, in TypeScript and in Python alike.
+    fn same_generated_names(&mut self) {
+        let mut seen: BTreeMap<(bool, String), String> = BTreeMap::new();
+        let mut clashes: Vec<(String, String, String)> = Vec::new();
+        let names: Vec<String> = self.m.enums.iter().map(|x| x.name.clone()).chain(self.m.records.iter().map(|x| x.name.clone())).collect();
+        for n in names {
+            for (python, generated) in [(false, crate::temporal::type_name(&n)), (true, crate::temporal_py::type_name(&n))] {
+                match seen.get(&(python, generated.clone())) {
+                    Some(first) if *first != n => {
+                        if !clashes.iter().any(|(a, b, _)| *a == *first && *b == n) {
+                            clashes.push((first.clone(), n.clone(), generated));
+                        }
+                    }
+                    Some(_) => {}
+                    None => {
+                        seen.insert((python, generated), n.clone());
+                    }
+                }
+            }
+        }
+        for (a, b, generated) in clashes {
+            // the one to rename is the one this file declares, else the one named later
+            let declared = |x: &str| self.prog.enums.iter().map(|d| &d.name).chain(self.prog.records.iter().map(|d| &d.name)).find(|(n, _)| n == x).map(|(_, sp)| *sp);
+            let (rename, at) = match (declared(&a), declared(&b)) {
+                (_, Some(sp)) => (b.clone(), sp),
+                (Some(sp), None) => (a.clone(), sp),
+                (None, None) => {
+                    let sp = self.made_at.get(&b).or_else(|| self.made_at.get(&a)).or_else(|| self.use_spans.get(b.split('.').next().unwrap_or(&b))).copied().unwrap_or(Span { line: 1, col: 1 });
+                    (b.clone(), sp)
+                }
+            };
+            self.push(e(
+                "E006",
+                at,
+                format!("`{a}` and `{b}` would have one name in the code dandori writes, `{generated}`; rename `{rename}`"),
+                format!("`{a}` と `{b}` は、生成するコードで同じ名前（`{generated}`）になります。`{rename}` の名前を変えてください"),
+            ));
         }
     }
 
@@ -463,6 +903,17 @@ impl<'a> Lowerer<'a> {
                 }
                 Some((b @ syntax::Binding::Connect { api: a, method }, bsp)) => {
                     if let Some(api) = self.api(a, crate::apis::ApiKind::Proto, "`connect` calls a method of a `.proto` (`use proto`)", "`connect` で呼べるのは `.proto`（`use proto`）のメソッドです") {
+                        // a `.proto` does not say where its service is; a flow that only takes its types needs no `url`
+                        if api.url.is_none() && self.url_said.insert(a.0.clone()) {
+                            let at = self.use_spans.get(&a.0).copied().unwrap_or(a.1);
+                            let name = &a.0;
+                            self.push(e(
+                                "E016",
+                                at,
+                                format!("a `.proto` does not say where the service is; write `url \"<where it is>\"` under `use proto {name}`"),
+                                format!("`.proto` はサービスの場所を言いません。`use proto {name}` の下に `url \"<場所>\"` を書いてください"),
+                            ));
+                        }
                         match crate::apis::proto_op(&api, method) {
                             Ok(op) => {
                                 connect = op.zeros();
@@ -471,7 +922,14 @@ impl<'a> Lowerer<'a> {
                                 }
                                 described = Some((api.clone(), b.clone()));
                             }
-                            Err((en, ja)) => self.push(e("E016", *bsp, en, ja)),
+                            Err((en, ja)) => {
+                                // the service may be in a file that was not read
+                                let mut d = e("E016", *bsp, en, ja);
+                                if let Some((nen, nja)) = Self::unread_note_of(&api) {
+                                    d = d.note(nen, nja);
+                                }
+                                self.push(d);
+                            }
                         }
                     }
                 }
@@ -775,6 +1233,7 @@ impl<'a> Lowerer<'a> {
                 event: t.event.is_some(),
                 flow,
                 connect,
+                answer_zeros: None,
                 line: sp.line,
             });
             let task = self.m.tasks.last().expect("just pushed");
@@ -798,7 +1257,12 @@ impl<'a> Lowerer<'a> {
                         };
                         let found = op.check(&self.m, task, &path_params);
                         for (en, ja) in found {
-                            self.push(e("E016", Span { line: sp.line, col: 1 }, en, ja));
+                            let mut d = e("E016", Span { line: sp.line, col: 1 }, en, ja);
+                            // what the task is held to may name a type of a file that was not read
+                            if let Some((nen, nja)) = Self::unread_note_of(api) {
+                                d = d.note(nen, nja);
+                            }
+                            self.push(d);
                         }
                     }
                     Err((en, ja)) => {
@@ -809,6 +1273,106 @@ impl<'a> Lowerer<'a> {
                 }
             }
         }
+    }
+
+    /// The service of a `.proto` the workflow implements (`implements`, DESIGN 1.14): its methods and
+    /// dandori's marks on them, the zero values protobuf's JSON leaves out of the request that starts a
+    /// run, and of the values the service's methods send the `event` and `callback` tasks. Here is
+    /// said only what keeps the service from being found; how the workflow fits it is held to it once
+    /// the flow is lowered (`service::check`, E017), when the names the flow fails with are known.
+    fn service(&mut self) {
+        let Some(parts) = self.prog.implements.clone() else { return };
+        let (api, at) = (parts[0].0.clone(), parts[0].1);
+        let rel = parts[1..].iter().map(|p| p.0.as_str()).collect::<Vec<_>>().join(".");
+        let pf = match self.apis.get(&api) {
+            Some((ApiKind::Proto, _)) => self.proto_of(&api),
+            Some((kind, _)) => {
+                let k = kind.word();
+                self.push(e(
+                    "E017",
+                    at,
+                    format!("`{api}` is read by `use {k}`, and a workflow implements a service of a `.proto` (`use proto`)"),
+                    format!("`{api}` は `use {k}` で読んだものですが、ワークフローが実装できるのは `.proto`（`use proto`）のサービスです"),
+                ));
+                return;
+            }
+            // a description that could not be read is said where it is read
+            None if self.prog.apis.iter().any(|u| u.name.0 == api) => return,
+            None => {
+                self.push(e("E002", at, format!("there is no API `{api}`; name one read by `use proto`"), format!("API `{api}` はありません。`use proto` で読んだものを書きます")));
+                return;
+            }
+        };
+        // by its full name, from the package, or by its own name when that is all that is written
+        let own = format!("{}.{rel}", pf.package);
+        let found = pf.services.iter().find(|x| x.name == rel).or_else(|| pf.services.iter().find(|x| x.name == own)).or_else(|| {
+            if rel.contains('.') {
+                return None;
+            }
+            pf.services.iter().find(|x| x.name.rsplit('.').next() == Some(rel.as_str()))
+        });
+        let Some(svc) = found.cloned() else {
+            let pkg = format!("{}.", pf.package);
+            let names: Vec<String> = pf.services.iter().map(|x| if pf.package.is_empty() { x.name.clone() } else { x.name.strip_prefix(&pkg).unwrap_or(&x.name).to_string() }).collect();
+            let (en, ja) = if names.is_empty() {
+                (format!("`{api}` has no service `{rel}` (it has no services)"), format!("`{api}` にサービス `{rel}` はありません（サービスはありません）"))
+            } else {
+                (format!("`{api}` has no service `{rel}` (its services are {})", names.join(", ")), format!("`{api}` にサービス `{rel}` はありません（サービスは {}）", names.join("・")))
+            };
+            let mut d = e("E017", at, en, ja);
+            // the service may be in a file that was not read
+            if let Some((nen, nja)) = crate::apis::unread_note(&pf) {
+                d = d.note(nen, nja);
+            }
+            self.push(d);
+            return;
+        };
+        let methods: Vec<MethodUse> = svc
+            .methods
+            .iter()
+            .map(|mt| {
+                let o = &mt.options;
+                let task = |k: &str| crate::proto::strings_of(&o[k]["task"]).into_iter().next().unwrap_or_default();
+                let mut marks = Vec::new();
+                if let Some(v) = o.get("dandori.v1.start") {
+                    marks.push(Mark::Start { fails: crate::proto::strings_of(&v["fails"]) });
+                }
+                if o.contains_key("dandori.v1.event") {
+                    marks.push(Mark::Event { task: task("dandori.v1.event") });
+                }
+                if o.contains_key("dandori.v1.answer") {
+                    marks.push(Mark::Answer { task: task("dandori.v1.answer") });
+                }
+                if o.contains_key("dandori.v1.status") {
+                    marks.push(Mark::Status);
+                }
+                MethodUse { name: mt.name.clone(), request: mt.input.clone(), response: mt.output.clone(), streams: mt.streams, marks }
+            })
+            .collect();
+        // the zero values of what comes in: the start's request, and the values of the events and the callbacks' answers
+        let starts: Vec<&MethodUse> = methods.iter().filter(|x| x.starts()).collect();
+        let input_zeros = match starts.as_slice() {
+            [one] => crate::apis::zeros_of(&pf, &one.request),
+            _ => serde_json::json!({}),
+        };
+        for mt in &methods {
+            for k in &mt.marks {
+                let (task, event) = match k {
+                    Mark::Event { task } => (task, true),
+                    Mark::Answer { task } => (task, false),
+                    _ => continue,
+                };
+                if let Some(t) = self.task_ix.get(task).copied() {
+                    let td = &mut self.m.tasks[t];
+                    if (event && td.event) || (!event && td.callback) {
+                        td.answer_zeros = Some(crate::apis::zeros_of(&pf, &mt.request));
+                    }
+                }
+            }
+        }
+        let file = self.prog.apis.iter().find(|u| u.name.0 == api).map(|u| u.path.clone()).unwrap_or_default();
+        let doc = self.apis[&api].1.clone();
+        self.m.service = Some(ServiceUse { api, file, name: svc.name.clone(), line: at.line, col: at.col, doc, methods, input_zeros });
     }
 
     /// What an agent task must have, and what it cannot: a provider dandori knows, a model, an
@@ -1254,9 +1818,14 @@ impl<'a> Lowerer<'a> {
                 continue;
             }
             let record = match self.ty(&c.record) {
-                Some(Ty::Record(r)) if self.m.records[r].origin == RecordOrigin::Local => r,
+                Some(Ty::Record(r)) if matches!(self.m.records[r].origin, RecordOrigin::Local | RecordOrigin::Proto { .. }) => r,
                 Some(_) => {
-                    self.push(e("E008", c.record.span(), "a case is held in a record declared in this file", "案件の型には、このファイルで宣言したレコードを使います"));
+                    self.push(e(
+                        "E008",
+                        c.record.span(),
+                        "a case is held in a record declared in this file or made from a `.proto`",
+                        "案件の型には、このファイルで宣言したレコードか、`.proto` から作ったレコードを使います",
+                    ));
                     continue;
                 }
                 None => continue,
@@ -1268,11 +1837,41 @@ impl<'a> Lowerer<'a> {
             let mc = self.m.rules[rule].info.machine.clone().unwrap();
             let state_enum = *self.enum_ix.get(&format!("{}.{}", self.m.rules[rule].name, mc.state_enum)).unwrap();
             let fields = self.m.records[record].fields.clone();
+            // the machine's own state enum, or an enum made from a `.proto` whose values are the machine's states
+            let sorted = |v: &[String]| {
+                let mut v = v.to_vec();
+                v.sort();
+                v
+            };
+            let is_state = |lw: &Self, t: &Ty| match t {
+                Ty::Enum(x) => *x == state_enum || (lw.made_enums.contains(x) && sorted(&lw.m.enums[*x].values) == sorted(&mc.states)),
+                _ => false,
+            };
+            // an enum made from a `.proto`, which says its values are not the machine's states
+            let not_states = |lw: &mut Self, sp: Span, t: &Ty| {
+                let Ty::Enum(x) = t else { return false };
+                if !lw.made_enums.contains(x) {
+                    return false;
+                }
+                let en = &lw.m.enums[*x];
+                let machine = format!("{}.{}", lw.m.rules[rule].name, mc.name);
+                let d = e(
+                    "E008",
+                    sp,
+                    format!("the values of `{}` ({}) are not the states of `{machine}` ({})", en.name, en.values.join(", "), mc.states.join(", ")),
+                    format!("`{}` の値（{}）は、`{machine}` の状態（{}）と違います", en.name, en.values.join("・"), mc.states.join("・")),
+                );
+                lw.push(d);
+                true
+            };
             let state_field = match &c.state_field {
                 Some((f, fsp)) => match fields.iter().find(|(n, _)| n == f) {
-                    Some((_, t)) if *t == Ty::Enum(state_enum) => f.clone(),
-                    Some(_) => {
-                        self.push(e("E008", *fsp, format!("`{f}` is not of the machine's state type"), format!("`{f}` はステートマシンの状態の型ではありません")));
+                    Some((_, t)) if is_state(self, t) => f.clone(),
+                    Some((_, t)) => {
+                        let t = t.clone();
+                        if !not_states(self, *fsp, &t) {
+                            self.push(e("E008", *fsp, format!("`{f}` is not of the machine's state type"), format!("`{f}` はステートマシンの状態の型ではありません")));
+                        }
                         continue;
                     }
                     None => {
@@ -1281,10 +1880,15 @@ impl<'a> Lowerer<'a> {
                     }
                 },
                 None => {
-                    let cands: Vec<&String> = fields.iter().filter(|(_, t)| *t == Ty::Enum(state_enum)).map(|(n, _)| n).collect();
+                    let cands: Vec<&String> = fields.iter().filter(|(_, t)| is_state(self, t)).map(|(n, _)| n).collect();
                     match cands.len() {
                         1 => cands[0].clone(),
                         0 => {
+                            // one field of a made enum that is not the states says so
+                            let made: Vec<Ty> = fields.iter().filter(|(_, t)| matches!(t, Ty::Enum(x) if self.made_enums.contains(x))).map(|(_, t)| t.clone()).collect();
+                            if made.len() == 1 && not_states(self, c.record.span(), &made[0]) {
+                                continue;
+                            }
                             self.push(e(
                                 "E008",
                                 c.record.span(),

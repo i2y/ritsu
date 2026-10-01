@@ -140,15 +140,24 @@ Indentation makes the blocks. `#` starts a comment.
 ### Declarations
 
 ```text
-workflow <name> v<N>                      the name and version (on Temporal, both are in the
-                                          workflow type and the task queue: review_v1)
+workflow <name> v<N> [implements <api>.<Service>]
+                                          the name and version (on Temporal, both are in the
+                                          workflow type and the task queue: review_v1); with
+                                          implements, the workflow is the service of a .proto
+                                          read by use proto (services.md)
 description "<text>"
 kind standard | express                   Step Functions; an Express workflow has limits (E031)
 use rule <name> from "<file.rule>"        a rulec rule, read through rulec; under it,
                                           lambda "<function>" (Step Functions, durable functions)
-                                          and local (a local activity on Temporal)
+                                          or connect "<url>" (the rule's Connect service, which
+                                          every platform calls; Step Functions also needs
+                                          connection "<EventBridge connection>"),
+                                          and local (a local activity on Temporal). A rule that
+                                          walks a list cannot be used (E005), nor one with an
+                                          enum from a .proto at its service, unless `rulec api`
+                                          says connect.enums (rulec 0.22.0 and later do)
 use openapi|smithy|proto <name> from "<file>"   an API description; under it, url "<base>"
-                                          (a proto needs one)
+                                          (a proto needs one to `connect` to it)
 enum <Name> = <value> | <value> | …
 record <Name>                             then one field a line, <name> : <type>
 inputs, outputs                           the same, for what a run takes and gives back
@@ -161,10 +170,12 @@ on cancel                                 runs when the workflow is cancelled (T
 ```
 
 The types are `int`, `string`, `bool`, `timestamp`, `json` (passed along without being looked
-into), `list[T]`, `T?` (a value that may be absent), numbers with a unit as rulec has them
-(`money[JPY, incl_tax]`, `duration[h]`), a rule's enums and records (`hold.room`), and the file's
-own. A number can say what it may be: `nights : int  range >=1 <=30`, either end may be left out,
-and the ends are integers in the type's unit.
+into; an input or a field that is not there reads as null), `list[T]`, `T?` (a value that may be absent), numbers with a unit as rulec has them
+(`money[JPY, incl_tax]`, `duration[h]`), a rule's enums and records (`hold.room`), a message or an
+enum of a `.proto` read by `use proto` (`warehouse.ReserveResponse`), and the file's own. A number
+can say what it may be: `nights : int  range >=1 <=30`, either end may be left out,
+and the ends are integers in the type's unit. A record cannot contain itself, directly or
+through others (E003); carry what has no fixed depth, a tree, as `json`.
 
 ### Tasks
 
@@ -298,7 +309,8 @@ Ask instead of guessing:
   which parameter (`key <parameter>`), is the API's to say.
 - **The errors a call comes back with**, and as what: an HTTP status, an AWS exception, a Connect
   code. When the API has a description, read it with `use openapi`, `use smithy` or `use proto`,
-  and the checker holds the task to it (E016).
+  and the checker holds the task to it (E016). The messages and enums of a `.proto` are types as
+  they are (`warehouse.ReserveResponse`), so the records need not be written out.
 - **The events that happen by themselves** on a case (`external`). They come from the other
   system's documentation; leaving one out hides the runs it causes.
 - **What becomes of a case left unfinished**: settled in `on failure` or `on cancel`, or handed
@@ -343,7 +355,8 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | E013 | a task on a case not started yet, or a case started twice | start it first, once |
 | E014, W104 | a value that can be outside a range, or whose range is unknown | say the range where the value comes from (the input, the task's answer) |
 | E015 | a task that does not fit the child `.flow` it runs | match the child's inputs, outputs and `fail`s |
-| E016 | a task that does not fit its API's description | follow it: `T?` for what the answer may leave out, every value of an enum |
+| E016 | a task that does not fit its API's description | follow it: `T?` for what the answer may leave out, every value of an enum; or use the `.proto`'s messages as the types |
+| E017 | a workflow that does not fit the service it implements | follow the service: the inputs and outputs by their JSON names, every `fail` in `fails`, the events and callbacks it names; one of dandori's options on each method |
 | E020 | a case the workflow can leave in a state that is not final | settle it before the end, or `fail … leaving <case>` |
 | E021, E022 | an event refused in every state; a refusal no handler takes | do not send it there; handle the `refused as` error |
 | E030, W030 | a call that changes something, retried without `key` | `key`, or `idempotent` if twice is the same as once |
@@ -370,9 +383,9 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 
 | Target | What `build` writes | What to know |
 |---|---|---|
-| `temporal` | the workflow, activities, a worker and a client, in TypeScript | the main platform; the only one with `on cancel` and `event` |
+| `temporal` | the workflow, activities, a worker and a client, in TypeScript | the main platform; the only one with `on cancel`, `event` and a service's `status` |
 | `temporal-python` | the same with Temporal's Python SDK | named as in TypeScript, so a worker in one language can serve the other |
-| `asl` | an ASL state machine with JSONata, and a Lambda handler for every rule | no code of your own (every task needs a way of calling); `http`, `agent` and `jev` need `connection` |
+| `asl` | an ASL state machine with JSONata, and a Lambda handler for every rule called by `lambda` | no code of your own (every task needs a way of calling); `http`, `agent`, `jev` and a rule at its `connect` need `connection` |
 | `durable` | a Lambda durable function in TypeScript | a task of your own is a step |
 | `argo` | a WorkflowTemplate and the caller image | a task of your own is a container of its `image` |
 | `pydantic-graph` | a graph in Python | runs in your own process, and keeps nothing when it stops |
@@ -386,6 +399,7 @@ written for Temporal, for AWS and for pydantic-graph.
 |---|---|
 | [tour.md](tour.md) | the language, through the hotel booking from its first line to its last |
 | [tasks.md](tasks.md) | every way a task can call, what each becomes on each platform, API descriptions, child flows |
+| [services.md](services.md) | a workflow whose entry is a proto service: dandori's options, what is held to the service, clients in other languages |
 | [agents.md](agents.md) | agent tasks: typed answers, OpenAI, Open Responses, Claude |
 | [jev.md](jev.md) | Jev tasks: the answer type as the question, confidence, rates for a rule |
 | [checks.md](checks.md) | what the checker looks at, with a diagnostic |

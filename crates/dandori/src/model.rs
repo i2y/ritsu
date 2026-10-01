@@ -132,6 +132,8 @@ pub enum RecordOrigin {
     Local,
     /// the outputs of a rule, which a call of the rule returns
     RuleOutputs(usize),
+    /// a message of a `.proto`, made into a record (`use proto`, by the name `api`)
+    Proto { api: String },
 }
 
 #[derive(Clone, Debug)]
@@ -143,14 +145,37 @@ pub struct RecordDef {
     pub origin: RecordOrigin,
 }
 
+/// A rule called as a Connect service (`connect "<url>"` under `use rule`): where to POST, what the
+/// request and the response are made of, and the zero values the response's JSON may leave out.
+#[derive(Clone, Debug)]
+pub struct RuleConnect {
+    /// where the service is, as `connect` writes it, without the slash at its end: `https://rules.example.com`
+    pub base: String,
+    /// the service's URL and the path `rulec api` gives: `https://rules.example.com/rulec.urgency.v1.UrgencyService/Decide`
+    pub url: String,
+    pub request: Vec<crate::rulec::WireField>,
+    pub response: Vec<crate::rulec::WireField>,
+    /// what `apis::fill` reads: the response's fields that protobuf's JSON leaves out at their zero
+    /// value, by their JSON keys (`{"f": {"urgent": false, "carrier": "CARRIER_UNSPECIFIED"}}`); an
+    /// enum's is the `.proto`'s name for its value 0, which `rulec api` gives (`ACTIVE` in a contract
+    /// that puts a value of its own at 0)
+    pub zeros: serde_json::Value,
+}
+
 #[derive(Clone, Debug)]
 pub struct RuleUse {
     pub name: String,
     pub info: RuleInfo,
+    /// the Lambda function that wraps the rule, for Step Functions and Lambda durable functions
     pub lambda: Option<String>,
     /// Temporal: called as a local activity, in the worker that runs the workflow; the other
     /// platforms call it as they call any rule
     pub local: bool,
+    /// the rule is called at its Connect service on every platform, in place of the code that is
+    /// written with the workflow
+    pub connect: Option<RuleConnect>,
+    /// Step Functions: the EventBridge connection its HTTP Task calls the service through
+    pub connection: Option<String>,
     pub outputs: RecordId,
     pub line: usize,
 }
@@ -382,6 +407,10 @@ pub struct TaskDef {
     /// `connect`: the task is an HTTP call by the Connect protocol, and this names the zero values
     /// its answer's JSON may leave out (`apis::Op::zeros`), which the generated code fills in
     pub connect: Option<serde_json::Value>,
+    /// an `event` or a `callback` task whose value a method of the service the workflow implements
+    /// sends (DESIGN 1.14): the zero values protobuf's JSON leaves out of the method's request, which
+    /// the workflow's code fills in when the value comes, before it checks it
+    pub answer_zeros: Option<serde_json::Value>,
     pub line: usize,
 }
 
@@ -431,6 +460,86 @@ impl TaskDef {
 
     pub fn error(&self, name: &str) -> Option<&ErrDef> {
         self.errors.iter().find(|e| e.name == name)
+    }
+}
+
+/// The service of a `.proto` that the workflow implements (`workflow … implements <api>.<Service>`,
+/// DESIGN 1.14): its methods, each marked by one of dandori's options with the way it reaches a run.
+#[derive(Clone, Debug)]
+pub struct ServiceUse {
+    /// the name `use proto` gives the `.proto`, and the path it reads it from
+    pub api: String,
+    pub file: String,
+    /// the service's full name: `shop.v1.FulfillmentService`
+    pub name: String,
+    /// where `implements` names it, which E017 points at
+    pub line: usize,
+    pub col: usize,
+    /// the `.proto`, as `use proto` read it
+    pub doc: crate::apis::Api,
+    pub methods: Vec<MethodUse>,
+    /// the zero values protobuf's JSON leaves out of the request of the method that starts a run
+    /// (`apis::zeros_of`), which every platform fills in before it checks the input
+    pub input_zeros: serde_json::Value,
+}
+
+impl ServiceUse {
+    /// The service's name without its package: `FulfillmentService`.
+    pub fn simple(&self) -> &str {
+        self.name.rsplit('.').next().unwrap_or(&self.name)
+    }
+
+    /// How a message names a method: `FulfillmentService/Fulfill`.
+    pub fn label(&self, method: &MethodUse) -> String {
+        format!("{}/{}", self.simple(), method.name)
+    }
+}
+
+/// A method of the service a workflow implements.
+#[derive(Clone, Debug)]
+pub struct MethodUse {
+    pub name: String,
+    /// the full names of its request and its response
+    pub request: String,
+    pub response: String,
+    pub streams: bool,
+    /// dandori's marks on it, in the order start, event, answer, status: one, when the service is
+    /// right; none or more are kept for E017 to say so
+    pub marks: Vec<Mark>,
+}
+
+impl MethodUse {
+    pub fn starts(&self) -> bool {
+        self.marks.iter().any(|k| matches!(k, Mark::Start { .. }))
+    }
+
+    pub fn is_status(&self) -> bool {
+        self.marks.contains(&Mark::Status)
+    }
+}
+
+/// How a method of the service reaches a run: dandori's options on it (`proto/dandori/v1/options.proto`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Mark {
+    /// `(dandori.v1.start)`: it starts a run; `fails`, the names a run can fail with
+    Start { fails: Vec<String> },
+    /// `(dandori.v1.event)`: it sends a run the value the `event` task `task` waits for
+    Event { task: String },
+    /// `(dandori.v1.answer)`: it answers the `callback` task `task`
+    Answer { task: String },
+    /// `(dandori.v1.status)`: it asks a run where it is
+    Status,
+}
+
+impl Mark {
+    /// The option, as a `.proto` writes it: `(dandori.v1.start)`.
+    pub fn option(&self) -> &'static str {
+        match self {
+            Mark::Start { .. } => "(dandori.v1.start)",
+            Mark::Event { .. } => "(dandori.v1.event)",
+            Mark::Answer { .. } => "(dandori.v1.answer)",
+            Mark::Status => "(dandori.v1.status)",
+        }
     }
 }
 
@@ -619,6 +728,8 @@ pub struct Model {
     pub on_cancel_line: usize,
     /// for a call on a case: the states its answer may carry, which the generated code checks
     pub monitors: BTreeMap<usize, (usize, Vec<String>)>,
+    /// the service of a `.proto` the workflow implements
+    pub service: Option<ServiceUse>,
 }
 
 impl Model {
@@ -655,6 +766,40 @@ impl Model {
             .filter(|t| t.event)
             .map(|t| crate::diag::Diag::error("E050", t.line, 1, format!("`{}` waits for an event sent to the workflow by name; {en}", t.name), format!("`{}` はワークフローに名前で送られてくるイベントを待ちます。{ja}", t.name)))
             .collect()
+    }
+
+    /// A platform's refusal of the method of the service the workflow implements that asks a run where
+    /// it is (E050): only Temporal answers it, by the query `dandori.status`.
+    pub fn refuse_status(&self, p: Platform) -> Vec<crate::diag::Diag> {
+        let Some(s) = &self.service else { return vec![] };
+        let words = |label: &str| match p {
+            Platform::Temporal => None,
+            Platform::StepFunctions | Platform::Durable => {
+                let name = if p == Platform::StepFunctions { "Step Functions" } else { "Lambda durable functions" };
+                Some((
+                    format!("`{label}` asks a run where it is, and {name} has no way to answer it; only Temporal answers the query `dandori.status`, so leave the method out of the service the flow implements for {name}"),
+                    format!("`{label}` は実行がいまどこにいるかを聞きますが、{name} にはそれに答える手段がありません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、{name} 向けのフローが実装するサービスからは、このメソッドを外してください"),
+                ))
+            }
+            Platform::Argo | Platform::Graph => {
+                let name = if p == Platform::Argo { "Argo Workflows" } else { "pydantic-graph" };
+                Some((
+                    format!("`{label}` asks a run where it is, and dandori does not answer it on {name} yet; only Temporal answers it, by the query `dandori.status`, so leave the method out of the service the flow implements for {name}"),
+                    format!("`{label}` は実行がいまどこにいるかを聞きますが、{name} ではまだ答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、{name} 向けのフローが実装するサービスからは、このメソッドを外してください"),
+                ))
+            }
+        };
+        s.methods.iter().filter(|x| x.is_status()).filter_map(|x| words(&s.label(x))).map(|(en, ja)| crate::diag::Diag::error("E050", s.line, 1, en, ja)).collect()
+    }
+
+    /// The method of the service the workflow implements that starts a run.
+    pub fn service_start(&self) -> Option<&MethodUse> {
+        self.service.as_ref()?.methods.iter().find(|x| x.starts())
+    }
+
+    /// The method of the service the workflow implements that asks a run where it is.
+    pub fn service_status(&self) -> Option<&MethodUse> {
+        self.service.as_ref()?.methods.iter().find(|x| x.is_status())
     }
 
     pub fn ty_name(&self, t: &Ty) -> String {

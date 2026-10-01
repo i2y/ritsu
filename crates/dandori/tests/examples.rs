@@ -67,14 +67,41 @@ fn flows(dir: &Path) -> Vec<PathBuf> {
 
 /// The flows every platform runs: the examples, and the ones in tests/flows that exercise
 /// the corners of the language. `DANDORI_FLOW=<part of a path>` runs only the flows whose
-/// path has it, to look at one flow on a slow platform.
+/// path has it, to look at one flow on a slow platform. A flow that needs a rulec the one at hand
+/// is not is left out, with a SKIP line (`NAMED_ENUMS`).
 fn runnable() -> Vec<PathBuf> {
     let mut out = flows(&root().join("examples"));
     out.extend(flows(&root().join("tests/flows")));
     if let Ok(part) = std::env::var("DANDORI_FLOW") {
         out.retain(|f| rel(f).contains(&part));
     }
+    if !rulec_names_enums() {
+        out.retain(|f| {
+            let keep = !NAMED_ENUMS.contains(&rel(f).as_str());
+            if !keep {
+                eprintln!("SKIP: {}: it calls at its service a rule whose enum is a contract's, and this rulec's `rulec api` does not say what the service calls the values (`connect.enums`)", rel(f));
+            }
+            keep
+        });
+    }
     out
+}
+
+/// The flows that call, at its Connect service, a rule whose enum is a contract's (`import proto`):
+/// with a rulec whose `rulec api` does not say what the service calls the enum's values
+/// (`connect.enums`), `check` refuses them (E005, DESIGN 1.13), and the tests leave them out.
+const NAMED_ENUMS: [&str; 1] = ["tests/flows/connect_rules_contract.flow"];
+
+/// Whether the rulec at hand says, in `rulec api`, what a rule's service calls the values of its
+/// enums (`connect.enums`): rulec 0.22.0 does, and 0.21.2 and before do not. The field is asked
+/// for, not the version. Asked once.
+fn rulec_names_enums() -> bool {
+    static NAMES: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *NAMES.get_or_init(|| {
+        let bin = std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".into());
+        let out = Command::new(&bin).arg("api").arg(root().join("examples/order/rules/urgency.rule")).output();
+        out.ok().and_then(|o| serde_json::from_slice::<Value>(&o.stdout).ok()).is_some_and(|v| v["connect"]["enums"].is_array())
+    })
 }
 
 /// The platforms a version of an example is written for, from its directory: `temporal/`,
@@ -193,6 +220,53 @@ fn diagnostics_match_the_golden_files() {
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
 
+/// What `check` says of a flow that calls at its service a rule whose enum is a contract's, when rulec
+/// does not say what the service calls the enum's values (`connect.enums`): E005 (DESIGN 1.13). What
+/// such a rulec printed for the rule is kept in tests/fixtures/unnamed_enums/rulec.json, as `check`
+/// asked for it from the repository's root (`rulec schema|certificate|api` on the rule, by rulec
+/// 0.21.2, which did not name them), so the diagnostics are the same whatever rulec is at hand, and
+/// need none. `DANDORI_BLESS=1` rewrites the golden files beside it.
+#[test]
+fn a_rulec_that_does_not_name_the_enums_has_a_contracts_refused() {
+    let bless = std::env::var("DANDORI_BLESS").is_ok();
+    let dir = root().join("tests/fixtures/unnamed_enums");
+    let recorded: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("rulec.json")).unwrap()).unwrap();
+    let bundle = std::rc::Rc::new(dandori::sources::Bundle::from_json(&recorded).unwrap());
+    let path = "tests/flows/connect_rules_contract.flow";
+    let text = std::fs::read_to_string(root().join(path)).unwrap();
+    let mut failures = Vec::new();
+    for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
+        let sources = std::rc::Rc::new(dandori::sources::Playground { bundle: bundle.clone(), path: path.into(), text: text.clone(), lang });
+        let checked = dandori::sources::with(sources, || dandori::check::check_source(&text, Path::new(path)));
+        assert!(checked.model.is_none() && checked.diags.iter().all(|d| d.code == "E005"), "{path} is refused with E005 alone: {:?}", checked.diags.iter().map(|d| (&d.code, &d.en)).collect::<Vec<_>>());
+        let said: String = checked.diags.iter().map(|d| d.render(path, &text, lang)).collect();
+        let golden = dir.join(format!("connect_rules_contract.{tag}.txt"));
+        if bless {
+            std::fs::write(&golden, &said).unwrap();
+            continue;
+        }
+        let want = std::fs::read_to_string(&golden).unwrap_or_default();
+        if want != said {
+            failures.push(format!("{path} ({tag}) differs from {}:\n--- want\n{want}\n--- got\n{said}", rel(&golden)));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+/// Every HTTP Task of a state machine, in a Map's or a Parallel's states too.
+fn http_tasks(v: &Value, each: &mut impl FnMut(&Value)) {
+    match v {
+        Value::Object(o) => {
+            if o.get("Resource").and_then(|r| r.as_str()) == Some("arn:aws:states:::http:invoke") {
+                each(v);
+            }
+            o.values().for_each(|x| http_tasks(x, each));
+        }
+        Value::Array(a) => a.iter().for_each(|x| http_tasks(x, each)),
+        _ => {}
+    }
+}
+
 #[test]
 fn asl_runs_as_the_reference_says() {
     need_rulec!();
@@ -221,6 +295,18 @@ fn asl_runs_as_the_reference_says() {
         } else {
             eprintln!("SKIP: asl-validator is not in tools/node_modules; the definition is not validated");
         }
+
+        // an HTTP Task reaches its API through the EventBridge connection the flow names, whichever call it is: the runners play HTTP Tasks without it
+        let mut connections = std::collections::BTreeSet::new();
+        let mut tasks = 0;
+        http_tasks(&serde_json::from_str(&files[0].1).unwrap(), &mut |t| {
+            tasks += 1;
+            let arn = t["Arguments"]["InvocationConfig"]["ConnectionArn"].as_str().unwrap_or_default();
+            assert!(arn.starts_with("arn:aws:events:"), "{}: an HTTP Task has no connection:\n{t}", rel(&f));
+            connections.insert(arn.to_string());
+        });
+        let declared: std::collections::BTreeSet<String> = m.rules.iter().filter_map(|r| r.connection.clone()).chain(m.tasks.iter().filter_map(|t| t.connection.clone())).collect();
+        assert_eq!(connections, declared, "{}: the connections of the HTTP Tasks ({tasks}) are not the ones the flow names", rel(&f));
 
         let scenarios = dandori::scenarios::generate(&m);
         assert!(!scenarios.is_empty(), "no scenarios for {}", rel(&f));
@@ -618,7 +704,8 @@ fn temporal_one(f: &Path, python: Option<&Path>, activities_by: Option<&Path>) {
     let activities_in_python = python.is_some() != activities_by.is_some();
     let method = |t: &str| if activities_in_python { dandori::temporal_py::method(t) } else { dandori::render::ident(t) };
     let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": method(&t.name), "callback": t.callback })).collect();
-    let rules: Vec<String> = m.rules.iter().map(|r| dandori::render::rule_activity(&r.name)).collect();
+    // the rules whose code goes with the workflow are stand-ins; one called at its service is an activity the generated code writes, which sends through the stand-in Transport
+    let rules: Vec<String> = m.rules.iter().filter(|r| r.connect.is_none()).map(|r| dandori::render::rule_activity(&r.name)).collect();
     let children: Vec<Value> = m.tasks.iter().filter_map(|t| t.workflow.as_ref().map(|w| json!({ "type": w, "queue": t.queue }))).collect();
     let mut queues: Vec<String> = m.tasks.iter().filter_map(|t| t.queue.clone()).collect();
     queues.sort();
@@ -674,6 +761,10 @@ fn temporal_one(f: &Path, python: Option<&Path>, activities_by: Option<&Path>) {
     for (i, (g, (sc, _))) in got.iter_mut().zip(&references).enumerate() {
         let o = g.as_object_mut().unwrap();
         let (cases, shown) = (o.remove("cases").unwrap_or(Value::Null), o.remove("shown").unwrap_or(Value::Null));
+        // the query that said otherwise than the search attribute, and was asked again (see the runners)
+        for said in o.remove("asked").and_then(|a| a.as_array().cloned()).unwrap_or_default() {
+            eprintln!("{} run {}: asked again, since the query said {said} where the search attribute said {shown}", rel(f), i + 1);
+        }
         let want = dandori::interp::cases_at_end(&m, sc, View::Temporal).unwrap();
         assert_eq!(cases, Value::Object(want.clone()), "{} run {}: the query says the cases are {cases}, and the reference {}", rel(f), i + 1, Value::Object(want.clone()));
         // the workflow writes the search attribute when a case moves; before that, it has none
@@ -985,13 +1076,17 @@ fn wire_cases(m: &Model) -> Vec<Value> {
                 let url = call["url"].as_str().unwrap();
                 // a Jev task's call: every one goes to TypeSafe's URL, and the one that declares the error names its status
                 let jev = url == dandori::model::JEV_URL;
+                // a rule called at its Connect service sends a POST of its own: no task declares an error for it, so any failure is a 500
+                let service = m.rules.iter().any(|r| r.connect.as_ref().is_some_and(|c| method == "POST" && c.url == url));
                 let task = if jev {
                     let jevs: Vec<&dandori::model::TaskDef> = m.tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Jev(_)))).collect();
-                    jevs.iter().find(|t| kind.is_some_and(|k| t.errors.iter().any(|e| e.name == k))).or(jevs.first()).copied().unwrap()
+                    jevs.iter().find(|t| kind.is_some_and(|k| t.errors.iter().any(|e| e.name == k))).or(jevs.first()).copied()
+                } else if service {
+                    None
                 } else {
-                    m.tasks.iter().find(|t| matches!(t.via(p), Some(Via::Http { method: tm, url: tu, .. }) if tm == method && url_matches(tu, url))).unwrap_or_else(|| panic!("no task sends {method} {url}"))
+                    Some(m.tasks.iter().find(|t| matches!(t.via(p), Some(Via::Http { method: tm, url: tu, .. }) if tm == method && url_matches(tu, url))).unwrap_or_else(|| panic!("no task sends {method} {url}")))
                 };
-                let form = matches!(task.via(p), Some(Via::Http { form: true, .. }));
+                let form = task.is_some_and(|t| matches!(t.via(p), Some(Via::Http { form: true, .. })));
                 let mut request = call.clone();
                 request["form"] = json!(form);
                 if jev {
@@ -999,7 +1094,7 @@ fn wire_cases(m: &Model) -> Vec<Value> {
                 }
                 let reply = match kind {
                     None => json!({ "status": 200, "body": ans["ok"] }),
-                    Some(k) => json!({ "status": task.errors.iter().find(|e| e.name == k).and_then(|e| e.status).unwrap_or(500), "body": "scripted" }),
+                    Some(k) => json!({ "status": task.and_then(|t| t.errors.iter().find(|e| e.name == k)).and_then(|e| e.status).unwrap_or(500), "body": "scripted" }),
                 };
                 json!({ "kind": "http", "request": request, "reply": reply })
             } else if let Some(fn_) = call.get("lambda").and_then(|x| x.as_str()) {
@@ -1083,6 +1178,8 @@ fn default_transports_send_what_the_calls_say() {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
     let mut checked = 0;
+    // the calls by what they are (a rule's service, the other HTTP calls, Lambda, the AWS APIs), and how many of each the scenario fails
+    let mut tally: std::collections::BTreeMap<String, (usize, usize)> = std::collections::BTreeMap::new();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         for f in runnable() {
             let (_, got) = dandori::check::check_file(&f).unwrap();
@@ -1197,7 +1294,21 @@ fn default_transports_send_what_the_calls_say() {
             }
             eprintln!("{}: sent {} call(s) through the default Transport of TypeScript and of Python", rel(&f), cases.len());
             checked += cases.len();
+            for c in &cases {
+                let kind = c["kind"].as_str().unwrap_or_default();
+                let failed = match kind {
+                    "http" => c["reply"]["status"] != json!(200),
+                    "lambda" => c["reply"].get("error").is_some(),
+                    _ => c.get("error").is_some(),
+                };
+                let service = kind == "http" && m.rules.iter().any(|r| r.connect.as_ref().is_some_and(|x| c["request"]["http"] == "POST" && c["request"]["url"] == json!(x.url)));
+                let class = if service { "a rule's service" } else { kind };
+                let t = tally.entry(class.to_string()).or_insert((0, 0));
+                t.0 += 1;
+                t.1 += usize::from(failed);
+            }
         }
+        eprintln!("{} call(s) through the default Transport in all: {}", tally.values().map(|t| t.0).sum::<usize>(), tally.iter().map(|(k, t)| format!("{} {k} ({} failed)", t.0, t.1)).collect::<Vec<_>>().join(", "));
     }));
     let _ = moto.kill();
     if let Err(e) = outcome {
@@ -1289,7 +1400,8 @@ fn generated_typescript_type_checks() {
             }
             // the directory of the TypeScript: the workflow's package, or Argo's caller
             let code = if argo { dir.join("caller") } else { dir.join(dandori::render::ident(&m.name)) };
-            let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+            // the rules whose code goes with the workflow need rulec's modules; one called at its service needs none
+            let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
             if target != "durable" {
                 for r in &called {
                     let gen = Command::new(rulec_bin()).arg("gen").arg(&m.rules[*r].info.path).arg("--out").arg(code.join("rulec")).output().unwrap();
@@ -1335,7 +1447,8 @@ fn rule_glue_answers_the_rulec_vectors() {
         // only read for its machine has no glue
         let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
         for (ri, r) in m.rules.iter().enumerate() {
-            if !called.contains(&ri) {
+            // a rule called at its service has no code that goes with the workflow
+            if !called.contains(&ri) || r.connect.is_some() {
                 continue;
             }
             let (hname, htext) = &dandori::asl::lambda_handler(&m, ri);
@@ -1389,6 +1502,118 @@ fn rule_glue_answers_the_rulec_vectors() {
     }
 }
 
+/// What a rule's service answers is read as the rule's own record the same way on every platform,
+/// also when it is not what the service would write: a number that is not a decimal, a name no enum
+/// has (`constructor`, `__proto__`), a field of another kind, a null, a body that is not an object. The
+/// reference (`render::rule_read`), the TypeScript of io.ts, the Python of io.py and the JSONata a
+/// state machine reads the answer with give the same record, and none of them raises: what is wrong
+/// is left for the check of the answer to refuse (DESIGN 1.13). The rules are those of
+/// connect_rules.flow, whose enums are their own, and of connect_rules_contract.flow, whose enum is a
+/// contract's with a value of its own at 0, which an answer that leaves it out has.
+#[test]
+fn a_rules_answer_is_read_alike_by_the_reference_typescript_python_and_jsonata() {
+    need_rulec!();
+    need_node!();
+    if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
+        eprintln!("SKIP: python3 is missing; io.py's reading of a rule's answer is not run");
+        return;
+    }
+    use dandori::rulec::WireKind;
+    let mut models = Vec::new();
+    for f in ["tests/flows/connect_rules.flow", "tests/flows/connect_rules_contract.flow"] {
+        if !rulec_names_enums() && NAMED_ENUMS.contains(&f) {
+            eprintln!("SKIP: {f}: this rulec's `rulec api` does not say what the service of its rule calls the values (`connect.enums`)");
+            continue;
+        }
+        let (_, checked) = dandori::check::check_file(&root().join(f)).unwrap();
+        models.push(checked.model.expect("the flows pass check"));
+    }
+    // io.ts and io.py are the same for every flow
+    let ts = dandori::temporal::build(&models[0]).unwrap();
+    let py = dandori::temporal_py::build(&models[0]).unwrap();
+    let dir = scratch("rule-read");
+    let io_ts = ts.iter().find(|(n, _)| n.ends_with("/io.ts")).map(|(_, t)| t.clone()).unwrap();
+    let io_py = py.iter().find(|(n, _)| n.ends_with("/io.py")).map(|(_, t)| t.clone()).unwrap();
+    std::fs::write(dir.join("io.ts"), io_ts).unwrap();
+    std::fs::create_dir_all(dir.join("py")).unwrap();
+    std::fs::write(dir.join("py/io.py"), io_py).unwrap();
+
+    // the answers: what the service writes, and each field left out, null, of another kind, or a value it has not
+    let rules: Vec<(&String, &dandori::model::RuleConnect)> = models.iter().flat_map(|m| m.rules.iter().filter_map(|r| Some((&r.name, r.connect.as_ref()?)))).collect();
+    let mut cases: Vec<(usize, Value)> = Vec::new();
+    for (ri, (_, c)) in rules.iter().enumerate() {
+        let good = |f: &dandori::rulec::WireField| match &f.kind {
+            WireKind::Bool => json!(true),
+            WireKind::Int => json!("12000"),
+            WireKind::Str => json!("x"),
+            WireKind::Enum { values, .. } => json!(values[0].1),
+        };
+        let whole: serde_json::Map<String, Value> = c.response.iter().map(|f| (f.json.clone(), good(f))).collect();
+        cases.push((ri, Value::Object(whole.clone())));
+        for f in &c.response {
+            let variants: Vec<Value> = match &f.kind {
+                WireKind::Int => ["12000", "-3", "007", "+5", "1.5", "1e3", "", "-", " 5", "5 ", "5\n", "\n5", "\u{663}", "9007199254740991", "-9007199254740991", "9007199254740992", "0000000000000012", "00000000000000012", "99999999999999999999", "0x10", "1_0", "12.", "--1", "NaN"]
+                    .iter()
+                    .map(|x| json!(x))
+                    .chain([json!(12000), json!(-3), json!(0), json!(1.5), json!(1e300), json!(true), json!([]), json!({}), json!(["12000"])])
+                    .collect(),
+                WireKind::Enum { zero, values } => [zero.as_str(), "constructor", "__proto__", "toString", "hasOwnProperty", "", "next_day", "carrier_standard"]
+                    .iter()
+                    .map(|x| json!(x))
+                    .chain(values.iter().map(|(rule, _)| json!(rule)))
+                    .chain([json!(0), json!(1), json!(true), json!([]), json!({}), json!(["x"])])
+                    .collect(),
+                WireKind::Bool => vec![json!(false), json!(0), json!(1), json!("true"), json!("false"), json!([]), json!({})],
+                WireKind::Str => vec![json!(""), json!(5), json!(true), json!([]), json!({})],
+            };
+            for v in variants {
+                let mut one = whole.clone();
+                one.insert(f.json.clone(), v);
+                cases.push((ri, Value::Object(one)));
+            }
+            // left out, and null
+            let mut left = whole.clone();
+            left.remove(&f.json);
+            cases.push((ri, Value::Object(left)));
+            let mut null = whole.clone();
+            null.insert(f.json.clone(), Value::Null);
+            cases.push((ri, Value::Object(null)));
+        }
+        let mut extra = whole.clone();
+        extra.insert("zzz".into(), json!(1));
+        cases.push((ri, Value::Object(extra)));
+        for body in [json!({}), json!([]), json!(["x"]), json!([{ "a": 1 }]), json!([[]]), json!(null), json!(5), json!("x"), json!(true), json!("{}")] {
+            cases.push((ri, body));
+        }
+    }
+    let spec: Vec<Value> = cases
+        .iter()
+        .map(|(ri, body)| {
+            let c = rules[*ri].1;
+            json!({ "wire": dandori::render::rule_wire_spec(c), "body": body, "jsonata": dandori::render::jsonata_rule_read(c, "$body") })
+        })
+        .collect();
+    std::fs::write(dir.join("cases.json"), serde_json::to_string(&spec).unwrap()).unwrap();
+    let node = Command::new("node").arg(root().join("tools/connect/read.mjs")).arg(dir.join("io.ts")).arg(dir.join("cases.json")).arg(dir.join("ts-jsonata.json")).output().unwrap();
+    assert!(node.status.success(), "tools/connect/read.mjs failed:\n{}", String::from_utf8_lossy(&node.stderr));
+    let python = Command::new("python3").arg(root().join("tools/connect/read.py")).arg(dir.join("py")).arg(dir.join("cases.json")).arg(dir.join("python.json")).output().unwrap();
+    assert!(python.status.success(), "tools/connect/read.py failed:\n{}", String::from_utf8_lossy(&python.stderr));
+    let both: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("ts-jsonata.json")).unwrap()).unwrap();
+    let in_python: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("python.json")).unwrap()).unwrap();
+    assert_eq!((both.len(), in_python.len()), (cases.len(), cases.len()));
+    let mut wrong = Vec::new();
+    for (i, (ri, body)) in cases.iter().enumerate() {
+        let want = norm(&dandori::render::rule_read(rules[*ri].1, body));
+        for (what, got) in [("TypeScript", &both[i]["ts"]), ("JSONata", &both[i]["jsonata"]), ("Python", &in_python[i])] {
+            if norm(got) != want {
+                wrong.push(format!("the rule {}, the answer {body}\n    the reference reads {want}\n    {what} reads {got}", rules[*ri].0));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{} of {} reading(s) differ:\n{}", wrong.len(), cases.len() * 3, wrong.iter().take(12).cloned().collect::<Vec<_>>().join("\n"));
+    eprintln!("{} answer(s) of {} rule(s) were read alike by the reference, TypeScript, Python and JSONata", cases.len(), rules.len());
+}
+
 /// The Python of tools/pydantic-graph/.venv, where pydantic-graph is.
 fn pydantic_graph_python() -> Option<PathBuf> {
     let py = root().join("tools/pydantic-graph/.venv/bin/python");
@@ -1424,7 +1649,10 @@ fn pydantic_graph_runs_as_the_reference_says() {
         }
         let p = Platform::Graph;
         let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": dandori::temporal_py::method(&t.name), "callback": t.callback })).collect();
-        let rules: Vec<Value> = m.rules.iter().map(|r| json!({ "fn": dandori::render::rule_activity(&r.name), "name": r.name })).collect();
+        // the graph has the rules only when it calls one: a rule a flow only follows the machine of is no function
+        let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+        // a rule called at its service is a method of the tasks, which send through the stand-in Transport
+        let rules: Vec<Value> = m.rules.iter().enumerate().filter(|(i, r)| called.contains(i) && r.connect.is_none()).map(|(_, r)| json!({ "fn": dandori::render::rule_activity(&r.name), "name": r.name })).collect();
         let (http, aws) = transport_spec(&m, p);
         // a task's own timeout cannot be scripted; a callback's can, by not answering it
         let (runs, references, left_out) = plays(&m, View::Graph, false, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout") || c.callback));
@@ -1847,7 +2075,8 @@ fn python_rules_answer_the_rulec_vectors() {
             std::fs::create_dir_all(&pkg).unwrap();
             std::fs::write(pkg.join("__init__.py"), "").unwrap();
             std::fs::write(pkg.join("rules.py"), &rules_py).unwrap();
-            let mut called: Vec<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+            // only the rules whose code goes with the workflow are in rules.py
+            let mut called: Vec<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
             called.sort();
             called.dedup();
             for r in &called {
@@ -1924,6 +2153,10 @@ fn durable_one(f: &Path) {
         let mut rules: Vec<String> = Vec::new();
         for s in m.all_stmts() {
             if let TK::Call { callee: Callee::Rule(r), .. } = &s.kind {
+                // a rule called at its service is no Lambda function: the generated step sends through the stand-in Transport
+                if m.rules[*r].connect.is_some() {
+                    continue;
+                }
                 let arn = m.rules[*r].lambda.clone().unwrap_or_default();
                 if !rules.contains(&arn) {
                     rules.push(arn);
@@ -2039,7 +2272,9 @@ fn ready_on_argo(f: PathBuf) -> Option<ArgoFlow> {
     assert!(read["spec"] == doc["spec"] && read["metadata"]["name"] == doc["metadata"]["name"], "{}: the YAML does not say what the document says", rel(&f));
     let runs_file = dir.join("runs.json");
     let results = dir.join("results.json");
-    let spec = json!({ "template": doc, "own": own, "children": children, "http": http, "aws": aws, "runs": runs, "real": [real] });
+    // the rules called at their services are run by the caller as they are generated, and send through the stand-in Transport
+    let connect_rules: Vec<String> = m.rules.iter().filter(|r| r.connect.is_some()).map(|r| dandori::render::rule_activity(&r.name)).collect();
+    let spec = json!({ "template": doc, "own": own, "children": children, "connectRules": connect_rules, "http": http, "aws": aws, "runs": runs, "real": [real] });
     std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
     let runner = with_argo_slot(|| {
         Command::new("node")

@@ -1,0 +1,70 @@
+workflow 注文の見直し v1
+description "注文の記述（.proto）から型を作る：メッセージと列挙をそのまま型に使い、案件の状態を .proto の列挙で運ぶ。範囲のある数、省かれたゼロ値、文字列で来る 64 ビットの整数、日時、`optional` の項目を通す。.proto の列挙の値は ASCII の識別子なので、ステートマシンには英語の規則 order_state を使う"
+
+use rule order_state from "../../examples/order/rules/order_state.rule"
+use proto 注文 from "protos/order.proto"
+  url "https://orders.example.com"
+
+case 受注 : 注文.Order follows order_state.order
+  external pay, deliver, cancel
+  refused when accepted = false
+
+inputs
+  id : string
+
+outputs
+  明細     : list[注文.Line]
+  票       : list[string]
+  通し番号 : string
+  置いた日 : timestamp?
+
+# The order as the service has it now.
+task 注文を見る(id: string) -> 注文.Order
+  connect 注文 "OrderService/Get"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/orders/1a2b3c"
+  observes
+  idempotent
+  errors 無い注文 = not_found
+
+# Only a paid order is shipped; the service says failed_precondition to another.
+task 出荷を頼む(id: string) -> 注文.Order
+  connect 注文 "OrderService/Ship"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/orders/1a2b3c"
+  sends ship
+  errors 断られた = failed_precondition
+  refused as 断られた
+  key
+
+# The range of quantity is the .proto's, which the line's own quantity fits.
+task 棚から取る(sku: string, quantity: int range >=1 <=99) -> 注文.PickResponse
+  connect 注文 "OrderService/Pick"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/orders/1a2b3c"
+  key
+  retry 2 times every 1 second
+
+task 一言を残す(text: string)
+  http POST "https://notes.example.com/notes"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/notes/4d5e6f"
+  idempotent
+
+flow
+  受注 <- 注文を見る(id: id)
+    on 無い注文 => fail Missing "注文 {id} はありません"
+  match 受注.state
+    paid =>
+      受注 <- 出荷を頼む(id: 受注.id)
+        on 断られた => 受注 <- 注文を見る(id: 受注.id)
+    received, shipped, delivered, cancelled => pass
+  let 票 = for 一品 in 受注.lines at most 5
+    let 取った = 棚から取る(sku: 一品.sku, quantity: 一品.quantity)
+    yield 取った.ticket
+  match 受注.note
+    some 一言 => 一言を残す(text: 一言)
+    none => pass
+  match 受注.state
+    delivered, cancelled => pass
+    received, shipped => fail NotYet "注文 {受注.id}（通し番号 {受注.serial}）はまだ終わっていません" leaving 受注
+  succeed 明細 = 受注.lines, 票 = 票, 通し番号 = 受注.serial, 置いた日 = 受注.placedAt
+
+on failure
+  fail Stopped "途中で止まりました" leaving 受注

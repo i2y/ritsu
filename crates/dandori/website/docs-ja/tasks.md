@@ -77,9 +77,194 @@ Stripe と在庫のサービスを呼ぶ下書き
 
 </div>
 
-protobuf の JSON では、`optional` の付かないフィールド（メッセージ型を除く）は、値がゼロ値（空の文字列、0、false、列挙の最初の値、空のリストやマップ）のとき省かれます。protobuf で読む側は、省かれたフィールドをゼロ値として読みます。`connect` のタスクのレスポンスも、どのプラットフォームでも同じように読みます。生成したコードは、レスポンスのメッセージと、その中やリストの中のメッセージに、`.proto` をもとにゼロ値を埋めてから、結果の型を確かめます。
+protobuf の JSON では、`optional` の付かないフィールド（メッセージ型を除く）は、値がゼロ値（空の文字列、0、false、列挙の最初の値、空のリストやマップ）のとき省かれます。protobuf で読む側は、省かれたフィールドをゼロ値として読みます。`connect` のタスクのレスポンスも、どのプラットフォームでも同じように読みます。生成したコードは、レスポンスのメッセージと、その中やリストの中のメッセージに、`.proto` をもとにゼロ値を埋めてから、結果の型を確かめます。値が設定されていない `google.protobuf.Value` も省かれますが、こちらは `json` のフィールドになり、無ければ null として読みます。
 
 検査が記述から読むのは、タスクの型に関わる部分だけです。そのため、8 MB ある Stripe の文書もそのまま読めます。例には、要る部分だけを残した抜粋を置いています。
+
+### .proto から型を作る
+
+`use proto` で読んだ `.proto` のメッセージと列挙は、`use` に付けた名前のあとに書けば、そのまま型になります。`warehouse.ReserveResponse` のように書きます。書ける場所はほかの型と同じです（レコードのフィールド、タスクの引数と結果、`inputs` と `outputs`、`let x: T`、`list[…]` と `T?` の中、案件のレコード）。記述がすでに言っていることを、レコードに手で写さずに済みます。引当と発送の例では、倉庫の記述がこう言っています。
+
+```proto
+enum Stock {
+  unspecified = 0;
+  secured = 1;
+  short = 2;
+}
+
+message ReserveResponse {
+  string sku = 1;
+  Stock stock = 2;
+  optional string id = 3;
+}
+```
+
+フローはこれをそのまま使います。
+
+```flow
+record PackingRequest
+  order_id     : string
+  reservations : list[warehouse.ReserveResponse]
+
+task reserve_stock(sku: string, quantity: int) -> warehouse.ReserveResponse
+  connect warehouse "StockService/Reserve"
+  errors busy = resource_exhausted
+```
+
+`warehouse.ReserveResponse` は、`sku : string`、`stock : warehouse.Stock`、`id : string?` を持つレコードで、`warehouse.Stock` は `secured | short` の列挙です。このタスクは、これだけで記述と合います。型を作る表と、タスクを記述と突き合わせる表は同じものだからです。
+
+| `.proto` | フローの型 |
+|---|---|
+| `string`、`bytes` | `string` |
+| `bool` | `bool` |
+| 32 ビットの整数（`int32`、`uint32`、`sint32`、`fixed32`、`sfixed32`） | `int` |
+| 64 ビットの整数 | `string`（protobuf の JSON が文字列で書くため） |
+| `float`、`double`、`map` | `json` |
+| 列挙 | 列挙。値は `.proto` の名前のまま |
+| メッセージ | レコード。フィールドの名前は protobuf の JSON の名前（`json_name`、なければ lowerCamelCase） |
+| `repeated T` | `list[T]` |
+| `optional` を付けたフィールド、メッセージ型のフィールド、`oneof` の一つ | `T?` |
+| `google.protobuf.Timestamp` | `timestamp` |
+| `Struct`、`Value`、`ListValue`、`Any` | `json` |
+| `Empty` | フィールドの無いレコード |
+| `Duration`、`FieldMask` | `string` |
+| ラッパー（`Int32Value` など） | 中の型。`Int64Value` は `string`、`DoubleValue` は `json` |
+
+- 入れ子のメッセージは `warehouse.Order.Line` と書きます。ファイルが import しているほかのパッケージの型は、パッケージから書きます（`warehouse.common.v1.Money`）。作るのは、フローが名前を書いた型と、そこからたどれる型だけです。自分自身を含むメッセージ（`repeated Tree children` を持つ木のようなもの）は、直接でもほかのメッセージを通してでも、レコードにできず、E003 になります。自分を含むところを `json` にしたレコードを、自分で書いてください。`.flow` に書いたレコードも、同じ理由で自分自身を含められません。シナリオの生成と dandori が書くコードは型を終わりまでたどりますが、自分を含む型には終わりがないからです。
+- `.proto` にない名前は E002 になり、`.proto` にあるメッセージと列挙の名前が添えられます。サービスの名前も E002 です。OpenAPI の文書や Smithy のモデルの名前も同じで、この二つからは型を作りません。
+
+<div class="dd-term" markdown>
+
+```text
+エラー[E002]: tests/fixtures/proto_types.flow:27:11: 型 `types.Stok` はありません
+    27 |   stock : types.Stok
+  = `types` のメッセージと列挙は Box・Everything・Everything.Nested・GetRequest・Line・Mode・Status・Ticket です
+```
+
+</div>
+
+- 数の範囲は、Protovalidate の指定から読みます。`(buf.validate.field).int32` の下の `gte`・`gt`・`lte`・`lt`・`const` を読み、一つのオプションにまとめて書いても、一つずつ書いても同じです。リストの中の数は `repeated.items` から読みます。0 のときは検証しない指定（`IGNORE_IF_ZERO_VALUE`）があるフィールドは、0 も範囲に入ります。低いほうの端が高いほうの端より大きい指定は「その外側」の意味になり、一つの範囲にはならないので、範囲としては読みません。読んだ範囲はレコードのそのフィールドの範囲になるので、[範囲](tour.md#範囲)の決まりがそのまま当てはまります。範囲を外れることのある値は E014、範囲が分からない値は W104 で、範囲のあるフィールドに、範囲のない値を送るタスクは E016 です。`optional` やメッセージ型のフィールドでも、`required` が付いていれば `T?` ではなく `T` になります。ほかの規則（文字列の長さ、リストの件数、CEL）は、無いものとして読みます。
+
+<div class="dd-term" markdown>
+
+```text
+エラー[E014]: tests/fixtures/proto_ranges.flow:35:1: `line.quantity` は `>=1 <=99` で、`few` の引数 `n` の範囲 `>=1 <=5` を外れることがあります
+    35 |   few(n: line.quantity)
+エラー[E014]: tests/fixtures/proto_ranges.flow:41:1: `many` は `>=1 <=200` で、`types.Box` のフィールド `count` の範囲 `>=1 <=10` を外れることがあります
+    41 |   let too_many: types.Box = {count: many}
+```
+
+</div>
+
+- 列挙のゼロ値を外すのは、その名前が「値が無い」ことを言っているときだけです。列挙の名前を大文字にした接頭辞（`Stock` なら `STOCK_`）を取ったあとが、大文字小文字を問わず `unspecified` になる名前がそうです。protobuf では、フィールドが設定されていないことを表す印で、`match` で分ける値ではありません。この値が返ってきたら、`Dandori.BadResponse` で失敗します。`ACTIVE = 0` のようにほかの名前のゼロ値は本当の値なので、残します。
+- 値が設定されていない `Value` は、protobuf の JSON から省かれます。そのため、`json` のフィールドは無いことがあります。無ければ、`T?` と同じように null として読み、そのフィールドを引数に取るタスクには `null` を渡します。レコードをそのまま渡すときは、フィールドが無いまま渡ります。ワークフローの `json` の入力も、始めるときに省かれていれば、null として読みます。
+- 生成するコードでは、型の名前の `.` を `_` にします（`warehouse_ReserveResponse`）。フローのほかの型が同じ名前になるときは E006 です。`dandori doc` では、`.flow` に書いたとおりの名前で表示します。
+- `url` が要るのは、タスクがサービスを呼ぶとき（`connect`）だけです。型を作るためだけに読む `.proto` には要りません。
+- `.proto` が、ディスクにないファイルを import していることがあります。たとえば `google/api/annotations.proto` はオプションのために import するもので、フローが使う型は何も持っていません。そのため `.proto` はそのまま読み、そのファイルは飛ばします。飛ばしたファイルだけが持つ型は分かりません。その型のフィールドを持つメッセージから型は作れず（E002）、その型を受け取る、または返すメソッドをタスクと合わせることもできません（E016）。診断には、読めなかったファイルの名前が添えられます。
+
+<div class="dd-term" markdown>
+
+```text
+エラー[E002]: tests/fixtures/proto_unread.flow:11:12: `catalog.Priced` を作れません。フィールド `price` の型 `google.type.Money` が分かりません。レコードを自分で書き、`price` は `json` にしてください
+    11 |   priced : catalog.Priced
+  = `google/api/annotations.proto`・`google/type/money.proto`・`shop/v2/cancel.proto` を読めなかったので、そこにある型は使えません
+```
+
+</div>
+
+## 規則をサービスとして呼ぶ
+
+規則のコードは、既定ではワークフローと一緒に出します。Step Functions では rulec が生成した Python を包んだ Lambda 関数、Temporal ではその TypeScript か Python を包んだアクティビティです。もう一つの形は、`rulec gen` が規則のために書く Connect のサービスを、どのプラットフォームからも呼ぶ形です。規則が一か所にあるので、規則を直すと、それを呼ぶすべてのワークフローに届きます。
+
+```flow
+use rule urgency from "../rules/urgency.rule"
+  connect "https://rules.example.com"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+```
+
+`connect` はサービスの場所です。`connection` は、Step Functions の HTTP Task がサービスを呼ぶときに通す EventBridge の接続で、`connect` と一緒にだけ書けます。規則の呼び出し方は `lambda` か `connect` のどちらか一つで、両方は書けません（E007）。`local` は `connect` と一緒に書けて、Temporal ではローカルアクティビティになります。
+
+<div class="dd-term" markdown>
+
+```text
+エラー[E007]: tests/fixtures/rule_connect.flow:6:3: この規則の呼び出し方はもう書かれています（5 行目）。規則の呼び出し方は `lambda` か `connect` のどちらか一つです
+     6 |   connect "https://rules.example.com"
+```
+
+</div>
+
+dandori は、規則のほかの情報と同じように、サービスについても `rulec api` だけを読みます。`rulec gen` が書く `.proto` は読みません。読むのは、メソッドのパス、リクエストとレスポンスのフィールド、列挙の値ごとにサービスが使う名前です。呼び出しは、URL とパスに `Connect-Protocol-Version: 1` のヘッダを付けた POST で、本文は protobuf の JSON の形で書いた JSON です。フィールド名は lowerCamelCase、数は十進の文字列（rulec の数は 64 ビットの整数です）、列挙の値は `rulec api` が言う `.proto` での名前です（`next_day` なら `CARRIER_NEXTDAY`）。入力は、ゼロ値（`false` や `"0"`）でも省かずに書きます。サービスは、省いた入力とゼロ値を区別するからです。急ぎの規則のために `rulec gen` が書いたサービスに、実際に送ったものと、返ってきたものは次のとおりです。
+
+```text
+POST /rulec.urgency.v1.UrgencyService/Decide
+Connect-Protocol-Version: 1
+Content-Type: application/json
+
+{"member":false,"amount":"5000"}
+
+200 OK
+rulec-source-sha256: 5ff6efc93a9b39d25225c10aa67460104da8e393a052635b225d497c51b7078f
+
+{"carrier":"CARRIER_STANDARD","trace":[{"table":"decide","row":3}]}
+```
+
+- サービスは、ゼロ値のフィールドをレスポンスの JSON から省きます（protobuf の JSON と同じです）。この例では、false の `urgent` がありません。dandori は、protobuf が読むのと同じように、省かれたものを戻します（false、0、空の文字列、列挙の 0 番の値）。そのうえで、規則自身のレコードとして読みます。数は十進の文字列から、列挙の値は規則での名前から読み替えます。便の列挙の 0 番は `CARRIER_UNSPECIFIED` で、規則のどの値でもありません。合わないものはそのまま残します。すべての規則の結果が通す検査（型と、rulec が出力ごとに出す範囲）が、`Dandori.BadResponse` で呼び出しを終えます。たとえば、規則の値でない列挙の 0 番、どの値にもない名前、十進でない数、2^53 − 1 を超える数、オブジェクトでない本文です。当たった行を表す `trace` は読みません。
+- 200 以外のステータスと、リクエストが届かないことは、呼び出しの失敗です。規則には宣言するエラーがないので、エラーは `failure` だけです。ほかの規則の呼び出しと同じようにリトライし、回数は 2 回、間隔は 1 秒と 2 秒です。
+- レスポンスを返したサービスの規則のバージョン（ヘッダ `rulec-source-sha256`）は見ません。検査したのと違う規則で動いているサービスでも、呼び出しは失敗しません。サービスを一か所にするのは、規則を直したときにワークフローを出し直さずに済ませるためだからです。守られているのは、レスポンスのたびに確かめる型と範囲と、パスの `v1` です。`v1` は契約のバージョンで、`buf breaking` が見張ります。
+
+| プラットフォーム | サービスで呼ぶ規則 |
+|---|---|
+| Step Functions | `connection` を通す HTTP Task（`connection` が無いとき、URL が HTTPS でないときは E050）。Lambda 関数は書きません |
+| Temporal | 生成したアクティビティ。名前は規則のコードを同梱するときと同じ `rule_<規則>` のままで、`Transport` を通して送ります。ワークフローも、残る履歴も、同梱のときと変わりません |
+| Lambda durable functions | `Transport` を通して送るステップ |
+| Argo Workflows | ほかの規則と同じく caller のイメージ。`Transport` を通して送ります |
+| pydantic-graph | `Deps.tasks` の関数。`Transport` を通して送ります |
+
+### 契約から取り込んだ列挙
+
+規則は、列挙を `.proto` から取り込むことがあります（規則の `import proto`）。その値の名前は契約が決めるので、buf の慣わしに従うとは限りません。0 番が、ほかと同じ一つの値のこともあります。
+
+```proto
+enum Status {
+  ACTIVE = 0;
+  CLOSED = 1;
+}
+```
+
+そのため dandori は、この名前を列挙の名前から組み立てずに、`rulec api` から読みます。サービスは、0 番の値の列挙を、ほかのゼロ値と同じくレスポンスから省きます。0 番が規則の値なら、dandori は、列挙の無いレスポンスをその値として読みます。送るときは、`ACTIVE` もほかの値と同じく名前を書きます。`tests/fixtures/rules/account_fee.rule` の規則はこの列挙を取り込んでいて、そのサービスは、状態が `ACTIVE` のままで手数料の掛からない結果を、当たった行だけで返します。
+
+```text
+POST /rulec.account_fee.v1.AccountFeeService/Decide
+Connect-Protocol-Version: 1
+Content-Type: application/json
+
+{"state":"ACTIVE","balance":"20000"}
+
+200 OK
+rulec-source-sha256: bdb2f090c3a1a0c471d0b94dd4f23db7aa7a4d9bd8c23bdd786effd3b0db16ba
+
+{"trace":[{"table":"手数料表","row":1}]}
+```
+
+`rulec api` が `connect.enums` でこの名前を言うのは rulec 0.22.0 からで、0.21.2 までの rulec は言いません。その rulec では、契約から列挙を取り込んだ規則をサービスで呼べず、`check` がそう言います。規則自身の列挙は、その rulec が付ける名前で、いままでどおり呼べます。
+
+<div class="dd-term" markdown>
+
+```text
+エラー[E005]: tests/flows/connect_rules_contract.flow:4:10: 規則 `../fixtures/rules/account_fee.rule` を読めませんでした
+     4 | use rule 手数料 from "../fixtures/rules/account_fee.rule"
+  = 規則の列挙 `口座の状態` は契約（`Status`）から取り込んだものですが、この rulec の `rulec api` は、規則のサービスがその値を何と呼ぶかを言いません。`connect` で呼ぶには、rulec 0.22.0 以降が要ります（`rulec api` の `connect.enums` がそれを言います）
+```
+
+</div>
+
+### サービスが断るもの
+
+rulec 0.22.0 以降が書くサービスは、範囲の外の入力、列挙に無い名前、リクエストに無いフィールド、入力を省いたリクエストを、`invalid_argument`（400）で断ります。dandori は、検査したのと同じ規則で動くサービスには、どれも送りません。入力の名前や列挙の値を変えた別のバージョンの規則で動くサービスは、ゼロ値で判断せずに呼び出しを断ります。呼び出しは、200 以外のステータスのときと同じく失敗します。rulec 0.21.2 が書くサービスは、知らないフィールドを読み飛ばし、省いた入力をゼロ値として読み、列挙に無い名前を 0 番の値として読みます。最後のものを断るのは、0 番が「何も設定されていない」を意味する列挙のときだけです。
+
+要素の並びをたどる規則（規則の `elements`）は、サービスでも、規則のコードを同梱しても呼べません。dandori はまだ、規則に並びを渡せないからです（E005）。
+
+AWS 向けの注文の例は、急ぎの規則をこの形で呼びます（[order.flow](https://github.com/i2y/dandori/blob/main/examples/order/aws/order.flow)）。`rulec gen` が書くサービスに、dandori が送るものを実際に送って確かめるテストもあります（[どうやって確かめているか](assurance.md)）。
 
 ## 子の .flow
 

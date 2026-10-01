@@ -1,8 +1,11 @@
 // The shelf-count service of tests/flows/connect.flow: an answer with every kind of field that
-// protobuf's JSON leaves out at its zero value, a message inside it, and a list of messages.
+// protobuf's JSON leaves out at its zero value, a message inside it, a list of messages, and a
+// Value that may not be set.
 syntax = "proto3";
 
 package shelf.v1;
+
+import "google/protobuf/struct.proto";
 
 service ShelfService {
   rpc Count(CountRequest) returns (CountResponse);
@@ -39,6 +42,8 @@ message CountResponse {
   Location location = 4;
   map<string, string> labels = 5;
   int64 serial = 6;
+  // protobuf's JSON leaves out a Value that is not set, so an answer may come without this
+  google.protobuf.Value extra = 7;
 }
 
 message RecordRequest {
@@ -47,6 +52,7 @@ message RecordRequest {
   repeated Item items = 3;
   string aisle = 4;
   map<string, string> labels = 5;
+  google.protobuf.Value extra = 6;
 }
 
 message RecordResponse {

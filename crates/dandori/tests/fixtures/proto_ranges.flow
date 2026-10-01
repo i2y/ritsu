@@ -1,0 +1,42 @@
+workflow proto_ranges v1
+description "The range Protovalidate gives a field of a message is the range of that field in the record made from it: a value that can be outside it is E014, and one whose range nothing says is W104"
+
+use proto types from "protos/types.proto"
+  url "https://types.example.com"
+
+inputs
+  line  : types.Line
+  many  : int  range >=1 <=200
+  a_few : int  range >=1 <=5
+  any   : int
+
+task nonnegative(n: int range >=0)
+  http POST "https://example.com/nonnegative"
+  idempotent
+
+task wide(n: int range >=0 <=200)
+  http POST "https://example.com/wide"
+  idempotent
+
+task few(n: int range >=1 <=5)
+  http POST "https://example.com/few"
+  idempotent
+
+task box(count: int range >=1 <=10) -> types.Box
+  connect types "TypesService/PutBox"
+
+flow
+  # quantity is >=1 <=99, discount >=0 <=50, offset >=0 (zero is let through, and above that, no end),
+  # and outside is what lies outside two ends, which no range says
+  nonnegative(n: line.quantity)
+  wide(n: line.discount)
+  wide(n: line.offset)
+  wide(n: line.outside)
+  few(n: line.quantity)
+  # a number of a list that Protovalidate holds to a range, each item
+  for mark in line.marks at most 5
+    few(n: mark)
+  let fixed = box(count: a_few)
+  let ok: types.Box = {count: a_few}
+  let too_many: types.Box = {count: many}
+  let unsure: types.Box = {count: any}

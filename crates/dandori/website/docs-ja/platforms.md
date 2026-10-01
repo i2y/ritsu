@@ -14,7 +14,7 @@ $ dandori build <file.flow> --target temporal|temporal-python|asl|durable|argo|p
 - `types.ts`：型
 - `activities.ts`：`makeActivities(own, transport)`。生成したタスクと、自分で書くタスクをまとめます
 - `io.ts`：`Transport`
-- `rules.ts`：rulec の TypeScript を包んで、規則をアクティビティにしたもの
+- `rules.ts`：rulec の TypeScript を包んで、規則をアクティビティにしたもの。`use rule` の下に `connect` を書いた規則はここに入りません。そのアクティビティは `activities.ts` にあり、規則のサービスに送ります（[規則をサービスとして呼ぶ](tasks.md#規則をサービスとして呼ぶ)）
 - `runtime.ts`
 - `worker.ts`：`makeWorker(own)`
 - `client.ts`：クライアント
@@ -34,6 +34,8 @@ $ dandori build <file.flow> --target temporal|temporal-python|asl|durable|argo|p
 
 `{ searchAttributes: true }` を付けて始めると、ワークフローは案件の状態が変わるたびに Search Attribute の `DandoriCases`（`"pi=requires_capture"` など）を書き換えます。これで、案件の状態から実行を検索できます。
 
+サービスを実装するワークフローの `client.ts` には、サービスのメソッドごとの関数（`fulfill`、`answerPacking`）と、`.proto` のメッセージの名前を付けた型（`FulfillRequest`）も入ります。詳しくは[サービスを実装する](services.md)を見てください。
+
 ### 長い実行
 
 フローの一番外にある `repeat` や、並列でない `for` は、履歴が長くなると、次のイテレーションの始めで新しい実行に引き継ぎます（Continue-As-New）。目安は 10,000 件で、サーバーが勧めればそれより早く引き継ぎます（dev server は 4,096 件を過ぎると勧めてきました）。引き継ぐ先には、変数、何回目のイテレーションか、ループのリスト、それまでに `yield` した値を渡します。ワークフロー ID は変わらず、冪等キー、コールバックと子ワークフローの ID も同じままです。Worker Deployment Versioning を使っていれば、引き継いだ実行も同じビルドで動きます。
@@ -44,15 +46,15 @@ $ dandori build <file.flow> --target temporal|temporal-python|asl|durable|argo|p
 
 ## Temporal（Python）
 
-`--target temporal-python` は、同じものを Temporal の Python SDK 向けに、ワークフローの名前を付けたパッケージとして書き出します。中身は `workflow.py`（ワークフローと、ワーカーに渡す `workflows`）、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`（rulec の Python を包んだもの）、`runtime.py`、`worker.py`（`make_worker`）、`client.py`（`start`、`answer`、`status`）です。ワークフローの型、アクティビティ、コールバックの Update とシグナル、クエリ、ID の名前を TypeScript 版とそろえてあるので、ワークフローとアクティビティを別々の言語のワーカーで動かせます。
+`--target temporal-python` は、同じものを Temporal の Python SDK 向けに、ワークフローの名前を付けたパッケージとして書き出します。中身は `workflow.py`（ワークフローと、ワーカーに渡す `workflows`）、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`（rulec の Python を包んだもの）、`runtime.py`、`worker.py`（`make_worker`）、`client.py`（`start`、`answer`、`status`。サービスを実装するワークフローなら、メソッドごとの関数も入り、名前はスネークケースの `answer_packing` のようになります）です。ワークフローの型、アクティビティ、コールバックの Update とシグナル、クエリ、ID の名前を TypeScript 版とそろえてあるので、ワークフローとアクティビティを別々の言語のワーカーで動かせます。
 
 ## AWS Step Functions
 
-`--target asl` は、JSONata を使う ASL のステートマシンを書き出します。呼ぶ規則ごとに、rulec が生成する Python を包んだ Lambda のハンドラーも書き出します。タスクは Lambda 関数、EventBridge の接続を通した HTTP の API、SDK の統合を通した AWS のサービスを呼び、コールバックにはタスクトークンを渡します。ステートマシンには自分で書くコードを置けないので、そのどれにも当たらないタスクはエラーにします（E050）。Temporal でしか意味を持たない機能（`on cancel`、`event`）も同じくエラーにします。
+`--target asl` は、JSONata を使う ASL のステートマシンを書き出します。Lambda 関数として呼ぶ規則ごとに、rulec が生成する Python を包んだ Lambda のハンドラーも書き出します。`connect` を書いた規則は、HTTP Task で規則のサービスを呼びます。`connection` と、HTTPS の URL が要り、Lambda 関数は書きません。タスクは Lambda 関数、EventBridge の接続を通した HTTP の API、SDK の統合を通した AWS のサービスを呼び、コールバックにはタスクトークンを渡します。ステートマシンには自分で書くコードを置けないので、そのどれにも当たらないタスクはエラーにします（E050）。Temporal でしか意味を持たない機能（`on cancel`、`event`、実装するサービスの、実行がいまどこにいるかを聞くメソッド）も同じくエラーにします。
 
 ## AWS Lambda durable functions
 
-`--target durable` は、`workflow.ts`（`makeHandler(own, transport)` を持つ）、`types.ts`、`tasks.ts`、`io.ts`、`runtime.ts` を書き出します。呼ぶ規則ごとに `asl` と同じ Lambda のハンドラーも書き出し、durable function はそれを invoke します。自分で書くタスクは、そのコードを動かすステップになります。
+`--target durable` は、`workflow.ts`（`makeHandler(own, transport)` を持つ）、`types.ts`、`tasks.ts`、`io.ts`、`runtime.ts` を書き出します。Lambda 関数として呼ぶ規則ごとに `asl` と同じ Lambda のハンドラーも書き出し、durable function はそれを invoke します。`connect` を書いた規則は、規則のサービスに送るステップになります。自分で書くタスクは、そのコードを動かすステップになります。
 
 ## Argo Workflows
 
@@ -63,9 +65,13 @@ $ dandori build <file.flow> --target temporal|temporal-python|asl|durable|argo|p
 
 自分で書くタスクは、自分のイメージ（`image`）のコンテナで動きます。
 
+タスクの `timeout` は、Pod の `activeDeadlineSeconds` になります。Kubernetes は、Pod を受け付けた時点から数えるので、コンテナが起動するまでの時間も含まれます。混んでいるクラスターでは、Pod の起動に数秒かかることがあるので、その分の余裕を見込んだ `timeout` にしてください。期限が過ぎるのと同時に終わった Pod は、期限を過ぎたものとして扱われ、Argo はタスクが返したエラーの名前を読めません。そのエラーに対する `retry` は行われません。
+
 ## pydantic-graph
 
 `--target pydantic-graph` は、`graph.py`（`graph` と、その `State` と `Deps`）、`types.py`、`tasks.py`（`make_tasks(own, transport)`）、`io.py`、`rules.py`、`runtime.py` を持つパッケージを書き出します。文の一つ一つがノードで、各ノードの戻り値の型に次のノードが書いてあるので、`graph.render()` でフローの図を描けます。実行の状態は、それを動かすプロセスの中にしかありません。待つときは `Deps.clock` で眠り、コールバックへの応答は `Deps.callbacks` に届きます。pydantic-graph 2.x は実行の状態をどこにも残さないので、プロセスが落ちればその実行も失われます。試作や、エージェントの中の短いフローに向いています。
+
+Lambda durable functions、Argo Workflows、pydantic-graph も、`event` のタスクと、サービスの、実行がいまどこにいるかを聞くメソッドはエラーにします（E050）。サービスを実装するワークフローは、どのプラットフォームでも、入力と、サービスのメソッドが送ってくるコールバックの応答に、protobuf の JSON が省いたゼロ値を埋めてから読みます。
 
 ## シナリオと参照インタプリタ
 

@@ -1,9 +1,10 @@
 workflow 出荷 v1
-description "倉庫のシステムにある注文について、入金を催促し、出荷させ、配達の知らせを待つ。注文の状態は倉庫のシステムが持ち、その移り方は rulec の規則「注文の状態」に従う。AWS 向けの版（Step Functions と Lambda durable functions）：急ぎの規則とお知らせは Lambda 関数で、倉庫の呼び出しは EventBridge の接続を通す。配達の知らせは、Lambda 関数が預かるタスクトークンで返ってくる。ほかのプラットフォームでも、dandori がそれぞれ向けに生成する呼び出しで動く"
+description "倉庫のシステムにある注文について、入金を催促し、出荷させ、配達の知らせを待つ。注文の状態は倉庫のシステムが持ち、その移り方は rulec の規則「注文の状態」に従う。AWS 向けの版（Step Functions と Lambda durable functions）：急ぎの規則は rulec が書く Connect のサービスとして呼び、お知らせは Lambda 関数で、倉庫の呼び出しと規則の呼び出しは EventBridge の接続を通す。配達の知らせは、Lambda 関数が預かるタスクトークンで返ってくる。ほかのプラットフォームでも、dandori がそれぞれ向けに生成する呼び出しで動く"
 
 use rule 注文の状態 from "../rules/注文の状態.rule"
 use rule 急ぎ from "../rules/出荷の急ぎ.rule"
-  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
+  connect "https://rules.example.com"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
 
 record 注文
   id   : string

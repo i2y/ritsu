@@ -17,8 +17,9 @@ message ReserveRequest {
   int32 quantity = 2;
 }
 
-// Named as the workflow names them. The zero value is what an answer that leaves the field out
-// reads as; the workflow's enum does not have it, so such an answer fails the call.
+// A workflow that makes its types from this file (`warehouse.Stock`) has secured and short only:
+// the zero value says nothing was set, and an answer that leaves the field out, which reads as it,
+// fails the call.
 enum Stock {
   unspecified = 0;
   secured = 1;

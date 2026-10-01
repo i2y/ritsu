@@ -1,0 +1,10 @@
+error[E014]: tests/fixtures/proto_ranges.flow:33:1: `line.offset` can be outside `>=0 <=200`, the range of the parameter `n` of `wide`: it is `>=0`
+    33 |   wide(n: line.offset)
+warning[W104]: tests/fixtures/proto_ranges.flow:34:1: nothing says what range `line.outside` is in (the field `outside` of `types.Line` has no range), and the parameter `n` of `wide` takes `>=0 <=200`
+    34 |   wide(n: line.outside)
+error[E014]: tests/fixtures/proto_ranges.flow:35:1: `line.quantity` can be outside `>=1 <=5`, the range of the parameter `n` of `few`: it is `>=1 <=99`
+    35 |   few(n: line.quantity)
+error[E014]: tests/fixtures/proto_ranges.flow:41:1: `many` can be outside `>=1 <=10`, the range of the field `count` of `types.Box`: it is `>=1 <=200`
+    41 |   let too_many: types.Box = {count: many}
+warning[W104]: tests/fixtures/proto_ranges.flow:42:1: nothing says what range `any` is in (the input `any` has no range), and the field `count` of `types.Box` takes `>=1 <=10`
+    42 |   let unsure: types.Box = {count: any}

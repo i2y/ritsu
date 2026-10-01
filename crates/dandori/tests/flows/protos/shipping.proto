@@ -1,0 +1,64 @@
+// The service tests/flows/service.flow implements, on every platform: a run starts with an order's
+// boxes, and the packing crew answers its callback. The request has a list of messages with a list
+// of messages in each, a message inside it, and an enum whose zero value is a value of its own, so
+// that what protobuf's JSON leaves out at its zero value is left out at every depth, and a Value, which
+// is left out when it is not set, so the flow's `json` input may not be there; the JSON names are
+// Japanese, as the flow's are. A run answers nothing, as `{}`.
+syntax = "proto3";
+
+package shipping.v1;
+
+import "dandori/v1/options.proto";
+import "google/protobuf/struct.proto";
+
+service ShippingService {
+  option (dandori.v1.workflow) = {name: "出荷の受付", version: 1};
+
+  rpc Ship(ShipRequest) returns (ShipResponse) {
+    option (dandori.v1.start) = {fails: ["梱包の遅れ", "検品漏れ"]};
+  }
+
+  rpc AnswerPacking(AnswerPackingRequest) returns (AnswerPackingResponse) {
+    option (dandori.v1.answer) = {task: "梱包を待つ"};
+  }
+}
+
+message ShipRequest {
+  string order_id = 1 [json_name = "注文ID"];
+  repeated Box boxes = 2 [json_name = "箱"];
+  Address to = 3 [json_name = "宛先"];
+  Kind kind = 4 [json_name = "区分"];
+  google.protobuf.Value extra = 5 [json_name = "付帯"];
+}
+
+message Box {
+  string label = 1 [json_name = "ラベル"];
+  int32 weight = 2 [json_name = "重さ"];
+  repeated Item items = 3 [json_name = "品"];
+}
+
+message Item {
+  string sku = 1;
+  int32 count = 2 [json_name = "数"];
+  bool fragile = 3 [json_name = "割れ物"];
+}
+
+message Address {
+  string city = 1 [json_name = "市"];
+  string line = 2 [json_name = "番地"];
+}
+
+// The zero value is a kind of its own, which a flow can match on.
+enum Kind {
+  normal = 0;
+  express = 1;
+}
+
+message ShipResponse {}
+
+message AnswerPackingRequest {
+  int32 boxes = 1 [json_name = "箱の数"];
+  bool checked = 2 [json_name = "検品済み"];
+}
+
+message AnswerPackingResponse {}

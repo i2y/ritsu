@@ -56,5 +56,9 @@ task 引き当てる(sku: string, quantity: string) -> 引当
 task 見張る(sku: string) -> 引当
   connect 倉庫 "StockService/Watch"
 
+# `url` is asked for where a task calls the service, and only there
+task 場所が無い(sku: string, quantity: int) -> 場所の無い倉庫.ReserveResponse
+  connect 場所の無い倉庫 "StockService/Reserve"
+
 flow
   pass

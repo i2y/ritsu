@@ -145,7 +145,7 @@ flowchart TD
 <details>
 <summary><code>order_state</code> · order_state v1 · <code>../rules/order_state.rule</code></summary>
 
-<!-- rulec 0.21.2 が order_state.rule (sha256:5b6ae1fbd5cf) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.22.0 が order_state.rule (sha256:5b6ae1fbd5cf) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
 # 規則 order_state v1
 
 Where an online order goes on a payment, a shipment, a delivery or a request to cancel it, and how much is refunded. The caller keeps the state; the rule decides one event at a time. Written for the example
@@ -281,7 +281,7 @@ stateDiagram-v2
 <details>
 <summary><code>urgency</code> · urgency v1 · <code>../rules/urgency.rule</code></summary>
 
-<!-- rulec 0.21.2 が urgency.rule (sha256:5ff6efc93a9b) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.22.0 が urgency.rule (sha256:5ff6efc93a9b) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
 # 規則 urgency v1
 
 Whether an order goes out in a hurry, and by which carrier: a member's always does, and anyone else's from 30,000 yen. Written for the example

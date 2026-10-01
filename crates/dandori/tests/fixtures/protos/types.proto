@@ -1,0 +1,113 @@
+// A description with every kind of field a flow's types are made from, for tests/fixtures/
+// proto_types.flow and tests/protos.rs: the scalars, the enums (one whose zero value says nothing
+// was set, one whose zero value is a value), messages and lists and maps, what says whether a field
+// is set, Google's well-known types, and what Protovalidate holds a number to. It is only read, so
+// `buf/validate/validate.proto` need not be at hand.
+syntax = "proto3";
+
+package types.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+service TypesService {
+  rpc Get(GetRequest) returns (Everything);
+  rpc Put(Everything) returns (google.protobuf.Empty);
+  rpc PutLine(Line) returns (Line);
+  rpc Open(Ticket) returns (Ticket);
+  rpc PutBox(Box) returns (Box);
+}
+
+message GetRequest {
+  string id = 1;
+}
+
+// the zero value says nothing was set: it is not a value of the enum a flow has
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_OPEN = 1;
+  STATUS_CLOSED = 2;
+}
+
+// the zero value is a value, and stays
+enum Mode {
+  ACTIVE = 0;
+  PAUSED = 1;
+}
+
+// the numbers that have a range, each written the way it is
+message Line {
+  string sku = 1;
+  // both ends in one option
+  int32 quantity = 2 [(buf.validate.field).int32 = {gte: 1, lte: 99}];
+  // one end in each option
+  int32 discount = 3 [(buf.validate.field).int32.gte = 0, (buf.validate.field).int32.lte = 50];
+  // gt is one above, and a field that is ignored at its zero value lets 0 through
+  int32 offset = 4 [(buf.validate.field).int32.gt = 0, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  // a low end above the high end is what lies outside them, which is not one range
+  int32 outside = 5 [(buf.validate.field).int32 = {gt: 10, lt: 5}];
+  int32 free = 6;
+  repeated int32 marks = 7 [(buf.validate.field).repeated.items.int32 = {gte: 1, lte: 5}];
+  int32 fixed = 8 [(buf.validate.field).int32.const = 7];
+  // a 64-bit integer has a range too, which only what is sent as a number is held to
+  int64 total = 9 [(buf.validate.field).int64.gte = 0];
+}
+
+message Box {
+  int32 count = 1 [(buf.validate.field).int32 = {gte: 1, lte: 10}];
+}
+
+message Ticket {
+  string id = 1;
+  Status status = 2;
+}
+
+message Everything {
+  string name = 1;
+  bytes blob = 2;
+  bool flag = 3;
+  int32 count = 4;
+  uint32 small = 5;
+  int64 big = 6;
+  uint64 bigger = 7;
+  float ratio = 8;
+  double weight = 9;
+  Status status = 10;
+  Mode mode = 11;
+  // a message says whether it is set
+  Line line = 12;
+  // unless it must be
+  Line required_line = 13 [(buf.validate.field).required = true];
+  repeated Line lines = 14;
+  map<string, string> tags = 15;
+  map<string, Line> by_name = 16;
+  optional string note = 17;
+  optional int32 amount = 18 [(buf.validate.field).int32 = {gte: 1}];
+  optional Status maybe_status = 19;
+  oneof choice {
+    string by_id = 20;
+    int32 by_number = 21;
+  }
+  google.protobuf.Timestamp at = 22;
+  google.protobuf.Duration span = 23;
+  google.protobuf.Struct extra = 24;
+  google.protobuf.Value value = 25;
+  google.protobuf.ListValue values = 26;
+  google.protobuf.Any any_thing = 27;
+  google.protobuf.Empty nothing = 28;
+  google.protobuf.Int32Value wrapped = 29;
+  google.protobuf.Int64Value wrapped_big = 30;
+  google.protobuf.DoubleValue wrapped_double = 31;
+  google.protobuf.StringValue wrapped_text = 32;
+  repeated google.protobuf.Timestamp times = 33;
+  optional string required_note = 34 [(buf.validate.field).required = true];
+  message Nested {
+    string tag = 1;
+  }
+  Nested nested = 35;
+}

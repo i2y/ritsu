@@ -1,0 +1,21 @@
+// A file that sits where its package says, in a buf module whose root is the directory above
+// shop/: it names what it imports from that root. For tests/fixtures/proto_types.flow.
+syntax = "proto3";
+
+package shop.v1;
+
+import "common/v1/money.proto";
+
+service OrderService {
+  rpc Place(PlaceRequest) returns (Order);
+}
+
+message PlaceRequest {
+  string customer = 1;
+}
+
+message Order {
+  string id = 1;
+  common.v1.Money total = 2;
+  common.v1.Currency currency = 3;
+}

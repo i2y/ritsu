@@ -5,8 +5,9 @@ reserves the lines of an order, answers a customer's inquiry: it calls APIs and 
 retries, and drives things like a Stripe PaymentIntent from state to state.
 
 - **Checked before it runs.** Types, every arm of every match, every state a payment or an order
-  can be left in when the workflow ends, retries that could repeat a change on the other side,
-  and how long a run's history can grow on the platform it is built for.
+  can be left in when the workflow ends, retries that could repeat a change on the other side, the
+  service of a `.proto` the workflow implements, and how long a run's history can grow on the
+  platform it is built for.
 - **Built for five platforms.** Temporal (TypeScript or Python), AWS Step Functions (ASL with
   JSONata), AWS Lambda durable functions, Argo Workflows and pydantic-graph. What each of them
   runs is played against one reference interpreter, on every scenario the tests generate.
@@ -51,7 +52,7 @@ rulec state machine. The workflow says which events happen on their own
 (`external authenticate, settle, expire`), and the checker follows them too: waiting until
 check-out, the authorization can expire, and then the capture is refused. Every diagnostic comes
 with a run that gets there; [Diagnostics](https://i2y.github.io/dandori/reference/codes/) lists
-all 29 codes.
+all 30 codes.
 
 ## A workflow
 
@@ -78,8 +79,13 @@ flow
 A `.flow` has no comparison or arithmetic. It branches only by matching an enum, a bool, or a
 value that may be absent, which a rule or a task answered. A task says how it is called,
 the errors it comes back with, how it is retried, whether it takes an idempotency `key`, and what
-it does to a case (`starts`, `sends`, `observes`). Every loop has a bound, so a run's history has
-one too. [Write a workflow](https://i2y.github.io/dandori/tour/) reads the whole example.
+it does to a case (`starts`, `sends`, `observes`). What a task takes and answers is written as
+records and enums, or taken from the description of the API it calls: a message of a `.proto` is a
+type as it is (`warehouse.ReserveResponse`), and the task is held to the same description. The
+workflow's own entry can be a service of a `.proto`, from which clients in other languages are made
+(`workflow fulfillment v1 implements shop.FulfillmentService`); the checker holds the workflow to
+it. Every loop has a bound, so a run's history has one too.
+[Write a workflow](https://i2y.github.io/dandori/tour/) reads the whole example.
 
 ## Install
 
@@ -92,9 +98,12 @@ $ cargo install --path .
 dandori builds with a recent stable Rust, and its one dependency is serde_json.
 
 rulec is needed only for a workflow that uses rules (`use rule`): dandori reads them through rulec,
-found through `DANDORI_RULEC`, else on the PATH, and `rulec gen` writes the code of each rule. Install
-it with `brew install i2y/tap/rulec`, or take a binary from its
-[releases](https://github.com/i2y/rulec/releases); dandori is tested with rulec 0.20.0 and 0.21.1.
+found through `DANDORI_RULEC`, else on the PATH, and `rulec gen` writes the code of each rule, and a Connect
+service for it that a workflow can call instead. Install it with `brew install i2y/tap/rulec`, or take a
+binary from its
+[releases](https://github.com/i2y/rulec/releases); dandori is tested with rulec 0.22.0. A rule whose enum
+comes from a `.proto` is called at its service only with rulec 0.22.0 or later, the first whose `rulec api`
+says what the service calls the enum's values.
 A workflow without rules is checked and built without rulec, but its branches can only match what
 its tasks answer, and it has no cases, since a case follows a rule's state machine.
 
@@ -126,7 +135,7 @@ it calls come with it, as `rulec doc` renders them for whoever approves them.
 |---|---|
 | `temporal` | the workflow, its activities, a worker and a client, in TypeScript |
 | `temporal-python` | the same in Python, named alike, so a worker in one language can serve the other |
-| `asl` | the state machine, in ASL with JSONata, and a Lambda handler for every rule it calls |
+| `asl` | the state machine, in ASL with JSONata, and a Lambda handler for every rule it calls by Lambda |
 | `durable` | a Lambda durable function in TypeScript |
 | `argo` | a WorkflowTemplate, and the caller image that makes its calls |
 | `pydantic-graph` | a graph that runs in your own Python process |
@@ -137,11 +146,12 @@ it calls come with it, as `rulec doc` renders them for whoever approves them.
 ## Examples
 
 [examples/](examples/) has five, each written for Temporal, for AWS and for pydantic-graph: a hotel
-booking held to Stripe's OpenAPI document, an order in a warehouse's system, the fulfillment of an
-order with a child flow, an inquiry sorted by Jev and read and answered by agents, and an
-application scored by Jev and, when a rule says so, approved by a person. Every version has a
-Japanese twin beside it (`hotel.ja.flow`), with Japanese names everywhere but where an API
-description fixes them.
+booking held to Stripe's OpenAPI document; an order in a warehouse's system, whose AWS version
+calls a rule at the rule's own Connect service; the fulfillment of an order, with a child flow, which
+implements a service of a `.proto` and takes the types of the warehouse's answers from the
+warehouse's `.proto`; an inquiry sorted by Jev and read and answered by agents; and an application
+scored by Jev and, when a rule says so, approved by a person. Every version has a Japanese twin
+beside it (`hotel.ja.flow`), with Japanese names everywhere but where an API description fixes them.
 [Examples](https://i2y.github.io/dandori/examples/) says how the versions differ.
 
 ## How it is checked
@@ -161,9 +171,11 @@ names outside ASCII come through all five platforms as identifiers, keys and URL
 
 ## Status
 
-Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, protobuf's binary
-encoding and Connect's streams, cases the workflow holds itself, a rule's preconditions checked at
-the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
+Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, types made from an
+OpenAPI document or a Smithy model (a `.proto` makes them), protobuf's binary encoding and Connect's
+streams, the clients of a service a workflow implements written for other languages by a plugin of
+protoc, cases the workflow holds itself, a rule that walks a list of elements, a rule's preconditions
+checked at the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
 Cloud (the tests run on the Temporal CLI's dev server), the caller image run against real Lambda,
 HTTP and AWS endpoints from Argo, and agents run against OpenAI and Anthropic themselves. The
 design, the decisions and what is left are in [DESIGN.md](DESIGN.md), in Japanese; its principles

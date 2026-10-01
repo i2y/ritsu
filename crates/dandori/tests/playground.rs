@@ -184,16 +184,27 @@ fn every_example_is_a_preset() {
     }
 }
 
+/// Whether what rulec printed in a presets.json says what a rule's service calls the values of its
+/// enums (`connect.enums` in `rulec api`), which rulec 0.22.0 does and 0.21.2 and before do not.
+fn names_enums(presets: &str) -> bool {
+    serde_json::from_str::<Value>(presets).ok().is_some_and(|v| v["rulec"].as_object().is_some_and(|r| r.values().any(|o| o["api"]["connect"]["enums"].is_array())))
+}
+
 #[test]
 fn presets_are_what_the_examples_read() {
     need_rulec!();
     let now = record();
     let file = site().join("presets.json");
+    let was = std::fs::read_to_string(&file).unwrap_or_default();
+    // the presets are recorded with the rulec the site is built with; one that says less is not held to them, nor writes them
+    if was != now && names_enums(&was) && !names_enums(&now) {
+        eprintln!("SKIP: website/docs/playground/presets.json was recorded with a rulec whose `rulec api` says what a rule's service calls the values of its enums (`connect.enums`), and this one does not; it is held to the presets, and records them anew, only with such a rulec");
+        return;
+    }
     if std::env::var("DANDORI_BLESS").is_ok() {
         std::fs::write(&file, &now).unwrap();
         return;
     }
-    let was = std::fs::read_to_string(&file).unwrap_or_default();
     assert!(was == now, "website/docs/playground/presets.json is not what the examples read now; record it anew with DANDORI_BLESS=1 cargo test --test playground");
     let v: Value = serde_json::from_str(&now).unwrap();
     for k in v["files"].as_object().unwrap().keys().chain(v["rulec"].as_object().unwrap().keys()) {
@@ -231,6 +242,11 @@ fn written(dir: &Path) -> Vec<(String, String)> {
 #[test]
 fn the_bundle_answers_as_the_command_does() {
     need_rulec!();
+    // presets.json is being recorded anew by the test beside this one, and this one may read it before
+    if std::env::var("DANDORI_BLESS").is_ok() {
+        eprintln!("SKIP: presets.json is being recorded anew; run this test again without DANDORI_BLESS");
+        return;
+    }
     let scratch = std::env::temp_dir().join(format!("dandori-playground-{}", std::process::id()));
     let jobs: Vec<(&str, PathBuf)> = presets().into_iter().flat_map(|(tag, list)| list.into_iter().map(move |f| (tag, f))).collect();
     let failures: Vec<String> = std::thread::scope(|s| {

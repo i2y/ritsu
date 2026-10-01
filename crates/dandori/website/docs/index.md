@@ -22,7 +22,8 @@ rules, waits, retries, and drives things like a Stripe PaymentIntent from state 
 <p class="dd-hero__lede">
 <strong>Checked before it runs.</strong> Types, every arm of every match, every state a payment or
 an order can be left in when the workflow ends, retries that could repeat a change on the other
-side, and how long a run's history can grow on the platform it is built for.
+side, the service of a `.proto` the workflow implements, and how long a run's history can grow on
+the platform it is built for.
 </p>
 
 <p class="dd-hero__lede">
@@ -222,8 +223,10 @@ way its run goes. [The hotel booking, drawn](doc/hotel.html) · [Draw a workflow
 
 ## Status
 
-Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, protobuf's binary
-encoding and Connect's streams, cases the workflow holds itself, a rule's preconditions checked at
+Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, types made from an
+OpenAPI document or a Smithy model (a `.proto` makes them), protobuf's binary encoding and Connect's
+streams, the clients of a service a workflow implements written for other languages by a plugin of
+protoc, cases the workflow holds itself, a rule's preconditions checked at
 the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
 Cloud, the caller image run against real Lambda, HTTP and AWS endpoints from Argo, and agents run
 against OpenAI and Anthropic themselves. The design, the decisions and what is left are in

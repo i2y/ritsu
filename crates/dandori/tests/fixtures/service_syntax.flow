@@ -1,0 +1,7 @@
+workflow fulfillment v1 implements shop
+description "E001: `implements` names the service after the name `use proto` gives the .proto"
+
+use proto shop from "services/shop.proto"
+
+flow
+  pass

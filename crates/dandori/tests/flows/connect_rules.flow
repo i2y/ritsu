@@ -1,0 +1,72 @@
+workflow 規則のサービス v1
+description "規則を Connect のサービスとして呼ぶ：呼ぶ規則は日本語の三つ（出荷の急ぎ・宿泊の与信額・審査の方針）で、どれも use rule の下の connect で呼ぶ。数は文字列で、列挙は .proto の名前で送る。答えは、protobuf の JSON が省く項目（false と 0）を埋め、数を文字列から、列挙を .proto の名前から読み直して、次の呼び出しに渡す。ローカルアクティビティ（local）で呼ぶ規則、並列のイテレーションの中の呼び出し、エラーを処理する呼び出しと処理しない呼び出しがある"
+
+use rule 急ぎ from "../../examples/order/rules/出荷の急ぎ.rule"
+  connect "https://rules.example.com"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+  local
+
+use rule 与信 from "../../examples/hotel/rules/宿泊の与信額.rule"
+  connect "https://rules.example.com"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+
+use rule 方針 from "../../examples/review/rules/審査の方針.rule"
+  connect "https://rules.example.com/"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+
+record 注文
+  id   : string
+  会員 : bool
+  金額 : money[円, incl_tax]  range >=0 <=1000000
+
+record 宿泊
+  id   : string
+  客室 : 与信.客室
+  泊数 : int  range >=1 <=30
+
+record 見立て
+  判断   : 方針.判断
+  確信度 : rate[step 1%]  range >=0 <=100
+
+inputs
+  注文   : list[注文]
+  宿泊   : list[宿泊]
+  見立て : 見立て
+
+outputs
+  決定 : 方針.決定
+  与信 : list[money[円, incl_tax]]
+
+task 便を知らせる(注文ID: string, 便: 急ぎ.便, 急ぎ: bool)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:notify"
+  idempotent
+
+task 与信額を記す(宿泊ID: string, 額: money[円, incl_tax], 扱い: 与信.扱い)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:record-hold"
+  idempotent
+
+task 失敗を記す(理由: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:audit-log"
+  idempotent
+
+flow
+  for 一件 in 注文 at most 2
+    let 判定 = 急ぎ(会員: 一件.会員, 金額: 一件.金額)
+      on failure =>
+        失敗を記す(理由: "注文 {一件.id} の急ぎを決められませんでした")
+        fail 急ぎが決まらない "注文 {一件.id} の急ぎを決められませんでした"
+    match 判定.便
+      通常便 => 便を知らせる(注文ID: 一件.id, 便: 判定.便, 急ぎ: 判定.急ぎ)
+      翌日便 => 便を知らせる(注文ID: 一件.id, 便: 判定.便, 急ぎ: 判定.急ぎ)
+  let 与信の額 = for 一泊 in 宿泊 at most 2 in parallel, 2 at a time
+    let 見積 = 与信(客室: 一泊.客室, 泊数: 一泊.泊数)
+    与信額を記す(宿泊ID: 一泊.id, 額: 見積.与信額, 扱い: 見積.扱い)
+    yield 見積.与信額
+  let 決まり = 方針(判断: 見立て.判断, 確信度: 見立て.確信度)
+    on failure =>
+      失敗を記す(理由: "審査の方針を決められませんでした")
+      fail 方針が決まらない "審査の方針を決められませんでした"
+  succeed 決定 = 決まり.決定, 与信 = 与信の額
+
+on failure
+  失敗を記す(理由: "規則か与信額の記録が失敗しました")

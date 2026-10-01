@@ -21,6 +21,7 @@ nav = [
   { "インストール" = "install.md" },
   { "ワークフローを書く" = "tour.md" },
   { "タスクが呼ぶもの" = "tasks.md" },
+  { "サービスを実装する" = "services.md" },
   { "エージェント" = "agents.md" },
   { Jev = "jev.md" },
   { "何を検査するか" = "checks.md" },

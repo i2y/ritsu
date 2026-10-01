@@ -73,6 +73,7 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
     ));
     errs.extend(crate::check::history_limit(m, Platform::Argo));
     errs.extend(m.refuse_events(Platform::Argo));
+    errs.extend(m.refuse_status(Platform::Argo));
     for t in &m.tasks {
         match t.via(Platform::Argo) {
             // refused above
@@ -209,6 +210,48 @@ fn hoist(expr: &str) -> String {
     }
     out.push_str(&expr[last..]);
     out
+}
+
+/// An expression of the value `x` (read from JSON) with the zero values filled in that protobuf's
+/// JSON leaves out, as `apis::fill` fills them: the same object, a field that is missing or null set
+/// to its zero value (`sprig.set`, which sets it in place), and the messages inside it and the
+/// messages of its lists filled the same way, in place. A value that is not an object is left as it
+/// is, and no key is added for a message or a list that is not there. The sets go in a list that is
+/// thrown away, ahead of `x` itself, so that each field is written once however many there are.
+/// `x` is a name or a path, which the expression reads more than once; inside a list, the item is
+/// `#`, and a list inside it is mapped by a closure of its own, whose `#` is its own item.
+pub fn fill_expr(x: &str, zeros: &Value) -> String {
+    let mut sets: Vec<String> = Vec::new();
+    for (k, z) in zeros["f"].as_object().into_iter().flatten() {
+        let key = q(k);
+        sets.push(format!("sprig.set({x}, {key}, {x}[{key}] ?? {})", expr_literal(z)));
+    }
+    // a message inside fills itself in place, or is left as it is, when it is not one (not there)
+    for (k, sub) in zeros["m"].as_object().into_iter().flatten() {
+        sets.push(fill_expr(&format!("{x}[{}]", q(k)), sub));
+    }
+    for (k, sub) in zeros["l"].as_object().into_iter().flatten() {
+        let key = q(k);
+        let inner = format!("{x}[{key}]");
+        sets.push(format!("(type({inner}) == \"array\" ? map({inner}, {{{}}}) : nil)", fill_expr("#", sub)));
+    }
+    if sets.is_empty() {
+        return x.to_string();
+    }
+    let n = sets.len();
+    sets.push(x.to_string());
+    format!("(type({x}) == \"map\" ? [{}][{n}] : {x})", sets.join(", "))
+}
+
+/// A JSON value as an expression of expr-lang: `""`, `0`, `false`, `[]`, `{}`, `nil`.
+fn expr_literal(v: &Value) -> String {
+    match v {
+        Value::Null => "nil".into(),
+        Value::String(s) => q(s),
+        Value::Array(a) => format!("[{}]", a.iter().map(expr_literal).collect::<Vec<_>>().join(", ")),
+        Value::Object(o) => format!("{{{}}}", o.iter().map(|(k, x)| format!("{}: {}", q(k), expr_literal(x))).collect::<Vec<_>>().join(", ")),
+        other => other.to_string(),
+    }
 }
 
 /// A name Argo takes for a template, a step or a parameter: ASCII letters, digits and `-`.
@@ -407,7 +450,8 @@ impl<'a> Gen<'a> {
                     let frg = m.field_range(*r, f);
                     match ft {
                         Ty::Opt(_) => parts.push(self.check(&fx, ft, frg)),
-                        Ty::Json => parts.push(format!("{} in {x}", q(f))),
+                        // a `json` field that is not there reads as nil, which is a value of it
+                        Ty::Json => {}
                         _ => parts.push(format!("({} in {x} && {})", q(f), self.check(&fx, ft, frg))),
                     }
                 }
@@ -448,6 +492,12 @@ impl<'a> Gen<'a> {
             "outputs": { "parameters": ps },
         }));
         n
+    }
+
+    /// What `dd_output` holds when the flow ends without outputs: null, but `{}` for a workflow that
+    /// implements a service, whose response protobuf's JSON reads from an object.
+    fn no_output(&self) -> String {
+        if self.m.service.is_some() { "\"{}\"".into() } else { "\"null\"".into() }
     }
 
     fn noop() -> Value {
@@ -528,7 +578,7 @@ impl<'a> Gen<'a> {
             }
             TK::Break => Some((self.compute(&format!("s{site}-break"), depth, &[], vec![Gen::set_ctl(depth, "\"break\"".into()), Gen::go("false")]), true)),
             TK::Succeed { fields } => {
-                let out = if fields.is_empty() { "\"null\"".to_string() } else { format!("toJson({{{}}})", fields.iter().map(|(f, e)| format!("{}: {}", q(f), self.ex(e))).collect::<Vec<_>>().join(", ")) };
+                let out = if fields.is_empty() { self.no_output() } else { format!("toJson({{{}}})", fields.iter().map(|(f, e)| format!("{}: {}", q(f), self.ex(e))).collect::<Vec<_>>().join(", ")) };
                 Some((
                     self.compute(&format!("s{site}-succeed"), depth, &[], vec![("output".into(), Some("dd_output".into()), out), Gen::set_ctl(depth, "\"succeed\"".into()), Gen::go("false")]),
                     true,
@@ -951,7 +1001,12 @@ impl<'a> Gen<'a> {
                 "let k = inputs.parameters.status != \"Succeeded\" ? (killed ? \"timeout\" : \"failure\") : (w == {t} ? \"timeout\" : (\"error\" in wv ? (wv.error in {decl} ? wv.error : \"failure\") : \"ok\")); ",
                 t = q(TIMEOUT)
             ));
-            pre.push_str("let a = k == \"ok\" ? wv.ok : nil; ");
+            // the answer that a method of the service the workflow implements sends, read as protobuf reads it
+            let answered = match callee {
+                Callee::Task(t) => m.tasks[*t].answer_zeros.as_ref().map(|z| fill_expr("wv.ok", z)).unwrap_or_else(|| "wv.ok".into()),
+                Callee::Rule(_) => "wv.ok".into(),
+            };
+            pre.push_str(&format!("let a = k == \"ok\" ? {answered} : nil; "));
             format!("w == {} ? \"no answer in time\" : (wv != nil ? (wv.message ?? \"\") : (killed ? \"ran past its timeout\" : (e != nil ? (e.message ?? \"\") : \"\")))", q(TIMEOUT))
         } else {
             pre.push_str(&format!("let k = inputs.parameters.status == \"Succeeded\" ? \"ok\" : (inputs.parameters.code == \"3\" && e != nil && e.error in {decl} ? e.error : (killed ? \"timeout\" : \"failure\")); "));
@@ -1055,7 +1110,12 @@ impl<'a> Gen<'a> {
         // the start: every variable, the inputs from the parameter `input`, checked; an
         // output's expression does not see the workflow's parameters, so the input comes as
         // an argument
-        let input = "sprig.fromJson(inputs.parameters.input)";
+        // a workflow that implements a service reads its input as protobuf reads the request: what
+        // reads it has the zero values filled in that its JSON leaves out
+        let (head, input) = match &m.service {
+            Some(s) => (format!("let dd_raw = sprig.fromJson(inputs.parameters.input); let dd_in = {}; ", fill_expr("dd_raw", &s.input_zeros)), "dd_in".to_string()),
+            None => (String::new(), "sprig.fromJson(inputs.parameters.input)".to_string()),
+        };
         let mut checks = vec![format!("type({input}) == \"map\"")];
         for (n, t) in &m.inputs {
             checks.push(self.check(&format!("{input}[{}]", q(n)), t, m.input_ranges.get(n).copied()));
@@ -1067,13 +1127,14 @@ impl<'a> Gen<'a> {
                 continue;
             }
             // when the input does not pass the checks, the flow does not run and the values go unread
-            let val = if m.inputs.iter().any(|(i, _)| i == v) { format!("type({input}) == \"map\" ? toJson({input}[{}]) : \"null\"", q(v)) } else { "\"null\"".into() };
+            let val = if m.inputs.iter().any(|(i, _)| i == v) { format!("{head}type({input}) == \"map\" ? toJson({input}[{}]) : \"null\"", q(v)) } else { "\"null\"".into() };
             init_out.push((format!("v{}", self.var_ix[v]), Some(self.var_global(v)), val));
         }
-        init_out.push(Gen::set_ctl(0, format!("{ok} ? \"next\" : \"fail\"")));
-        init_out.push(Gen::set_error(0, format!("{ok} ? \"null\" : toJson({{\"Error\": \"Dandori.BadInput\", \"Cause\": \"the execution's input does not have the declared shape\"}})")));
-        init_out.push(("output".into(), Some("dd_output".into()), "\"null\"".into()));
-        init_out.push(Gen::go(&ok));
+        init_out.push(Gen::set_ctl(0, format!("{head}{ok} ? \"next\" : \"fail\"")));
+        init_out.push(Gen::set_error(0, format!("{head}{ok} ? \"null\" : toJson({{\"Error\": \"Dandori.BadInput\", \"Cause\": \"the execution's input does not have the declared shape\"}})")));
+        init_out.push(("output".into(), Some("dd_output".into()), self.no_output()));
+        let (_, _, go) = Gen::go(&ok);
+        init_out.push(("go".into(), None, format!("{head}{go}")));
         let init = self.compute("dd-init", 0, &["input"], init_out);
         let flow = self.block(&m.flow, 0, "flow");
         let top = |args: Vec<Value>| -> Vec<Value> {

@@ -35,8 +35,9 @@ the workflow and the states of its cases.
 - **P5. What cannot be known before the run is checked where it comes in.** What the other side
   answers is checked when it arrives, and a value that does not fit fails the run there.
 - **P6. A feature whose meaning would differ between the platforms is built only where it can mean
-  the same,** and refused elsewhere with E050: cleaning up after a cancellation (`on cancel`) and
-  events sent to a workflow by name (`event`) are Temporal's for now. A clause that only changes how or
+  the same,** and refused elsewhere with E050: cleaning up after a cancellation (`on cancel`), events
+  sent to a workflow by name (`event`), and a method of a service that asks a run where it is
+  (`status`) are Temporal's for now. A clause that only changes how or
   at what cost something runs (`queue`, `image`, a rule's `local`) does nothing where it does not
   apply.
 

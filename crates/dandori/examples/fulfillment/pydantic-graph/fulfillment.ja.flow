@@ -1,11 +1,10 @@
-workflow 引当と発送 v1
+workflow 引当と発送 v1 implements 店.FulfillmentService
 description "注文の明細ごとに在庫を引き当て、配送を手配し、倉庫の梱包を待ってから、お客さまに知らせる。明細は並べて引き当て、足りない明細があれば、引き当てたぶんを戻す。pydantic-graph 向けの版：グラフは注文を受け取る Python のプロセスの中で動く。倉庫の呼び出しは dandori が Connect で生成する関数で、標準ライブラリで送る。配送の手配、梱包の依頼、お知らせ、記録は自分で書く関数で、梱包の担当者の応答は、同じプロセスの中でコールバックに届く。梱包を待っているあいだはプロセスがふさがり、プロセスが失われると実行も失われる"
 
 use rule 急ぎ from "../../order/rules/出荷の急ぎ.rule"
+use proto 店 from "../specs/fulfillment.ja.proto"
 use proto warehouse from "../specs/warehouse.proto"
   url "https://warehouse.example.com"
-
-enum 在庫 = secured | short
 
 record 明細
   sku : string
@@ -23,17 +22,12 @@ record 注文
   贈り物 : 贈り物?
   付帯   : json
 
-record 引当
-  sku   : string
-  stock : 在庫
-  id    : string?
-
 record 配送
   追跡番号 : string
 
 record 梱包の依頼
   注文ID : string
-  引当   : list[引当]
+  引当   : list[warehouse.ReserveResponse]
 
 record 梱包
   箱の数 : int
@@ -42,11 +36,11 @@ inputs
   注文 : 注文
 
 outputs
-  引当     : list[引当]
+  引当     : list[warehouse.ReserveResponse]
   追跡番号 : string
 
 # 倉庫は、どの引当にも答える。在庫を押さえられたら secured とその ID、足りなければ short。
-task 在庫を引き当てる(sku: string, quantity: int) -> 引当
+task 在庫を引き当てる(sku: string, quantity: int) -> warehouse.ReserveResponse
   connect warehouse "StockService/Reserve"
   errors 混雑 = resource_exhausted
   key
@@ -63,7 +57,7 @@ task 配送を手配する(注文ID: string, 便: 急ぎ.便, 宛名: string?, �
 
 # 梱包の担当者のアプリは、自分で書く関数から依頼とコールバックの ID を受け取り、箱詰めが
 # 済むとコールバックに応答する。
-task 梱包を待つ(注文ID: string, 引当: list[引当]) -> 梱包
+task 梱包を待つ(注文ID: string, 引当: list[warehouse.ReserveResponse]) -> 梱包
   callback
   timeout 2 days
 

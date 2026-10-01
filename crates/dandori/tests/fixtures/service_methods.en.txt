@@ -1,0 +1,16 @@
+error[E017]: tests/fixtures/service_methods.flow:1:32: `services/methods.proto` uses dandori's options without `import "dandori/v1/options.proto";`, which protoc and buf need
+     1 | workflow methods v1 implements shop.MethodsService
+error[E017]: tests/fixtures/service_methods.flow:1:32: `shop.v1.MethodsService` does not say which workflow implements it; give it `option (dandori.v1.workflow) = {name: "methods", version: 1};`
+     1 | workflow methods v1 implements shop.MethodsService
+error[E017]: tests/fixtures/service_methods.flow:1:32: `MethodsService/Watch` streams; a workflow takes one message and answers one
+     1 | workflow methods v1 implements shop.MethodsService
+error[E017]: tests/fixtures/service_methods.flow:1:32: `MethodsService/Cancel` does not say how it reaches the workflow; mark it with one of `(dandori.v1.start)`, `(dandori.v1.event)`, `(dandori.v1.answer)` and `(dandori.v1.status)`
+     1 | workflow methods v1 implements shop.MethodsService
+error[E017]: tests/fixtures/service_methods.flow:1:32: `MethodsService/Both` has both `(dandori.v1.event)` and `(dandori.v1.answer)`; a method has one of them
+     1 | workflow methods v1 implements shop.MethodsService
+error[E017]: tests/fixtures/service_methods.flow:1:32: `shop.v1.MethodsService` starts a run by both `Fulfill` and `Begin`; one method does
+     1 | workflow methods v1 implements shop.MethodsService
+error[E017]: tests/fixtures/service_methods.flow:1:32: `Delivered` and `Arrived` both send the event of `delivered`; one method does
+     1 | workflow methods v1 implements shop.MethodsService
+error[E017]: tests/fixtures/service_methods.flow:1:32: `shop.v1.MethodsService` asks where a run is by both `Watch` and `GetStatus`; one method does
+     1 | workflow methods v1 implements shop.MethodsService

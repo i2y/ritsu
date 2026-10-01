@@ -30,13 +30,13 @@ outputs
   outcome : Outcome
 ```
 
-最初の行で、ワークフローの名前とバージョンを決めます（`workflow hotel_stay v1`）。Temporal では、バージョンがワークフローの型とタスクキューの名前（`hotel_stay_v1`）に入ります。そのため新しいバージョンは古いバージョンと並んで動き、走っている実行のコードが入れ替わることはありません。
+最初の行で、ワークフローの名前とバージョンを決めます（`workflow hotel_stay v1`）。Temporal では、バージョンがワークフローの型とタスクキューの名前（`hotel_stay_v1`）に入ります。そのため新しいバージョンは古いバージョンと並んで動き、走っている実行のコードが入れ替わることはありません。ワークフローの入口を `.proto` のサービスとして書いたときは、この行に続けて `implements <API>.<サービス>` と書きます（[サービスを実装する](services.md)）。
 
-`use rule` は [rulec](https://github.com/i2y/rulec) で書いた規則を読みます。`hold` は与信の額と、フロントが先に見るかどうかを決める規則です。もう一つの `payment_intent` には、Stripe の PaymentIntent を rulec のステートマシンとして書き写してあります。規則の列挙とレコードは、ここでそのまま型として使えます（`hold.room`）。
+`use rule` は [rulec](https://github.com/i2y/rulec) で書いた規則を読みます。`hold` は与信の額と、フロントが先に見るかどうかを決める規則です。もう一つの `payment_intent` には、Stripe の PaymentIntent を rulec のステートマシンとして書き写してあります。規則の列挙とレコードは、ここでそのまま型として使えます（`hold.room`）。規則は、rulec が書く Connect のサービスとして呼ぶこともできます（[規則をサービスとして呼ぶ](tasks.md#規則をサービスとして呼ぶ)）。
 
 `use openapi` は API の記述を読みます。その API を呼ぶタスクは、記述と合っているかを検査されます（[API の記述](tasks.md#api-の記述)）。`inputs` と `outputs` は、一回の実行が受け取るものと返すものです。
 
-型は `int`、rulec と同じ単位の付いた数（`money[JPY, incl_tax]` など）、`string`、`bool`、`timestamp`、列挙、レコード、`list[T]`、オプショナルな値を表す `T?`、中を見ずにそのまま渡す値の `json` です。数には、取りうる[範囲](#範囲)も書けます。
+型は `int`、rulec と同じ単位の付いた数（`money[JPY, incl_tax]` など）、`string`、`bool`、`timestamp`、列挙、レコード、`list[T]`、オプショナルな値を表す `T?`、中を見ずにそのまま渡す値の `json` です。`use proto` で読んだ `.proto` のメッセージと列挙も、`use` に付けた名前のあとに書けば型になります（`warehouse.ReserveResponse`。[.proto から型を作る](tasks.md#proto-から型を作る)）。数には、取りうる[範囲](#範囲)も書けます。レコードは、直接でもほかのレコードを通してでも、自分自身を含められません（E003）。木のように深さが決まらないものは、`json` で運びます。
 
 ## タスク
 

@@ -72,7 +72,7 @@ flowchart TD
 <details>
 <summary><code>routing</code> · inquiry_routing v1 · <code>../rules/inquiry_routing.rule</code></summary>
 
-<!-- rulec 0.21.2 が inquiry_routing.rule (sha256:77cf5ddb6256) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.22.0 が inquiry_routing.rule (sha256:77cf5ddb6256) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
 # 規則 inquiry_routing v1
 
 Which desk takes an inquiry, and how soon it is first answered, from its kind and whether the customer is a member. Written for the example

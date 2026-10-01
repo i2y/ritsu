@@ -57,6 +57,10 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
     let task = match callee {
         Callee::Rule(r) => {
             let ru = &m.rules[*r];
+            // a rule called at its Connect service is an HTTP request, which every platform sends alike
+            if let Some(c) = &ru.connect {
+                return json!({ "http": "POST", "url": c.url, "headers": { "Connect-Protocol-Version": "1" }, "body": rule_request(c, args) });
+            }
             return match view {
                 View::Temporal => json!({ "activity": rule_activity(&ru.name), "args": args }),
                 View::Durable => json!({ "invoke": ru.lambda.clone().unwrap_or_default(), "payload": args }),
@@ -752,13 +756,13 @@ pub fn jsonata_path(var: &str, fields: &[String]) -> String {
     s
 }
 
-/// The value of an expression, in JSONata. A field that may be absent reads as null, so
-/// that no expression the state machine evaluates comes out undefined.
+/// The value of an expression, in JSONata. A field that may be absent (a `T?`, a `json`) reads as
+/// null, so that no expression the state machine evaluates comes out undefined.
 pub fn jsonata_expr(e: &TExpr) -> String {
     match e {
         TExpr::Var { name, fields, ty } => {
             let p = jsonata_path(name, fields);
-            if !fields.is_empty() && matches!(ty, Ty::Opt(_)) {
+            if !fields.is_empty() && matches!(ty, Ty::Opt(_) | Ty::Json) {
                 format!("($exists({p}) ? {p} : null)")
             } else {
                 p
@@ -845,6 +849,186 @@ $merge([$o, $m, $l])) : $v }}; $dd_fill({x}, {}))",
     )
 }
 
+// ---------------------------------------------------------------------------
+// A rule called at its Connect service (DESIGN 1.13)
+
+/// The greatest whole number every platform holds as itself: 2^53 − 1, a JavaScript number's.
+pub const SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+
+/// A whole number written out in decimal, `-12`, and nothing else (`+5`, `1.0` and `1e3` are not):
+/// at most 16 digits, and not above 2^53 − 1, so that a number is read as the same number on every
+/// platform, in JavaScript and in JSONata, whose numbers are doubles, as in Rust and Python.
+fn decimal(s: &str) -> Option<i64> {
+    let digits = s.strip_prefix('-').unwrap_or(s);
+    if digits.is_empty() || digits.len() > 16 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    s.parse().ok().filter(|n: &i64| n.abs() <= SAFE_INTEGER)
+}
+
+/// One argument as protobuf's JSON writes the field it goes to: a number as its decimal string (the
+/// 64-bit integer it is), an enum's value by the `.proto`'s name for it. What is not of the field's
+/// kind, or an enum's value the table does not have, is sent as it is, for the service to refuse.
+fn wire_arg(f: &crate::rulec::WireField, v: &Value) -> Value {
+    use crate::rulec::WireKind;
+    match (&f.kind, v) {
+        (WireKind::Int, v) if v.is_i64() || v.is_u64() => json!(v.to_string()),
+        (WireKind::Enum { values, .. }, Value::String(s)) => json!(values.iter().find(|(rule, _)| rule == s).map(|(_, proto)| proto.as_str()).unwrap_or(s)),
+        _ => v.clone(),
+    }
+}
+
+/// The body of the POST that calls a rule's service: each argument under its JSON key, as `wire_arg`
+/// writes it. An argument that is null is not sent; every other one is, at its zero value too (false,
+/// 0, an enum's value 0), since the service tells a field left out from one set to zero and refuses
+/// an input left out. The arguments are by the rule's names for them.
+pub fn rule_request(c: &RuleConnect, args: &Map<String, Value>) -> Value {
+    let mut body = Map::new();
+    for f in &c.request {
+        if let Some(v) = args.get(&f.name).filter(|v| !v.is_null()) {
+            body.insert(f.json.clone(), wire_arg(f, v));
+        }
+    }
+    Value::Object(body)
+}
+
+/// What a rule's service answers, read as the rule's own would be: the zero values its JSON leaves
+/// out put back (protobuf reads them so; an enum left out is its value 0, which is the rule's value
+/// when a contract puts one at 0), then each field by the rule's name for it, a number from
+/// its decimal string, an enum's value by the rule's name for it. What is not one of those (a number
+/// that is not a decimal, a name the table does not have, a body that is not an object) is left as
+/// it is, for the check of the answer to refuse: nothing here raises, so that every platform ends
+/// such an answer the same way. A field the answer does not have is null.
+pub fn rule_read(c: &RuleConnect, body: &Value) -> Value {
+    use crate::rulec::WireKind;
+    if !body.is_object() {
+        return body.clone();
+    }
+    let filled = crate::apis::fill(body, &c.zeros);
+    let mut out = Map::new();
+    for f in &c.response {
+        let read = match (&f.kind, filled.get(&f.json)) {
+            (_, None) => Value::Null,
+            (WireKind::Int, Some(Value::String(s))) => decimal(s).map(|n| json!(n)).unwrap_or_else(|| Value::String(s.clone())),
+            (WireKind::Enum { values, .. }, Some(Value::String(s))) => values.iter().find(|(_, proto)| proto == s).map(|(rule, _)| json!(rule)).unwrap_or_else(|| Value::String(s.clone())),
+            (_, Some(v)) => v.clone(),
+        };
+        out.insert(f.name.clone(), read);
+    }
+    Value::Object(out)
+}
+
+/// A rule's answer, the record of its outputs, as its service writes it: the inverse of `rule_read`.
+/// A field at its zero value (false, 0, an empty string, and an enum's value 0 when that is a value
+/// of the rule's, as a contract's can be) is left out, as protobuf's JSON leaves it out, and so is a
+/// null; a number is its decimal string and an enum's value the `.proto`'s name for it. What a
+/// scenario answers a call of the rule with.
+pub fn rule_wire(c: &RuleConnect, record: &Value) -> Value {
+    use crate::rulec::WireKind;
+    let Some(o) = record.as_object() else { return record.clone() };
+    let mut body = Map::new();
+    for f in &c.response {
+        let Some(v) = o.get(&f.name).filter(|v| !v.is_null()) else { continue };
+        let zero = match (&f.kind, v) {
+            (WireKind::Bool, Value::Bool(false)) => true,
+            (WireKind::Int, v) => v.as_i64() == Some(0),
+            (WireKind::Str, Value::String(s)) => s.is_empty(),
+            (WireKind::Enum { .. }, Value::String(s)) => f.kind.zero_value() == Some(s.as_str()),
+            _ => false,
+        };
+        if !zero {
+            body.insert(f.json.clone(), wire_arg(f, v));
+        }
+    }
+    Value::Object(body)
+}
+
+/// The table of an enum's values: by the rule's name for each, to the `.proto`'s (what a request
+/// sends), or the other way (what a response is read by).
+fn enum_table(values: &[(String, String)], to_rule: bool) -> Value {
+    Value::Object(values.iter().map(|(rule, proto)| if to_rule { (proto.clone(), json!(rule)) } else { (rule.clone(), json!(proto)) }).collect())
+}
+
+/// What the code dandori writes needs to call a rule's service: the URL, the fields of the request
+/// (an enum's table is rule name → `.proto` name) and of the response (`.proto` name → rule name),
+/// and the zero values the response leaves out. The generated code carries it as a table.
+pub fn rule_wire_spec(c: &RuleConnect) -> Value {
+    use crate::rulec::WireKind;
+    let field = |f: &crate::rulec::WireField, to_rule: bool| {
+        let mut o = Map::new();
+        o.insert("name".into(), json!(f.name));
+        o.insert("json".into(), json!(f.json));
+        match &f.kind {
+            WireKind::Bool => o.insert("kind".into(), json!("bool")),
+            WireKind::Int => o.insert("kind".into(), json!("int")),
+            WireKind::Str => o.insert("kind".into(), json!("str")),
+            WireKind::Enum { values, .. } => {
+                o.insert("kind".into(), json!("enum"));
+                o.insert("values".into(), enum_table(values, to_rule))
+            }
+        };
+        Value::Object(o)
+    };
+    json!({
+        "url": c.url,
+        "request": c.request.iter().map(|f| field(f, false)).collect::<Vec<_>>(),
+        "response": c.response.iter().map(|f| field(f, true)).collect::<Vec<_>>(),
+        "zeros": c.zeros,
+    })
+}
+
+/// A JSONata expression for the value of `x` through a table of names, or `x` itself when it is not
+/// a string the table has. The table is asked only for the names it has as its own: a name that
+/// an object has of its own accord (`constructor`, `toString`, `__proto__`) is not one that a
+/// lookup in it may find, and a service can answer anything.
+fn jsonata_enum_by_table(x: &str, table: &Value) -> String {
+    format!("($dd_v := {x}; $dd_t := {table}; $type($dd_v) = \"string\" and $dd_v in $keys($dd_t) ? $lookup($dd_t, $dd_v) : $dd_v)")
+}
+
+/// The body of a rule's request as Step Functions' HTTP Task sends it: the fields by their JSON
+/// keys, each a value known now or a `{% … %}` JSONata expression that writes it as `rule_request`
+/// does (a number through `$string`, an enum's value through the table).
+pub fn jsonata_rule_request(c: &RuleConnect, args: &[(String, TExpr)]) -> Value {
+    use crate::rulec::WireKind;
+    let mut body = Map::new();
+    for f in &c.request {
+        let Some((_, e)) = args.iter().find(|(a, _)| *a == f.name) else { continue };
+        let sent = match literal(e) {
+            Some(Value::Null) => continue,
+            Some(v) => wire_arg(f, &v),
+            None => {
+                let x = jsonata_expr(e);
+                match &f.kind {
+                    WireKind::Int => json!(format!("{{% $string({x}) %}}")),
+                    WireKind::Enum { values, .. } => json!(format!("{{% {} %}}", jsonata_enum_by_table(&x, &enum_table(values, false)))),
+                    _ => json!(format!("{{% {x} %}}")),
+                }
+            }
+        };
+        body.insert(f.json.clone(), sent);
+    }
+    Value::Object(body)
+}
+
+/// A JSONata expression for what `rule_read` makes of the response `x`: the zero values filled in,
+/// then the record of the rule's outputs. A number is read from a decimal string only when it is
+/// one, and an enum's value through the table only when the table has it: JSONata would raise on
+/// a value of another kind, and the answer's check is to refuse it instead.
+pub fn jsonata_rule_read(c: &RuleConnect, x: &str) -> String {
+    use crate::rulec::WireKind;
+    let mut parts = Vec::new();
+    for f in &c.response {
+        let get = format!("$lookup($dd_b, {})", jsonata_string(&f.json));
+        let read = match &f.kind {
+            WireKind::Int => format!("($dd_v := {get}; ($type($dd_v) = \"string\" and $contains($dd_v, /^-?[0-9]{{1,16}}$/) and $abs($number($dd_v)) <= {SAFE_INTEGER}) ? $number($dd_v) : $dd_v)"),
+            WireKind::Enum { values, .. } => jsonata_enum_by_table(&get, &enum_table(values, true)),
+            _ => get,
+        };
+        parts.push(format!("{}: {read}", jsonata_string(&f.name)));
+    }
+    format!("($dd_b := {}; $type($dd_b) = \"object\" ? {{{}}} : $dd_b)", jsonata_fill(x, &c.zeros), parts.join(", "))
+}
+
 /// A JSONata test that `x` is a well-formed value of type `t`, and in `rg` when it is a number
 /// (or its numbers, when it is a `?` or a list).
 pub fn jsonata_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, depth: usize) -> String {
@@ -868,6 +1052,10 @@ pub fn jsonata_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, depth: usize
             let mut parts = vec![format!("$type({x}) = \"object\"")];
             if depth < 4 {
                 for (f, ft) in &m.records[*r].fields {
+                    // a `json` field that is not there reads as null, which is a value of it
+                    if *ft == Ty::Json {
+                        continue;
+                    }
                     parts.push(jsonata_check(m, &format!("{x}.{}", jsonata_field(f)), ft, m.field_range(*r, f), depth + 1));
                 }
             }
@@ -911,7 +1099,8 @@ pub fn value_fits(m: &Model, v: &Value, t: &Ty, rg: Option<Range>) -> bool {
         Ty::Record(r) => match v.as_object() {
             Some(o) => m.records[*r].fields.iter().all(|(f, ft)| match o.get(f) {
                 Some(x) => value_fits(m, x, ft, m.field_range(*r, f)),
-                None => matches!(ft, Ty::Opt(_)),
+                // a field that is not there reads as null: a value of a `T?` and of a `json`
+                None => matches!(ft, Ty::Opt(_) | Ty::Json),
             }),
             None => false,
         },
@@ -939,5 +1128,160 @@ pub fn asl_error(m: &Model, callee: &Callee, e: &HErr) -> Vec<String> {
             }
             Callee::Rule(_) => vec![n.clone()],
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rulec::{WireField, WireKind};
+
+    /// The urgency rule's service: a bool and a number in, a bool and an enum out.
+    fn urgency() -> RuleConnect {
+        let carrier = WireKind::Enum { zero: "CARRIER_UNSPECIFIED".into(), values: vec![("standard".into(), "CARRIER_STANDARD".into()), ("next_day".into(), "CARRIER_NEXTDAY".into())] };
+        let field = |name: &str, json: &str, kind: WireKind| WireField { name: name.into(), json: json.into(), kind, optional: false };
+        RuleConnect {
+            base: "https://rules.example.com".into(),
+            url: "https://rules.example.com/rulec.urgency.v1.UrgencyService/Decide".into(),
+            request: vec![field("会員", "member", WireKind::Bool), field("金額", "amount", WireKind::Int)],
+            response: vec![field("急ぎ", "urgent", WireKind::Bool), field("便", "carrier", carrier)],
+            zeros: json!({ "f": { "urgent": false, "carrier": "CARRIER_UNSPECIFIED" } }),
+        }
+    }
+
+    fn args(v: Value) -> Map<String, Value> {
+        v.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn a_request_is_written_as_protobufs_json_writes_it() {
+        let c = urgency();
+        // a number is its decimal string, the keys are the JSON names, and what is null is not sent
+        assert_eq!(rule_request(&c, &args(json!({ "会員": true, "金額": 5000 }))), json!({ "member": true, "amount": "5000" }));
+        assert_eq!(rule_request(&c, &args(json!({ "会員": false, "金額": -1 }))), json!({ "member": false, "amount": "-1" }));
+        assert_eq!(rule_request(&c, &args(json!({ "会員": null, "金額": 7 }))), json!({ "amount": "7" }));
+        // an enum's value is the `.proto`'s name for it, and one the table has not is sent as it is
+        let mut e = urgency();
+        e.request = e.response.clone();
+        assert_eq!(rule_request(&e, &args(json!({ "急ぎ": true, "便": "next_day" }))), json!({ "urgent": true, "carrier": "CARRIER_NEXTDAY" }));
+        assert_eq!(rule_request(&e, &args(json!({ "便": "drone" }))), json!({ "carrier": "drone" }));
+    }
+
+    #[test]
+    fn a_response_is_read_with_its_zero_values_put_back() {
+        let c = urgency();
+        assert_eq!(rule_read(&c, &json!({ "urgent": true, "carrier": "CARRIER_NEXTDAY" })), json!({ "急ぎ": true, "便": "next_day" }));
+        // what protobuf's JSON leaves out is there: false, and the enum's zero value, which no value of the rule is
+        assert_eq!(rule_read(&c, &json!({ "carrier": "CARRIER_STANDARD" })), json!({ "急ぎ": false, "便": "standard" }));
+        assert_eq!(rule_read(&c, &json!({})), json!({ "急ぎ": false, "便": "CARRIER_UNSPECIFIED" }));
+        // a null is a field left out; a name nothing has stays as it is, and so does a body that is not an object
+        assert_eq!(rule_read(&c, &json!({ "urgent": null, "carrier": "CARRIER_DRONE" })), json!({ "急ぎ": false, "便": "CARRIER_DRONE" }));
+        assert_eq!(rule_read(&c, &json!([])), json!([]));
+        assert_eq!(rule_read(&c, &json!("no")), json!("no"));
+    }
+
+    #[test]
+    fn a_number_is_read_from_a_decimal_and_from_nothing_else() {
+        let mut c = urgency();
+        c.response = vec![WireField { name: "額".into(), json: "amount".into(), kind: WireKind::Int, optional: false }];
+        c.zeros = json!({ "f": { "amount": "0" } });
+        let read = |v: Value| rule_read(&c, &json!({ "amount": v }))["額"].clone();
+        assert_eq!(read(json!("12000")), json!(12000));
+        assert_eq!(read(json!("-3")), json!(-3));
+        assert_eq!(read(json!("007")), json!(7));
+        // a number the service wrote as a number is one; what is not a decimal is left for the check to refuse
+        assert_eq!(read(json!(12000)), json!(12000));
+        // the greatest number every platform holds as itself, and one more, which is left as the text it is
+        assert_eq!(read(json!("9007199254740991")), json!(9_007_199_254_740_991_i64));
+        assert_eq!(read(json!("-9007199254740991")), json!(-9_007_199_254_740_991_i64));
+        assert_eq!(read(json!("0000000000000012")), json!(12));
+        for bad in [json!("9007199254740992"), json!("00000000000000012"), json!("9999999999999999")] {
+            assert_eq!(read(bad.clone()), bad);
+        }
+        for bad in [json!("+5"), json!("1.5"), json!("1e3"), json!(""), json!("-"), json!("12a"), json!(" 5"), json!("99999999999999999999"), json!(true), json!(null)] {
+            let got = read(bad.clone());
+            // a null is a field left out, which reads as the zero it is
+            let want = if bad.is_null() { json!(0) } else { bad.clone() };
+            assert_eq!(got, want, "{bad}");
+        }
+        // left out, the number is zero, as protobuf reads it
+        assert_eq!(rule_read(&c, &json!({}))["額"], json!(0));
+    }
+
+    #[test]
+    fn what_a_service_writes_is_read_back_as_the_answer_it_was() {
+        let c = urgency();
+        // every answer of the rule: both bools, each enum value; the zero values are left out of what the service writes
+        for urgent in [true, false] {
+            for carrier in ["standard", "next_day"] {
+                let answer = json!({ "急ぎ": urgent, "便": carrier });
+                let wire = rule_wire(&c, &answer);
+                assert_eq!(wire.get("urgent").is_some(), urgent, "false is left out: {wire}");
+                assert_eq!(rule_read(&c, &wire), answer, "{wire}");
+            }
+        }
+        // a number is a string, and 0 is left out
+        let mut n = urgency();
+        n.response = vec![WireField { name: "額".into(), json: "amount".into(), kind: WireKind::Int, optional: false }];
+        n.zeros = json!({ "f": { "amount": "0" } });
+        assert_eq!(rule_wire(&n, &json!({ "額": 12000 })), json!({ "amount": "12000" }));
+        assert_eq!(rule_wire(&n, &json!({ "額": 0 })), json!({}));
+        for v in [0, 1, -1, 12000, 1_200_000] {
+            assert_eq!(rule_read(&n, &rule_wire(&n, &json!({ "額": v }))), json!({ "額": v }));
+        }
+    }
+
+    /// A rule whose enum is a contract's that puts a value of its own at 0 and gives its values no
+    /// prefix (`enum Status { ACTIVE = 0; CLOSED = 1; }`): the account fee of tests/fixtures/rules.
+    fn account() -> RuleConnect {
+        let state = WireKind::Enum { zero: "ACTIVE".into(), values: vec![("有効".into(), "ACTIVE".into()), ("解約".into(), "CLOSED".into())] };
+        let field = |name: &str, json: &str, kind: WireKind| WireField { name: name.into(), json: json.into(), kind, optional: false };
+        RuleConnect {
+            base: "https://rules.example.com".into(),
+            url: "https://rules.example.com/rulec.account_fee.v1.AccountFeeService/Decide".into(),
+            request: vec![field("状態", "state", state.clone()), field("残高", "balance", WireKind::Int)],
+            response: vec![field("手数料", "fee", WireKind::Int), field("次の状態", "nextState", state)],
+            zeros: json!({ "f": { "fee": "0", "nextState": "ACTIVE" } }),
+        }
+    }
+
+    #[test]
+    fn an_enums_value_0_that_is_the_rules_is_sent_and_read_as_any_other() {
+        let c = account();
+        assert_eq!(c.response[1].kind.zero_value(), Some("有効"));
+        assert_eq!(urgency().response[1].kind.zero_value(), None);
+        // sent by its name, as the zero values of the other kinds are: the service refuses an input left out
+        assert_eq!(rule_request(&c, &args(json!({ "状態": "有効", "残高": 0 }))), json!({ "state": "ACTIVE", "balance": "0" }));
+        // the service leaves it out of its answer, and it is read back as the rule's value
+        assert_eq!(rule_wire(&c, &json!({ "手数料": 0, "次の状態": "有効" })), json!({}));
+        assert_eq!(rule_wire(&c, &json!({ "手数料": 110, "次の状態": "解約" })), json!({ "fee": "110", "nextState": "CLOSED" }));
+        assert_eq!(rule_read(&c, &json!({})), json!({ "手数料": 0, "次の状態": "有効" }));
+        assert_eq!(rule_read(&c, &json!({ "nextState": null })), json!({ "手数料": 0, "次の状態": "有効" }));
+        for fee in [0, 110] {
+            for state in ["有効", "解約"] {
+                let answer = json!({ "手数料": fee, "次の状態": state });
+                assert_eq!(rule_read(&c, &rule_wire(&c, &answer)), answer);
+            }
+        }
+        // the state machine fills it in and reads it by the same table
+        let read = jsonata_rule_read(&c, "$states.result.ResponseBody");
+        assert!(read.contains("\"nextState\":\"ACTIVE\""), "{read}");
+        assert!(read.contains("{\"ACTIVE\":\"有効\",\"CLOSED\":\"解約\"}"), "{read}");
+    }
+
+    #[test]
+    fn jsonata_writes_what_the_functions_do() {
+        let c = urgency();
+        // a value known now is written out as the request writes it; the rest are expressions
+        let body = jsonata_rule_request(&c, &[("会員".into(), TExpr::Bool(true)), ("金額".into(), TExpr::Int(5000))]);
+        assert_eq!(body, json!({ "member": true, "amount": "5000" }));
+        let var = |n: &str, ty: Ty| TExpr::Var { name: "受注".into(), fields: vec![n.into()], ty };
+        let body = jsonata_rule_request(&c, &[("会員".into(), var("会員", Ty::Bool)), ("金額".into(), var("金額", Ty::Num("円".into())))]);
+        assert_eq!(body["member"], json!("{% $受注.`会員` %}"));
+        assert_eq!(body["amount"], json!("{% $string($受注.`金額`) %}"));
+        let read = jsonata_rule_read(&c, "$states.result.ResponseBody");
+        // the table is asked only for the names it has of its own (not `constructor`, `toString`, `__proto__`)
+        assert!(read.contains("$dd_t := {\"CARRIER_STANDARD\":\"standard\",\"CARRIER_NEXTDAY\":\"next_day\"}; $type($dd_v) = \"string\" and $dd_v in $keys($dd_t) ? $lookup($dd_t, $dd_v) : $dd_v"), "{read}");
+        assert!(read.contains("\"急ぎ\": $lookup($dd_b, \"urgent\")"), "{read}");
     }
 }

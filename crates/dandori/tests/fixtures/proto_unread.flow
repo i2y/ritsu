@@ -1,0 +1,39 @@
+workflow proto_unread v1
+description "読めない import を持つ .proto：import した google/api/annotations.proto・google/type/money.proto・shop/v2/cancel.proto は手元に無い。annotations はオプションのためだけで、型には関わらない。ほかの二つにある型は分からず、それを通して作る型、突き合わせ、サービスの名前が診断になる"
+
+use proto catalog from "protos/unread.proto"
+  url "https://catalog.example.com"
+
+record 品物
+  item : catalog.Item
+
+record 値付き
+  priced : catalog.Priced
+
+record 値付き手書き
+  sku   : string
+  price : json
+
+record 無い
+  nope : catalog.Nope
+
+task get_item(sku: string) -> catalog.Item
+  connect catalog "CatalogService/GetItem"
+
+task get_priced(sku: string) -> 値付き手書き
+  connect catalog "CatalogService/GetPriced"
+
+task quote(budget: string) -> catalog.QuoteResponse
+  connect catalog "CatalogService/Quote"
+
+task cancel(order: string)
+  connect catalog "CatalogService/Cancel"
+
+task discontinue(sku: string)
+  connect catalog "CatalogService/Discontinue"
+
+inputs
+  sku : string
+
+flow
+  pass

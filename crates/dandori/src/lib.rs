@@ -26,6 +26,7 @@ pub mod ranges;
 pub mod render;
 pub mod rulec;
 pub mod scenarios;
+pub mod service;
 pub mod sources;
 pub mod syntax;
 pub mod temporal;

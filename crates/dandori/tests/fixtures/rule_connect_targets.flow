@@ -1,0 +1,20 @@
+workflow rule_connect_targets v1
+description "Connect で呼ぶ規則を出せないプラットフォーム：Step Functions に出すには connection が要り、サービスの URL は https でなければならない。Step Functions と durable functions では、lambda も connect も無い規則を呼べない。検査は通り、ビルドが断る"
+
+use rule 接続なし from "../../examples/order/rules/出荷の急ぎ.rule"
+  connect "https://rules.example.com"
+
+use rule 平文 from "../../examples/order/rules/出荷の急ぎ.rule"
+  connect "http://rules.example.com"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+
+use rule 呼び方なし from "../../examples/order/rules/出荷の急ぎ.rule"
+
+inputs
+  会員 : bool
+
+flow
+  let 一 = 接続なし(会員: 会員, 金額: 5000)
+  let 二 = 平文(会員: 会員, 金額: 5000)
+  let 三 = 呼び方なし(会員: 会員, 金額: 5000)
+  pass

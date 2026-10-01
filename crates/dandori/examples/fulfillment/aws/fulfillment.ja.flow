@@ -1,14 +1,13 @@
-workflow 引当と発送 v1
+workflow 引当と発送 v1 implements 店.FulfillmentService
 description "注文の明細ごとに在庫を引き当て、配送を手配し、倉庫の梱包を待ってから、お客さまに知らせる。明細は並べて引き当て、足りない明細があれば、引き当てたぶんを戻す。AWS 向けの版（Step Functions と Lambda durable functions）：規則は Lambda 関数で、倉庫は EventBridge の接続を通して Connect で呼ぶ。配送の手配は、デプロイした ARN で始める arrange_delivery.ja.flow。梱包の依頼は、メッセージにタスクトークンを入れて SQS に送り、お客さまへは SNS で知らせ、記録は Lambda 関数に残す。ほかのプラットフォームでも、dandori がそれぞれ向けに生成する呼び出しで動く"
 
 use rule 急ぎ from "../../order/rules/出荷の急ぎ.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
+use proto 店 from "../specs/fulfillment.ja.proto"
 use proto warehouse from "../specs/warehouse.proto"
   url "https://warehouse.example.com"
 use smithy sns from "../specs/sns.json"
 use smithy sqs from "../specs/sqs.json"
-
-enum 在庫 = secured | short
 
 record 明細
   sku : string
@@ -26,17 +25,12 @@ record 注文
   贈り物 : 贈り物?
   付帯   : json
 
-record 引当
-  sku   : string
-  stock : 在庫
-  id    : string?
-
 record 配送
   追跡番号 : string
 
 record 梱包の依頼
   注文ID : string
-  引当   : list[引当]
+  引当   : list[warehouse.ReserveResponse]
 
 record 梱包
   箱の数 : int
@@ -48,11 +42,11 @@ inputs
   注文 : 注文
 
 outputs
-  引当     : list[引当]
+  引当     : list[warehouse.ReserveResponse]
   追跡番号 : string
 
 # 倉庫は、どの引当にも答える。在庫を押さえられたら secured とその ID、足りなければ short。
-task 在庫を引き当てる(sku: string, quantity: int) -> 引当
+task 在庫を引き当てる(sku: string, quantity: int) -> warehouse.ReserveResponse
   connect warehouse "StockService/Reserve"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d"
   errors 混雑 = resource_exhausted

@@ -1,0 +1,7 @@
+workflow fulfillment v1 implements shop.FulfilmentService
+description "E017: the service the workflow implements is not in the .proto"
+
+use proto shop from "services/shop.proto"
+
+flow
+  pass

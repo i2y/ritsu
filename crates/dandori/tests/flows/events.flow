@@ -1,7 +1,8 @@
-workflow 承認と配達 v1
-description "イベントを待つ（Temporal）：注文の承認と配達の知らせを、ワークフローの ID と名前で送られてくるイベントとして待つ。拒否のイベント、タイムアウト、ループのイテレーションごとに待つイベント、案件の状態を知らせるイベントも通る。ほかのプラットフォームでは E050"
+workflow 承認と配達 v1 implements 窓口.ApprovalService
+description "イベントを待つ（Temporal）：注文の承認と配達の知らせを、ワークフローの ID と名前で送られてくるイベントとして待つ。拒否のイベント、タイムアウト、ループのイテレーションごとに待つイベント、案件の状態を知らせるイベントも通る。protos/approvals.proto のサービスを実装する（始め方、承認のイベント、状態の問い合わせ）。配達の知らせは日本語の状態を運ぶので、サービスには書かない。ほかのプラットフォームでは E050"
 
 use rule 注文の状態 from "../../examples/order/rules/注文の状態.rule"
+use proto 窓口 from "protos/approvals.proto"
 
 record 承認
   承認者 : string

@@ -1,3 +1,5 @@
+エラー[E003]: tests/fixtures/agents.flow:26:8: `甲` は、フィールド `乙` を通して自分自身を含んでいます。レコードは自分自身を含められないので、自分を含むフィールドの型は `json` にしてください
+    26 |   乙 : 乙?
 エラー[E007]: tests/fixtures/agents.flow:56:3: エージェントには、使うモデルを `model "gpt-5.4-mini"` のように書いてください
     56 |   agent "読んでください。"
 エラー[E007]: tests/fixtures/agents.flow:60:3: `model` はエージェントや Jev が使うモデルを書くところです。このタスクには `agent` も `jev` もありません

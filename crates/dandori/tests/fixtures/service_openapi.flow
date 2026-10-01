@@ -1,0 +1,7 @@
+workflow hotel_stay v1 implements stripe.PaymentIntents
+description "E017: a workflow implements a service of a .proto, not an OpenAPI document"
+
+use openapi stripe from "../../examples/hotel/specs/stripe.json"
+
+flow
+  pass

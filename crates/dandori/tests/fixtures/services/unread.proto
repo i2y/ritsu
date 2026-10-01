@@ -1,0 +1,18 @@
+// The service tests/fixtures/service_unread.flow implements, whose start takes a message of a file
+// that is not on the disk.
+syntax = "proto3";
+
+package shop.v1;
+
+import "dandori/v1/options.proto";
+import "shop/v2/start.proto";
+
+service UnreadService {
+  option (dandori.v1.workflow) = {name: "unread", version: 1};
+
+  rpc Start(shop.v2.StartRequest) returns (StartResponse) {
+    option (dandori.v1.start) = {};
+  }
+}
+
+message StartResponse {}

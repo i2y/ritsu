@@ -64,6 +64,8 @@ fn dump_dom(chrome: &str, url: &str) -> String {
 
 /// The flows `doc` is held to: each example as written for Temporal and the child flow beside them,
 /// in English and in Japanese, the flows of tests/flows, and a first draft whose check finds errors.
+/// A flow that calls at its service a rule whose enum is a contract's is left out, with a SKIP line,
+/// when the rulec at hand does not say what the service calls the values: `check` refuses it then (E005).
 fn flows() -> Vec<PathBuf> {
     let mut out = Vec::new();
     for lang in ["", ".ja"] {
@@ -74,9 +76,30 @@ fn flows() -> Vec<PathBuf> {
     }
     let mut tf: Vec<PathBuf> = std::fs::read_dir(root().join("tests/flows")).unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().is_some_and(|x| x == "flow")).collect();
     tf.sort();
+    if !rulec_names_enums() {
+        tf.retain(|f| {
+            let keep = !NAMED_ENUMS.contains(&rel(f).as_str());
+            if !keep {
+                eprintln!("SKIP: {}: it calls at its service a rule whose enum is a contract's, and this rulec's `rulec api` does not say what the service calls the values (`connect.enums`)", rel(f));
+            }
+            keep
+        });
+    }
     out.extend(tf);
     out.push(root().join("tests/fixtures/hotel_naive.flow"));
     out
+}
+
+/// The flows that call, at its Connect service, a rule whose enum is a contract's (`import proto`),
+/// which a rulec that does not say what the service calls the enum's values has refused (E005).
+const NAMED_ENUMS: [&str; 1] = ["tests/flows/connect_rules_contract.flow"];
+
+/// Whether the rulec at hand says, in `rulec api`, what a rule's service calls the values of its
+/// enums (`connect.enums`).
+fn rulec_names_enums() -> bool {
+    let bin = std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".into());
+    let out = Command::new(&bin).arg("api").arg(root().join("examples/order/rules/urgency.rule")).output();
+    out.ok().and_then(|o| serde_json::from_slice::<Value>(&o.stdout).ok()).is_some_and(|v| v["connect"]["enums"].is_array())
 }
 
 fn key(f: &Path) -> String {
@@ -204,7 +227,8 @@ fn every_run_lights_up_a_way_that_holds_together() {
                 assert!(reached, "{name}: {n} is lit, but no lit edge goes to it; the run lit {:?}", lit.edges);
             }
             // every arm and handler it took, every way round and out of a loop, is an edge it lit; an
-            // arm that goes round again is lit only when the loop did
+            // arm that goes round again is lit only when the loop did, and so is the way out of a loop
+            // that is the last of the body of a loop around it, which goes round that one
             let lit_with = |c: Cond| edges.iter().any(|e| e.conds.contains(&c) && lit.edges.contains(&e.id));
             let round_only = |c: Cond| edges.iter().any(|e| e.conds.contains(&c) && e.conds.iter().any(|x| matches!(x, Cond::Again(_))));
             for v in &visits {
@@ -216,7 +240,7 @@ fn every_run_lights_up_a_way_that_holds_together() {
                     Visit::Done(s) => Cond::Done(*s),
                     _ => continue,
                 };
-                assert!(lit_with(c) || (matches!(c, Cond::Arm(..) | Cond::Handler(..)) && round_only(c)), "{name}: the run went by {c:?}, and no edge of it is lit");
+                assert!(lit_with(c) || (matches!(c, Cond::Arm(..) | Cond::Handler(..) | Cond::Done(..)) && round_only(c)), "{name}: the run went by {c:?}, and no edge of it is lit");
             }
             // a loop whose first step the run passed more often than it began the loop went round
             // again, and its way round is lit

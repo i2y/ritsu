@@ -7,14 +7,16 @@ a page where each scenario lights up the way its run goes ([Draw a workflow](dia
 
 Every version has a Japanese twin beside it, `<name>.ja.flow` (fulfillment's child too,
 `arrange_delivery.ja.flow`), which names everything in Japanese but what an API description fixes:
-Stripe's fields and states, the warehouse's `.proto`, the SNS and SQS APIs. The Japanese rules sit
-beside the English ones in each `rules/`, and the Japanese site draws the Japanese versions.
+Stripe's fields and states, the warehouse's `.proto`, the SNS and SQS APIs. The Japanese versions of
+fulfillment implement a service of their own, `fulfillment.ja.proto`, whose names in JSON are
+Japanese. The Japanese rules sit beside the English ones in each `rules/`, and the Japanese site
+draws the Japanese versions.
 
 | Example | For Temporal | For AWS (Step Functions, Lambda durable functions) | For pydantic-graph | Drawn |
 |---|---|---|---|---|
 | a hotel booking that holds a card and captures at check-out, held to Stripe's OpenAPI document | [temporal](https://github.com/i2y/dandori/blob/main/examples/hotel/temporal/hotel.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/hotel/aws/hotel.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/hotel/pydantic-graph/hotel.flow) | [page](doc/hotel.html) |
 | an order in a warehouse's system, reminded, shipped, delivered | [temporal](https://github.com/i2y/dandori/blob/main/examples/order/temporal/order.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/order/aws/order.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/order/pydantic-graph/order.flow) | [page](doc/order.html) |
-| reserving the lines of an order side by side, packing, delivery: the warehouse called by Connect, and the delivery a child flow, [arrange_delivery](https://github.com/i2y/dandori/blob/main/examples/fulfillment/arrange_delivery.flow), written once for every platform | [temporal](https://github.com/i2y/dandori/blob/main/examples/fulfillment/temporal/fulfillment.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/fulfillment/aws/fulfillment.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/fulfillment/pydantic-graph/fulfillment.flow) | [page](doc/fulfillment.html) |
+| reserving the lines of an order side by side, packing, delivery: a workflow that implements a service of a `.proto` ([Implement a service](services.md)), the warehouse called by Connect, with the types of its answers made from its `.proto`, and the delivery a child flow, [arrange_delivery](https://github.com/i2y/dandori/blob/main/examples/fulfillment/arrange_delivery.flow), written once for every platform | [temporal](https://github.com/i2y/dandori/blob/main/examples/fulfillment/temporal/fulfillment.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/fulfillment/aws/fulfillment.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/fulfillment/pydantic-graph/fulfillment.flow) | [page](doc/fulfillment.html) |
 | an inquiry sorted by [Jev](jev.md), with an agent's reading when Jev is not sure, a rule that routes it, and an agent that drafts the reply | [temporal](https://github.com/i2y/dandori/blob/main/examples/inquiry/temporal/inquiry.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/inquiry/aws/inquiry.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/inquiry/pydantic-graph/inquiry.flow) | [page](doc/inquiry.html) |
 | an application scored by [Jev](jev.md), and a rule that weighs how sure the score is and sends the rest to a person's approval; also [for Argo Workflows](https://github.com/i2y/dandori/blob/main/examples/review/argo/review.flow) | [temporal](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/review/aws/review.flow) (Lambda durable functions) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/review/pydantic-graph/review.flow) | [page](doc/review.html) |
 
@@ -32,7 +34,9 @@ new run as its history grows. Review asks Jev from the workers of its own task q
 from the workflow's.
 
 **For AWS**, the tasks call Lambda functions, HTTP APIs through EventBridge connections, and SNS and
-SQS, as Step Functions does; a callback hands on a task token. Lambda durable functions runs the same
+SQS, as Step Functions does; a callback hands on a task token. Order calls its urgency rule at its
+Connect service, through a connection too, where the other versions keep the rule's code with the
+workflow ([A rule as a service](tasks.md#a-rule-as-a-service)). Lambda durable functions runs the same
 versions, and the code dandori writes for the other platforms makes the same calls, so these build
 for all five. Jev is called by an HTTP Task, with TypeSafe's key in the connection. Review's is the
 exception: asking for the approval and the notice are your own code, which Step Functions cannot
@@ -57,6 +61,7 @@ The flows under
 [tests/flows](https://github.com/i2y/dandori/tree/main/tests/flows) exercise the corners of the
 language: lists put into `json`, a parallel loop inside a parallel loop, agents' answers with every
 kind of type, Jev's questions of every kind and how sure its answers are, calls that time out, local
-rules, Connect's zero values, events. They are written with
+rules, Connect's zero values, events, and services implemented, whose requests come with their zero
+values left out. They are written with
 Japanese names on purpose, to see that names outside ASCII come through all five platforms as
 identifiers, keys and URL paths.

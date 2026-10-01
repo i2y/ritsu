@@ -1,0 +1,56 @@
+workflow 出荷の受付 v1 implements 受付.ShippingService
+description "サービスを実装する（どのプラットフォームでも）：protos/shipping.proto のサービスの入口で、入力とコールバックの応答に、protobuf の JSON が省くゼロ値を埋めてから読む。箱のリストの中の品のリスト、中のメッセージ、ゼロ値が値でもある列挙を通る。値が設定されていない google.protobuf.Value は省かれるので、json の入力は無いことがあり、無ければ null として読む。出力は無く、実行は {} で終わる（protobuf の JSON を読む側は、null からメッセージを読まない）"
+
+use proto 受付 from "protos/shipping.proto"
+
+record 品
+  sku    : string
+  数     : int
+  割れ物 : bool
+
+record 箱
+  ラベル : string
+  重さ   : int
+  品     : list[品]
+
+record 宛先
+  市   : string
+  番地 : string
+
+record 梱包
+  箱の数   : int
+  検品済み : bool
+
+inputs
+  注文ID : string
+  箱     : list[箱]
+  宛先   : 宛先
+  区分   : 受付.Kind
+  付帯   : json
+
+task 記録する(注文ID: string, 品: 品, 付帯: json)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:shipping-log"
+  idempotent
+
+# The packing crew gets the boxes and the callback's id, and answers when they are packed.
+task 梱包を待つ(注文ID: string, 箱: list[箱]) -> 梱包
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:packing"
+  callback
+  timeout 1 day
+
+task 知らせる(注文ID: string, 本文: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:shipping-notice"
+  idempotent
+
+flow
+  for 一箱 in 箱 at most 3
+    for 一品 in 一箱.品 at most 3
+      記録する(注文ID: 注文ID, 品: 一品, 付帯: 付帯)
+  let 済み = 梱包を待つ(注文ID: 注文ID, 箱: 箱)
+    on timeout => fail 梱包の遅れ "一日たっても梱包の知らせがありません"
+  match 済み.検品済み
+    true => pass
+    false => fail 検品漏れ "注文 {注文ID} の検品が済んでいません"
+  match 区分
+    normal => 知らせる(注文ID: 注文ID, 本文: "{宛先.市} {宛先.番地} へ {済み.箱の数} 箱を送ります")
+    express => succeed

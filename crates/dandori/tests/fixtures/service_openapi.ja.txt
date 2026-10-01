@@ -1,0 +1,2 @@
+エラー[E017]: tests/fixtures/service_openapi.flow:1:35: `stripe` は `use openapi` で読んだものですが、ワークフローが実装できるのは `.proto`（`use proto`）のサービスです
+     1 | workflow hotel_stay v1 implements stripe.PaymentIntents

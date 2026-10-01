@@ -11,7 +11,7 @@ dandori doc hotel.flow --format html > hotel.html
 
 ## Markdown で、プルリクエストに
 
-Markdown では、flow と `on failure`・`on cancel` を Mermaid のフローチャートで描きます。GitHub は、プルリクエストや issue や README の中でそのまま図にします。図の下には、すべての呼び出しの表と、すべての終わり方の表が付きます。Jev が申込を採点し、人の承認に回すかを規則が決める、審査の例の日本語版（[examples/review/temporal/review.ja.flow](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.ja.flow)）です。
+Markdown では、flow と `on failure`・`on cancel` を Mermaid のフローチャートで描きます。GitHub は、プルリクエストや issue や README の中でそのまま図にします。図の下には、すべての呼び出しの表と、すべての終わり方の表が付きます。サービスを実装するワークフローでは、その前に、サービスのメソッドと、それぞれが実行に対して何をするかの表が入ります（[サービスを実装する](services.md)）。Jev が申込を採点し、人の承認に回すかを規則が決める、審査の例の日本語版（[examples/review/temporal/review.ja.flow](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.ja.flow)）です。
 
 ```mermaid
 flowchart TD

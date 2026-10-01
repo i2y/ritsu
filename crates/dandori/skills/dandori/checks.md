@@ -59,6 +59,11 @@ Jev can answer (E007), and one that relies on how sure Jev is names the version 
 [Jev](jev.md)
 [What a task calls](tasks.md)
 
+**The service a workflow implements.** A workflow whose entry is a proto service fits it: its inputs
+and outputs are the start's request and response, every name it fails with is listed, and the
+events and callbacks the service names are tasks of the flow that read what the service sends (E017).
+[Implement a service](services.md)
+
 **The platform.** `dandori build` also checks what only the platform decides: a run whose history
 could outgrow the platform's limit (E040), and what the platform needs or cannot do (E050).
 
@@ -76,4 +81,4 @@ loop, or one round that is too large, and the diagnostic says which.
 
 ## Every code
 
-[Diagnostics](codes.md) lists all 29, with what each one finds.
+[Diagnostics](codes.md) lists all 30, with what each one finds.

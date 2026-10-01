@@ -1,0 +1,16 @@
+error[E002]: tests/fixtures/proto_unread.flow:11:12: `catalog.Priced` cannot be made: its field `price` is of the type `google.type.Money`, which is not known; write the record yourself, with `json` for `price`
+    11 |   priced : catalog.Priced
+  = `google/api/annotations.proto`, `google/type/money.proto` and `shop/v2/cancel.proto` could not be read, so the types in them cannot be used
+error[E002]: tests/fixtures/proto_unread.flow:18:10: there is no type `catalog.Nope`
+    18 |   nope : catalog.Nope
+  = the messages and enums of `catalog` are Item, ItemRequest, Kind, Priced, QuoteRequest, QuoteResponse
+  = `google/api/annotations.proto`, `google/type/money.proto` and `shop/v2/cancel.proto` could not be read, so the types in them cannot be used
+error[E016]: tests/fixtures/proto_unread.flow:26:1: the parameter `budget` is not what `catalog` CatalogService/Quote takes: its type `google.type.Money` is not known, since a file it may be in was not read; `json` takes it
+    26 | task quote(budget: string) -> catalog.QuoteResponse
+  = `google/api/annotations.proto`, `google/type/money.proto` and `shop/v2/cancel.proto` could not be read, so the types in them cannot be used
+error[E016]: tests/fixtures/proto_unread.flow:29:1: `catalog` CatalogService/Cancel takes `shop.v2.CancelRequest`, a type that is not known (a file it may be in was not read), so the parameters of `cancel` cannot be held to it
+    29 | task cancel(order: string)
+  = `google/api/annotations.proto`, `google/type/money.proto` and `shop/v2/cancel.proto` could not be read, so the types in them cannot be used
+error[E016]: tests/fixtures/proto_unread.flow:33:3: `catalog` has no method `CatalogService/Discontinue`; write it as `Service/Method`
+    33 |   connect catalog "CatalogService/Discontinue"
+  = `google/api/annotations.proto`, `google/type/money.proto` and `shop/v2/cancel.proto` could not be read, so the types in them cannot be used

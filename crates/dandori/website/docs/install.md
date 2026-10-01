@@ -19,15 +19,18 @@ $ cargo install --path .
 ## rulec
 
 For a workflow that uses rules, dandori runs rulec to read them, and `rulec gen` writes the code of
-each rule, which the generated code calls. dandori finds rulec through `DANDORI_RULEC`, else on the
-PATH. With Homebrew, on macOS or Linux:
+each rule, which the generated code calls, and a Connect service for it, which a workflow can call
+instead. dandori finds rulec through `DANDORI_RULEC`, else on the PATH. With Homebrew, on macOS or Linux:
 
 ```console
 $ brew install i2y/tap/rulec
 ```
 
 Or take a binary from rulec's [releases](https://github.com/i2y/rulec/releases). dandori is tested
-with rulec 0.20.0 and 0.21.1.
+with rulec 0.22.0. rulec 0.21.2 and before do not say, in `rulec api`, what a rule's service calls the
+values of an enum the rule takes from a `.proto` (0.22.0 is the first to), so with them dandori calls
+such a rule with its code but not at its service (E005;
+[An enum from a contract](tasks.md#an-enum-from-a-contract)).
 
 Without rules, a workflow gives up two things. Its branches can only match what its tasks answer (an
 enum, a bool, a value that may be absent), since a `.flow` neither compares nor computes: comparing
@@ -79,7 +82,7 @@ The code a build writes imports each platform's own SDK, and nothing of dandori'
 |---|---|
 | `temporal` | Temporal's TypeScript SDK (`@temporalio/*`); the AWS SDK, OpenAI's Agents SDK or Anthropic's SDK only if a task calls through them |
 | `temporal-python` | Temporal's Python SDK (`temporalio`); boto3 and the agents' SDKs the same way |
-| `asl` | AWS Step Functions; a rule is a Lambda function around the Python rulec generates |
+| `asl` | AWS Step Functions; a rule is a Lambda function around the Python rulec generates, or an HTTP Task to its service |
 | `durable` | AWS Lambda durable functions (`@aws/durable-execution-sdk-js`) |
 | `argo` | Argo Workflows, and the image built from the generated `caller/` |
 | `pydantic-graph` | pydantic-graph 2.x, in your own Python process |

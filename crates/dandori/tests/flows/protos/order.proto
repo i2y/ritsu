@@ -1,0 +1,61 @@
+// The order service of tests/flows/proto_types.flow: a flow makes its types from these messages
+// and enums. The order's states are the states of examples/order/rules/order_state.rule, which a
+// `.proto` value can spell because they are ASCII; the zero value says nothing was set, and is not
+// a state.
+syntax = "proto3";
+
+package order.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+service OrderService {
+  // The order as the service has it now.
+  rpc Get(GetRequest) returns (Order);
+  // Ship a paid order; an order in any other state is refused with failed_precondition.
+  rpc Ship(ShipRequest) returns (Order);
+  // Take a line's quantity off the shelf.
+  rpc Pick(PickRequest) returns (PickResponse);
+}
+
+message GetRequest {
+  string id = 1;
+}
+
+message ShipRequest {
+  string id = 1;
+}
+
+enum OrderState {
+  ORDER_STATE_UNSPECIFIED = 0;
+  received = 1;
+  paid = 2;
+  shipped = 3;
+  delivered = 4;
+  cancelled = 5;
+}
+
+message Line {
+  string sku = 1;
+  int32 quantity = 2 [(buf.validate.field).int32 = {gte: 1, lte: 99}];
+}
+
+message Order {
+  string id = 1;
+  OrderState state = 2;
+  repeated Line lines = 3;
+  google.protobuf.Timestamp placed_at = 4;
+  int64 serial = 5;
+  map<string, string> tags = 6;
+  double weight = 7;
+  optional string note = 8;
+}
+
+message PickRequest {
+  string sku = 1;
+  int32 quantity = 2 [(buf.validate.field).int32 = {gte: 1, lte: 99}];
+}
+
+message PickResponse {
+  string ticket = 1;
+}

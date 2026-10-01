@@ -18,7 +18,7 @@ hide:
 </p>
 
 <p class="dd-hero__lede">
-<strong>動かす前に検査します。</strong>型や match の分岐の漏れだけでなく、ワークフローが終わったときに支払いや注文が中途半端な状態で残らないか、リトライで同じ変更を二度加えてしまわないか、実行履歴がプラットフォームの上限を超えないかまで調べます。
+<strong>動かす前に検査します。</strong>型や match の分岐の漏れだけでなく、ワークフローが終わったときに支払いや注文が中途半端な状態で残らないか、リトライで同じ変更を二度加えてしまわないか、実装すると書いた `.proto` のサービスと合っているか、実行履歴がプラットフォームの上限を超えないかまで調べます。
 </p>
 
 <p class="dd-hero__lede">
@@ -192,6 +192,6 @@ dandori doc hotel.flow --format html > hotel.html
 
 ## いまの状況
 
-まだ初期の段階です。次のものはまだありません。別々の処理を同時に走らせる Parallel、YAML で書いた OpenAPI の文書、protobuf のバイナリ形式と Connect のストリーム、ワークフロー自身が状態を持つ案件、規則の前提条件を値を作ったタスクの直後で確かめること。AWS の上や、本番構成の Temporal や Temporal Cloud の上ではまだ動かしておらず、Argo から caller のイメージで本物の Lambda・HTTP・AWS に送ることも、エージェントの呼び出しを本物の OpenAI や Anthropic に送ることもしていません。
+まだ初期の段階です。次のものはまだありません。別々の処理を同時に走らせる Parallel、YAML で書いた OpenAPI の文書、OpenAPI の文書や Smithy のモデルから型を作ること（型を作れるのは `.proto` だけです）、protobuf のバイナリ形式と Connect のストリーム、ワークフローが実装するサービスのクライアントを、protoc のプラグインでほかの言語向けに書き出すこと、ワークフロー自身が状態を持つ案件、規則の前提条件を値を作ったタスクの直後で確かめること。AWS の上や、本番構成の Temporal や Temporal Cloud の上ではまだ動かしておらず、Argo から caller のイメージで本物の Lambda・HTTP・AWS に送ることも、エージェントの呼び出しを本物の OpenAI や Anthropic に送ることもしていません。
 
 設計の理由、決めたこと、残っていることは [DESIGN.md](https://github.com/i2y/dandori/blob/main/DESIGN.md) にあり、原則は [設計](design.md) にまとめています。ライセンスは Apache License 2.0 と MIT ライセンスのどちらかを選べます。

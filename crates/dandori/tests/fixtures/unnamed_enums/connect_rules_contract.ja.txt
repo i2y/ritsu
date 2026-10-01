@@ -1,0 +1,3 @@
+エラー[E005]: tests/flows/connect_rules_contract.flow:4:10: 規則 `../fixtures/rules/account_fee.rule` を読めませんでした
+     4 | use rule 手数料 from "../fixtures/rules/account_fee.rule"
+  = 規則の列挙 `口座の状態` は契約（`Status`）から取り込んだものですが、この rulec の `rulec api` は、規則のサービスがその値を何と呼ぶかを言いません。`connect` で呼ぶには、rulec 0.22.0 以降が要ります（`rulec api` の `connect.enums` がそれを言います）
