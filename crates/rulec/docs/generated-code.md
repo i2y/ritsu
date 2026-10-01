@@ -1033,13 +1033,13 @@ package rulec.shipping_fee.v4;
 
 message DecideRequest {
   // 届け先
-  Prefecture dest = 1;
+  optional Prefecture dest = 1;
   // 重量: an integer, in g. 1 to 40000
-  int64 weight = 2;
+  optional int64 weight = 2;
   // 注文金額: an integer, in 円 (tax included). 0 to 10000000
-  int64 total = 3;
+  optional int64 total = 3;
   // 会員
-  MemberKind member = 4;
+  optional MemberKind member = 4;
 }
 
 message DecideResponse {
@@ -1060,7 +1060,7 @@ service ShippingFeeService {
 }
 ```
 
-Four things there are decisions rather than transcription.
+Five things there are decisions rather than transcription.
 
 **The package carries the rule's major version.** The package names the *wire*, and what a
 change to the wire does is exactly what `buf breaking` is there to say.
@@ -1074,11 +1074,26 @@ writes, so one call is one fixtures record. Its field number is far from the out
 an output added to a table later takes the next small number and leaves the trace where it
 was.
 
+**Every field of the request is `optional`.** proto3 reads a field left out as its zero, so
+without the mark a request that named nothing would be decided as one that said 0, `false`
+and the first value of every enum. Marked, a field left out is told apart from one set to
+zero, and a request that leaves out an input the rule needs is refused (below); a `T?` input
+says in its comment that it may be left unset. A caller therefore sends every input, `false`
+and `0` included — which a generated client does when the field is set, and which is what the
+JSON has to say when it is written by hand. The answer keeps the plain form: it always has
+every output, so an output at its zero is left out of the JSON as usual.
+
 **Only the enums that cross the wire are declared**, and one whose values belong to a contract
 outside the rule (`import proto`, [reference.md](reference.md#an-enum-a-proto-owns)) is
-imported rather than copied — the rule cites that file and `rulec check` holds the two
+imported rather than declared again — the rule cites that file and `rulec check` holds the two
 together, so the service speaks the contract's own type instead of a second one that means
-the same thing.
+the same thing. So that the module builds as it stands, `gen` puts the contract in it: the file
+`check` read, byte for byte, at the path its package gives it (`proto/shop/v1/order.proto` for
+`package shop.v1`), which is also the path the generated `.proto` imports. A file the contract
+imports in turn comes with it when it is found where its import path says; the well-known
+types are buf's own, and an import found nowhere — a file of a BSR module such as
+protovalidate's — is left out, and buf names it when it builds. Two rules may import one
+contract, but two different files that would land on the same path stop `gen` with an error.
 
 The stubs are generated the way [connect-py](https://github.com/connectrpc/connect-py)'s own
 documentation generates them — with [buf](https://buf.build/), configured by the two files
@@ -1101,7 +1116,7 @@ nothing to await and the two are two doors on one body:
 ```console
 $ uvicorn shipping_fee_service:app --port 8080         # ASGI: uvicorn, hypercorn, daphne
 $ gunicorn 'shipping_fee_service:wsgi_app'             # WSGI: gunicorn, uWSGI
-$ python3 generated/python/shipping_fee_service.py --http 127.0.0.1:8080   # the standard library alone
+$ python3 generated/python/shipping_fee_service.py --http 127.0.0.1:8080   # the standard library's server
 http://127.0.0.1:8080
 $ curl -sS -X POST -H 'Content-Type: application/json' \
     -d '{"dest":"PREFECTURE_KAGOSHIMA","weight":800,"total":4200,"member":"MEMBER_KIND_BASIC"}' \
@@ -1115,8 +1130,9 @@ and non-ASCII is escaped. A generated client hands you a Python `int` and the ta
 name either way; it is only the bytes on the wire that look like that.
 
 The third line is the standard library's own server, there so that the service can be tried
-with nothing installed beyond `connectrpc`; it serves the WSGI side. As with the MCP server,
-**TLS and authentication go in front**: none of these carries either.
+without uvicorn or gunicorn; it serves the WSGI side, and like the other two it needs
+`connectrpc` and the stubs. As with the MCP server, **TLS and authentication go in front**:
+none of these carries either.
 
 An input the rule cannot take is refused rather than answered, with the code that says whose
 mistake it was:
@@ -1124,6 +1140,8 @@ mistake it was:
 | what happened | code | HTTP |
 |---|---|---|
 | outside the declared domain — out of range, not an integer, not a member of the enum | `invalid_argument` | 400 |
+| an input the rule needs was left out — `会員: not set`, `明細[2].数量: not set` for a field of one element | `invalid_argument` | 400 |
+| a field or an enum value the message does not have — a misspelt name | `invalid_argument` | 400 |
 | the runtime guard of a W114 pair fired (§8.1) | `internal` | 500 |
 
 ```console
@@ -1132,9 +1150,12 @@ $ curl … -d '{"dest":"PREFECTURE_KAGOSHIMA","weight":0,…}'
 ```
 
 The message names the argument by the rule's own name for it (`重量`), as the module's own
-error does. The second row is the one place with no static proof, and it answers 500 on
-purpose: which of two rows wins is the table's to decide and no caller can fix it, so it
-belongs where a service's own failures are counted.
+error does. The third row's message is the JSON reader's own and names the field or the value
+it did not know: Connect's default is to drop it, and the service turns that off, because a
+dropped input would then be decided as zero — and where a contract puts a real value at 0, a
+misspelt enum value would be decided as that value. The last row is the one place with no
+static proof, and it answers 500 on purpose: which of two rows wins is the table's to decide
+and no caller can fix it, so it belongs where a service's own failures are counted.
 
 Every answer carries `rulec-source-sha256`, the digest of the rule the service was generated
 from — which version of the table answered, for a caller that keeps the answer. And

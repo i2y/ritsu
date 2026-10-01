@@ -65,7 +65,7 @@ fn readmeの生成コード抜粋は実物と一致する() {
     let md = readme();
     let src = example(&md);
     let (f, c) = rulec::prepare(src, "README.md").expect("README の例は検査を通る");
-    let g = rulec::codegen::Gen::new(&f, &c, src);
+    let g = rulec::codegen::Gen::new(&f, &c, src, "");
     // Whichever languages the README happens to show, held to what the generator writes for
     // that same example. The excerpts are abridged with `...`, so the whole cannot be
     // compared, but every line shown must be a line the generator really writes: they were

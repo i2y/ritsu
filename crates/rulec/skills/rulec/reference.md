@@ -278,7 +278,10 @@ owns **which values exist**; the `.rule` owns **what they are called here** and 
 costs — a proto has no Japanese in it. So what is checked is that they agree:
 
 - the value names are matched by the ASCII alias, with the enum's own name taken off the front
-  (`MEMBER_TIER_GOLD` is `gold`), which is the prefix convention `buf lint` enforces;
+  (`MEMBER_TIER_GOLD` is `gold`), which is the prefix convention `buf lint` enforces. The prefix
+  is the name split into words the way buf splits it, so `HTTPMethod` asks for `HTTP_METHOD_`
+  and `Tier2` for `TIER2_`. It is taken off only when what is left begins with a letter:
+  `SIZE_60` is `size_60`, since an alias cannot begin with a digit;
 - the zero value is proto3's "not set" when it is named `…_UNSPECIFIED`, so it is not a value
   the table answers for — the generated code refuses it at the entry like any other non-member.
   A zero value named anything else is a value like any other;

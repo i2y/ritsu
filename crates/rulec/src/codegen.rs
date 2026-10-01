@@ -143,6 +143,7 @@ pub struct Gen<'a> {
     /// The source itself and where it was read from, for the approver's page the MCP server
     /// serves (§15.52). The page is rendered from the rule, not from the generated code.
     src: String,
+    /// The files the rule cites are found from this one's directory (§15.160).
     path: String,
 }
 
@@ -348,7 +349,12 @@ impl<'a> Gen<'a> {
         (tn, row.index, row.label.as_ref().map(|l| l.text.clone()).unwrap_or_default())
     }
 
-    pub fn new(f: &'a RuleFile, c: &'a Checked, src: &str) -> Self {
+    /// `path` is where the rule was read from, as the command line named it, or "" when it was
+    /// read from no file (the playground). It is an argument and not a setting because the
+    /// files a rule cites — a `.proto` it imports an enum from, a contract it reads inputs
+    /// out of — are found from the rule's directory, and a generator left to look from the
+    /// working directory wrote different code depending on where it was run.
+    pub fn new(f: &'a RuleFile, c: &'a Checked, src: &str, path: &str) -> Self {
         let mut enum_names = BTreeMap::new();
         let mut value_names = BTreeMap::new();
         for e in &f.enums {
@@ -402,16 +408,8 @@ impl<'a> Gen<'a> {
             idents,
             src_hash: hash(src),
             src: src.to_string(),
-            path: String::new(),
+            path: path.to_string(),
         }
-    }
-
-    /// Where the rule was read from. The approver's page names its source, so a caller that
-    /// has a file says which; one that has none (the playground) says nothing, and the page
-    /// is the same either way apart from that line.
-    pub fn at(mut self, path: &str) -> Self {
-        self.path = path.to_string();
-        self
     }
 
     /// The page an approver reads, as `rulec doc --format html` renders it: the same

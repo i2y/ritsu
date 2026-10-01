@@ -49,6 +49,12 @@ pub struct Enum {
 
 impl Enum {
     /// The ASCII aliases this enum asks a rule for, in declaration order.
+    pub fn aliases(&self) -> Vec<String> {
+        self.named().into_iter().map(|(a, _)| a).collect()
+    }
+
+    /// Each value a table answers for, with the alias it asks the rule to declare for it, in
+    /// declaration order.
     ///
     /// Two conventions are read, and only two. The value names carry the enum's own name as a
     /// prefix (`MemberTier` → `MEMBER_TIER_`), which `buf lint` enforces and which is there to
@@ -58,13 +64,31 @@ impl Enum {
     ///
     /// A zero value named anything else is **not** dropped. A file that puts a real value at 0
     /// is unusual, and quietly deciding it means nothing is the one thing this must not do.
-    pub fn aliases(&self) -> Vec<String> {
+    pub fn named(&self) -> Vec<(String, &Value)> {
+        self.values.iter().filter(|v| !self.is_unset(v)).map(|v| (self.local(v).to_ascii_lowercase(), v)).collect()
+    }
+
+    /// The value proto3 reads as "not set", when the file has one: number 0, named
+    /// `…_UNSPECIFIED`. A field left out of a message arrives as this value.
+    pub fn unset(&self) -> Option<&Value> {
+        self.values.iter().find(|v| self.is_unset(v))
+    }
+
+    fn is_unset(&self, v: &Value) -> bool {
+        v.number == 0 && self.local(v).eq_ignore_ascii_case("unspecified")
+    }
+
+    /// A value's name with the enum's prefix taken off, when what is left is a name of its own.
+    ///
+    /// It is not when it begins with a digit — `SIZE_60` would leave `60`, which no alias can
+    /// be — or when it is another value's whole name, which would make two values one. The
+    /// name then stays as written, prefix and all, which is also what protobuf-py does with it.
+    fn local<'v>(&self, v: &'v Value) -> &'v str {
         let prefix = format!("{}_", upper_snake(&self.name));
-        self.values
-            .iter()
-            .filter(|v| !(v.number == 0 && strip(&v.name, &prefix).eq_ignore_ascii_case("unspecified")))
-            .map(|v| strip(&v.name, &prefix).to_ascii_lowercase())
-            .collect()
+        match v.name.strip_prefix(prefix.as_str()) {
+            Some(rest) if rest.starts_with(|c: char| c.is_ascii_alphabetic()) && !self.values.iter().any(|o| o.name == rest) => rest,
+            _ => &v.name,
+        }
     }
 }
 
@@ -777,19 +801,53 @@ fn rules_of(text: &str, strs: &[String]) -> Rules {
     r
 }
 
-fn strip<'a>(name: &'a str, prefix: &str) -> &'a str {
-    name.strip_prefix(prefix).unwrap_or(name)
-}
-
-/// `MemberTier` → `MEMBER_TIER`. The value names of an enum are spelled this way by
-/// convention, so this is how the prefix to take off is found.
+/// `MemberTier` → `MEMBER_TIER`: an enum's name as the prefix its values carry.
+///
+/// The split is buf's, because `buf lint` is what asks for the prefix (`ENUM_VALUE_PREFIX`)
+/// and protobuf-py splits the same way when it takes it off. A capital begins a word when the
+/// letter before it is lower case or the one after it is, so `HTTPMethod` is `HTTP_METHOD` —
+/// not `H_T_T_P_METHOD`, which buf refuses — and a digit begins none: `Tier2` is `TIER2`.
 pub fn upper_snake(camel: &str) -> String {
+    let b: Vec<char> = camel.chars().collect();
     let mut out = String::new();
-    for (i, ch) in camel.chars().enumerate() {
-        if ch.is_ascii_uppercase() && i > 0 && !out.ends_with('_') {
-            out.push('_');
+    for (i, &ch) in b.iter().enumerate() {
+        if ch == '_' {
+            if !out.is_empty() && !out.ends_with('_') {
+                out.push('_');
+            }
+            continue;
+        }
+        if i > 0 && ch.is_ascii_uppercase() && !out.ends_with('_') {
+            let lower_before = b[i - 1].is_ascii_lowercase();
+            let lower_after = b.get(i + 1).is_some_and(|n| !n.is_ascii_uppercase() && !n.is_ascii_digit() && *n != '_');
+            if lower_before || lower_after {
+                out.push('_');
+            }
         }
         out.push(ch.to_ascii_uppercase());
+    }
+    while out.ends_with('_') {
+        out.pop();
+    }
+    out
+}
+
+/// The files a `.proto` imports, as written: `import "a/b.proto";`, and the `public` and
+/// `weak` forms alike.
+pub fn imports(src: &str) -> Vec<String> {
+    let (text, strs) = lex_strings(src);
+    let mut out = Vec::new();
+    for stmt in text.split([';', '{', '}']) {
+        let Some(rest) = stmt.trim().strip_prefix("import") else { continue };
+        if !rest.starts_with(|c: char| c.is_whitespace() || c == '"' || c == '\'') {
+            continue;
+        }
+        let rest = rest.trim_start();
+        let rest = ["public", "weak"].iter().find_map(|w| rest.strip_prefix(w)).map(str::trim_start).unwrap_or(rest);
+        let n = rest.trim_matches(|c| c == '"' || c == '\'');
+        if let Some(s) = n.parse::<usize>().ok().and_then(|k| strs.get(k)) {
+            out.push(s.clone());
+        }
     }
     out
 }
@@ -1154,5 +1212,46 @@ message Old {
         let src = "enum MemberTier { MEMBER_TIER_UNSPECIFIED = 0; MEMBER_TIER_GOLD = 1 [(foo) = {a: [1, 2]}]; MEMBER_TIER_BASIC = 2; }";
         let es = enums(src);
         assert_eq!(es[0].aliases(), vec!["gold".to_string(), "basic".to_string()]);
+    }
+
+    #[test]
+    fn 接頭辞は_buf_と同じに切る() {
+        for (name, want) in [
+            ("MemberTier", "MEMBER_TIER"),
+            ("HTTPMethod", "HTTP_METHOD"),
+            ("ABTest", "AB_TEST"),
+            ("IPv4Kind", "I_PV4_KIND"),
+            ("Tier2", "TIER2"),
+            ("MemberTierV2", "MEMBER_TIER_V2"),
+            ("Size60cm", "SIZE60CM"),
+            ("Member_Tier", "MEMBER_TIER"),
+            ("Carrier", "CARRIER"),
+        ] {
+            assert_eq!(upper_snake(name), want, "{name}");
+        }
+        let es = enums("enum HTTPMethod { HTTP_METHOD_UNSPECIFIED = 0; HTTP_METHOD_GET = 1; HTTP_METHOD_POST = 2; }");
+        assert_eq!(es[0].aliases(), vec!["get".to_string(), "post".to_string()]);
+        assert_eq!(es[0].unset().map(|v| v.name.as_str()), Some("HTTP_METHOD_UNSPECIFIED"));
+    }
+
+    #[test]
+    fn 数字で始まる残りは接頭辞ごと残す() {
+        let es = enums("enum Size { SIZE_UNSPECIFIED = 0; SIZE_60 = 1; SIZE_80 = 2; SIZE_LARGE = 3; }");
+        assert_eq!(es[0].aliases(), vec!["size_60".to_string(), "size_80".to_string(), "large".to_string()]);
+        // A remainder that is another value's whole name stays whole, so two values stay two.
+        let es = enums("enum Color { COLOR_UNSPECIFIED = 0; COLOR_RED = 1; RED = 2; }");
+        assert_eq!(es[0].aliases(), vec!["color_red".to_string(), "red".to_string()]);
+        // A zero value that is a value of its own is not "not set".
+        let es = enums("enum Status { STATUS_ACTIVE = 0; STATUS_CLOSED = 1; }");
+        assert_eq!(es[0].aliases(), vec!["active".to_string(), "closed".to_string()]);
+        assert!(es[0].unset().is_none());
+    }
+
+    #[test]
+    fn import_を読む() {
+        let src = "syntax = \"proto3\";\npackage shop.v1;\nimport \"buf/validate/validate.proto\";\n\
+                   import public 'shop/v1/common.proto';\nimport weak \"google/protobuf/struct.proto\";\n\
+                   // import \"commented.proto\";\nmessage Imported { int64 importance = 1; imported.Foo x = 2; }\n";
+        assert_eq!(imports(src), vec!["buf/validate/validate.proto", "shop/v1/common.proto", "google/protobuf/struct.proto"]);
     }
 }

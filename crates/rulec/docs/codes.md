@@ -137,9 +137,9 @@ Related codes: [E002](#e002)
 
 `error` — **Unreadable character**
 
-**When.** A character that is neither a letter nor `_` appears where a name is expected. The check exists so that a typo does not quietly become a name.
+**When.** A character that is neither a letter nor `_` appears where a name is expected — an alias in parentheses that is not a name (`六十(60)`) included. The check exists so that a typo does not quietly become a name, nor an alias quietly go missing.
 
-**Fix.** Delete the character. A name starts with a letter or `_` (`@x(x)` becomes `x(x)`).
+**Fix.** Delete the character. A name starts with a letter or `_` (`@x(x)` becomes `x(x)`, and `六十(60)` becomes `六十(size_60)`).
 
 **Smallest reproduction**:
 

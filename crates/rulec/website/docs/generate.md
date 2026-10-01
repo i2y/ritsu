@@ -406,7 +406,7 @@ service ShippingFeeService {
 }
 ```
 
-Three things in that file are worth saying out loud.
+Four things in that file are worth saying out loud.
 
 **The path spells the package**, which is what a buf module asks for, so
 the `.proto` can be dropped into one as it stands — `buf lint` finds
@@ -420,6 +420,11 @@ called with `GET`, which is what makes an answer cacheable.
 **The answer carries the rows that decided it**, so one call is one
 fixtures record, and every answer carries `rulec-source-sha256` — which
 version of the table said so.
+
+**A request names every input.** Each field is marked `optional`, so one
+left out is told apart from one set to zero: the service refuses it
+rather than deciding it as 0 or `false`, and refuses a field or an enum
+value the message does not have the same way.
 
 The stubs are generated the way [connect-py](https://github.com/connectrpc/connect-py)'s own
 documentation generates them, with buf — `gen` writes the `buf.yaml`

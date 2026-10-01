@@ -59,7 +59,7 @@ fn 銭の列に書いた円は百倍になる() {
     let src = money("銭", "5円");
     assert!(check(&src).is_empty(), "5円 は 500銭 として通る");
     let (f, c) = rulec::prepare(&src, "units.rule").expect("通る");
-    let g = rulec::codegen::Gen::new(&f, &c, &src);
+    let g = rulec::codegen::Gen::new(&f, &c, &src, "");
     assert!(g.python().contains("fee = 500"), "500 でなければ換算していない:\n{}", g.python());
 }
 
@@ -295,7 +295,7 @@ define fee(fee) : money[円, incl_tax] = base × 3.3%
     let by_yen = rule("10円");
     for src in [&by_sen, &by_yen] {
         let (f, c) = rulec::prepare(src, "units.rule").expect("1000銭 は 10円 として通る");
-        let g = rulec::codegen::Gen::new(&f, &c, src);
+        let g = rulec::codegen::Gen::new(&f, &c, src, "");
         assert!(
             g.python().contains("_round_up(raw, 10000)"),
             "10円 の格子で丸めていない:\n{}",
@@ -350,7 +350,7 @@ sequence 空(none)
     // 1000銭 is ten yen exactly, so it is a value of the column and is read as ten.
     let src = rule("1000銭");
     let (f, c) = rulec::prepare(&src, "units.rule").expect("1000銭 は 10円 として通る");
-    let g = rulec::codegen::Gen::new(&f, &c, &src);
+    let g = rulec::codegen::Gen::new(&f, &c, &src, "");
     assert!(
         g.python().contains("answer: int = 10"),
         "空のときの答えが 10円 になっていない:\n{}",

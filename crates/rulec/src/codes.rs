@@ -527,12 +527,12 @@ pub fn ledger() -> Vec<Entry> {
             "E002",
             tr!("読めない文字があります", "Unreadable character"),
             tr!(
-                "名前の位置に、文字でも `_` でもない文字（記号や制御文字）があるとき。打ち間違いが黙って名前になるのを防ぐための検査です。",
-                "A character that is neither a letter nor `_` appears where a name is expected. The check exists so that a typo does not quietly become a name."
+                "名前の位置に、文字でも `_` でもない文字（記号や制御文字）があるとき。括弧に入れた別名が名前になっていないとき（`六十(60)`）も同じです。打ち間違いが黙って名前になったり、別名が黙って消えたりするのを防ぐための検査です。",
+                "A character that is neither a letter nor `_` appears where a name is expected — an alias in parentheses that is not a name (`六十(60)`) included. The check exists so that a typo does not quietly become a name, nor an alias quietly go missing."
             ),
             tr!(
-                "その文字を消してください。名前は文字か `_` で始まります（`@x(x)` なら `x(x)`）。",
-                "Delete the character. A name starts with a letter or `_` (`@x(x)` becomes `x(x)`)."
+                "その文字を消してください。名前は文字か `_` で始まります（`@x(x)` なら `x(x)`、`六十(60)` なら `六十(size_60)`）。",
+                "Delete the character. A name starts with a letter or `_` (`@x(x)` becomes `x(x)`, and `六十(60)` becomes `六十(size_60)`)."
             ),
             X_E002,
             &["E001", "E009"],

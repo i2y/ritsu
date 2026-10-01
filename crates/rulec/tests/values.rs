@@ -51,7 +51,7 @@ fn 二つの列挙に同じ名前の値があってよい() {
 fn 同じ名前の値は列の列挙で生成される() {
     let src = shared("", ROWS);
     let (f, c) = rulec::prepare(&src, "a.rule").unwrap_or_else(|d| panic!("{:?}", d.iter().map(|d| d.code).collect::<Vec<_>>()));
-    let py = rulec::codegen::Gen::new(&f, &c, &src).python();
+    let py = rulec::codegen::Gen::new(&f, &c, &src, "").python();
     assert!(py.contains("cap == Capture.AUTOMATIC and conf == Confirmation.AUTOMATIC"), "{py}");
     assert!(py.contains("how = Confirmation.AUTOMATIC"), "{py}");
 }

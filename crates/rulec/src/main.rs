@@ -1392,6 +1392,9 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
     let mut dirty = 0u8;
     let (mut written, mut stale, mut missing): (Vec<String>, Vec<String>, Vec<String>) =
         (Vec::new(), Vec::new(), Vec::new());
+    // The contracts copied into the module so far, and the rule each came with: two rules
+    // may import the same one, but not two different files under one path.
+    let mut contracts: std::collections::BTreeMap<String, (String, String)> = std::collections::BTreeMap::new();
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -1417,7 +1420,7 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
                 return ExitCode::from(1);
             }
         };
-        let g = rulec::codegen::Gen::new(&f, &c, &src).at(path);
+        let g = rulec::codegen::Gen::new(&f, &c, &src, path);
         let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
         let pkg = rulec::backend::go_package(&alias);
         // Also emit the vectors and the expected values. Of the three uses in §9.3, the
@@ -1482,6 +1485,24 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
         // work in it as it stands.
         targets.push((format!("{out_dir}/proto/buf.yaml"), g.buf_yaml()));
         targets.push((format!("{out_dir}/proto/buf.gen.yaml"), g.buf_gen_yaml()));
+        // The contracts that `.proto` imports an enum from, so that the module builds as it
+        // stands (§15.160): each the file `check` held the rule to, copied byte for byte to
+        // the path the import names.
+        for (rel, body) in g.proto_contracts() {
+            let p = format!("{out_dir}/proto/{rel}");
+            if let Some((_, from)) = contracts.get(&p).filter(|(prev, _)| *prev != body) {
+                eprintln!(
+                    "{}",
+                    tr!(
+                        "error: `{from}` と `{path}` が、違う内容の契約を同じ `proto/{rel}` として取り込んでいます",
+                        "error: `{from}` and `{path}` import two different contracts as the same `proto/{rel}`"
+                    )
+                );
+                return ExitCode::from(1);
+            }
+            contracts.insert(p.clone(), (body.clone(), path.to_string()));
+            targets.push((p, body));
+        }
         targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
         targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
         // The cases the reference evaluator refuses, where there are any. They have no
@@ -1607,7 +1628,7 @@ fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool) -> 
         };
         let body = if html {
             // The page runs the generated JavaScript — the same code `rulec gen` writes.
-            let js = rulec::codegen::Gen::new(&f, &c, &src).javascript();
+            let js = rulec::codegen::Gen::new(&f, &c, &src, path).javascript();
             rulec::doc::render_html(&f, &c, &src, path, &js)
         } else if customer {
             rulec::doc::render_customer(&f, &c, &src, path)
@@ -2039,7 +2060,7 @@ fn api(files: &[&String]) -> ExitCode {
             Ok(x) => x,
             Err(e) => return e,
         };
-        println!("{}", rulec::codegen::Gen::new(&f, &c, &src).api());
+        println!("{}", rulec::codegen::Gen::new(&f, &c, &src, path).api());
     }
     ExitCode::from(0)
 }

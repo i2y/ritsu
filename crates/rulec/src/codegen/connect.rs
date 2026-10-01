@@ -30,10 +30,63 @@
 use super::{brand_of, pascal, pub_name, wire_of, Gen, Wire};
 use crate::ast::EnumSource;
 use crate::types::Ty;
+use std::path::{Path, PathBuf};
 
 /// The field number of `trace`. It sits far from the outputs so that an output added to a
 /// table later takes the next small number and leaves the trace where it was.
 const TRACE_FIELD: u32 = 100;
+
+/// An enum whose value set a `.proto` outside the rule declares (§15.59).
+struct Foreign {
+    /// The file as the rule cites it, from the rule's directory.
+    file: String,
+    /// The enum's name in that file.
+    sel: String,
+    /// The package the file declares.
+    pkg: Option<String>,
+    /// Where the generated module has the file, and so what the generated `.proto` imports:
+    /// its package as directories, then its name (§15.160).
+    import: String,
+    /// The enum as read, values and numbers.
+    decl: Option<crate::proto::Enum>,
+}
+
+/// One enum that crosses the wire, as the service maps it and `rulec api` describes it.
+struct WireEnum {
+    /// The type as a field names it: `Carrier`, or `shop.v1.MemberTier` for one imported.
+    ty: String,
+    /// For an imported enum, the file as the rule cites it and where the module has it.
+    contract: Option<(String, String)>,
+    /// The name of value 0 when it means "not set", which is no value of the rule's.
+    unset: Option<String>,
+    /// Each value of the rule's: its name here, its name on the wire, and its number.
+    values: Vec<(String, String, i64)>,
+}
+
+/// Where a contract sits in the generated module: its package as directories, then its file
+/// name — where buf's `PACKAGE_DIRECTORY_MATCH` puts it, whatever path the rule reached it by.
+fn import_path(file: &str, pkg: Option<&str>) -> String {
+    let base = Path::new(file).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| file.to_string());
+    match pkg {
+        Some(p) => format!("{}/{base}", p.replace('.', "/")),
+        None => base,
+    }
+}
+
+/// The directory a file's own imports are followed from: the root of the module it is in,
+/// when the file sits where its import path says, and else the directory it is in.
+fn module_root(disk: &Path, import: &str) -> PathBuf {
+    let up = Path::new(import).components().count();
+    let mut root = disk.to_path_buf();
+    for _ in 0..up {
+        root.pop();
+    }
+    if root.join(import) == disk {
+        root
+    } else {
+        disk.parent().map(|p| p.to_path_buf()).unwrap_or_default()
+    }
+}
 
 impl<'a> Gen<'a> {
     /// `rulec.<alias>.v<major>`.
@@ -86,18 +139,102 @@ impl<'a> Gen<'a> {
         out
     }
 
+    /// The directory of the rule, which the files it cites are followed from.
+    fn dir(&self) -> PathBuf {
+        Path::new(&self.path).parent().map(|p| p.to_path_buf()).unwrap_or_default()
+    }
+
     /// Where an enum's value set is declared, when that is a `.proto` outside this rule
-    /// (§15.59): the file as the rule wrote it, the enum's name there, and the package that
-    /// file declares. The generated `.proto` imports it rather than declaring the set twice.
-    fn foreign(&self, ty: &str) -> Option<(String, String, Option<String>)> {
+    /// (§15.59). The generated `.proto` imports it rather than declaring the set twice.
+    fn foreign(&self, ty: &str) -> Option<Foreign> {
         let im = self
             .f
             .enum_imports
             .iter()
             .find(|p| p.kind == EnumSource::Proto && p.target.text == ty)?;
-        let dir = std::path::Path::new(&self.path).parent().map(|p| p.to_path_buf()).unwrap_or_default();
-        let pkg = std::fs::read_to_string(dir.join(&im.file)).ok().and_then(|s| crate::proto::package(&s));
-        Some((im.file.clone(), im.source.clone(), pkg))
+        let text = std::fs::read_to_string(self.dir().join(&im.file)).ok();
+        let pkg = text.as_deref().and_then(crate::proto::package);
+        let decl = text.as_deref().and_then(|s| crate::proto::enums(s).into_iter().find(|e| e.name == im.source));
+        Some(Foreign { file: im.file.clone(), sel: im.source.clone(), import: import_path(&im.file, pkg.as_deref()), pkg, decl })
+    }
+
+    /// One enum on the wire: what a field calls its type, and each value of the rule's with
+    /// the name and the number it travels as.
+    ///
+    /// The rule's own enum is declared in the generated `.proto`, its values numbered from 1
+    /// in the order the rule declares them, with 0 left for "not set". An imported one is the
+    /// contract's: its names and numbers are read from the file, each matched to the rule's
+    /// value by the alias `rulec check` held the two together by.
+    fn wire_enum(&self, ty: &str) -> WireEnum {
+        let values = self.c.enums.get(ty).cloned().unwrap_or_default();
+        match self.foreign(ty) {
+            Some(fr) => {
+                let named = fr.decl.as_ref().map(|d| d.named()).unwrap_or_default();
+                let decl = self.f.enums.iter().find(|e| e.name.text == ty);
+                let values = values
+                    .iter()
+                    .filter_map(|v| {
+                        let n = decl?.values.iter().find(|n| n.text == *v)?;
+                        let ascii = n.ascii.clone().unwrap_or_else(|| n.text.clone());
+                        let (_, pv) = named.iter().find(|(a, _)| *a == ascii)?;
+                        Some((v.clone(), pv.name.clone(), pv.number))
+                    })
+                    .collect();
+                WireEnum {
+                    ty: match &fr.pkg {
+                        Some(p) => format!("{p}.{}", fr.sel),
+                        None => fr.sel.clone(),
+                    },
+                    unset: fr.decl.as_ref().and_then(|d| d.unset()).map(|v| v.name.clone()),
+                    contract: Some((fr.file, fr.import)),
+                    values,
+                }
+            }
+            None => {
+                let name = self.enum_names.get(ty).cloned().unwrap_or_else(|| pascal(ty));
+                let prefix = crate::proto::upper_snake(&name);
+                let values = values
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| {
+                        let al = self.value_names.get(&(ty.to_string(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
+                        (v.clone(), format!("{prefix}_{al}"), i as i64 + 1)
+                    })
+                    .collect();
+                WireEnum { ty: name, contract: None, unset: Some(format!("{prefix}_UNSPECIFIED")), values }
+            }
+        }
+    }
+
+    /// The contracts the generated `.proto` imports, as files to put in the module beside it:
+    /// each at the path it is imported by, byte for byte — the file `rulec check` held the
+    /// rule to — and with it each file it imports in turn that is found where its import path
+    /// says. The well-known types are buf's own; an import found nowhere is left to buf, which
+    /// names it.
+    pub fn proto_contracts(&self) -> Vec<(String, String)> {
+        let mut todo: Vec<(PathBuf, String)> = Vec::new();
+        for ty in self.wire_enums() {
+            if let Some(fr) = self.foreign(&ty) {
+                todo.push((self.dir().join(&fr.file), fr.import));
+            }
+        }
+        let mut out: Vec<(String, String)> = Vec::new();
+        while let Some((disk, at)) = todo.pop() {
+            if out.iter().any(|(p, _)| *p == at) {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&disk) else { continue };
+            let root = module_root(&disk, &at);
+            for imp in crate::proto::imports(&text) {
+                let p = root.join(&imp);
+                if !imp.starts_with("google/protobuf/") && p.is_file() {
+                    todo.push((p, imp));
+                }
+            }
+            out.push((at, text));
+        }
+        out.sort();
+        out
     }
 
     /// The type of one value in the `.proto`.
@@ -105,8 +242,8 @@ impl<'a> Gen<'a> {
         match ty {
             Ty::Opt(t) => self.proto_ty(name, t),
             Ty::Enum(n) => match self.foreign(n) {
-                Some((_, sel, Some(pkg))) => format!("{pkg}.{sel}"),
-                Some((_, sel, None)) => sel,
+                Some(Foreign { sel, pkg: Some(pkg), .. }) => format!("{pkg}.{sel}"),
+                Some(Foreign { sel, pkg: None, .. }) => sel,
                 None => self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n)),
             },
             Ty::Bool => "bool".into(),
@@ -149,8 +286,13 @@ impl<'a> Gen<'a> {
     /// The comment is left out when it would only repeat the field's own name, which is what
     /// happens to every field of a rule written in English that carries no unit. A comment
     /// that says nothing teaches the reader to skip the ones that do.
-    fn proto_field(&self, name: &str, alias: &str, ty: &Ty, n: u32) -> String {
-        let label = if matches!(ty, Ty::Opt(_)) { "optional " } else { "" };
+    ///
+    /// `presence` is for a field the caller sends. proto3 reads a field left out as its zero,
+    /// so a request that named nothing would be decided as one that said 0, false and the
+    /// first value; marked `optional`, a field left out is told apart and refused (§15.160).
+    /// What the service answers keeps the plain form: an answer always has every output.
+    fn proto_field(&self, name: &str, alias: &str, ty: &Ty, n: u32, presence: bool) -> String {
+        let label = if presence || matches!(ty, Ty::Opt(_)) { "optional " } else { "" };
         let note = self.proto_note(name, ty);
         let comment = if note.eq_ignore_ascii_case(alias) { String::new() } else { format!("  // {note}\n") };
         format!("{comment}  {label}{} {alias} = {n};\n", self.proto_ty(name, ty))
@@ -211,9 +353,9 @@ impl<'a> Gen<'a> {
         // contract's own enum rather than a second one that means the same thing.
         let mut imports: Vec<String> = Vec::new();
         for ty in self.wire_enums() {
-            if let Some((file, _, _)) = self.foreign(&ty) {
-                if !imports.contains(&file) {
-                    imports.push(file);
+            if let Some(fr) = self.foreign(&ty) {
+                if !imports.contains(&fr.import) {
+                    imports.push(fr.import);
                 }
             }
         }
@@ -228,18 +370,20 @@ impl<'a> Gen<'a> {
             if self.foreign(&ty).is_some() {
                 continue;
             }
-            let name = self.enum_names.get(&ty).cloned().unwrap_or_else(|| pascal(&ty));
-            let prefix = crate::proto::upper_snake(&name);
-            let head = if ty.eq_ignore_ascii_case(&name) { String::new() } else { format!("// {ty}\n") };
+            let we = self.wire_enum(&ty);
+            let name = &we.ty;
+            let head = if ty.eq_ignore_ascii_case(name) { String::new() } else { format!("// {ty}\n") };
             o.push_str(&format!("\n{head}enum {name} {{\n"));
             // Proto3's zero value is "not set", and it is not one of the rule's values: an
             // input that arrives as 0 has named nothing, and the service refuses it the way
             // the module refuses anything else outside the declared domain.
-            o.push_str(&format!("  {prefix}_UNSPECIFIED = 0;\n"));
-            for (i, v) in self.c.enums.get(&ty).cloned().unwrap_or_default().iter().enumerate() {
+            if let Some(unset) = &we.unset {
+                o.push_str(&format!("  {unset} = 0;\n"));
+            }
+            for (v, wire, number) in &we.values {
                 let al = self.value_names.get(&(ty.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
                 let note = if v.eq_ignore_ascii_case(&al) { String::new() } else { format!("  // {v}") };
-                o.push_str(&format!("  {prefix}_{al} = {};{note}\n", i + 1));
+                o.push_str(&format!("  {wire} = {number};{note}\n"));
             }
             o.push_str("}\n");
         }
@@ -252,20 +396,34 @@ impl<'a> Gen<'a> {
 
         // The sequence a walk reads is a repeated message of the element's own fields (§15.56).
         if let Some(el) = &self.f.elements {
-            o.push_str(&tr!("\n// {} の一件。\n", "\n// One {}.\n", el.name.text));
+            o.push_str(&tr!(
+                "\n// {} の一件。フィールドの扱いは、下の入力と同じ。\n",
+                "\n// One {}. Its fields are sent the way the inputs below are.\n",
+                el.name.text
+            ));
             o.push_str("message Element {\n");
             for (n, fd) in el.fields.iter().enumerate() {
-                o.push_str(&self.proto_field(&fd.name.text, &pub_name(&fd.name), &self.ty_of(&fd.name.text), n as u32 + 1));
+                o.push_str(&self.proto_field(&fd.name.text, &pub_name(&fd.name), &self.ty_of(&fd.name.text), n as u32 + 1, true));
             }
             o.push_str("}\n");
         }
 
-        o.push_str(&tr!("\n// 規則 {} v{} の入力。\n", "\n// The inputs of rule {} v{}.\n", self.f.name.text, self.f.version));
+        o.push_str(&tr!(
+            "\n// 規則 {} v{} の入力。\n\
+             // 省いたフィールドと、0 や false を入れたフィールドを区別するため、どれも optional にしてある。\n\
+             // 規則が要るものを省いたリクエストは invalid_argument で断る。省いてよいものは、注釈にそう書いてある。\n",
+            "\n// The inputs of rule {} v{}.\n\
+             // Every field is optional on the wire, so that one left out is told apart from one set\n\
+             // to zero or false; a request that leaves out one the rule needs is refused with\n\
+             // invalid_argument. The ones that may be left unset say so.\n",
+            self.f.name.text,
+            self.f.version
+        ));
         o.push_str("message DecideRequest {\n");
         let mut n = 0u32;
         for i in &self.f.inputs {
             n += 1;
-            o.push_str(&self.proto_field(&i.name.text, &pub_name(&i.name), &self.ty_of(&i.name.text), n));
+            o.push_str(&self.proto_field(&i.name.text, &pub_name(&i.name), &self.ty_of(&i.name.text), n, true));
         }
         if let Some(el) = &self.f.elements {
             n += 1;
@@ -285,7 +443,7 @@ impl<'a> Gen<'a> {
         ));
         o.push_str("message DecideResponse {\n");
         for (k, out) in self.f.outputs.iter().enumerate() {
-            o.push_str(&self.proto_field(&out.name.text, &pub_name(&out.name), &self.ty_of(&out.name.text), k as u32 + 1));
+            o.push_str(&self.proto_field(&out.name.text, &pub_name(&out.name), &self.ty_of(&out.name.text), k as u32 + 1, false));
         }
         o.push_str(&tr!(
             "\n  // 当てはまった行。表ごとに一つ、順番に。\n",
@@ -351,25 +509,23 @@ impl<'a> Gen<'a> {
             .collect();
         for ty in self.wire_enums() {
             let cls = self.enum_names.get(&ty).cloned().unwrap_or_else(|| pascal(&ty));
-            // How the enum is spelled in Python. The plugin strips the enum's own name from
-            // its values, which leaves exactly the alias the rule declared, so the two sides
-            // of the table below are the same word.
+            // How the enum is spelled in Python. The values are the imported file's when it is
+            // imported, so they are read from the module the plugin wrote for **that** file.
             let qual: String = match self.foreign(&ty) {
-                // The values are the imported file's, so they are read from the module the
-                // plugin wrote for **that** file, not from this rule's.
-                Some((file, sel, _)) => {
-                    let module = ext_module(&file);
-                    let name = if module.contains('.') { module.replace('.', "_") } else { module };
-                    format!("{name}.{sel}")
-                }
+                Some(fr) => format!("{}.{}", stub_module(&fr.import).1, fr.sel),
                 None => format!("pb.{cls}"),
             };
-            let values = self.c.enums.get(&ty).cloned().unwrap_or_default();
-            let pairs: Vec<String> = values
+            // Each value is taken by its number, with its name beside it. The plugin names a
+            // member after the value with the enum's prefix taken off, but not always — a name
+            // left with a leading digit keeps the prefix — and a number is what the wire and
+            // the contract agree on in any case.
+            let we = self.wire_enum(&ty);
+            let pairs: Vec<String> = we
+                .values
                 .iter()
-                .map(|v| {
+                .map(|(v, wire, number)| {
                     let al = self.value_names.get(&(ty.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
-                    format!("    {qual}.{al}: m.{cls}.{al},\n")
+                    format!("    {qual}({number}): m.{cls}.{al},  # {wire}\n")
                 })
                 .collect();
             o.push_str(&format!("ENUM_{}: dict[{qual}, m.{cls}] = {{\n{}}}\n\n", crate::proto::upper_snake(&cls), pairs.concat()));
@@ -464,6 +620,43 @@ impl<'a> Gen<'a> {
         } else {
             format!("    args = (\n{}    )\n", args.concat())
         };
+        // The fields a request has to set (§15.160): every input that is not `T?`, by the
+        // name the message has it under and the rule's own, and the same for one element.
+        let table = |pairs: Vec<(String, String)>| -> String {
+            match pairs.len() {
+                0 => "()".to_string(),
+                1 => format!("(({:?}, {:?}),)", pairs[0].0, pairs[0].1),
+                _ => format!("(\n{})", pairs.iter().map(|(f, n)| format!("    ({f:?}, {n:?}),\n")).collect::<String>()),
+            }
+        };
+        let needed = |names: Vec<&crate::ast::Name>| -> Vec<(String, String)> {
+            names
+                .into_iter()
+                .filter(|n| !matches!(self.ty_of(&n.text), Ty::Opt(_)))
+                .map(|n| (pub_name(n), n.text.clone()))
+                .collect()
+        };
+        let mut fields = format!(
+            "\n\n# {}\nREQUIRED: tuple[tuple[str, str], ...] = {}\n",
+            tr!(
+                "リクエストが必ず入れるフィールドを、メッセージでの名前と規則での名前で。省いたことが分かるように、\n# .proto ではどのフィールドも optional にしてある。",
+                "The fields a request has to set, by the name the message has each under and the\n# rule's own. The .proto marks every field optional, so that one left out is seen."
+            ),
+            table(needed(self.f.inputs.iter().map(|i| &i.name).collect()))
+        );
+        let mut required = "    _required(request, REQUIRED)\n".to_string();
+        if let Some(el) = &self.f.elements {
+            fields.push_str(&format!(
+                "ELEMENT_REQUIRED: tuple[tuple[str, str], ...] = {}\n",
+                table(needed(el.fields.iter().map(|fd| &fd.name).collect()))
+            ));
+            required.push_str(&format!(
+                "    for i, e in enumerate(request.{}):\n        _required(e, ELEMENT_REQUIRED, f\"{}[{{i}}].\")\n",
+                pub_name(&el.name),
+                el.name.text
+            ));
+        }
+        fields.push_str(PY_SERVICE_REQUIRED);
         let outs: String = if self.f.outputs.len() == 1 {
             let o = &self.f.outputs[0];
             self.into_response(&pub_name(&o.name), &self.ty_of(&o.name.text), "out")
@@ -477,25 +670,19 @@ impl<'a> Gen<'a> {
                 })
                 .collect()
         };
-        // The stubs of an imported enum live in the module protoc wrote for **its** file.
+        // The stubs of an imported enum live in the module the plugin wrote for **its** file.
         let mut ext: Vec<String> = Vec::new();
         for ty in self.wire_enums() {
-            if let Some((file, _, _)) = self.foreign(&ty) {
-                let module = ext_module(&file);
-                // A module under a directory is imported under a flat name; a flat one needs
-                // no second spelling.
-                let line = match module.contains('.') {
-                    true => format!("import {module} as {}\n", module.replace('.', "_")),
-                    false => format!("import {module}\n"),
-                };
+            if let Some(fr) = self.foreign(&ty) {
+                let line = stub_module(&fr.import).0;
                 if !ext.contains(&line) {
                     ext.push(line);
                 }
             }
         }
         let doc = tr!(
-            "規則 {} v{} を、Connect のサービス一つとして出す。\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # 標準ライブラリだけで試す\n\nTLS と認証は前に置くこと。このサーバは自分では持たない。\n\n呼ぶ側と交わすのは隣の `.proto` だけで、その stub は buf が書く:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\n決めているのは隣のモジュールで、そちらは何にも依存しない。ここにあるのはワイヤだけである。\n返す値には当てはまった行が付く。一回の呼び出しが記録一件で、--record を付ければ\nその一行がファイルに溜まり、rulec replay と rulec diff がそのまま読む。",
-            "Rule {} v{} as one Connect service.\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # the standard library alone\n\nPut TLS and authentication in front: this server carries neither.\n\nThe only thing a caller agrees to is the `.proto` beside it, whose stubs buf writes:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\nThe deciding is the module next to this file, which depends on nothing; what is here is the\nwire. The answer carries the rows that matched, so one call is one record: with --record that\nline is appended to a file, and rulec replay and rulec diff read it as it stands.",
+            "規則 {} v{} を、Connect のサービス一つとして出す。\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # 標準ライブラリのサーバで試す\n\nTLS と認証は前に置くこと。このサーバは自分では持たない。\n\n呼ぶ側と交わすのは隣の `.proto` だけで、その stub は buf が書く:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\n決めているのは隣のモジュールで、そちらは何にも依存しない。ここにあるのはワイヤだけである。\n返す値には当てはまった行が付く。一回の呼び出しが記録一件で、--record を付ければ\nその一行がファイルに溜まり、rulec replay と rulec diff がそのまま読む。",
+            "Rule {} v{} as one Connect service.\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # the standard library's server\n\nPut TLS and authentication in front: this server carries neither.\n\nThe only thing a caller agrees to is the `.proto` beside it, whose stubs buf writes:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\nThe deciding is the module next to this file, which depends on nothing; what is here is the\nwire. The answer carries the rows that matched, so one call is one record: with --record that\nline is appended to a file, and rulec replay and rulec diff read it as it stands.",
             self.f.name.text,
             self.f.version,
             alias = alias
@@ -532,14 +719,19 @@ impl<'a> Gen<'a> {
                     s.concat()
                 },
             )
-            .replace("@TYPEVAR@", if self.wire_enums().is_empty() { "" } else { ", Any, TypeVar" })
+            .replace("@TYPEVAR@", if self.wire_enums().is_empty() { "" } else { ", TypeVar" })
             .replace("@MAPPING@", if self.wire_enums().is_empty() { "" } else { ", Mapping" })
+            .replace("@FIELDS@", &fields)
+            .replace("@REQUIRED@", &required)
             .replace("@ARGS@", &args)
             .replace("@OUTS@", &outs)
             .replace(
                 "@DATES@",
                 if self.has_date(Dir::In) || self.has_date(Dir::Out) { PY_SERVICE_DATES } else { "" },
             )
+            .replace("@D_CODECS@", &tr!("JSON の読み手は、知らないフィールドと列挙の値を断る。Connect の既定はそれを捨てるので、\n# 綴りを誤った入力が、ゼロ値として判断されてしまう。", "The JSON reader refuses a field or an enum value it does not know. Connect's default\n# drops it, and a misspelt input would then be decided as if it were zero."))
+            .replace("@D_REQUIRED@", &tr!("規則が要るフィールドが省かれていたら断る。proto3 は省かれたフィールドをゼロ値として\n    読むので、これが無いと、何も名指さなかったリクエストが 0 と false を言ったものとして判断される。", "Refuse a request that left out a field the rule needs. proto3 reads a field left out\n    as its zero, so without this a request that named nothing would be decided as 0 and false."))
+            .replace("@M_REQUIRED@", &tr!("設定されていません", "not set"))
             .replace("@D_SHA@", &tr!("どの版の表が答えたか。答えを保つ呼び出し側のために、返す見出しに入れる。", "Which version of the table answered; it goes in a response header for a caller that keeps the answer."))
             .replace("@D_MEMBER@", &tr!("列挙の値一つ。契約に無い番号は、呼び出し側の契約違反である。", "One value of an enum. A number the contract does not have is a contract violation by the caller."))
             .replace("@M_MEMBER@", &tr!("{{ty}} の値ではありません: {{v}}", "not a value of {{ty}}: {{v}}"))
@@ -554,7 +746,7 @@ impl<'a> Gen<'a> {
             .replace("@D_INTERNAL@", &tr!("静的に証明できなかった重なりに、実際に当たった（W114）。どちらの行を採るかは表が決めることで、\n        # 呼び出し側には直せない。だから 500 で、気づかれるべきものとして返す。", "An overlap the checker could not settle statically was actually hit (W114). Which row wins is\n        # the table's to decide and the caller cannot fix it, so it answers 500: something to notice."))
             .replace("@D_APP@", &tr!("ASGI アプリとしてのサービス。uvicorn・hypercorn・daphne のどれでも動く。", "The service as an ASGI application, for uvicorn, hypercorn or daphne."))
             .replace("@D_WSGI@", &tr!("同じサービスの WSGI 版。gunicorn・uWSGI のような同期のサーバ向け。", "The same service as a WSGI application, for a synchronous server such as gunicorn or uWSGI."))
-            .replace("@D_SERVER@", &tr!("標準ライブラリだけで、WSGI の側を立てる。何も入れずに試すための道で、本番は\n    uvicorn か gunicorn に上の app を渡すこと。番号に 0 を渡すと空いているものが取られる。", "The WSGI side, served by the standard library alone: the way to try it with nothing\n    installed. In production, hand `app` to uvicorn or `wsgi_app` to gunicorn. A port of 0\n    takes any free one."))
+            .replace("@D_SERVER@", &tr!("WSGI の側を、標準ライブラリのサーバで立てる。uvicorn も gunicorn も入れずに試すためのもので、\n    connectrpc と stub は要る。本番は uvicorn か gunicorn に上の app を渡すこと。番号に 0 を渡すと\n    空いているものが取られる。", "The WSGI side, on the standard library's own server: a way to try it without uvicorn or\n    gunicorn, though connectrpc and the stubs are still needed. In production, hand `app` to\n    uvicorn or `wsgi_app` to gunicorn. A port of 0 takes any free one."))
             .replace("@D_QUIET@", &tr!("アクセスログは出さない。通信の話であって、この規則が言うことではない。", "No access log: that is the transport talking, not this rule."))
             .replace("@D_MAIN@", &tr!("引数を読んで待ち受ける。", "Read the arguments and listen."))
             .replace("@D_LIMITED@", &tr!(
@@ -571,10 +763,34 @@ enum Dir {
     Out,
 }
 
-/// `api/v1/order.proto` → `api.v1.order_pb`, the module protobuf-py's plugin writes for it.
-fn ext_module(file: &str) -> String {
-    file.trim_end_matches(".proto").replace(['/', '\\'], ".") + "_pb"
+/// `shop/v1/order.proto` → the line importing the module protobuf-py's plugin writes for it,
+/// and the name the service uses it by: `from stubs.shop.v1 import order_pb as
+/// shop_v1_order_pb`.
+///
+/// The plugin writes it into `stubs/` beside this rule's own stubs, and it is imported from
+/// there rather than as a module of its own on the path. The rule's stub imports it relative
+/// to itself, so the two are one module; imported by the bare name, it could only be found
+/// with `stubs/` added to the path, and was then a second copy of the same file.
+fn stub_module(import: &str) -> (String, String) {
+    let dotted = import.trim_end_matches(".proto").replace(['/', '\\'], ".") + "_pb";
+    match dotted.rsplit_once('.') {
+        Some((pkg, base)) => {
+            let flat = dotted.replace('.', "_");
+            (format!("from stubs.{pkg} import {base} as {flat}\n"), flat)
+        }
+        None => (format!("from stubs import {dotted}\n"), dotted),
+    }
 }
+
+/// The one check of a request's fields: each the rule needs is there (§15.160).
+const PY_SERVICE_REQUIRED: &str = r#"
+
+def _required(message: Any, fields: tuple[tuple[str, str], ...], at: str = "") -> None:
+    """@D_REQUIRED@"""
+    for field, name in fields:
+        if not message.has_field(field):
+            raise ConnectError(Code.INVALID_ARGUMENT, f"{at}{name}: @M_REQUIRED@")
+"#;
 
 /// The enum tables and the one reader of them, for a rule that has an enum on the wire.
 const PY_SERVICE_MEMBER: &str = r#"
@@ -615,9 +831,10 @@ from __future__ import annotations
 
 @IMPORTS@import io
 import sys
-from typing import TYPE_CHECKING@TYPEVAR@
+from typing import TYPE_CHECKING, Any@TYPEVAR@
 
 from connectrpc.code import Code
+from connectrpc.codec import proto_binary_codec, proto_json_codec
 from connectrpc.errors import ConnectError
 
 import @ALIAS@ as m
@@ -639,7 +856,10 @@ if TYPE_CHECKING:
 
 # @D_SHA@
 SOURCE_SHA256 = "@SHA@"
-@MEMBER@@DATES@
+
+# @D_CODECS@
+CODECS = (proto_binary_codec(), proto_json_codec(ignore_unknown_fields=False))
+@MEMBER@@DATES@@FIELDS@
 
 def decide(
     request: pb.DecideRequest,
@@ -647,7 +867,7 @@ def decide(
     record: str | None = None,
 ) -> pb.DecideResponse:
     """@D_DECIDE@"""
-@ARGS@    try:
+@REQUIRED@@ARGS@    try:
         out, trace = m.@ALIAS@_traced(*args)
     except m.RuleInputError as e:
         # @D_INVALID@
@@ -692,12 +912,12 @@ class @CLASS@Sync(@SVC@Sync):
 
 def application(record: str | None = None) -> @SVC@ASGIApplication:
     """@D_APP@"""
-    return @SVC@ASGIApplication(@CLASS@(record))
+    return @SVC@ASGIApplication(@CLASS@(record), codecs=CODECS)
 
 
 def wsgi_application(record: str | None = None) -> @SVC@WSGIApplication:
     """@D_WSGI@"""
-    return @SVC@WSGIApplication(@CLASS@Sync(record))
+    return @SVC@WSGIApplication(@CLASS@Sync(record), codecs=CODECS)
 
 
 # uvicorn @ALIAS@_service:app --port 8080
@@ -1038,11 +1258,18 @@ impl<'a> Gen<'a> {
         let alias = pub_name(&self.f.name);
         let svc = self.proto_service();
         let pkg = self.proto_package();
+        // `optional` is the rule's `T?`: a value that may be absent. It is not the `.proto`'s
+        // label, which every field a caller sends carries (§15.160). `enum` names the rule's
+        // enum, which is what `enums` is keyed by: one contract's enum may be imported into
+        // two of the rule's, and the type alone would not say which.
         let field = |name: &str, n: &crate::ast::Name, ty: &Ty| -> String {
+            let inner = if let Ty::Opt(t) = ty { t.as_ref() } else { ty };
             crate::json::Obj::new()
                 .str("name", name)
                 .str("field", &pub_name(n))
                 .str("type", &self.proto_ty(name, ty))
+                .bool("optional", matches!(ty, Ty::Opt(_)))
+                .opt_str("enum", if let Ty::Enum(e) = inner { Some(e.as_str()) } else { None })
                 .finish()
         };
         let mut ins: Vec<String> = self
@@ -1057,14 +1284,53 @@ impl<'a> Gen<'a> {
                     .str("name", &el.name.text)
                     .str("field", &pub_name(&el.name))
                     .str("type", "repeated Element")
+                    .bool("optional", false)
                     .finish(),
             );
         }
+        let elems: Option<String> = self.f.elements.as_ref().map(|el| {
+            crate::json::arr(
+                &el.fields.iter().map(|fd| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text))).collect::<Vec<_>>(),
+            )
+        });
         let outs: Vec<String> = self
             .f
             .outputs
             .iter()
             .map(|o| field(&o.name.text, &o.name, &self.ty_of(&o.name.text)))
+            .collect();
+        // Every enum that crosses the wire, with each value's name and number there: what a
+        // caller writing the JSON by hand has to send, and how to read a value 0 that the
+        // answer leaves out. `unset` is the name of value 0 when it means "not set"; when it
+        // is null, value 0 is one of the rule's and appears among the values.
+        let quoted = |s: Option<&str>| s.map(crate::json::quote).unwrap_or_else(|| "null".into());
+        let enums: Vec<String> = self
+            .wire_enums()
+            .iter()
+            .map(|ty| {
+                let we = self.wire_enum(ty);
+                let values: Vec<String> = we
+                    .values
+                    .iter()
+                    .map(|(v, wire, number)| crate::json::Obj::new().str("name", v).str("alias", wire).int("number", *number).finish())
+                    .collect();
+                crate::json::Obj::new()
+                    .str("name", ty)
+                    .str("alias", &we.ty)
+                    .raw(
+                        "contract",
+                        match &we.contract {
+                            Some((file, import)) => crate::json::Obj::new()
+                                .str("file", file)
+                                .str("proto", format!("proto/{import}"))
+                                .finish(),
+                            None => "null".into(),
+                        },
+                    )
+                    .raw("unset", quoted(we.unset.as_deref()))
+                    .raw("values", crate::json::arr(&values))
+                    .finish()
+            })
             .collect();
         let python = crate::json::Obj::new()
             .str("module", &format!("{alias}_service.py"))
@@ -1102,7 +1368,9 @@ impl<'a> Gen<'a> {
             .str("json_names", "lowerCamelCase")
             .str("json_int64", "string")
             .raw("request_fields", crate::json::arr(&ins))
+            .raw("element_fields", elems.unwrap_or_else(|| "null".into()))
             .raw("response_fields", crate::json::arr(&outs))
+            .raw("enums", crate::json::arr(&enums))
             .raw("python", python)
             .finish()
     }

@@ -399,8 +399,14 @@ value refused at its own boundary and one refused after it is recorded (§15.116
             "stubs":"cd proto && buf generate",
             "buf_yaml":"proto/buf.yaml","buf_gen_yaml":"proto/buf.gen.yaml",
             "json_names":"lowerCamelCase","json_int64":"string",
-            "request_fields":[{"name":"商品合計","field":"subtotal","type":"int64"}],
-            "response_fields":[{"name":"素割引","field":"raw","type":"int64"}],
+            "request_fields":[{"name":"商品合計","field":"subtotal","type":"int64","optional":false},
+                              {"name":"種別","field":"kind","type":"CouponKind","optional":false,
+                               "enum":"クーポン種別"}],
+            "element_fields":null,
+            "response_fields":[{"name":"素割引","field":"raw","type":"int64","optional":false}],
+            "enums":[{"name":"クーポン種別","alias":"CouponKind","contract":null,
+                      "unset":"COUPON_KIND_UNSPECIFIED",
+                      "values":[{"name":"率引き","alias":"COUPON_KIND_PERCENT","number":1}]}],
             "python":{"module":"coupon_step_service.py",
                       "class":"CouponStep","sync_class":"CouponStepSync",
                       "asgi":"app","wsgi":"wsgi_app",
@@ -469,6 +475,25 @@ names no function in a language either: it gives the source and the module it bu
 calls (`call`, `post_return`, `realloc`) and the `memory`, the `runner` that `rulec test`
 drives, and the `component` line that wraps the module for the component model
 ([generated-code.md](generated-code.md#wasm)).
+
+The `connect` entry is the wire a caller writes by hand, without the stubs: the method's
+`path`, the two message names, and under `request_fields` and `response_fields` each field by
+the rule's own name (`name`), the name the message has it under (`field`, which the JSON writes
+in `json_names` form) and its `type` there. `optional` is the rule's `T?` — a value that may be
+absent — and not the `.proto`'s label, which every field a caller sends carries so that a
+field left out is refused rather than read as zero
+([generated-code.md](generated-code.md#the-rule-as-a-connect-service)). A field whose type is
+an enum names the rule's enum under `enum`, which is what `enums` is keyed by: one contract's
+enum may be imported into two of the rule's, and the type alone would not say which. A rule
+that walks a sequence describes the fields of one element under `element_fields`, in the same
+shape, and has `null` there otherwise. `enums` lists every enum that crosses the wire, each
+value with the name the wire spells it by (`alias`) and its `number`. For the rule's own enum
+the values are numbered from 1 and `unset` names value 0, which means "not set" and is
+refused; `contract` is `null`. For one imported from a `.proto` (`import proto`), names and
+numbers are the contract's, `contract` gives the file as the rule cites it and where `gen` put
+the copy the module imports (`proto`), and `unset` is `null` when the contract's value 0 is a
+value of the rule's — it is then the value numbered 0, which is also what an answer that
+leaves the field out means.
 
 A rule that is one step of a state machine (§15.148) carries `machine` at the top level, and
 `null` there otherwise:

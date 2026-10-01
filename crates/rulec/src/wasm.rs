@@ -123,7 +123,7 @@ pub extern "C" fn rulec_gen(src: *const u8, ja: u32) -> *mut u8 {
     lang(ja);
     let src = input(src);
     let Some((f, c)) = passing(src) else { return out(&refused(src)) };
-    let g = Gen::new(&f, &c, src).at(PATH);
+    let g = Gen::new(&f, &c, src, PATH);
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
     let pkg = crate::backend::go_package(&alias);
     let mut files: Vec<String> = Vec::new();
@@ -169,7 +169,7 @@ pub extern "C" fn rulec_doc(src: *const u8, ja: u32) -> *mut u8 {
     lang(ja);
     let src = input(src);
     let Some((f, c)) = passing(src) else { return out(&refused(src)) };
-    let js = Gen::new(&f, &c, src).javascript();
+    let js = Gen::new(&f, &c, src, PATH).javascript();
     let html = crate::doc::render_html(&f, &c, src, PATH, &js);
     out(&Obj::new().bool("ok", true).str("html", &html).finish())
 }

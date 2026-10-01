@@ -499,7 +499,7 @@ fn 定義の中で矛盾する重なりは消去が決める() {
     assert!(!codes.contains(&"E105"), "起きない重なりでエラーにしている: {codes:?}");
     assert!(!codes.contains(&"W114"), "消去で決まるので警告も出ない: {codes:?}");
     let (f, c) = rulec::prepare(src, "d.rule").expect("検査は通る");
-    let py = rulec::codegen::Gen::new(&f, &c, src).python();
+    let py = rulec::codegen::Gen::new(&f, &c, src, "").python();
     // The exception class is part of every module; what a decided pair does not get is the
     // guard, and the guard names the code it came from.
     assert!(!py.contains("W114"), "決まった対にガードは要らない");
@@ -529,7 +529,7 @@ fn 決められない重なりはガードへ降ろす() {
     );
     // The matching guard goes into the generated code (§8.1).
     let (f, c) = rulec::prepare(&src, "d.rule").expect("検査は通る");
-    let py = rulec::codegen::Gen::new(&f, &c, &src).python();
+    let py = rulec::codegen::Gen::new(&f, &c, &src, "").python();
     assert!(py.contains("ガード"), "ガードが入っていない");
     assert!(py.contains("RuleContradictionError"), "ガードが例外を投げない");
 }

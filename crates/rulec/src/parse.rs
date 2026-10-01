@@ -563,10 +563,28 @@ impl P {
         }
         let mut ascii = None;
         if ts.get(j).is_some_and(|t| t.is(&Kind::LParen)) {
-            if let Some(a) = ts.get(j + 1).and_then(|t| t.ident()) {
-                ascii = Some(a.to_string());
+            match ts.get(j + 1).and_then(|t| t.ident()) {
+                Some(a) if ts.get(j + 2).is_some_and(|t| t.is(&Kind::RParen)) => {
+                    ascii = Some(a.to_string());
+                    j += 3; // ( ident )
+                }
+                // An alias is a name, and a name begins with a letter or `_`. Taken as no
+                // alias, `六十(60)` used to pass with the parentheses dropped (§15.160).
+                _ => {
+                    let inside = ts[j + 1..].iter().take_while(|t| !t.is(&Kind::RParen)).count();
+                    let sp = ts.get(j + 1).filter(|_| inside > 0).unwrap_or(&ts[j]).span.clone();
+                    self.err(
+                        Diag::error("E002", tr!("`{text}` の別名が名前ではありません", "The alias of `{text}` is not a name"))
+                            .mark(sp, "")
+                            .note(tr!(
+                                "別名は英字か `_` で始まる ASCII の名前です。`サイズ60(size_60)` のように書きます。",
+                                "An alias is an ASCII name beginning with a letter or `_`, such as `サイズ60(size_60)`."
+                            )),
+                    );
+                    // Past the `)` when there is one, so that what follows is read as before.
+                    j += 1 + inside + usize::from(ts.get(j + 1 + inside).is_some());
+                }
             }
-            j += 3; // ( ident )
         }
         Some((Name { text, ascii, span: t.span.clone() }, j))
     }
