@@ -15,7 +15,7 @@ On macOS and on Linux:
 ```console
 $ brew install i2y/tap/rulec
 $ rulec --version
-rulec 0.22.0
+rulec 0.22.1
 ```
 
 The formula installs the release archive for your platform, held to its line in
@@ -28,18 +28,18 @@ Every release carries a `.deb` and an `.rpm` for x64 and arm64. They hold the
 same static binary as the archives, so they depend on nothing:
 
 ```console
-$ v=0.22.0; a=amd64                  # arm64 on ARM
+$ v=0.22.1; a=amd64                  # arm64 on ARM
 $ curl -fsSLO "https://github.com/i2y/rulec/releases/download/v$v/rulec_$v-1_$a.deb"
 $ curl -fsSL "https://github.com/i2y/rulec/releases/download/v$v/SHA256SUMS" | grep "rulec_$v-1_$a.deb" | sha256sum -c
-rulec_0.22.0-1_amd64.deb: OK
+rulec_0.22.1-1_amd64.deb: OK
 $ sudo apt install "./rulec_$v-1_$a.deb"
 ```
 
 ```console
-$ v=0.22.0; a=x86_64                 # aarch64 on ARM
+$ v=0.22.1; a=x86_64                 # aarch64 on ARM
 $ curl -fsSLO "https://github.com/i2y/rulec/releases/download/v$v/rulec-$v-1.$a.rpm"
 $ curl -fsSL "https://github.com/i2y/rulec/releases/download/v$v/SHA256SUMS" | grep "rulec-$v-1.$a.rpm" | sha256sum -c
-rulec-0.22.0-1.x86_64.rpm: OK
+rulec-0.22.1-1.x86_64.rpm: OK
 $ sudo dnf install "./rulec-$v-1.$a.rpm"
 ```
 
@@ -66,13 +66,13 @@ does not hold it to `SHA256SUMS`, as Homebrew and the steps on this page do.
 ## The release binary
 
 ```console
-$ v=v0.22.0; t=aarch64-apple-darwin
+$ v=v0.22.1; t=aarch64-apple-darwin
 $ curl -fsSLO "https://github.com/i2y/rulec/releases/download/$v/rulec-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/rulec/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
-rulec-v0.22.0-aarch64-apple-darwin.tar.gz: OK
+rulec-v0.22.1-aarch64-apple-darwin.tar.gz: OK
 $ tar -xzf "rulec-$v-$t.tar.gz" && install -m 755 rulec ~/.local/bin/
 $ rulec --version
-rulec 0.22.0
+rulec 0.22.1
 ```
 
 `t` is one of `aarch64-apple-darwin`, `x86_64-apple-darwin`,
@@ -88,7 +88,7 @@ $ git clone https://github.com/i2y/rulec
 $ cd rulec
 $ cargo install --path .
 $ rulec --version
-rulec 0.22.0
+rulec 0.22.1
 ```
 
 A recent stable Rust is all that is needed — rulec has **zero
@@ -198,7 +198,7 @@ it runs on.
 
 ## In CI
 
-`uses: i2y/rulec@v0.22.0` puts that release on the runner's `PATH`,
+`uses: i2y/rulec@v0.22.1` puts that release on the runner's `PATH`,
 verified against the checksums published with it. The ref the action is
 referenced with is the release, so by default the two cannot drift apart
 (`with: { version: v0.4.0 }` is how you ask for another one on purpose).
@@ -216,7 +216,7 @@ check:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # --diff-base reads origin/main
-    - uses: i2y/rulec@v0.22.0
+    - uses: i2y/rulec@v0.22.1
     - run: rulec fmt --check rules/
     - run: rulec check rules/ --diff-base origin/main
     - run: rulec gen rules/ --out generated/ --check
@@ -254,7 +254,7 @@ replay:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # origin/main is where the old version is read from
-    - uses: i2y/rulec@v0.22.0
+    - uses: i2y/rulec@v0.22.1
     # a step of your own puts the records at $FIXTURES: an artifact, or protected storage
     - run: rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:
