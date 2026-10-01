@@ -1,0 +1,5790 @@
+{
+  "events": [
+    {
+      "eventId": "1",
+      "eventTime": "2026-10-01T15:32:33.350407Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED",
+      "taskId": "1048670",
+      "workflowExecutionStartedEventAttributes": {
+        "workflowType": {
+          "name": "hotel_stay_v1"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJib29raW5nIjp7ImNhcmQiOiJjYXJkLTMiLCJjaGVja19vdXQiOiIyMDI2LTEwLTAxVDEwOjAwOjAwWiIsImlkIjoiaWQtMSIsIm5pZ2h0cyI6Mywicm9vbSI6InN0YW5kYXJkIn19"
+            }
+          ]
+        },
+        "workflowExecutionTimeout": "0s",
+        "workflowRunTimeout": "0s",
+        "workflowTaskTimeout": "10s",
+        "originalExecutionRunId": "01a0f818-8bc6-7631-9b54-c3467111dc85",
+        "identity": "87239@localhost@",
+        "firstExecutionRunId": "01a0f818-8bc6-7631-9b54-c3467111dc85",
+        "attempt": 1,
+        "firstWorkflowTaskBackoff": "0s",
+        "memo": {
+          "fields": {
+            "dandori.cases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "dHJ1ZQ=="
+            }
+          }
+        },
+        "header": {},
+        "workflowId": "run-52"
+      }
+    },
+    {
+      "eventId": "2",
+      "eventTime": "2026-10-01T15:32:33.350440Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1048671",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "3",
+      "eventTime": "2026-10-01T15:32:33.716977Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1049941",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "2",
+        "identity": "87239@localhost@",
+        "requestId": "997b1639-177c-4452-bc36-5b399b1ed0f6",
+        "historySizeBytes": "432",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "4",
+      "eventTime": "2026-10-01T15:32:33.720672Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1049958",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "2",
+        "startedEventId": "3",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {
+          "langUsedFlags": [
+            3,
+            4
+          ],
+          "sdkName": "temporal-go",
+          "sdkVersion": "1.49.0"
+        },
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "5",
+      "eventTime": "2026-10-01T15:32:33.720688Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1049959",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "5",
+        "activityType": {
+          "name": "rule_hold"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJuaWdodHMiOjMsInJvb20iOiJzdGFuZGFyZCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "4",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "6",
+      "eventTime": "2026-10-01T15:32:33.720699Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1049963",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "5",
+        "identity": "87239@localhost@",
+        "requestId": "1e8d9198-3d5d-4be1-8f5f-c2a03f6b3afa",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "7",
+      "eventTime": "2026-10-01T15:32:33.721988Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1049964",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJhbW91bnQiOjEyMDA0LCJoYW5kbGluZyI6ImF1dG8ifQ=="
+            }
+          ]
+        },
+        "scheduledEventId": "5",
+        "startedEventId": "6",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "8",
+      "eventTime": "2026-10-01T15:32:33.721993Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1049965",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "9",
+      "eventTime": "2026-10-01T15:32:33.742276Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1049986",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "8",
+        "identity": "87239@localhost@",
+        "requestId": "1a5ca14d-e243-4326-853b-378e2b67407e",
+        "historySizeBytes": "1200",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "10",
+      "eventTime": "2026-10-01T15:32:33.750046Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1050016",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "8",
+        "startedEventId": "9",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "11",
+      "eventTime": "2026-10-01T15:32:33.750069Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1050017",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "11",
+        "activityType": {
+          "name": "create_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJhbW91bnQiOjEyMDA0LCJjYXB0dXJlX21ldGhvZCI6Im1hbnVhbCIsImN1cnJlbmN5IjoianB5IiwiaWRlbXBvdGVuY3lfa2V5IjoicnVuLTUyLzQiLCJwYXltZW50X21ldGhvZCI6ImNhcmQtMyJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "10",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "12",
+      "eventTime": "2026-10-01T15:32:33.750242Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1050041",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "11",
+        "identity": "87239@localhost@",
+        "requestId": "0c7d6952-8003-4da7-b655-3d017a3022ce",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "13",
+      "eventTime": "2026-10-01T15:32:33.752999Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1050042",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "11",
+        "startedEventId": "12",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "14",
+      "eventTime": "2026-10-01T15:32:33.753004Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1050043",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "15",
+      "eventTime": "2026-10-01T15:32:33.884476Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1050164",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "14",
+        "identity": "87239@localhost@",
+        "requestId": "6709239a-4baa-49a6-880f-847aaf82b724",
+        "historySizeBytes": "2021",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "16",
+      "eventTime": "2026-10-01T15:32:33.890730Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1050218",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "14",
+        "startedEventId": "15",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "17",
+      "eventTime": "2026-10-01T15:32:33.890733Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1050219",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "17",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "16"
+      }
+    },
+    {
+      "eventId": "18",
+      "eventTime": "2026-10-01T15:32:33.912441Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1050385",
+      "timerFiredEventAttributes": {
+        "timerId": "17",
+        "startedEventId": "17"
+      }
+    },
+    {
+      "eventId": "19",
+      "eventTime": "2026-10-01T15:32:33.912442Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1050386",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "20",
+      "eventTime": "2026-10-01T15:32:33.956019Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1050744",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "19",
+        "identity": "87239@localhost@",
+        "requestId": "514da816-bdd5-47a5-9deb-15f16eb66b19",
+        "historySizeBytes": "2464",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "21",
+      "eventTime": "2026-10-01T15:32:33.958590Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1050758",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "19",
+        "startedEventId": "20",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "22",
+      "eventTime": "2026-10-01T15:32:33.958605Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1050759",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "22",
+        "activityType": {
+          "name": "create_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJhbW91bnQiOjEyMDA0LCJjYXB0dXJlX21ldGhvZCI6Im1hbnVhbCIsImN1cnJlbmN5IjoianB5IiwiaWRlbXBvdGVuY3lfa2V5IjoicnVuLTUyLzQiLCJwYXltZW50X21ldGhvZCI6ImNhcmQtMyJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "21",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "23",
+      "eventTime": "2026-10-01T15:32:33.958616Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1050777",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "22",
+        "identity": "87239@localhost@",
+        "requestId": "109fc382-abc8-403c-b08c-f1d9dec6ebfe",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "24",
+      "eventTime": "2026-10-01T15:32:33.959503Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1050778",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTUiLCJzdGF0dXMiOiJyZXF1aXJlc19jb25maXJtYXRpb24ifQ=="
+            }
+          ]
+        },
+        "scheduledEventId": "22",
+        "startedEventId": "23",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "25",
+      "eventTime": "2026-10-01T15:32:33.959507Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1050779",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "26",
+      "eventTime": "2026-10-01T15:32:33.999816Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1051001",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "25",
+        "identity": "87239@localhost@",
+        "requestId": "39f7dac5-d51f-41d6-8faf-82e8cbfa9b6f",
+        "historySizeBytes": "3313",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "27",
+      "eventTime": "2026-10-01T15:32:34.001775Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1051022",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "25",
+        "startedEventId": "26",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "28",
+      "eventTime": "2026-10-01T15:32:34.001951Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1051023",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "27",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1yZXF1aXJlc19jb25maXJtYXRpb24iXQ=="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "29",
+      "eventTime": "2026-10-01T15:32:34.001963Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1051024",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "29",
+        "activityType": {
+          "name": "confirm_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZGVtcG90ZW5jeV9rZXkiOiJydW4tNTIvNSIsImludGVudCI6ImlkLTUifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "27",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "30",
+      "eventTime": "2026-10-01T15:32:34.001972Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1051039",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "29",
+        "identity": "87239@localhost@",
+        "requestId": "64d7554e-d036-4efa-9279-953441a82f16",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "31",
+      "eventTime": "2026-10-01T15:32:34.003203Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1051040",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTYiLCJzdGF0dXMiOiJyZXF1aXJlc19jYXB0dXJlIn0="
+            }
+          ]
+        },
+        "scheduledEventId": "29",
+        "startedEventId": "30",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "32",
+      "eventTime": "2026-10-01T15:32:34.003209Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1051041",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "33",
+      "eventTime": "2026-10-01T15:32:34.043499Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1051267",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "32",
+        "identity": "87239@localhost@",
+        "requestId": "345e2f04-80e4-4af0-953f-afc1c46b037b",
+        "historySizeBytes": "4201",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "34",
+      "eventTime": "2026-10-01T15:32:34.045403Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1051296",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "32",
+        "startedEventId": "33",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "35",
+      "eventTime": "2026-10-01T15:32:34.045718Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1051297",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "34",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1yZXF1aXJlc19jYXB0dXJlIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "36",
+      "eventTime": "2026-10-01T15:32:34.045729Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1051298",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "36",
+        "activityType": {
+          "name": "capture_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZGVtcG90ZW5jeV9rZXkiOiJydW4tNTIvMTciLCJpbnRlbnQiOiJpZC02In0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "34",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "37",
+      "eventTime": "2026-10-01T15:32:34.045736Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1051312",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "36",
+        "identity": "87239@localhost@",
+        "requestId": "704720b8-bbdd-4b37-95e7-b4847a259841",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "38",
+      "eventTime": "2026-10-01T15:32:34.047440Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1051313",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTciLCJzdGF0dXMiOiJwcm9jZXNzaW5nIn0="
+            }
+          ]
+        },
+        "scheduledEventId": "36",
+        "startedEventId": "37",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "39",
+      "eventTime": "2026-10-01T15:32:34.047445Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1051314",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "40",
+      "eventTime": "2026-10-01T15:32:34.110634Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1051644",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "39",
+        "identity": "87239@localhost@",
+        "requestId": "5f93bbbc-f532-4527-952b-75f168a287e1",
+        "historySizeBytes": "5081",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "41",
+      "eventTime": "2026-10-01T15:32:34.112458Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1051660",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "39",
+        "startedEventId": "40",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "42",
+      "eventTime": "2026-10-01T15:32:34.112978Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1051661",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "41",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "43",
+      "eventTime": "2026-10-01T15:32:34.112988Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1051662",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "43",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "41"
+      }
+    },
+    {
+      "eventId": "44",
+      "eventTime": "2026-10-01T15:32:34.292471Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1052691",
+      "timerFiredEventAttributes": {
+        "timerId": "43",
+        "startedEventId": "43"
+      }
+    },
+    {
+      "eventId": "45",
+      "eventTime": "2026-10-01T15:32:34.292472Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1052692",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "46",
+      "eventTime": "2026-10-01T15:32:34.374048Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1053151",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "45",
+        "identity": "87239@localhost@",
+        "requestId": "4c79b051-4de8-474b-a7a5-d4622f48e814",
+        "historySizeBytes": "5633",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "47",
+      "eventTime": "2026-10-01T15:32:34.380407Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1053178",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "45",
+        "startedEventId": "46",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "48",
+      "eventTime": "2026-10-01T15:32:34.380436Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1053179",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "48",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC03In0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "47",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "49",
+      "eventTime": "2026-10-01T15:32:34.380458Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1053192",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "48",
+        "identity": "87239@localhost@",
+        "requestId": "3f630fc3-0d28-4d07-8d95-10bc27c14b9d",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "50",
+      "eventTime": "2026-10-01T15:32:34.381861Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1053193",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "48",
+        "startedEventId": "49",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "51",
+      "eventTime": "2026-10-01T15:32:34.381865Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1053194",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "52",
+      "eventTime": "2026-10-01T15:32:34.441629Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1053454",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "51",
+        "identity": "87239@localhost@",
+        "requestId": "cd802002-30d4-4d7d-aca7-18b267f9dc1d",
+        "historySizeBytes": "6351",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "53",
+      "eventTime": "2026-10-01T15:32:34.442899Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1053469",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "51",
+        "startedEventId": "52",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "54",
+      "eventTime": "2026-10-01T15:32:34.442907Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1053470",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "54",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "53"
+      }
+    },
+    {
+      "eventId": "55",
+      "eventTime": "2026-10-01T15:32:34.492418Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1053756",
+      "timerFiredEventAttributes": {
+        "timerId": "54",
+        "startedEventId": "54"
+      }
+    },
+    {
+      "eventId": "56",
+      "eventTime": "2026-10-01T15:32:34.492420Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1053757",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "57",
+      "eventTime": "2026-10-01T15:32:34.541495Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1053940",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "56",
+        "identity": "87239@localhost@",
+        "requestId": "5d9017a7-35d2-4b7b-ace5-3d3911baae6e",
+        "historySizeBytes": "6794",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "58",
+      "eventTime": "2026-10-01T15:32:34.542893Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1053954",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "56",
+        "startedEventId": "57",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "59",
+      "eventTime": "2026-10-01T15:32:34.542921Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1053955",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "59",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC03In0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "58",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "60",
+      "eventTime": "2026-10-01T15:32:34.542939Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1053973",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "59",
+        "identity": "87239@localhost@",
+        "requestId": "163f9bcf-dde1-4ae5-9414-043c656d5935",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "61",
+      "eventTime": "2026-10-01T15:32:34.544447Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1053974",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTgiLCJzdGF0dXMiOiJwcm9jZXNzaW5nIn0="
+            }
+          ]
+        },
+        "scheduledEventId": "59",
+        "startedEventId": "60",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "62",
+      "eventTime": "2026-10-01T15:32:34.544450Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1053975",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "63",
+      "eventTime": "2026-10-01T15:32:34.585681Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1054172",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "62",
+        "identity": "87239@localhost@",
+        "requestId": "0249ebd3-d2ca-4328-8afc-d69687bf2d77",
+        "historySizeBytes": "7528",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "64",
+      "eventTime": "2026-10-01T15:32:34.586486Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1054189",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "62",
+        "startedEventId": "63",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "65",
+      "eventTime": "2026-10-01T15:32:34.586597Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1054190",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "64",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "66",
+      "eventTime": "2026-10-01T15:32:34.586606Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1054191",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "66",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "64"
+      }
+    },
+    {
+      "eventId": "67",
+      "eventTime": "2026-10-01T15:32:34.692479Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1054480",
+      "timerFiredEventAttributes": {
+        "timerId": "66",
+        "startedEventId": "66"
+      }
+    },
+    {
+      "eventId": "68",
+      "eventTime": "2026-10-01T15:32:34.692481Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1054481",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "69",
+      "eventTime": "2026-10-01T15:32:34.730346Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1054521",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "68",
+        "identity": "87239@localhost@",
+        "requestId": "5f633b94-18ef-42b0-b142-d7562cc0fce9",
+        "historySizeBytes": "8085",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "70",
+      "eventTime": "2026-10-01T15:32:34.731624Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1054541",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "68",
+        "startedEventId": "69",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "71",
+      "eventTime": "2026-10-01T15:32:34.731637Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1054542",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "71",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC04In0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "70",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "72",
+      "eventTime": "2026-10-01T15:32:34.731646Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1054547",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "71",
+        "identity": "87239@localhost@",
+        "requestId": "38a29c17-df9f-42b6-9251-b3fd31a904cd",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "73",
+      "eventTime": "2026-10-01T15:32:34.732409Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1054548",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "71",
+        "startedEventId": "72",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "74",
+      "eventTime": "2026-10-01T15:32:34.732412Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1054549",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "75",
+      "eventTime": "2026-10-01T15:32:34.776370Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1054604",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "74",
+        "identity": "87239@localhost@",
+        "requestId": "a1efcf2a-5d21-4765-b4b9-63a23a5a7e5b",
+        "historySizeBytes": "8803",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "76",
+      "eventTime": "2026-10-01T15:32:34.777454Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1054611",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "74",
+        "startedEventId": "75",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "77",
+      "eventTime": "2026-10-01T15:32:34.777465Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1054612",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "77",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "76"
+      }
+    },
+    {
+      "eventId": "78",
+      "eventTime": "2026-10-01T15:32:34.992677Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1054669",
+      "timerFiredEventAttributes": {
+        "timerId": "77",
+        "startedEventId": "77"
+      }
+    },
+    {
+      "eventId": "79",
+      "eventTime": "2026-10-01T15:32:34.992679Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1054670",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "80",
+      "eventTime": "2026-10-01T15:32:35.030533Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1054740",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "79",
+        "identity": "87239@localhost@",
+        "requestId": "1d74946f-773e-4f93-a158-8cf3d3a9ea33",
+        "historySizeBytes": "9246",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "81",
+      "eventTime": "2026-10-01T15:32:35.031912Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1054751",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "79",
+        "startedEventId": "80",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "82",
+      "eventTime": "2026-10-01T15:32:35.031921Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1054752",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "82",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC04In0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "81",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "83",
+      "eventTime": "2026-10-01T15:32:35.031927Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1054759",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "82",
+        "identity": "87239@localhost@",
+        "requestId": "9cdcee6e-ddaa-4cd4-9bd5-1bc0f9fd7d1d",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "84",
+      "eventTime": "2026-10-01T15:32:35.032898Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1054760",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTkiLCJzdGF0dXMiOiJwcm9jZXNzaW5nIn0="
+            }
+          ]
+        },
+        "scheduledEventId": "82",
+        "startedEventId": "83",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "85",
+      "eventTime": "2026-10-01T15:32:35.032902Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1054761",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "86",
+      "eventTime": "2026-10-01T15:32:35.080606Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1054813",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "85",
+        "identity": "87239@localhost@",
+        "requestId": "7ef06b5f-e9bf-40f7-8317-09e3f32f34be",
+        "historySizeBytes": "9972",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "87",
+      "eventTime": "2026-10-01T15:32:35.081834Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1054824",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "85",
+        "startedEventId": "86",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "88",
+      "eventTime": "2026-10-01T15:32:35.082104Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1054825",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "87",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "89",
+      "eventTime": "2026-10-01T15:32:35.082118Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1054826",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "89",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "87"
+      }
+    },
+    {
+      "eventId": "90",
+      "eventTime": "2026-10-01T15:32:35.292667Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1054847",
+      "timerFiredEventAttributes": {
+        "timerId": "89",
+        "startedEventId": "89"
+      }
+    },
+    {
+      "eventId": "91",
+      "eventTime": "2026-10-01T15:32:35.292670Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1054848",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "92",
+      "eventTime": "2026-10-01T15:32:35.331605Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1054915",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "91",
+        "identity": "87239@localhost@",
+        "requestId": "81203219-1059-4f8c-96f4-08925190a5a6",
+        "historySizeBytes": "10524",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "93",
+      "eventTime": "2026-10-01T15:32:35.332656Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1054926",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "91",
+        "startedEventId": "92",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "94",
+      "eventTime": "2026-10-01T15:32:35.332666Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1054927",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "94",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC05In0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "93",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "95",
+      "eventTime": "2026-10-01T15:32:35.332674Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1054930",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "94",
+        "identity": "87239@localhost@",
+        "requestId": "71c2b0e0-bfdf-4bee-8100-6da6f405d69b",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "96",
+      "eventTime": "2026-10-01T15:32:35.333601Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1054931",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "94",
+        "startedEventId": "95",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "97",
+      "eventTime": "2026-10-01T15:32:35.333606Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1054932",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "98",
+      "eventTime": "2026-10-01T15:32:35.377312Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1054936",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "97",
+        "identity": "87239@localhost@",
+        "requestId": "ced4914c-8b01-4416-af7e-736c00962e02",
+        "historySizeBytes": "11242",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "99",
+      "eventTime": "2026-10-01T15:32:35.378416Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1054942",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "97",
+        "startedEventId": "98",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "100",
+      "eventTime": "2026-10-01T15:32:35.378428Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1054943",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "100",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "99"
+      }
+    },
+    {
+      "eventId": "101",
+      "eventTime": "2026-10-01T15:32:35.492469Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1054958",
+      "timerFiredEventAttributes": {
+        "timerId": "100",
+        "startedEventId": "100"
+      }
+    },
+    {
+      "eventId": "102",
+      "eventTime": "2026-10-01T15:32:35.492475Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1054959",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "103",
+      "eventTime": "2026-10-01T15:32:35.527559Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1054987",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "102",
+        "identity": "87239@localhost@",
+        "requestId": "bfc94f11-91ed-4a1b-b477-051f957d62c4",
+        "historySizeBytes": "11687",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "104",
+      "eventTime": "2026-10-01T15:32:35.528691Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1054995",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "102",
+        "startedEventId": "103",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "105",
+      "eventTime": "2026-10-01T15:32:35.528711Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1054996",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "105",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC05In0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "104",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "106",
+      "eventTime": "2026-10-01T15:32:35.528725Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055000",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "105",
+        "identity": "87239@localhost@",
+        "requestId": "8a6c878c-8914-418a-8100-3edc9c0fe9bf",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "107",
+      "eventTime": "2026-10-01T15:32:35.529597Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1055001",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTEwIiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "105",
+        "startedEventId": "106",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "108",
+      "eventTime": "2026-10-01T15:32:35.529602Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055002",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "109",
+      "eventTime": "2026-10-01T15:32:35.577225Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055042",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "108",
+        "identity": "87239@localhost@",
+        "requestId": "b812668e-60e7-4417-ac55-ec2b6f159c1e",
+        "historySizeBytes": "12423",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "110",
+      "eventTime": "2026-10-01T15:32:35.578466Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055049",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "108",
+        "startedEventId": "109",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "111",
+      "eventTime": "2026-10-01T15:32:35.578799Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1055050",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "110",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "112",
+      "eventTime": "2026-10-01T15:32:35.578814Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055051",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "112",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "110"
+      }
+    },
+    {
+      "eventId": "113",
+      "eventTime": "2026-10-01T15:32:35.692490Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055087",
+      "timerFiredEventAttributes": {
+        "timerId": "112",
+        "startedEventId": "112"
+      }
+    },
+    {
+      "eventId": "114",
+      "eventTime": "2026-10-01T15:32:35.692497Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055088",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "115",
+      "eventTime": "2026-10-01T15:32:35.729079Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055101",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "114",
+        "identity": "87239@localhost@",
+        "requestId": "f04a87f8-d17b-4451-ad2d-b468d4dd5cd9",
+        "historySizeBytes": "12982",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "116",
+      "eventTime": "2026-10-01T15:32:35.730516Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055117",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "114",
+        "startedEventId": "115",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "117",
+      "eventTime": "2026-10-01T15:32:35.730534Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055118",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "117",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xMCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "116",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "118",
+      "eventTime": "2026-10-01T15:32:35.730556Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055121",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "117",
+        "identity": "87239@localhost@",
+        "requestId": "b43fbd93-12a2-41ee-be5f-359b76c94ba4",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "119",
+      "eventTime": "2026-10-01T15:32:35.731406Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1055122",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "117",
+        "startedEventId": "118",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "120",
+      "eventTime": "2026-10-01T15:32:35.731412Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055123",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "121",
+      "eventTime": "2026-10-01T15:32:35.778255Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055127",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "120",
+        "identity": "87239@localhost@",
+        "requestId": "ef926583-52f6-41ae-bd82-1781b4e6dabf",
+        "historySizeBytes": "13702",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "122",
+      "eventTime": "2026-10-01T15:32:35.779521Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055133",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "120",
+        "startedEventId": "121",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "123",
+      "eventTime": "2026-10-01T15:32:35.779534Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055134",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "123",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "122"
+      }
+    },
+    {
+      "eventId": "124",
+      "eventTime": "2026-10-01T15:32:35.992763Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055145",
+      "timerFiredEventAttributes": {
+        "timerId": "123",
+        "startedEventId": "123"
+      }
+    },
+    {
+      "eventId": "125",
+      "eventTime": "2026-10-01T15:32:35.992771Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055146",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "126",
+      "eventTime": "2026-10-01T15:32:35.993658Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055155",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "125",
+        "identity": "87239@localhost@",
+        "requestId": "5303fd14-e1cc-4349-968e-3972da9a3da4",
+        "historySizeBytes": "14147",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "127",
+      "eventTime": "2026-10-01T15:32:35.995155Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055163",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "125",
+        "startedEventId": "126",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "128",
+      "eventTime": "2026-10-01T15:32:35.995178Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055164",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "128",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xMCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "127",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "129",
+      "eventTime": "2026-10-01T15:32:35.995192Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055168",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "128",
+        "identity": "87239@localhost@",
+        "requestId": "28b30ee6-1e97-45ee-b316-db258c1b03f9",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "130",
+      "eventTime": "2026-10-01T15:32:35.996433Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1055169",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTExIiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "128",
+        "startedEventId": "129",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "131",
+      "eventTime": "2026-10-01T15:32:35.996438Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055170",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "132",
+      "eventTime": "2026-10-01T15:32:35.997148Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055179",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "131",
+        "identity": "87239@localhost@",
+        "requestId": "aee1f06e-41ec-468f-82eb-fd78130a7fb8",
+        "historySizeBytes": "14891",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "133",
+      "eventTime": "2026-10-01T15:32:35.998418Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055189",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "131",
+        "startedEventId": "132",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "134",
+      "eventTime": "2026-10-01T15:32:35.998582Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1055190",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "133",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "135",
+      "eventTime": "2026-10-01T15:32:35.998595Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055191",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "135",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "133"
+      }
+    },
+    {
+      "eventId": "136",
+      "eventTime": "2026-10-01T15:32:36.292913Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055205",
+      "timerFiredEventAttributes": {
+        "timerId": "135",
+        "startedEventId": "135"
+      }
+    },
+    {
+      "eventId": "137",
+      "eventTime": "2026-10-01T15:32:36.292920Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055206",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "138",
+      "eventTime": "2026-10-01T15:32:36.293845Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055215",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "137",
+        "identity": "87239@localhost@",
+        "requestId": "6fb6cb5e-f649-4ccf-8a8e-9d2b21a372a6",
+        "historySizeBytes": "15462",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "139",
+      "eventTime": "2026-10-01T15:32:36.295447Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055223",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "137",
+        "startedEventId": "138",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "140",
+      "eventTime": "2026-10-01T15:32:36.295467Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055224",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "140",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xMSJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "139",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "141",
+      "eventTime": "2026-10-01T15:32:36.295482Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055228",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "140",
+        "identity": "87239@localhost@",
+        "requestId": "e618b447-0873-48a9-8f38-e189cc48bc5b",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "142",
+      "eventTime": "2026-10-01T15:32:36.296767Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1055229",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "140",
+        "startedEventId": "141",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "143",
+      "eventTime": "2026-10-01T15:32:36.296773Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055230",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "144",
+      "eventTime": "2026-10-01T15:32:36.297421Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055239",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "143",
+        "identity": "87239@localhost@",
+        "requestId": "893ed54c-f33b-494a-8d72-a537e2a641cb",
+        "historySizeBytes": "16195",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "145",
+      "eventTime": "2026-10-01T15:32:36.298537Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055251",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "143",
+        "startedEventId": "144",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "146",
+      "eventTime": "2026-10-01T15:32:36.298547Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055252",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "146",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "145"
+      }
+    },
+    {
+      "eventId": "147",
+      "eventTime": "2026-10-01T15:32:36.493104Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055263",
+      "timerFiredEventAttributes": {
+        "timerId": "146",
+        "startedEventId": "146"
+      }
+    },
+    {
+      "eventId": "148",
+      "eventTime": "2026-10-01T15:32:36.493111Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055264",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "149",
+      "eventTime": "2026-10-01T15:32:36.493953Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055273",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "148",
+        "identity": "87239@localhost@",
+        "requestId": "863a0e13-4a7a-4eec-af77-697798461f18",
+        "historySizeBytes": "16650",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "150",
+      "eventTime": "2026-10-01T15:32:36.495556Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055278",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "148",
+        "startedEventId": "149",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "151",
+      "eventTime": "2026-10-01T15:32:36.495577Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055279",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "151",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xMSJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "150",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "152",
+      "eventTime": "2026-10-01T15:32:36.495593Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055286",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "151",
+        "identity": "87239@localhost@",
+        "requestId": "965e5c03-5388-4adb-abd1-c88ab82b164d",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "153",
+      "eventTime": "2026-10-01T15:32:36.496904Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1055287",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTEyIiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "151",
+        "startedEventId": "152",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "154",
+      "eventTime": "2026-10-01T15:32:36.496911Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055288",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "155",
+      "eventTime": "2026-10-01T15:32:36.497628Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055297",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "154",
+        "identity": "87239@localhost@",
+        "requestId": "04b1527c-1a0f-427c-9cb5-4a21f0087ff7",
+        "historySizeBytes": "17401",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "156",
+      "eventTime": "2026-10-01T15:32:36.499013Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055310",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "154",
+        "startedEventId": "155",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "157",
+      "eventTime": "2026-10-01T15:32:36.499375Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1055311",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "156",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "158",
+      "eventTime": "2026-10-01T15:32:36.499392Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055312",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "158",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "156"
+      }
+    },
+    {
+      "eventId": "159",
+      "eventTime": "2026-10-01T15:32:36.692485Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055323",
+      "timerFiredEventAttributes": {
+        "timerId": "158",
+        "startedEventId": "158"
+      }
+    },
+    {
+      "eventId": "160",
+      "eventTime": "2026-10-01T15:32:36.692493Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055324",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "161",
+      "eventTime": "2026-10-01T15:32:36.693295Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055333",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "160",
+        "identity": "87239@localhost@",
+        "requestId": "6d6365c9-5a24-4958-aa61-639b5fdc9204",
+        "historySizeBytes": "17973",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "162",
+      "eventTime": "2026-10-01T15:32:36.694730Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055338",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "160",
+        "startedEventId": "161",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "163",
+      "eventTime": "2026-10-01T15:32:36.694748Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055339",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "163",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xMiJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "162",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "164",
+      "eventTime": "2026-10-01T15:32:36.694760Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055346",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "163",
+        "identity": "87239@localhost@",
+        "requestId": "1105595f-3d38-42a4-91ff-34d08a0c8a57",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "165",
+      "eventTime": "2026-10-01T15:32:36.695678Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1055347",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "163",
+        "startedEventId": "164",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "166",
+      "eventTime": "2026-10-01T15:32:36.695684Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055348",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "167",
+      "eventTime": "2026-10-01T15:32:36.696340Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055357",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "166",
+        "identity": "87239@localhost@",
+        "requestId": "6740dc0d-92e6-4f3e-b98a-dc720ba5f0ae",
+        "historySizeBytes": "18707",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "168",
+      "eventTime": "2026-10-01T15:32:36.697733Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055367",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "166",
+        "startedEventId": "167",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "169",
+      "eventTime": "2026-10-01T15:32:36.697743Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055368",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "169",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "168"
+      }
+    },
+    {
+      "eventId": "170",
+      "eventTime": "2026-10-01T15:32:36.994589Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055381",
+      "timerFiredEventAttributes": {
+        "timerId": "169",
+        "startedEventId": "169"
+      }
+    },
+    {
+      "eventId": "171",
+      "eventTime": "2026-10-01T15:32:36.994603Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055382",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "172",
+      "eventTime": "2026-10-01T15:32:36.996104Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055391",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "171",
+        "identity": "87239@localhost@",
+        "requestId": "6c4c3bcd-d551-492a-aa4a-89babe149809",
+        "historySizeBytes": "19163",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "173",
+      "eventTime": "2026-10-01T15:32:36.998513Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055399",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "171",
+        "startedEventId": "172",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "174",
+      "eventTime": "2026-10-01T15:32:36.998578Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055400",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "174",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xMiJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "173",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "175",
+      "eventTime": "2026-10-01T15:32:36.998604Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055404",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "174",
+        "identity": "87239@localhost@",
+        "requestId": "bad19931-5f0b-441c-b1f4-1adbd14883fc",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "176",
+      "eventTime": "2026-10-01T15:32:37.000388Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1055405",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTEzIiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "174",
+        "startedEventId": "175",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "177",
+      "eventTime": "2026-10-01T15:32:37.000405Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055406",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "178",
+      "eventTime": "2026-10-01T15:32:37.001564Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055415",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "177",
+        "identity": "87239@localhost@",
+        "requestId": "02a81551-d6f7-40f5-be84-08ce9eb70258",
+        "historySizeBytes": "19910",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "179",
+      "eventTime": "2026-10-01T15:32:37.003041Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055428",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "177",
+        "startedEventId": "178",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "180",
+      "eventTime": "2026-10-01T15:32:37.003483Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1055429",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "179",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "181",
+      "eventTime": "2026-10-01T15:32:37.003501Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055430",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "181",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "179"
+      }
+    },
+    {
+      "eventId": "182",
+      "eventTime": "2026-10-01T15:32:37.294796Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055444",
+      "timerFiredEventAttributes": {
+        "timerId": "181",
+        "startedEventId": "181"
+      }
+    },
+    {
+      "eventId": "183",
+      "eventTime": "2026-10-01T15:32:37.294823Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055445",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "184",
+      "eventTime": "2026-10-01T15:32:37.297615Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055451",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "183",
+        "identity": "87239@localhost@",
+        "requestId": "d302313e-e073-4453-967e-3f226e3841b3",
+        "historySizeBytes": "20477",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "185",
+      "eventTime": "2026-10-01T15:32:37.301228Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055459",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "183",
+        "startedEventId": "184",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "186",
+      "eventTime": "2026-10-01T15:32:37.301285Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055460",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "186",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xMyJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "185",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "187",
+      "eventTime": "2026-10-01T15:32:37.301316Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055464",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "186",
+        "identity": "87239@localhost@",
+        "requestId": "76c9c8d8-a308-4d73-be16-6e41e3afbee9",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "188",
+      "eventTime": "2026-10-01T15:32:37.304183Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1055465",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "186",
+        "startedEventId": "187",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "189",
+      "eventTime": "2026-10-01T15:32:37.304198Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055466",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "190",
+      "eventTime": "2026-10-01T15:32:37.305603Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055475",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "189",
+        "identity": "87239@localhost@",
+        "requestId": "a7ff541a-f6f7-4052-b561-8cbe6cf6da40",
+        "historySizeBytes": "21211",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "191",
+      "eventTime": "2026-10-01T15:32:37.307759Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055487",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "189",
+        "startedEventId": "190",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "192",
+      "eventTime": "2026-10-01T15:32:37.307786Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055488",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "192",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "191"
+      }
+    },
+    {
+      "eventId": "193",
+      "eventTime": "2026-10-01T15:32:37.493835Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055502",
+      "timerFiredEventAttributes": {
+        "timerId": "192",
+        "startedEventId": "192"
+      }
+    },
+    {
+      "eventId": "194",
+      "eventTime": "2026-10-01T15:32:37.493841Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055503",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "195",
+      "eventTime": "2026-10-01T15:32:37.497552Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055513",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "194",
+        "identity": "87239@localhost@",
+        "requestId": "db711322-488d-4e55-8e01-74f9d00bac43",
+        "historySizeBytes": "21667",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "196",
+      "eventTime": "2026-10-01T15:32:37.499299Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055527",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "194",
+        "startedEventId": "195",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "197",
+      "eventTime": "2026-10-01T15:32:37.499317Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055528",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "197",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xMyJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "196",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "198",
+      "eventTime": "2026-10-01T15:32:37.499332Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055537",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "197",
+        "identity": "87239@localhost@",
+        "requestId": "be373f8b-8bad-490d-83a3-4f4d4776dc85",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "199",
+      "eventTime": "2026-10-01T15:32:37.500758Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1055538",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTE0Iiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "197",
+        "startedEventId": "198",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "200",
+      "eventTime": "2026-10-01T15:32:37.500765Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055539",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "201",
+      "eventTime": "2026-10-01T15:32:37.501771Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055543",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "200",
+        "identity": "87239@localhost@",
+        "requestId": "41eb9b63-0e17-4071-90f6-023c05801b08",
+        "historySizeBytes": "22418",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "202",
+      "eventTime": "2026-10-01T15:32:37.503379Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055554",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "200",
+        "startedEventId": "201",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "203",
+      "eventTime": "2026-10-01T15:32:37.504139Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1055555",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "202",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "204",
+      "eventTime": "2026-10-01T15:32:37.504156Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055556",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "204",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "202"
+      }
+    },
+    {
+      "eventId": "205",
+      "eventTime": "2026-10-01T15:32:37.694654Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055560",
+      "timerFiredEventAttributes": {
+        "timerId": "204",
+        "startedEventId": "204"
+      }
+    },
+    {
+      "eventId": "206",
+      "eventTime": "2026-10-01T15:32:37.694668Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055561",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "207",
+      "eventTime": "2026-10-01T15:32:37.696008Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055565",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "206",
+        "identity": "87239@localhost@",
+        "requestId": "e465c5a6-f087-4941-8e3c-c39e34195aef",
+        "historySizeBytes": "22990",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "208",
+      "eventTime": "2026-10-01T15:32:37.698140Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055570",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "206",
+        "startedEventId": "207",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "209",
+      "eventTime": "2026-10-01T15:32:37.698175Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055571",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "209",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xNCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "208",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "210",
+      "eventTime": "2026-10-01T15:32:37.698199Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055574",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "209",
+        "identity": "87239@localhost@",
+        "requestId": "7d4f4ef8-9f0c-4abf-910b-dbdc3c9795c2",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "211",
+      "eventTime": "2026-10-01T15:32:37.699503Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1055575",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "209",
+        "startedEventId": "210",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "212",
+      "eventTime": "2026-10-01T15:32:37.699512Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055576",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "213",
+      "eventTime": "2026-10-01T15:32:37.700412Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055580",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "212",
+        "identity": "87239@localhost@",
+        "requestId": "8d48286b-6f33-45e9-b4bf-74d4a45055bc",
+        "historySizeBytes": "23724",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "214",
+      "eventTime": "2026-10-01T15:32:37.701919Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055584",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "212",
+        "startedEventId": "213",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "215",
+      "eventTime": "2026-10-01T15:32:37.701934Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055585",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "215",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "214"
+      }
+    },
+    {
+      "eventId": "216",
+      "eventTime": "2026-10-01T15:32:37.994488Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055588",
+      "timerFiredEventAttributes": {
+        "timerId": "215",
+        "startedEventId": "215"
+      }
+    },
+    {
+      "eventId": "217",
+      "eventTime": "2026-10-01T15:32:37.994499Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055589",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "218",
+      "eventTime": "2026-10-01T15:32:37.995723Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055593",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "217",
+        "identity": "87239@localhost@",
+        "requestId": "c80ebd26-6247-45fd-822f-f7646359e660",
+        "historySizeBytes": "24180",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "219",
+      "eventTime": "2026-10-01T15:32:37.997532Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055598",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "217",
+        "startedEventId": "218",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "220",
+      "eventTime": "2026-10-01T15:32:37.997561Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055599",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "220",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xNCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "219",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "221",
+      "eventTime": "2026-10-01T15:32:37.997579Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055602",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "220",
+        "identity": "87239@localhost@",
+        "requestId": "513407de-a723-40dc-84f8-fa37a3ee2d6a",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "222",
+      "eventTime": "2026-10-01T15:32:37.998625Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1055603",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTE1Iiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "220",
+        "startedEventId": "221",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "223",
+      "eventTime": "2026-10-01T15:32:37.998634Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055604",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "224",
+      "eventTime": "2026-10-01T15:32:37.999383Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055608",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "223",
+        "identity": "87239@localhost@",
+        "requestId": "912781bd-a346-4ae8-8f27-90c83d993a33",
+        "historySizeBytes": "24931",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "225",
+      "eventTime": "2026-10-01T15:32:38.000690Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055612",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "223",
+        "startedEventId": "224",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "226",
+      "eventTime": "2026-10-01T15:32:38.000899Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1055613",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "225",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "227",
+      "eventTime": "2026-10-01T15:32:38.000915Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055614",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "227",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "225"
+      }
+    },
+    {
+      "eventId": "228",
+      "eventTime": "2026-10-01T15:32:38.293034Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055618",
+      "timerFiredEventAttributes": {
+        "timerId": "227",
+        "startedEventId": "227"
+      }
+    },
+    {
+      "eventId": "229",
+      "eventTime": "2026-10-01T15:32:38.293054Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055619",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "230",
+      "eventTime": "2026-10-01T15:32:38.294815Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055623",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "229",
+        "identity": "87239@localhost@",
+        "requestId": "f118b75a-66b9-4274-be2e-9d20c129d717",
+        "historySizeBytes": "25497",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "231",
+      "eventTime": "2026-10-01T15:32:38.297520Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055628",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "229",
+        "startedEventId": "230",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "232",
+      "eventTime": "2026-10-01T15:32:38.297567Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055629",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "232",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xNSJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "231",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "233",
+      "eventTime": "2026-10-01T15:32:38.297594Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055632",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "232",
+        "identity": "87239@localhost@",
+        "requestId": "ec2a0f93-a83a-4db4-8007-91772618e2e4",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "234",
+      "eventTime": "2026-10-01T15:32:38.299635Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1055633",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "232",
+        "startedEventId": "233",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "235",
+      "eventTime": "2026-10-01T15:32:38.299648Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055634",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "236",
+      "eventTime": "2026-10-01T15:32:38.300794Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055638",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "235",
+        "identity": "87239@localhost@",
+        "requestId": "9bc5ba79-490d-41c2-b24c-5ea4e055b935",
+        "historySizeBytes": "26231",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "237",
+      "eventTime": "2026-10-01T15:32:38.303508Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055642",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "235",
+        "startedEventId": "236",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "238",
+      "eventTime": "2026-10-01T15:32:38.303540Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055643",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "238",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "237"
+      }
+    },
+    {
+      "eventId": "239",
+      "eventTime": "2026-10-01T15:32:38.493323Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055646",
+      "timerFiredEventAttributes": {
+        "timerId": "238",
+        "startedEventId": "238"
+      }
+    },
+    {
+      "eventId": "240",
+      "eventTime": "2026-10-01T15:32:38.493351Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055647",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "241",
+      "eventTime": "2026-10-01T15:32:38.496591Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055651",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "240",
+        "identity": "87239@localhost@",
+        "requestId": "d626175e-99bb-401a-bae7-cf0950e1f5a5",
+        "historySizeBytes": "26687",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "242",
+      "eventTime": "2026-10-01T15:32:38.500183Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055656",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "240",
+        "startedEventId": "241",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "243",
+      "eventTime": "2026-10-01T15:32:38.500229Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055657",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "243",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xNSJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "242",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "244",
+      "eventTime": "2026-10-01T15:32:38.500258Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055660",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "243",
+        "identity": "87239@localhost@",
+        "requestId": "e42e3fea-5146-43b8-98c3-e8b2f2bf20ab",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "245",
+      "eventTime": "2026-10-01T15:32:38.502168Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1055661",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTE2Iiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "243",
+        "startedEventId": "244",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "246",
+      "eventTime": "2026-10-01T15:32:38.502183Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055662",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "247",
+      "eventTime": "2026-10-01T15:32:38.503617Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055666",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "246",
+        "identity": "87239@localhost@",
+        "requestId": "098a5a99-3429-46a2-828c-a6ed32fa7d88",
+        "historySizeBytes": "27438",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "248",
+      "eventTime": "2026-10-01T15:32:38.505838Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055670",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "246",
+        "startedEventId": "247",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "249",
+      "eventTime": "2026-10-01T15:32:38.506110Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1055671",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "248",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "250",
+      "eventTime": "2026-10-01T15:32:38.506133Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055672",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "250",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "248"
+      }
+    },
+    {
+      "eventId": "251",
+      "eventTime": "2026-10-01T15:32:38.694358Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055676",
+      "timerFiredEventAttributes": {
+        "timerId": "250",
+        "startedEventId": "250"
+      }
+    },
+    {
+      "eventId": "252",
+      "eventTime": "2026-10-01T15:32:38.694373Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055677",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "253",
+      "eventTime": "2026-10-01T15:32:38.696385Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055681",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "252",
+        "identity": "87239@localhost@",
+        "requestId": "5ec1a0b6-07f4-418e-bfa1-9ee89b6d5baf",
+        "historySizeBytes": "28010",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "254",
+      "eventTime": "2026-10-01T15:32:38.699155Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055686",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "252",
+        "startedEventId": "253",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "255",
+      "eventTime": "2026-10-01T15:32:38.699201Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055687",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "255",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xNiJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "254",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "256",
+      "eventTime": "2026-10-01T15:32:38.699231Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055690",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "255",
+        "identity": "87239@localhost@",
+        "requestId": "f3dda228-d270-4e5f-94cb-4ac8bdd77410",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "257",
+      "eventTime": "2026-10-01T15:32:38.700989Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1055691",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "255",
+        "startedEventId": "256",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "258",
+      "eventTime": "2026-10-01T15:32:38.700999Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055692",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "259",
+      "eventTime": "2026-10-01T15:32:38.702146Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055696",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "258",
+        "identity": "87239@localhost@",
+        "requestId": "9814f630-1cdf-475c-be85-39fa140d99f3",
+        "historySizeBytes": "28744",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "260",
+      "eventTime": "2026-10-01T15:32:38.703952Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055700",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "258",
+        "startedEventId": "259",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "261",
+      "eventTime": "2026-10-01T15:32:38.703970Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055701",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "261",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "260"
+      }
+    },
+    {
+      "eventId": "262",
+      "eventTime": "2026-10-01T15:32:38.996424Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055704",
+      "timerFiredEventAttributes": {
+        "timerId": "261",
+        "startedEventId": "261"
+      }
+    },
+    {
+      "eventId": "263",
+      "eventTime": "2026-10-01T15:32:38.996448Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055705",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "264",
+      "eventTime": "2026-10-01T15:32:38.999330Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055709",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "263",
+        "identity": "87239@localhost@",
+        "requestId": "00d1f23f-0c19-473f-bc6a-551777bb10ea",
+        "historySizeBytes": "29200",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "265",
+      "eventTime": "2026-10-01T15:32:39.004088Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055714",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "263",
+        "startedEventId": "264",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "266",
+      "eventTime": "2026-10-01T15:32:39.004152Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055715",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "266",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xNiJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "265",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "267",
+      "eventTime": "2026-10-01T15:32:39.004192Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055718",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "266",
+        "identity": "87239@localhost@",
+        "requestId": "df5993e1-f7d9-42ec-bf41-6295ba8052d5",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "268",
+      "eventTime": "2026-10-01T15:32:39.006303Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1055719",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTE3Iiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "266",
+        "startedEventId": "267",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "269",
+      "eventTime": "2026-10-01T15:32:39.006316Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055720",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "270",
+      "eventTime": "2026-10-01T15:32:39.007632Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055724",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "269",
+        "identity": "87239@localhost@",
+        "requestId": "051aeb4c-b43a-488f-8fc0-033014a0eadf",
+        "historySizeBytes": "29946",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "271",
+      "eventTime": "2026-10-01T15:32:39.009727Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055728",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "269",
+        "startedEventId": "270",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "272",
+      "eventTime": "2026-10-01T15:32:39.010073Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1055729",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "271",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "273",
+      "eventTime": "2026-10-01T15:32:39.010106Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055730",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "273",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "271"
+      }
+    },
+    {
+      "eventId": "274",
+      "eventTime": "2026-10-01T15:32:39.295324Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055745",
+      "timerFiredEventAttributes": {
+        "timerId": "273",
+        "startedEventId": "273"
+      }
+    },
+    {
+      "eventId": "275",
+      "eventTime": "2026-10-01T15:32:39.295328Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055746",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "276",
+      "eventTime": "2026-10-01T15:32:39.302800Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055792",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "275",
+        "identity": "87239@localhost@",
+        "requestId": "cb99333c-4334-4fa4-9a8a-9d155955940c",
+        "historySizeBytes": "30514",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "277",
+      "eventTime": "2026-10-01T15:32:39.304700Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055812",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "275",
+        "startedEventId": "276",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "278",
+      "eventTime": "2026-10-01T15:32:39.304715Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055813",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "278",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xNyJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "277",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "279",
+      "eventTime": "2026-10-01T15:32:39.304725Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055817",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "278",
+        "identity": "87239@localhost@",
+        "requestId": "c2ae0468-d504-4455-b26f-498021077b01",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "280",
+      "eventTime": "2026-10-01T15:32:39.305741Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1055818",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "278",
+        "startedEventId": "279",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "281",
+      "eventTime": "2026-10-01T15:32:39.305746Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055819",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "282",
+      "eventTime": "2026-10-01T15:32:39.309612Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055861",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "281",
+        "identity": "87239@localhost@",
+        "requestId": "fa84e349-f10c-4d3b-a559-ce00bf48e49f",
+        "historySizeBytes": "31248",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "283",
+      "eventTime": "2026-10-01T15:32:39.310959Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055878",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "281",
+        "startedEventId": "282",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "284",
+      "eventTime": "2026-10-01T15:32:39.310967Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1055879",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "284",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "283"
+      }
+    },
+    {
+      "eventId": "285",
+      "eventTime": "2026-10-01T15:32:39.493040Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1055935",
+      "timerFiredEventAttributes": {
+        "timerId": "284",
+        "startedEventId": "284"
+      }
+    },
+    {
+      "eventId": "286",
+      "eventTime": "2026-10-01T15:32:39.493043Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055936",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "287",
+      "eventTime": "2026-10-01T15:32:39.496948Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1055966",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "286",
+        "identity": "87239@localhost@",
+        "requestId": "32b70a31-f76b-4d36-a902-cd19819fd09d",
+        "historySizeBytes": "31704",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "288",
+      "eventTime": "2026-10-01T15:32:39.498184Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1055982",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "286",
+        "startedEventId": "287",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "289",
+      "eventTime": "2026-10-01T15:32:39.498196Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1055983",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "289",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xNyJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "288",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "290",
+      "eventTime": "2026-10-01T15:32:39.498205Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1055990",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "289",
+        "identity": "87239@localhost@",
+        "requestId": "60c0ff86-e25d-4e30-9104-cd293e15a7f8",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "291",
+      "eventTime": "2026-10-01T15:32:39.499533Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1055991",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTE4Iiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "289",
+        "startedEventId": "290",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "292",
+      "eventTime": "2026-10-01T15:32:39.499537Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1055992",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "293",
+      "eventTime": "2026-10-01T15:32:39.502298Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1056019",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "292",
+        "identity": "87239@localhost@",
+        "requestId": "25cc2f2c-9322-4de4-ae3e-1ea4cfa13ac1",
+        "historySizeBytes": "32455",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "294",
+      "eventTime": "2026-10-01T15:32:39.503513Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1056033",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "292",
+        "startedEventId": "293",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "295",
+      "eventTime": "2026-10-01T15:32:39.504023Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1056034",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "294",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "296",
+      "eventTime": "2026-10-01T15:32:39.504037Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1056035",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "296",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "294"
+      }
+    },
+    {
+      "eventId": "297",
+      "eventTime": "2026-10-01T15:32:39.693626Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1056123",
+      "timerFiredEventAttributes": {
+        "timerId": "296",
+        "startedEventId": "296"
+      }
+    },
+    {
+      "eventId": "298",
+      "eventTime": "2026-10-01T15:32:39.693629Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1056124",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "299",
+      "eventTime": "2026-10-01T15:32:39.698901Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1056158",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "298",
+        "identity": "87239@localhost@",
+        "requestId": "5357d82a-9f0a-44f1-989a-e1509fb440c6",
+        "historySizeBytes": "33027",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "300",
+      "eventTime": "2026-10-01T15:32:39.700121Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1056176",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "298",
+        "startedEventId": "299",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "301",
+      "eventTime": "2026-10-01T15:32:39.700135Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1056177",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "301",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xOCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "300",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "302",
+      "eventTime": "2026-10-01T15:32:39.700144Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1056182",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "301",
+        "identity": "87239@localhost@",
+        "requestId": "3e80e937-33d6-49a3-855a-280b346b2c8f",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "303",
+      "eventTime": "2026-10-01T15:32:39.701083Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
+      "taskId": "1056183",
+      "activityTaskFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "Dandori.HttpStatus.500",
+            "nonRetryable": true
+          }
+        },
+        "scheduledEventId": "301",
+        "startedEventId": "302",
+        "identity": "87239@localhost@",
+        "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+      }
+    },
+    {
+      "eventId": "304",
+      "eventTime": "2026-10-01T15:32:39.701088Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1056184",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "305",
+      "eventTime": "2026-10-01T15:32:39.747615Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1056233",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "304",
+        "identity": "87239@localhost@",
+        "requestId": "a5cb437c-c0e3-4ef5-aea2-46d13409ba1d",
+        "historySizeBytes": "33761",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "306",
+      "eventTime": "2026-10-01T15:32:39.748644Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1056246",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "304",
+        "startedEventId": "305",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "307",
+      "eventTime": "2026-10-01T15:32:39.748654Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1056247",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IlNsZWVwIg=="
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "307",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "306"
+      }
+    },
+    {
+      "eventId": "308",
+      "eventTime": "2026-10-01T15:32:39.994881Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1056301",
+      "timerFiredEventAttributes": {
+        "timerId": "307",
+        "startedEventId": "307"
+      }
+    },
+    {
+      "eventId": "309",
+      "eventTime": "2026-10-01T15:32:39.994894Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1056302",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "310",
+      "eventTime": "2026-10-01T15:32:39.996156Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1056311",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "309",
+        "identity": "87239@localhost@",
+        "requestId": "9abe4621-8713-4921-ac46-01b16168d562",
+        "historySizeBytes": "34217",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "311",
+      "eventTime": "2026-10-01T15:32:39.998017Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1056319",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "309",
+        "startedEventId": "310",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "312",
+      "eventTime": "2026-10-01T15:32:39.998049Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1056320",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "312",
+        "activityType": {
+          "name": "get_intent"
+        },
+        "taskQueue": {
+          "name": "hotel_stay_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpbnRlbnQiOiJpZC0xOCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "311",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "313",
+      "eventTime": "2026-10-01T15:32:39.998068Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1056324",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "312",
+        "identity": "87239@localhost@",
+        "requestId": "143768e8-59fa-4563-a5e0-62117a355462",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "314",
+      "eventTime": "2026-10-01T15:32:39.999556Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1056325",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJpZCI6ImlkLTE5Iiwic3RhdHVzIjoicHJvY2Vzc2luZyJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "312",
+        "startedEventId": "313",
+        "identity": "87239@localhost@"
+      }
+    },
+    {
+      "eventId": "315",
+      "eventTime": "2026-10-01T15:32:39.999565Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1056326",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:f00f1e1f-8285-4132-a38b-d61d11110cf9",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "hotel_stay_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "316",
+      "eventTime": "2026-10-01T15:32:40.048303Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1056345",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "315",
+        "identity": "87239@localhost@",
+        "requestId": "fa14d216-3e18-474b-bd20-84997b312117",
+        "historySizeBytes": "34968",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "317",
+      "eventTime": "2026-10-01T15:32:40.049694Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1056353",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "315",
+        "startedEventId": "316",
+        "identity": "87239@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "318",
+      "eventTime": "2026-10-01T15:32:40.049900Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "taskId": "1056354",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "317",
+        "searchAttributes": {
+          "indexedFields": {
+            "DandoriCases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg==",
+                "type": "S2V5d29yZExpc3Q="
+              },
+              "data": "WyJwaT1wcm9jZXNzaW5nIl0="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "319",
+      "eventTime": "2026-10-01T15:32:40.049919Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_FAILED",
+      "taskId": "1056355",
+      "workflowExecutionFailedEventAttributes": {
+        "failure": {
+          "message": "The capture has no clear outcome; handing it over to staff",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "SettlementUnclear",
+            "nonRetryable": true
+          }
+        },
+        "retryState": "RETRY_STATE_RETRY_POLICY_NOT_SET",
+        "workflowTaskCompletedEventId": "317"
+      }
+    }
+  ]
+}

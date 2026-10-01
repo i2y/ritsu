@@ -23,12 +23,15 @@ Step Functions sends, so the same `.flow` makes the same requests wherever it ru
 | `event` | cannot build (E050) | nothing is called: the workflow waits for a value sent to it by name | cannot build (E050) | cannot build (E050) | cannot build (E050) |
 | none of these | cannot build (E050) | an activity you write (`OwnTasks`) | a step running code you write (`OwnTasks`) | cannot build (E050) | a function you write (`OwnTasks`) |
 
-The calls dandori writes go through a `Transport` (`io.ts`, `io.py`), whose credentials and clients
+On Temporal, the Python build calls with urllib and boto3 where the TypeScript calls with `fetch` and the AWS
+SDK, and the Go build with `net/http` and the AWS SDK for Go v2.
+
+The calls dandori writes go through a `Transport` (`io.ts`, `io.py`, `io.go`), whose credentials and clients
 are yours to set: the headers of an HTTP API, the AWS SDK's clients, an agent's API key, TypeSafe's
 key for Jev. In tests it is where a stand-in goes.
 
 - `queue "<name>"` sends a Temporal activity or child workflow to that task queue, where workers in
-  either language can serve it.
+  any of the three languages can serve it.
 - `local` under `use rule` has Temporal call the rule as a local activity, in the worker that runs
   the workflow: each call leaves one marker in the history rather than an activity's six events,
   which counts in a flow that decides many times in a loop.
@@ -215,7 +218,7 @@ error[E002]: tests/fixtures/proto_unread.flow:11:12: `catalog.Priced` cannot be 
 ## A rule as a service
 
 By default a rule's code goes with the workflow: a Lambda function around the Python rulec generates on
-Step Functions, an activity around its TypeScript or Python on Temporal. A rule can instead be called
+Step Functions, an activity around its TypeScript, Python or Go on Temporal. A rule can instead be called
 at the Connect service that `rulec gen` writes for it, from every platform, so that the rule is in one
 place and a change of its table reaches every workflow that calls it:
 

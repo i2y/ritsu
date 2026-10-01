@@ -27,7 +27,7 @@ the platform it is built for.
 </p>
 
 <p class="dd-hero__lede">
-<strong>Built for five platforms.</strong> Temporal (TypeScript or Python), AWS Step Functions,
+<strong>Built for five platforms.</strong> Temporal (TypeScript, Python or Go), AWS Step Functions,
 AWS Lambda durable functions, Argo Workflows and pydantic-graph. What each of them runs is played
 against one reference interpreter, on every scenario the tests generate.
 </p>
@@ -126,6 +126,7 @@ settled nor released. Each diagnostic comes with the run that gets there.
 ```text
 dandori build hotel.flow --target temporal
 dandori build hotel.flow --target temporal-python
+dandori build hotel.flow --target temporal-go
 dandori build hotel.flow --target asl
 dandori build hotel.flow --target durable
 dandori build hotel.flow --target argo
@@ -138,7 +139,7 @@ dandori build hotel.flow --target pydantic-graph
 ### One workflow, built for the platform you run
 
 Temporal is the main platform: dandori writes the workflow, the activities that make its HTTP, AWS
-and agent calls, the worker and the client, in TypeScript or in Python. The same `.flow` also builds
+and agent calls, the worker and the client, in TypeScript, Python or Go. The same `.flow` also builds
 for AWS Step Functions, Lambda durable functions, Argo Workflows and pydantic-graph, and the code
 dandori writes sends the same requests on each. A build refuses what its platform cannot do.
 [Build for a platform](platforms.md)

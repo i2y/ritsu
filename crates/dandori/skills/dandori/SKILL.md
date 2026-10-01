@@ -1,6 +1,6 @@
 ---
 name: dandori
-description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents, TypeSafe's Jev and code of your own, checked before they run and built for Temporal (TypeScript or Python), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W032, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
+description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents, TypeSafe's Jev and code of your own, checked before they run and built for Temporal (TypeScript, Python or Go), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W032, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
 compatibility: Requires the `dandori` binary on PATH (`cargo install --path .` in a clone of https://github.com/i2y/dandori). A workflow that uses rules (`use rule`) also needs `rulec` (`brew install i2y/tap/rulec`).
 license: MIT OR Apache-2.0
 ---
@@ -384,7 +384,8 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | Target | What `build` writes | What to know |
 |---|---|---|
 | `temporal` | the workflow, activities, a worker and a client, in TypeScript | the main platform; the only one with `on cancel`, `event` and a service's `status` |
-| `temporal-python` | the same with Temporal's Python SDK | named as in TypeScript, so a worker in one language can serve the other |
+| `temporal-python` | the same with Temporal's Python SDK | named as in TypeScript, so a worker in one language can serve another |
+| `temporal-go` | the same with Temporal's Go SDK, as one package | values are JSON values (`map[string]any`); your tasks implement `OwnTasks`; Go 1.26 |
 | `asl` | an ASL state machine with JSONata, and a Lambda handler for every rule called by `lambda` | no code of your own (every task needs a way of calling); `http`, `agent`, `jev` and a rule at its `connect` need `connection` |
 | `durable` | a Lambda durable function in TypeScript | a task of your own is a step |
 | `argo` | a WorkflowTemplate and the caller image | a task of your own is a container of its `image` |

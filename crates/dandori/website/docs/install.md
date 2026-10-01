@@ -82,6 +82,7 @@ The code a build writes imports each platform's own SDK, and nothing of dandori'
 |---|---|
 | `temporal` | Temporal's TypeScript SDK (`@temporalio/*`); the AWS SDK, OpenAI's Agents SDK or Anthropic's SDK only if a task calls through them |
 | `temporal-python` | Temporal's Python SDK (`temporalio`); boto3 and the agents' SDKs the same way |
+| `temporal-go` | Temporal's Go SDK (`go.temporal.io/sdk`, which asks for Go 1.26); the AWS SDK for Go v2, OpenAI's Go client or Anthropic's Go SDK only if a task calls through them |
 | `asl` | AWS Step Functions; a rule is a Lambda function around the Python rulec generates, or an HTTP Task to its service |
 | `durable` | AWS Lambda durable functions (`@aws/durable-execution-sdk-js`) |
 | `argo` | Argo Workflows, and the image built from the generated `caller/` |

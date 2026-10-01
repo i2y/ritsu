@@ -21,9 +21,11 @@
 | `event` | ビルドできない（E050） | 何も呼ばず、名前を宛先にして送られてくる値を待つ | ビルドできない（E050） | ビルドできない（E050） | ビルドできない（E050） |
 | どれも書かない | ビルドできない（E050） | 自分で書くアクティビティ（`OwnTasks`） | 自分で書くコードを動かすステップ（`OwnTasks`） | ビルドできない（E050） | 自分で書く関数（`OwnTasks`） |
 
-生成した呼び出しは、どれも `Transport`（`io.ts`、`io.py`）を通ります。HTTP の API のヘッダ、AWS SDK のクライアント、エージェントの API キー、Jev のための TypeSafe の API キーといった認証や接続の設定は、ここで渡します。テストでは、ここを差し替えます。
+Temporal の表は TypeScript 版のものです。Python 版は `fetch` と AWS SDK の代わりに urllib と boto3 で、Go 版は `net/http` と AWS SDK for Go v2 で呼びます。
 
-`queue "<名前>"` を書くと、Temporal のアクティビティや子ワークフローを、そのタスクキューへ送ります。そのキューは、どちらの言語のワーカーでも受け持てます。
+生成した呼び出しは、どれも `Transport`（`io.ts`、`io.py`、`io.go`）を通ります。HTTP の API のヘッダ、AWS SDK のクライアント、エージェントの API キー、Jev のための TypeSafe の API キーといった認証や接続の設定は、ここで渡します。テストでは、ここを差し替えます。
+
+`queue "<名前>"` を書くと、Temporal のアクティビティや子ワークフローを、そのタスクキューへ送ります。そのキューは、三つの言語のどのワーカーでも受け持てます。
 
 `use rule` の下に `local` と書くと、Temporal は規則をローカルアクティビティとして、ワークフローを動かしているワーカーの中で呼びます。一回の呼び出しで履歴に残るのは、通常のアクティビティなら六つになるイベントではなく、マーカー一つだけです。ループの中で何度も規則を呼ぶフローで効きます。
 
@@ -174,7 +176,7 @@ task reserve_stock(sku: string, quantity: int) -> warehouse.ReserveResponse
 
 ## 規則をサービスとして呼ぶ
 
-規則のコードは、既定ではワークフローと一緒に出します。Step Functions では rulec が生成した Python を包んだ Lambda 関数、Temporal ではその TypeScript か Python を包んだアクティビティです。もう一つの形は、`rulec gen` が規則のために書く Connect のサービスを、どのプラットフォームからも呼ぶ形です。規則が一か所にあるので、規則を直すと、それを呼ぶすべてのワークフローに届きます。
+規則のコードは、既定ではワークフローと一緒に出します。Step Functions では rulec が生成した Python を包んだ Lambda 関数、Temporal ではその TypeScript、Python、Go のどれかを包んだアクティビティです。もう一つの形は、`rulec gen` が規則のために書く Connect のサービスを、どのプラットフォームからも呼ぶ形です。規則が一か所にあるので、規則を直すと、それを呼ぶすべてのワークフローに届きます。
 
 ```flow
 use rule urgency from "../rules/urgency.rule"

@@ -30,6 +30,7 @@ pub mod service;
 pub mod sources;
 pub mod syntax;
 pub mod temporal;
+pub mod temporal_go;
 pub mod temporal_py;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;

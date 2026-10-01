@@ -63,7 +63,8 @@ does.
 - **OpenAI**, without `url`. Step Functions sends the request to the Responses API from an HTTP Task,
   with the API key in the EventBridge connection the task names (`connection`). The code dandori
   writes for the other platforms runs it with OpenAI's Agents SDK through the `Transport`, which reads
-  `OPENAI_API_KEY`, or takes a run configuration of your own.
+  `OPENAI_API_KEY`, or takes a run configuration of your own. OpenAI has no Agents SDK for Go: the Go
+  build sends the request Step Functions sends to the Responses API, with OpenAI's Go client.
 - **Any Open Responses endpoint**, with `url "<base>"`. Open Responses is the open specification of
   OpenAI's Responses API, which OpenAI, Hugging Face, OpenRouter, Ollama, vLLM, LM Studio and Vercel
   took up in January 2026. The call goes to `<base>/responses` at that endpoint as the same request

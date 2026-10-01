@@ -8,12 +8,12 @@ const USAGE: &str = "dandori — a small typed language for workflows that call 
 
 Usage:
   dandori check <file.flow>...                    check: types, every arm, every state a case can be left in, retries
-  dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo|pydantic-graph [--out <dir>]
-                                                  compile to AWS Step Functions (ASL, JSONata), to Temporal (TypeScript or Python),
+  dandori build <file.flow> --target asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph [--out <dir>]
+                                                  compile to AWS Step Functions (ASL, JSONata), to Temporal (TypeScript, Python or Go),
                                                   to AWS Lambda durable functions (TypeScript), to Argo Workflows (YAML),
                                                   or to pydantic-graph (Python); a build also refuses what the platform
                                                   cannot do, and a run that can outgrow its history
-  dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]
+  dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
                                                   run the workflow in the reference interpreter against scripted answers,
                                                   and print the trace as the target would show it
   dandori scenarios <file.flow> [--out <dir>]     write scenarios that take every arm and every way a case can move
@@ -59,7 +59,7 @@ fn parse_args() -> Result<Args, String> {
                 _ => return Err("--format takes json or text (check), html or md (doc)".into()),
             },
             "--lang" => lang_flag = Some(it.next().ok_or("--lang takes ja or en")?),
-            "--target" => a.target = Some(it.next().ok_or("--target takes asl, temporal, temporal-python, durable, argo, pydantic-graph or reference")?),
+            "--target" => a.target = Some(it.next().ok_or("--target takes asl, temporal, temporal-python, temporal-go, durable, argo, pydantic-graph or reference")?),
             "--out" => a.out = Some(PathBuf::from(it.next().ok_or("--out takes a directory")?)),
             "--scenario" => a.scenario = Some(PathBuf::from(it.next().ok_or("--scenario takes a file")?)),
             "--help" | "-h" => return Err(USAGE.to_string()),
@@ -136,7 +136,7 @@ fn cmd_build(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo|pydantic-graph [--out <dir>]");
+            eprintln!("dandori build <file.flow> --target asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph [--out <dir>]");
             return 2;
         }
     };
@@ -147,7 +147,7 @@ fn cmd_build(a: &Args) -> u8 {
     };
     let out = a.out.clone().unwrap_or_else(|| PathBuf::from("out"));
     let Some(files) = a.target.as_deref().and_then(|t| commands::build(&model, t)) else {
-        eprintln!("--target takes asl, temporal, temporal-python, durable, argo or pydantic-graph");
+        eprintln!("--target takes asl, temporal, temporal-python, temporal-go, durable, argo or pydantic-graph");
         return 2;
     };
     let files = match files {
@@ -179,7 +179,7 @@ fn cmd_run(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]");
+            eprintln!("dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]");
             return 2;
         }
     };
@@ -203,8 +203,8 @@ fn cmd_run(a: &Args) -> u8 {
     };
     let view = match a.target.as_deref() {
         None | Some("reference") | Some("asl") => dandori::render::View::Asl,
-        // both SDKs put the same names on the wire
-        Some("temporal") | Some("temporal-python") => dandori::render::View::Temporal,
+        // the three SDKs put the same names on the wire
+        Some("temporal") | Some("temporal-python") | Some("temporal-go") => dandori::render::View::Temporal,
         Some("durable") => dandori::render::View::Durable,
         Some("argo") => dandori::render::View::Argo,
         Some("pydantic-graph") => dandori::render::View::Graph,

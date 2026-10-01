@@ -7,6 +7,9 @@ error[E040]: tests/fixtures/history_parallel.flow:1:1: on Temporal, an execution
 build --target temporal-python:
 error[E040]: tests/fixtures/history_parallel.flow:1:1: on Temporal, an execution of this workflow can write up to about 60008 history events, past the limit of 51200; a `repeat`, or a `for` that is not parallel, at the top of the flow would go on in a new run (Continue-As-New) as the history grows; lower the loop counts, or start a new execution to continue
      1 | workflow look_at_all v1
+build --target temporal-go:
+error[E040]: tests/fixtures/history_parallel.flow:1:1: on Temporal, an execution of this workflow can write up to about 60008 history events, past the limit of 51200; a `repeat`, or a `for` that is not parallel, at the top of the flow would go on in a new run (Continue-As-New) as the history grows; lower the loop counts, or start a new execution to continue
+     1 | workflow look_at_all v1
 build --target durable:
 error[E040]: tests/fixtures/history_parallel.flow:1:1: on Lambda durable functions, an execution of this workflow can take up to about 30001 durable operations, past the limit of 3000; lower the loop counts, or start a new execution to continue
      1 | workflow look_at_all v1

@@ -2,9 +2,9 @@
 
 ```text
 dandori check <file.flow>...
-dandori build <file.flow> --target asl|temporal|temporal-python|durable|argo|pydantic-graph [--out <dir>]
+dandori build <file.flow> --target asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph [--out <dir>]
 dandori scenarios <file.flow> [--out <dir>]
-dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]
+dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
 ```
 

@@ -86,15 +86,15 @@ use proto shop from "../specs/fulfillment.proto"
 
 ## ほかの言語のクライアント
 
-値は JSON で、Temporal では `json/plain` のペイロードになります。ほかの言語のクライアントは、メッセージを protobuf の JSON にして、それを JSON の値として渡します。Go なら `json.RawMessage(protojson.Marshal(m))`、Python なら `json_format.MessageToDict(m)` です。文字列のまま渡すと、ワークフローには文字列が届き、実行は `Dandori.BadInput` で失敗します。protobuf 独自のペイロード（`json/protobuf`）は読みません。Temporal の Go の SDK は、メッセージをそのまま渡すと、この形のペイロードにします。
+値は JSON で、Temporal では `json/plain` のペイロードになります。dandori が生成する TypeScript、Python、Go のクライアントは、そのように送ります。自分で書くクライアントは、メッセージを protobuf の JSON にして、それを JSON の値として渡します。Go なら `json.RawMessage(protojson.Marshal(m))`、Python なら `json_format.MessageToDict(m)` です。文字列のまま渡すと、ワークフローには文字列が届き、実行は `Dandori.BadInput` で失敗します。protobuf 独自のペイロード（`json/protobuf`）は読みません。Temporal の Go の SDK は、メッセージをそのまま渡すと、この形のペイロードにします。
 
 ## Temporal では
 
-メソッドは、クライアントがもともとしていることに対応します。ワークフローの型は `<名前>_v<バージョン>`（`fulfillment_v1`）で、イベントは Update の `dandori.event`、コールバックへの応答は Update の `dandori.answer`、実行がいまどこにいるかはクエリの `dandori.status` です。生成する `client.ts` と `client.py` には、ほかに次のものが入ります。
+メソッドは、クライアントがもともとしていることに対応します。ワークフローの型は `<名前>_v<バージョン>`（`fulfillment_v1`）で、イベントは Update の `dandori.event`、コールバックへの応答は Update の `dandori.answer`、実行がいまどこにいるかはクエリの `dandori.status` です。生成する `client.ts`、`client.py`、`client.go` には、ほかに次のものが入ります。
 
-- `SERVICE`：サービスの完全な名前
+- `SERVICE`（Go では `Service`）：サービスの完全な名前
 - メッセージごとの型。名前は `.proto` のメッセージの名前で、`FulfillRequest` はワークフローの入力、`FulfillResponse` は出力、イベントとコールバックのリクエストはそのタスクの結果の型です。
-- メソッドごとの関数。名前はメソッドの名前から作り（`fulfill`、`answerPacking`。Python では `answer_packing`）、中で `start`・`send`・`answer`・`status` を呼びます。クライアントにもともとある関数と同じになるメソッド（`Start` なら `start`）には、関数を足しません。
+- メソッドごとの関数。名前はメソッドの名前から作り（`fulfill`、`answerPacking`。Python では `answer_packing`、Go では `Fulfill`、`AnswerPacking`）、中で `start`・`send`・`answer`・`status` を呼びます。クライアントにもともとある関数と同じになるメソッド（`Start` なら `start`）には、関数を足しません。
 
 ## ほかのプラットフォームでは
 

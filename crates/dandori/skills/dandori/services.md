@@ -117,9 +117,9 @@ since protobuf does not read a message from `null`.
 
 ## Clients in other languages
 
-The values are JSON: on Temporal, a `json/plain` payload. A client in another language makes the
-message's protobuf JSON and hands it on as a JSON value: in Go,
-`json.RawMessage(protojson.Marshal(m))`; in Python, `json_format.MessageToDict(m)`. Handed on as a
+The values are JSON: on Temporal, a `json/plain` payload. The clients dandori writes, in TypeScript,
+Python and Go, send them so. A client of your own makes the message's protobuf JSON and hands it on as
+a JSON value: in Go, `json.RawMessage(protojson.Marshal(m))`; in Python, `json_format.MessageToDict(m)`. Handed on as a
 string, it reaches the workflow as a string, and the run fails with `Dandori.BadInput`. A payload of
 protobuf's own (`json/protobuf`, which Temporal's Go SDK makes of a message given as it is) is not
 read.
@@ -128,15 +128,15 @@ read.
 
 The methods are what the client already does. The workflow's type is `<name>_v<version>`
 (`fulfillment_v1`); an event is the Update `dandori.event`, a callback's answer the Update
-`dandori.answer`, and where a run is the query `dandori.status`. The generated `client.ts` and
-`client.py` also have:
+`dandori.answer`, and where a run is the query `dandori.status`. The generated `client.ts`,
+`client.py` and `client.go` also have:
 
-- `SERVICE`, the service's full name;
+- `SERVICE` (in Go, `Service`), the service's full name;
 - a type for each message, by its name in the `.proto`: `FulfillRequest` is the workflow's input,
   `FulfillResponse` its output, and the request of an event or a callback is the task's answer;
-- a function for each method, by its name (`fulfill`, `answerPacking`; in Python `answer_packing`),
-  which calls `start`, `send`, `answer` or `status`. A method whose function the client has already
-  (`Start` is `start`) adds none.
+- a function for each method, by its name (`fulfill`, `answerPacking`; in Python `answer_packing`; in
+  Go `Fulfill`, `AnswerPacking`), which calls `start`, `send`, `answer` or `status`. A method whose
+  function the client has already (`Start` is `start`) adds none.
 
 ## On the other platforms
 

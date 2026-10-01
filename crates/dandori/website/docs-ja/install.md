@@ -64,6 +64,7 @@ $ cp -r skills/dandori <your-project>/.claude/skills/     # 一つのプロジ�
 |---|---|
 | `temporal` | Temporal の TypeScript SDK（`@temporalio/*`）。AWS SDK、OpenAI の Agents SDK、Anthropic の SDK は、それを通して呼ぶタスクがあるときだけ |
 | `temporal-python` | Temporal の Python SDK（`temporalio`）。boto3 やエージェントの SDK も同じく、使うときだけ |
+| `temporal-go` | Temporal の Go SDK（`go.temporal.io/sdk`。Go 1.26 が要る）。AWS SDK for Go v2、OpenAI の Go のクライアント、Anthropic の Go の SDK は、それを通して呼ぶタスクがあるときだけ |
 | `asl` | AWS Step Functions。規則は、rulec が生成する Python を包んだ Lambda 関数になるか、サービスを呼ぶ HTTP Task になる |
 | `durable` | AWS Lambda durable functions（`@aws/durable-execution-sdk-js`） |
 | `argo` | Argo Workflows と、生成した `caller/` から作るイメージ |

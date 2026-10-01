@@ -22,7 +22,7 @@ hide:
 </p>
 
 <p class="dd-hero__lede">
-<strong>五つのプラットフォーム向けにビルドします。</strong>Temporal（TypeScript か Python）、AWS Step Functions、AWS Lambda durable functions、Argo Workflows、pydantic-graph です。どのプラットフォーム向けのコードも、テストで作ったすべてのシナリオで動かし、参照インタプリタと結果を突き合わせています。
+<strong>五つのプラットフォーム向けにビルドします。</strong>Temporal（TypeScript、Python、Go のどれか）、AWS Step Functions、AWS Lambda durable functions、Argo Workflows、pydantic-graph です。どのプラットフォーム向けのコードも、テストで作ったすべてのシナリオで動かし、参照インタプリタと結果を突き合わせています。
 </p>
 
 <div class="dd-hero__cta" markdown>
@@ -110,6 +110,7 @@ flow
 ```text
 dandori build hotel.flow --target temporal
 dandori build hotel.flow --target temporal-python
+dandori build hotel.flow --target temporal-go
 dandori build hotel.flow --target asl
 dandori build hotel.flow --target durable
 dandori build hotel.flow --target argo
@@ -121,7 +122,7 @@ dandori build hotel.flow --target pydantic-graph
 
 ### 一つの .flow から、使っているプラットフォーム向けに
 
-主なプラットフォームは Temporal です。dandori は、ワークフローと、HTTP や AWS などの呼び出しを受け持つアクティビティ、ワーカー、クライアントを、TypeScript か Python で生成します。同じ `.flow` から AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにもビルドでき、生成したコードはどれも同じリクエストを送ります。プラットフォームにできないことは、ビルドが断ります。[プラットフォーム別のビルド](platforms.md)
+主なプラットフォームは Temporal です。dandori は、ワークフローと、HTTP や AWS などの呼び出しを受け持つアクティビティ、ワーカー、クライアントを、TypeScript、Python、Go のどれかで生成します。同じ `.flow` から AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにもビルドでき、生成したコードはどれも同じリクエストを送ります。プラットフォームにできないことは、ビルドが断ります。[プラットフォーム別のビルド](platforms.md)
 
 </div>
 </div>

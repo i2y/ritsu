@@ -1,7 +1,7 @@
 # How it is checked
 
 The reference interpreter defines what a `.flow` means. The tests generate the scenarios of every
-example and run each of them eight ways: in the reference interpreter, and in what each platform
+example and run each of them nine ways: in the reference interpreter, and in what each platform
 runs. Every way must make the same calls, with the same arguments and idempotency keys, and end the
 same way.
 
@@ -12,6 +12,7 @@ same way.
 | the ASL, on LocalStack's Step Functions | `tools/localstack/run.mjs` |
 | the Temporal workflow in TypeScript, on a Temporal server | `tools/temporal/run.mjs` (the Temporal CLI's dev server) |
 | the Temporal workflow in Python, on a Temporal server | `tools/temporal-python/run.py` |
+| the Temporal workflow in Go, on a Temporal server | `tools/temporal-go` (one program, with the Go of every flow built into it) |
 | the durable function, in the SDK's local test runner | `tools/durable/run.mjs` |
 | the WorkflowTemplate, on Argo Workflows v4.1.4 in a local kind cluster | `tools/argo/run.mjs` |
 | the graph, with pydantic-graph 2.51.0 | `tools/pydantic-graph/run.py` |
@@ -53,10 +54,12 @@ Every run of a flow goes at once, each as a workflow of its own id, which the id
   and gives an activity 5 seconds; a call the scenario times out is kept busy until the server times it
   out. The copy also counts every history as long, so a loop at the top of the flow goes on in a new
   run at every round but the first, and the runners follow each run to the next to replay them all.
-- Every flow also runs with its workflow in one language and its activities in the other, both ways.
+- Every flow also runs with its workflow in one language and its activities in another: TypeScript and
+  Python each way, and Go each way with TypeScript.
 - In a flow with `on cancel`, the scenarios also cancel the workflow during a call.
 - A workflow that runs another `.flow` as its child also runs with the child's generated workflow in
-  place of a stand-in, in one language and in the two crossed.
+  place of a stand-in, in each language, and crossed: TypeScript and Python each way, and Go each way
+  with TypeScript.
 
 ## Step Functions
 
@@ -102,15 +105,19 @@ run again, at most twice, and the test says so.
   Messages API on this machine: the model must be asked what Step Functions asks for the same call,
   and an error status must fail the call without a retry. An agent on another server of Open
   Responses goes to a stand-in of that server, which must get the very request Step Functions sends.
-  Nothing goes to OpenAI or Anthropic. When Ollama runs on this machine, one call of each such agent
+  The default `Transport` in Go, which has no Agents SDK, sends an OpenAI agent's call with OpenAI's Go
+  client and a Claude agent's with Anthropic's Go SDK, each to a stand-in of its API on this machine,
+  which must get the very request Step Functions sends, once. Nothing goes to OpenAI or Anthropic. When Ollama runs on this machine, one call of each such agent
   also goes to it for real, without its effort (a model that does not reason is refused one), and each
   answer must fit the task's type (`DANDORI_OLLAMA` names where it runs, `DANDORI_OLLAMA_MODEL` the
   model; else the smallest one it has).
 - The rest of the default `Transport` (`fetch` and the AWS SDK in TypeScript, the standard library and
-  boto3 in Python) sends every HTTP, Lambda and AWS call of the scenarios to stand-ins on this machine:
-  a server that answers HTTP and Lambda's Invoke, and moto for SNS and SQS. What arrives must be the
-  call, in the same text from both languages, and an AWS error must come back by the name the task
-  declares (`NotFoundException`).
+  boto3 in Python, `net/http` and the AWS SDK for Go v2 in Go) sends every HTTP, Lambda and AWS call of
+  the scenarios to stand-ins on this machine: a server that answers HTTP and Lambda's Invoke, and moto
+  for SNS and SQS. What arrives must be the call, in the same text from TypeScript and Python, and an AWS
+  error must come back by the name the task declares (`NotFoundException`). Go's maps keep no order, so
+  Go writes the keys of an object, and the pairs of a query or a form, in the order of their names: the
+  same JSON and the same pairs, in another order.
 - A rule called at its service (`connect` under `use rule`) is an HTTP request on every platform, and the
   scenarios answer it as the service writes: the record they chose as protobuf's JSON, with the zero
   values left out and the numbers as strings. They also answer with the false and the 0 left out (and an
@@ -134,9 +141,9 @@ run again, at most twice, and the test says so.
   requests without an input. With rulec 0.21.2 and before, whose `rulec api` does not say what a service
   calls the values of its enums, the two rules of `.proto` enums are skipped, and so are the field and
   the input left out, which the services of those rulecs do not refuse.
-- What a service answers is read as the rule's record in four places: the reference interpreter, the
-  TypeScript and the Python that dandori writes, and the JSONata of the state machine. 200 answers of
-  four rules must be read alike in all four, among them the ones a service would not write: a number
+- What a service answers is read as the rule's record in five places: the reference interpreter, the
+  TypeScript, the Python and the Go that dandori writes, and the JSONata of the state machine. 200
+  answers of four rules must be read alike in all five, among them the ones a service would not write: a number
   that is not a decimal or is more than 2^53 − 1, a name that no enum has (`constructor`, `__proto__`),
   a field of another kind, a null, a body that is not an object. None of them may raise.
 - A Jev task's call is an HTTP request, and the stand-in answers it with Jev's response as TypeSafe's
@@ -148,7 +155,7 @@ run again, at most twice, and the test says so.
   answer would show. The default `Transport`'s request to Jev goes to the stand-in server too, where
   TypeSafe's key from `TYPESAFE_API_KEY` must arrive as `Authorization: Bearer <key>`.
 - When `TYPESAFE_API_KEY` is set, the first call of each Jev task of the examples and the test flows
-  also goes to TypeSafe for real, from the default `Transport` of TypeScript and of Python. The
+  also goes to TypeSafe for real, from the default `Transport` of TypeScript, of Python and of Go. The
   response must answer every question, and each answer must read into the task's type, or fail the
   call with the task's error when Jev is not sure enough. Without the key, nothing goes to TypeSafe.
 
@@ -185,7 +192,7 @@ Both are committed, and both are held to the repository.
 - `presets.json` must be what checking the examples reads now, and what rulec prints for their rules
   now.
 - For every flow the page opens, the command, reading the disk and running rulec, must print and
-  write what the page answers from `presets.json`: `check`, `build` for all six targets, and `doc` in
+  write what the page answers from `presets.json`: `check`, `build` for all seven targets, and `doc` in
   both formats.
 - The rules tab has no command to be held to: what it answers from `presets.json` must be what it
   answers reading the disk and running rulec, and every rule must have its page.
@@ -201,8 +208,9 @@ The durable functions test runner cannot time a call out on cue, so the scenario
 left out there. Argo and the graph's runner cannot time out a task either, but a callback's timeout can
 be played: on pydantic-graph by not answering it, on Argo by answering the wait with what its running
 out gives. On Temporal, both can. The TypeScript for Temporal, durable functions and Argo's caller also
-passes `tsc --strict`, and the code between each platform and a rule answers every vector
-`rulec vectors` produces as rulec says.
+passes `tsc --strict`, the Go for Temporal, with the Go rulec writes for the rules, passes `go vet` and is
+as gofmt writes it, and the code between each platform and a rule answers every vector `rulec vectors`
+produces as rulec says.
 
 Nothing here runs on AWS itself, on a production Temporal cluster or Temporal Cloud, or against real
 OpenAI and Anthropic APIs.
@@ -226,6 +234,7 @@ $ uv pip install --python tools/wire/.venv/bin/python -r tools/wire/requirements
 $ uv venv --python 3.13 tools/connect/.venv
 $ uv pip install --python tools/connect/.venv/bin/python -r tools/connect/requirements.txt
 $ npm install --prefix tools/mermaid
+$ (cd tools/temporal-go && go mod download)   # Go 1.25 or later; go fetches the Go 1.26 the Temporal SDK asks for
 $ sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind 0.33+, kubectl)
 $ docker pull localstack/localstack:4.14.0
 $ DANDORI_RULEC=/path/to/rulec cargo test
@@ -240,7 +249,7 @@ line.
 
 A test that cannot find rulec, Node, the tools, buf, protoc, the cluster, the `argo` command, the image of
 LocalStack or Chrome prints a `SKIP:` line and passes, so read the output with `-- --nocapture`. The whole
-`cargo test` takes two to four minutes; `tools/argo/setup.sh` sets Argo's controller up for it, to
+`cargo test` takes six to seven minutes; `tools/argo/setup.sh` sets Argo's controller up for it, to
 look at a workflow again a second after a change rather than ten, on the node image of kind 0.33.0.
 `DANDORI_FLOW=<part of a path>` runs only the flows whose path
 has it, and `DANDORI_BLESS=1` rewrites the golden files and the site's pages of the examples, and records the kept histories and the playground's `presets.json` anew.

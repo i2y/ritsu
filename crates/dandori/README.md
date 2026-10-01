@@ -8,7 +8,7 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
   can be left in when the workflow ends, retries that could repeat a change on the other side, the
   service of a `.proto` the workflow implements, and how long a run's history can grow on the
   platform it is built for.
-- **Built for five platforms.** Temporal (TypeScript or Python), AWS Step Functions (ASL with
+- **Built for five platforms.** Temporal (TypeScript, Python or Go), AWS Step Functions (ASL with
   JSONata), AWS Lambda durable functions, Argo Workflows and pydantic-graph. What each of them
   runs is played against one reference interpreter, on every scenario the tests generate.
 - **Decisions come from outside the workflow.** A `.flow` branches only on what a rule or a task
@@ -118,9 +118,9 @@ project's `.claude/skills/`; [skills/README.md](skills/README.md) says more.
 
 ```
 dandori check <file.flow>...
-dandori build <file.flow> --target temporal|temporal-python|asl|durable|argo|pydantic-graph [--out <dir>]
+dandori build <file.flow> --target temporal|temporal-python|temporal-go|asl|durable|argo|pydantic-graph [--out <dir>]
 dandori scenarios <file.flow> [--out <dir>]
-dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]
+dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
 ```
 
@@ -134,7 +134,8 @@ it calls come with it, as `rulec doc` renders them for whoever approves them.
 | Target | What `build` writes |
 |---|---|
 | `temporal` | the workflow, its activities, a worker and a client, in TypeScript |
-| `temporal-python` | the same in Python, named alike, so a worker in one language can serve the other |
+| `temporal-python` | the same in Python, named alike, so a worker in one language can serve another |
+| `temporal-go` | the same in Go, as one package, named alike too |
 | `asl` | the state machine, in ASL with JSONata, and a Lambda handler for every rule it calls by Lambda |
 | `durable` | a Lambda durable function in TypeScript |
 | `argo` | a WorkflowTemplate, and the caller image that makes its calls |
@@ -157,8 +158,8 @@ beside it (`hotel.ja.flow`), with Japanese names everywhere but where an API des
 ## How it is checked
 
 The reference interpreter defines what a `.flow` means. The tests generate the scenarios of every
-example and run each of them eight ways: in the reference interpreter, the ASL under JSONata 2.0.6
-and on LocalStack's Step Functions, the Temporal workflow in TypeScript and in Python on the
+example and run each of them nine ways: in the reference interpreter, the ASL under JSONata 2.0.6
+and on LocalStack's Step Functions, the Temporal workflow in TypeScript, in Python and in Go on the
 Temporal CLI's dev server, the durable function in the SDK's local test runner, the
 WorkflowTemplate on Argo Workflows in a kind cluster, and the graph with pydantic-graph. Each must
 make the same calls, with the same arguments and idempotency keys, and end the same way. The page
@@ -173,8 +174,8 @@ names outside ASCII come through all five platforms as identifiers, keys and URL
 
 Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, types made from an
 OpenAPI document or a Smithy model (a `.proto` makes them), protobuf's binary encoding and Connect's
-streams, the clients of a service a workflow implements written for other languages by a plugin of
-protoc, cases the workflow holds itself, a rule that walks a list of elements, a rule's preconditions
+streams, the clients of a service a workflow implements written, for the languages dandori does not
+build for, by a plugin of protoc, cases the workflow holds itself, a rule that walks a list of elements, a rule's preconditions
 checked at the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
 Cloud (the tests run on the Temporal CLI's dev server), the caller image run against real Lambda,
 HTTP and AWS endpoints from Argo, and agents run against OpenAI and Anthropic themselves. The

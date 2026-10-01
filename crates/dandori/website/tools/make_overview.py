@@ -50,7 +50,7 @@ TEXT = {
         "build": "build",
         "main": "main",
         "platforms": [
-            ("Temporal", "workflow, worker and client, in TypeScript or Python"),
+            ("Temporal", "workflow, worker and client, in TypeScript, Python or Go"),
             ("AWS Step Functions", "a state machine in ASL with JSONata"),
             ("Lambda durable functions", "a handler in TypeScript"),
             ("Argo Workflows", "a WorkflowTemplate and its caller image"),
@@ -77,7 +77,7 @@ TEXT = {
         "build": "ビルド",
         "main": "主",
         "platforms": [
-            ("Temporal", "ワークフロー一式（TypeScript か Python）"),
+            ("Temporal", "ワークフロー一式（TypeScript、Python、Go）"),
             ("AWS Step Functions", "JSONata で書いた ASL のステートマシン"),
             ("Lambda durable functions", "TypeScript のハンドラー"),
             ("Argo Workflows", "WorkflowTemplate と、呼び出し用のイメージ"),

@@ -46,7 +46,7 @@ flow
 
 ## どこへ送るか
 
-**OpenAI** には、`url` を書かないときに送ります。Step Functions では、HTTP Task から Responses API に送ります。API キーは、タスクの `connection` に書いた EventBridge の接続に置きます。ほかのプラットフォーム向けに生成したコードは、`Transport` を通し、OpenAI の Agents SDK で呼びます。キーは `OPENAI_API_KEY` から読みます。自分で用意した実行の設定を渡すこともできます。
+**OpenAI** には、`url` を書かないときに送ります。Step Functions では、HTTP Task から Responses API に送ります。API キーは、タスクの `connection` に書いた EventBridge の接続に置きます。ほかのプラットフォーム向けに生成したコードは、`Transport` を通し、OpenAI の Agents SDK で呼びます。キーは `OPENAI_API_KEY` から読みます。自分で用意した実行の設定を渡すこともできます。OpenAI には Go の Agents SDK が無いので、Go 版は OpenAI の Go のクライアントで、Step Functions と同じリクエストを Responses API に送ります。
 
 **Open Responses のエンドポイント**には、`url "<base>"` を書くと送ります。Open Responses は、OpenAI の Responses API をもとにしたオープンな仕様です。2026 年 1 月に、OpenAI、Hugging Face、OpenRouter、Ollama、vLLM、LM Studio、Vercel が採用しました。リクエストは、Step Functions が送るのと同じ形で、そのエンドポイントの `<base>/responses` へ送ります。生成したコードは、SDK を使わずに HTTP で直接送ります。SDK は仕様に無い項目まで送ることがあるからです。認証は `Transport` のヘッダで渡します。受け付ける Schema の制限はサーバーごとに違うので、応答の型を OpenAI の制限に照らして検査するのは、OpenAI に送るときだけです。
 

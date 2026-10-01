@@ -42,6 +42,7 @@ const TEXT = {
       asl: "Step Functions (ASL)",
       temporal: "Temporal (TypeScript)",
       "temporal-python": "Temporal (Python)",
+      "temporal-go": "Temporal (Go)",
       durable: "Lambda durable functions",
       argo: "Argo Workflows",
       "pydantic-graph": "pydantic-graph",
@@ -79,6 +80,7 @@ const TEXT = {
       asl: "Step Functions（ASL）",
       temporal: "Temporal（TypeScript）",
       "temporal-python": "Temporal（Python）",
+      "temporal-go": "Temporal（Go）",
       durable: "Lambda durable functions",
       argo: "Argo Workflows",
       "pydantic-graph": "pydantic-graph",
@@ -87,7 +89,7 @@ const TEXT = {
 };
 
 // The platforms, in the order `dandori build --target` lists them.
-const TARGETS = ["asl", "temporal", "temporal-python", "durable", "argo", "pydantic-graph"];
+const TARGETS = ["asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"];
 
 // The module and the bundle sit beside this script, so they are found from its own URL rather
 // than the page's: the same files are loaded by the page in each language.

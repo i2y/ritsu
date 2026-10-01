@@ -4,7 +4,7 @@ use crate::diag::{Diag, Lang};
 use crate::model::Model;
 
 /// The platforms `build` writes for, as `--target` names them.
-pub const TARGETS: [&str; 6] = ["asl", "temporal", "temporal-python", "durable", "argo", "pydantic-graph"];
+pub const TARGETS: [&str; 7] = ["asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"];
 
 /// The files a build writes, by their paths under `--out`, or the diagnostics of what the
 /// platform cannot do.
@@ -16,6 +16,7 @@ pub fn build(m: &Model, target: &str) -> Option<Built> {
         "asl" => crate::asl::build(m),
         "temporal" => crate::temporal::build(m),
         "temporal-python" => crate::temporal_py::build(m),
+        "temporal-go" => crate::temporal_go::build(m),
         "durable" => crate::temporal::build_flavor(m, crate::temporal::Flavor::Durable),
         "argo" => crate::argo::build(m),
         "pydantic-graph" => crate::pydantic_graph::build(m),

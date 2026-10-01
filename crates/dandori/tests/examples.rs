@@ -191,6 +191,7 @@ fn diagnostics_match_the_golden_files() {
                 ("asl", dandori::asl::build(m)),
                 ("temporal", dandori::temporal::build(m)),
                 ("temporal-python", dandori::temporal_py::build(m)),
+                ("temporal-go", dandori::temporal_go::build(m)),
                 ("durable", dandori::temporal::build_flavor(m, dandori::temporal::Flavor::Durable)),
                 ("argo", dandori::argo::build(m)),
                 ("pydantic-graph", dandori::pydantic_graph::build(m)),
@@ -595,7 +596,7 @@ fn temporal_runs_as_the_reference_says() {
         eprintln!("SKIP: tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
         return;
     }
-    temporal_all(None);
+    temporal_all(Sdk::Ts);
 }
 
 /// The Python of tools/temporal-python/.venv, where the Temporal SDK for Python is.
@@ -607,42 +608,204 @@ fn temporal_python() -> Option<PathBuf> {
 #[test]
 fn temporal_python_runs_as_the_reference_says() {
     need_rulec!();
-    let python = match temporal_python() {
-        Some(p) => p,
-        None => {
-            eprintln!("SKIP: tools/temporal-python/.venv is missing; make it as tools/temporal-python/requirements.txt says");
-            return;
-        }
-    };
-    temporal_all(Some(python));
+    if temporal_python().is_none() {
+        eprintln!("SKIP: tools/temporal-python/.venv is missing; make it as tools/temporal-python/requirements.txt says");
+        return;
+    }
+    temporal_all(Sdk::Py);
 }
 
-/// Every flow on Temporal at once, each with a runner and a dev server of its own: the
-/// TypeScript build, or with `python`, the Python build.
-fn temporal_all(python: Option<PathBuf>) {
+/// The languages of the Temporal SDKs that dandori writes for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Sdk {
+    Ts,
+    Py,
+    Go,
+}
+
+impl Sdk {
+    fn name(self) -> &'static str {
+        match self {
+            Sdk::Ts => "TypeScript",
+            Sdk::Py => "Python",
+            Sdk::Go => "Go",
+        }
+    }
+
+    fn short(self) -> &'static str {
+        match self {
+            Sdk::Ts => "ts",
+            Sdk::Py => "py",
+            Sdk::Go => "go",
+        }
+    }
+
+    fn build(self, m: &Model) -> Result<Vec<(String, String)>, Vec<dandori::diag::Diag>> {
+        match self {
+            Sdk::Ts => dandori::temporal::build(m),
+            Sdk::Py => dandori::temporal_py::build(m),
+            Sdk::Go => dandori::temporal_go::build(m),
+        }
+    }
+
+    /// The directory of the build's code: the workflow's package.
+    fn package(self, m: &Model) -> String {
+        match self {
+            Sdk::Ts => dandori::render::ident(&m.name),
+            Sdk::Py => dandori::temporal_py::package(m),
+            Sdk::Go => dandori::temporal_go::package(m),
+        }
+    }
+
+    /// The method of the stand-in that runs a task the user writes, in the language that serves the activities.
+    fn method(self, task: &str) -> String {
+        match self {
+            Sdk::Ts => dandori::render::ident(task),
+            Sdk::Py => dandori::temporal_py::method(task),
+            Sdk::Go => task.to_string(),
+        }
+    }
+
+    /// The function of the workflow's code that calls a task's activity.
+    fn proxy(self, task: &str) -> String {
+        match self {
+            Sdk::Ts => dandori::render::ident(&format!("task_{task}")),
+            Sdk::Py => format!("dd_task_{}", dandori::render::ident(task)),
+            Sdk::Go => dandori::temporal_go::task_function(task),
+        }
+    }
+}
+
+/// The Go runner: one binary, built by tools/temporal-go from the Go of every flow the Temporal
+/// tests run (building one a flow costs too much time and memory), and the key of each package in
+/// it, by what the package is: a flow (`rel(f)`), the two of tests/children (`children/<name>`),
+/// and the two builds of tests/versions (`versions/a`, `versions/b`).
+struct GoRunner {
+    bin: PathBuf,
+    keys: std::collections::BTreeMap<String, String>,
+}
+
+impl GoRunner {
+    fn key(&self, what: &str) -> &str {
+        self.keys.get(what).unwrap_or_else(|| panic!("the Go runner has no package for {what}"))
+    }
+}
+
+/// The Go runner, built once (by the first test that asks); None, with a SKIP line, when Go or the
+/// module in tools/temporal-go is missing. The runner of a test process that has ended is removed
+/// first: it is a hundred megabytes, and the temporary directory keeps it.
+fn go_runner() -> Option<&'static GoRunner> {
+    static GO: std::sync::OnceLock<Option<GoRunner>> = std::sync::OnceLock::new();
+    let got = GO.get_or_init(|| {
+        let tools = root().join("tools/temporal-go");
+        if !tools.join("go.mod").exists() || !Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false) {
+            return None;
+        }
+        for e in std::fs::read_dir(std::env::temp_dir()).into_iter().flatten().flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            let Some(pid) = name.strip_prefix("dandori-test-").and_then(|n| n.strip_suffix("-go-runner")) else { continue };
+            let ended = pid != std::process::id().to_string() && Command::new("kill").args(["-0", pid]).stderr(std::process::Stdio::null()).status().is_ok_and(|s| !s.success());
+            if ended {
+                let _ = std::fs::remove_dir_all(e.path());
+            }
+        }
+        let dir = scratch("go-runner");
+        let mut entries = Vec::new();
+        let mut keys = std::collections::BTreeMap::new();
+        let mut add = |what: String, m: &Model, patch: &str, entries: &mut Vec<Value>| {
+            let key = format!("p{}", keys.len());
+            let out = dir.join(&key);
+            let files = dandori::temporal_go::build(m).unwrap_or_else(|d| panic!("{what} does not build for Go: {}", d[0].en));
+            for (name, text) in &files {
+                let p = out.join(name);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(&p, text).unwrap();
+            }
+            let package = out.join(dandori::temporal_go::package(m));
+            let callbacks: Vec<String> = m.tasks.iter().filter(|t| t.callback && !t.is_child(Platform::Temporal)).map(|t| dandori::temporal_go::task_function(&t.name)).collect();
+            entries.push(json!({ "key": key, "dir": package, "patch": patch, "callbacks": callbacks }));
+            keys.insert(what, key);
+        };
+        // every flow, the versions for the other platforms too, whose default Transport the checks send through
+        for f in runnable() {
+            let (_, checked) = dandori::check::check_file(&f).unwrap();
+            add(rel(&f), &checked.model.expect("the examples pass check"), "full", &mut entries);
+        }
+        // the parent and the child of tests/children, as they are
+        let (_, checked) = dandori::check::check_file(&root().join("tests/children/受付.flow")).unwrap();
+        let parent = checked.model.expect("the flow passes check");
+        let child = parent.tasks.iter().find_map(|t| t.flow.as_ref()).expect("a task runs a .flow").model.clone();
+        add("children/parent".into(), &parent, "none", &mut entries);
+        add("children/child".into(), &child, "none", &mut entries);
+        // the two builds of tests/versions, which go on in a new run at every round
+        for (name, flow) in versions_texts() {
+            if name == "again" {
+                continue;
+            }
+            let d = dir.join(format!("versions-{name}"));
+            std::fs::create_dir_all(&d).unwrap();
+            let f = d.join("approvals.flow");
+            std::fs::write(&f, flow).unwrap();
+            let (_, checked) = dandori::check::check_file(&f).unwrap();
+            add(format!("versions/{name}"), &checked.model.unwrap(), "continue", &mut entries);
+        }
+        let manifest = dir.join("manifest.json");
+        std::fs::write(&manifest, serde_json::to_string_pretty(&entries).unwrap()).unwrap();
+        let bin = dir.join("run");
+        let started = std::time::Instant::now();
+        let out = Command::new("go").arg("run").arg("./build").arg(&bin).arg(&manifest).current_dir(&tools).env("GOWORK", "off").output().unwrap();
+        assert!(out.status.success(), "tools/temporal-go could not build the Go runner:\n{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        eprintln!("built the Go runner of {} package(s) in {:.0} s", entries.len(), started.elapsed().as_secs_f64());
+        Some(GoRunner { bin, keys })
+    });
+    if got.is_none() {
+        eprintln!("SKIP: go or tools/temporal-go is missing; the Go that dandori writes for Temporal is not run");
+    }
+    got.as_ref()
+}
+
+/// The flow of tests/versions as it is (a, and again), and with one text changed (b).
+fn versions_texts() -> Vec<(&'static str, String)> {
+    let text = std::fs::read_to_string(root().join("tests/versions/approvals.flow")).unwrap();
+    let changed = text.replace("さんが申込 {申込.id} を承認しました\")", "さんが申込 {申込.id} を承認しました（新しいビルド）\")");
+    assert_ne!(text, changed, "tests/versions/approvals.flow no longer has the text the test changes");
+    vec![("a", text.clone()), ("b", changed), ("again", text)]
+}
+
+#[test]
+fn temporal_go_runs_as_the_reference_says() {
+    need_rulec!();
+    if go_runner().is_none() {
+        return;
+    }
+    temporal_all(Sdk::Go);
+}
+
+/// Every flow on Temporal at once, each with a runner and a dev server of its own, in one language.
+fn temporal_all(lang: Sdk) {
     let _turn = heavy();
     std::thread::scope(|scope| {
         for f in runnable_on(Platform::Temporal) {
-            let python = python.clone();
-            scope.spawn(move || temporal_one(&f, python.as_deref(), None));
+            scope.spawn(move || temporal_one(&f, lang, None));
         }
     });
 }
 
-/// The workflow in one language, and its activities in the other: the workers of the build that
+/// The workflow in one language, and its activities in another: the workers of the build that
 /// runs the workflow run nothing else, and the other build's runner serves the activities on the
-/// same server (`--serve`). The flows whose rules say `local` are left out: a local activity runs
-/// in the worker of the workflow, so it is in the workflow's language.
+/// same server (`--serve`): TypeScript and Python each way, and then Go each way with TypeScript.
+/// The two rounds take turns: the four pairs of every flow at once start twice the processes of
+/// one, and beside the rest of the tests, runs then time out. The flows whose rules say `local`
+/// are left out: a local activity runs in the worker of the workflow, so it is in the workflow's
+/// language.
 #[test]
 fn temporal_activities_run_in_the_other_language() {
     need_rulec!();
-    let python = match (temporal_available(), temporal_python()) {
-        (true, Some(p)) => p,
-        _ => {
-            eprintln!("SKIP: tools/temporal/node_modules or tools/temporal-python/.venv is missing");
-            return;
-        }
-    };
+    if !temporal_available() || temporal_python().is_none() {
+        eprintln!("SKIP: tools/temporal/node_modules or tools/temporal-python/.venv is missing");
+        return;
+    }
+    let go = go_runner().is_some();
     let _turn = heavy();
     let flows: Vec<PathBuf> = runnable_on(Platform::Temporal)
         .into_iter()
@@ -660,50 +823,49 @@ fn temporal_activities_run_in_the_other_language() {
             true
         })
         .collect();
-    std::thread::scope(|scope| {
-        for f in &flows {
-            let python = &python;
-            scope.spawn(move || temporal_one(f, None, Some(python)));
-            scope.spawn(move || temporal_one(f, Some(python), Some(Path::new("node"))));
-        }
-    });
+    let mut rounds = vec![[(Sdk::Ts, Sdk::Py), (Sdk::Py, Sdk::Ts)]];
+    if go {
+        rounds.push([(Sdk::Go, Sdk::Ts), (Sdk::Ts, Sdk::Go)]);
+    }
+    for pairs in &rounds {
+        std::thread::scope(|scope| {
+            for f in &flows {
+                for (wf, acts) in pairs {
+                    scope.spawn(move || temporal_one(f, *wf, Some(*acts)));
+                }
+            }
+        });
+    }
 }
 
-/// One flow on Temporal: the TypeScript build, or with `python`, the Python build. With
-/// `activities_by` (the other language's program: Python, or Node), the activities are that
-/// language's, served by its runner.
-fn temporal_one(f: &Path, python: Option<&Path>, activities_by: Option<&Path>) {
+/// One flow on Temporal, its workflow in `wf`; with `acts`, its activities in that other language,
+/// served by that language's runner.
+fn temporal_one(f: &Path, wf: Sdk, acts: Option<Sdk>) {
     let (_, checked) = dandori::check::check_file(f).unwrap();
     let m = checked.model.expect("the examples pass check");
-    let lang = match (python.is_some(), activities_by.is_some()) {
-        (false, false) => "",
-        (true, false) => "python-",
-        (false, true) => "ts-py-",
-        (true, true) => "py-ts-",
+    let lang = match acts {
+        None => format!("{}-", wf.short()),
+        Some(a) => format!("{}-{}-", wf.short(), a.short()),
     };
     let dir = scratch(&format!("temporal-{lang}{}", key(f)));
-    let mut files = match python {
-        Some(_) => dandori::temporal_py::build(&m),
-        None => dandori::temporal::build(&m),
+    // the code of the languages whose runner is not the Go one, which has every flow's built in
+    for l in std::iter::once(wf).chain(acts) {
+        if l == Sdk::Go {
+            continue;
+        }
+        let files = l.build(&m).unwrap_or_else(|d| panic!("{} does not build: {}", rel(f), d[0].en));
+        for (name, text) in &files {
+            let p = dir.join(name);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, text).unwrap();
+        }
     }
-    .unwrap_or_else(|d| panic!("{} does not build: {}", rel(f), d[0].en));
-    if activities_by.is_some() {
-        // the other language's build, whose runner serves the activities
-        files.extend(match python {
-            Some(_) => dandori::temporal::build(&m),
-            None => dandori::temporal_py::build(&m),
-        }.unwrap());
-    }
-    for (name, text) in &files {
-        let p = dir.join(name);
-        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-        std::fs::write(&p, text).unwrap();
-    }
+    let go = if wf == Sdk::Go || acts == Some(Sdk::Go) { go_runner() } else { None };
+    let python = temporal_python();
     let p = Platform::Temporal;
     // the stand-ins of the tasks the user writes are methods of the language that serves the activities
-    let activities_in_python = python.is_some() != activities_by.is_some();
-    let method = |t: &str| if activities_in_python { dandori::temporal_py::method(t) } else { dandori::render::ident(t) };
-    let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": method(&t.name), "callback": t.callback })).collect();
+    let serving = acts.unwrap_or(wf);
+    let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": serving.method(&t.name), "callback": t.callback })).collect();
     // the rules whose code goes with the workflow are stand-ins; one called at its service is an activity the generated code writes, which sends through the stand-in Transport
     let rules: Vec<String> = m.rules.iter().filter(|r| r.connect.is_none()).map(|r| dandori::render::rule_activity(&r.name)).collect();
     let children: Vec<Value> = m.tasks.iter().filter_map(|t| t.workflow.as_ref().map(|w| json!({ "type": w, "queue": t.queue }))).collect();
@@ -715,64 +877,75 @@ fn temporal_one(f: &Path, python: Option<&Path>, activities_by: Option<&Path>) {
     let (runs, references, _) = plays(&m, View::Temporal, true, |_| true);
     let runs_file = dir.join("runs.json");
     let results_file = dir.join("results.json");
-    // the tasks that hand on a callback's id, by the name of their proxy in the workflow's code
-    let callbacks: Vec<String> = m
-        .tasks
-        .iter()
-        .filter(|t| t.callback && !t.is_child(p))
-        .map(|t| if python.is_some() { format!("dd_task_{}", dandori::render::ident(&t.name)) } else { dandori::render::ident(&format!("task_{}", t.name)) })
-        .collect();
+    // the tasks that hand on a callback's id, by the name of their function in the workflow's code
+    let callbacks: Vec<String> = m.tasks.iter().filter(|t| t.callback && !t.is_child(p)).map(|t| wf.proxy(&t.name)).collect();
     let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": own, "rules": rules, "children": children, "queues": queues, "http": http, "aws": aws, "callbacks": callbacks, "runs": runs });
     std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
     let histories = dir.join("histories");
     let _ = std::fs::remove_dir_all(&histories);
-    let mut run = match python {
-        Some(py) => {
-            let mut c = Command::new(py);
-            c.arg(root().join("tools/temporal-python/run.py")).arg(dir.join(dandori::temporal_py::package(&m)));
+    let mut run = match wf {
+        Sdk::Py => {
+            let mut c = Command::new(python.as_ref().expect("the Python of tools/temporal-python"));
+            c.arg(root().join("tools/temporal-python/run.py")).arg(dir.join(wf.package(&m)));
             c
         }
-        None => {
+        Sdk::Ts => {
             let mut c = Command::new("node");
-            c.arg(root().join("tools/temporal/run.mjs")).arg(dir.join(dandori::render::ident(&m.name)));
+            c.arg(root().join("tools/temporal/run.mjs")).arg(dir.join(wf.package(&m)));
+            c
+        }
+        Sdk::Go => {
+            let go = go.expect("the Go runner");
+            let mut c = Command::new(&go.bin);
+            c.arg(go.key(&rel(f)));
             c
         }
     };
     run.arg(&runs_file).arg(&results_file).arg(&histories);
-    if let Some(by) = activities_by {
-        let serve: Vec<String> = match python {
-            Some(_) => vec![by.display().to_string(), root().join("tools/temporal/run.mjs").display().to_string(), "--serve".into(), dir.join(dandori::render::ident(&m.name)).display().to_string()],
-            None => vec![by.display().to_string(), root().join("tools/temporal-python/run.py").display().to_string(), "--serve".into(), dir.join(dandori::temporal_py::package(&m)).display().to_string()],
+    if let Some(by) = acts {
+        let mut serve: Vec<String> = match by {
+            Sdk::Ts => vec!["node".into(), root().join("tools/temporal/run.mjs").display().to_string(), "--serve".into(), dir.join(by.package(&m)).display().to_string()],
+            Sdk::Py => vec![python.as_ref().unwrap().display().to_string(), root().join("tools/temporal-python/run.py").display().to_string(), "--serve".into(), dir.join(by.package(&m)).display().to_string()],
+            Sdk::Go => {
+                let go = go.expect("the Go runner");
+                vec![go.bin.display().to_string(), "--serve".into(), go.key(&rel(f)).to_string()]
+            }
         };
-        let mut serve = serve;
         serve.push(runs_file.display().to_string());
         run.env("DANDORI_ACTIVITIES_BY", serde_json::to_string(&serve).unwrap());
     }
     let out = run.output().unwrap();
-    let what = match (python.is_some(), activities_by.is_some()) {
-        (false, false) => "the Temporal workflow",
-        (true, false) => "the Temporal workflow in Python",
-        (false, true) => "the Temporal workflow with its activities in Python",
-        (true, true) => "the Temporal workflow in Python with its activities in TypeScript",
+    let what = match acts {
+        None if wf == Sdk::Ts => "the Temporal workflow".to_string(),
+        None => format!("the Temporal workflow in {}", wf.name()),
+        Some(a) if wf == Sdk::Ts => format!("the Temporal workflow with its activities in {}", a.name()),
+        Some(a) => format!("the Temporal workflow in {} with its activities in {}", wf.name(), a.name()),
     };
     assert!(out.status.success(), "{}: the runner of {what} failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
     let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
-    // what the query dandori.status and the search attribute DandoriCases say of the cases at the end
-    for (i, (g, (sc, _))) in got.iter_mut().zip(&references).enumerate() {
-        let o = g.as_object_mut().unwrap();
-        let (cases, shown) = (o.remove("cases").unwrap_or(Value::Null), o.remove("shown").unwrap_or(Value::Null));
+    // what the query dandori.status and the search attribute DandoriCases say of the cases at the end,
+    // looked at once the runs themselves are: a run that went another way says why its cases differ
+    let said: Vec<(Value, Value, Vec<Value>)> = got
+        .iter_mut()
+        .map(|g| {
+            let o = g.as_object_mut().unwrap();
+            let (cases, shown) = (o.remove("cases").unwrap_or(Value::Null), o.remove("shown").unwrap_or(Value::Null));
+            (cases, shown, o.remove("asked").and_then(|a| a.as_array().cloned()).unwrap_or_default())
+        })
+        .collect();
+    compare(&what, f, &references, &got);
+    for (i, ((cases, shown, asked), (sc, _))) in said.iter().zip(&references).enumerate() {
         // the query that said otherwise than the search attribute, and was asked again (see the runners)
-        for said in o.remove("asked").and_then(|a| a.as_array().cloned()).unwrap_or_default() {
-            eprintln!("{} run {}: asked again, since the query said {said} where the search attribute said {shown}", rel(f), i + 1);
+        for again in asked {
+            eprintln!("{} run {}: asked again, since the query said {again} where the search attribute said {shown}", rel(f), i + 1);
         }
-        let want = dandori::interp::cases_at_end(&m, sc, View::Temporal).unwrap();
-        assert_eq!(cases, Value::Object(want.clone()), "{} run {}: the query says the cases are {cases}, and the reference {}", rel(f), i + 1, Value::Object(want.clone()));
+        let want = Value::Object(dandori::interp::cases_at_end(&m, sc, View::Temporal).unwrap());
+        assert_eq!(*cases, want, "{} run {}: the query to {what} says the cases are {cases}, and the reference {want}", rel(f), i + 1);
         // the workflow writes the search attribute when a case moves; before that, it has none
-        let listed: Vec<Value> = want.iter().filter(|(_, s)| !s.is_null()).map(|(c, s)| json!(format!("{c}={}", s.as_str().unwrap_or_default()))).collect();
+        let listed: Vec<Value> = want.as_object().unwrap().iter().filter(|(_, s)| !s.is_null()).map(|(c, s)| json!(format!("{c}={}", s.as_str().unwrap_or_default()))).collect();
         let listed = if listed.is_empty() { Value::Null } else { Value::Array(listed) };
-        assert_eq!(shown, listed, "{} run {}: the search attribute says {shown}, and the reference's cases {listed}", rel(f), i + 1);
+        assert_eq!(*shown, listed, "{} run {}: the search attribute of {what} says {shown}, and the reference's cases {listed}", rel(f), i + 1);
     }
-    compare(what, f, &references, &got);
     // a rule that says `local` runs as a local activity: a marker in the history, never an activity task
     let locals: Vec<String> = m.rules.iter().filter(|r| r.local).map(|r| dandori::render::rule_activity(&r.name)).collect();
     if !locals.is_empty() {
@@ -787,24 +960,24 @@ fn temporal_one(f: &Path, python: Option<&Path>, activities_by: Option<&Path>) {
                 if let Some(name) = ev["activityTaskScheduledEventAttributes"]["activityType"]["name"].as_str() {
                     assert!(!locals.iter().any(|l| l == name), "{}: the rule activity {name} says `local`, and ran as an activity task ({})", rel(f), path.display());
                 }
-                if ev["markerRecordedEventAttributes"]["markerName"] == "core_local_activity" {
+                if ev["markerRecordedEventAttributes"]["markerName"] == "core_local_activity" || ev["markerRecordedEventAttributes"]["markerName"] == "LocalActivity" {
                     markers += 1;
                 }
             }
         }
         assert!(markers > 0, "{}: no run called a rule that says `local` as a local activity", rel(f));
     }
-    let how = match (python.is_some(), activities_by.is_some()) {
-        (false, false) => "",
-        (true, false) => " in Python",
-        (false, true) => ", the activities in Python,",
-        (true, true) => " in Python, the activities in TypeScript,",
+    let how = match acts {
+        None if wf == Sdk::Ts => String::new(),
+        None => format!(" in {}", wf.name()),
+        Some(a) if wf == Sdk::Ts => format!(", the activities in {},", a.name()),
+        Some(a) => format!(" in {}, the activities in {},", wf.name(), a.name()),
     };
     eprintln!("{}: compared {} run(s) on Temporal{how} (the dev server), with the query and the search attribute, and replayed each", rel(f), references.len());
     // with DANDORI_BLESS, the history of the run with the most calls is kept for the replay test
-    if activities_by.is_none() && std::env::var("DANDORI_BLESS").is_ok() && RECORDED.iter().any(|r| rel(f) == *r) {
+    if acts.is_none() && std::env::var("DANDORI_BLESS").is_ok() && RECORDED.iter().any(|r| rel(f) == *r) {
         let longest = references.iter().enumerate().max_by_key(|(_, (_, r))| r["steps"].as_array().map(|a| a.len()).unwrap_or(0)).map(|(i, _)| i).unwrap();
-        let keep = recorded_dir(&m, python.is_some());
+        let keep = recorded_dir(&m, wf);
         let _ = std::fs::remove_dir_all(&keep);
         std::fs::create_dir_all(&keep).unwrap();
         // the run's history, and the histories of the runs that went on from it (Continue-As-New)
@@ -831,7 +1004,8 @@ fn neutral(text: &str) -> String {
     if let Ok(out) = Command::new("hostname").output() {
         let host = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if !host.is_empty() {
-            t = t.replace(&format!("@{host}"), "@localhost");
+            // the Go SDK names a sticky task queue <host>:<uuid>
+            t = t.replace(&format!("@{host}"), "@localhost").replace(&format!("\"{host}:"), "\"localhost:");
         }
     }
     t
@@ -842,7 +1016,7 @@ fn neutral(text: &str) -> String {
 /// deployment. A run that starts on A and waits for its approval while B becomes the current
 /// version ends on A's code, and so does its second round, which starts in a new run
 /// (Continue-As-New); a run that starts after runs on B's. The build id is a hash of the code:
-/// the same for the same code, and another for B.
+/// the same for the same code, and another for B. In TypeScript, in Python and in Go.
 #[test]
 fn temporal_worker_versioning_keeps_a_run_on_its_build() {
     need_rulec!();
@@ -851,41 +1025,47 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
         return;
     }
     let _turn = heavy();
-    let text = std::fs::read_to_string(root().join("tests/versions/approvals.flow")).unwrap();
-    let changed = text.replace("さんが申込 {申込.id} を承認しました\")", "さんが申込 {申込.id} を承認しました（新しいビルド）\")");
-    assert_ne!(text, changed, "tests/versions/approvals.flow no longer has the text the test changes");
     let dir = scratch("versions");
     let python = temporal_python();
-    for (lang, py) in [("TypeScript", None), ("Python", python.as_ref())] {
-        if lang == "Python" && py.is_none() {
+    let go = go_runner();
+    for lang in [Sdk::Ts, Sdk::Py, Sdk::Go] {
+        if lang == Sdk::Py && python.is_none() {
             eprintln!("SKIP: tools/temporal-python/.venv is missing; Worker Deployment Versioning is not tried in Python");
             continue;
         }
+        if lang == Sdk::Go && go.is_none() {
+            continue;
+        }
         let mut built = Vec::new();
-        for (name, flow) in [("a", &text), ("b", &changed), ("again", &text)] {
-            let d = dir.join(format!("{}-{name}", lang.to_lowercase()));
+        for (name, flow) in versions_texts() {
+            let d = dir.join(format!("{}-{name}", lang.short()));
             std::fs::create_dir_all(&d).unwrap();
             let f = d.join("approvals.flow");
             std::fs::write(&f, flow).unwrap();
             let (_, checked) = dandori::check::check_file(&f).unwrap();
             let m = checked.model.unwrap();
-            let files = if py.is_some() { dandori::temporal_py::build(&m) } else { dandori::temporal::build(&m) }.unwrap();
+            let files = lang.build(&m).unwrap();
             for (n, t) in &files {
                 let p = d.join(n);
                 std::fs::create_dir_all(p.parent().unwrap()).unwrap();
                 std::fs::write(&p, t).unwrap();
             }
-            let worker = files.iter().find(|(n, _)| n.ends_with("/worker.ts") || n.ends_with("/worker.py")).unwrap();
-            let id = worker.1.lines().find(|l| l.contains("BUILD_ID =")).unwrap().split('"').nth(1).unwrap().to_string();
-            built.push((d.join(dandori::render::ident(&m.name)), id));
+            let worker = files.iter().find(|(n, _)| n.ends_with("/worker.ts") || n.ends_with("/worker.py") || n.ends_with("/worker.go")).unwrap();
+            let id = worker.1.lines().find(|l| l.contains("BUILD_ID =") || l.contains("BuildID =")).unwrap().split('"').nth(1).unwrap().to_string();
+            built.push((d.join(lang.package(&m)), id));
         }
         assert_eq!(built[0].1, built[2].1, "the same code has two build ids");
         assert_ne!(built[0].1, built[1].1, "two builds of different code have one build id");
-        let results = dir.join(format!("{}-results.json", lang.to_lowercase()));
-        let out = match py {
-            Some(py) => Command::new(py).arg(root().join("tools/temporal-python/versions.py")).arg(&built[0].0).arg(&built[1].0).arg(&results).output().unwrap(),
-            None => Command::new("node").arg(root().join("tools/temporal/versions.mjs")).arg(&built[0].0).arg(&built[1].0).arg(&results).output().unwrap(),
+        let results = dir.join(format!("{}-results.json", lang.short()));
+        let out = match lang {
+            Sdk::Py => Command::new(python.as_ref().unwrap()).arg(root().join("tools/temporal-python/versions.py")).arg(&built[0].0).arg(&built[1].0).arg(&results).output().unwrap(),
+            Sdk::Ts => Command::new("node").arg(root().join("tools/temporal/versions.mjs")).arg(&built[0].0).arg(&built[1].0).arg(&results).output().unwrap(),
+            Sdk::Go => {
+                let go = go.unwrap();
+                Command::new(&go.bin).arg("--versions").arg(go.key("versions/a")).arg(go.key("versions/b")).arg(&results).output().unwrap()
+            }
         };
+        let lang = lang.name();
         assert!(out.status.success(), "the Worker Deployment Versioning run in {lang} failed:\n{}", String::from_utf8_lossy(&out.stderr));
         let got: Value = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
         let a_says = json!(["a さんが申込 申込-1 を承認しました", "a さんが申込 申込-1 を承認しました"]);
@@ -893,13 +1073,16 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
         assert_eq!(got["runs"], json!({ "run-a": 2, "run-b": 2 }), "{lang}: the second round of each did not start in a new run: {}", got["runs"]);
         assert_eq!(got["notified"]["run-a"], a_says, "{lang}: the run that started on A did not end on A's code: {}", got["notified"]);
         assert_eq!(got["notified"]["run-b"], b_says, "{lang}: the run that started on B did not run B's code: {}", got["notified"]);
+        if lang == "Go" {
+            assert_eq!(got["buildIds"], json!([built[0].1, built[1].1]), "Go: the runner's builds have other build ids than dandori wrote: {}", got["buildIds"]);
+        }
         eprintln!("{lang}: a run pinned to build {} ended on it, in the run it went on in too, after {} became the current version", built[0].1, built[1].1);
     }
 }
 
 /// A workflow that runs another `.flow` as its child (`flow "<path>"`, tests/children), both as
-/// dandori writes them, on one Temporal server: the parent's worker and the child's, in one
-/// language and in the two crossed. Nothing stands in for the child. Each run must end as the
+/// dandori writes them, on one Temporal server: the parent's worker and the child's, in each
+/// language, and crossed: TypeScript and Python each way, Go and TypeScript each way. Nothing stands in for the child. Each run must end as the
 /// reference interpreter says, given the child's end, which the reference interpreter also
 /// decides, from the input the parent passes it, as the answer of the parent's call.
 #[test]
@@ -911,6 +1094,7 @@ fn temporal_runs_a_flow_as_its_child() {
         return;
     }
     let python = python.unwrap();
+    let go = go_runner();
     let f = root().join("tests/children/受付.flow");
     let (_, checked) = dandori::check::check_file(&f).unwrap();
     let pm = checked.model.expect("the flow passes check");
@@ -959,26 +1143,52 @@ fn temporal_runs_a_flow_as_its_child() {
     }
     let node_runner = root().join("tools/temporal/children.mjs");
     let py_runner = root().join("tools/temporal-python/children.py");
-    let lang = |l: &str| if l == "py" { "Python" } else { "TypeScript" };
+    let lang = |l: &str| match l {
+        "py" => "Python",
+        "go" => "Go",
+        _ => "TypeScript",
+    };
     let _turn = heavy();
-    for (parent, child) in [("ts", "ts"), ("py", "py"), ("ts", "py"), ("py", "ts")] {
-        let (p_dir, c_dir) = (&built[&(parent, pm.name.clone())], &built[&(child, cm.name.clone())]);
+    let mut pairs = vec![("ts", "ts"), ("py", "py"), ("ts", "py"), ("py", "ts")];
+    if go.is_some() {
+        pairs.extend([("go", "go"), ("go", "ts"), ("ts", "go")]);
+    }
+    for (parent, child) in pairs {
         let results = dir.join(format!("results-{parent}-{child}.json"));
-        let mut cmd = if parent == "py" {
-            let mut c = Command::new(&python);
-            c.arg(&py_runner);
-            c
-        } else {
-            let mut c = Command::new("node");
-            c.arg(&node_runner);
-            c
+        let mut cmd = match parent {
+            "py" => {
+                let mut c = Command::new(&python);
+                c.arg(&py_runner);
+                c
+            }
+            "go" => {
+                let mut c = Command::new(&go.unwrap().bin);
+                c.arg("--children");
+                c
+            }
+            _ => {
+                let mut c = Command::new("node");
+                c.arg(&node_runner);
+                c
+            }
         };
-        cmd.arg(p_dir).arg(c_dir).arg(&runs_file).arg(&results);
-        if parent != child {
-            let serve: Vec<String> = if child == "py" {
-                vec![python.display().to_string(), py_runner.display().to_string(), "--serve".into(), c_dir.display().to_string()]
+        // the Go runner has its packages in it, by their keys
+        let at = |l: &str, what: &str, name: &String| -> String {
+            if l == "go" {
+                go.unwrap().key(what).to_string()
             } else {
-                vec!["node".into(), node_runner.display().to_string(), "--serve".into(), c_dir.display().to_string()]
+                built[&(l, name.clone())].display().to_string()
+            }
+        };
+        // the Go runner names both by their keys, also a child that another language's runner serves
+        let child_arg = if parent == "go" { go.unwrap().key("children/child").to_string() } else { at(child, "children/child", &cm.name) };
+        cmd.arg(at(parent, "children/parent", &pm.name)).arg(child_arg).arg(&runs_file).arg(&results);
+        if parent != child {
+            let c_dir = at(child, "children/child", &cm.name);
+            let serve: Vec<String> = match child {
+                "py" => vec![python.display().to_string(), py_runner.display().to_string(), "--serve".into(), c_dir],
+                "go" => vec![go.unwrap().bin.display().to_string(), "--children-serve".into(), c_dir],
+                _ => vec!["node".into(), node_runner.display().to_string(), "--serve".into(), c_dir],
             };
             cmd.env("DANDORI_CHILD_BY", serde_json::to_string(&serve).unwrap());
         }
@@ -1009,8 +1219,13 @@ const RECORDED: [&str; 9] = [
     "examples/order/temporal/order.ja.flow",
 ];
 
-fn recorded_dir(m: &Model, python: bool) -> PathBuf {
-    root().join("tests/histories").join(if python { "python" } else { "typescript" }).join(dandori::render::ident(&m.name))
+fn recorded_dir(m: &Model, lang: Sdk) -> PathBuf {
+    let dir = match lang {
+        Sdk::Ts => "typescript",
+        Sdk::Py => "python",
+        Sdk::Go => "go",
+    };
+    root().join("tests/histories").join(dir).join(dandori::render::ident(&m.name))
 }
 
 /// Whether an HTTP task's URL, with its `{placeholders}`, is the URL of a call.
@@ -1150,13 +1365,15 @@ fn wire_cases(m: &Model) -> Vec<Value> {
     cases
 }
 
-/// The default Transports — TypeScript's (fetch, the AWS SDK for JavaScript) and Python's (the
-/// standard library, boto3) — send the calls of every scenario to stand-ins on this machine
+/// The default Transports — TypeScript's (fetch, the AWS SDK for JavaScript), Python's (the
+/// standard library, boto3) and Go's (net/http, the AWS SDK for Go v2, through the Go runner's
+/// --wire) — send the calls of every scenario to stand-ins on this machine
 /// (tools/wire): an HTTP request arrives with the method, the path, the query, the headers and
 /// the body the call has, JSON or URL-encoded; a Lambda invoke with the function and the
 /// payload; an SNS message or an SQS message on moto, the AWS APIs' stand-in; and each gives
 /// back what the runners' stand-in Transport gives for the scenario's answer, an AWS error by
-/// the name the task declares. Nothing leaves the machine.
+/// the name the task declares. TypeScript and Python send the same text; Go's maps keep no order,
+/// so Go's JSON, query and form are held to theirs as values and as pairs. Nothing leaves the machine.
 #[test]
 fn default_transports_send_what_the_calls_say() {
     need_rulec!();
@@ -1292,6 +1509,65 @@ fn default_transports_send_what_the_calls_say() {
                     assert_eq!(keys(ts), keys(py), "{}: the fields of moto's answer differ between the languages: {case}", rel(&f));
                 }
             }
+            // the default Transport in Go: the same calls, and the same JSON; Go's maps keep no order, so it
+            // writes an object's keys, and a query's and a form's pairs, in the order of their names
+            if let Some(go) = go_runner() {
+                let results_file = dir.join("go.json");
+                let out = Command::new(&go.bin).arg("--wire").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results_file).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").output().unwrap();
+                assert!(out.status.success(), "{}: the Go check failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+                let results: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+                let sorted = |v: &Value| -> Value {
+                    let mut a = v.as_array().cloned().unwrap_or_default();
+                    a.sort_by_key(|x| x.to_string());
+                    Value::Array(a)
+                };
+                for (i, (c, r)) in cases.iter().zip(&results).enumerate() {
+                    let at = || format!("{} (Go): {}", rel(&f), serde_json::to_string(c).unwrap());
+                    let ts = &by_lang[0][i];
+                    match c["kind"].as_str().unwrap() {
+                        "http" => {
+                            let (got, want) = (&r["received"], &ts["received"]);
+                            assert_eq!(got["method"], want["method"], "{}: the method", at());
+                            assert_eq!(got["path"], want["path"], "{}: the path", at());
+                            assert_eq!(sorted(&got["query"]), sorted(&want["query"]), "{}: the query", at());
+                            for (k, v) in c["request"]["headers"].as_object().into_iter().flatten() {
+                                assert_eq!(got["headers"][k.to_lowercase()], *v, "{}: the header {k}", at());
+                            }
+                            assert_eq!(got["headers"]["x-dandori-check"], json!("wire"), "{}: the headers the options add", at());
+                            if c["request"]["typesafe"] == json!(true) {
+                                assert_eq!(got["headers"]["authorization"], json!("Bearer wire-typesafe-key"), "{}: TypeSafe's key", at());
+                            }
+                            if c["request"]["form"] == json!(true) {
+                                assert_eq!(sorted(&got["body"]), sorted(&want["body"]), "{}: the form", at());
+                            } else {
+                                assert_eq!(got["body"], want["body"], "{}: the body", at());
+                                if !want["body"].is_null() {
+                                    assert_eq!(got["headers"]["content-type"], json!("application/json"), "{}: the body's type", at());
+                                }
+                            }
+                            assert_eq!(r["returned"], c["reply"], "{}: what the Transport gave back", at());
+                        }
+                        "lambda" => {
+                            assert_eq!(r["received"]["fn"], c["fn"], "{}: the function", at());
+                            assert_eq!(r["received"]["payload"], c["payload"], "{}: the payload", at());
+                            assert!(r["received"]["invocationType"].is_null() || r["received"]["invocationType"] == json!("RequestResponse"), "{}: the invocation's type", at());
+                            assert_eq!(r["returned"], c["reply"], "{}: what the Transport gave back", at());
+                        }
+                        _ => {
+                            match c.get("error") {
+                                Some(e) => assert_eq!(r["returned"]["error"], *e, "{}: the error's name ({})", at(), r["returned"]),
+                                None => assert!(r["returned"]["ok"]["MessageId"].is_string(), "{}: no message id in {}", at(), r["returned"]),
+                            }
+                            // a message that is JSON text is compared as the JSON it is: Go writes its keys in the order of their names
+                            let read = |v: &Value| -> Value { Value::Array(v.as_array().into_iter().flatten().map(|m| m.as_str().and_then(|t| serde_json::from_str::<Value>(t).ok()).unwrap_or_else(|| m.clone())).collect()) };
+                            assert_eq!(read(&r["messages"]), read(&ts["messages"]), "{}: the messages differ from TypeScript's", at());
+                            let keys = |r: &Value| r["returned"]["ok"].as_object().map(|o| o.keys().cloned().collect::<std::collections::BTreeSet<_>>());
+                            assert_eq!(keys(r), keys(ts), "{}: the fields of moto's answer differ from TypeScript's", at());
+                        }
+                    }
+                }
+                eprintln!("{}: sent {} call(s) through the default Transport of Go", rel(&f), cases.len());
+            }
             eprintln!("{}: sent {} call(s) through the default Transport of TypeScript and of Python", rel(&f), cases.len());
             checked += cases.len();
             for c in &cases {
@@ -1317,7 +1593,7 @@ fn default_transports_send_what_the_calls_say() {
     assert!(checked > 0, "no call went through a Transport");
 }
 
-/// The kept histories replay with the code dandori writes now: a change of the generator that
+/// The kept histories, of TypeScript, Python and Go, replay with the code dandori writes now: a change of the generator that
 /// would make a running workflow of an unchanged `.flow` nondeterministic shows here. A change
 /// that has to do so is made with DANDORI_BLESS=1, which records the histories anew; runs that
 /// are going on need the version of the `.flow` raised, or Worker Deployment Versioning.
@@ -1329,33 +1605,38 @@ fn temporal_replays_the_recorded_histories() {
         eprintln!("SKIP: tools/temporal/node_modules or tools/temporal-python/.venv is missing");
         return;
     }
+    let go = go_runner();
     let mut replayed = 0;
     for r in RECORDED {
         let f = root().join(r);
         let (_, checked) = dandori::check::check_file(&f).unwrap();
         let m = checked.model.expect("the flows pass check");
-        for py in [false, true] {
-            let kept = recorded_dir(&m, py);
+        for lang in [Sdk::Ts, Sdk::Py, Sdk::Go] {
+            if lang == Sdk::Go && go.is_none() {
+                continue;
+            }
+            let kept = recorded_dir(&m, lang);
             if !kept.exists() {
                 panic!("{r}: no histories kept in {}; record them with DANDORI_BLESS=1", rel(&kept));
             }
-            let dir = scratch(&format!("replay-{}-{}", if py { "python" } else { "typescript" }, key(&f)));
-            let files = if py { dandori::temporal_py::build(&m) } else { dandori::temporal::build(&m) }.unwrap();
-            for (name, text) in &files {
-                let p = dir.join(name);
-                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-                std::fs::write(&p, text).unwrap();
+            let dir = scratch(&format!("replay-{}-{}", lang.short(), key(&f)));
+            if lang != Sdk::Go {
+                for (name, text) in &lang.build(&m).unwrap() {
+                    let p = dir.join(name);
+                    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                    std::fs::write(&p, text).unwrap();
+                }
             }
             let results = dir.join("replayed.json");
-            let out = if py {
-                Command::new(python.as_ref().unwrap()).arg(root().join("tools/temporal-python/run.py")).arg("--replay").arg(dir.join(dandori::temporal_py::package(&m))).arg(&kept).arg(&results).output().unwrap()
-            } else {
-                Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg("--replay").arg(dir.join(dandori::render::ident(&m.name))).arg(&kept).arg(&results).output().unwrap()
+            let out = match lang {
+                Sdk::Py => Command::new(python.as_ref().unwrap()).arg(root().join("tools/temporal-python/run.py")).arg("--replay").arg(dir.join(lang.package(&m))).arg(&kept).arg(&results).output().unwrap(),
+                Sdk::Ts => Command::new("node").arg(root().join("tools/temporal/run.mjs")).arg("--replay").arg(dir.join(lang.package(&m))).arg(&kept).arg(&results).output().unwrap(),
+                Sdk::Go => Command::new(&go.unwrap().bin).arg("--replay").arg(go.unwrap().key(r)).arg(&kept).arg(&results).output().unwrap(),
             };
             assert!(out.status.success(), "{r}: the replay failed:\n{}", String::from_utf8_lossy(&out.stderr));
             let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results).unwrap()).unwrap();
             for g in &got {
-                assert!(g["error"].is_null(), "{r}: the kept history {} does not replay with the code dandori writes now ({}): {}", g["file"], if py { "Python" } else { "TypeScript" }, g["error"]);
+                assert!(g["error"].is_null(), "{r}: the kept history {} does not replay with the code dandori writes now ({}): {}", g["file"], lang.name(), g["error"]);
                 replayed += 1;
             }
         }
@@ -1432,8 +1713,106 @@ fn rulec_bin() -> String {
     std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".into())
 }
 
+/// A Go module of the Go that dandori writes for flows, with the rules as rulec generates them: the
+/// module of tools/temporal-go's go.mod and go.sum, each flow's package under flows/, and each
+/// rule's package under rulec/go/, which go.mod requires and replaces, as rules.go says to. Two
+/// rules whose Go packages have one name (a rule and its Japanese twin) go to two modules.
+struct GoModule {
+    dir: PathBuf,
+    packages: Vec<GoPackage>,
+}
+
+/// A flow's package in a Go module.
+struct GoPackage {
+    flow: String,
+    import: String,
+    /// the rules it bundles: each one's activity, and the file of its vectors
+    vectors: Vec<(String, PathBuf)>,
+}
+
+/// The modules of these flows, made once a name.
+fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
+    let tools = root().join("tools/temporal-go");
+    let mut modules: Vec<(GoModule, std::collections::BTreeMap<String, PathBuf>)> = Vec::new();
+    for f in flows {
+        let (_, checked) = dandori::check::check_file(f).unwrap();
+        let m = checked.model.expect("the flows pass check");
+        let Ok(files) = dandori::temporal_go::build(&m) else { continue };
+        let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
+        let rules: Vec<(String, PathBuf)> = called.iter().map(|r| (m.rules[*r].info.api["go"]["package"].as_str().unwrap().to_string(), m.rules[*r].info.path.clone())).collect();
+        // the first module whose rules of these names are these rules
+        let at = modules.iter().position(|(_, by)| rules.iter().all(|(p, path)| by.get(p).is_none_or(|x| x == path))).unwrap_or_else(|| {
+            let dir = scratch(&format!("go-{name}-{}", modules.len()));
+            let gomod = std::fs::read_to_string(tools.join("go.mod")).unwrap();
+            let gomod = gomod.lines().map(|l| if l.starts_with("module ") { "module gocheck".to_string() } else { l.to_string() }).collect::<Vec<_>>().join("\n") + "\n";
+            std::fs::write(dir.join("go.mod"), gomod).unwrap();
+            std::fs::copy(tools.join("go.sum"), dir.join("go.sum")).unwrap();
+            modules.push((GoModule { dir, packages: vec![] }, std::collections::BTreeMap::new()));
+            modules.len() - 1
+        });
+        let (module, by) = &mut modules[at];
+        let k = format!("f{}", module.packages.len());
+        for (fname, text) in &files {
+            let p = module.dir.join("flows").join(&k).join(fname);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, text).unwrap();
+        }
+        let mut vectors = Vec::new();
+        for r in &called {
+            let ru = &m.rules[*r];
+            let p = ru.info.api["go"]["package"].as_str().unwrap().to_string();
+            if !by.contains_key(&p) {
+                let gen = Command::new(rulec_bin()).arg("gen").arg(&ru.info.path).arg("--out").arg(module.dir.join("rulec")).output().unwrap();
+                assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
+                let mut gomod = std::fs::read_to_string(module.dir.join("go.mod")).unwrap();
+                gomod.push_str(&format!("\nrequire {p} v0.0.0\n\nreplace {p} => ./rulec/go/{p}\n"));
+                std::fs::write(module.dir.join("go.mod"), gomod).unwrap();
+                by.insert(p.clone(), ru.info.path.clone());
+            }
+            let file = module.dir.join(format!("vectors-{}.jsonl", dandori::render::ident(&ru.name)));
+            let out = Command::new(rulec_bin()).arg("vectors").arg(&ru.info.path).output().unwrap();
+            std::fs::write(&file, &out.stdout).unwrap();
+            vectors.push((dandori::render::rule_activity(&ru.name), file));
+        }
+        let import = format!("gocheck/flows/{k}/{}", dandori::temporal_go::package(&m));
+        module.packages.push(GoPackage { flow: rel(f), import, vectors });
+    }
+    // rulec's own runners are modules of their own, which nothing here needs
+    for (module, _) in &modules {
+        if let Ok(rd) = std::fs::read_dir(module.dir.join("rulec/go")) {
+            for e in rd.flatten() {
+                if e.file_name().to_string_lossy().ends_with("runner") {
+                    let _ = std::fs::remove_dir_all(e.path());
+                }
+            }
+        }
+    }
+    modules.into_iter().map(|(m, _)| m).collect()
+}
+
+/// The Go dandori writes for every flow, with the rules as rulec generates them, passes `go vet`,
+/// and is as gofmt writes it.
+#[test]
+fn generated_go_vets() {
+    need_rulec!();
+    if !Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false) || !root().join("tools/temporal-go/go.mod").exists() {
+        eprintln!("SKIP: go or tools/temporal-go is missing; the Go that dandori writes is not vetted");
+        return;
+    }
+    let mut vetted = 0;
+    for module in go_modules("vet", &runnable()) {
+        let out = Command::new("go").args(["vet", "./..."]).current_dir(&module.dir).env("GOWORK", "off").output().unwrap();
+        assert!(out.status.success(), "go vet finds fault with the Go dandori writes ({}):\n{}{}", module.dir.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        let fmt = Command::new("gofmt").arg("-l").arg("flows").current_dir(&module.dir).output().unwrap();
+        assert!(fmt.status.success() && fmt.stdout.is_empty(), "gofmt would write these otherwise ({}):\n{}{}", module.dir.display(), String::from_utf8_lossy(&fmt.stdout), String::from_utf8_lossy(&fmt.stderr));
+        vetted += module.packages.len();
+    }
+    eprintln!("vetted the Go of {vetted} flow(s), with their rules, with go vet and gofmt");
+}
+
 /// The code between a platform and a rule — the Lambda handler for Step Functions and the
-/// activity for Temporal — answers every vector rulec generates for the rule as rulec says.
+/// activity for Temporal, in TypeScript and in Go — answers every vector rulec generates for the
+/// rule as rulec says.
 #[test]
 fn rule_glue_answers_the_rulec_vectors() {
     need_rulec!();
@@ -1500,18 +1879,63 @@ fn rule_glue_answers_the_rulec_vectors() {
             }
         }
     }
+    // rules.go, with the Go rulec generates: every rule of every example, in a program of each module
+    if !Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false) || !root().join("tools/temporal-go/go.mod").exists() {
+        eprintln!("SKIP: go or tools/temporal-go is missing; rules.go is not run");
+        return;
+    }
+    let mut answered = 0;
+    for module in go_modules("glue", &flows(&root().join("examples"))) {
+        let mut imports = Vec::new();
+        let mut calls = Vec::new();
+        let mut expected = serde_json::Map::new();
+        for (i, GoPackage { flow: f, import, vectors }) in module.packages.iter().enumerate() {
+            if vectors.is_empty() {
+                continue;
+            }
+            // the rules of the package, which are its own, for the program to call
+            let dir = module.dir.join(import.trim_start_matches("gocheck/"));
+            let pkg = import.rsplit('/').next().unwrap();
+            std::fs::write(dir.join("dd_rules_export.go"), format!("package {pkg}\n\n// DDRulesForTheTest are the rules' activities, for the test of their glue.\nfunc DDRulesForTheTest() map[string]any {{\n\treturn ddRules\n}}\n")).unwrap();
+            imports.push(format!("\tp{i} \"{import}\""));
+            for (activity, file) in vectors {
+                let k = format!("{f} {activity}");
+                calls.push(format!("\trun({}, p{i}.DDRulesForTheTest(), {}, {})", json!(k), json!(activity), json!(file.display().to_string())));
+                let lines = std::fs::read_to_string(file).unwrap();
+                expected.insert(k, Value::Array(lines.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect()));
+            }
+        }
+        if calls.is_empty() {
+            continue;
+        }
+        let main = format!(
+            "package main\n\nimport (\n\t\"bufio\"\n\t\"context\"\n\t\"encoding/json\"\n\t\"os\"\n\n{}\n)\n\nfunc main() {{\n\tout := map[string][]any{{}}\n\trun := func(key string, rules map[string]any, activity string, file string) {{\n\t\tcall := rules[activity].(func(context.Context, map[string]any) (any, error))\n\t\tf, err := os.Open(file)\n\t\tif err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\tdefer f.Close()\n\t\tlines := bufio.NewScanner(f)\n\t\tlines.Buffer(make([]byte, 1<<20), 1<<20)\n\t\tfor lines.Scan() {{\n\t\t\tvar v struct {{\n\t\t\t\tIn map[string]any `json:\"in\"`\n\t\t\t}}\n\t\t\tif err := json.Unmarshal(lines.Bytes(), &v); err != nil {{\n\t\t\t\tpanic(err)\n\t\t\t}}\n\t\t\tgot, err := call(context.Background(), v.In)\n\t\t\tif err != nil {{\n\t\t\t\tgot = map[string]any{{\"error\": err.Error()}}\n\t\t\t}}\n\t\t\tout[key] = append(out[key], got)\n\t\t}}\n\t}}\n{}\n\tif err := json.NewEncoder(os.Stdout).Encode(out); err != nil {{\n\t\tpanic(err)\n\t}}\n}}\n",
+            imports.join("\n"),
+            calls.join("\n")
+        );
+        std::fs::create_dir_all(module.dir.join("cmd/vectors")).unwrap();
+        std::fs::write(module.dir.join("cmd/vectors/main.go"), main).unwrap();
+        let out = Command::new("go").args(["run", "./cmd/vectors"]).current_dir(&module.dir).env("GOWORK", "off").output().unwrap();
+        assert!(out.status.success(), "rules.go failed ({}):\n{}", module.dir.display(), String::from_utf8_lossy(&out.stderr));
+        let got: Value = serde_json::from_slice(&out.stdout).unwrap();
+        for (k, want) in &expected {
+            assert_eq!(norm(&got[k]), norm(want), "the Temporal activity in Go of {k} differs from rulec's vectors");
+            answered += want.as_array().map(|a| a.len()).unwrap_or(0);
+        }
+    }
+    eprintln!("rules.go answered {answered} vector(s) of the examples' rules as rulec says");
 }
 
 /// What a rule's service answers is read as the rule's own record the same way on every platform,
 /// also when it is not what the service would write: a number that is not a decimal, a name no enum
 /// has (`constructor`, `__proto__`), a field of another kind, a null, a body that is not an object. The
-/// reference (`render::rule_read`), the TypeScript of io.ts, the Python of io.py and the JSONata a
+/// reference (`render::rule_read`), the TypeScript of io.ts, the Python of io.py, the Go of io.go and the JSONata a
 /// state machine reads the answer with give the same record, and none of them raises: what is wrong
 /// is left for the check of the answer to refuse (DESIGN 1.13). The rules are those of
 /// connect_rules.flow, whose enums are their own, and of connect_rules_contract.flow, whose enum is a
 /// contract's with a value of its own at 0, which an answer that leaves it out has.
 #[test]
-fn a_rules_answer_is_read_alike_by_the_reference_typescript_python_and_jsonata() {
+fn a_rules_answer_is_read_alike_by_the_reference_typescript_python_go_and_jsonata() {
     need_rulec!();
     need_node!();
     if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
@@ -1601,17 +2025,28 @@ fn a_rules_answer_is_read_alike_by_the_reference_typescript_python_and_jsonata()
     let both: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("ts-jsonata.json")).unwrap()).unwrap();
     let in_python: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("python.json")).unwrap()).unwrap();
     assert_eq!((both.len(), in_python.len()), (cases.len(), cases.len()));
+    // the Go of io.go, which is the same for every flow: that of connect_rules.flow
+    let in_go: Option<Vec<Value>> = go_runner().map(|go| {
+        let out = Command::new(&go.bin).arg("--connect-read").arg(go.key("tests/flows/connect_rules.flow")).arg(dir.join("cases.json")).arg(dir.join("go.json")).output().unwrap();
+        assert!(out.status.success(), "the Go runner's --connect-read failed:\n{}", String::from_utf8_lossy(&out.stderr));
+        serde_json::from_str(&std::fs::read_to_string(dir.join("go.json")).unwrap()).unwrap()
+    });
     let mut wrong = Vec::new();
     for (i, (ri, body)) in cases.iter().enumerate() {
         let want = norm(&dandori::render::rule_read(rules[*ri].1, body));
-        for (what, got) in [("TypeScript", &both[i]["ts"]), ("JSONata", &both[i]["jsonata"]), ("Python", &in_python[i])] {
+        let mut readers = vec![("TypeScript", &both[i]["ts"]), ("JSONata", &both[i]["jsonata"]), ("Python", &in_python[i])];
+        if let Some(go) = &in_go {
+            readers.push(("Go", &go[i]));
+        }
+        for (what, got) in readers {
             if norm(got) != want {
                 wrong.push(format!("the rule {}, the answer {body}\n    the reference reads {want}\n    {what} reads {got}", rules[*ri].0));
             }
         }
     }
-    assert!(wrong.is_empty(), "{} of {} reading(s) differ:\n{}", wrong.len(), cases.len() * 3, wrong.iter().take(12).cloned().collect::<Vec<_>>().join("\n"));
-    eprintln!("{} answer(s) of {} rule(s) were read alike by the reference, TypeScript, Python and JSONata", cases.len(), rules.len());
+    let readers = if in_go.is_some() { 4 } else { 3 };
+    assert!(wrong.is_empty(), "{} of {} reading(s) differ:\n{}", wrong.len(), cases.len() * readers, wrong.iter().take(12).cloned().collect::<Vec<_>>().join("\n"));
+    eprintln!("{} answer(s) of {} rule(s) were read alike by the reference, TypeScript, Python{} and JSONata", cases.len(), rules.len(), if in_go.is_some() { ", Go" } else { "" });
 }
 
 /// The Python of tools/pydantic-graph/.venv, where pydantic-graph is.
@@ -1684,7 +2119,10 @@ fn pydantic_graph_runs_as_the_reference_says() {
 /// API on this machine, which must get the very request Step Functions sends, once. For either,
 /// an error status must fail the call at once: neither SDK's client may retry by itself, since
 /// the workflow retries as the task's `retry` says. The Transport must give back what the model
-/// answered, and throw when the model refuses.
+/// answered, and throw when the model refuses. io.go has no Agents SDK to run, since OpenAI has
+/// none for Go: through the Go runner's --agents, an OpenAI agent's call goes to a stand-in of the
+/// Responses API with OpenAI's Go client, a Claude agent's to one of the Messages API with
+/// Anthropic's Go SDK, and each must get the very request Step Functions sends, once.
 #[test]
 fn agents_sdk_is_asked_what_step_functions_asks() {
     need_rulec!();
@@ -1707,6 +2145,9 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
         // every agent call the scenarios make, as the Transport gets it and as Step Functions sends it
         let mut cases = Vec::new();
         let mut expected = Vec::new();
+        // what the default Transport in Go is to give back and send: it has no Agents SDK, and sends an
+        // OpenAI agent's call to the Responses API as Step Functions does; an error by its Go type
+        let mut expected_go = Vec::new();
         let mut refused: Vec<String> = Vec::new();
         for sc in dandori::scenarios::generate(&m) {
             // every call, in order, as each view has it: the Transport's, and Step Functions' HTTP Task
@@ -1730,12 +2171,15 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
                     if let Some(ok) = answer.get("ok") {
                         cases.push(json!({ "call": call, "text": json!({ "answer": ok }).to_string() }));
                         expected.push(json!({ "answer": { "answer": ok }, "asked": asked }));
+                        expected_go.push(json!({ "answer": { "answer": ok }, "asked": asked }));
                     }
                     if first {
                         cases.push(json!({ "call": call, "refusal": "I can't help with that." }));
                         expected.push(json!({ "error": "AgentStopped", "asked": asked }));
+                        expected_go.push(json!({ "error": "AgentStopped", "asked": asked }));
                         cases.push(json!({ "call": call, "status": 500 }));
                         expected.push(json!({ "error": "AgentHttpError", "asked": asked }));
+                        expected_go.push(json!({ "error": "AgentHTTPError", "asked": asked }));
                     }
                     continue;
                 }
@@ -1745,12 +2189,15 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
                     if let Some(ok) = answer.get("ok") {
                         cases.push(json!({ "call": call, "text": json!({ "answer": ok }).to_string() }));
                         expected.push(json!({ "answer": { "answer": ok }, "asked": asked }));
+                        expected_go.push(json!({ "answer": { "answer": ok }, "asked": asked }));
                     }
                     if first {
                         cases.push(json!({ "call": call, "refusal": "I can't help with that." }));
                         expected.push(json!({ "error": "AgentStopped", "asked": asked }));
+                        expected_go.push(json!({ "error": "AgentStopped", "asked": asked }));
                         cases.push(json!({ "call": call, "status": 500 }));
                         expected.push(json!({ "error": "InternalServerError", "asked": asked }));
+                        expected_go.push(json!({ "error": "Error", "asked": asked }));
                     }
                     continue;
                 }
@@ -1767,16 +2214,21 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
                     },
                     "tools": []
                 });
+                // what Go sends: Step Functions' request, to OpenAI's path
+                let asked_go = json!([{ "method": "POST", "path": "/v1/responses", "body": sent["body"] }]);
                 if let Some(ok) = answer.get("ok") {
                     cases.push(json!({ "call": call, "text": json!({ "answer": ok }).to_string() }));
                     expected.push(json!({ "answer": { "answer": ok }, "asked": asked }));
+                    expected_go.push(json!({ "answer": { "answer": ok }, "asked": asked_go }));
                 }
                 if first {
                     cases.push(json!({ "call": call, "refusal": "I can't help with that." }));
                     expected.push(json!({ "error": "ModelRefusalError", "asked": asked }));
+                    expected_go.push(json!({ "error": "AgentStopped", "asked": asked_go }));
                     // the client the Transport makes sends the request once
                     cases.push(json!({ "call": call, "status": 500 }));
                     expected.push(json!({ "error": "InternalServerError", "asked": [{ "method": "POST", "path": "/v1/responses" }] }));
+                    expected_go.push(json!({ "error": "Error", "asked": asked_go }));
                 }
             }
         }
@@ -1793,9 +2245,9 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
             }
             got
         };
-        let check = |what: &str, got: Vec<Value>| {
+        let check = |what: &str, got: Vec<Value>, expected: &Vec<Value>| {
             assert_eq!(got.len(), expected.len(), "{}: {what} answered {} case(s) of {}", rel(&f), got.len(), expected.len());
-            for (i, (g, e)) in got.iter().zip(&expected).enumerate() {
+            for (i, (g, e)) in got.iter().zip(expected).enumerate() {
                 assert!(
                     norm(g) == norm(e),
                     "{} case {}: {what} differs\n--- case\n{}\n--- expected\n{}\n--- got\n{}",
@@ -1815,7 +2267,7 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
             let results = dir.join("results-ts.json");
             let out = Command::new("node").arg("--no-warnings").arg(root().join("tools/agents/check.mjs")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
             assert!(out.status.success(), "{}: tools/agents/check.mjs failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
-            check("the default Transport in TypeScript", read(&results));
+            check("the default Transport in TypeScript", read(&results), &expected);
             eprintln!("{}: the default Transport in TypeScript asked what Step Functions asks in {} case(s)", rel(&f), cases.len());
         }
         if python.exists() {
@@ -1826,14 +2278,39 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
             let results = dir.join("results-py.json");
             let out = Command::new(&python).arg(root().join("tools/agents/check.py")).arg(&io_file).arg(&cases_file).arg(&results).output().unwrap();
             assert!(out.status.success(), "{}: tools/agents/check.py failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
-            check("the default Transport in Python", read(&results));
+            check("the default Transport in Python", read(&results), &expected);
             eprintln!("{}: the default Transport in Python asked what Step Functions asks in {} case(s)", rel(&f), cases.len());
+        }
+        if let Some(go) = go_runner() {
+            let results = dir.join("results-go.json");
+            let out = Command::new(&go.bin).arg("--agents").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results).output().unwrap();
+            assert!(out.status.success(), "{}: the Go check of the agents failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            // Go's maps keep no order, so Go writes the input's JSON text with its keys in the order of their
+            // names: the text the model reads is compared as the JSON it is
+            fn as_json(v: &Value) -> Value {
+                let mut v = v.clone();
+                for asked in v["asked"].as_array_mut().into_iter().flatten() {
+                    if let Some(text) = asked["body"]["input"].as_str().map(str::to_string) {
+                        asked["body"]["input"] = serde_json::from_str(&text).unwrap_or(json!(text));
+                    }
+                    for m in asked["body"]["messages"].as_array_mut().into_iter().flatten() {
+                        if let Some(text) = m["content"].as_str().map(str::to_string) {
+                            m["content"] = serde_json::from_str(&text).unwrap_or(json!(text));
+                        }
+                    }
+                }
+                v
+            }
+            let got: Vec<Value> = serde_json::from_str::<Vec<Value>>(&std::fs::read_to_string(&results).unwrap()).unwrap().iter().map(as_json).collect();
+            let expected_go: Vec<Value> = expected_go.iter().map(as_json).collect();
+            check("the default Transport in Go", got, &expected_go);
+            eprintln!("{}: the default Transport in Go asked what Step Functions asks in {} case(s)", rel(&f), cases.len());
         }
     }
 }
 
 /// The agents on a server of Open Responses (`url`), sent for real to Ollama on this machine by
-/// the default Transport of both languages: for each such agent, the arguments of the first call
+/// the default Transport of TypeScript, Python and Go: for each such agent, the arguments of the first call
 /// the scenarios answer, with the model swapped for one Ollama has. Each answer must fit the
 /// task's type. Skipped when no Ollama answers at DANDORI_OLLAMA (http://127.0.0.1:11434) or it
 /// has no model; DANDORI_OLLAMA_MODEL picks the model, else the smallest there is.
@@ -1939,14 +2416,22 @@ fn open_responses_agents_answer_on_ollama() {
             check("Python", &results);
             sent += cases.len();
         }
-        eprintln!("{}: {} agent(s) on a server of Open Responses answered from Ollama {} ({model}) as their types say, from the default Transport of TypeScript and of Python", rel(&f), cases.len(), version["version"].as_str().unwrap_or("?"));
+        if let Some(go) = go_runner() {
+            let results = dir.join("results-go.json");
+            let out = Command::new(&go.bin).arg("--agents").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results).output().unwrap();
+            assert!(out.status.success(), "{}: the Go check of the agents failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            check("Go", &results);
+            sent += cases.len();
+        }
+        eprintln!("{}: {} agent(s) on a server of Open Responses answered from Ollama {} ({model}) as their types say, from the default Transport of TypeScript, of Python and of Go", rel(&f), cases.len(), version["version"].as_str().unwrap_or("?"));
     }
     assert!(sent > 0, "no agent on a server of Open Responses was sent to Ollama");
 }
 
 /// Every Jev task of the examples and of tests/flows, asked of the real Jev when TYPESAFE_API_KEY is
 /// set: the first call of each that the scenarios make, sent to TypeSafe's API by the default
-/// Transport of TypeScript and of Python, which add the key, and read with their io.jev. The
+/// Transport of TypeScript, of Python and of Go, which add the key, and read with their io.jev
+/// (Go's ddJev). The
 /// response must be the API's shape, with an answer to every question, and it must read into the
 /// task's type, or fail the call with the task's own error when Jev is less sure than the task
 /// asks. What Jev answered, and how sure it was, is printed. It costs next to nothing: the API
@@ -2042,7 +2527,14 @@ fn jev_tasks_answer_on_typesafe() {
             check("Python", &results);
             sent += cases.len();
         } else {
-            eprintln!("SKIP: python3 is missing; the Jev tasks are sent from TypeScript alone");
+            eprintln!("SKIP: python3 is missing; the Jev tasks are not sent from Python");
+        }
+        if let Some(go) = go_runner() {
+            let results = dir.join("results-go.json");
+            let out = Command::new(&go.bin).arg("--jev").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results).output().unwrap();
+            assert!(out.status.success(), "{}: the Go check of Jev failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            check("Go", &results);
+            sent += cases.len();
         }
     }
     assert!(sent > 0, "no Jev task was sent to TypeSafe");

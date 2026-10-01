@@ -1,7 +1,7 @@
 # Build for a platform
 
 ```console
-$ dandori build <file.flow> --target temporal|temporal-python|asl|durable|argo|pydantic-graph [--out <dir>]
+$ dandori build <file.flow> --target temporal|temporal-python|temporal-go|asl|durable|argo|pydantic-graph [--out <dir>]
 ```
 
 A build writes the code for one platform, and refuses what that platform cannot do (E050) and a
@@ -48,7 +48,35 @@ workflow: `workflow.py` (the workflow, and `workflows` to give the worker), `typ
 `runtime.py`, `worker.py` (`make_worker`) and `client.py` (`start`, `answer`, `status`, and for a
 workflow that implements a service, a function for each method, in snake case: `answer_packing`).
 The workflow type, the activities, the callback's Update and signal, the query and the ids are named
-as in the TypeScript, so a worker in one language can serve the other.
+as in the TypeScript, so a worker in one language can serve another.
+
+## Temporal (Go)
+
+`--target temporal-go` writes the same for Temporal's Go SDK, as one Go package named after the
+workflow, with no `go.mod` of its own: put it in your module and `go get` the modules its `doc.go`
+names. Go's import paths are ASCII, so when the workflow's name is not, the package is named after the
+`.flow` file (`hotel.ja.flow` writes `hotel_ja`), or else `workflow`. `workflow.go` has `Workflow`,
+`activities.go` the interface `OwnTasks` of the tasks you write and `Activities(own, transport)`,
+`io.go` the `Transport`, `rules.go` the rules as activities around rulec's Go, `worker.go`
+`NewWorker(client, own, transport, deployment)` and `Replay`, and `client.go` `Start`, `Answer`,
+`Send`, `Status` and `Histories`, and for a workflow that implements a service, a function for each
+method (`Fulfill`, `AnswerPacking`). Everything on the wire is named as in the TypeScript.
+
+- **JSON values.** The workflow carries its values as JSON values (`map[string]any`, `[]any`,
+  `float64`, `string`, `bool`, `nil`), as the Python build does: a struct would make a field that is
+  not there the same as a null, drop the fields it does not know, and fail on an answer of another
+  shape, which the workflow has to see to refuse it. `types.go` still has a struct for each record and a
+  string type for each enum, and `Decode` reads a task's arguments into them; each of your tasks gets
+  its arguments as `map[string]any` and answers any value the SDK can write as JSON.
+- **The rules.** `rulec gen <rule> --out <the package's directory>/rulec` writes each rule's Go as a
+  module of its own (`rulec/go/holdamount`), which your `go.mod` requires and replaces with that
+  directory, as `rules.go` says at its top.
+- **The default `Transport`** uses `net/http`, the AWS SDK for Go v2 for Lambda and the AWS APIs, OpenAI's
+  Go client for OpenAI's agents, and Anthropic's Go SDK for Claude's, and a package imports only the
+  SDKs its flow calls through. OpenAI has no Agents SDK for Go; the Go client sends the request Step
+  Functions sends to the Responses API.
+- **Go 1.26.** The Temporal Go SDK the code is written against, 1.49.0, asks for Go 1.26, which the
+  `go` command fetches by itself when yours is older.
 
 ## AWS Step Functions
 
@@ -101,7 +129,7 @@ service sends, on every platform.
 
 ```console
 $ dandori scenarios <file.flow> [--out <dir>]
-$ dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|durable|argo|pydantic-graph]
+$ dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
 ```
 
 `scenarios` writes inputs and scripted answers that together take every arm, every handler, every way

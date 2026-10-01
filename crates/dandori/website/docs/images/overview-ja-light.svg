@@ -40,7 +40,7 @@
 <text x="833" y="59" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="700" fill="#10161a" text-anchor="start" xml:space="preserve">Temporal</text>
 <rect x="1118" y="42" width="46" height="22" rx="11" fill="#0d8a77"/>
 <text x="1141" y="58" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle" xml:space="preserve">主</text>
-<text x="833" y="83" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="start" xml:space="preserve">ワークフロー一式（TypeScript か Python）</text>
+<text x="833" y="83" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="start" xml:space="preserve">ワークフロー一式（TypeScript、Python、Go）</text>
 <rect x="815" y="112" width="365" height="70" rx="12" fill="#ffffff" stroke="#d3dfdc" stroke-width="1.5"/>
 <text x="833" y="141" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="700" fill="#10161a" text-anchor="start" xml:space="preserve">AWS Step Functions</text>
 <text x="833" y="165" font-family="Inter, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="400" fill="#56646a" text-anchor="start" xml:space="preserve">JSONata で書いた ASL のステートマシン</text>
