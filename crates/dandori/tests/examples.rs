@@ -151,10 +151,35 @@ fn key(f: &Path) -> String {
     rel(f).trim_end_matches(".flow").replace(['/', '.'], "-")
 }
 
+/// A directory of this test process's own, in the temporary directory, which the tests leave there
+/// to be read. The first one removes those of the test processes that have ended: they came to
+/// thousands a day, and the Go runner in each is a hundred megabytes.
 fn scratch(name: &str) -> PathBuf {
+    static SWEPT: std::sync::Once = std::sync::Once::new();
+    SWEPT.call_once(remove_ended_scratch);
     let d = std::env::temp_dir().join(format!("dandori-test-{}-{name}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
     d
+}
+
+/// Removes the directories of `scratch` whose test process has ended (`kill -0` says there is no
+/// such process; a process that is there, or that kill may not ask about, keeps its own).
+fn remove_ended_scratch() {
+    let me = std::process::id().to_string();
+    let mut ended = std::collections::HashMap::new();
+    for e in std::fs::read_dir(std::env::temp_dir()).into_iter().flatten().flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        let Some(pid) = name.strip_prefix("dandori-test-").and_then(|n| n.split('-').next()) else { continue };
+        if pid == me || pid.is_empty() || !pid.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        let gone = *ended.entry(pid.to_string()).or_insert_with(|| {
+            Command::new("kill").args(["-0", pid]).output().is_ok_and(|o| !o.status.success() && String::from_utf8_lossy(&o.stderr).contains("No such process"))
+        });
+        if gone {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
 }
 
 /// Numbers compared as numbers: 2 and 2.0 are the same wait.
@@ -691,23 +716,23 @@ impl GoRunner {
     }
 }
 
+/// `go`, run in `dir`, as every Go command here runs: outside any workspace, and with -trimpath.
+/// Go's build cache keys a package by its directory otherwise, and the tests build the same
+/// packages in a new temporary directory each time: each run of the Go tests added 0.8 GB to it.
+fn go_in(dir: &Path) -> Command {
+    let mut go = Command::new("go");
+    go.current_dir(dir).env("GOWORK", "off").env("GOFLAGS", "-trimpath");
+    go
+}
+
 /// The Go runner, built once (by the first test that asks); None, with a SKIP line, when Go or the
-/// module in tools/temporal-go is missing. The runner of a test process that has ended is removed
-/// first: it is a hundred megabytes, and the temporary directory keeps it.
+/// module in tools/temporal-go is missing.
 fn go_runner() -> Option<&'static GoRunner> {
     static GO: std::sync::OnceLock<Option<GoRunner>> = std::sync::OnceLock::new();
     let got = GO.get_or_init(|| {
         let tools = root().join("tools/temporal-go");
         if !tools.join("go.mod").exists() || !Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false) {
             return None;
-        }
-        for e in std::fs::read_dir(std::env::temp_dir()).into_iter().flatten().flatten() {
-            let name = e.file_name().to_string_lossy().to_string();
-            let Some(pid) = name.strip_prefix("dandori-test-").and_then(|n| n.strip_suffix("-go-runner")) else { continue };
-            let ended = pid != std::process::id().to_string() && Command::new("kill").args(["-0", pid]).stderr(std::process::Stdio::null()).status().is_ok_and(|s| !s.success());
-            if ended {
-                let _ = std::fs::remove_dir_all(e.path());
-            }
         }
         let dir = scratch("go-runner");
         let mut entries = Vec::new();
@@ -753,7 +778,7 @@ fn go_runner() -> Option<&'static GoRunner> {
         std::fs::write(&manifest, serde_json::to_string_pretty(&entries).unwrap()).unwrap();
         let bin = dir.join("run");
         let started = std::time::Instant::now();
-        let out = Command::new("go").arg("run").arg("./build").arg(&bin).arg(&manifest).current_dir(&tools).env("GOWORK", "off").output().unwrap();
+        let out = go_in(&tools).arg("run").arg("./build").arg(&bin).arg(&manifest).output().unwrap();
         assert!(out.status.success(), "tools/temporal-go could not build the Go runner:\n{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
         eprintln!("built the Go runner of {} package(s) in {:.0} s", entries.len(), started.elapsed().as_secs_f64());
         Some(GoRunner { bin, keys })
@@ -1801,7 +1826,7 @@ fn generated_go_vets() {
     }
     let mut vetted = 0;
     for module in go_modules("vet", &runnable()) {
-        let out = Command::new("go").args(["vet", "./..."]).current_dir(&module.dir).env("GOWORK", "off").output().unwrap();
+        let out = go_in(&module.dir).args(["vet", "./..."]).output().unwrap();
         assert!(out.status.success(), "go vet finds fault with the Go dandori writes ({}):\n{}{}", module.dir.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
         let fmt = Command::new("gofmt").arg("-l").arg("flows").current_dir(&module.dir).output().unwrap();
         assert!(fmt.status.success() && fmt.stdout.is_empty(), "gofmt would write these otherwise ({}):\n{}{}", module.dir.display(), String::from_utf8_lossy(&fmt.stdout), String::from_utf8_lossy(&fmt.stderr));
@@ -1900,7 +1925,10 @@ fn rule_glue_answers_the_rulec_vectors() {
             imports.push(format!("\tp{i} \"{import}\""));
             for (activity, file) in vectors {
                 let k = format!("{f} {activity}");
-                calls.push(format!("\trun({}, p{i}.DDRulesForTheTest(), {}, {})", json!(k), json!(activity), json!(file.display().to_string())));
+                // the file by its name in the module, where the program runs: its path would make the program another
+                // at every run, and `go run` keeps each program it builds in Go's build cache
+                let name = file.strip_prefix(&module.dir).unwrap().display().to_string();
+                calls.push(format!("\trun({}, p{i}.DDRulesForTheTest(), {}, {})", json!(k), json!(activity), json!(name)));
                 let lines = std::fs::read_to_string(file).unwrap();
                 expected.insert(k, Value::Array(lines.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect()));
             }
@@ -1915,7 +1943,7 @@ fn rule_glue_answers_the_rulec_vectors() {
         );
         std::fs::create_dir_all(module.dir.join("cmd/vectors")).unwrap();
         std::fs::write(module.dir.join("cmd/vectors/main.go"), main).unwrap();
-        let out = Command::new("go").args(["run", "./cmd/vectors"]).current_dir(&module.dir).env("GOWORK", "off").output().unwrap();
+        let out = go_in(&module.dir).args(["run", "./cmd/vectors"]).output().unwrap();
         assert!(out.status.success(), "rules.go failed ({}):\n{}", module.dir.display(), String::from_utf8_lossy(&out.stderr));
         let got: Value = serde_json::from_slice(&out.stdout).unwrap();
         for (k, want) in &expected {

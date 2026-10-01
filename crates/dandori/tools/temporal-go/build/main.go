@@ -14,7 +14,8 @@
 // copies each package's Go files to flows/<the key made safe for an import path>/, patching them,
 // writes main.go, where an adapter converts each package's types to the harness's, and builds
 // the binary (GOWORK=off, -mod=readonly: what the generated packages import must be required by
-// go.mod, and summed in go.sum). Then it runs `<out binary> --fetch` once, which downloads the
+// go.mod, and summed in go.sum; -trimpath: Go's build cache would key each package by the
+// temporary directory, and add the same packages to it at every build). Then it runs `<out binary> --fetch` once, which downloads the
 // Temporal CLI for the dev servers, so that the runners that start at once do not race to download
 // it. On a failure it says why and exits with 1; when go build fails, it prints the build's errors
 // and keeps the temporary directory they point into.
@@ -158,7 +159,7 @@ func build(out, manifestFile string) error {
 
 	cmd := exec.Command("go", "build", "-o", out, ".")
 	cmd.Dir = work
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=readonly")
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=readonly -trimpath")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		keep = true
 		return fmt.Errorf("go build failed (%v):\n%s", err, output)
