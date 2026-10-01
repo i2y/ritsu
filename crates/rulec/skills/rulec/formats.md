@@ -397,7 +397,7 @@ value refused at its own boundary and one refused after it is recorded (§15.116
             "idempotency_level":"NO_SIDE_EFFECTS","trace":"trace",
             "source_header":"rulec-source-sha256",
             "stubs":"cd proto && buf generate",
-            "buf_yaml":"proto/buf.yaml","buf_gen_yaml":"proto/buf.gen.yaml",
+            "buf_yaml":"proto/buf.yaml","buf_gen_yaml":"proto/buf.gen.yaml","deps":[],
             "json_names":"lowerCamelCase","json_int64":"string",
             "request_fields":[{"name":"商品合計","field":"subtotal","type":"int64","optional":false},
                               {"name":"種別","field":"kind","type":"CouponKind","optional":false,
@@ -493,7 +493,10 @@ refused; `contract` is `null`. For one imported from a `.proto` (`import proto`)
 numbers are the contract's, `contract` gives the file as the rule cites it and where `gen` put
 the copy the module imports (`proto`), and `unset` is `null` when the contract's value 0 is a
 value of the rule's — it is then the value numbered 0, which is also what an answer that
-leaves the field out means.
+leaves the field out means. `deps` names the BSR modules the rule's contracts import files
+from — protovalidate's, say. With any, the module's `buf.yaml` declares them, a `buf.lock` pins
+them, and the stubs have to include the files they import, as the generated `buf.gen.yaml`
+does with `include_imports`.
 
 A rule that is one step of a state machine (§15.148) carries `machine` at the top level, and
 `null` there otherwise:

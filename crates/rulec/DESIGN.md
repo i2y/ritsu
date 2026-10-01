@@ -4611,7 +4611,7 @@ SyntaxError: Identifier 'rows' has already been declared
 
 1. 列挙の値がワイヤでどう綴られるか（`CARRIER_NEXTDAY`）が、`rulec api` のどこにも無かった。呼び手は型の名前と値の別名から組み立てるしかなく、接頭辞の慣わしに従わない契約では組み立てが外れる。接頭辞の無い `NEXTDAY = 2` も check は通る。
 2. `rulec api` は、`import proto` の契約を作業ディレクトリから探していた。`Gen` に規則のパスを渡していなかったからで、見つからないと package の無い型の名前を黙って書いた。同じ抜けが `doc --format html` にもあり、`.proto` の `shape` を持つ規則では、承認者のページに入る取り出し関数が、走らせた場所によって protojson で読まない古い形になった。
-3. 取り込んだ列挙を持つ規則のサービスは、生成したままでは立たなかった。契約の stub を最上位の `order_pb` として import していたが、プラグインはそれを `stubs/` の下に書く。試験は import の文字列を確かめるだけで、このサービスを一度も起動していなかった。契約は module に入っていないので、`rulec test` の Connect の段も、文書の `cd proto && buf generate` も、import を解決できずに落ちた。
+3. 取り込んだ列挙を持つ規則のサービスは、生成したままでは立たなかった。契約の stub を最上位の `order_pb` として import していたが、プラグインはそれを `stubs/` の下に書く。試験は import の文字列を確かめるだけで、このサービスを一度も起動していなかった。契約は モジュール に入っていないので、`rulec test` の Connect の段も、文書の `cd proto && buf generate` も、import を解決できずに落ちた。
 4. サービスの説明は、`--http` を「標準ライブラリだけ」と書いていた。サーバは標準ライブラリのものだが、connectrpc と stub は要る。§15.112 の「何も入れずに試す道」も同じ誤りである。
 5. Connect の JSON の読み手は、既定で知らないフィールドを捨てる。綴りを誤った入力はゼロとして判断された。知らない列挙の名前も 0 番として読まれる。契約が 0 番に本物の値を置いていると（§15.59 で落とさないと決めた形）、誤った名前のリクエストに 200 が返り、その値として判断された。
 6. 省いた入力も、proto3 では 0、false、0 番の値として読まれ、そのまま判断されていた。同じ規則の MCP のサーバーは、知らない引数も足りない引数も断っている。断らないのは Connect のサービスだけだった。
@@ -4621,9 +4621,9 @@ SyntaxError: Identifier 'rows' has already been declared
 
 **決定**：
 
-- **`connect` の節に、ワイヤを手で書くのに要るものを全部出す。** `enums` は、ワイヤを渡る列挙ごとに、規則の値の名前、ワイヤでの名前（`alias`）、番号を並べる。`unset` は、0 番が「未設定」を意味するときのその名前である。0 番が規則の値なら null で、その値が番号 0 として並ぶ。省かれた出力を読むときに、何で埋めればよいかがこれで決まる。`contract` は、取り込んだ契約のファイル（規則からのパス）と、module の中の写しの場所である。規則自身の列挙なら null。フィールドには `optional`（規則の `T?`）と `enum`（規則の列挙の名前）を足した。`enums` は規則の列挙の名前で引く。一つの契約の列挙は二つの規則の列挙に取り込めるので、型の名前では引けない。並びを歩く規則は、要素のフィールドを `element_fields` に出す。
+- **`connect` の節に、ワイヤを手で書くのに要るものを全部出す。** `enums` は、ワイヤを渡る列挙ごとに、規則の値の名前、ワイヤでの名前（`alias`）、番号を並べる。`unset` は、0 番が「未設定」を意味するときのその名前である。0 番が規則の値なら null で、その値が番号 0 として並ぶ。省かれた出力を読むときに、何で埋めればよいかがこれで決まる。`contract` は、取り込んだ契約のファイル（規則からのパス）と、モジュール の中の写しの場所である。規則自身の列挙なら null。フィールドには `optional`（規則の `T?`）と `enum`（規則の列挙の名前）を足した。`enums` は規則の列挙の名前で引く。一つの契約の列挙は二つの規則の列挙に取り込めるので、型の名前では引けない。並びを歩く規則は、要素のフィールドを `element_fields` に出す。
 - **`Gen::new` が規則のパスを引数で受け取る。** 設定のメソッド（`.at()`）だったので、渡し忘れが二か所あった。引数なら、忘れたものはコンパイルされない。
-- **`gen` が、取り込んだ契約を module に写す。** 写す先は、契約の package をディレクトリにしたパスである（`package shop.v1` なら `proto/shop/v1/order.proto`）。buf の `PACKAGE_DIRECTORY_MATCH` が置く場所で、生成する `.proto` の import もこのパスにした。写すのは `rulec check` が読んだファイルそのもので、一字も変えない。契約が import するファイルも、import のパスどおりの場所に見つかれば一緒に写す。well-known types は buf が持っている。二つの規則が同じ契約を取り込むのはよいが、違う中身の二つのファイルが同じパスに来るときは、`gen` を止める。サービスは契約の stub を `from stubs.shop.v1 import order_pb as shop_v1_order_pb` で読む。規則自身の stub はそれを相対で import しているので、二つは同じモジュールになる。
+- **`gen` が、取り込んだ契約を モジュール に写す。** 写す先は、契約の package をディレクトリにしたパスである（`package shop.v1` なら `proto/shop/v1/order.proto`）。buf の `PACKAGE_DIRECTORY_MATCH` が置く場所で、生成する `.proto` の import もこのパスにした。写すのは `rulec check` が読んだファイルそのもので、一字も変えない。契約が import するファイルも、import のパスどおりの場所に見つかれば一緒に写す。well-known types は buf が持っている。二つの規則が同じ契約を取り込むのはよいが、違う中身の二つのファイルが同じパスに来るときは、`gen` を止める。サービスは契約の stub を `from stubs.shop.v1 import order_pb as shop_v1_order_pb` で読む。規則自身の stub はそれを相対で import しているので、二つは同じモジュールになる。
 - **説明は事実に合わせる。** `--http` は「標準ライブラリのサーバで試す」ためのもので、connectrpc と stub は要る、と書いた。
 - **知らないフィールドと知らない列挙の名前を断る。** JSON の読み手を `proto_json_codec(ignore_unknown_fields=False)` にして、ASGI と WSGI の両方に渡す。知らないフィールドも知らない列挙の名前も `invalid_argument` になり、本文は読み手が書くもので、知らなかった名前を挙げる。binary はフィールドを番号で運ぶので、名前の取り違えは起きない。
 - **リクエストの全フィールドに `optional` を付け、省いた入力を断る。** 列挙のフィールドも含め、要素のフィールドも同じにした。規則が要る入力が無ければ、規則の名前で `会員: not set`、要素なら `明細[2].数量: not set` と言って `invalid_argument` を返す。`T?` の入力は、今までどおり、省けば無いものとして読む。レスポンスは変えない。出力はいつもあるので、0 の出力が JSON から省かれるのは今までどおりである。
@@ -4639,6 +4639,39 @@ SyntaxError: Identifier 'rows' has already been declared
 
 **ワイヤの互換**：入力に `optional` を付けるのは、`buf breaking` が止める変更である。0 や false を省いて送っていた呼び手は、断られるようになる。互換の約束（`docs/compatibility.md` の 4）は `rulec api` が書くものを 1.x のあいだ守るので、1.0 の前に入れた。生成する `.proto` の import のパスと、`HTTPMethod` のような列挙の値の名前も、同じ理由でいま変えた。
 
-**正直な限界**：契約が module の外のファイルを import していると、写した module は組めない。protovalidate の `buf/validate/validate.proto` のような BSR の module がそれに当たる。`buf.yaml` はディレクトリのもので規則のものではない（§15.112）ので、規則ごとに依存を書き足すことはできない。buf がその import を名指して止まり、`rulec test` の Connect の段もそこで落ちる。
+**正直な限界**：契約が モジュール の外のファイルを import していると、写した モジュール は組めない。protovalidate の `buf/validate/validate.proto` のような BSR の モジュール がそれに当たる。`buf.yaml` はディレクトリのもので規則のものではない（§15.112）ので、規則ごとに依存を書き足すことはできない。buf がその import を名指して止まり、`rulec test` の Connect の段もそこで落ちる。
 
 **確かめたこと**：`tests/connect.rs` に試験を五本足した。取り込んだ列挙を持つ規則のサービスを、PYTHONPATH を付けずに生成したまま立て、正しいリクエスト、0 や false を明示したリクエスト、入力を一つずつ省いたもの、知らないフィールド、知らない列挙の名前、`_UNSPECIFIED` を送る。0 番が本物の値の契約で、省いた列挙が `not set` で断られることもここで見る。同じ規則で `rulec test` の Connect の段が通ることも確かめる。ほかの四本は次のとおり。`connect` の目録を、生成した `.proto` を rulec の読み手で読み返したものと突き合わせる。承認者のページが、`doc` をどこから走らせても `gen` の書くページと同じになる。buf lint を通る `HTTPMethod` と `SIZE_60` の契約が E032 にならない。違う契約が同じパスに来ると `gen` が止まる。取り込んだ列挙と要素を持つ規則の生成物は、`mypy --strict`（rulec の書いたファイル）と ruff の二つの検査を通った。
+
+### 15.161 契約が BSR の モジュール に依存していても、生成した モジュール を組めるようにする（2026-10-01）
+
+**きっかけ**：§15.160 で、取り込んだ契約を生成した モジュール に写すようにした。そこに正直な限界として残したのが、契約が モジュール の外のファイルを import している場合である。protovalidate の注釈を書いた契約は `buf/validate/validate.proto` を import する。そのファイルは BSR の モジュール にあり、手元には無い。写した モジュール は組めず、`rulec test` の Connect の段もそこで落ちた。protovalidate の注釈は、契約によくある形である。
+
+**まず buf に確かめた。**
+
+- `deps` を書いても `buf.lock` が無ければ、buf は依存を解決せず、import が見つからないと言って止まる。固定する commit が要る。
+- v2 の `buf.lock` は b5 の digest しか読まない。v1 の lock の shake256 は持ち込めず、digest の無い行も断られる。
+- 宣言したまま使わない依存も、`buf.lock` の余分な行も、誤りにはならない。
+- 依存のファイルの stub は、既定では書かれない。契約の stub はそれを import するので、`include_imports` が要る。
+
+**決定**：
+
+- **依存とピンは、契約の利用者の側から引き継ぐ。** 契約の上でいちばん近い `buf.yaml`（buf が使うのと同じもの）の `deps` と、そのそばの `buf.lock` を読む。生成する `proto/buf.yaml` には import の元の モジュール を宣言し、`proto/buf.lock` には lock のピンを全部写す。モジュール 自身の依存もそこに固定されているからである。どの モジュール から来たかは、よくある import のパスで絞る（`buf/validate/` なら protovalidate、`google/type/` なら googleapis）。表に無いパスなら、その `buf.yaml` の依存を全部宣言する。
+- **`gen` は何も取りに行かない。** 依存を取りに行くのは、組むときの buf である。`gen` はこれまでどおり、規則のそばのファイルだけから出力を決める。
+- **固定できないときは、言って任せる。** そばに `buf.yaml` が無い、`buf.lock` が無い、lock が v1 の形、のどれかなら、宣言できる モジュール だけを宣言して `buf.lock` は書かない。そして `proto/` で `buf dep update` を走らせるよう言う。そうして利用者が作った `buf.lock` は `gen` の書くものではないので、次の `gen` でも残り、`gen --check` も緑のままである。
+- **二つの lock が一つの モジュール を違う commit に固定していれば、止める。** 一つの モジュール に置けるのは一つである。
+- **`buf.yaml` と `buf.lock` は、一回の `gen` で一度だけ書く。** どちらもディレクトリのもので、規則のものではない（§15.112）。規則ごとに書けば、最後の規則の依存だけが残る。全部の規則の依存を合わせて、ループのあとに書く。依存の無い規則だけなら、`buf.yaml` は今までと同じで、`buf.lock` は書かない。
+- **stub は、依存のファイルの分も書く。** `buf.gen.yaml` の py のプラグインと `rulec test` のテンプレートに `include_imports: true` を足した。well-known types は含まれないが、protobuf-py が自分で持っている。
+- **`rulec api` の `connect` に `deps` を足す。** stub を自分のテンプレートで作る呼び手は、`include_imports` が要ることをここで知る。
+
+**捨てたもの**：
+
+- **依存のファイルを生成物に写すこと。** ファイルを手に入れるには、`gen` が buf を呼んで BSR に取りに行くことになる。CI の `gen --check` が、ネットワークと buf を要するようになる。
+- **依存を宣言するだけで、lock を書かないこと。** buf は lock の無い依存を解決しない。
+- **`gen` が `buf dep update` を走らせること。** 同じ理由で、`gen` がネットワークに出る。
+- **よく使われる モジュール の commit を rulec に持たせること。** すぐに古くなる。
+- **v1 の lock の digest を b5 に直すこと。** digest は モジュール の中身から計算するもので、中身が手元に無ければ計算できない。
+
+**`rulec test` とネットワーク**：依存のある契約を持つ規則では、Connect の段で buf が依存を取りに行く（キャッシュに無ければ）。ネットワークにつながらない機械では、buf がそう言って落ちる。§15.112 で `rulec test` をネットワークなしで走るようにしたのは、プラグインの話である。依存は契約の性質なので、ここは避けられない。
+
+**確かめたこと**：`tests/connect.rs` に三本足した。一本目は、protovalidate と googleapis を宣言する v2 の ワークスペース から、protovalidate だけが宣言され、ピンが全部写り、`include_imports` が付き、`rulec api` の `deps` に出ることを見る。二本目は、`buf.yaml` が無いとき、lock が v1 のときに警告が出て `buf.lock` を書かないこと、二つの lock が食い違うと止まることを見る。三本目だけがネットワークに出る。その モジュール を buf で組み、`rulec test` の Connect の段を通し、`validate_pb.py` が書かれたことを見る。BSR に届かなければ、そう言って飛ばす。手では、`buf.yaml` の無い契約で警告どおり `buf dep update` を走らせると組め、そのあとの `gen --check` も緑のままであることを確かめた。

@@ -425,8 +425,10 @@ impl Plan {
 /// How `rulec test` builds the Connect stubs: buf, with the plugins that `pip` put on the
 /// PATH rather than the ones on the network (§15.112). `out` is relative to the output base,
 /// which is the directory the command runs in — so `stubs` under `python/`, which is where
-/// the generated service imports them from.
-const LOCAL_STUBS: &str = r#"{"version":"v2","plugins":[{"local":"protoc-gen-py","out":"stubs","strategy":"all"},{"local":"protoc-gen-connectrpc","out":"stubs"}]}"#;
+/// the generated service imports them from. `include_imports` writes the stubs of what a
+/// contract imports from a BSR module too, as the generated `buf.gen.yaml` does (§15.161);
+/// such a module is the one thing this pass reaches the network for, until buf has it cached.
+const LOCAL_STUBS: &str = r#"{"version":"v2","plugins":[{"local":"protoc-gen-py","out":"stubs","strategy":"all","include_imports":true},{"local":"protoc-gen-connectrpc","out":"stubs"}]}"#;
 
 /// The `go` line of the generated `go.mod`.
 ///

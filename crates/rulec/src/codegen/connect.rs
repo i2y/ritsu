@@ -73,6 +73,207 @@ fn import_path(file: &str, pkg: Option<&str>) -> String {
     }
 }
 
+/// The contracts a rule's `.proto` imports, as files for the module, and what the module
+/// needs from the BSR for the files they import that are not on disk.
+pub struct Contracts {
+    pub files: Vec<(String, String)>,
+    pub deps: BufDeps,
+}
+
+/// The BSR modules the generated module depends on, with their pins, and what could not be
+/// settled (§15.161). One run of `gen` merges every rule's into one `buf.yaml` and one
+/// `buf.lock`: they belong to the directory, and the directory holds every rule's contracts.
+#[derive(Debug, Clone, Default)]
+pub struct BufDeps {
+    /// Module names, `buf.build/<owner>/<repository>`.
+    pub deps: std::collections::BTreeSet<String>,
+    /// Every v2 pin of the `buf.lock` beside a contract: name → (commit, digest, that file).
+    /// A module's own dependencies are pinned there too, which is why all of them are taken.
+    pub pins: std::collections::BTreeMap<String, (String, String, String)>,
+    /// What `gen` says and leaves to buf: a module with no pin, an import in no module.
+    pub notes: Vec<String>,
+}
+
+impl BufDeps {
+    /// Take another rule's in. One module can hold one commit of a dependency, so two
+    /// contracts that pin one at two commits are an error, which names both files.
+    pub fn merge(&mut self, other: BufDeps) -> Result<(), String> {
+        for (name, (commit, digest, from)) in other.pins {
+            match self.pins.get(&name) {
+                Some((c, _, f)) if *c != commit => {
+                    return Err(tr!(
+                        "`{f}` と `{from}` が {name} を違う commit に固定しています（{c} と {commit}）。一つの モジュール に置けるのは一つなので、二つの buf.lock を揃えてください",
+                        "`{f}` and `{from}` pin {name} at two commits ({c} and {commit}); one module holds one, so make the two buf.lock files agree"
+                    ));
+                }
+                Some(_) => {}
+                None => {
+                    self.pins.insert(name, (commit, digest, from));
+                }
+            }
+        }
+        self.deps.extend(other.deps);
+        for n in other.notes {
+            if !self.notes.contains(&n) {
+                self.notes.push(n);
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether every module the generated `buf.yaml` declares has a pin, so that a `buf.lock`
+    /// can be written. buf resolves no dependency without one.
+    pub fn pinned(&self) -> bool {
+        self.deps.iter().all(|d| self.pins.contains_key(d))
+    }
+}
+
+/// The BSR modules most contracts import from, by the path their files are imported under.
+/// A contract's own `buf.yaml` may declare more than it uses; with this, the generated one
+/// declares the module an import comes from, and every module only when the path is not here.
+const KNOWN: &[(&str, &str)] = &[
+    ("buf/validate/", "buf.build/bufbuild/protovalidate"),
+    ("google/api/", "buf.build/googleapis/googleapis"),
+    ("google/type/", "buf.build/googleapis/googleapis"),
+    ("google/rpc/", "buf.build/googleapis/googleapis"),
+    ("google/longrunning/", "buf.build/googleapis/googleapis"),
+    ("validate/", "buf.build/envoyproxy/protoc-gen-validate"),
+    ("protoc-gen-openapiv2/", "buf.build/grpc-ecosystem/grpc-gateway"),
+];
+
+/// The `buf.yaml` a contract is built with: the nearest one above it, as buf finds it.
+fn workspace(contract: &Path) -> Option<PathBuf> {
+    let full = std::fs::canonicalize(contract).ok()?;
+    full.ancestors().skip(1).find(|d| d.join("buf.yaml").is_file()).map(Path::to_path_buf)
+}
+
+/// What the module needs for the imports of its contracts that are on no disk.
+///
+/// They are files of BSR modules, which the contract's own `buf.yaml` declares and its
+/// `buf.lock` pins. Those two are read and carried over; nothing is fetched, so `gen` stays a
+/// function of the files beside the rule. When there is no `buf.yaml`, the module of a path
+/// `KNOWN` names is declared without a pin, and `gen` says to run `buf dep update`.
+fn bsr_deps(elsewhere: &[(PathBuf, String)]) -> BufDeps {
+    let mut out = BufDeps::default();
+    for (contract, imp) in elsewhere {
+        let known = KNOWN.iter().find(|(p, _)| imp.starts_with(p)).map(|(_, m)| m.to_string());
+        let shown = contract.display();
+        let Some(dir) = workspace(contract) else {
+            match known {
+                Some(m) => {
+                    out.notes.push(tr!(
+                        "`{shown}` は {m} の `{imp}` を import していますが、そばに buf.yaml がありません。proto/buf.yaml に {m} を書きましたが、固定する commit が無いので、proto/ で `buf dep update` を走らせてください",
+                        "`{shown}` imports `{imp}` from {m}, and no buf.yaml is beside it. proto/buf.yaml declares {m}, but nothing pins it: run `buf dep update` in proto/"
+                    ));
+                    out.deps.insert(m);
+                }
+                None => out.notes.push(tr!(
+                    "`{shown}` の import `{imp}` は、そばにも buf.yaml の依存にも見つかりません。buf が名指して止まります",
+                    "`{shown}` imports `{imp}`, which is neither beside it nor in a buf.yaml's deps; buf will name it"
+                )),
+            }
+            continue;
+        };
+        let declared = std::fs::read_to_string(dir.join("buf.yaml")).map(|s| crate::proto::buf_deps(&s)).unwrap_or_default();
+        let take: Vec<String> = match known {
+            Some(m) if declared.contains(&m) => vec![m],
+            _ => declared.clone(),
+        };
+        if take.is_empty() {
+            out.notes.push(tr!(
+                "`{shown}` の import `{imp}` は、そばにも {} の依存にも見つかりません。buf が名指して止まります",
+                "`{shown}` imports `{imp}`, which is neither beside it nor among the deps of {}; buf will name it",
+                dir.join("buf.yaml").display()
+            ));
+            continue;
+        }
+        let lock_path = dir.join("buf.lock");
+        let lock = std::fs::read_to_string(&lock_path).map(|s| crate::proto::buf_lock(&s)).ok();
+        match lock {
+            Some((v, pins)) if v == "v2" => {
+                for p in pins {
+                    out.pins.entry(p.name).or_insert((p.commit, p.digest, lock_path.display().to_string()));
+                }
+            }
+            Some(_) => out.notes.push(tr!(
+                "{} は v1 の形で、digest が shake256 です。v2 の モジュール は b5 の digest しか読まないので、引き継げません。そこで `buf config migrate` を走らせるか、proto/ で `buf dep update` を走らせてください",
+                "{} is a v1 lock, digested with shake256, and a v2 module reads only b5 digests, so its pins are not carried over: run `buf config migrate` there, or `buf dep update` in proto/",
+                lock_path.display()
+            )),
+            None => out.notes.push(tr!(
+                "{} がありません。proto/buf.yaml に依存を書きましたが、固定する commit が無いので、そこで `buf dep update` を走らせるか、proto/ で走らせてください",
+                "There is no {}: proto/buf.yaml declares the deps, but nothing pins them. Run `buf dep update` there, or in proto/",
+                lock_path.display()
+            )),
+        }
+        out.deps.extend(take);
+    }
+    out
+}
+
+/// The first line of every generated file, which names the version that wrote it. The two
+/// files that configure the module carry nothing else: they belong to the directory.
+fn plain_header() -> String {
+    format!("# Code generated by rulec {}. DO NOT EDIT.", env!("CARGO_PKG_VERSION"))
+}
+
+/// `proto/buf.yaml`: the module, linted by buf's STANDARD rules, and the BSR modules its
+/// contracts depend on when there are any (§15.161).
+pub fn buf_yaml(deps: &BufDeps) -> String {
+    let mut o = format!("{}\nversion: v2\n", plain_header());
+    if !deps.deps.is_empty() {
+        o.push_str("deps:\n");
+        for d in &deps.deps {
+            o.push_str(&format!("  - {d}\n"));
+        }
+    }
+    o.push_str("lint:\n  use:\n    - STANDARD\nbreaking:\n  use:\n    - FILE\n");
+    o
+}
+
+/// `proto/buf.lock`, when the module has dependencies and every one is pinned: the pins of
+/// the `buf.lock` files beside its contracts, as buf writes them.
+pub fn buf_lock(deps: &BufDeps) -> Option<String> {
+    if deps.deps.is_empty() || !deps.pinned() {
+        return None;
+    }
+    let mut o = format!("{}\nversion: v2\ndeps:\n", plain_header());
+    for (name, (commit, digest, _)) in &deps.pins {
+        o.push_str(&format!("  - name: {name}\n    commit: {commit}\n    digest: {digest}\n"));
+    }
+    Some(o)
+}
+
+/// `proto/buf.gen.yaml`: the stubs, the way connect-python's own documentation asks for
+/// them — buf and two remote plugins (§15.112).
+pub fn buf_gen_yaml() -> String {
+    let note = tr!(
+        "# ローカルだけで作るなら `uv add --dev protoc-gen-py protoc-gen-connectrpc` を入れて、\n  \
+         # この二行を `local: protoc-gen-py` と `local: protoc-gen-connectrpc` にする。\n  \
+         # そのときは py の側に `strategy: all` も足すこと。規則ごとにディレクトリが分かれるので、\n  \
+         # 既定（directory）だとプラグインがディレクトリごとに呼ばれ、同じ __init__.py を何度も書く。",
+        "# To generate entirely locally, `uv add --dev protoc-gen-py protoc-gen-connectrpc`\n  \
+         # and make these two `local: protoc-gen-py` and `local: protoc-gen-connectrpc`.\n  \
+         # Add `strategy: all` to the py one when you do: there is one directory per rule, and\n  \
+         # under the default (directory) buf calls the plugin once per directory, which writes\n  \
+         # the shared __init__.py again each time."
+    );
+    let imports = tr!(
+        "# include_imports：契約が BSR のモジュールから import するファイル（protovalidate の\n    \
+         # validate.proto など）の stub も書く。契約の stub がそれを import する。",
+        "# include_imports: the stubs of the files a contract imports from a BSR module\n    \
+         # (protovalidate's validate.proto, say) are written too; the contract's stub imports them."
+    );
+    format!(
+        "{}\n# cd generated/proto && buf generate\nversion: v2\nplugins:\n  \
+         {note}\n  \
+         - remote: buf.build/bufbuild/py\n    out: ../python/stubs\n    \
+         {imports}\n    include_imports: true\n  \
+         - remote: buf.build/connectrpc/py\n    out: ../python/stubs\n",
+        plain_header()
+    )
+}
+
 /// The directory a file's own imports are followed from: the root of the module it is in,
 /// when the file sits where its import path says, and else the directory it is in.
 fn module_root(disk: &Path, import: &str) -> PathBuf {
@@ -209,32 +410,44 @@ impl<'a> Gen<'a> {
     /// The contracts the generated `.proto` imports, as files to put in the module beside it:
     /// each at the path it is imported by, byte for byte — the file `rulec check` held the
     /// rule to — and with it each file it imports in turn that is found where its import path
-    /// says. The well-known types are buf's own; an import found nowhere is left to buf, which
-    /// names it.
-    pub fn proto_contracts(&self) -> Vec<(String, String)> {
+    /// says. The well-known types are buf's own. An import found nowhere is a file of a BSR
+    /// module the contract depends on, and what the module needs for it is in `deps` (§15.161).
+    pub fn proto_contracts(&self) -> Contracts {
         let mut todo: Vec<(PathBuf, String)> = Vec::new();
         for ty in self.wire_enums() {
             if let Some(fr) = self.foreign(&ty) {
                 todo.push((self.dir().join(&fr.file), fr.import));
             }
         }
-        let mut out: Vec<(String, String)> = Vec::new();
+        let mut files: Vec<(String, String)> = Vec::new();
+        let mut elsewhere: Vec<(PathBuf, String)> = Vec::new();
         while let Some((disk, at)) = todo.pop() {
-            if out.iter().any(|(p, _)| *p == at) {
+            if files.iter().any(|(p, _)| *p == at) {
                 continue;
             }
             let Ok(text) = std::fs::read_to_string(&disk) else { continue };
             let root = module_root(&disk, &at);
             for imp in crate::proto::imports(&text) {
                 let p = root.join(&imp);
-                if !imp.starts_with("google/protobuf/") && p.is_file() {
+                if imp.starts_with("google/protobuf/") {
+                    continue;
+                }
+                if p.is_file() {
                     todo.push((p, imp));
+                } else if !elsewhere.iter().any(|(_, i)| *i == imp) {
+                    elsewhere.push((disk.clone(), imp));
                 }
             }
-            out.push((at, text));
+            files.push((at, text));
         }
-        out.sort();
-        out
+        files.sort();
+        Contracts { files, deps: bsr_deps(&elsewhere) }
+    }
+
+    /// The BSR modules this rule's contracts import files from, which `rulec api` names so a
+    /// caller that builds the stubs itself knows the module has dependencies.
+    fn proto_deps(&self) -> Vec<String> {
+        self.proto_contracts().deps.deps.into_iter().collect()
     }
 
     /// The type of one value in the `.proto`.
@@ -296,50 +509,6 @@ impl<'a> Gen<'a> {
         let note = self.proto_note(name, ty);
         let comment = if note.eq_ignore_ascii_case(alias) { String::new() } else { format!("  // {note}\n") };
         format!("{comment}  {label}{} {alias} = {n};\n", self.proto_ty(name, ty))
-    }
-
-    /// The first line of the header alone: what these two files say about themselves.
-    ///
-    /// They belong to the directory rather than to a rule, so the line naming a rule and its
-    /// digest has no place in them — and a header that named one would make the file depend
-    /// on which rule was generated last.
-    fn plain_header(&self) -> String {
-        self.header("#").lines().next().unwrap_or_default().to_string()
-    }
-
-    /// `proto/buf.yaml`: the generated tree **is** a buf module.
-    pub fn buf_yaml(&self) -> String {
-        format!(
-            "{}\nversion: v2\nlint:\n  use:\n    - STANDARD\nbreaking:\n  use:\n    - FILE\n",
-            self.plain_header()
-        )
-    }
-
-    /// `proto/buf.gen.yaml`: the stubs, the way connect-python's own documentation asks for
-    /// them.
-    ///
-    /// `buf generate` from this directory writes the messages, their types and the client and
-    /// server bases into `../python`, where the generated service imports them. `protoc` does
-    /// the same and is in the service's own docstring, for a build that has no buf.
-    pub fn buf_gen_yaml(&self) -> String {
-        let note = tr!(
-            "# ローカルだけで作るなら `uv add --dev protoc-gen-py protoc-gen-connectrpc` を入れて、\n  \
-             # この二行を `local: protoc-gen-py` と `local: protoc-gen-connectrpc` にする。\n  \
-             # そのときは py の側に `strategy: all` も足すこと。規則ごとにディレクトリが分かれるので、\n  \
-             # 既定（directory）だとプラグインがディレクトリごとに呼ばれ、同じ __init__.py を何度も書く。",
-            "# To generate entirely locally, `uv add --dev protoc-gen-py protoc-gen-connectrpc`\n  \
-             # and make these two `local: protoc-gen-py` and `local: protoc-gen-connectrpc`.\n  \
-             # Add `strategy: all` to the py one when you do: there is one directory per rule, and\n  \
-             # under the default (directory) buf calls the plugin once per directory, which writes\n  \
-             # the shared __init__.py again each time."
-        );
-        format!(
-            "{}\n# cd generated/proto && buf generate\nversion: v2\nplugins:\n  \
-             {note}\n  \
-             - remote: buf.build/bufbuild/py\n    out: ../python/stubs\n  \
-             - remote: buf.build/connectrpc/py\n    out: ../python/stubs\n",
-            self.plain_header()
-        )
     }
 
     /// `proto/<package as a path>/<alias>.proto`: the whole of what a caller has to agree to.
@@ -1362,6 +1531,10 @@ impl<'a> Gen<'a> {
             .str("stubs", "cd proto && buf generate")
             .str("buf_yaml", "proto/buf.yaml")
             .str("buf_gen_yaml", "proto/buf.gen.yaml")
+            // The BSR modules this rule's contracts import files from (§15.161). With any, the
+            // module's `buf.yaml` declares them and a `buf.lock` pins them, and the stubs of
+            // their files are written too (`include_imports`).
+            .raw("deps", crate::json::strs(&self.proto_deps()))
             // Protobuf's own JSON mapping, which is what a caller sees who speaks the wire
             // by hand rather than through a generated client: names in lowerCamelCase, and an
             // int64 as a string, because a double cannot hold one.

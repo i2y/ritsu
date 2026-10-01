@@ -1395,6 +1395,38 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
     // The contracts copied into the module so far, and the rule each came with: two rules
     // may import the same one, but not two different files under one path.
     let mut contracts: std::collections::BTreeMap<String, (String, String)> = std::collections::BTreeMap::new();
+    // What the module needs from the BSR, over every rule of the run (§15.161).
+    let mut module_deps = rulec::codegen::BufDeps::default();
+    // Writes what changed, or under `--check` says what is stale. `Some` is the exit code of
+    // a write that failed.
+    let mut emit = |targets: Vec<(String, String)>| -> Option<ExitCode> {
+        for (p, body) in targets {
+            let existing = std::fs::read_to_string(&p).ok();
+            if existing.as_deref() == Some(body.as_str()) {
+                continue;
+            }
+            if check_only {
+                if existing.is_none() { missing.push(p.clone()) } else { stale.push(p.clone()) }
+                if !json {
+                    println!("{}", tr!("生成物が古いか手で編集されています: {p}", "generated file is stale or hand-edited: {p}"));
+                }
+                dirty = 1;
+                continue;
+            }
+            if let Some(dir) = std::path::Path::new(&p).parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            if std::fs::write(&p, &body).is_err() {
+                eprintln!("{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
+                return Some(ExitCode::from(2));
+            }
+            written.push(p.clone());
+            if !json {
+                println!("{}", tr!("生成しました: {p}", "generated: {p}"));
+            }
+        }
+        None
+    };
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -1480,15 +1512,16 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
         // not one per backend, so it is pushed here rather than from the registry: the
         // `.proto` is the contract, and a contract does not come in twelve copies.
         targets.push((format!("{out_dir}/proto/{}", g.proto_path()), g.proto()));
-        // The directory those files land in is a buf module, configured the way
-        // connect-python's own documentation configures one: `buf lint` and `buf generate`
-        // work in it as it stands.
-        targets.push((format!("{out_dir}/proto/buf.yaml"), g.buf_yaml()));
-        targets.push((format!("{out_dir}/proto/buf.gen.yaml"), g.buf_gen_yaml()));
         // The contracts that `.proto` imports an enum from, so that the module builds as it
         // stands (§15.160): each the file `check` held the rule to, copied byte for byte to
-        // the path the import names.
-        for (rel, body) in g.proto_contracts() {
+        // the path the import names. What they import from the BSR goes into the module's
+        // `buf.yaml` and `buf.lock`, written once below.
+        let found = g.proto_contracts();
+        if let Err(e) = module_deps.merge(found.deps) {
+            eprintln!("error: {e}");
+            return ExitCode::from(1);
+        }
+        for (rel, body) in found.files {
             let p = format!("{out_dir}/proto/{rel}");
             if let Some((_, from)) = contracts.get(&p).filter(|(prev, _)| *prev != body) {
                 eprintln!(
@@ -1528,31 +1561,27 @@ fn generate(files: &[&String], out_dir: &str, check_only: bool, json: bool) -> E
                 rulec::vectors::traces_expected_json(&f, &c, &t),
             ));
         }
-        for (p, body) in targets {
-            let existing = std::fs::read_to_string(&p).ok();
-            if existing.as_deref() == Some(body.as_str()) {
-                continue;
-            }
-            if check_only {
-                if existing.is_none() { missing.push(p.clone()) } else { stale.push(p.clone()) }
-                if !json {
-                    println!("{}", tr!("生成物が古いか手で編集されています: {p}", "generated file is stale or hand-edited: {p}"));
-                }
-                dirty = 1;
-                continue;
-            }
-            if let Some(dir) = std::path::Path::new(&p).parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            if std::fs::write(&p, &body).is_err() {
-                eprintln!("{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
-                return ExitCode::from(2);
-            }
-            written.push(p.clone());
-            if !json {
-                println!("{}", tr!("生成しました: {p}", "generated: {p}"));
-            }
+        if let Some(code) = emit(targets) {
+            return code;
         }
+    }
+    // The directory the `.proto` files land in is a buf module, configured the way
+    // connect-python's own documentation configures one, so that `buf lint` and `buf generate`
+    // work in it as it stands. Its configuration belongs to the directory, not to a rule, and
+    // is written once: the BSR modules the contracts of every rule depend on, and their pins
+    // when the `buf.lock` files beside the contracts give every one (§15.161).
+    for n in &module_deps.notes {
+        eprintln!("{}", tr!("注意: {n}", "warning: {n}"));
+    }
+    let mut module = vec![
+        (format!("{out_dir}/proto/buf.yaml"), rulec::codegen::buf_yaml(&module_deps)),
+        (format!("{out_dir}/proto/buf.gen.yaml"), rulec::codegen::buf_gen_yaml()),
+    ];
+    if let Some(lock) = rulec::codegen::buf_lock(&module_deps) {
+        module.push((format!("{out_dir}/proto/buf.lock"), lock));
+    }
+    if let Some(code) = emit(module) {
+        return code;
     }
     if json {
         println!(

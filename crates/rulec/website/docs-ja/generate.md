@@ -252,7 +252,7 @@ service ShippingFeeService {
 
 **リクエストは、入力を全部名指します。** どのフィールドにも `optional` が付いているので、省いたフィールドと 0 を入れたフィールドを区別できます。省いた入力は 0 や false として判断せずに断り、メッセージに無いフィールドや列挙の値も同じように断ります。
 
-stub の作り方は [connect-py](https://github.com/connectrpc/connect-py) の文書がすすめるとおり、buf です。`buf.yaml` と `buf.gen.yaml` も `gen` が書くので、出てきたディレクトリはそのまま buf のモジュールになっています。
+stub の作り方は [connect-py](https://github.com/connectrpc/connect-py) の文書がすすめるとおり、buf です。`buf.yaml` と `buf.gen.yaml` も `gen` が書き、契約が BSR のモジュールに依存していれば `buf.lock` も書くので、出てきたディレクトリはそのまま buf のモジュールになっています。
 
 ```console
 $ uv add connectrpc

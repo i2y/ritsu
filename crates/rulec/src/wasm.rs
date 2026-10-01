@@ -140,8 +140,9 @@ pub extern "C" fn rulec_gen(src: *const u8, ja: u32) -> *mut u8 {
             .str("body", &g.proto())
             .finish(),
     );
-    files.push(Obj::new().str("path", "proto/buf.yaml").str("body", &g.buf_yaml()).finish());
-    files.push(Obj::new().str("path", "proto/buf.gen.yaml").str("body", &g.buf_gen_yaml()).finish());
+    // The playground reads no file, so its module has no contract and no dependency.
+    files.push(Obj::new().str("path", "proto/buf.yaml").str("body", &crate::codegen::buf_yaml(&Default::default())).finish());
+    files.push(Obj::new().str("path", "proto/buf.gen.yaml").str("body", &crate::codegen::buf_gen_yaml()).finish());
     let vs = crate::vectors::generate(&f, &c);
     let join = |v: Vec<String>| v.join("\n") + "\n";
     files.push(

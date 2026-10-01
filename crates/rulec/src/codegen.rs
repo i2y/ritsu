@@ -158,6 +158,7 @@ pub use java::{java_class, round_tests_java};
 mod tool;
 mod connect;
 pub use connect::template as connect_template;
+pub use connect::{buf_gen_yaml, buf_lock, buf_yaml, BufDeps, Contracts};
 
 impl<'a> Gen<'a> {
     /// The machine the rule is one step of (§15.148): the enum of the carried state, the

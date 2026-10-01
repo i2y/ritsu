@@ -1090,10 +1090,20 @@ together, so the service speaks the contract's own type instead of a second one 
 the same thing. So that the module builds as it stands, `gen` puts the contract in it: the file
 `check` read, byte for byte, at the path its package gives it (`proto/shop/v1/order.proto` for
 `package shop.v1`), which is also the path the generated `.proto` imports. A file the contract
-imports in turn comes with it when it is found where its import path says; the well-known
-types are buf's own, and an import found nowhere — a file of a BSR module such as
-protovalidate's — is left out, and buf names it when it builds. Two rules may import one
-contract, but two different files that would land on the same path stop `gen` with an error.
+imports in turn comes with it when it is found where its import path says, and the well-known
+types are buf's own.
+
+An import found nowhere on disk is a file of a BSR module — protovalidate's
+`buf/validate/validate.proto`, say — and the module gets it the way the contract's own
+workspace does. `gen` reads the `buf.yaml` nearest above the contract and the `buf.lock` beside
+it, declares in `proto/buf.yaml` the module the import comes from, and writes the lock's pins to
+`proto/buf.lock`. It fetches nothing itself: buf fetches the module when it builds, and
+`buf.gen.yaml` writes the stubs of its files with the rest (`include_imports`), since the
+contract's stub imports them. With no `buf.yaml` beside the contract, or a lock still in v1's
+shape — whose shake256 digests a v2 module does not read — there is nothing to pin with, so
+`gen` declares the module, writes no lock, and says to run `buf dep update` in `proto/`. Two
+rules may import one contract, but two different files that would land on one path, or two
+locks that pin one module at two commits, stop `gen` with an error.
 
 The stubs are generated the way [connect-py](https://github.com/connectrpc/connect-py)'s own
 documentation generates them — with [buf](https://buf.build/), configured by the two files

@@ -428,8 +428,9 @@ value the message does not have the same way.
 
 The stubs are generated the way [connect-py](https://github.com/connectrpc/connect-py)'s own
 documentation generates them, with buf — `gen` writes the `buf.yaml`
-and the `buf.gen.yaml` that configure it, so the tree is a buf module
-as it stands:
+and the `buf.gen.yaml` that configure it, and a `buf.lock` when a
+contract depends on a BSR module, so the tree is a buf module as it
+stands:
 
 ```console
 $ uv add connectrpc
