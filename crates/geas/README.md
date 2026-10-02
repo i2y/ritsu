@@ -356,9 +356,9 @@ The same folder is [skills/geas](skills/geas); [skills/README.md](skills/README.
 
 ## Install
 
-In a clone of this repository:
-
 ```console
+$ git clone https://github.com/i2y/geas
+$ cd geas
 $ cargo install --path .
 ```
 

@@ -294,9 +294,9 @@ geas のスキルを .claude/skills/geas に書きました（ファイル 7 個
 
 ## インストール
 
-このリポジトリを clone したディレクトリで、次を実行します。
-
 ```console
+$ git clone https://github.com/i2y/geas
+$ cd geas
 $ cargo install --path .
 ```
 

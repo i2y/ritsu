@@ -1,7 +1,7 @@
 ---
 name: geas
 description: Hold code to claims a person has read, with geas. A `.geas` file holds claims about what a program does as anyone could observe it from outside (what a command prints and exits with, what an HTTP service answers, what a screen shows), and geas runs every claim against the real program, whatever language it is written in. Use when writing or changing code that a `.geas` claims file holds; when running the gate on a change (`geas check`, `geas drift`, `geas map` and `geas affected`); when a claim fails or a geas diagnostic (E001-E081, W060-W061) has to be fixed; or when behavior no claim covers has to be proposed to the person as new claims.
-compatibility: Requires the `geas` binary on PATH (`cargo install --path .` in a clone of the geas repository), and whatever the project's own programs need to run. `geas map` records Python 3.12 and later, Node, Go built with `-cover`, and Rust built with `-C instrument-coverage` (with rustup's llvm-tools). A page in a browser needs Chrome or Chromium; a pixie target needs a built pixie app.
+compatibility: Requires the `geas` binary on PATH (`cargo install --path .` in a clone of https://github.com/i2y/geas), and whatever the project's own programs need to run. `geas map` records Python 3.12 and later, Node, Go built with `-cover`, and Rust built with `-C instrument-coverage` (with rustup's llvm-tools). A page in a browser needs Chrome or Chromium; a pixie target needs a built pixie app.
 license: MIT OR Apache-2.0
 ---
 
