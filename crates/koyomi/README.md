@@ -151,9 +151,9 @@ error gets none.
 
 ## Install
 
-In a clone of this repository:
-
 ```console
+$ git clone https://github.com/i2y/koyomi
+$ cd koyomi
 $ cargo install --path .
 ```
 

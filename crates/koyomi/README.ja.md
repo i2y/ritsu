@@ -135,9 +135,9 @@ koyomi は、[rulec](https://github.com/i2y/rulec)（業務ルールのための
 
 ## インストール
 
-このリポジトリを clone したディレクトリで、次を実行します。
-
 ```console
+$ git clone https://github.com/i2y/koyomi
+$ cd koyomi
 $ cargo install --path .
 ```
 
