@@ -1,0 +1,35 @@
+# pixie's greeter, driven by replaying a script: each claim's actions on the app
+# run as one script, with the accessibility tree read after each.
+
+target app {
+  pixie "greeter"
+}
+
+claim "starts asking for a name" {
+  when app.open()
+  then screen contains text "Your name:"
+  and  screen contains textbox "type here"
+  and  screen contains exactly 2 textbox
+  and  screen does not contain text containing "Hello"
+}
+
+claim "greets the name typed in" {
+  when app.input("Ada")
+  then screen contains textbox "type here" with value "Ada"
+  and  screen contains text "name: Ada"
+  when app.click("greet")
+  then screen contains text "Hello, Ada!"
+  and  screen contains button "greet" enabled
+}
+
+claim "greets on Enter, a comma and all" {
+  when app.input("Ada, Grace")
+  when app.submit()
+  then screen contains text "Hello, Ada, Grace!"
+  and  screen contains textbox with value "Ada, Grace"
+}
+
+claim "types into the second field" {
+  when app.input("hello", field: 2)
+  then screen contains text "note: hello"
+}

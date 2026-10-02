@@ -1,0 +1,3 @@
+error[E051]: .geas/e051.baseline.jsonl:1: the line is not JSON: bad JSON literal (expected `null`)
+     1 | not json
+  = `geas snap` writes the baseline; run `geas snap e051.geas` to write it again

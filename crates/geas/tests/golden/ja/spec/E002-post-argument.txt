@@ -1,0 +1,2 @@
+エラー[E002]: E002-post-argument.geas:7:25: `post` に `data` という名前の引数はありません。書けるのはパスと `body:` です
+     7 |   when api.post("/add", data: "5")

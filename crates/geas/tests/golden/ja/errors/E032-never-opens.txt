@@ -1,0 +1,7 @@
+not ok 1 - answers（エラー）
+    エラー[E032]: e032.geas:7:3: サービス `api` が 5 秒のうちにポート 8123 を開かなかったので、geas が止めました
+         7 |   when api.get("/")
+      = コマンド: sleep 30
+      ここまでの実行:
+           7  when api.get("/")
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: .geas/e032.journal.jsonl

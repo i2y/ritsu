@@ -1,0 +1,2 @@
+エラー[E001]: E001-file-ends-in-an-escape.geas:1:12: エスケープの途中でファイルが終わっています
+     1 | claim "adds\

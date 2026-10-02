@@ -1,0 +1,32 @@
+error[E032]: examples/greeter/greeter.geas:15:3: the service `api` exited before opening the port geas gave it (exit 1)
+    15 |   when api.get("/greet?name=Alice")
+  = command: python3 server.py {port}
+  = stderr: ImportError: no module named 'greetings'
+  the run that gets there:
+      15  when api.get("/greet?name=Alice")
+error[E032]: examples/greeter/greeter.geas:21:3: the service `api` exited before opening the port geas gave it (exit 1)
+    21 |   when api.get("/greet?name=")
+  = command: python3 server.py {port}
+  = stderr: ImportError: no module named 'greetings'
+  the run that gets there:
+      21  when api.get("/greet?name=")
+error[E032]: examples/greeter/greeter.geas:26:3: the service `api` exited before opening the port geas gave it (exit 1)
+    26 |   when api.post("/reset")
+  = command: python3 server.py {port}
+  = stderr: ImportError: no module named 'greetings'
+  the run that gets there:
+      26  when api.post("/reset")
+error[E032]: examples/greeter/greeter.geas:35:3: the service `api` exited before opening the port geas gave it (exit 1)
+    35 |   when api.get("/nope")
+  = command: python3 server.py {port}
+  = stderr: ImportError: no module named 'greetings'
+  the run that gets there:
+      35  when api.get("/nope")
+note: baseline has claim "greets by name" when#1 but the current run does not (claim removed or errored)
+note: baseline has claim "rejects an empty name" when#1 but the current run does not (claim removed or errored)
+note: baseline has claim "totals accumulate across requests" when#1 but the current run does not (claim removed or errored)
+note: baseline has claim "totals accumulate across requests" when#2 but the current run does not (claim removed or errored)
+note: baseline has claim "totals accumulate across requests" when#3 but the current run does not (claim removed or errored)
+note: baseline has claim "totals accumulate across requests" when#4 but the current run does not (claim removed or errored)
+note: baseline has claim "unknown paths are 404" when#1 but the current run does not (claim removed or errored)
+drift: 0 interactions compared · 0 drifted · 0 unclaimed change(s) · 0 claimed

@@ -1,0 +1,8 @@
+target app {
+  pixie "build/greeter --port={port}"
+}
+
+claim "greets" {
+  when app.open()
+  then screen contains button "greet"
+}

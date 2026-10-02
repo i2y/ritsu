@@ -1,0 +1,5 @@
+target calc {
+  run "python3 calc.py"
+  serve "python3 server.py 8123"
+  port 8123
+}

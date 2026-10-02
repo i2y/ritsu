@@ -1,0 +1,15 @@
+target app {
+  pixie "build/greeter"
+}
+
+target calc {
+  run "python3 calc.py"
+}
+
+claim "greets after adding" {
+  when app.input("Ada")
+  when calc.run("2", "+", "3")
+  then stdout is "5"
+  when app.click("greet")
+  then screen contains text "Hello, Ada!"
+}

@@ -1,0 +1,6 @@
+ok 1 - greets by name
+ok 2 - rejects an empty name
+ok 3 - totals accumulate across requests
+ok 4 - unknown paths are 404
+4 claims · 4 ok · 0 failed · journal: examples/greeter/.geas/greeter.journal.jsonl
+map: 2 files · 40 lines of code, 38 run by some claim → examples/greeter/.geas/greeter.map.jsonl

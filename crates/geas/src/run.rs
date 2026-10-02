@@ -1,40 +1,93 @@
-use crate::json::{self, J};
+//! One claim at a time: its `when`s through the adapters, its checks against what
+//! they observed, and the journal events. A `when` that gets no observation ends the
+//! claim as an error with a code (E030-E033), the command and its stderr as notes,
+//! and the run that gets there. In `map`, every process a claim starts gets the
+//! coverage switches and a directory of its own (DESIGN §7.3).
+
+pub use crate::check::CheckResult;
+use crate::check::{self, trim_one_newline};
+use crate::cover;
+use crate::diag::{self, same, t, Diag};
+use crate::drift;
+use crate::gui;
+use crate::http;
+use crate::json;
 use crate::model::*;
+use crate::proc::{self, AutoPort, Env, Failure, Launch, Server};
+use crate::sched;
 use std::collections::HashMap;
-use std::io::Read;
-use std::io::Write as _;
-use std::net::{SocketAddr, TcpStream};
-use std::path::Path;
-use std::process::{Child, Command, Stdio};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::path::{Path, PathBuf};
 
-const STEP_TIMEOUT: Duration = Duration::from_secs(5);
+/// The longest observation a step of the run that gets there shows.
+const OBSERVED: usize = 100;
 
+#[derive(Clone)]
 pub enum Obs {
     Proc { stdout: String, stderr: String, exit: i32 },
     Http { status: u16, headers: Vec<(String, String)>, body: String },
+    /// What a GUI target shows after an action (DESIGN §8).
+    Screen(crate::screen::Node),
+}
+
+impl Obs {
+    /// What a step of a run shows: `exit 1, stdout "…", stderr "…"` for a process,
+    /// `200, body "…"` for HTTP, in at most 100 characters.
+    pub fn summary(&self) -> String {
+        let s = match self {
+            Obs::Proc { stdout, stderr, exit } => {
+                let mut parts = vec![format!("exit {exit}")];
+                if !stdout.is_empty() {
+                    parts.push(format!("stdout {}", json::quote(trim_one_newline(stdout))));
+                }
+                if !stderr.is_empty() {
+                    parts.push(format!("stderr {}", json::quote(trim_one_newline(stderr))));
+                }
+                parts.join(", ")
+            }
+            Obs::Http { status, body, .. } => {
+                if body.is_empty() {
+                    status.to_string()
+                } else {
+                    format!("{status}, body {}", json::quote(trim_one_newline(body)))
+                }
+            }
+            Obs::Screen(screen) => screen.summary(),
+        };
+        diag::cut(&s, OBSERVED)
+    }
 }
 
 pub struct ObsRec {
     pub idx: usize,
+    pub line: usize,
     pub target: String,
+    /// The call as written after the target: `get("/total")`.
     pub call: String,
     pub obs: Obs,
 }
 
-pub struct CheckResult {
+/// One `when` of the run that gets there: its line, `api.get("/")`, and what it
+/// observed, or None for the `when` the claim stopped at.
+pub struct RunLine {
     pub line: usize,
-    pub label: String,
-    pub expected: String,
-    pub actual: String,
-    pub ok: bool,
+    pub when: String,
+    pub observed: Option<String>,
+}
+
+impl RunLine {
+    pub fn step(&self) -> diag::Step {
+        let text = match &self.observed {
+            Some(o) => format!("when {}  →  {}", self.when, o),
+            None => format!("when {}", self.when),
+        };
+        diag::Step { line: self.line, text: same(text) }
+    }
 }
 
 pub enum ClaimStatus {
     Ok,
     Fail,
-    Error { message: String, line: usize },
+    Error(Diag),
 }
 
 pub struct ClaimResult {
@@ -43,386 +96,359 @@ pub struct ClaimResult {
     pub status: ClaimStatus,
     pub checks: Vec<CheckResult>,
     pub observations: Vec<ObsRec>,
+    /// For a claim that is not ok: the `when`s up to the problem.
+    pub run: Vec<RunLine>,
+    /// Every process the claim started, in order.
+    pub started: Vec<Started>,
 }
 
-struct Server {
-    child: Child,
-    stderr: thread::JoinHandle<Vec<u8>>,
+/// A process a claim started, for `map` to read what it ran.
+pub struct Started {
+    pub target: String,
+    /// The place of the `when` that started it.
+    pub line: usize,
+    pub col: usize,
+    pub pid: u32,
+    pub words: Vec<String>,
+    /// The program its first word starts, resolved as the OS would (in `map`).
+    pub program: Option<PathBuf>,
+    /// The directory its coverage goes to (in `map`).
+    pub dir: Option<PathBuf>,
+    /// A service that did not exit within 5 s of SIGTERM and was killed.
+    pub killed: bool,
 }
 
-pub fn run_spec(spec: &Spec, dir: &Path, journal: &mut Vec<String>) -> Vec<ClaimResult> {
-    spec.claims
-        .iter()
-        .map(|c| run_claim(spec, c, dir, journal))
-        .collect()
+/// How a claim is run: in `map`, with the coverage switches of a session, the
+/// claim's number naming its directory; and what its GUI targets share, as seen by
+/// the worker running it.
+#[derive(Clone, Copy)]
+pub struct Opts<'a> {
+    pub cover: Option<&'a cover::Session>,
+    pub gui: &'a gui::Shared,
+    pub worker: usize,
 }
 
-fn run_claim(spec: &Spec, claim: &Claim, dir: &Path, journal: &mut Vec<String>) -> ClaimResult {
-    let mut servers: HashMap<String, Server> = HashMap::new();
+/// Runs every claim, up to `jobs` at once (DESIGN §10); the results and the
+/// journal in claim order, whatever finished first. `geas_dir` is the spec's
+/// `.geas/`, absolute, and `stem` the spec's name, for what GUI targets write.
+pub fn run_spec(spec: &Spec, dir: &Path, geas_dir: &Path, stem: &str, jobs: usize) -> (Vec<ClaimResult>, Vec<String>) {
+    let shared = gui::Shared::new(geas_dir, stem, jobs);
+    let runs = sched::each(spec, jobs, |worker, i| {
+        run_claim(spec, &spec.claims[i], i + 1, dir, Opts { cover: None, gui: &shared, worker })
+    });
+    let mut journal = Vec::new();
+    let results = runs
+        .into_iter()
+        .map(|(r, j)| {
+            journal.extend(j);
+            r
+        })
+        .collect();
+    (results, journal)
+}
+
+/// A service a claim started: its port, and the port it holds from the registry
+/// when the target has `port auto`, given back once the service is stopped.
+struct Instance {
+    server: Server,
+    /// Its place in the claim's started processes.
+    index: usize,
+    port: u16,
+    auto: Option<AutoPort>,
+}
+
+/// The environment of the k-th process of a claim: what its target's pins give
+/// it, and in `map` the coverage switches, with the directory they point into.
+fn environment(tg: &Target, port: Option<u16>, opts: Opts, claim_no: usize, k: usize) -> Result<(Option<PathBuf>, Env), Failure> {
+    let mut env = Env::of(&tg.pins, port);
+    let Some(session) = opts.cover else {
+        return Ok((None, env));
+    };
+    match session.process(claim_no, k) {
+        Ok(d) => {
+            session.switch(&mut env, &d);
+            Ok((Some(d), env))
+        }
+        Err(e) => Err(Failure {
+            code: "E081",
+            msg: t(
+                format!("cannot make the directory for the coverage of this process: {e}"),
+                format!("このプロセスのカバレッジを書くディレクトリを作れません: {e}"),
+            ),
+            notes: vec![],
+        }),
+    }
+}
+
+/// Runs one claim; `claim_no` (from 1) names its coverage directory in `map`. The
+/// result, and the claim's lines of the journal.
+pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: Opts) -> (ClaimResult, Vec<String>) {
+    let mut journal: Vec<String> = Vec::new();
+    let term = opts.cover.is_some();
+    let mut servers: HashMap<String, Instance> = HashMap::new();
     let mut checks: Vec<CheckResult> = Vec::new();
-    let mut error: Option<(String, usize)> = None;
+    let mut error: Option<(Failure, Pos, String, String)> = None;
     let mut obs: Option<Obs> = None;
     let mut observations: Vec<ObsRec> = Vec::new();
+    let mut started: Vec<Started> = Vec::new();
     let mut when_idx = 0usize;
+    // how many observations the last failed check had seen: its run
+    let mut failed_after: Option<usize> = None;
+
+    // the targets this claim has used, for the journal's `env` event
+    let mut used: Vec<&str> = Vec::new();
+    let mut gui = gui::ClaimGui::new(opts.gui, opts.worker, claim, claim_no, dir);
 
     for step in &claim.steps {
         match step {
-            Step::When { target, call, line } => {
-                let t = spec.target(target).expect("validated");
-                let result = match (&t.kind, call) {
-                    (TargetKind::Run(cmd), Call::Run(args)) => run_process(cmd, args, dir),
-                    (TargetKind::Serve { cmd, port }, _) => {
-                        match ensure_server(target, cmd, *port, dir, &mut servers) {
+            Step::When { target, call, pos } => {
+                let tg = spec.target(target).expect("the parser resolved every target");
+                if !used.contains(&target.as_str()) {
+                    used.push(target);
+                    if !tg.pins.is_empty() {
+                        journal.push(format!(
+                            "{{\"claim\":{},\"event\":\"env\",\"target\":{},\"pins\":{}}}",
+                            json::quote(&claim.name),
+                            json::quote(target),
+                            tg.pins.json()
+                        ));
+                    }
+                }
+                let k = started.len() + 1;
+                let record = |pid: u32, words: &[String], d: Option<PathBuf>| Started {
+                    target: target.clone(),
+                    line: pos.line,
+                    col: pos.col,
+                    pid,
+                    words: words.to_vec(),
+                    program: opts.cover.and_then(|_| proc::resolve(&words[0], dir)),
+                    dir: d,
+                    killed: false,
+                };
+                let result = match (&tg.kind, call) {
+                    (TargetKind::Run(base), Call::Run(args)) => match environment(tg, None, opts, claim_no, k) {
+                        Err(f) => Err(f),
+                        Ok((d, env)) => {
+                            let launch = Launch { dir, env: &env, term };
+                            let mut s = None;
+                            let r = proc::run_process(target, base, args, &launch, &mut |pid, words| {
+                                s = Some(record(pid, words, d.clone()));
+                            });
+                            started.extend(s);
+                            r
+                        }
+                    },
+                    (TargetKind::Serve { words: cmd, port }, _) => {
+                        let up = if servers.contains_key(target.as_str()) {
+                            Ok(())
+                        } else {
+                            match take_port(target, *port) {
+                                Err(f) => Err(f),
+                                Ok((p, auto)) => match environment(tg, Some(p), opts, claim_no, k) {
+                                    Err(f) => Err(f),
+                                    Ok((d, env)) => {
+                                        let launch = Launch { dir, env: &env, term };
+                                        let mut s = None;
+                                        let r = proc::start_server(target, cmd, p, auto.is_some(), &launch, &mut |pid, words| {
+                                            s = Some(record(pid, words, d.clone()));
+                                        });
+                                        let index = started.len();
+                                        started.extend(s);
+                                        r.map(|server| {
+                                            servers.insert(target.clone(), Instance { server, index, port: p, auto });
+                                        })
+                                    }
+                                },
+                            }
+                        };
+                        match up {
                             Err(e) => Err(e),
-                            Ok(()) => match call {
-                                Call::Get(path) => http(*port, "GET", path, None),
-                                Call::Post { path, body } => {
-                                    http(*port, "POST", path, body.as_deref())
-                                }
-                                Call::Run(_) => unreachable!("validated"),
-                            },
+                            Ok(()) => {
+                                let inst = &servers[target.as_str()];
+                                let auto = inst.auto.is_some();
+                                let answer = match call {
+                                    Call::Get(path) => http::exchange(target, inst.port, auto, "GET", path, None),
+                                    Call::Post { path, body } => {
+                                        http::exchange(target, inst.port, auto, "POST", path, body.as_deref())
+                                    }
+                                    Call::Run(_) => unreachable!("E006 refuses `run` on a service"),
+                                    // an action on the service's page in Chrome
+                                    _ => gui.act(tg, call, Some((inst.port, auto))).map(Obs::Screen),
+                                };
+                                // the port belongs to the run, not to the program (DESIGN §10)
+                                answer.map(|o| if auto { http::port_written(o, inst.port) } else { o })
+                            }
                         }
                     }
-                    _ => unreachable!("validated"),
+                    (TargetKind::Pixie(_) | TargetKind::Driver(_), _) => gui.act(tg, call, None).map(Obs::Screen),
+                    _ => unreachable!("E006 refuses a call its target does not take"),
                 };
                 match result {
                     Ok(o) => {
-                        journal.push(journal_when(&claim.name, target, call, &o));
+                        journal.push(journal_when(&claim.name, pos.line, target, call, &drift::recorded(&o, &spec.masks)));
                         observations.push(ObsRec {
                             idx: when_idx,
+                            line: pos.line,
                             target: target.clone(),
-                            call: call_display(call),
-                            obs: clone_obs(&o),
+                            call: call.display(),
+                            obs: o.clone(),
                         });
                         when_idx += 1;
                         obs = Some(o);
                     }
-                    Err(e) => {
+                    Err(f) => {
                         journal.push(format!(
-                            "{{\"claim\":\"{}\",\"event\":\"error\",\"line\":{},\"message\":\"{}\"}}",
-                            json::esc(&claim.name),
-                            line,
-                            json::esc(&e)
+                            "{{\"claim\":{},\"event\":\"error\",\"line\":{},\"code\":\"{}\",\"message\":{}}}",
+                            json::quote(&claim.name),
+                            pos.line,
+                            f.code,
+                            json::quote(&f.msg.en)
                         ));
-                        error = Some((e, *line));
+                        error = Some((f, *pos, target.clone(), format!("{}.{}", target, call.display())));
                         break;
                     }
                 }
             }
             Step::Then(check) => {
-                let o = obs.as_ref().expect("parser guarantees a `when` first");
-                let cr = eval_check(check, o);
+                let o = obs.as_ref().expect("E005 refuses a check before any `when`");
+                let cr = check::eval(check, o);
                 journal.push(format!(
-                    "{{\"claim\":\"{}\",\"event\":\"check\",\"line\":{},\"check\":\"{}\",\"expected\":{},\"actual\":{},\"ok\":{}}}",
-                    json::esc(&claim.name),
+                    "{{\"claim\":{},\"event\":\"check\",\"line\":{},\"check\":{},\"expected\":{},\"actual\":{},\"ok\":{}}}",
+                    json::quote(&claim.name),
                     cr.line,
-                    json::esc(&cr.label),
-                    quote(&cr.expected),
-                    quote(&cr.actual),
+                    json::quote(&cr.label),
+                    json::quote(&cr.expected),
+                    json::quote(&cr.actual.en),
                     cr.ok
                 ));
+                if !cr.ok {
+                    failed_after = Some(observations.len());
+                }
                 checks.push(cr);
             }
         }
     }
 
-    for (_, mut s) in servers.drain() {
-        let _ = s.child.kill();
-        let _ = s.child.wait();
-        let _ = s.stderr.join();
+    // A claim ends with its GUIs, then its services: killed at once, or in `map`
+    // asked to stop with SIGTERM first, so that their runtimes write what they ran.
+    gui.close();
+    let mut server_stderr: HashMap<String, String> = HashMap::new();
+    let mut names: Vec<String> = servers.keys().cloned().collect();
+    names.sort();
+    for name in names {
+        let inst = servers.remove(&name).expect("a started service");
+        let (stderr, killed) = proc::stop_server(inst.server, term);
+        started[inst.index].killed = killed;
+        server_stderr.insert(name, stderr);
+        // an auto port goes back to the registry once its service is gone
+        drop(inst.auto);
     }
 
-    let status = if let Some((message, line)) = error {
-        ClaimStatus::Error { message, line }
-    } else if checks.iter().any(|c| !c.ok) {
-        ClaimStatus::Fail
-    } else {
-        ClaimStatus::Ok
+    let seen = |upto: usize| -> Vec<RunLine> {
+        observations
+            .iter()
+            .take(upto)
+            .map(|o| RunLine {
+                line: o.line,
+                when: format!("{}.{}", o.target, o.call),
+                observed: Some(o.obs.summary()),
+            })
+            .collect()
     };
-    ClaimResult { name: claim.name.clone(), line: claim.line, status, checks, observations }
-}
-
-fn clone_obs(o: &Obs) -> Obs {
-    match o {
-        Obs::Proc { stdout, stderr, exit } => Obs::Proc {
-            stdout: stdout.clone(),
-            stderr: stderr.clone(),
-            exit: *exit,
-        },
-        Obs::Http { status, headers, body } => Obs::Http {
-            status: *status,
-            headers: headers.clone(),
-            body: body.clone(),
-        },
-    }
-}
-
-pub fn call_display(call: &Call) -> String {
-    match call {
-        Call::Run(args) => {
-            let a: Vec<String> = args.iter().map(|s| format!("\"{}\"", s)).collect();
-            format!("run({})", a.join(", "))
+    let (status, run) = if let Some((mut f, pos, target, when)) = error {
+        if f.code == "E033"
+            && let Some(err) = server_stderr.get(&target)
+        {
+            f.notes.extend(proc::stderr_tail(err));
         }
-        Call::Get(p) => format!("get(\"{}\")", p),
-        Call::Post { path, body } => match body {
-            Some(b) => format!("post(\"{}\", body: \"{}\")", path, b),
-            None => format!("post(\"{}\")", path),
+        // every observation came before the `when` that failed
+        let mut run = seen(observations.len());
+        run.push(RunLine { line: pos.line, when, observed: None });
+        let mut d = Diag::error(f.code, pos.line, pos.col, f.msg).with_path(run.iter().map(RunLine::step).collect());
+        d.notes = f.notes;
+        (ClaimStatus::Error(d), run)
+    } else if let Some(upto) = failed_after {
+        (ClaimStatus::Fail, seen(upto))
+    } else {
+        (ClaimStatus::Ok, vec![])
+    };
+    (ClaimResult { name: claim.name.clone(), line: claim.pos.line, status, checks, observations, run, started }, journal)
+}
+
+/// The port of a new instance: the one written in the spec, or a free one from the
+/// registry, held until the instance is stopped.
+fn take_port(target: &str, port: Port) -> Result<(u16, Option<AutoPort>), Failure> {
+    match port {
+        Port::Fixed(p) => Ok((p, None)),
+        Port::Auto => match AutoPort::take() {
+            Ok(a) => Ok((a.0, Some(a))),
+            Err(e) => Err(Failure {
+                code: "E030",
+                msg: t(
+                    format!("cannot find a free port on 127.0.0.1 for `{target}`: {e}"),
+                    format!("`{target}` に渡す 127.0.0.1 の空きポートが見つかりません: {e}"),
+                ),
+                notes: vec![],
+            }),
         },
     }
 }
 
-fn journal_when(claim: &str, target: &str, call: &Call, obs: &Obs) -> String {
-    let call_s = call_display(call);
+/// The run of a claim up to and with the `when` on `line`, each `when` with what it
+/// observed: the path of a diagnostic about something that `when` started.
+pub fn run_up_to(r: &ClaimResult, line: usize) -> Vec<diag::Step> {
+    r.observations
+        .iter()
+        .filter(|o| o.line <= line)
+        .map(|o| {
+            RunLine { line: o.line, when: format!("{}.{}", o.target, o.call), observed: Some(o.obs.summary()) }.step()
+        })
+        .collect()
+}
+
+/// A `when` in the journal, its observation as recorded: masked values written as
+/// `<masked>`, so two runs write the same bytes where the spec declares noise.
+fn journal_when(claim: &str, line: usize, target: &str, call: &Call, obs: &Obs) -> String {
     let obs_s = match obs {
         Obs::Proc { stdout, stderr, exit } => format!(
-            "{{\"stdout\":\"{}\",\"stderr\":\"{}\",\"exit\":{}}}",
-            json::esc(stdout),
-            json::esc(stderr),
+            "{{\"stdout\":{},\"stderr\":{},\"exit\":{}}}",
+            json::quote(stdout),
+            json::quote(stderr),
             exit
         ),
-        Obs::Http { status, body, .. } => format!(
-            "{{\"status\":{},\"body\":\"{}\"}}",
+        Obs::Http { status, headers, body } => format!(
+            "{{\"status\":{},\"headers\":{},\"body\":{}}}",
             status,
-            json::esc(body)
+            drift::headers_json(headers),
+            json::quote(body)
         ),
+        Obs::Screen(screen) => format!("{{\"screen\":{}}}", screen.json()),
     };
     format!(
-        "{{\"claim\":\"{}\",\"event\":\"when\",\"target\":\"{}\",\"call\":\"{}\",\"obs\":{}}}",
-        json::esc(claim),
-        json::esc(target),
-        json::esc(&call_s),
+        "{{\"claim\":{},\"event\":\"when\",\"line\":{},\"target\":{},\"call\":{},\"obs\":{}}}",
+        json::quote(claim),
+        line,
+        json::quote(target),
+        json::quote(&call.display()),
         obs_s
     )
 }
 
-fn quote(s: &str) -> String {
-    format!("\"{}\"", json::esc(s))
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-// ---------- process adapter ----------
-
-fn slurp(mut r: impl Read + Send + 'static) -> thread::JoinHandle<Vec<u8>> {
-    thread::spawn(move || {
-        let mut v = Vec::new();
-        let _ = r.read_to_end(&mut v);
-        v
-    })
-}
-
-fn run_process(cmd_base: &str, args: &[String], dir: &Path) -> Result<Obs, String> {
-    let mut parts = cmd_base.split_whitespace();
-    let Some(prog) = parts.next() else {
-        return Err("empty command".into());
-    };
-    let mut cmd = Command::new(prog);
-    cmd.args(parts)
-        .args(args)
-        .current_dir(dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("failed to start `{}`: {}", prog, e))?;
-    let so = slurp(child.stdout.take().expect("piped"));
-    let se = slurp(child.stderr.take().expect("piped"));
-    let deadline = Instant::now() + STEP_TIMEOUT;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(st)) => break st,
-            Ok(None) => {
-                if Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(format!(
-                        "`{}` did not finish within {}s",
-                        prog,
-                        STEP_TIMEOUT.as_secs()
-                    ));
-                }
-                thread::sleep(Duration::from_millis(10));
-            }
-            Err(e) => return Err(format!("wait failed: {}", e)),
-        }
-    };
-    let stdout = String::from_utf8_lossy(&so.join().unwrap_or_default()).into_owned();
-    let stderr = String::from_utf8_lossy(&se.join().unwrap_or_default()).into_owned();
-    Ok(Obs::Proc { stdout, stderr, exit: status.code().unwrap_or(-1) })
-}
-
-// ---------- service adapter ----------
-
-fn ensure_server(
-    name: &str,
-    cmd: &str,
-    port: u16,
-    dir: &Path,
-    servers: &mut HashMap<String, Server>,
-) -> Result<(), String> {
-    if servers.contains_key(name) {
-        return Ok(());
+    #[test]
+    fn summaries_fit_one_line() {
+        let p = Obs::Proc { stdout: "5\n".into(), stderr: String::new(), exit: 0 };
+        assert_eq!(p.summary(), "exit 0, stdout \"5\"");
+        let p = Obs::Proc { stdout: String::new(), stderr: "no\nway\n".into(), exit: 1 };
+        assert_eq!(p.summary(), "exit 1, stderr \"no\\nway\"");
+        let h = Obs::Http { status: 204, headers: vec![], body: String::new() };
+        assert_eq!(h.summary(), "204");
+        let h = Obs::Http { status: 200, headers: vec![], body: "x".repeat(200) };
+        let s = h.summary();
+        assert_eq!(s.chars().count(), 100);
+        assert!(s.starts_with("200, body \"xxx") && s.ends_with('…'));
     }
-    let mut parts = cmd.split_whitespace();
-    let Some(prog) = parts.next() else {
-        return Err("empty serve command".into());
-    };
-    let mut c = Command::new(prog);
-    c.args(parts)
-        .current_dir(dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-    let mut child = c
-        .spawn()
-        .map_err(|e| format!("failed to start `{}`: {}", prog, e))?;
-    let se = slurp(child.stderr.take().expect("piped"));
-    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().expect("addr");
-    let deadline = Instant::now() + STEP_TIMEOUT;
-    loop {
-        if TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok() {
-            break;
-        }
-        if let Ok(Some(st)) = child.try_wait() {
-            let err = String::from_utf8_lossy(&se.join().unwrap_or_default()).into_owned();
-            return Err(format!(
-                "server exited before opening port {} (exit {}): {}",
-                port,
-                st.code().unwrap_or(-1),
-                err.trim()
-            ));
-        }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = se.join();
-            return Err(format!(
-                "server did not open port {} within {}s",
-                port,
-                STEP_TIMEOUT.as_secs()
-            ));
-        }
-        thread::sleep(Duration::from_millis(25));
-    }
-    servers.insert(name.to_string(), Server { child, stderr: se });
-    Ok(())
-}
-
-fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> Result<Obs, String> {
-    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().expect("addr");
-    let mut s = TcpStream::connect_timeout(&addr, STEP_TIMEOUT)
-        .map_err(|e| format!("connect to port {} failed: {}", port, e))?;
-    let _ = s.set_read_timeout(Some(STEP_TIMEOUT));
-    let _ = s.set_write_timeout(Some(STEP_TIMEOUT));
-    let b = body.unwrap_or("");
-    let req = format!(
-        "{} {} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
-        method,
-        path,
-        b.len(),
-        b
-    );
-    s.write_all(req.as_bytes())
-        .map_err(|e| format!("write failed: {}", e))?;
-    let mut buf = Vec::new();
-    s.read_to_end(&mut buf)
-        .map_err(|e| format!("read failed: {}", e))?;
-    let text = String::from_utf8_lossy(&buf).into_owned();
-    let Some(hdr_end) = text.find("\r\n\r\n") else {
-        return Err("malformed HTTP response".into());
-    };
-    let head = &text[..hdr_end];
-    let body = text[hdr_end + 4..].to_string();
-    let status_line = head.lines().next().unwrap_or("");
-    let status: u16 = status_line
-        .split_whitespace()
-        .nth(1)
-        .and_then(|s| s.parse().ok())
-        .ok_or_else(|| format!("bad status line `{}`", status_line))?;
-    let mut headers: Vec<(String, String)> = Vec::new();
-    for line in head.lines().skip(1) {
-        if let Some((name, value)) = line.split_once(':') {
-            headers.push((name.trim().to_lowercase(), value.trim().to_string()));
-        }
-    }
-    headers.sort();
-    Ok(Obs::Http { status, headers, body })
-}
-
-// ---------- checks ----------
-
-fn eval_check(check: &Check, obs: &Obs) -> CheckResult {
-    let matcher_word = match check.matcher {
-        Matcher::Is => "is",
-        Matcher::Contains => "contains",
-    };
-    let label = format!("{} {}", check.subject.label(), matcher_word);
-    let expected = match &check.expected {
-        Expected::S(s) => format!("\"{}\"", json::esc(s)),
-        Expected::N(n) => json::render_num(*n),
-    };
-    let (actual, ok) = match (&check.subject, obs) {
-        (Subject::Stdout, Obs::Proc { stdout, .. }) => cmp_text(stdout, check),
-        (Subject::Stderr, Obs::Proc { stderr, .. }) => cmp_text(stderr, check),
-        (Subject::Exit, Obs::Proc { exit, .. }) => cmp_num(f64::from(*exit), check),
-        (Subject::Status, Obs::Http { status, .. }) => cmp_num(f64::from(*status), check),
-        (Subject::Body, Obs::Http { body, .. }) => cmp_text(body, check),
-        (Subject::BodyJson(path), Obs::Http { body, .. }) => cmp_json(body, path, check),
-        (s, _) => (
-            format!("<{} is not observable after this `when`>", s.label()),
-            false,
-        ),
-    };
-    CheckResult { line: check.line, label, expected, actual, ok }
-}
-
-fn trim_one_newline(s: &str) -> &str {
-    s.strip_suffix('\n').unwrap_or(s)
-}
-
-fn short(s: &str) -> String {
-    let t: String = s.chars().take(160).collect();
-    if t.len() < s.len() {
-        format!("{}…", t)
-    } else {
-        t
-    }
-}
-
-fn cmp_text(actual_raw: &str, check: &Check) -> (String, bool) {
-    let trimmed = trim_one_newline(actual_raw);
-    let disp = format!("\"{}\"", json::esc(&short(trimmed)));
-    match (&check.matcher, &check.expected) {
-        (Matcher::Is, Expected::S(want)) => (disp, trimmed == want),
-        (Matcher::Is, Expected::N(n)) => (disp, trimmed == json::render_num(*n)),
-        (Matcher::Contains, Expected::S(want)) => (disp, actual_raw.contains(want)),
-        (Matcher::Contains, Expected::N(_)) => (disp, false), // rejected at parse
-    }
-}
-
-fn cmp_num(actual: f64, check: &Check) -> (String, bool) {
-    let disp = json::render_num(actual);
-    match &check.expected {
-        Expected::N(n) => ((disp), (actual - n).abs() < 1e-9),
-        Expected::S(_) => (disp, false), // rejected at parse
-    }
-}
-
-fn cmp_json(body: &str, path: &str, check: &Check) -> (String, bool) {
-    let parsed = match json::parse(body) {
-        Ok(v) => v,
-        Err(e) => return (format!("<body is not JSON: {}>", e), false),
-    };
-    let leaf = match json::path_get(&parsed, path) {
-        Ok(v) => v,
-        Err(e) => return (format!("<{}>", e), false),
-    };
-    let disp = short(&json::render(leaf));
-    let ok = match (&check.matcher, &check.expected, leaf) {
-        (Matcher::Is, Expected::S(want), J::Str(s)) => s == want,
-        (Matcher::Is, Expected::N(n), J::Num(m)) => (m - n).abs() < 1e-9,
-        (Matcher::Is, Expected::N(n), J::Str(s)) => s == &json::render_num(*n),
-        (Matcher::Contains, Expected::S(want), J::Str(s)) => s.contains(want),
-        _ => false,
-    };
-    (disp, ok)
 }

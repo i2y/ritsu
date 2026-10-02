@@ -1,0 +1,9 @@
+not ok 1 - answers（エラー）
+    エラー[E032]: exits/exits.geas:12:3: サービス `api` がポート 8123 を開く前に終了しました（終了コード 3）
+        12 |   when api.get("/")
+      = コマンド: python3 exits.py
+      = stderr: cannot listen: address already in use
+      ここまでの実行:
+          11  when hello.run()  →  exit 0, stdout "42"
+          12  when api.get("/")
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: exits/.geas/exits.journal.jsonl

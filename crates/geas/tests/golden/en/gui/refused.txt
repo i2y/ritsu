@@ -1,0 +1,9 @@
+not ok 1 - clicks what is not there (error)
+    error[E035]: g/refused.geas:7:3: `app` refused `click("nope")`: nothing to click named "nope"
+         7 |   when app.click("nope")
+      = the screen it was on: window "Greeter", text "Your name:", textbox "type here" value "Ada", button "greet", button "retry" disabled
+      = what it has to click: button "greet", button "retry" disabled
+      the run that gets there:
+           6  when app.input("Ada")  →  window "Greeter", text "Your name:", textbox "type here" value "Ada", button "greet", button "retry…
+           7  when app.click("nope")
+1 claim · 0 ok · 1 failed · journal: g/.geas/refused.journal.jsonl

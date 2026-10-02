@@ -1,0 +1,2 @@
+error[E013]: E013-field-zero.geas:6:32: `field:` counts from 1: the first is `field: 1`
+     6 |   when app.input("Ada", field: 0)

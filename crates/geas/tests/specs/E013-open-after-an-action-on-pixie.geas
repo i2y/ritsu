@@ -1,0 +1,9 @@
+target app {
+  pixie "build/greeter"
+}
+
+claim "greets" {
+  when app.input("Ada")
+  when app.open()
+  then screen contains textbox with value "Ada"
+}

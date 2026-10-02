@@ -1,0 +1,2 @@
+error[E004]: E004-run-and-serve.geas:3:3: the target `calc` has both `run` and `serve`; a target runs a command or serves, not both
+     3 |   serve "python3 server.py 8123"

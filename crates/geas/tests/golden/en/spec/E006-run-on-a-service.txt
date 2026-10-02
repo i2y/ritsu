@@ -1,0 +1,2 @@
+error[E006]: E006-run-on-a-service.geas:7:12: `api` is a service, so it takes `get` and `post`, and the actions on its page in a browser (open, click, input, submit, press, advance), not `run`
+     7 |   when api.run("2", "+", "3")

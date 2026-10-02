@@ -1,0 +1,2 @@
+error[E008]: E008-node-on-a-text.geas:7:24: `stdout` is a text, and a node is what a screen holds; to look for a part of the text, write it in quotes: `stdout contains "…"`
+     7 |   then stdout contains text "5"

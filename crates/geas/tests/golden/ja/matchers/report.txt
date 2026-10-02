@@ -1,0 +1,174 @@
+ok 1 - is holds
+not ok 2 - is fails
+    m/matchers.geas:31: stdout is "43" のはずが、実際は "42"
+        31 |   then stdout is "43"
+    m/matchers.geas:32: exit is 0 のはずが、実際は 3
+        32 |   and  exit is 0
+    m/matchers.geas:34: status is 201 のはずが、実際は 200
+        34 |   then status is 201
+    m/matchers.geas:35: header "x-version" is "1.2.4" のはずが、実際は "1.2.3"
+        35 |   and  header "x-version" is "1.2.4"
+    m/matchers.geas:36: header "etag" is "x" のはずが、実際は <ヘッダー "etag" はありません>
+        36 |   and  header "etag" is "x"
+    m/matchers.geas:37: body json ".total" is "12" のはずが、実際は 12
+        37 |   and  body json ".total" is "12"
+    m/matchers.geas:38: body json ".ok" is false のはずが、実際は true
+        38 |   and  body json ".ok" is false
+    m/matchers.geas:39: body json ".nope" is null のはずが、実際は <JSON のオブジェクトに `nope` というキーがありません>
+        39 |   and  body json ".nope" is null
+      ここまでの実行:
+          30  when echo.run("42", "warning", "3")  →  exit 3, stdout "42", stderr "warning"
+          33  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 3 - is not holds
+not ok 4 - is not fails
+    m/matchers.geas:54: stdout is not "42" のはずが、実際は "42"
+        54 |   then stdout is not "42"
+    m/matchers.geas:55: exit is not 3 のはずが、実際は 3
+        55 |   and  exit is not 3
+    m/matchers.geas:57: status is not 200 のはずが、実際は 200
+        57 |   then status is not 200
+    m/matchers.geas:58: header "etag" is not "x" のはずが、実際は <ヘッダー "etag" はありません>
+        58 |   and  header "etag" is not "x"
+    m/matchers.geas:59: body json ".ok" is not true のはずが、実際は true
+        59 |   and  body json ".ok" is not true
+      ここまでの実行:
+          53  when echo.run("42", "", "3")  →  exit 3, stdout "42"
+          56  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 5 - is above holds
+not ok 6 - is above fails
+    m/matchers.geas:75: stdout is above 1 のはずが、実際は "many"（数ではありません）
+        75 |   then stdout is above 1
+    m/matchers.geas:76: exit is above 3 のはずが、実際は 3
+        76 |   and  exit is above 3
+    m/matchers.geas:78: status is above 200 のはずが、実際は 200
+        78 |   then status is above 200
+    m/matchers.geas:79: body json ".total" is above 12 のはずが、実際は 12
+        79 |   and  body json ".total" is above 12
+    m/matchers.geas:80: body json ".message" is above 0 のはずが、実際は "Hello, Ada"（数ではありません）
+        80 |   and  body json ".message" is above 0
+      ここまでの実行:
+          74  when echo.run("many", "", "3")  →  exit 3, stdout "many"
+          77  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 7 - is below holds
+not ok 8 - is below fails
+    m/matchers.geas:94: stdout is below 42 のはずが、実際は "42"
+        94 |   then stdout is below 42
+    m/matchers.geas:95: exit is below 3 のはずが、実際は 3
+        95 |   and  exit is below 3
+    m/matchers.geas:97: status is below 200 のはずが、実際は 200
+        97 |   then status is below 200
+    m/matchers.geas:98: body json ".ratio" is below 0.5 のはずが、実際は 0.5
+        98 |   and  body json ".ratio" is below 0.5
+      ここまでの実行:
+          93  when echo.run("42", "", "3")  →  exit 3, stdout "42"
+          96  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 9 - is at least holds
+not ok 10 - is at least fails
+    m/matchers.geas:112: stdout is at least 43 のはずが、実際は "42"
+       112 |   then stdout is at least 43
+    m/matchers.geas:113: exit is at least 4 のはずが、実際は 3
+       113 |   and  exit is at least 4
+    m/matchers.geas:115: status is at least 201 のはずが、実際は 200
+       115 |   then status is at least 201
+    m/matchers.geas:116: body json ".total" is at least 13 のはずが、実際は 12
+       116 |   and  body json ".total" is at least 13
+      ここまでの実行:
+         111  when echo.run("42", "", "3")  →  exit 3, stdout "42"
+         114  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 11 - is at most holds
+not ok 12 - is at most fails
+    m/matchers.geas:130: stdout is at most 41 のはずが、実際は "42"
+       130 |   then stdout is at most 41
+    m/matchers.geas:131: exit is at most 2 のはずが、実際は 3
+       131 |   and  exit is at most 2
+    m/matchers.geas:133: status is at most 199 のはずが、実際は 200
+       133 |   then status is at most 199
+    m/matchers.geas:134: body json ".total" is at most 11 のはずが、実際は 12
+       134 |   and  body json ".total" is at most 11
+      ここまでの実行:
+         129  when echo.run("42", "", "3")  →  exit 3, stdout "42"
+         132  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 13 - is between holds
+not ok 14 - is between fails
+    m/matchers.geas:149: stdout is between 0 and 41 のはずが、実際は "42"
+       149 |   then stdout is between 0 and 41
+    m/matchers.geas:150: exit is between 4 and 9 のはずが、実際は 3
+       150 |   and  exit is between 4 and 9
+    m/matchers.geas:152: status is between 300 and 399 のはずが、実際は 200
+       152 |   then status is between 300 and 399
+    m/matchers.geas:153: header "etag" is between 0 and 1 のはずが、実際は <ヘッダー "etag" はありません>
+       153 |   and  header "etag" is between 0 and 1
+    m/matchers.geas:154: body json ".ratio" is between 0.6 and 1 のはずが、実際は 0.5
+       154 |   and  body json ".ratio" is between 0.6 and 1
+      ここまでの実行:
+         148  when echo.run("42", "", "3")  →  exit 3, stdout "42"
+         151  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 15 - contains holds
+not ok 16 - contains fails
+    m/matchers.geas:169: stdout contains "question" のはずが、実際は "the answer is 42"
+       169 |   then stdout contains "question"
+    m/matchers.geas:171: header "content-type" contains "xml" のはずが、実際は "application/json"
+       171 |   then header "content-type" contains "xml"
+    m/matchers.geas:172: body json ".message" contains "Bob" のはずが、実際は "Hello, Ada"
+       172 |   and  body json ".message" contains "Bob"
+    m/matchers.geas:173: body json ".tags" contains "x" のはずが、実際は ["x","y"]（文字列ではありません）
+       173 |   and  body json ".tags" contains "x"
+      ここまでの実行:
+         168  when echo.run("the answer is 42", "", "0")  →  exit 0, stdout "the answer is 42"
+         170  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 17 - does not contain holds
+not ok 18 - does not contain fails
+    m/matchers.geas:186: stdout does not contain "answer" のはずが、実際は "the answer is 42"
+       186 |   then stdout does not contain "answer"
+    m/matchers.geas:188: header "set-cookie" does not contain "a=" のはずが、実際は "a=1"
+       188 |   then header "set-cookie" does not contain "a="
+    m/matchers.geas:189: body json ".nope" does not contain "x" のはずが、実際は <JSON のオブジェクトに `nope` というキーがありません>
+       189 |   and  body json ".nope" does not contain "x"
+      ここまでの実行:
+         185  when echo.run("the answer is 42", "", "0")  →  exit 0, stdout "the answer is 42"
+         187  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 19 - matches holds
+not ok 20 - matches fails
+    m/matchers.geas:203: stdout matches "\d{4}-\d{2}-\d{2}" のはずが、実際は "2026-10-3"
+       203 |   then stdout matches "\d{4}-\d{2}-\d{2}"
+    m/matchers.geas:205: header "x-version" matches "\d+" のはずが、実際は "1.2.3"
+       205 |   then header "x-version" matches "\d+"
+    m/matchers.geas:206: body json ".total" matches "\d+" のはずが、実際は 12（文字列ではありません）
+       206 |   and  body json ".total" matches "\d+"
+      ここまでの実行:
+         202  when echo.run("2026-10-3", "", "0")  →  exit 0, stdout "2026-10-3"
+         204  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 21 - does not match holds
+not ok 22 - does not match fails
+    m/matchers.geas:219: stdout does not match "[0-9-]+" のはずが、実際は "2026-10-03"
+       219 |   then stdout does not match "[0-9-]+"
+    m/matchers.geas:221: body json ".id" does not match "a.*" のはずが、実際は "a1b2c3"
+       221 |   then body json ".id" does not match "a.*"
+    m/matchers.geas:222: header "etag" does not match "x" のはずが、実際は <ヘッダー "etag" はありません>
+       222 |   and  header "etag" does not match "x"
+      ここまでの実行:
+         218  when echo.run("2026-10-03", "", "0")  →  exit 0, stdout "2026-10-03"
+         220  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+ok 23 - exists holds
+not ok 24 - exists fails
+    m/matchers.geas:234: header "etag" exists のはずが、実際は <ヘッダー "etag" はありません>
+       234 |   then header "etag" exists
+    m/matchers.geas:235: body json ".tags[2]" exists のはずが、実際は <インデックス 2 の要素がありません>
+       235 |   and  body json ".tags[2]" exists
+    m/matchers.geas:237: body json ".message" exists のはずが、実際は <body が JSON ではありません>
+       237 |   then body json ".message" exists
+      ここまでの実行:
+         233  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+         236  when answer.get("/text")  →  200, body "Hello, Ada"
+ok 25 - does not exist holds
+not ok 26 - does not exist fails
+    m/matchers.geas:249: header "set-cookie" does not exist のはずが、実際は "a=1"
+       249 |   then header "set-cookie" does not exist
+    m/matchers.geas:250: body json ".missing" does not exist のはずが、実際は null
+       250 |   and  body json ".missing" does not exist
+    m/matchers.geas:252: body json ".error" does not exist のはずが、実際は <body が JSON ではありません>
+       252 |   then body json ".error" does not exist
+      ここまでの実行:
+         248  when answer.get("/")  →  200, body "{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"m…
+         251  when answer.get("/text")  →  200, body "Hello, Ada"
+主張 26 件 · 成り立った 13 件 · 成り立たなかった 13 件 · ジャーナル: m/.geas/matchers.journal.jsonl

@@ -1,0 +1,2 @@
+エラー[E008]: E008-pattern-not-in-quotes.geas:7:23: `matches` は文字列を、`"` で囲んだパターンと照らし合わせます（`matches "5"`）
+     7 |   then stdout matches 5

@@ -1,0 +1,2 @@
+error[E001]: E001-port-out-of-range.geas:3:8: `70000` is not a port; a port is a whole number from 1 to 65535
+     3 |   port 70000

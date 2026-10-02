@@ -1,0 +1,8 @@
+target calc {
+  run "python3 calc.py"
+}
+
+claim "adds" {
+  when calc.get("/add?a=2&b=3")
+  then status is 200
+}

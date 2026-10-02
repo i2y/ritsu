@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E002-post-argument.geas","diagnostics":[{"code":"E002","severity":"error","file":"E002-post-argument.geas","line":7,"col":25,"message":"`post` takes no argument named `data`; it takes the path and `body:`","notes":[],"path":[]}]}

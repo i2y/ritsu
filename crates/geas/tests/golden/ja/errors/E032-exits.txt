@@ -1,0 +1,9 @@
+not ok 1 - answers（エラー）
+    エラー[E032]: e032.geas:7:3: サービス `api` がポート 8123 を開く前に終了しました（終了コード 1）
+         7 |   when api.get("/")
+      = コマンド: python3 exits.py 8123
+      = stderr: starting on 8123
+      = stderr: OSError: [Errno 48] Address already in use
+      ここまでの実行:
+           7  when api.get("/")
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: .geas/e032.journal.jsonl

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E009-mask-path.geas","diagnostics":[{"code":"E009","severity":"error","file":"E009-mask-path.geas","line":6,"col":23,"message":"the JSON path does not read: expected `]` in JSON path","notes":["a path is written `.key`, `.a.b` or `.items[0].name`"],"path":[]}]}

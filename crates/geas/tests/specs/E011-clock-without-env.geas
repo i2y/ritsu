@@ -1,0 +1,15 @@
+# A top-level clock applies to every target.
+clock "2026-08-29T09:00:00+09:00"
+
+target calc {
+  run "python3 calc.py"
+}
+
+target report {
+  run "python3 report.py"
+}
+
+claim "adds" {
+  when calc.run("2", "+", "3")
+  then stdout is "5"
+}

@@ -1,0 +1,15 @@
+target app {
+  pixie "greeter"
+}
+
+claim "greets the wrong name" {
+  when app.input("Ada")
+  when app.click("greet")
+  then screen contains text "Hello, Bob!"
+}
+
+claim "clicks what is not there" {
+  when app.input("Ada")
+  when app.click("nope")
+  then screen contains text "Hello, Ada!"
+}

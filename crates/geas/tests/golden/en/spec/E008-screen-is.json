@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E008-screen-is.geas","diagnostics":[{"code":"E008","severity":"error","file":"E008-screen-is.geas","line":7,"col":15,"message":"`screen` is checked for the nodes it holds, with `contains` or `does not contain` and a node, not with `is`: `screen contains button \"greet\"`","notes":[],"path":[]}]}

@@ -1,0 +1,9 @@
+target app {
+  driver "python3 fake_driver.py greeter.json"
+}
+
+claim "keeps the driver running" {
+  when app.open()
+  when app.click("die")
+  then screen contains button "greet"
+}

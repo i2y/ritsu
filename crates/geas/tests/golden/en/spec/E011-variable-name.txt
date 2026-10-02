@@ -1,0 +1,2 @@
+error[E011]: E011-variable-name.geas:3:7: `MODE=fast` is not a variable's name: it is empty or holds `=`
+     3 |   env "MODE=fast" "1"

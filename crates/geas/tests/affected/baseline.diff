@@ -1,0 +1,7 @@
+diff --git a/.geas/shop.baseline.jsonl b/.geas/shop.baseline.jsonl
+index 352976e..e50e564 100644
+--- a/.geas/shop.baseline.jsonl
++++ b/.geas/shop.baseline.jsonl
+@@ -1 +1 @@
+-{"claim":"prints the sign","idx":0,"target":"sign","call":"run(\"corner shop\")","obs":{"kind":"proc","stdout":"Welcome to the corner shop\nOpen every day\n","stderr":"","exit":0}}
++{"claim":"prints the sign","idx":0,"target":"sign","call":"run(\"corner shop\")","obs":{"kind":"proc","stdout":"Welcome to the corner shop\nOpen every day but Sunday\n","stderr":"","exit":0}}

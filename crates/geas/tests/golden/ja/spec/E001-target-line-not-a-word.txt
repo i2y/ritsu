@@ -1,0 +1,2 @@
+エラー[E001]: E001-target-line-not-a-word.geas:2:3: `run`、`serve`、`pixie`、`driver`、`port`、`serial`、固定、`}` のどれかを書くところに `"python3 calc.py"` があります
+     2 |   "python3 calc.py"

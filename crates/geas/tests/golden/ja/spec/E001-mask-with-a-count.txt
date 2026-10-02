@@ -1,0 +1,2 @@
+エラー[E001]: E001-mask-with-a-count.geas:6:13: マスクはノードをドリフトから外すもので、数は書きません（`mask screen text "clock"`）
+     6 | mask screen exactly 2 text

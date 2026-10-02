@@ -1,0 +1,98 @@
+diff --git a/README.md b/README.md
+index 048613e..025d3f7 100644
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,4 @@
+ # The shop
+ 
+ A service that prices its stock, and a sign.
++Prices include tax.
+diff --git a/app.py b/app.py
+index 63d46ed..570f870 100644
+--- a/app.py
++++ b/app.py
+@@ -3,8 +3,8 @@ import json
+ import sys
+ from http.server import BaseHTTPRequestHandler, HTTPServer
+ 
+-import old
+-import stock
++import inventory
++import tax
+ 
+ 
+ class Handler(BaseHTTPRequestHandler):
+@@ -15,20 +15,21 @@ class Handler(BaseHTTPRequestHandler):
+         body = json.dumps(value).encode()
+         self.send_response(status)
+         self.send_header("Content-Type", "application/json")
+-        self.send_header("Content-Length", str(len(body)))
+         self.end_headers()
+         self.wfile.write(body)
+ 
+     def do_GET(self):
+         if self.path == "/items":
+-            self.send(200, {"items": stock.names()})
++            self.send(200, {"items": inventory.names()})
+         elif self.path.startswith("/price/"):
+             name = self.path[len("/price/"):]
+-            price = stock.price(name)
++            price = inventory.price(name)
+             if price is None:
+-                self.send(404, {"error": "no such item"})
++                self.send(404, {"error": f"no such item: {name}"})
+                 return
+-            self.send(200, {"price": old.with_tax(price)})
++            self.send(200, {"price": tax.with_tax(price)})
++        elif self.path == "/count":
++            self.send(200, {"count": len(inventory.names())})
+         else:
+             self.send(404, {"error": "not found"})
+ 
+diff --git a/stock.py b/inventory.py
+similarity index 73%
+rename from stock.py
+rename to inventory.py
+index 2cc26a8..9a995c4 100644
+--- a/stock.py
++++ b/inventory.py
+@@ -1,5 +1,5 @@
+ # What the shop has, and what each costs before tax.
+-ITEMS = {"apple": 120, "pear": 150}
++ITEMS = {"apple": 120, "pear": 150, "quince": 200}
+ 
+ 
+ def names():
+diff --git a/legacy.py b/legacy.py
+index 7c79b2c..6bd2b15 100644
+--- a/legacy.py
++++ b/legacy.py
+@@ -1,3 +1,3 @@
+ # Prices as they were before the shop kept a stock. Nothing imports this.
+ def price(name):
+-    return 100
++    return 90
+diff --git a/logo.png b/logo.png
+index 21099d2..82e8075 100644
+Binary files a/logo.png and b/logo.png differ
+diff --git a/old.py b/old.py
+deleted file mode 100644
+index 1404199..0000000
+--- a/old.py
++++ /dev/null
+@@ -1,3 +0,0 @@
+-# Tax, as the shop first added it.
+-def with_tax(price):
+-    return price * 110 // 100
+diff --git a/tax.py b/tax.py
+new file mode 100644
+index 0000000..a651075
+--- /dev/null
++++ b/tax.py
+@@ -0,0 +1,6 @@
++# Tax at ten percent, rounded down.
++RATE = 10
++
++
++def with_tax(price):
++    return price * (100 + RATE) // 100

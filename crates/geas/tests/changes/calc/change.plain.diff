@@ -1,0 +1,21 @@
+--- examples/calc/calc.py.orig	2026-10-03 01:02:02
++++ examples/calc/calc.py	2026-10-03 01:02:02
+@@ -4,15 +4,15 @@
+ x, y = int(a), int(b)
+ if op == "+":
+     print(x + y)
+-elif op == "-":
+-    print(x - y)
+ elif op == "*":
+     print(x * y)
+ elif op == "/":
+     if y == 0:
+-        print("division by zero", file=sys.stderr)
++        print("cannot divide: division by zero", file=sys.stderr)
+         sys.exit(1)
+     print(x // y)
++elif op == "**":
++    print(x ** y)
+ else:
+     print(f"unknown op: {op}", file=sys.stderr)
+     sys.exit(2)

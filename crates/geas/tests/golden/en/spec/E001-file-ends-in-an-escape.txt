@@ -1,0 +1,2 @@
+error[E001]: E001-file-ends-in-an-escape.geas:1:12: the file ends in the middle of an escape
+     1 | claim "adds\

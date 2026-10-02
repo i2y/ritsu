@@ -1,0 +1,2 @@
+error[E006]: E006-get-on-a-pixie-app.geas:6:12: `app` is a pixie app, so it takes the actions open, click, input, submit, press and advance, not `get`
+     6 |   when app.get("/")

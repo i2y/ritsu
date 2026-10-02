@@ -1,0 +1,2 @@
+error[E001]: E001-post-body-number.geas:7:31: expected the body, in quotes, found `5`
+     7 |   when api.post("/add", body: 5)

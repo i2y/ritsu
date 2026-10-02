@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-mask-body-not-json.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-mask-body-not-json.geas","line":1,"col":11,"message":"expected `json`, found `xml`","notes":[],"path":[]}]}

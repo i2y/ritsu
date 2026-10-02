@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E002-run-argument.geas","diagnostics":[{"code":"E002","severity":"error","file":"E002-run-argument.geas","line":6,"col":22,"message":"`run` takes no argument named `op`; its arguments are strings","notes":[],"path":[]}]}

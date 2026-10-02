@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E007-stdout-after-get.geas","diagnostics":[{"code":"E007","severity":"error","file":"E007-stdout-after-get.geas","line":8,"col":8,"message":"a `get` observes status, header, body and body json, not `stdout`","notes":["the `when` it reads is on line 7"],"path":[]}]}

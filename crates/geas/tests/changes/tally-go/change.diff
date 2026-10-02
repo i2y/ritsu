@@ -1,0 +1,27 @@
+diff --git a/examples/tally-go/main.go b/examples/tally-go/main.go
+index 8d599b8..8eb551c 100644
+--- a/examples/tally-go/main.go
++++ b/examples/tally-go/main.go
+@@ -24,7 +24,6 @@ type tally struct {
+ 
+ func send(w http.ResponseWriter, status int, value any) {
+ 	body, _ := json.Marshal(value)
+-	w.Header().Set("Cache-Control", "no-store")
+ 	w.Header().Set("Content-Type", "application/json")
+ 	w.WriteHeader(status)
+ 	w.Write(body)
+@@ -41,11 +40,13 @@ func (t *tally) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+ 		text := strings.TrimSpace(string(raw))
+ 		n, err := strconv.Atoi(text)
+ 		if err != nil {
+-			send(w, 400, map[string]string{"error": "not a number: " + text})
++			send(w, 400, map[string]string{"error": "not a whole number: " + text})
+ 			return
+ 		}
+ 		t.total += n
+ 		send(w, 200, map[string]int{"total": t.total})
++	case r.Method == http.MethodGet && r.URL.Path == "/health":
++		send(w, 200, map[string]bool{"ok": true})
+ 	case r.Method == http.MethodPost && r.URL.Path == "/reset":
+ 		t.total = 0
+ 		send(w, 200, map[string]int{"total": t.total})

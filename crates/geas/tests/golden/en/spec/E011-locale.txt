@@ -1,0 +1,2 @@
+error[E011]: E011-locale.geas:3:10: `ja_JP.UTF-8` is not a locale written as a language and a region; write `ja-JP`
+     3 |   locale "ja_JP.UTF-8"

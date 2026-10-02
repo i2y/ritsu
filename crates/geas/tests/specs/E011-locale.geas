@@ -1,0 +1,9 @@
+target report {
+  run "python3 report.py"
+  locale "ja_JP.UTF-8"
+}
+
+claim "prints in Japanese" {
+  when report.run()
+  then stdout contains "合計"
+}

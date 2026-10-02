@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E007-status-after-run.geas","diagnostics":[{"code":"E007","severity":"error","file":"E007-status-after-run.geas","line":7,"col":8,"message":"a `run` observes stdout, stderr and exit, not `status`","notes":["the `when` it reads is on line 6"],"path":[]}]}

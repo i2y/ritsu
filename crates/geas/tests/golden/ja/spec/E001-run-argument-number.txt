@@ -1,0 +1,2 @@
+エラー[E001]: E001-run-argument-number.geas:6:17: 文字列を書くところに `2` があります
+     6 |   when calc.run(2, "+", 3)

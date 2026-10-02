@@ -1,0 +1,43 @@
+# Claims for a small tally service, written in TypeScript and run by Node.
+# Each claim gets a fresh service, on a port of its own, so every claim
+# starts from zero.
+
+target tally {
+  serve "node server.ts {port}"
+  port auto
+}
+
+# The date a response is sent on is noise, not behavior.
+mask header "date"
+
+claim "starts at zero" {
+  when tally.get("/total")
+  then status is 200
+  and  body json ".total" is 0
+}
+
+claim "adds what it is given" {
+  when tally.post("/add", body: "5")
+  then body json ".total" is 5
+  when tally.post("/add", body: "7")
+  when tally.get("/total")
+  then body json ".total" is 12
+}
+
+claim "refuses what is not a number" {
+  when tally.post("/add", body: "five")
+  then status is 400
+  and  body json ".error" contains "five"
+}
+
+claim "reset goes back to zero" {
+  when tally.post("/add", body: "3")
+  when tally.post("/reset")
+  when tally.get("/total")
+  then body json ".total" is 0
+}
+
+claim "unknown paths are 404" {
+  when tally.get("/nope")
+  then status is 404
+}

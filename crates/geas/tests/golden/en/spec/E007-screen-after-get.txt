@@ -1,0 +1,3 @@
+error[E007]: E007-screen-after-get.geas:8:8: a `get` observes status, header, body and body json, not `screen`
+     8 |   then screen contains text "Hello, Ada"
+  = the `when` it reads is on line 7

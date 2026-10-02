@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E011-variable-name.geas","diagnostics":[{"code":"E011","severity":"error","file":"E011-variable-name.geas","line":3,"col":7,"message":"`MODE=fast` is not a variable's name: it is empty or holds `=`","notes":[],"path":[]}]}

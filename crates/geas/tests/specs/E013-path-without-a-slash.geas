@@ -1,0 +1,9 @@
+target web {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "shows the list" {
+  when web.open("list")
+  then screen contains heading "Shopping list"
+}

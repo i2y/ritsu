@@ -1,0 +1,23 @@
+diff --git a/examples/calc/calc.py b/examples/calc/calc.py
+index 7da9444..c8a7249 100644
+--- a/examples/calc/calc.py
++++ b/examples/calc/calc.py
+@@ -4,15 +4,15 @@ a, op, b = sys.argv[1], sys.argv[2], sys.argv[3]
+ x, y = int(a), int(b)
+ if op == "+":
+     print(x + y)
+-elif op == "-":
+-    print(x - y)
+ elif op == "*":
+     print(x * y)
+ elif op == "/":
+     if y == 0:
+-        print("division by zero", file=sys.stderr)
++        print("cannot divide: division by zero", file=sys.stderr)
+         sys.exit(1)
+     print(x // y)
++elif op == "**":
++    print(x ** y)
+ else:
+     print(f"unknown op: {op}", file=sys.stderr)
+     sys.exit(2)

@@ -1,0 +1,22 @@
+not ok 1 - clicks what is not there (error)
+    error[E035]: w/refused.geas:12:3: the page of `web` has no button, link, checkbox, radio, switch, tab, menu item or option named "nope"
+        12 |   when web.click("nope")
+      = the screen it was on: heading "Shopping list", form, text "Item", textbox "Item", button "Add", list "Items", button "Check later", button "Remind me", status, checkbox "I agree to the terms" unchecked, button "Order" dis…
+      = what it has to click: button "Add", button "Check later", button "Remind me", checkbox "I agree to the terms" unchecked, button "Order" disabled
+      the run that gets there:
+          11  when web.open("/")  →  heading "Shopping list", form, text "Item", textbox "Item", button "Add", list "Items", button "Che…
+          12  when web.click("nope")
+not ok 2 - types into a field that is not there (error)
+    error[E035]: w/refused.geas:18:3: the page of `web` has no text field that `input("milk", into: "Quantity")` names
+        18 |   when web.input("milk", into: "Quantity")
+      = the screen it was on: heading "Shopping list", form, text "Item", textbox "Item", button "Add", list "Items", button "Check later", button "Remind me", status, checkbox "I agree to the terms" unchecked, button "Order" dis…
+      = its text fields: textbox "Item"
+      the run that gets there:
+          17  when web.open("/")  →  heading "Shopping list", form, text "Item", textbox "Item", button "Add", list "Items", button "Che…
+          18  when web.input("milk", into: "Quantity")
+not ok 3 - a page that does not load (error)
+    error[E036]: w/refused.geas:23:3: the page `/broken` of `web` did not load: net::ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_LENGTH
+        23 |   when web.open("/broken")
+      the run that gets there:
+          23  when web.open("/broken")
+3 claims · 0 ok · 3 failed · journal: w/.geas/refused.journal.jsonl

@@ -1,0 +1,2 @@
+{"claim":"answers","event":"when","line":11,"target":"hello","call":"run()","obs":{"stdout":"42\n","stderr":"","exit":0}}
+{"claim":"answers","event":"error","line":12,"code":"E032","message":"the service `api` exited before opening port 8123 (exit 3)"}

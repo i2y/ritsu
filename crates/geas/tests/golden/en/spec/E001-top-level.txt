@@ -1,0 +1,2 @@
+error[E001]: E001-top-level.geas:5:1: expected `target`, `claim`, `mask` or a pin (`env`, `tz`, `locale`, `clock`, `seed`), found `when`
+     5 | when calc.run("2", "+", "3")

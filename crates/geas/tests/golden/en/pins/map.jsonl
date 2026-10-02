@@ -1,0 +1,5 @@
+{"geas_map":1,"spec":"pins.geas","root":".","claims":[{"name":"the pins outside any target reach every target","status":"ok","targets":["plain"]},{"name":"a target's own pins win over those outside","status":"ok","targets":["pinned"]},{"name":"env clean keeps PATH, what the pins set, and what is passed","status":"ok","targets":["clean"]}]}
+{"file":"env.py","blob":"9ddc165af739d049921c87e3426447efcf5da479","lang":"python","code":"4-5,7-12,14"}
+{"claim":"the pins outside any target reach every target","target":"plain","file":"env.py","ran":"4-5,7-8,11-12,14"}
+{"claim":"a target's own pins win over those outside","target":"pinned","file":"env.py","ran":"4-5,7-8,11-12"}
+{"claim":"env clean keeps PATH, what the pins set, and what is passed","target":"clean","file":"env.py","ran":"4-5,7-12,14"}

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E008-contains-a-number.geas","diagnostics":[{"code":"E008","severity":"error","file":"E008-contains-a-number.geas","line":7,"col":24,"message":"`contains` looks for a part of a text; write the value in quotes: `contains \"5\"`","notes":[],"path":[]}]}

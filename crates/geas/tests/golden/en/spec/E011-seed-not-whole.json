@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E011-seed-not-whole.geas","diagnostics":[{"code":"E011","severity":"error","file":"E011-seed-not-whole.geas","line":3,"col":8,"message":"`1.5` is not a seed; a seed is a whole number from 0","notes":[],"path":[]}]}

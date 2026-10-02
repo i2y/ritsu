@@ -1,0 +1,4 @@
+target calc {
+  run "python3 calc.py"
+  port 8123
+}

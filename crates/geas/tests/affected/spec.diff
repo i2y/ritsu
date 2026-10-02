@@ -1,0 +1,13 @@
+diff --git a/shop.geas b/shop.geas
+index a63a8cd..7c654a0 100644
+--- a/shop.geas
++++ b/shop.geas
+@@ -29,3 +29,8 @@ claim "prints the sign" {
+   when sign.run("corner shop")
+   then stdout contains "Welcome to the corner shop"
+ }
++
++claim "prints the hours" {
++  when sign.run()
++  then stdout contains "Open every day"
++}

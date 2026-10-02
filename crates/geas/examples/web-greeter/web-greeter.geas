@@ -1,0 +1,69 @@
+# Claims for the greeter's page, as a person sees it in a browser, and for the
+# service behind it. geas opens the page in a headless Chrome and reads what a
+# screen reader would be told: headings, fields, buttons and their states, text.
+# Each claim gets a fresh service and a fresh browser, so it starts with no names.
+
+target web {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+# The page writes the date, greets by the time of day and draws a fortune at
+# random. Fixed here, they read the same on every machine and in every run.
+locale "en-US"
+tz "Asia/Tokyo"
+clock "2026-08-29T09:00:00+09:00"
+seed 7
+
+# What Python's server says about itself and the hour is noise, not behavior.
+mask header "date"
+mask header "server"
+
+claim "the first screen asks for a name" {
+  when web.open("/")
+  then screen contains heading "Greeter"
+  and  screen contains text "Today is Saturday, August 29, 2026."
+  and  screen contains textbox "Your name"
+  and  screen contains button "Greet" disabled
+  and  screen contains exactly 0 listitem
+}
+
+claim "greets the name typed in, by the time of day" {
+  when web.open("/")
+  when web.input("Ada", into: "Your name")
+  then screen contains button "Greet" enabled
+  when web.click("Greet")
+  then screen contains text "Good morning, Ada!" in status
+  and  screen contains text "Ada" in list "Greeted"
+  and  screen contains textbox "Your name" with value ""
+}
+
+claim "draws a fortune" {
+  when web.open("/")
+  then screen contains text matching "Your fortune: .+"
+}
+
+claim "the service keeps the names the page greets" {
+  when web.open("/")
+  when web.input("Ada")
+  when web.submit()
+  when web.get("/api/greetings")
+  then status is 200
+  and  header "content-type" is "application/json"
+  and  body json ".names[0]" is "Ada"
+  and  body json ".names[1]" does not exist
+}
+
+claim "a name sent to the service shows on the page" {
+  when web.post("/api/greetings", body: "Grace")
+  then status is 201
+  when web.open("/")
+  then screen contains exactly 1 listitem
+  and  screen contains text "Grace" in list "Greeted"
+}
+
+claim "the service refuses an empty name" {
+  when web.post("/api/greetings", body: "  ")
+  then status is between 400 and 499
+  and  body json ".error" contains "name"
+}

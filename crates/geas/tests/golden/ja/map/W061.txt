@@ -1,0 +1,10 @@
+ok 1 - adds
+主張 1 件 · 成り立った 1 件 · 成り立たなかった 0 件 · ジャーナル: w061/.geas/w061.journal.jsonl
+記録: ファイル 1 件 · コード 0 行 · どれかの主張が通った行 0 行 → w061/.geas/w061.map.jsonl
+--- stderr
+警告[W061]: w061/w061.geas:6:3: `tally` が起動した Rust のプログラムがプロファイルを書きましたが、geas が直接起動したプログラムではないので、その実行は記録に入れていません
+     6 |   when tally.run("2", "3")
+  = コマンド: sh tally.sh 2 3
+  = llvm-cov には、プロファイルを書いたプログラムが要ります。geas が知っているのは自分で起動したプログラムだけです。-C instrument-coverage を付けてビルドしたプログラムを、`cargo run` やスクリプトを通さず、コマンドで直接起動してください（`run "./tally"`）
+  ここまでの実行:
+       6  when tally.run("2", "3")  →  exit 0, stdout "5"

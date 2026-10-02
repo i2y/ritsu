@@ -1,0 +1,3 @@
+error[E007]: E007-status-after-run.geas:7:8: a `run` observes stdout, stderr and exit, not `status`
+     7 |   then status is 200
+  = the `when` it reads is on line 6

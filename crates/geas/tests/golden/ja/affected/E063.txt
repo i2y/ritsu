@@ -1,0 +1,4 @@
+エラー[E063]: full.diff:20: 差分が app.py に行を足していますが、変更後のコードの記録がありません
+    20 | +import inventory
+  = 記録 .geas/shop.map.jsonl は変更前のコードのものです。変更後のコードでも記録を取り（`geas map shop.geas --out <after.jsonl>`）、`--map .geas/shop.map.jsonl --map <after.jsonl>` の形で両方を渡してください
+  = ほかに 3 件のファイルにも行を足しています: inventory.py、legacy.py、tax.py

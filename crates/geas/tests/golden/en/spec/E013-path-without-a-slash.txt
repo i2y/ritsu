@@ -1,0 +1,2 @@
+error[E013]: E013-path-without-a-slash.geas:7:17: a page's path starts with `/`: `open("/list")`
+     7 |   when web.open("list")

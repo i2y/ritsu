@@ -1,0 +1,23 @@
+diff: full.diff · record: .geas/shop.map.jsonl (the code after the change)
+claims the change touches:
+  1 - lists the items
+      app.py: 23
+  2 - prices an item with tax
+      app.py: 26,30
+      tax.py: 6
+  3 - does not price what it lacks
+      app.py: 26,28
+  every claim that starts `api`: 1, 2, 3
+      app.py: 6-7
+      app.py: removed 18 (next to lines they run)
+      inventory.py: 2
+      tax.py: 2,5
+changed code no claim runs:
+  app.py: 31-32
+  legacy.py: 3 (no runtime reported this file)
+deleted:
+  old.py (with no record of the code before the change, the claims that ran it are not known)
+outside the record:
+  README.md
+  logo.png
+4 claims · 3 touched · 3 changed lines no claim runs

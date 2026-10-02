@@ -1,0 +1,10 @@
+{"claim":"a file name with a space, in single quotes","event":"when","line":24,"target":"single","call":"run(\"2\", \"3\")","obs":{"stdout":"5\n","stderr":"","exit":0}}
+{"claim":"a file name with a space, in single quotes","event":"check","line":25,"check":"stdout is","expected":"\"5\"","actual":"\"5\"","ok":true}
+{"claim":"a file name with a space, in double quotes","event":"when","line":29,"target":"double","call":"run(\"2\", \"3\")","obs":{"stdout":"5\n","stderr":"","exit":0}}
+{"claim":"a file name with a space, in double quotes","event":"check","line":30,"check":"stdout is","expected":"\"5\"","actual":"\"5\"","ok":true}
+{"claim":"a file name with a space, after a backslash","event":"when","line":34,"target":"escaped","call":"run(\"2\", \"3\")","obs":{"stdout":"5\n","stderr":"","exit":0}}
+{"claim":"a file name with a space, after a backslash","event":"check","line":35,"check":"stdout is","expected":"\"5\"","actual":"\"5\"","ok":true}
+{"claim":"every word as it was written, and nothing expanded","event":"when","line":39,"target":"words","call":"run(\"g h\")","obs":{"stdout":"[\"\", \"a b\", \"c 'd'\", \"e'f\", \"$HOME\", \"~\", \"*.py\", \"g h\"]\n","stderr":"","exit":0}}
+{"claim":"every word as it was written, and nothing expanded","event":"check","line":40,"check":"stdout is","expected":"\"[\\\"\\\", \\\"a b\\\", \\\"c 'd'\\\", \\\"e'f\\\", \\\"$HOME\\\", \\\"~\\\", \\\"*.py\\\", \\\"g h\\\"]\"","actual":"\"[\\\"\\\", \\\"a b\\\", \\\"c 'd'\\\", \\\"e'f\\\", \\\"$HOME\\\", \\\"~\\\", \\\"*.py\\\", \\\"g h\\\"]\"","ok":true}
+{"claim":"a shell when one is named","event":"when","line":44,"target":"shell","call":"run()","obs":{"stdout":"first\nsecond\n","stderr":"","exit":0}}
+{"claim":"a shell when one is named","event":"check","line":45,"check":"stdout is","expected":"\"first\\nsecond\"","actual":"\"first\\nsecond\"","ok":true}

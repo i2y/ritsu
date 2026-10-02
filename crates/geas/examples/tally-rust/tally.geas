@@ -1,0 +1,29 @@
+# Claims for a small command-line tally, written in Rust. `geas map` needs it
+# built with coverage: rustc --edition 2024 -C instrument-coverage -o tally src/main.rs
+
+target tally {
+  run "./tally"
+}
+
+claim "adds its numbers" {
+  when tally.run("add", "5", "7")
+  then stdout is "12"
+  and  exit is 0
+}
+
+claim "adds nothing to zero" {
+  when tally.run("add")
+  then stdout is "0"
+}
+
+claim "refuses what is not a number" {
+  when tally.run("add", "5", "x")
+  then exit is 2
+  and  stderr contains "not a number: x"
+}
+
+claim "says how to use it" {
+  when tally.run()
+  then exit is 2
+  and  stderr contains "usage"
+}

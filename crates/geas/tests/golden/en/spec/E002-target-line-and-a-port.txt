@@ -1,0 +1,2 @@
+error[E002]: E002-target-line-and-a-port.geas:3:3: a target has no line `prot`; its lines are run, serve, pixie, driver, port, serial, and the pins env, tz, locale, clock and seed
+     3 |   prot 8123

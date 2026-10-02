@@ -1,0 +1,26 @@
+$ geas snap examples/greeter/greeter.geas
+4 claims · 4 ok · 0 failed · baseline: 7 interactions → examples/greeter/.geas/greeter.baseline.jsonl
+$ cp examples/greeter/server_refactored.py examples/greeter/server.py
+$ geas check examples/greeter/greeter.geas
+ok 1 - greets by name
+ok 2 - rejects an empty name
+ok 3 - totals accumulate across requests
+ok 4 - unknown paths are 404
+4 claims · 4 ok · 0 failed · journal: examples/greeter/.geas/greeter.journal.jsonl
+$ geas drift examples/greeter/greeter.geas
+claim "greets by name" when#1 api.get("/greet?name=Alice")
+  + body json ".debug": appeared: {"handler":"greet_v2"}   [unclaimed]
+claim "rejects an empty name" when#1 api.get("/greet?name=")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [unclaimed]
+claim "totals accumulate across requests" when#1 api.post("/reset")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [unclaimed]
+claim "totals accumulate across requests" when#2 api.post("/add", body: "5")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [unclaimed]
+claim "totals accumulate across requests" when#3 api.post("/add", body: "7")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [unclaimed]
+claim "unknown paths are 404" when#1 api.get("/nope")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [unclaimed]
+  ~ body: "not found" → "Not Found"   [unclaimed]
+drift: 7 interactions compared · 6 drifted · 7 unclaimed change(s) · 0 claimed
+$ echo $?
+1

@@ -1,0 +1,23 @@
+$ geas map examples/greeter/greeter.geas
+ok 1 - greets by name
+ok 2 - rejects an empty name
+ok 3 - totals accumulate across requests
+ok 4 - unknown paths are 404
+4 claims · 4 ok · 0 failed · journal: examples/greeter/.geas/greeter.journal.jsonl
+map: 2 files · 40 lines of code, 38 run by some claim → examples/greeter/.geas/greeter.map.jsonl
+$ git diff | geas affected examples/greeter/greeter.geas -
+diff: <stdin> · record: examples/greeter/.geas/greeter.map.jsonl (the code after the change)
+claims the change touches:
+  1 - greets by name
+      examples/greeter/server.py: 21
+  2 - rejects an empty name
+      examples/greeter/server.py: 21
+  4 - unknown paths are 404
+      examples/greeter/server.py: 29
+  every claim that starts `api`: 1, 2, 3, 4
+      examples/greeter/server.py: removed 10-11 (next to lines they run)
+changed code no claim runs:
+  examples/greeter/server.py: 30
+4 claims · 4 touched · 1 changed line no claim runs
+$ echo $?
+1

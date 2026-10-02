@@ -1,0 +1,2 @@
+error[E008]: E008-matches-a-number.geas:7:13: `exit` is a number, and `matches` holds a text to a pattern; compare it with `is` or `is between`
+     7 |   then exit matches "0"

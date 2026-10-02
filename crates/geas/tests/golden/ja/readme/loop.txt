@@ -1,0 +1,20 @@
+$ geas check examples/greeter/greeter.ja.geas --lang ja
+ok 1 - 名前で挨拶する
+not ok 2 - 空の名前は断る
+    examples/greeter/greeter.ja.geas:21: status is 400 のはずが、実際は 200
+        21 |   then status is 400
+      ここまでの実行:
+          20  when api.get("/greet?name=")  →  200, body "{\"message\": \"Hello, \"}"
+ok 3 - 足した数が積み上がる
+ok 4 - 知らないパスには 404 を返す
+主張 4 件 · 成り立った 3 件 · 成り立たなかった 1 件 · ジャーナル: examples/greeter/.geas/greeter.ja.journal.jsonl
+$ echo $?
+1
+$ geas check examples/greeter/greeter.ja.geas --lang ja
+ok 1 - 名前で挨拶する
+ok 2 - 空の名前は断る
+ok 3 - 足した数が積み上がる
+ok 4 - 知らないパスには 404 を返す
+主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: examples/greeter/.geas/greeter.ja.journal.jsonl
+$ echo $?
+0

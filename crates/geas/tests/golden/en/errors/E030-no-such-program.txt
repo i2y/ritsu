@@ -1,0 +1,7 @@
+not ok 1 - adds (error)
+    error[E030]: e030.geas:6:3: cannot start `geas-test-no-such-program`: No such file or directory (os error 2)
+         6 |   when calc.run("2", "+", "3")
+      = command: geas-test-no-such-program --flag 2 + 3
+      the run that gets there:
+           6  when calc.run("2", "+", "3")
+1 claim · 0 ok · 1 failed · journal: .geas/e030.journal.jsonl

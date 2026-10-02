@@ -1,0 +1,10 @@
+target web {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "adds an item" {
+  when web.input("milk")
+  when web.submit()
+  then screen contains listitem
+}

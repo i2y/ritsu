@@ -1,0 +1,19 @@
+ok 1 - greets the name typed in
+not ok 2 - greets the wrong name
+    g/greeter.geas:30: screen contains text "Hello, Bob!" のはずが、実際は当てはまるノードがありません
+        30 |   then screen contains text "Hello, Bob!"
+      画面:
+        window "Greeter"
+          text "Your name:"
+          textbox "type here" value "Ada"
+          button "greet"
+          text "Hello, Ada!"
+          button "retry"
+    g/greeter.geas:31: screen does not contain button "retry" のはずが、実際は当てはまるノードが 1 個あります
+        31 |   and  screen does not contain button "retry"
+      画面: 上と同じ
+      ここまでの実行:
+          28  when app.input("Ada")  →  window "Greeter", text "Your name:", textbox "type here" value "Ada", button "greet", button "retry…
+          29  when app.click("greet")  →  window "Greeter", text "Your name:", textbox "type here" value "Ada", button "greet", text "Hello, …
+ok 3 - a command between two actions
+主張 3 件 · 成り立った 2 件 · 成り立たなかった 1 件 · ジャーナル: g/.geas/greeter.journal.jsonl

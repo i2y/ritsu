@@ -1,0 +1,9 @@
+target app {
+  pixie "build/greeter"
+  driver "python3 driver.py"
+}
+
+claim "greets" {
+  when app.open()
+  then screen contains button "greet"
+}

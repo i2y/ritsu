@@ -1,0 +1,7 @@
+{"geas_map":1,"spec":"examples/tally-go/tally.geas","root":"../..","claims":[{"name":"starts at zero","status":"ok","targets":["tally"]},{"name":"adds what it is given","status":"ok","targets":["tally"]},{"name":"refuses what is not a number","status":"ok","targets":["tally"]},{"name":"reset goes back to zero","status":"ok","targets":["tally"]},{"name":"unknown paths are 404","status":"ok","targets":["tally"]}]}
+{"file":"examples/tally-go/main.go","blob":"8d599b8c6eee2c70cdc69b009ef342e97ac26727","lang":"go","code":"25-31,33-53,57-69,71-72"}
+{"claim":"starts at zero","target":"tally","file":"examples/tally-go/main.go","ran":"25-31,33-38,57-66,71-72"}
+{"claim":"adds what it is given","target":"tally","file":"examples/tally-go/main.go","ran":"25-31,33-43,47-48,57-66,71-72"}
+{"claim":"refuses what is not a number","target":"tally","file":"examples/tally-go/main.go","ran":"25-31,33-36,39-46,57-66,71-72"}
+{"claim":"reset goes back to zero","target":"tally","file":"examples/tally-go/main.go","ran":"25-31,33-43,47-51,57-66,71-72"}
+{"claim":"unknown paths are 404","target":"tally","file":"examples/tally-go/main.go","ran":"25-31,33-36,52-53,57-66,71-72"}

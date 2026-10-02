@@ -1,0 +1,2 @@
+error[E001]: E001-target-line-not-a-word.geas:2:3: expected `run`, `serve`, `pixie`, `driver`, `port`, `serial`, a pin or `}`, found `"python3 calc.py"`
+     2 |   "python3 calc.py"

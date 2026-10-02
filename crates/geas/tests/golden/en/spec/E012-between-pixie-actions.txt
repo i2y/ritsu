@@ -1,0 +1,4 @@
+error[E012]: E012-between-pixie-actions.geas:11:3: a `when` on `calc` comes between two actions on `app`, a pixie app; pixie runs a claim's actions on an app as one script, so the app is not running between them
+    11 |   when calc.run("2", "+", "3")
+  = the actions on `app` before and after it are on lines 10 and 13
+  = move this `when` before the first action on `app` or after the last

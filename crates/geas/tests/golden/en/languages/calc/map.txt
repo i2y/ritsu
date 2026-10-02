@@ -1,0 +1,6 @@
+ok 1 - adds two integers
+ok 2 - multiplies
+ok 3 - refuses division by zero
+ok 4 - rejects an unknown operator
+4 claims · 4 ok · 0 failed · journal: examples/calc/.geas/calc.journal.jsonl
+map: 1 file · 16 lines of code, 14 run by some claim → examples/calc/.geas/calc.map.jsonl

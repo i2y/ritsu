@@ -1,0 +1,8 @@
+target app {
+  driver "python3 driver.py"
+}
+
+claim "presses the second button" {
+  when app.click("save", nth: 1.5)
+  then screen contains text "saved"
+}

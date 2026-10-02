@@ -1,0 +1,2 @@
+エラー[E005]: E005-then-before-when.geas:6:3: `when` より前に `then` があります。チェックは直前の `when` の結果を見ます
+     6 |   then stdout is "5"

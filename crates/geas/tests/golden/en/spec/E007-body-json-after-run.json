@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E007-body-json-after-run.geas","diagnostics":[{"code":"E007","severity":"error","file":"E007-body-json-after-run.geas","line":7,"col":8,"message":"a `run` observes stdout, stderr and exit, not `body json`","notes":["the `when` it reads is on line 6"],"path":[]}]}

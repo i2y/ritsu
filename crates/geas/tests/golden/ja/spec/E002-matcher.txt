@@ -1,0 +1,2 @@
+エラー[E002]: E002-matcher.geas:7:15: `equals` という比べ方はありません。書けるのは is、is not、is above、is below、is at least、is at most、is between、contains、does not contain、matches、does not match、exists、does not exist です
+     7 |   then stdout equals "5"

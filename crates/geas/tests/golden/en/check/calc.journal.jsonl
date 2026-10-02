@@ -1,0 +1,11 @@
+{"claim":"adds two integers","event":"when","line":9,"target":"calc","call":"run(\"2\", \"+\", \"3\")","obs":{"stdout":"5\n","stderr":"","exit":0}}
+{"claim":"adds two integers","event":"check","line":10,"check":"stdout is","expected":"\"5\"","actual":"\"5\"","ok":true}
+{"claim":"adds two integers","event":"check","line":11,"check":"exit is","expected":"0","actual":"0","ok":true}
+{"claim":"multiplies","event":"when","line":15,"target":"calc","call":"run(\"6\", \"*\", \"7\")","obs":{"stdout":"42\n","stderr":"","exit":0}}
+{"claim":"multiplies","event":"check","line":16,"check":"stdout is","expected":"\"42\"","actual":"\"42\"","ok":true}
+{"claim":"refuses division by zero","event":"when","line":20,"target":"calc","call":"run(\"1\", \"/\", \"0\")","obs":{"stdout":"","stderr":"division by zero\n","exit":1}}
+{"claim":"refuses division by zero","event":"check","line":21,"check":"exit is","expected":"1","actual":"1","ok":true}
+{"claim":"refuses division by zero","event":"check","line":22,"check":"stderr contains","expected":"\"division by zero\"","actual":"\"division by zero\"","ok":true}
+{"claim":"rejects an unknown operator","event":"when","line":26,"target":"calc","call":"run(\"1\", \"%\", \"2\")","obs":{"stdout":"","stderr":"unknown op: %\n","exit":2}}
+{"claim":"rejects an unknown operator","event":"check","line":27,"check":"exit is","expected":"2","actual":"2","ok":true}
+{"claim":"rejects an unknown operator","event":"check","line":28,"check":"stderr contains","expected":"\"unknown op\"","actual":"\"unknown op: %\"","ok":true}

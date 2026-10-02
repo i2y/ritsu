@@ -1,0 +1,4 @@
+error[E063]: full.diff:20: the diff adds lines to app.py, and no record is of the code after the change
+    20 | +import inventory
+  = the record .geas/shop.map.jsonl is of the code before the change: record the changed code as well (`geas map shop.geas --out <after.jsonl>`) and give both, `--map .geas/shop.map.jsonl --map <after.jsonl>`
+  = it adds lines to 3 more file(s) as well: inventory.py, legacy.py, tax.py

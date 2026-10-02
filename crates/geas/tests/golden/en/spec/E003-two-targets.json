@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E003-two-targets.geas","diagnostics":[{"code":"E003","severity":"error","file":"E003-two-targets.geas","line":5,"col":8,"message":"a second target named `calc`","notes":["the first is on line 1"],"path":[]}]}

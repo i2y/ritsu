@@ -1,0 +1,9 @@
+target app {
+  pixie "build/greeter"
+}
+
+claim "greets" {
+  when app.input("Ada", into: "type here")
+  when app.click("greet")
+  then screen contains text "Hello, Ada!"
+}

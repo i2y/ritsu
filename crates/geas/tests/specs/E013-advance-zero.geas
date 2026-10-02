@@ -1,0 +1,8 @@
+target app {
+  driver "python3 driver.py"
+}
+
+claim "ticks" {
+  when app.advance(0)
+  then screen contains text "1 s"
+}

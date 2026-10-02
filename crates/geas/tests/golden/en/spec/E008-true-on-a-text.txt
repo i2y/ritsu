@@ -1,0 +1,2 @@
+error[E008]: E008-true-on-a-text.geas:7:18: `true` is a JSON value, and `stdout` is a text; to compare it with the word, write `stdout is "true"`
+     7 |   then stdout is true

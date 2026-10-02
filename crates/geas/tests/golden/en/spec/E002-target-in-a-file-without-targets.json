@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E002-target-in-a-file-without-targets.geas","diagnostics":[{"code":"E002","severity":"error","file":"E002-target-in-a-file-without-targets.geas","line":2,"col":8,"message":"there is no target `api`","notes":["this file declares no target"],"path":[]}]}

@@ -1,0 +1,37 @@
+# Claims for pixie's greeter, a desktop app: a field for a name, a button that
+# greets it, and a second field for a note. geas starts the app headless for each
+# claim, replays the claim's actions as one script, and reads what a screen reader
+# would be told after each action. The app is `greeter` beside this file; the
+# README says how to build it.
+
+target app {
+  pixie "greeter"
+}
+
+claim "asks for a name" {
+  when app.open()
+  then screen contains text "Your name:"
+  and  screen contains textbox "type here"
+  and  screen contains button "greet"
+  and  screen does not contain text containing "Hello"
+}
+
+claim "greets the name typed in" {
+  when app.input("Ada")
+  then screen contains text "name: Ada"
+  when app.click("greet")
+  then screen contains text "Hello, Ada!"
+}
+
+claim "greets on Enter too" {
+  when app.input("Grace")
+  when app.submit()
+  then screen contains text "Hello, Grace!"
+}
+
+claim "the note is a field of its own" {
+  when app.input("milk", field: 2)
+  then screen contains text "note: milk"
+  and  screen contains text "name: "
+  and  screen contains exactly 2 textbox
+}

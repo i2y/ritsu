@@ -1,0 +1,3 @@
+error[E009]: E009-pattern-anchor.geas:7:24: the pattern does not parse: a pattern always matches the whole value, so it takes no `^`; write `\^` for the character
+     7 |   then stdout matches "^5$"
+  = a pattern takes literals, `.`, classes such as `[a-z]` and `[^0-9]`, `\d`, `\w`, `\s` and their capitals, groups, `|`, `*`, `+`, `?`, `{n}`, `{n,}` and `{n,m}`, and matches the whole value

@@ -1,0 +1,162 @@
+{"claim":"is holds","event":"when","line":16,"target":"echo","call":"run(\"42\", \"warning\", \"3\")","obs":{"stdout":"42\n","stderr":"warning\n","exit":3}}
+{"claim":"is holds","event":"check","line":17,"check":"stdout is","expected":"\"42\"","actual":"\"42\"","ok":true}
+{"claim":"is holds","event":"check","line":18,"check":"stderr is","expected":"\"warning\"","actual":"\"warning\"","ok":true}
+{"claim":"is holds","event":"check","line":19,"check":"exit is","expected":"3","actual":"3","ok":true}
+{"claim":"is holds","event":"when","line":20,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is holds","event":"check","line":21,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"is holds","event":"check","line":22,"check":"header \"x-version\" is","expected":"\"1.2.3\"","actual":"\"1.2.3\"","ok":true}
+{"claim":"is holds","event":"check","line":23,"check":"body json \".total\" is","expected":"12","actual":"12","ok":true}
+{"claim":"is holds","event":"check","line":24,"check":"body json \".count\" is","expected":"\"42\"","actual":"\"42\"","ok":true}
+{"claim":"is holds","event":"check","line":25,"check":"body json \".ok\" is","expected":"true","actual":"true","ok":true}
+{"claim":"is holds","event":"check","line":26,"check":"body json \".missing\" is","expected":"null","actual":"null","ok":true}
+{"claim":"is fails","event":"when","line":30,"target":"echo","call":"run(\"42\", \"warning\", \"3\")","obs":{"stdout":"42\n","stderr":"warning\n","exit":3}}
+{"claim":"is fails","event":"check","line":31,"check":"stdout is","expected":"\"43\"","actual":"\"42\"","ok":false}
+{"claim":"is fails","event":"check","line":32,"check":"exit is","expected":"0","actual":"3","ok":false}
+{"claim":"is fails","event":"when","line":33,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is fails","event":"check","line":34,"check":"status is","expected":"201","actual":"200","ok":false}
+{"claim":"is fails","event":"check","line":35,"check":"header \"x-version\" is","expected":"\"1.2.4\"","actual":"\"1.2.3\"","ok":false}
+{"claim":"is fails","event":"check","line":36,"check":"header \"etag\" is","expected":"\"x\"","actual":"<no header \"etag\">","ok":false}
+{"claim":"is fails","event":"check","line":37,"check":"body json \".total\" is","expected":"\"12\"","actual":"12","ok":false}
+{"claim":"is fails","event":"check","line":38,"check":"body json \".ok\" is","expected":"false","actual":"true","ok":false}
+{"claim":"is fails","event":"check","line":39,"check":"body json \".nope\" is","expected":"null","actual":"<no key `nope` in JSON object>","ok":false}
+{"claim":"is not holds","event":"when","line":43,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is not holds","event":"check","line":44,"check":"stdout is not","expected":"\"43\"","actual":"\"42\"","ok":true}
+{"claim":"is not holds","event":"check","line":45,"check":"exit is not","expected":"0","actual":"3","ok":true}
+{"claim":"is not holds","event":"when","line":46,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is not holds","event":"check","line":47,"check":"status is not","expected":"500","actual":"200","ok":true}
+{"claim":"is not holds","event":"check","line":48,"check":"header \"x-version\" is not","expected":"\"1.2.4\"","actual":"\"1.2.3\"","ok":true}
+{"claim":"is not holds","event":"check","line":49,"check":"body json \".ok\" is not","expected":"false","actual":"true","ok":true}
+{"claim":"is not fails","event":"when","line":53,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is not fails","event":"check","line":54,"check":"stdout is not","expected":"\"42\"","actual":"\"42\"","ok":false}
+{"claim":"is not fails","event":"check","line":55,"check":"exit is not","expected":"3","actual":"3","ok":false}
+{"claim":"is not fails","event":"when","line":56,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is not fails","event":"check","line":57,"check":"status is not","expected":"200","actual":"200","ok":false}
+{"claim":"is not fails","event":"check","line":58,"check":"header \"etag\" is not","expected":"\"x\"","actual":"<no header \"etag\">","ok":false}
+{"claim":"is not fails","event":"check","line":59,"check":"body json \".ok\" is not","expected":"true","actual":"true","ok":false}
+{"claim":"is above holds","event":"when","line":63,"target":"echo","call":"run(\" 42 \", \"\", \"3\")","obs":{"stdout":" 42 \n","stderr":"","exit":3}}
+{"claim":"is above holds","event":"check","line":64,"check":"stdout is above","expected":"41.5","actual":"\" 42 \"","ok":true}
+{"claim":"is above holds","event":"check","line":65,"check":"exit is above","expected":"2","actual":"3","ok":true}
+{"claim":"is above holds","event":"when","line":66,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is above holds","event":"check","line":67,"check":"status is above","expected":"199","actual":"200","ok":true}
+{"claim":"is above holds","event":"check","line":68,"check":"header \"x-count\" is above","expected":"41","actual":"\"42\"","ok":true}
+{"claim":"is above holds","event":"check","line":69,"check":"body json \".ratio\" is above","expected":"0.25","actual":"0.5","ok":true}
+{"claim":"is above holds","event":"check","line":70,"check":"body json \".count\" is above","expected":"41","actual":"\"42\"","ok":true}
+{"claim":"is above fails","event":"when","line":74,"target":"echo","call":"run(\"many\", \"\", \"3\")","obs":{"stdout":"many\n","stderr":"","exit":3}}
+{"claim":"is above fails","event":"check","line":75,"check":"stdout is above","expected":"1","actual":"\"many\" (not a number)","ok":false}
+{"claim":"is above fails","event":"check","line":76,"check":"exit is above","expected":"3","actual":"3","ok":false}
+{"claim":"is above fails","event":"when","line":77,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is above fails","event":"check","line":78,"check":"status is above","expected":"200","actual":"200","ok":false}
+{"claim":"is above fails","event":"check","line":79,"check":"body json \".total\" is above","expected":"12","actual":"12","ok":false}
+{"claim":"is above fails","event":"check","line":80,"check":"body json \".message\" is above","expected":"0","actual":"\"Hello, Ada\" (not a number)","ok":false}
+{"claim":"is below holds","event":"when","line":84,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is below holds","event":"check","line":85,"check":"stdout is below","expected":"43","actual":"\"42\"","ok":true}
+{"claim":"is below holds","event":"check","line":86,"check":"exit is below","expected":"4","actual":"3","ok":true}
+{"claim":"is below holds","event":"when","line":87,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is below holds","event":"check","line":88,"check":"status is below","expected":"300","actual":"200","ok":true}
+{"claim":"is below holds","event":"check","line":89,"check":"body json \".ratio\" is below","expected":"1","actual":"0.5","ok":true}
+{"claim":"is below fails","event":"when","line":93,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is below fails","event":"check","line":94,"check":"stdout is below","expected":"42","actual":"\"42\"","ok":false}
+{"claim":"is below fails","event":"check","line":95,"check":"exit is below","expected":"3","actual":"3","ok":false}
+{"claim":"is below fails","event":"when","line":96,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is below fails","event":"check","line":97,"check":"status is below","expected":"200","actual":"200","ok":false}
+{"claim":"is below fails","event":"check","line":98,"check":"body json \".ratio\" is below","expected":"0.5","actual":"0.5","ok":false}
+{"claim":"is at least holds","event":"when","line":102,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is at least holds","event":"check","line":103,"check":"stdout is at least","expected":"42","actual":"\"42\"","ok":true}
+{"claim":"is at least holds","event":"check","line":104,"check":"exit is at least","expected":"3","actual":"3","ok":true}
+{"claim":"is at least holds","event":"when","line":105,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is at least holds","event":"check","line":106,"check":"status is at least","expected":"200","actual":"200","ok":true}
+{"claim":"is at least holds","event":"check","line":107,"check":"body json \".total\" is at least","expected":"12","actual":"12","ok":true}
+{"claim":"is at least fails","event":"when","line":111,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is at least fails","event":"check","line":112,"check":"stdout is at least","expected":"43","actual":"\"42\"","ok":false}
+{"claim":"is at least fails","event":"check","line":113,"check":"exit is at least","expected":"4","actual":"3","ok":false}
+{"claim":"is at least fails","event":"when","line":114,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is at least fails","event":"check","line":115,"check":"status is at least","expected":"201","actual":"200","ok":false}
+{"claim":"is at least fails","event":"check","line":116,"check":"body json \".total\" is at least","expected":"13","actual":"12","ok":false}
+{"claim":"is at most holds","event":"when","line":120,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is at most holds","event":"check","line":121,"check":"stdout is at most","expected":"42","actual":"\"42\"","ok":true}
+{"claim":"is at most holds","event":"check","line":122,"check":"exit is at most","expected":"3","actual":"3","ok":true}
+{"claim":"is at most holds","event":"when","line":123,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is at most holds","event":"check","line":124,"check":"status is at most","expected":"200","actual":"200","ok":true}
+{"claim":"is at most holds","event":"check","line":125,"check":"body json \".total\" is at most","expected":"12","actual":"12","ok":true}
+{"claim":"is at most fails","event":"when","line":129,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is at most fails","event":"check","line":130,"check":"stdout is at most","expected":"41","actual":"\"42\"","ok":false}
+{"claim":"is at most fails","event":"check","line":131,"check":"exit is at most","expected":"2","actual":"3","ok":false}
+{"claim":"is at most fails","event":"when","line":132,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is at most fails","event":"check","line":133,"check":"status is at most","expected":"199","actual":"200","ok":false}
+{"claim":"is at most fails","event":"check","line":134,"check":"body json \".total\" is at most","expected":"11","actual":"12","ok":false}
+{"claim":"is between holds","event":"when","line":138,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is between holds","event":"check","line":139,"check":"stdout is between","expected":"42 and 43","actual":"\"42\"","ok":true}
+{"claim":"is between holds","event":"check","line":140,"check":"exit is between","expected":"1 and 3","actual":"3","ok":true}
+{"claim":"is between holds","event":"when","line":141,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is between holds","event":"check","line":142,"check":"status is between","expected":"200 and 299","actual":"200","ok":true}
+{"claim":"is between holds","event":"check","line":143,"check":"header \"x-count\" is between","expected":"40 and 50","actual":"\"42\"","ok":true}
+{"claim":"is between holds","event":"check","line":144,"check":"body json \".ratio\" is between","expected":"0 and 1","actual":"0.5","ok":true}
+{"claim":"is between fails","event":"when","line":148,"target":"echo","call":"run(\"42\", \"\", \"3\")","obs":{"stdout":"42\n","stderr":"","exit":3}}
+{"claim":"is between fails","event":"check","line":149,"check":"stdout is between","expected":"0 and 41","actual":"\"42\"","ok":false}
+{"claim":"is between fails","event":"check","line":150,"check":"exit is between","expected":"4 and 9","actual":"3","ok":false}
+{"claim":"is between fails","event":"when","line":151,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"is between fails","event":"check","line":152,"check":"status is between","expected":"300 and 399","actual":"200","ok":false}
+{"claim":"is between fails","event":"check","line":153,"check":"header \"etag\" is between","expected":"0 and 1","actual":"<no header \"etag\">","ok":false}
+{"claim":"is between fails","event":"check","line":154,"check":"body json \".ratio\" is between","expected":"0.6 and 1","actual":"0.5","ok":false}
+{"claim":"contains holds","event":"when","line":158,"target":"echo","call":"run(\"the answer is 42\", \"warning: deprecated\", \"0\")","obs":{"stdout":"the answer is 42\n","stderr":"warning: deprecated\n","exit":0}}
+{"claim":"contains holds","event":"check","line":159,"check":"stdout contains","expected":"\"answer\"","actual":"\"the answer is 42\"","ok":true}
+{"claim":"contains holds","event":"check","line":160,"check":"stderr contains","expected":"\"deprecated\"","actual":"\"warning: deprecated\"","ok":true}
+{"claim":"contains holds","event":"when","line":161,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"contains holds","event":"check","line":162,"check":"body contains","expected":"\"Hello\"","actual":"\"{\\\"id\\\": \\\"a1b2c3\\\", \\\"total\\\": 12, \\\"ratio\\\": 0.5, \\\"count\\\": \\\"42\\\", \\\"ok\\\": true, \\\"missing\\\": null, \\\"tags\\\": [\\\"x\\\", \\\"y\\\"], \\\"message\\\": \\\"Hello, Ada\\\"}\"","ok":true}
+{"claim":"contains holds","event":"check","line":163,"check":"header \"content-type\" contains","expected":"\"json\"","actual":"\"application/json\"","ok":true}
+{"claim":"contains holds","event":"check","line":164,"check":"body json \".message\" contains","expected":"\"Ada\"","actual":"\"Hello, Ada\"","ok":true}
+{"claim":"contains fails","event":"when","line":168,"target":"echo","call":"run(\"the answer is 42\", \"\", \"0\")","obs":{"stdout":"the answer is 42\n","stderr":"","exit":0}}
+{"claim":"contains fails","event":"check","line":169,"check":"stdout contains","expected":"\"question\"","actual":"\"the answer is 42\"","ok":false}
+{"claim":"contains fails","event":"when","line":170,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"contains fails","event":"check","line":171,"check":"header \"content-type\" contains","expected":"\"xml\"","actual":"\"application/json\"","ok":false}
+{"claim":"contains fails","event":"check","line":172,"check":"body json \".message\" contains","expected":"\"Bob\"","actual":"\"Hello, Ada\"","ok":false}
+{"claim":"contains fails","event":"check","line":173,"check":"body json \".tags\" contains","expected":"\"x\"","actual":"[\"x\",\"y\"] (not a string)","ok":false}
+{"claim":"does not contain holds","event":"when","line":177,"target":"echo","call":"run(\"the answer is 42\", \"\", \"0\")","obs":{"stdout":"the answer is 42\n","stderr":"","exit":0}}
+{"claim":"does not contain holds","event":"check","line":178,"check":"stdout does not contain","expected":"\"question\"","actual":"\"the answer is 42\"","ok":true}
+{"claim":"does not contain holds","event":"when","line":179,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"does not contain holds","event":"check","line":180,"check":"header \"content-type\" does not contain","expected":"\"xml\"","actual":"\"application/json\"","ok":true}
+{"claim":"does not contain holds","event":"check","line":181,"check":"body json \".message\" does not contain","expected":"\"Bob\"","actual":"\"Hello, Ada\"","ok":true}
+{"claim":"does not contain fails","event":"when","line":185,"target":"echo","call":"run(\"the answer is 42\", \"\", \"0\")","obs":{"stdout":"the answer is 42\n","stderr":"","exit":0}}
+{"claim":"does not contain fails","event":"check","line":186,"check":"stdout does not contain","expected":"\"answer\"","actual":"\"the answer is 42\"","ok":false}
+{"claim":"does not contain fails","event":"when","line":187,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"does not contain fails","event":"check","line":188,"check":"header \"set-cookie\" does not contain","expected":"\"a=\"","actual":"\"a=1\"","ok":false}
+{"claim":"does not contain fails","event":"check","line":189,"check":"body json \".nope\" does not contain","expected":"\"x\"","actual":"<no key `nope` in JSON object>","ok":false}
+{"claim":"matches holds","event":"when","line":193,"target":"echo","call":"run(\"2026-10-03\", \"\", \"0\")","obs":{"stdout":"2026-10-03\n","stderr":"","exit":0}}
+{"claim":"matches holds","event":"check","line":194,"check":"stdout matches","expected":"\"\\d{4}-\\d{2}-\\d{2}\"","actual":"\"2026-10-03\"","ok":true}
+{"claim":"matches holds","event":"when","line":195,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"matches holds","event":"check","line":196,"check":"header \"x-version\" matches","expected":"\"\\d+\\.\\d+\\.\\d+\"","actual":"\"1.2.3\"","ok":true}
+{"claim":"matches holds","event":"check","line":197,"check":"body json \".id\" matches","expected":"\"[a-f0-9]{6}\"","actual":"\"a1b2c3\"","ok":true}
+{"claim":"matches holds","event":"check","line":198,"check":"body matches","expected":"\".*\\\"ok\\\": true.*\"","actual":"\"{\\\"id\\\": \\\"a1b2c3\\\", \\\"total\\\": 12, \\\"ratio\\\": 0.5, \\\"count\\\": \\\"42\\\", \\\"ok\\\": true, \\\"missing\\\": null, \\\"tags\\\": [\\\"x\\\", \\\"y\\\"], \\\"message\\\": \\\"Hello, Ada\\\"}\"","ok":true}
+{"claim":"matches fails","event":"when","line":202,"target":"echo","call":"run(\"2026-10-3\", \"\", \"0\")","obs":{"stdout":"2026-10-3\n","stderr":"","exit":0}}
+{"claim":"matches fails","event":"check","line":203,"check":"stdout matches","expected":"\"\\d{4}-\\d{2}-\\d{2}\"","actual":"\"2026-10-3\"","ok":false}
+{"claim":"matches fails","event":"when","line":204,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"matches fails","event":"check","line":205,"check":"header \"x-version\" matches","expected":"\"\\d+\"","actual":"\"1.2.3\"","ok":false}
+{"claim":"matches fails","event":"check","line":206,"check":"body json \".total\" matches","expected":"\"\\d+\"","actual":"12 (not a string)","ok":false}
+{"claim":"does not match holds","event":"when","line":210,"target":"echo","call":"run(\"2026-10-3\", \"\", \"0\")","obs":{"stdout":"2026-10-3\n","stderr":"","exit":0}}
+{"claim":"does not match holds","event":"check","line":211,"check":"stdout does not match","expected":"\"\\d{4}-\\d{2}-\\d{2}\"","actual":"\"2026-10-3\"","ok":true}
+{"claim":"does not match holds","event":"when","line":212,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"does not match holds","event":"check","line":213,"check":"header \"x-version\" does not match","expected":"\"\\d+\"","actual":"\"1.2.3\"","ok":true}
+{"claim":"does not match holds","event":"check","line":214,"check":"body json \".id\" does not match","expected":"\"[0-9]+\"","actual":"\"a1b2c3\"","ok":true}
+{"claim":"does not match fails","event":"when","line":218,"target":"echo","call":"run(\"2026-10-03\", \"\", \"0\")","obs":{"stdout":"2026-10-03\n","stderr":"","exit":0}}
+{"claim":"does not match fails","event":"check","line":219,"check":"stdout does not match","expected":"\"[0-9-]+\"","actual":"\"2026-10-03\"","ok":false}
+{"claim":"does not match fails","event":"when","line":220,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"does not match fails","event":"check","line":221,"check":"body json \".id\" does not match","expected":"\"a.*\"","actual":"\"a1b2c3\"","ok":false}
+{"claim":"does not match fails","event":"check","line":222,"check":"header \"etag\" does not match","expected":"\"x\"","actual":"<no header \"etag\">","ok":false}
+{"claim":"exists holds","event":"when","line":226,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"exists holds","event":"check","line":227,"check":"header \"set-cookie\" exists","expected":"","actual":"\"a=1\"","ok":true}
+{"claim":"exists holds","event":"check","line":228,"check":"body json \".tags[1]\" exists","expected":"","actual":"\"y\"","ok":true}
+{"claim":"exists holds","event":"check","line":229,"check":"body json \".missing\" exists","expected":"","actual":"null","ok":true}
+{"claim":"exists fails","event":"when","line":233,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"exists fails","event":"check","line":234,"check":"header \"etag\" exists","expected":"","actual":"<no header \"etag\">","ok":false}
+{"claim":"exists fails","event":"check","line":235,"check":"body json \".tags[2]\" exists","expected":"","actual":"<index 2 out of range>","ok":false}
+{"claim":"exists fails","event":"when","line":236,"target":"answer","call":"get(\"/text\")","obs":{"status":200,"headers":{"content-length":"11","content-type":"text/plain"},"body":"Hello, Ada\n"}}
+{"claim":"exists fails","event":"check","line":237,"check":"body json \".message\" exists","expected":"","actual":"<body is not JSON: unexpected character `H` in JSON>","ok":false}
+{"claim":"does not exist holds","event":"when","line":241,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"does not exist holds","event":"check","line":242,"check":"header \"etag\" does not exist","expected":"","actual":"<no header \"etag\">","ok":true}
+{"claim":"does not exist holds","event":"check","line":243,"check":"body json \".error\" does not exist","expected":"","actual":"<no key `error` in JSON object>","ok":true}
+{"claim":"does not exist holds","event":"check","line":244,"check":"body json \".tags[2]\" does not exist","expected":"","actual":"<index 2 out of range>","ok":true}
+{"claim":"does not exist fails","event":"when","line":248,"target":"answer","call":"get(\"/\")","obs":{"status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}
+{"claim":"does not exist fails","event":"check","line":249,"check":"header \"set-cookie\" does not exist","expected":"","actual":"\"a=1\"","ok":false}
+{"claim":"does not exist fails","event":"check","line":250,"check":"body json \".missing\" does not exist","expected":"","actual":"null","ok":false}
+{"claim":"does not exist fails","event":"when","line":251,"target":"answer","call":"get(\"/text\")","obs":{"status":200,"headers":{"content-length":"11","content-type":"text/plain"},"body":"Hello, Ada\n"}}
+{"claim":"does not exist fails","event":"check","line":252,"check":"body json \".error\" does not exist","expected":"","actual":"<body is not JSON: unexpected character `H` in JSON>","ok":false}

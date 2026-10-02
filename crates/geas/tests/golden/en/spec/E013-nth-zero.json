@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E013-nth-zero.geas","diagnostics":[{"code":"E013","severity":"error","file":"E013-nth-zero.geas","line":6,"col":31,"message":"`nth:` counts from 1: the first is `nth: 1`","notes":[],"path":[]}]}

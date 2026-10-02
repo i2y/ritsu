@@ -1,196 +1,782 @@
+mod affected;
+mod cdp;
+mod check;
+mod codes;
+mod cover;
+mod diag;
+mod diff;
 mod drift;
+mod driver;
+mod gui;
+mod hash;
+mod http;
 mod json;
 mod lex;
+mod lines;
+mod map;
 mod model;
 mod parse;
+mod pins;
+mod pixie;
+mod proc;
+mod regex;
+mod screen;
+mod report;
 mod run;
+mod sched;
+mod skill;
+mod tree;
+mod words;
+mod ws;
 
-use run::{ClaimResult, ClaimStatus};
-use std::path::Path;
-use std::process::exit;
+use diag::{t, Diag, Lang};
+use run::ClaimStatus;
+use std::io::Write as _;
+use std::path::{Path, PathBuf};
 
-fn print_claim_failures(results: &[ClaimResult], file: &str) {
-    for (i, r) in results.iter().enumerate() {
-        match &r.status {
-            ClaimStatus::Ok => {}
-            ClaimStatus::Fail => {
-                println!("not ok {} - {}", i + 1, r.name);
-                for c in r.checks.iter().filter(|c| !c.ok) {
-                    println!(
-                        "    {}:{}: {} {} — got {}",
-                        file, c.line, c.label, c.expected, c.actual
-                    );
-                }
-            }
-            ClaimStatus::Error { message, line } => {
-                println!("not ok {} - {} (error)", i + 1, r.name);
-                println!("    {}:{}: {}", file, line, message);
-            }
+const HELP_EN: &str = "\
+geas: hold agent-written code to claims a person has read
+Coding agents: `geas skill` prints the guide; `geas skill --install <dir>` installs it.
+
+usage:
+  geas check <spec.geas>...           run every claim; exit 0 when all hold
+  geas snap <spec.geas>...            run them and keep every observation as the baseline
+  geas drift <spec.geas>...           run them again and report what changed since the baseline
+  geas map <spec.geas>...             run them with coverage on and record the lines each claim runs
+  geas affected <spec.geas> <diff|->  the claims a diff touches, and the changed code no claim runs
+  geas explain <code>... | --all      what a code means and how to fix it
+  geas skill [--install <dir>]        the guide for coding agents, or the guide written as a skill folder
+
+options:
+  --json            the answer as JSON
+  --lang ja         messages in Japanese (also GEAS_LANG=ja)
+  --jobs N, -j N    run up to N claims at once (also GEAS_JOBS); default 1
+  --root <dir>      map, affected: the directory the record's paths are relative to
+  --out <file>      map: where to write the record
+  --map <file>      affected: a record to read; give two for both sides of the diff
+  --install <dir>   skill: write the skill's files to <dir>/geas
+  --force           skill: write over a <dir>/geas that is already there
+  --help, -h        this text
+  --version         the version
+
+exit: 0 all held, or nothing to report · 1 something failed or changed · 2 the spec, a file, or the arguments are wrong
+";
+
+const HELP_JA: &str = "\
+geas: エージェントが書いたコードに、人が読んで確かめた主張を守らせる
+コーディングエージェント向け: `geas skill` が手引きを出します。`geas skill --install <dir>` でスキルとしてインストールできます。
+
+使い方:
+  geas check <spec.geas>...           主張をすべて実行する。すべて成り立てば終了コード 0
+  geas snap <spec.geas>...            主張を実行し、結果をすべてベースラインとして残す
+  geas drift <spec.geas>...           もう一度実行し、ベースラインから変わったところを示す
+  geas map <spec.geas>...             カバレッジを取りながら実行し、主張ごとに通った行を記録する
+  geas affected <spec.geas> <diff|->  差分が関わる主張と、変わったコードのうちどの主張も通らないところを示す
+  geas explain <code>... | --all      コードの意味と直し方
+  geas skill [--install <dir>]        コーディングエージェント向けの手引きを出すか、スキルのフォルダーとして書く
+
+オプション:
+  --json            JSON で出力する
+  --lang ja         メッセージを日本語で出す（GEAS_LANG=ja でも同じ）
+  --jobs N, -j N    主張を一度に N 個まで並列に走らせる（GEAS_JOBS でも同じ）。既定は 1
+  --root <dir>      map、affected: 記録のパスの基準にするディレクトリ
+  --out <file>      map: 記録を書く先
+  --map <file>      affected: 読む記録。変更前と変更後のコードの記録を二つ渡せる
+  --install <dir>   skill: スキルのファイルを <dir>/geas に書く
+  --force           skill: すでにある <dir>/geas に上書きする
+  --help, -h        この説明を出す
+  --version         バージョンを出す
+
+終了コード: 0 すべて成り立った、または報告することがない · 1 成り立たない主張や変化、どの主張も通らないコードの変更がある · 2 主張のファイルや引数に誤りがあるか、ファイルを読み書きできない
+";
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Cmd {
+    Check,
+    Snap,
+    Drift,
+    Map,
+    Affected,
+    Explain,
+    Skill,
+}
+
+/// The options that take a value, and how many times each may be given.
+const VALUE_FLAGS: &[(&str, usize)] = &[("--lang", 1), ("--jobs", 1), ("--root", 1), ("--out", 1), ("--map", 2), ("--install", 1)];
+
+impl Cmd {
+    fn parse(s: &str) -> Option<Cmd> {
+        match s {
+            "check" => Some(Cmd::Check),
+            "snap" => Some(Cmd::Snap),
+            "drift" => Some(Cmd::Drift),
+            "map" => Some(Cmd::Map),
+            "affected" => Some(Cmd::Affected),
+            "explain" => Some(Cmd::Explain),
+            "skill" => Some(Cmd::Skill),
+            _ => None,
+        }
+    }
+
+    fn word(self) -> &'static str {
+        match self {
+            Cmd::Check => "check",
+            Cmd::Snap => "snap",
+            Cmd::Drift => "drift",
+            Cmd::Map => "map",
+            Cmd::Affected => "affected",
+            Cmd::Explain => "explain",
+            Cmd::Skill => "skill",
+        }
+    }
+
+    /// The options the command takes, besides `--help` and `--version`.
+    fn options(self) -> &'static [&'static str] {
+        match self {
+            Cmd::Explain => &["--all", "--json", "--lang"],
+            Cmd::Skill => &["--install", "--force", "--lang"],
+            Cmd::Map => &["--json", "--lang", "--jobs", "--root", "--out"],
+            Cmd::Affected => &["--json", "--lang", "--root", "--map"],
+            _ => &["--json", "--lang", "--jobs"],
         }
     }
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let mut file: Option<String> = None;
-    let mut as_json = false;
-    let mut cmd = String::from("check");
-    for a in &args {
-        match a.as_str() {
-            "--json" => as_json = true,
-            "check" | "snap" | "drift" => cmd = a.clone(),
-            _ => file = Some(a.clone()),
+struct Args {
+    cmd: Cmd,
+    files: Vec<String>,
+    json: bool,
+    all: bool,
+    lang: Lang,
+    root: Option<String>,
+    out: Option<String>,
+    maps: Vec<String>,
+    /// Claims at once: `--jobs`, else `GEAS_JOBS`, else 1.
+    jobs: usize,
+    /// `skill`: the directory to write the skill folder into, and whether it may be
+    /// written over.
+    install: Option<String>,
+    force: bool,
+}
+
+enum Parsed {
+    Help(Lang),
+    Version,
+    Run(Args),
+}
+
+fn e080(en: impl Into<String>, ja: impl Into<String>) -> Diag {
+    Diag::error("E080", 0, 0, t(en, ja))
+}
+
+fn commands_note() -> diag::Text {
+    t(
+        "the commands: check, snap, drift, map, affected, explain, skill; `geas --help` says more",
+        "コマンドは check、snap、drift、map、affected、explain、skill です。詳しくは `geas --help` を見てください",
+    )
+}
+
+/// The command line. An error comes back in the language `--lang` asked for when
+/// that much could be read.
+fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
+    let mut lang_flag = None;
+    let mut i = 0;
+    while i < raw.len() {
+        if raw[i] == "--lang" {
+            let lang = Lang::pick(None);
+            match raw.get(i + 1) {
+                Some(v) => match Lang::parse(v) {
+                    Some(l) => lang_flag = Some(l),
+                    None => {
+                        return Err((
+                            e080(
+                                format!("`--lang` takes en or ja, not `{v}`"),
+                                format!("`--lang` に渡せるのは en か ja で、`{v}` は使えません"),
+                            ),
+                            lang,
+                        ));
+                    }
+                },
+                None => {
+                    return Err((e080("`--lang` needs a value: en or ja", "`--lang` には値（en か ja）が要ります"), lang));
+                }
+            }
+            i += 2;
+        } else {
+            i += 1;
         }
     }
-    let Some(file) = file else {
-        eprintln!("usage: geas <check|snap|drift> <spec.geas> [--json]");
-        exit(2);
+    let lang = Lang::pick(lang_flag);
+    let fail = |d: Diag| Err((d, lang));
+
+    let mut word: Option<&str> = None;
+    let mut files: Vec<String> = Vec::new();
+    let mut flags: Vec<&str> = Vec::new();
+    let mut values: Vec<(&str, String)> = Vec::new();
+    let mut it = raw.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--help" | "-h" => return Ok(Parsed::Help(lang)),
+            "--version" => return Ok(Parsed::Version),
+            // `-j N` and `-jN`, as make and cargo take them
+            "-j" => {
+                let Some(v) = it.next() else {
+                    return fail(e080("`-j` needs a value", "`-j` には値が要ります"));
+                };
+                flags.push("--jobs");
+                values.push(("--jobs", v.clone()));
+            }
+            j if j.starts_with("-j") && j.len() > 2 => {
+                flags.push("--jobs");
+                values.push(("--jobs", j[2..].to_string()));
+            }
+            f if VALUE_FLAGS.iter().any(|(v, _)| *v == f) => {
+                let Some(v) = it.next() else {
+                    return fail(e080(format!("`{f}` needs a value"), format!("`{f}` には値が要ります")));
+                };
+                flags.push(f);
+                values.push((f, v.clone()));
+            }
+            // `-` alone is stdin, an argument like any other
+            s if s.starts_with('-') && s.len() > 1 => flags.push(s),
+            s if word.is_none() => word = Some(s),
+            s => files.push(s.to_string()),
+        }
+    }
+    let Some(word) = word else {
+        return fail(
+            e080(
+                "no command given; geas runs as `geas <command> …`",
+                "コマンドがありません。geas は `geas <コマンド> …` の形で走らせます",
+            )
+            .note(commands_note()),
+        );
     };
-    let src = match std::fs::read_to_string(&file) {
+    let Some(cmd) = Cmd::parse(word) else {
+        return fail(
+            e080(format!("`{word}` is not a command"), format!("`{word}` というコマンドはありません")).note(commands_note()),
+        );
+    };
+    let c = cmd.word();
+    for f in &flags {
+        if !cmd.options().contains(f) {
+            return fail(
+                e080(
+                    format!("`{f}` is not an option of `geas {c}`"),
+                    format!("`{f}` は `geas {c}` のオプションではありません"),
+                )
+                .note(t(
+                    format!("it takes: {}", cmd.options().join(", ")),
+                    format!("使えるオプション: {}", cmd.options().join("、")),
+                )),
+            );
+        }
+    }
+    for (flag, most) in VALUE_FLAGS {
+        let n = values.iter().filter(|(f, _)| f == flag).count();
+        if n > *most && *flag != "--lang" {
+            return fail(if *most == 1 {
+                e080(format!("`{flag}` is given {n} times; give it once"), format!("`{flag}` が {n} 回あります。一回だけ渡してください"))
+            } else {
+                e080(
+                    format!("`{flag}` is given {n} times; it takes at most {most}: a record of the code before the change and one of the code after it"),
+                    format!("`{flag}` が {n} 回あります。渡せるのは {most} 回までで、変更前のコードの記録と変更後のコードの記録です"),
+                )
+            });
+        }
+    }
+    let value = |flag: &str| values.iter().find(|(f, _)| *f == flag).map(|(_, v)| v.clone());
+    let all = flags.contains(&"--all");
+    let jobs = match value("--jobs") {
+        None => None,
+        Some(v) => match v.parse::<usize>() {
+            Ok(n) if n >= 1 => Some(n),
+            _ => {
+                return fail(e080(
+                    format!("`--jobs` takes a whole number from 1, not `{v}`"),
+                    format!("`--jobs` に渡せるのは 1 以上の整数で、`{v}` は使えません"),
+                ));
+            }
+        },
+    };
+    match cmd {
+        Cmd::Explain if all && !files.is_empty() => {
+            return fail(e080(
+                "give `geas explain` codes or `--all`, not both",
+                "`geas explain` に渡すのは、コードか `--all` のどちらかです",
+            ));
+        }
+        Cmd::Explain if !all && files.is_empty() => {
+            return fail(e080(
+                "`geas explain` needs a code, or `--all`",
+                "`geas explain` にはコードか `--all` が要ります",
+            ));
+        }
+        Cmd::Explain => {}
+        Cmd::Skill if !files.is_empty() => {
+            return fail(
+                e080(
+                    format!("`geas skill` takes no file, and was given {} argument(s)", files.len()),
+                    format!("`geas skill` はファイルを受け取りませんが、引数が {} 個渡されています", files.len()),
+                )
+                .note(t(
+                    "usage: geas skill [--install <dir> [--force]]",
+                    "使い方: geas skill [--install <dir> [--force]]",
+                )),
+            );
+        }
+        Cmd::Skill if flags.contains(&"--force") && value("--install").is_none() => {
+            return fail(e080(
+                "`--force` goes with `--install <dir>`: it lets geas write over the skill folder there",
+                "`--force` は `--install <dir>` と一緒に使います。そこにあるスキルのフォルダーへの上書きを許すオプションです",
+            ));
+        }
+        Cmd::Skill => {}
+        Cmd::Affected if files.len() != 2 => {
+            return fail(
+                e080(
+                    format!("`geas affected` takes a spec and a diff, and was given {} argument(s)", files.len()),
+                    format!("`geas affected` に渡すのは主張のファイルと差分の二つで、渡された引数は {} 個です", files.len()),
+                )
+                .note(t(
+                    "usage: geas affected <spec.geas> <diff|->; `-` reads the diff from stdin",
+                    "使い方: geas affected <spec.geas> <diff|->。`-` なら差分を標準入力から読みます",
+                )),
+            );
+        }
+        _ if files.is_empty() => {
+            return fail(
+                e080(
+                    format!("`geas {c}` needs at least one spec"),
+                    format!("`geas {c}` には主張のファイルが一つ以上要ります"),
+                )
+                .note(t(format!("usage: geas {c} <spec.geas>..."), format!("使い方: geas {c} <spec.geas>..."))),
+            );
+        }
+        Cmd::Map if files.len() > 1 && value("--out").is_some() => {
+            return fail(e080(
+                format!("`--out` names one record, and `geas map` was given {} specs", files.len()),
+                format!("`--out` で書ける記録は一つですが、`geas map` に主張のファイルが {} 個渡されています", files.len()),
+            ));
+        }
+        _ => {}
+    }
+    Ok(Parsed::Run(Args {
+        cmd,
+        files,
+        json: flags.contains(&"--json"),
+        all,
+        lang,
+        root: value("--root"),
+        out: value("--out"),
+        maps: values.iter().filter(|(f, _)| *f == "--map").map(|(_, v)| v.clone()).collect(),
+        jobs: sched::jobs(jobs),
+        install: value("--install"),
+        force: flags.contains(&"--force"),
+    }))
+}
+
+/// Where a spec's files go: beside it, under `.geas/`, named after it.
+struct Paths {
+    /// The directory the targets' commands run in.
+    cwd: PathBuf,
+    geas: PathBuf,
+    journal: PathBuf,
+    baseline: PathBuf,
+    record: PathBuf,
+    /// The name the spike gave every spec's baseline.
+    old_baseline: PathBuf,
+    /// The spec's file name without `.geas`.
+    stem: String,
+}
+
+fn paths(file: &str) -> Paths {
+    let p = Path::new(file);
+    let parent = p.parent().filter(|d| !d.as_os_str().is_empty());
+    let cwd = parent.map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
+    let geas = match parent {
+        Some(d) => d.join(".geas"),
+        None => PathBuf::from(".geas"),
+    };
+    let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "spec".into());
+    Paths {
+        cwd,
+        journal: geas.join(format!("{stem}.journal.jsonl")),
+        baseline: geas.join(format!("{stem}.baseline.jsonl")),
+        record: geas.join(format!("{stem}.map.jsonl")),
+        old_baseline: geas.join("baseline.jsonl"),
+        geas,
+        stem,
+    }
+}
+
+fn shown(p: &Path) -> String {
+    p.display().to_string()
+}
+
+/// A spec geas could not run: its diagnostics on stderr, or as JSON on stdout.
+fn fail(a: &Args, file: &str, diags: &[(String, Diag)], src: &str) {
+    if a.json {
+        println!("{}", report::failure_json(file, diags, a.lang));
+    } else {
+        for (f, d) in diags {
+            eprint!("{}", d.render(f, src, a.lang));
+        }
+    }
+}
+
+/// Why `drift` cannot compare: the file the diagnostic points at, the diagnostic,
+/// and that file's text.
+fn baseline_problem(e: drift::BaselineError, file: &str, p: &Paths) -> (String, Diag, String) {
+    let base = shown(&p.baseline);
+    let again = t(
+        format!("`geas snap` writes the baseline; run `geas snap {file}` to write it again"),
+        format!("ベースラインは `geas snap` が書きます。`geas snap {file}` を走らせると書き直します"),
+    );
+    match e {
+        drift::BaselineError::Missing => {
+            let mut d = Diag::error(
+                "E050",
+                0,
+                0,
+                t(format!("there is no baseline at {base}"), format!("{base} にベースラインがありません")),
+            )
+            .note(t(
+                format!("run `geas snap {file}` first; drift compares a run with what snap kept"),
+                format!("先に `geas snap {file}` を走らせてください。ドリフトは今回の実行を、snap が残したものと比べます"),
+            ));
+            if p.old_baseline.is_file() {
+                let old = shown(&p.old_baseline);
+                let new = p.baseline.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                d = d.note(t(
+                    format!("{old} is a baseline under its older name; rename it to {new}, or snap again"),
+                    format!("{old} は前の名前のベースラインです。{new} に名前を変えるか、snap をやり直してください"),
+                ));
+            }
+            (file.to_string(), d, String::new())
+        }
+        drift::BaselineError::Unreadable(err) => (
+            base,
+            Diag::error(
+                "E081",
+                0,
+                0,
+                t(format!("cannot read the baseline: {err}"), format!("ベースラインを読めません: {err}")),
+            ),
+            String::new(),
+        ),
+        drift::BaselineError::Bad { line, why } => {
+            let text = std::fs::read_to_string(&p.baseline).unwrap_or_default();
+            (base, Diag::error("E051", line, 0, why).note(again), text)
+        }
+    }
+}
+
+fn write_journal(p: &Paths, journal: &[String]) -> Result<(), (String, Diag)> {
+    if let Err(e) = std::fs::create_dir_all(&p.geas) {
+        return Err((
+            shown(&p.geas),
+            Diag::error(
+                "E081",
+                0,
+                0,
+                t(format!("cannot make this directory: {e}"), format!("このディレクトリを作れません: {e}")),
+            ),
+        ));
+    }
+    std::fs::write(&p.journal, journal.join("\n") + "\n").map_err(|e| {
+        (
+            shown(&p.journal),
+            Diag::error("E081", 0, 0, t(format!("cannot write the journal: {e}"), format!("ジャーナルを書けません: {e}"))),
+        )
+    })
+}
+
+/// check, snap or drift on one spec; its exit status.
+fn run_file(file: &str, a: &Args) -> i32 {
+    let lang = a.lang;
+    let src = match std::fs::read_to_string(file) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("{}: {}", file, e);
-            exit(2);
+            let d = Diag::error("E081", 0, 0, t(format!("cannot read this file: {e}"), format!("このファイルを読めません: {e}")));
+            fail(a, file, &[(file.to_string(), d)], "");
+            return 2;
         }
     };
     let spec = match parse::parse(&src) {
         Ok(s) => s,
-        Err(e) => {
-            eprintln!("{}:{}", file, e);
-            exit(2);
+        Err(diags) => {
+            let ds: Vec<(String, Diag)> = diags.into_iter().map(|d| (file.to_string(), d)).collect();
+            fail(a, file, &ds, &src);
+            return 2;
         }
     };
-    let dir0 = Path::new(&file).parent().unwrap_or(Path::new("."));
-    let dir = if dir0.as_os_str().is_empty() { Path::new(".") } else { dir0 };
-    let geas_dir = dir.join(".geas");
-    let baseline_path = geas_dir.join("baseline.jsonl");
-    let journal_path = geas_dir.join("journal.jsonl");
-
-    // For drift, fail fast if there is no baseline before running anything.
-    let pre_baseline = if cmd == "drift" {
-        match drift::read_baseline(&baseline_path) {
+    let p = paths(file);
+    if a.cmd == Cmd::Map {
+        return map_file(file, a, &src, &spec, &p);
+    }
+    // drift stops before running anything when it has nothing to compare with
+    let baseline = if a.cmd == Cmd::Drift {
+        match drift::read_baseline(&p.baseline) {
             Ok(b) => Some(b),
             Err(e) => {
-                eprintln!("{}", e);
-                exit(2);
+                let (f, d, text) = baseline_problem(e, file, &p);
+                fail(a, file, &[(f, d)], &text);
+                return 2;
             }
         }
     } else {
         None
     };
 
-    let mut journal: Vec<String> = Vec::new();
-    let results = run::run_spec(&spec, dir, &mut journal);
-    let _ = std::fs::create_dir_all(&geas_dir);
-    let _ = std::fs::write(&journal_path, journal.join("\n") + "\n");
-
-    let failed = results
-        .iter()
-        .filter(|r| !matches!(r.status, ClaimStatus::Ok))
-        .count();
-
-    match cmd.as_str() {
-        "drift" => {
-            let code = drift::drift(&spec, &results, pre_baseline.expect("read above"), &file);
-            exit(code);
-        }
-        "snap" => {
-            print_claim_failures(&results, &file);
-            match drift::write_baseline(&baseline_path, &results) {
-                Ok(n) => println!(
-                    "{} claims · {} ok · {} failed · baseline: {} interactions → {}",
-                    results.len(),
-                    results.len() - failed,
-                    failed,
-                    n,
-                    baseline_path.display()
-                ),
-                Err(e) => {
-                    eprintln!("cannot write baseline: {}", e);
-                    exit(2);
-                }
-            }
-            if failed > 0 {
-                println!("warning: baseline recorded from a run with failing claims");
-            }
-            exit(if failed == 0 { 0 } else { 1 });
-        }
-        _ => {}
+    // what GUI targets write goes under `.geas/`, named absolutely, since the
+    // programs that write it run in the spec's directory
+    let geas_dir = std::fs::canonicalize(&p.cwd).map(|d| d.join(".geas")).unwrap_or_else(|_| p.geas.clone());
+    let (results, journal) = run::run_spec(&spec, &p.cwd, &geas_dir, &p.stem, a.jobs);
+    // a signal killed what the run started: nothing it says now would be true
+    if let Some(sig) = proc::signalled() {
+        return 128 + sig;
     }
-
-    if as_json {
-        let claims: Vec<String> = results
-            .iter()
-            .map(|r| {
-                let status = match &r.status {
-                    ClaimStatus::Ok => "ok",
-                    ClaimStatus::Fail => "fail",
-                    ClaimStatus::Error { .. } => "error",
-                };
-                let error = match &r.status {
-                    ClaimStatus::Error { message, line } => format!(
-                        "{{\"line\":{},\"message\":\"{}\"}}",
-                        line,
-                        json::esc(message)
-                    ),
-                    _ => "null".into(),
-                };
-                let checks: Vec<String> = r
-                    .checks
-                    .iter()
-                    .map(|c| {
-                        format!(
-                            "{{\"line\":{},\"check\":\"{}\",\"expected\":\"{}\",\"actual\":\"{}\",\"ok\":{}}}",
-                            c.line,
-                            json::esc(&c.label),
-                            json::esc(&c.expected),
-                            json::esc(&c.actual),
-                            c.ok
-                        )
-                    })
-                    .collect();
-                format!(
-                    "{{\"name\":\"{}\",\"line\":{},\"status\":\"{}\",\"error\":{},\"checks\":[{}]}}",
-                    json::esc(&r.name),
-                    r.line,
-                    status,
-                    error,
-                    checks.join(",")
-                )
-            })
-            .collect();
-        println!(
-            "{{\"ok\":{},\"file\":\"{}\",\"claims\":[{}]}}",
-            failed == 0,
-            json::esc(&file),
-            claims.join(",")
-        );
-    } else {
-        for (i, r) in results.iter().enumerate() {
-            match &r.status {
-                ClaimStatus::Ok => println!("ok {} - {}", i + 1, r.name),
-                ClaimStatus::Fail => {
-                    println!("not ok {} - {}", i + 1, r.name);
-                    for c in r.checks.iter().filter(|c| !c.ok) {
-                        println!(
-                            "    {}:{}: {} {} — got {}",
-                            file, c.line, c.label, c.expected, c.actual
-                        );
+    let mut problems: Vec<(String, Diag)> = Vec::new();
+    if let Err(problem) = write_journal(&p, &journal) {
+        problems.push(problem);
+    }
+    let mut code = if report::failed(&results) == 0 { 0 } else { 1 };
+    match a.cmd {
+        Cmd::Check => {
+            if a.json {
+                println!("{}", report::claims_json(file, &results, lang));
+            } else {
+                print!("{}", report::claims(file, &src, &results, lang, false));
+                print!("{}", report::check_summary(&results, &shown(&p.journal), lang));
+            }
+        }
+        Cmd::Snap => {
+            if !a.json {
+                print!("{}", report::claims(file, &src, &results, lang, true));
+            }
+            let written = drift::write_baseline(&p.baseline, &spec, &results);
+            if a.json {
+                println!("{}", report::claims_json(file, &results, lang));
+            }
+            match written {
+                Ok(n) => {
+                    if !a.json {
+                        print!("{}", report::snap_summary(&results, n, &shown(&p.baseline), lang));
                     }
                 }
-                ClaimStatus::Error { message, line } => {
-                    println!("not ok {} - {} (error)", i + 1, r.name);
-                    println!("    {}:{}: {}", file, line, message);
+                Err(e) => problems.push((
+                    shown(&p.baseline),
+                    Diag::error(
+                        "E081",
+                        0,
+                        0,
+                        t(format!("cannot write the baseline: {e}"), format!("ベースラインを書けません: {e}")),
+                    ),
+                )),
+            }
+        }
+        Cmd::Drift => {
+            let r = drift::drift(&spec, &results, baseline.expect("read before the run"));
+            let errored = results.iter().any(|x| matches!(x.status, ClaimStatus::Error(_)));
+            if a.json {
+                println!("{}", r.json(file, &report::error_diagnostics(file, &results, lang), lang));
+            } else {
+                for x in &results {
+                    if let ClaimStatus::Error(d) = &x.status {
+                        print!("{}", d.render(file, &src, lang));
+                    }
+                }
+                print!("{}", r.text(lang));
+            }
+            code = if errored {
+                2
+            } else if r.unclaimed + r.claimed > 0 {
+                1
+            } else {
+                0
+            };
+        }
+        Cmd::Map | Cmd::Affected | Cmd::Explain | Cmd::Skill => unreachable!("handled apart"),
+    }
+    for (f, d) in &problems {
+        eprint!("{}", d.render(f, "", lang));
+        code = 2;
+    }
+    code
+}
+
+/// `geas map` on one spec: the claims run as `check` runs them, with coverage on,
+/// and the record written unless something stopped it.
+fn map_file(file: &str, a: &Args, src: &str, spec: &model::Spec, p: &Paths) -> i32 {
+    let lang = a.lang;
+    let early = |d: Diag| {
+        fail(a, file, &[(file.to_string(), d)], "");
+        2
+    };
+    let (root, spec_rel) = match map::root_and_spec(file, a.root.as_deref()) {
+        Ok(x) => x,
+        Err(d) => return early(d),
+    };
+    let cwd = match std::fs::canonicalize(&p.cwd) {
+        Ok(c) => c,
+        Err(e) => {
+            return early(Diag::error(
+                "E081",
+                0,
+                0,
+                t(format!("cannot read the spec's directory: {e}"), format!("主張のファイルのディレクトリを読めません: {e}")),
+            ));
+        }
+    };
+    let geas_dir = cwd.join(".geas");
+    let place = map::Place { cwd: &p.cwd, geas_dir: &geas_dir, root: &root, spec_rel: &spec_rel };
+    let mut journal = Vec::new();
+    let m = match map::run(spec, &place, a.jobs, &mut journal) {
+        Ok(m) => m,
+        Err(d) => return early(d),
+    };
+    if let Some(sig) = proc::signalled() {
+        return 128 + sig;
+    }
+    let mut problems: Vec<(String, Diag)> = Vec::new();
+    if let Err(problem) = write_journal(p, &journal) {
+        problems.push(problem);
+    }
+    let record_path = a.out.clone().unwrap_or_else(|| shown(&p.record));
+    let mut written = None;
+    if let Some(r) = &m.record {
+        match std::fs::write(&record_path, r.render()) {
+            Ok(()) => written = Some(r.clone()),
+            Err(e) => problems.push((
+                record_path.clone(),
+                Diag::error("E081", 0, 0, t(format!("cannot write the record: {e}"), format!("記録を書けません: {e}"))),
+            )),
+        }
+    }
+    let mut code = if report::failed(&m.results) == 0 { 0 } else { 1 };
+    if m.stopped() || !problems.is_empty() {
+        code = 2;
+    }
+    if a.json {
+        let diags: Vec<String> = m
+            .diags
+            .iter()
+            .map(|d| d.to_json(file, lang))
+            .chain(problems.iter().map(|(f, d)| d.to_json(f, lang)))
+            .collect();
+        let more = format!(",\"map\":{},\"diagnostics\":[{}]", map::json_part(&written, &record_path), diags.join(","));
+        println!("{}", report::claims_json_with(file, &m.results, lang, code == 0, &more));
+    } else {
+        print!("{}", report::claims(file, src, &m.results, lang, false));
+        print!("{}", report::check_summary(&m.results, &shown(&p.journal), lang));
+        if let Some(r) = &written {
+            print!("{}", map::summary(r, &record_path, lang));
+        }
+        for d in &m.diags {
+            eprint!("{}", d.render(file, src, lang));
+        }
+        for (f, d) in &problems {
+            eprint!("{}", d.render(f, "", lang));
+        }
+    }
+    code
+}
+
+fn explain(a: &Args) -> i32 {
+    let entries = if a.all {
+        codes::table()
+    } else {
+        let mut v = Vec::new();
+        for c in &a.files {
+            match codes::find(c) {
+                Some(e) => v.push(e),
+                None => {
+                    let d = e080(format!("`{c}` is not a code geas has"), format!("`{c}` というコードはありません")).note(t(
+                        "`geas explain --all` prints every code",
+                        "`geas explain --all` で、すべてのコードが出ます",
+                    ));
+                    eprint!("{}", d.render("", "", a.lang));
+                    return 2;
                 }
             }
         }
-        println!(
-            "{} claims · {} ok · {} failed · journal: {}",
-            results.len(),
-            results.len() - failed,
-            failed,
-            journal_path.display()
-        );
+        v
+    };
+    if a.json {
+        for e in &entries {
+            println!("{}", codes::render_json(e, a.lang));
+        }
+    } else {
+        let texts: Vec<String> = entries.iter().map(|e| codes::render_text(e, a.lang)).collect();
+        print!("{}", texts.join("\n"));
     }
-    exit(if failed == 0 { 0 } else { 1 });
+    0
+}
+
+/// `geas skill`: the guide on stdout, or the skill folder written into a directory.
+fn skill_command(a: &Args) -> i32 {
+    let Some(dir) = &a.install else {
+        print!("{}", skill::guide());
+        return 0;
+    };
+    match skill::install(Path::new(dir), a.force) {
+        Ok(folder) => {
+            let n = skill::FILES.len();
+            let shown = folder.display();
+            println!(
+                "{}",
+                a.lang.tr(
+                    &format!("wrote the geas skill to {shown} ({n} files)"),
+                    &format!("geas のスキルを {shown} に書きました（ファイル {n} 個）"),
+                )
+            );
+            0
+        }
+        Err(d) => {
+            eprint!("{}", d.render("", "", a.lang));
+            2
+        }
+    }
+}
+
+fn main() {
+    proc::stop_groups_on_signals();
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    let code = match parse_args(&raw) {
+        Ok(Parsed::Help(lang)) => {
+            print!("{}", lang.tr(HELP_EN, HELP_JA));
+            0
+        }
+        Ok(Parsed::Version) => {
+            println!("geas {}", env!("CARGO_PKG_VERSION"));
+            0
+        }
+        Ok(Parsed::Run(a)) => match a.cmd {
+            Cmd::Explain => explain(&a),
+            Cmd::Skill => skill_command(&a),
+            Cmd::Affected => affected::command(
+                &a.files[0],
+                &a.files[1],
+                &affected::Opts { root: a.root.as_deref(), maps: &a.maps, json: a.json, lang: a.lang },
+            ),
+            _ => {
+                let mut worst = 0;
+                for f in &a.files {
+                    worst = worst.max(run_file(f, &a));
+                    if proc::signalled().is_some() {
+                        break;
+                    }
+                }
+                worst
+            }
+        },
+        Err((d, lang)) => {
+            eprint!("{}", d.render("", "", lang));
+            2
+        }
+    };
+    let code = proc::signalled().map_or(code, |sig| 128 + sig);
+    let _ = std::io::stdout().flush();
+    std::process::exit(code);
 }

@@ -1,0 +1,44 @@
+$ geas check examples/web-greeter/web-greeter.geas --lang ja
+ok 1 - the first screen asks for a name
+ok 2 - greets the name typed in, by the time of day
+ok 3 - draws a fortune
+ok 4 - the service keeps the names the page greets
+ok 5 - a name sent to the service shows on the page
+ok 6 - the service refuses an empty name
+主張 6 件 · 成り立った 6 件 · 成り立たなかった 0 件 · ジャーナル: examples/web-greeter/.geas/web-greeter.journal.jsonl
+$ geas snap examples/web-greeter/web-greeter.geas --lang ja
+主張 6 件 · 成り立った 6 件 · 成り立たなかった 0 件 · ベースライン: やりとり 12 件 → examples/web-greeter/.geas/web-greeter.baseline.jsonl
+$ geas drift examples/web-greeter/web-greeter.geas --lang ja
+ドリフト: 比べたやりとり 12 件 · 変わったやりとり 0 件 · 主張なしの変化 0 件 · 主張ありの変化 0 件
+$ geas check examples/web-greeter/web-greeter.geas --lang ja
+not ok 1 - the first screen asks for a name
+    examples/web-greeter/web-greeter.geas:27: screen contains button "Greet" disabled のはずが、実際は当てはまるノードがありません
+        27 |   and  screen contains button "Greet" disabled
+      画面:
+        heading "Greeter"
+        text "Today is Saturday, August 29, 2026."
+        form
+          text "Your name"
+          textbox "Your name"
+          text "Greet"
+        status
+        list "Greeted"
+        text "Your fortune: A pleasant surprise is waiting for you."
+      ここまでの実行:
+          23  when web.open("/")  →  heading "Greeter", text "Today is Saturday, August 29, 2026.", form, text "Your name", textbox "You…
+not ok 2 - greets the name typed in, by the time of day（エラー）
+    エラー[E035]: examples/web-greeter/web-greeter.geas:35:3: `web` のページに、"Greet" という名前のボタン、リンク、チェックボックス、ラジオボタン、スイッチ、タブ、メニュー項目、選択肢がありません
+        35 |   when web.click("Greet")
+      = そのときの画面: heading "Greeter", text "Today is Saturday, August 29, 2026.", form, text "Your name", textbox "Your name" value "Ada", text "Greet", status, list "Greeted", text "Your fortune: A pleasant surprise i…
+      = その画面にクリックできるものはありません
+      ここまでの実行:
+          32  when web.open("/")  →  heading "Greeter", text "Today is Saturday, August 29, 2026.", form, text "Your name", textbox "You…
+          33  when web.input("Ada", into: "Your name")  →  heading "Greeter", text "Today is Saturday, August 29, 2026.", form, text "Your name", textbox "You…
+          35  when web.click("Greet")
+ok 3 - draws a fortune
+ok 4 - the service keeps the names the page greets
+ok 5 - a name sent to the service shows on the page
+ok 6 - the service refuses an empty name
+主張 6 件 · 成り立った 4 件 · 成り立たなかった 2 件 · ジャーナル: examples/web-greeter/.geas/web-greeter.journal.jsonl
+$ echo $?
+1

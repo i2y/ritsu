@@ -1,0 +1,16 @@
+not ok 1 - clicks what is not there（エラー）
+    エラー[E034]: w/refused.geas:11:3: GEAS_CHROME が指す `no-such-chrome` は、geas が起動できるファイルではありません
+        11 |   when web.open("/")
+      ここまでの実行:
+          11  when web.open("/")
+not ok 2 - types into a field that is not there（エラー）
+    エラー[E034]: w/refused.geas:17:3: GEAS_CHROME が指す `no-such-chrome` は、geas が起動できるファイルではありません
+        17 |   when web.open("/")
+      ここまでの実行:
+          17  when web.open("/")
+not ok 3 - a page that does not load（エラー）
+    エラー[E034]: w/refused.geas:23:3: GEAS_CHROME が指す `no-such-chrome` は、geas が起動できるファイルではありません
+        23 |   when web.open("/broken")
+      ここまでの実行:
+          23  when web.open("/broken")
+主張 3 件 · 成り立った 0 件 · 成り立たなかった 3 件 · ジャーナル: w/.geas/refused.journal.jsonl

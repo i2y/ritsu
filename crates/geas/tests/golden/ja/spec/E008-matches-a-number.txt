@@ -1,0 +1,2 @@
+エラー[E008]: E008-matches-a-number.geas:7:13: `exit` は数なので、文字列をパターンと照らし合わせる `matches` は使えません。`is` か `is between` で比べてください
+     7 |   then exit matches "0"

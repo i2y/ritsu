@@ -1,0 +1,3 @@
+error[E003]: E003-two-claims.geas:10:7: a second claim named "adds"
+    10 | claim "adds" {
+  = the first is on line 5

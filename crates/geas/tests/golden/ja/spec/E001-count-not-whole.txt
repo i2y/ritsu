@@ -1,0 +1,2 @@
+エラー[E001]: E001-count-not-whole.geas:6:31: `1.5` は整数ではありません。個数や何番目かは整数で書きます
+     6 |   when app.click("save", nth: 1.5)

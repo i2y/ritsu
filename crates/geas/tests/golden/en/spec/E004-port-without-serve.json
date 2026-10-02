@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E004-port-without-serve.geas","diagnostics":[{"code":"E004","severity":"error","file":"E004-port-without-serve.geas","line":3,"col":3,"message":"the target `calc` has `port` but no `serve`; only a service has a port","notes":[],"path":[]}]}

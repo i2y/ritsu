@@ -1,0 +1,2 @@
+エラー[E005]: E005-and-before-when.geas:6:3: `when` より前に `and` があります。チェックは直前の `when` の結果を見ます
+     6 |   and exit is 0

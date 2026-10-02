@@ -1,0 +1,1 @@
+error[E080]: d/echo.geas: `--root` names `kept.jsonl`, which is not a directory

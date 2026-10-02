@@ -1,0 +1,13 @@
+# A check that names a header claims it: drift calls its change claimed, and a
+# header no check names unclaimed.
+
+target answer {
+  serve "python3 answer.py {port}"
+  port auto
+}
+
+claim "answers with its version" {
+  when answer.get("/")
+  then status is 200
+  and  header "x-version" matches "\d+\.\d+\.\d+"
+}

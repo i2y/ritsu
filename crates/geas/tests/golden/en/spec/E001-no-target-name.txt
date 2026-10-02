@@ -1,0 +1,2 @@
+error[E001]: E001-no-target-name.geas:1:8: expected the target's name, found `{`
+     1 | target {

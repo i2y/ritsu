@@ -1,0 +1,7 @@
+not ok 1 - starts at nine (error)
+    error[E011]: g/pinned.geas:8:3: the driver of `app` cannot keep the pins it was handed: this app cannot pin clock
+         8 |   when app.open()
+      = the pins: {"tz":"Asia/Tokyo","clock":"2026-08-29T09:00:00+09:00"}
+      the run that gets there:
+           8  when app.open()
+1 claim · 0 ok · 1 failed · journal: g/.geas/pinned.journal.jsonl

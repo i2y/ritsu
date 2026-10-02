@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Shopping list</title></head>
+<body>
+<h1>Shopping list</h1>
+<form id="add">
+  <label for="item">Item</label>
+  <input id="item" name="item">
+  <button type="submit">Add</button>
+</form>
+<ul id="items" aria-label="Items"></ul>
+<button id="later">Check later</button>
+<button id="remind">Remind me</button>
+<p role="status" id="status"></p>
+<label><input type="checkbox" id="terms"> I agree to the terms</label>
+<button id="order" disabled>Order</button>
+<p id="today"></p>
+<p id="total"></p>
+<p id="lucky"></p>
+<p id="visits"></p>
+<script>
+// The list is the service's: the page reads it from the API the claims call too.
+async function load() {
+  const r = await fetch('/api/items');
+  show(await r.json());
+}
+function show(items) {
+  const ul = document.getElementById('items');
+  ul.replaceChildren(...items.map(t => { const li = document.createElement('li'); li.textContent = t; return li; }));
+}
+document.getElementById('add').addEventListener('submit', async e => {
+  e.preventDefault();
+  const input = document.getElementById('item');
+  const r = await fetch('/api/items', { method: 'POST', body: input.value });
+  show(await r.json());
+  input.value = '';
+});
+// a status that comes 300 ms after a click, and a reminder a minute after one
+const status = document.getElementById('status');
+document.getElementById('later').addEventListener('click', () => setTimeout(() => { status.textContent = 'checked'; }, 300));
+document.getElementById('remind').addEventListener('click', () => setTimeout(() => { status.textContent = 'reminded'; }, 60000));
+// the order waits for the terms
+const terms = document.getElementById('terms');
+terms.addEventListener('change', () => { document.getElementById('order').disabled = !terms.checked; });
+// what the time zone, the locale and the clock make of a date and a number
+const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+document.getElementById('today').textContent = 'Today: ' + new Date().toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' }) + ' (' + zone + ')';
+document.getElementById('total').textContent = 'Total: ' + (1234.5).toLocaleString();
+document.getElementById('lucky').textContent = 'Lucky number: ' + Math.random().toFixed(6);
+// a counter in the page's storage, which each claim starts without
+const visits = Number(localStorage.getItem('visits') || '0') + 1;
+localStorage.setItem('visits', String(visits));
+document.getElementById('visits').textContent = 'Visits: ' + visits;
+load();
+</script>
+</body>
+</html>

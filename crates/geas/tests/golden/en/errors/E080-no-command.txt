@@ -1,0 +1,2 @@
+error[E080]: no command given; geas runs as `geas <command> …`
+  = the commands: check, snap, drift, map, affected, explain, skill; `geas --help` says more

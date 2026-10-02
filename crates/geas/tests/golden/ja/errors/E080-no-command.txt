@@ -1,0 +1,2 @@
+エラー[E080]: コマンドがありません。geas は `geas <コマンド> …` の形で走らせます
+  = コマンドは check、snap、drift、map、affected、explain、skill です。詳しくは `geas --help` を見てください

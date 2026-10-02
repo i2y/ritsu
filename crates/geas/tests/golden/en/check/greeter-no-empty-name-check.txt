@@ -1,0 +1,9 @@
+ok 1 - greets by name
+not ok 2 - rejects an empty name
+    examples/greeter/greeter.geas:22: status is 400 — got 200
+        22 |   then status is 400
+      the run that gets there:
+          21  when api.get("/greet?name=")  →  200, body "{\"message\": \"Hello, \"}"
+ok 3 - totals accumulate across requests
+ok 4 - unknown paths are 404
+4 claims · 3 ok · 1 failed · journal: examples/greeter/.geas/greeter.journal.jsonl

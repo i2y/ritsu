@@ -1,0 +1,7 @@
+not ok 1 - finishes（エラー）
+    エラー[E031]: e031.geas:6:3: `sleep` が 5 秒のうちに終わらなかったので、geas が止めました
+         6 |   when slow.run()
+      = コマンド: sleep 10
+      ここまでの実行:
+           6  when slow.run()
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: .geas/e031.journal.jsonl

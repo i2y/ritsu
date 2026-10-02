@@ -1,0 +1,11 @@
+target app {
+  driver "python3 driver.py"
+}
+
+# a mask names nodes, not a count of them
+mask screen exactly 2 text
+
+claim "shows the time" {
+  when app.open()
+  then screen contains heading "Clock"
+}

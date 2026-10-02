@@ -1,0 +1,2 @@
+エラー[E006]: E006-get-on-a-pixie-app.geas:6:12: `app` は pixie のアプリのターゲットなので、呼べるのは操作（open、click、input、submit、press、advance）で、`get` は呼べません
+     6 |   when app.get("/")

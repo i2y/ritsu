@@ -1,0 +1,2 @@
+error[E050]: examples/greeter/greeter.geas: there is no baseline at examples/greeter/.geas/greeter.baseline.jsonl
+  = run `geas snap examples/greeter/greeter.geas` first; drift compares a run with what snap kept

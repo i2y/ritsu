@@ -1,0 +1,27 @@
+diff --git a/examples/tally-node/server.ts b/examples/tally-node/server.ts
+index 9c38c96..f009255 100644
+--- a/examples/tally-node/server.ts
++++ b/examples/tally-node/server.ts
+@@ -5,7 +5,6 @@ let total: number = 0;
+ 
+ function send(res: ServerResponse, status: number, value: object): void {
+   const body = JSON.stringify(value);
+-  res.setHeader("cache-control", "no-store");
+   res.writeHead(status, { "content-type": "application/json" });
+   res.end(body);
+ }
+@@ -24,11 +23,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void>
+   } else if (req.method === "POST" && req.url === "/add") {
+     const text = (await readBody(req)).trim();
+     if (!/^-?\d+$/.test(text)) {
+-      send(res, 400, { error: `not a number: ${text}` });
++      send(res, 400, { error: `not a whole number: ${text}` });
+       return;
+     }
+     total += Number(text);
+     send(res, 200, { total });
++  } else if (req.method === "GET" && req.url === "/health") {
++    send(res, 200, { ok: true });
+   } else if (req.method === "POST" && req.url === "/reset") {
+     total = 0;
+     send(res, 200, { total });

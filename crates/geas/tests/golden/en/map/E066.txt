@@ -1,0 +1,9 @@
+ok 1 - answers
+1 claim · 1 ok · 0 failed · journal: en/.geas/e066.journal.jsonl
+--- stderr
+error[E066]: en/e066.geas:7:3: the service `api` did not exit within 5 s of SIGTERM, so geas killed it, and what it ran may be missing from the record
+     7 |   when api.get("/")
+  = command: python3 stubborn.py 8123
+  = a service is recorded when it exits by itself on SIGTERM: Python and Node do, through geas's hooks, unless the program ignores the signal; a Go service has to return from main (signal.NotifyContext and Server.Shutdown); a Rust service needs code of its own
+  the run that gets there:
+       7  when api.get("/")  →  200

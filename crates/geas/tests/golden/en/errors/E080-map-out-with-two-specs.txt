@@ -1,0 +1,1 @@
+error[E080]: `--out` names one record, and `geas map` was given 2 specs

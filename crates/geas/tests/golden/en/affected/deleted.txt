@@ -1,0 +1,4 @@
+diff: deleted.diff · record: .geas/shop.map.jsonl (the code after the change)
+deleted:
+  old.py (with no record of the code before the change, the claims that ran it are not known)
+4 claims · 0 touched · 0 changed lines no claim runs

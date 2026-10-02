@@ -1,0 +1,2 @@
+エラー[E008]: E008-between-backwards.geas:8:26: `is between 299 and 200` に当てはまる数はありません。小さいほうを先に書きます（`is between 200 and 299`）
+     8 |   then status is between 299 and 200

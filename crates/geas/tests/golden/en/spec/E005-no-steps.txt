@@ -1,0 +1,2 @@
+error[E005]: E005-no-steps.geas:5:1: the claim "adds" has no steps; a claim starts with a `when`
+     5 | claim "adds" {

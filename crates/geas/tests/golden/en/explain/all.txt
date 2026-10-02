@@ -1,0 +1,855 @@
+error[E001]: a character, a string or a token the grammar does not allow there
+
+When it appears
+  The spec holds a character geas does not read outside a string or a comment (such as `@`), a string not closed on its line, an escape other than `\n`, `\t`, `\"` and `\\`, or a token where the grammar wants another: a name where the claim's name in quotes goes, a missing `{`, `(`, `)` or `:`, a number where a string goes. geas stops at the first one, since what follows it cannot be read reliably.
+
+What usually fixes it
+  Write there what the message says the grammar expects. A string opens and closes with `"` on one line; a line break inside it is written `\n`.
+
+Repro
+  $ geas check e001.geas
+  e001.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers {
+      when calc.run("2", "+", "3")
+      then stdout is "5"
+    }
+
+error[E002]: a name geas does not know
+
+When it appears
+  A word that has to name something geas knows names nothing it knows: a target in a `when` that the file does not declare, a call other than `run`, `get`, `post`, `open`, `click`, `input`, `submit`, `press` and `advance`, an argument a call does not take (`nth:` without `into:` among them), something to check other than `stdout`, `stderr`, `exit`, `status`, `header`, `body`, `body json` and `screen`, a way to compare other than `is`, `is not`, `is above`, `is below`, `is at least`, `is at most`, `is between`, `contains`, `does not contain`, `matches`, `does not match`, `exists` and `does not exist`, a role in a node other than WAI-ARIA's and `text`, a state other than `disabled`, `enabled`, `checked` and `unchecked`, a line in a target other than `run`, `serve`, `pixie`, `driver`, `port`, `serial` and the pins (`env`, `tz`, `locale`, `clock`, `seed`), or a `mask` of something other than `header`, `body json` and `screen`.
+
+What usually fixes it
+  Correct the word: the message lists the words that fit there. A target a `when` names is declared in the same file, with `target <name> { … }`.
+
+Repro
+  $ geas check e002.geas
+  e002.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then output is "5"
+    }
+
+error[E003]: two targets, or two claims, with one name; one thing pinned twice
+
+When it appears
+  Two targets, or two claims, in one file have the same name. A `when` finds its target by name, and the baseline keeps each claim's observations under the claim's name, so a second one would be taken for the first. Or one place pins one thing twice (`tz` twice in a target, the same variable twice outside any target), or two pins set one variable of a target (`tz` and `env "TZ"`): which one wins would not be written anywhere a reader looks.
+
+What usually fixes it
+  Rename one of them, or keep one of the two pins. A pin inside a target replaces the same pin outside it, which is not an error.
+
+Repro
+  $ geas check e003.geas
+  e003.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then stdout is "5"
+    }
+
+    claim "adds two integers" {
+      when calc.run("-2", "+", "3")
+      then stdout is "1"
+    }
+
+error[E004]: a target whose lines do not fit together
+
+When it appears
+  A target has none of `run`, `serve`, `pixie` and `driver`, or two of them; `serve` without `port`; `port` without `serve`; `port auto` with no `{port}` in its command or its `env` values, so that the service has no way to learn the port geas gives it; or one of its lines twice. A `run` target is a command geas starts for each `when`; a `serve` target is a service geas starts once per claim and sends requests to on its `port`, or opens as a page; a `pixie` target is a pixie app, and a `driver` target a GUI reached through a driver program.
+
+What usually fixes it
+  Give a command target one `run` line, a service target one `serve` line and one `port` line, a pixie app one `pixie` line, and a GUI behind a driver one `driver` line. With `port auto`, write `{port}` where the service reads its port: `serve "python3 server.py {port}"`.
+
+Repro
+  $ geas check e004.geas
+  e004.geas:
+    target api {
+      serve "python3 server.py 8123"
+    }
+
+    claim "greets by name" {
+      when api.get("/greet?name=Ada")
+      then status is 200
+    }
+
+error[E005]: a claim that cannot run
+
+When it appears
+  A claim has no steps, or a `then` (or an `and`) comes before any `when`. A claim runs its `when`s in order, and each check reads what the `when` before it observed.
+
+What usually fixes it
+  Start the claim with the `when` whose observation the check reads.
+
+Repro
+  $ geas check e005.geas
+  e005.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      then stdout is "5"
+      when calc.run("2", "+", "3")
+    }
+
+error[E006]: a call its target does not take
+
+When it appears
+  A `when` makes a call its target does not take: `get`, `post` or an action (`open`, `click`, `input`, `submit`, `press`, `advance`) on a `run` target; `run` on a `serve` target; anything but an action on a `pixie` or a `driver` target.
+
+What usually fixes it
+  Call a command with `run(…)`, a service with `get(…)`, `post(…)` or the actions on its page, and a pixie app or a GUI behind a driver with the actions; or point the `when` at the target meant.
+
+Repro
+  $ geas check e006.geas
+  e006.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.get("/add?a=2&b=3")
+      then body is "5"
+    }
+
+error[E007]: a check of something its `when` does not observe
+
+When it appears
+  A check names something the `when` before it does not observe: `status`, `header`, `body` or `screen` after a `run`; `stdout`, `stderr`, `exit` or `screen` after a `get` or a `post`; anything but `screen` after an action. geas finds this before it runs anything.
+
+What usually fixes it
+  Check what that call gives (a `run`: stdout, stderr, exit; a `get` or a `post`: status, header, body, body json; an action: screen), or move the check after the `when` that gives it.
+
+Repro
+  $ geas check e007.geas
+  e007.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then status is 200
+    }
+
+error[E008]: a matcher that does not fit its subject or its value
+
+When it appears
+  The matcher does not fit what it checks, or the value after it: `contains`, `matches` or `exists` (or their `does not` forms) on `exit` or `status`, which are numbers; `exists` on anything but a header or a JSON path, the two subjects that can be absent; `exit` or `status` compared with a string, `true`, `false` or `null`; a text compared with `true`, `false` or `null`, which are JSON values; `is above`, `is below`, `is at least`, `is at most` or `is between` given anything but a number, or `is between` with its larger end first; `contains` given anything but a string; `matches` given anything but a pattern in quotes; `screen` checked with anything but `contains` or `does not contain` and a node; a node given to `contains` on a text or a number.
+
+What usually fixes it
+  Compare a number with `is`, `is not` or a number matcher, and a number written without quotes (`exit is 0`, `status is between 200 and 299`); give `contains` a string and `matches` a pattern, both in quotes; ask `exists` of a header or a JSON path; check the screen for a node, `screen contains button "greet"`.
+
+Repro
+  $ geas check e008.geas
+  e008.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then exit is "0"
+    }
+
+error[E009]: a pattern, or a JSON path, that does not parse
+
+When it appears
+  A pattern after `matches` or `does not match` is not one geas reads: a `(` or a `[` left open, a repetition with nothing before it or right after another, a count that is not `{n}`, `{n,}` or `{n,m}`, or is above 1000, `^` or `$` (a pattern always matches the whole value), or an escape other than `\d`, `\w`, `\s` and their capitals, `\n`, `\t`, `\r`, and a backslash before a character that is not a letter or a digit. Or a JSON path after `body json` or `mask body json` is not made of `.key` and `[0]` steps. The column points at the character where reading stops.
+
+What usually fixes it
+  Write the pattern with literals, `.`, classes such as `[a-z]` and `[^0-9]`, `\d`, `\w`, `\s` and their capitals, groups, `|`, `*`, `+`, `?` and counts. In a claims file a pattern's backslash is written as it is, `matches "\d+"`, and a character the pattern language uses is kept with one: `\.`, `\(`. A JSON path is written `.key`, `.a.b` or `.items[0].name`.
+
+Repro
+  $ geas check e009.geas
+  e009.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then stdout matches "(5"
+    }
+
+error[E010]: a command that cannot be split into words, or has none; `{port}` on a target without a port
+
+When it appears
+  geas splits a `run` or `serve` string into words itself, never through a shell: blanks separate words, `'…'` keeps what is in it as it is, `"…"` keeps blanks and reads `\"` and `\\`, and outside quotes a backslash keeps the next character. The string opens a quote that nothing closes, ends in a backslash, or holds no word at all. Or a `run` target, which has no port, says `{port}`, which stands for the target's port, in its command or in an `env` value.
+
+What usually fixes it
+  Close the quote, or keep the character with a backslash. In a claims file a double quote inside a string is written `\"`, so single quotes are the easy form: `run "python3 'my calc.py'"`. A shell, when one is wanted, is named: `run "sh -c 'cd tools && ./gen'"`. `{port}` belongs to a service: a target with `serve` and `port`.
+
+Repro
+  $ geas check e010.geas
+  e010.geas:
+    target calc {
+      run "python3 'my calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then stdout is "5"
+    }
+
+error[E011]: a pin geas cannot keep for this target, or a time, a locale, a seed or a variable's name it cannot read
+
+When it appears
+  `clock` or `seed` without `env "NAME"` on a target whose processes geas starts, a pixie app among them: no switch sets the time or the random numbers of a program from outside, so geas passes them in a variable the program reads, and the pin has to name it. A service a claim opens as a page takes them without one, since geas keeps the page's clock and random numbers itself, and so does a driver, which is handed every pin. Or a pin's value geas cannot read: a `clock` that is not an RFC 3339 time, a `locale` not written as a language and a region (`ja-JP`), an empty `tz`, a `seed` that is not a whole number from 0, a variable's name that is empty or holds `=`. When a claim runs, a driver that answers its pins with an error, and Chrome refusing a `tz` or a `locale` it does not know, give E011 too.
+
+What usually fixes it
+  Name the variable the program reads, on the same line, `clock "2026-08-29T09:00:00+09:00" env "NOW"` or `seed 7 env "SEED"`, and have the program take the time or the seed from there. Write a time as `2026-08-29T09:00:00+09:00` and a locale as `ja-JP`.
+
+Repro
+  $ geas check e011.geas
+  e011.geas:
+    target calc {
+      run "python3 calc.py"
+      clock "2026-08-29T09:00:00+09:00"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then stdout is "5"
+    }
+
+error[E012]: another target's `when` between two actions on a pixie app
+
+When it appears
+  A claim's actions on a pixie app run as one script: pixie replays the steps headless in one process, and geas reads the screen after each from what it prints. So between the first and the last action on a pixie app, no `when` on another target can run: the app is not running between them. Before the first and after the last is fine.
+
+What usually fixes it
+  Move the other target's `when` before the first action on the app or after the last, or split the claim in two.
+
+Repro
+  $ geas check e012.geas
+  e012.geas:
+    target app {
+      pixie "build/greeter"
+    }
+
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "greets after adding" {
+      when app.input("Ada")
+      when calc.run("2", "+", "3")
+      when app.click("greet")
+      then screen contains text "Hello, Ada!"
+    }
+
+error[E013]: an argument an action cannot take there
+
+When it appears
+  An action is given what it cannot take on its target: `into:` on a pixie app, which reaches a text field by its place only; `nth: 0` or `field: 0`, which count from 1; `advance(0)`; `open("/path")` on a pixie app, which has no paths, or `open()` after another action on it, since the app starts once in a claim; a page's path without its leading `/`; an action on a service's page before the claim opens it; a key geas cannot send to a page.
+
+What usually fixes it
+  Write what the message says the action takes there: `field: n` on pixie, counts from 1, a path with its `/`, `when <target>.open("/")` before the other actions on a page, a key such as `enter`, `tab`, `a` or `cmd-s`.
+
+Repro
+  $ geas check e013.geas
+  e013.geas:
+    target app {
+      pixie "build/greeter"
+    }
+
+    claim "greets the name typed in" {
+      when app.input("Ada", into: "type here")
+      when app.click("greet")
+      then screen contains text "Hello, Ada!"
+    }
+
+error[E030]: a program that could not be started
+
+When it appears
+  The first word of a `run` or `serve` command is not a program geas can start: it is not on `PATH`, or it is not a file the system can run. The claim ends as an error, and its remaining steps do not run.
+
+What usually fixes it
+  Install the program or put it on `PATH`, or correct the command. The `command:` note shows the words geas tried to start.
+
+Repro
+  $ geas check e030.geas
+  e030.geas:
+    target calc {
+      run "geas-example-no-such-program"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then stdout is "5"
+    }
+
+error[E031]: a `run` that did not finish within 5 s
+
+When it appears
+  A `run` command was still running 5 s after it started, so geas stopped it and the claim ended as an error. A service started with `run` instead of `serve` does this.
+
+What usually fixes it
+  Declare a program that keeps running as a `serve` target, or make the command finish sooner.
+
+Repro
+  $ geas check e031.geas
+  e031.geas:
+    target slow {
+      run "sleep 10"
+    }
+
+    claim "finishes" {
+      when slow.run()
+      then exit is 0
+    }
+
+error[E032]: a service that exited before opening its port, or did not open it within 5 s
+
+When it appears
+  geas started a `serve` target and waited for its port to open on 127.0.0.1: the service exited first, or the port was still closed after 5 s. The notes give the command and the last lines of its stderr.
+
+What usually fixes it
+  Make the service listen on 127.0.0.1 at the target's `port`; its stderr usually says why it stopped.
+
+Repro
+  $ geas check e032.geas
+  e032.geas:
+    target api {
+      serve "false"
+      port 8123
+    }
+
+    claim "answers" {
+      when api.get("/")
+      then status is 200
+    }
+
+error[E033]: an HTTP exchange that failed: refused, cut off, malformed, or no answer within 5 s
+
+When it appears
+  A `get` or a `post` reached the service's port and got no HTTP answer: the connection was refused, the service closed it without answering, what came back was not HTTP, or nothing came back within 5 s. The notes give the last lines of the service's stderr.
+
+What usually fixes it
+  Make the service answer every request with an HTTP response. A service that fails on a request often closes the connection; its stderr says why.
+
+Repro (needs python3)
+  $ geas check e033.geas
+  e033.geas:
+    target api {
+      serve "python3 hangup.py 8123"
+      port 8123
+    }
+
+    claim "answers" {
+      when api.get("/")
+      then status is 200
+    }
+  hangup.py:
+    # Accepts every connection and closes it without answering.
+    import socket
+    import sys
+
+    server = socket.create_server(("127.0.0.1", int(sys.argv[1])))
+    while True:
+        connection, _ = server.accept()
+        connection.close()
+
+error[E034]: Chrome not found, not started, or not answering on its port
+
+When it appears
+  A claim acts on a service's page, which geas opens in headless Chrome, and Chrome cannot be had: `GEAS_CHROME` names something that is not a file; no Chrome is found (the macOS application, then `google-chrome`, `chromium` or `chromium-browser` on PATH); Chrome exits, or does not open its debugging port within 15 s; or it stops answering. Each claim that needs Chrome ends as an error.
+
+What usually fixes it
+  Install Chrome or Chromium, or set GEAS_CHROME to the program to start (on macOS, `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`).
+
+Repro (needs python3)
+  $ GEAS_CHROME=no-such-chrome geas check e034.geas
+  e034.geas:
+    target web {
+      serve "python3 -m http.server {port} --bind 127.0.0.1"
+      port auto
+    }
+
+    claim "shows the files" {
+      when web.open("/")
+      then screen contains heading containing "Directory listing"
+    }
+
+error[E035]: an action the app refused
+
+When it appears
+  The app could not do what a `when` asked: nothing of that name to click, no such text field, a key nothing takes. pixie exits with 101 at such a step, a driver answers with an error, and a page in Chrome has no node of that role and name. The notes give the screen the app was on, and what on it the action could have reached.
+
+What usually fixes it
+  Name what the screen has, as the notes list it, by its role and its name, which is what a screen reader reads out. A control a claim cannot reach by its name is one a person using a screen reader cannot reach either: give it a name in the app (a label, `aria-label`).
+
+Repro (needs python3)
+  $ geas check e035.geas
+  e035.geas:
+    target app {
+      driver "python3 driver.py"
+    }
+
+    claim "saves" {
+      when app.click("Save")
+      then screen contains text "saved"
+    }
+  driver.py:
+    # A driver of a screen with one button, `save`, that refuses every other click.
+    import json
+    import sys
+
+    screen = {"children": [{"role": "button", "name": "save"}]}
+    for line in sys.stdin:
+        msg = json.loads(line)
+        if "geas" in msg:
+            print(json.dumps({"ok": True}), flush=True)
+        elif msg["do"] == "close":
+            break
+        elif msg["do"] == "click" and msg["name"] != "save":
+            print(json.dumps({"error": "no button named " + msg["name"], "screen": screen}), flush=True)
+        else:
+            print(json.dumps({"screen": screen}), flush=True)
+
+error[E036]: a page that did not load, or did not settle within 10 s
+
+When it appears
+  geas loads a page and, after each action, lets the page's clock run one second of the page's own time; the clock waits while a request of the page is pending. The page did not load (Chrome reported an error, or the service did not answer the request within 10 s), or that second did not run out within 10 s of real time, as when the page waits on a request the service never answers.
+
+What usually fixes it
+  Make the service answer every request of the page, and soon; a request it never answers holds the page's clock.
+
+Repro (needs python3, chrome)
+  $ geas check e036.geas
+  e036.geas:
+    target web {
+      serve "python3 broken.py {port}"
+      port auto
+    }
+
+    claim "shows the page" {
+      when web.open("/")
+      then screen contains heading "Welcome"
+    }
+  broken.py:
+    # Answers every request with two lengths for one body, which Chrome refuses to load.
+    import socket
+    import sys
+
+    server = socket.create_server(("127.0.0.1", int(sys.argv[1])))
+    while True:
+        connection, _ = server.accept()
+        try:
+            connection.recv(65536)
+            connection.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nContent-Length: 6\r\n\r\nhello!")
+        except OSError:
+            pass
+        connection.close()
+
+error[E037]: output of a GUI driver geas cannot read
+
+When it appears
+  A driver answered with a line that is not JSON, or not of the protocol's shape; did not answer within 5 s; or exited. Or pixie's output held an accessibility tree that reads no way, or not one tree per action; or the app did not finish its script, or ended it with an exit code other than 0 and 101.
+
+What usually fixes it
+  A driver answers the first line, which hands it the pins, with `{"ok":true}`, and each action with one line, `{"screen":…}` or `{"error":"…","screen":…}`, within 5 s. For pixie, run the app by hand with the script the notes give, as `PIXIE_SCRIPT`.
+
+Repro (needs python3)
+  $ geas check e037.geas
+  e037.geas:
+    target app {
+      driver "python3 driver.py"
+    }
+
+    claim "opens" {
+      when app.open()
+      then screen contains button "save"
+    }
+  driver.py:
+    # A driver that takes the pins, then answers every action with a line that is not JSON.
+    import json
+    import sys
+
+    for line in sys.stdin:
+        msg = json.loads(line)
+        if "geas" in msg:
+            print(json.dumps({"ok": True}), flush=True)
+        elif msg["do"] == "close":
+            break
+        else:
+            print("ready", flush=True)
+
+error[E050]: no baseline: run `geas snap` first
+
+When it appears
+  `geas drift` compares a run with the baseline `geas snap` kept beside the spec, in `.geas/<name>.baseline.jsonl` (`<name>` being the spec's file name without `.geas`), and there is none.
+
+What usually fixes it
+  Run `geas snap <spec>` when the behavior is what you accept, then `geas drift <spec>` after each change.
+
+Repro
+  $ geas drift e050.geas
+  e050.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then stdout is "5"
+    }
+
+error[E051]: a baseline that cannot be read
+
+When it appears
+  A line of the spec's baseline (`.geas/<name>.baseline.jsonl`) is not JSON, or lacks what `geas snap` writes there: `claim`, `idx`, `call` and `obs`.
+
+What usually fixes it
+  The baseline is written by `geas snap`, not by hand: run it again to write a new one.
+
+Repro
+  $ geas drift e051.geas
+  e051.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then stdout is "5"
+    }
+  .geas/e051.baseline.jsonl:
+    this is not a baseline
+
+error[E060]: no record: run `geas map` first
+
+When it appears
+  `geas affected` reads the record `geas map` wrote beside the spec, in `.geas/<name>.map.jsonl`, or the records `--map` names, and there is none.
+
+What usually fixes it
+  Run `geas map <spec>` on the code before the change or after it, then `geas affected` again.
+
+Repro
+  $ geas affected e060.geas change.diff --root .
+  e060.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds" {
+      when calc.run("2", "3")
+      then stdout is "5"
+    }
+  calc.py:
+    import sys
+    a, b = int(sys.argv[1]), int(sys.argv[2])
+    print(a + b)
+  change.diff:
+    diff --git a/calc.py b/calc.py
+    index f296577..178c189 100644
+    --- a/calc.py
+    +++ b/calc.py
+    @@ -1,2 +1,3 @@
+     import sys
+    -print(int(sys.argv[1]) + int(sys.argv[2]))
+    +a, b = int(sys.argv[1]), int(sys.argv[2])
+    +print(a + b)
+
+error[E061]: a record that cannot be read, of another format version, or of another spec
+
+When it appears
+  A line of the record is not what `geas map` writes; or the record is of a format this geas does not read; or it was made for another spec: its `spec` names another file relative to the root, as when `map` was given another `--root`.
+
+What usually fixes it
+  A record is written by `geas map`, not by hand: run it again on this spec, with the `--root` that `affected` is given.
+
+Repro
+  $ geas affected e061.geas change.diff --root .
+  e061.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds" {
+      when calc.run("2", "3")
+      then stdout is "5"
+    }
+  calc.py:
+    import sys
+    a, b = int(sys.argv[1]), int(sys.argv[2])
+    print(a + b)
+  change.diff:
+    diff --git a/calc.py b/calc.py
+    index f296577..178c189 100644
+    --- a/calc.py
+    +++ b/calc.py
+    @@ -1,2 +1,3 @@
+     import sys
+    -print(int(sys.argv[1]) + int(sys.argv[2]))
+    +a, b = int(sys.argv[1]), int(sys.argv[2])
+    +print(a + b)
+  .geas/e061.map.jsonl:
+    {"geas_map":1,"spec":"other.geas","root":".","claims":[{"name":"adds","status":"ok","targets":["calc"]}]}
+    {"file":"calc.py","blob":"f296577308110001ace80922309b2a55b5c8b854","lang":"python","code":"1-2"}
+    {"claim":"adds","target":"calc","file":"calc.py","ran":"1-2"}
+
+error[E062]: a stale record: a file's hash on disk or in the diff is not the recorded one
+
+When it appears
+  A record is held to the code it was made on, file by file, by git's blob hashes, which geas computes itself: a source file the diff does not touch has to have its recorded hash on disk, and one it touches has to have, in the record, the hash of the code before the change or after it. A source file added since the record and missing from the diff counts too. The notes name the files that differ.
+
+What usually fixes it
+  Record again with `geas map <spec>`, on the code before the change or after it. A new file has to be in the diff: `git add -N <file>` makes `git diff` show it.
+
+Repro
+  $ geas affected e062.geas change.diff --root .
+  e062.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds" {
+      when calc.run("2", "3")
+      then stdout is "5"
+    }
+  calc.py:
+    import sys
+    a, b = int(sys.argv[1]), int(sys.argv[2])
+    print(a + b)
+  README.md:
+    A calculator.
+    It adds.
+  change.diff:
+    diff --git a/README.md b/README.md
+    index 734af0a..62c08b9 100644
+    --- a/README.md
+    +++ b/README.md
+    @@ -1 +1,2 @@
+     A calculator.
+    +It adds.
+  .geas/e062.map.jsonl:
+    {"geas_map":1,"spec":"e062.geas","root":".","claims":[{"name":"adds","status":"ok","targets":["calc"]}]}
+    {"file":"calc.py","blob":"f296577308110001ace80922309b2a55b5c8b854","lang":"python","code":"1-2"}
+    {"claim":"adds","target":"calc","file":"calc.py","ran":"1-2"}
+
+error[E063]: added lines with only a record of the code before the change
+
+When it appears
+  An added or rewritten line is looked up in a record of the code after the change, since its number is a line of that code, and the only record given is of the code before it.
+
+What usually fixes it
+  Run `geas map <spec> --out <after.jsonl>` on the changed code, and give both records: `--map <before> --map <after.jsonl>`.
+
+Repro
+  $ geas affected e063.geas change.diff --root .
+  e063.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds" {
+      when calc.run("2", "3")
+      then stdout is "5"
+    }
+  calc.py:
+    import sys
+    a, b = int(sys.argv[1]), int(sys.argv[2])
+    print(a + b)
+  change.diff:
+    diff --git a/calc.py b/calc.py
+    index f296577..178c189 100644
+    --- a/calc.py
+    +++ b/calc.py
+    @@ -1,2 +1,3 @@
+     import sys
+    -print(int(sys.argv[1]) + int(sys.argv[2]))
+    +a, b = int(sys.argv[1]), int(sys.argv[2])
+    +print(a + b)
+  .geas/e063.map.jsonl:
+    {"geas_map":1,"spec":"e063.geas","root":".","claims":[{"name":"adds","status":"ok","targets":["calc"]}]}
+    {"file":"calc.py","blob":"f296577308110001ace80922309b2a55b5c8b854","lang":"python","code":"1-2"}
+    {"claim":"adds","target":"calc","file":"calc.py","ran":"1-2"}
+
+error[E064]: a diff that cannot be read, or that fits neither side of the file on disk
+
+When it appears
+  The diff is not a unified diff (`git diff`, `diff -u`), or a hunk does not hold the lines its header counts. Or a diff without `index` lines, as `diff -u` writes it, does not fit the file on disk: geas holds such a diff to the disk, which has to be the code after the change or before it.
+
+What usually fixes it
+  Give the diff of the code on disk, as `git diff` or `diff -u` writes it; `git diff` names both sides' blobs and needs no file on disk.
+
+Repro
+  $ geas affected e064.geas change.diff --root .
+  e064.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds" {
+      when calc.run("2", "3")
+      then stdout is "5"
+    }
+  calc.py:
+    import sys
+    a, b = int(sys.argv[1]), int(sys.argv[2])
+    print(a + b)
+  change.diff:
+    --- calc.py.orig
+    +++ calc.py
+    @@ -1,2 +1,2 @@
+     import sys
+    -print(x)
+    +print(y)
+  .geas/e064.map.jsonl:
+    {"geas_map":1,"spec":"e064.geas","root":".","claims":[{"name":"adds","status":"ok","targets":["calc"]}]}
+    {"file":"calc.py","blob":"f296577308110001ace80922309b2a55b5c8b854","lang":"python","code":"1-2"}
+    {"claim":"adds","target":"calc","file":"calc.py","ran":"1-2"}
+
+error[E065]: a coverage converter missing or failing (`go tool covdata`, `llvm-profdata`, `llvm-cov`)
+
+When it appears
+  In `geas map`, a Go program built with `-cover` or a Rust program built with `-C instrument-coverage` wrote its coverage, and the tool that turns it into lines is missing or failed: `go` for Go; `llvm-profdata` and `llvm-cov` for Rust, from `GEAS_LLVM_BIN` when it is set, else from the Rust toolchain's sysroot, else from PATH. A coverage file that does not read is reported the same way. `map` writes no record then.
+
+What usually fixes it
+  Install the tool: Go's own toolchain for Go; rustup's llvm-tools component for Rust (`rustup component add llvm-tools`), or set GEAS_LLVM_BIN to a directory that holds llvm-profdata and llvm-cov.
+
+Repro (needs python3)
+  $ GEAS_LLVM_BIN=empty geas map e065.geas --root .
+  e065.geas:
+    target fake {
+      run "python3 fake.py"
+    }
+
+    claim "runs" {
+      when fake.run()
+      then exit is 0
+    }
+  fake.py:
+    # Writes a file where a Rust program built with coverage writes its profile.
+    import os
+
+    name = os.environ["LLVM_PROFILE_FILE"].replace("%p", str(os.getpid())).replace("%m", "1_0")
+    with open(name, "w") as f:
+        f.write("not a profile")
+  empty/.keep:
+
+error[E066]: a service that stopped without writing its record
+
+When it appears
+  In `geas map`, a service is asked to stop with SIGTERM at the end of each claim and given 5 s to exit, since the runtimes write what ran when a program exits. One that had to be killed after the 5 s, or a Go program that wrote its coverage metadata and no counters, may have stopped without writing its lines, so the record cannot be trusted. `map` writes no record then.
+
+What usually fixes it
+  Let the service exit on SIGTERM: Python and Node do, through geas's hooks, unless the program ignores the signal; a Go service returns from main (signal.NotifyContext and Server.Shutdown); a Rust service needs a handler of its own.
+
+Repro (needs python3)
+  $ geas map e066.geas --root .
+  e066.geas:
+    target api {
+      serve "python3 stubborn.py 8123"
+      port 8123
+    }
+
+    claim "answers" {
+      when api.get("/")
+      then status is 200
+    }
+  stubborn.py:
+    # A service that ignores SIGTERM, so it never stops by itself.
+    import signal
+    import sys
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+
+    HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
+
+error[E080]: arguments the command does not take
+
+When it appears
+  geas was run with no command or an unknown one, with an option the command does not take or an option without its value, with `--jobs` given anything but a whole number from 1, without the specs (or, for `explain`, the codes) the command needs, or with a file given to `skill`, or `--force` without `--install`.
+
+What usually fixes it
+  `geas --help` lists the commands and their options.
+
+Repro
+  $ geas check
+
+error[E081]: a file that cannot be read or written
+
+When it appears
+  geas could not read a spec, or could not write the journal or the baseline in the `.geas/` directory beside it, or `geas skill --install <dir>` could not write the skill folder, or found `<dir>/geas` already there and was not given `--force`. The message carries the system's reason.
+
+What usually fixes it
+  Check the path, and that the spec's directory can be written to. For `geas skill --install`, add `--force` to write the skill over the folder that is there.
+
+Repro
+  $ geas check missing.geas
+
+warning[W060]: a target that gave no record at all in `map`
+
+When it appears
+  In `geas map`, no process a target started reported a line of a file under the root. geas records Python 3.12 and later, Node, a Go program built with `-cover` and a Rust program built with `-C instrument-coverage`; a shell script, an older Python, a program built without coverage, or a program outside the root gives nothing. The record is still written, without that target's lines.
+
+What usually fixes it
+  Build the program with coverage for `map` (`go build -cover`, `rustc -C instrument-coverage`), run Python 3.12 or later, or leave the target as it is when its code is not the project's: the warning says only that `affected` will call its changes unclaimed.
+
+Repro
+  $ geas map w060.geas --root .
+  w060.geas:
+    target five {
+      run "echo 5"
+    }
+
+    claim "prints five" {
+      when five.run()
+      then stdout is "5"
+    }
+
+warning[W061]: a Rust profile from a program geas did not start itself
+
+When it appears
+  In `geas map`, a Rust program built with `-C instrument-coverage` wrote a profile, and it is not a program geas started: a script or `cargo run` started it. `llvm-cov` turns a profile into lines only with the program that wrote it, and geas knows only the programs it starts, so that profile is left out of the record.
+
+What usually fixes it
+  Make the target's command start the built program itself: `run "./tally"`, not `run "cargo run"` or a script.
+
+Repro (needs rustc, llvm-tools)
+  $ geas map w061.geas --root .
+  w061.geas:
+    target tally {
+      run "sh tally.sh"
+    }
+
+    claim "adds" {
+      when tally.run("2", "3")
+      then stdout is "5"
+    }
+  tally.sh:
+    # Builds the program with coverage the first time, then runs it: the program is
+    # started by sh, not by geas.
+    [ -x tally ] || rustc --edition 2021 -C instrument-coverage -o tally tally.rs
+    ./tally "$@"
+  tally.rs:
+    fn main() {
+        let sum: i64 = std::env::args().skip(1).map(|a| a.parse::<i64>().unwrap_or(0)).sum();
+        println!("{sum}");
+    }

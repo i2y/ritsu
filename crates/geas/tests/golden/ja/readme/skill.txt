@@ -1,0 +1,9 @@
+$ geas skill --install .claude/skills --lang ja
+geas のスキルを .claude/skills/geas に書きました（ファイル 7 個）
+$ geas skill --install .claude/skills --lang ja
+エラー[E081]: .claude/skills/geas はすでにあります。`geas skill --install` が上書きするのは、`--force` を付けたときだけです
+  = `--force` を付けると、スキルのファイルを書き直し、フォルダーにあるほかのファイルはそのまま残します
+$ echo $?
+2
+$ geas skill --install .claude/skills --force --lang ja
+geas のスキルを .claude/skills/geas に書きました（ファイル 7 個）

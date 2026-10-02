@@ -1,0 +1,2 @@
+error[E080]: `--all` is not an option of `geas check`
+  = it takes: --json, --lang, --jobs

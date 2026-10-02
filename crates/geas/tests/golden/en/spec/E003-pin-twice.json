@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E003-pin-twice.geas","diagnostics":[{"code":"E003","severity":"error","file":"E003-pin-twice.geas","line":4,"col":3,"message":"`tz` is pinned twice in the target `report`","notes":["the first is on line 3"],"path":[]}]}

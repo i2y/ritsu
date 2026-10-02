@@ -1,0 +1,23 @@
+$ geas map examples/greeter/greeter.ja.geas --lang ja
+ok 1 - 名前で挨拶する
+ok 2 - 空の名前は断る
+ok 3 - 足した数が積み上がる
+ok 4 - 知らないパスには 404 を返す
+主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: examples/greeter/.geas/greeter.ja.journal.jsonl
+記録: ファイル 2 件 · コード 40 行 · どれかの主張が通った行 38 行 → examples/greeter/.geas/greeter.ja.map.jsonl
+$ git diff | geas affected examples/greeter/greeter.ja.geas - --lang ja
+差分: <stdin> · 記録: examples/greeter/.geas/greeter.ja.map.jsonl（変更後のコード）
+この変更が関わる主張:
+  1 - 名前で挨拶する
+      examples/greeter/server.py: 21
+  2 - 空の名前は断る
+      examples/greeter/server.py: 21
+  4 - 知らないパスには 404 を返す
+      examples/greeter/server.py: 29
+  `api` を起動するすべての主張: 1、2、3、4
+      examples/greeter/server.py: 削除した行 10-11（通る行の隣）
+どの主張も通らないコードの変更:
+  examples/greeter/server.py: 30
+主張 4 件 · 関わる主張 4 件 · どの主張も通らない変更 1 行
+$ echo $?
+1

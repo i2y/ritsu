@@ -1,0 +1,7 @@
+{"geas_map":1,"spec":"examples/tally-node/tally.geas","root":"../..","claims":[{"name":"starts at zero","status":"ok","targets":["tally"]},{"name":"adds what it is given","status":"ok","targets":["tally"]},{"name":"refuses what is not a number","status":"ok","targets":["tally"]},{"name":"reset goes back to zero","status":"ok","targets":["tally"]},{"name":"unknown paths are 404","status":"ok","targets":["tally"]}]}
+{"file":"examples/tally-node/server.ts","blob":"f009255e141f752603ce6df80afa3d2b0a13c248","lang":"node","code":"1-2,4,6-10,12-18,20-39,41-44"}
+{"claim":"starts at zero","target":"tally","file":"examples/tally-node/server.ts","ran":"1-2,4,6-10,20-23,39,41-44"}
+{"claim":"adds what it is given","target":"tally","file":"examples/tally-node/server.ts","ran":"1-2,4,6-10,12-18,20-25,29-31,39,41-44"}
+{"claim":"refuses what is not a number","target":"tally","file":"examples/tally-node/server.ts","ran":"1-2,4,6-10,12-18,20-21,24-28,39,41-44"}
+{"claim":"reset goes back to zero","target":"tally","file":"examples/tally-node/server.ts","ran":"1-2,4,6-10,12-18,20-25,29-31,34-36,39,41-44"}
+{"claim":"unknown paths are 404","target":"tally","file":"examples/tally-node/server.ts","ran":"1-2,4,6-10,20-21,37-39,41-44"}

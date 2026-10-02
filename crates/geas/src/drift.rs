@@ -1,6 +1,10 @@
+//! `geas snap` and `geas drift`: the baseline, and every change from it, claimed
+//! (a check covers the field, so `geas check` decides) or unclaimed (nothing does).
+
+use crate::diag::{count, t, Lang, Text};
 use crate::json::{self, J};
 use crate::model::*;
-use crate::run::{ClaimResult, ClaimStatus, Obs};
+use crate::run::{ClaimResult, Obs};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -13,90 +17,171 @@ pub struct BaseRec {
     pub obs: Obs,
 }
 
-pub fn write_baseline(path: &Path, results: &[ClaimResult]) -> std::io::Result<usize> {
+/// Why a baseline cannot be used.
+pub enum BaselineError {
+    /// There is none: E050.
+    Missing,
+    /// The file is there and cannot be read: E081.
+    Unreadable(std::io::Error),
+    /// A line is not what `geas snap` writes: E051.
+    Bad { line: usize, why: Text },
+}
+
+/// What a masked value is written as, in the journal and the baseline.
+pub const MASKED: &str = "<masked>";
+
+/// An observation as the journal and the baseline record it: the value of a masked
+/// header, and of a masked JSON path in a body that is JSON, written as
+/// `<masked>` (the body then written back compactly). A mask declares a value to be
+/// noise, so a record that kept it would differ from run to run where the spec says
+/// nothing changed. Checks see the observation itself.
+pub fn recorded(obs: &Obs, masks: &[Mask]) -> Obs {
+    if let Obs::Screen(screen) = obs {
+        let patterns: Vec<&crate::screen::Pattern> = masks
+            .iter()
+            .filter_map(|m| match m {
+                Mask::Screen(p) => Some(p),
+                _ => None,
+            })
+            .collect();
+        return Obs::Screen(crate::screen::masked(screen, &patterns));
+    }
+    let Obs::Http { status, headers, body } = obs else {
+        return obs.clone();
+    };
+    let masked_header = |name: &str| masks.iter().any(|m| matches!(m, Mask::Header(h) if h == name));
+    let headers = headers
+        .iter()
+        .map(|(k, v)| (k.clone(), if masked_header(k) { MASKED.to_string() } else { v.clone() }))
+        .collect();
+    let paths: Vec<&str> = masks
+        .iter()
+        .filter_map(|m| match m {
+            Mask::BodyJson(p) => Some(p.as_str()),
+            _ => None,
+        })
+        .collect();
+    let mut body = body.clone();
+    if !paths.is_empty()
+        && let Ok(mut v) = json::parse(&body)
+    {
+        let mut changed = false;
+        for p in paths {
+            if let Some(slot) = json::path_get_mut(&mut v, p) {
+                *slot = J::Str(MASKED.into());
+                changed = true;
+            }
+        }
+        if changed {
+            body = json::render(&v);
+        }
+    }
+    Obs::Http { status: *status, headers, body }
+}
+
+/// Headers as a JSON object, in the order they are kept (by name).
+pub fn headers_json(headers: &[(String, String)]) -> String {
+    let hs: Vec<String> = headers.iter().map(|(k, v)| format!("{}:{}", json::quote(k), json::quote(v))).collect();
+    format!("{{{}}}", hs.join(","))
+}
+
+/// The format of the baseline's first line.
+pub const BASELINE_FORMAT: u32 = 1;
+
+/// A baseline as read: its observations, and the pins each target had when it was
+/// taken (none from a baseline written before pins, which had none).
+pub struct Baseline {
+    pub recs: Vec<BaseRec>,
+    /// Target by target, the pins as JSON.
+    pub pins: Vec<(String, String)>,
+}
+
+/// The baseline's first line: the format, and the pins of every target that has
+/// some, so that drift can say when they changed.
+fn baseline_head(spec: &Spec) -> String {
+    let pins: Vec<String> = spec
+        .targets
+        .iter()
+        .filter(|t| !t.pins.is_empty())
+        .map(|t| format!("{}:{}", json::quote(&t.name), t.pins.json()))
+        .collect();
+    format!("{{\"geas_baseline\":{BASELINE_FORMAT},\"pins\":{{{}}}}}", pins.join(","))
+}
+
+/// Writes the baseline; the number of observations it keeps.
+pub fn write_baseline(path: &Path, spec: &Spec, results: &[ClaimResult]) -> std::io::Result<usize> {
     let mut lines = Vec::new();
     for r in results {
         for o in &r.observations {
-            let obs_s = match &o.obs {
+            let obs_s = match recorded(&o.obs, &spec.masks) {
                 Obs::Proc { stdout, stderr, exit } => format!(
-                    "{{\"kind\":\"proc\",\"stdout\":\"{}\",\"stderr\":\"{}\",\"exit\":{}}}",
-                    json::esc(stdout),
-                    json::esc(stderr),
+                    "{{\"kind\":\"proc\",\"stdout\":{},\"stderr\":{},\"exit\":{}}}",
+                    json::quote(&stdout),
+                    json::quote(&stderr),
                     exit
                 ),
-                Obs::Http { status, headers, body } => {
-                    let hs: Vec<String> = headers
-                        .iter()
-                        .map(|(k, v)| format!("\"{}\":\"{}\"", json::esc(k), json::esc(v)))
-                        .collect();
-                    format!(
-                        "{{\"kind\":\"http\",\"status\":{},\"headers\":{{{}}},\"body\":\"{}\"}}",
-                        status,
-                        hs.join(","),
-                        json::esc(body)
-                    )
-                }
+                Obs::Http { status, headers, body } => format!(
+                    "{{\"kind\":\"http\",\"status\":{},\"headers\":{},\"body\":{}}}",
+                    status,
+                    headers_json(&headers),
+                    json::quote(&body)
+                ),
+                Obs::Screen(screen) => format!("{{\"kind\":\"screen\",\"screen\":{}}}", screen.json()),
             };
             lines.push(format!(
-                "{{\"claim\":\"{}\",\"idx\":{},\"target\":\"{}\",\"call\":\"{}\",\"obs\":{}}}",
-                json::esc(&r.name),
+                "{{\"claim\":{},\"idx\":{},\"target\":{},\"call\":{},\"obs\":{}}}",
+                json::quote(&r.name),
                 o.idx,
-                json::esc(&o.target),
-                json::esc(&o.call),
+                json::quote(&o.target),
+                json::quote(&o.call),
                 obs_s
             ));
         }
     }
+    let kept = lines.len();
+    lines.insert(0, baseline_head(spec));
     std::fs::write(path, lines.join("\n") + "\n")?;
-    Ok(lines.len())
+    Ok(kept)
 }
 
-fn jget<'a>(j: &'a J, key: &str) -> Result<&'a J, String> {
+fn jget<'a>(j: &'a J, key: &str) -> Result<&'a J, Text> {
     match j {
         J::Obj(pairs) => pairs
             .iter()
             .find(|(k, _)| k == key)
             .map(|(_, v)| v)
-            .ok_or_else(|| format!("baseline record missing `{}`", key)),
-        _ => Err("baseline record is not an object".into()),
+            .ok_or_else(|| t(format!("the line has no `{key}`"), format!("この行に `{key}` がありません"))),
+        _ => Err(t("the line is not a JSON object", "この行は JSON のオブジェクトではありません")),
     }
 }
 
-fn jstr(j: &J, key: &str) -> Result<String, String> {
+fn jstr(j: &J, key: &str) -> Result<String, Text> {
     match jget(j, key)? {
         J::Str(s) => Ok(s.clone()),
-        _ => Err(format!("baseline `{}` is not a string", key)),
+        _ => Err(t(format!("`{key}` is not a string"), format!("`{key}` が文字列ではありません"))),
     }
 }
 
-fn jnum(j: &J, key: &str) -> Result<f64, String> {
+fn jnum(j: &J, key: &str) -> Result<f64, Text> {
     match jget(j, key)? {
         J::Num(n) => Ok(*n),
-        _ => Err(format!("baseline `{}` is not a number", key)),
+        _ => Err(t(format!("`{key}` is not a number"), format!("`{key}` が数ではありません"))),
     }
 }
 
-pub fn read_baseline(path: &Path) -> Result<Vec<BaseRec>, String> {
-    let s = std::fs::read_to_string(path)
-        .map_err(|e| format!("cannot read baseline {}: {} (run `geas snap` first)", path.display(), e))?;
-    let mut out = Vec::new();
-    for (n, line) in s.lines().enumerate() {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let j = json::parse(line).map_err(|e| format!("baseline line {}: {}", n + 1, e))?;
-        let claim = jstr(&j, "claim")?;
-        let idx = jnum(&j, "idx")? as usize;
-        let call = jstr(&j, "call")?;
-        let o = jget(&j, "obs")?;
-        let kind = jstr(o, "kind")?;
-        let obs = if kind == "proc" {
-            Obs::Proc {
-                stdout: jstr(o, "stdout")?,
-                stderr: jstr(o, "stderr")?,
-                exit: jnum(o, "exit")? as i32,
-            }
-        } else {
+fn base_rec(line: &str) -> Result<BaseRec, Text> {
+    let j = json::parse(line).map_err(|e| t(format!("the line is not JSON: {e}"), "この行は JSON ではありません"))?;
+    let claim = jstr(&j, "claim")?;
+    let idx = jnum(&j, "idx")? as usize;
+    let call = jstr(&j, "call")?;
+    let o = jget(&j, "obs")?;
+    let obs = match jstr(o, "kind")?.as_str() {
+        "proc" => Obs::Proc {
+            stdout: jstr(o, "stdout")?,
+            stderr: jstr(o, "stderr")?,
+            exit: jnum(o, "exit")? as i32,
+        },
+        "http" => {
             let mut headers = Vec::new();
             if let J::Obj(pairs) = jget(o, "headers")? {
                 for (k, v) in pairs {
@@ -105,28 +190,78 @@ pub fn read_baseline(path: &Path) -> Result<Vec<BaseRec>, String> {
                     }
                 }
             }
-            Obs::Http {
-                status: jnum(o, "status")? as u16,
-                headers,
-                body: jstr(o, "body")?,
-            }
-        };
-        out.push(BaseRec { claim, idx, call, obs });
+            Obs::Http { status: jnum(o, "status")? as u16, headers, body: jstr(o, "body")? }
+        }
+        "screen" => {
+            let node = crate::screen::Node::from_json(jget(o, "screen")?)
+                .map_err(|e| t(format!("`screen` is not a screen: {e}"), format!("`screen` が画面になっていません: {e}")))?;
+            Obs::Screen(node)
+        }
+        _ => {
+            return Err(t(
+                "`kind` is none of `proc`, `http` and `screen`",
+                "`kind` が `proc`・`http`・`screen` のどれでもありません",
+            ));
+        }
+    };
+    Ok(BaseRec { claim, idx, call, obs })
+}
+
+/// The pins of a baseline's first line, target by target; None for a line that is
+/// not the first line `geas snap` writes.
+fn base_head(line: &str) -> Option<Result<Vec<(String, String)>, Text>> {
+    let j = json::parse(line).ok()?;
+    let version = jget(&j, "geas_baseline").ok()?;
+    if !matches!(version, J::Num(n) if *n == f64::from(BASELINE_FORMAT)) {
+        let v = json::render(version);
+        return Some(Err(t(
+            format!("the baseline is of format {v}, and this geas reads format {BASELINE_FORMAT}"),
+            format!("このベースラインの形式は {v} で、この geas が読めるのは形式 {BASELINE_FORMAT} です"),
+        )));
+    }
+    let pins = match jget(&j, "pins") {
+        Ok(J::Obj(pairs)) => pairs.iter().map(|(k, v)| (k.clone(), json::render(v))).collect(),
+        _ => return Some(Err(t("the first line has no `pins` object", "最初の行に `pins` のオブジェクトがありません"))),
+    };
+    Some(Ok(pins))
+}
+
+pub fn read_baseline(path: &Path) -> Result<Baseline, BaselineError> {
+    let s = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(BaselineError::Missing),
+        Err(e) => return Err(BaselineError::Unreadable(e)),
+    };
+    let mut out = Baseline { recs: Vec::new(), pins: Vec::new() };
+    let mut first = true;
+    for (n, line) in s.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        // a baseline from before pins has no first line of its own
+        if std::mem::take(&mut first)
+            && let Some(head) = base_head(line)
+        {
+            out.pins = head.map_err(|why| BaselineError::Bad { line: n + 1, why })?;
+            continue;
+        }
+        out.recs.push(base_rec(line).map_err(|why| BaselineError::Bad { line: n + 1, why })?);
     }
     Ok(out)
 }
 
 // ---------- claimed-subject map ----------
 
-fn claimed_map(claim: &Claim) -> HashMap<usize, Vec<Subject>> {
-    let mut m: HashMap<usize, Vec<Subject>> = HashMap::new();
+/// The checks of each `when`, by its place in the claim.
+fn claimed_map(claim: &Claim) -> HashMap<usize, Vec<Check>> {
+    let mut m: HashMap<usize, Vec<Check>> = HashMap::new();
     let mut idx: isize = -1;
     for s in &claim.steps {
         match s {
             Step::When { .. } => idx += 1,
             Step::Then(c) => {
                 if idx >= 0 {
-                    m.entry(idx as usize).or_default().push(c.subject.clone());
+                    m.entry(idx as usize).or_default().push(c.clone());
                 }
             }
         }
@@ -174,10 +309,16 @@ fn path_covers(claimed: &str, diff_path: &str) -> bool {
 
 // ---------- comparison ----------
 
+/// One side of a change: as a person reads it, and as JSON.
+struct Side {
+    shown: String,
+    json: String,
+}
+
 struct DiffE {
     field: String,
-    old: Option<String>,
-    new: Option<String>,
+    old: Option<Side>,
+    new: Option<Side>,
     claimed: bool,
 }
 
@@ -186,22 +327,33 @@ fn short(s: &str) -> String {
     if t.len() < s.len() { format!("{}…", t) } else { t }
 }
 
-fn q(s: &str) -> String {
-    format!("\"{}\"", json::esc(&short(s)))
+/// A text value: quoted and cut for a person, whole for JSON.
+fn text_side(s: &str) -> Side {
+    Side { shown: format!("\"{}\"", json::esc(&short(s))), json: json::quote(s) }
 }
 
-fn jdiff(old: &J, new: &J, path: &str, out: &mut Vec<(String, Option<String>, Option<String>)>) {
+fn num_side(n: impl ToString) -> Side {
+    let s = n.to_string();
+    Side { shown: s.clone(), json: s }
+}
+
+fn json_side(v: &J) -> Side {
+    let s = json::render(v);
+    Side { shown: s.clone(), json: s }
+}
+
+fn jdiff<'a>(old: &'a J, new: &'a J, path: &str, out: &mut Vec<(String, Option<&'a J>, Option<&'a J>)>) {
     match (old, new) {
         (J::Obj(a), J::Obj(b)) => {
             for (k, va) in a {
                 match b.iter().find(|(kb, _)| kb == k) {
                     Some((_, vb)) => jdiff(va, vb, &format!("{}.{}", path, k), out),
-                    None => out.push((format!("{}.{}", path, k), Some(json::render(va)), None)),
+                    None => out.push((format!("{}.{}", path, k), Some(va), None)),
                 }
             }
             for (k, vb) in b {
                 if !a.iter().any(|(ka, _)| ka == k) {
-                    out.push((format!("{}.{}", path, k), None, Some(json::render(vb))));
+                    out.push((format!("{}.{}", path, k), None, Some(vb)));
                 }
             }
         }
@@ -211,10 +363,10 @@ fn jdiff(old: &J, new: &J, path: &str, out: &mut Vec<(String, Option<String>, Op
                 jdiff(&a[i], &b[i], &format!("{}[{}]", path, i), out);
             }
             for (i, item) in a.iter().enumerate().skip(n) {
-                out.push((format!("{}[{}]", path, i), Some(json::render(item)), None));
+                out.push((format!("{}[{}]", path, i), Some(item), None));
             }
             for (i, item) in b.iter().enumerate().skip(n) {
-                out.push((format!("{}[{}]", path, i), None, Some(json::render(item))));
+                out.push((format!("{}[{}]", path, i), None, Some(item)));
             }
         }
         _ => {
@@ -226,60 +378,81 @@ fn jdiff(old: &J, new: &J, path: &str, out: &mut Vec<(String, Option<String>, Op
                 _ => false,
             };
             if !same {
-                out.push((path.to_string(), Some(json::render(old)), Some(json::render(new))));
+                out.push((path.to_string(), Some(old), Some(new)));
             }
         }
     }
 }
 
+/// A node of a screen change, without its children: as a person reads it, and as
+/// JSON.
+fn node_side(n: &crate::screen::Node) -> Side {
+    Side { shown: n.line(), json: n.json() }
+}
+
 fn compare(
     base: &Obs,
     cur: &Obs,
-    subjects: &[Subject],
-    mask_headers: &HashSet<String>,
-    mask_paths: &[String],
+    checks: &[Check],
+    masks: &Masks,
 ) -> Vec<DiffE> {
     let mut out = Vec::new();
+    let subjects: Vec<Subject> = checks.iter().map(|c| c.subject.clone()).collect();
+    let subjects = subjects.as_slice();
     let has = |f: fn(&Subject) -> bool| subjects.iter().any(f);
+    let (mask_headers, mask_paths) = (&masks.headers, &masks.paths);
     match (base, cur) {
-        (
-            Obs::Proc { stdout: so, stderr: eo, exit: xo },
-            Obs::Proc { stdout: sn, stderr: en, exit: xn },
-        ) => {
+        (Obs::Screen(old), Obs::Screen(new)) => {
+            // a change is claimed when a check of this `when` has a pattern
+            // matching the node, before or after (DESIGN §8.6)
+            let patterns: Vec<&crate::screen::Pattern> = checks
+                .iter()
+                .filter_map(|c| match &c.matcher {
+                    Matcher::ContainsNode(p) | Matcher::NotContainsNode(p) => Some(p),
+                    _ => None,
+                })
+                .collect();
+            for ch in crate::screen::diff(old, new, &masks.screen) {
+                out.push(DiffE {
+                    field: ch.place(),
+                    old: ch.old.as_ref().map(|(n, _)| node_side(n)),
+                    new: ch.new.as_ref().map(|(n, _)| node_side(n)),
+                    claimed: patterns.iter().any(|p| ch.claimed_by(p)),
+                });
+            }
+        }
+        (Obs::Proc { stdout: so, stderr: eo, exit: xo }, Obs::Proc { stdout: sn, stderr: en, exit: xn }) => {
             if so != sn {
                 out.push(DiffE {
                     field: "stdout".into(),
-                    old: Some(q(so)),
-                    new: Some(q(sn)),
+                    old: Some(text_side(so)),
+                    new: Some(text_side(sn)),
                     claimed: has(|s| matches!(s, Subject::Stdout)),
                 });
             }
             if eo != en {
                 out.push(DiffE {
                     field: "stderr".into(),
-                    old: Some(q(eo)),
-                    new: Some(q(en)),
+                    old: Some(text_side(eo)),
+                    new: Some(text_side(en)),
                     claimed: has(|s| matches!(s, Subject::Stderr)),
                 });
             }
             if xo != xn {
                 out.push(DiffE {
                     field: "exit".into(),
-                    old: Some(xo.to_string()),
-                    new: Some(xn.to_string()),
+                    old: Some(num_side(xo)),
+                    new: Some(num_side(xn)),
                     claimed: has(|s| matches!(s, Subject::Exit)),
                 });
             }
         }
-        (
-            Obs::Http { status: so, headers: ho, body: bo },
-            Obs::Http { status: sn, headers: hn, body: bn },
-        ) => {
+        (Obs::Http { status: so, headers: ho, body: bo }, Obs::Http { status: sn, headers: hn, body: bn }) => {
             if so != sn {
                 out.push(DiffE {
                     field: "status".into(),
-                    old: Some(so.to_string()),
-                    new: Some(sn.to_string()),
+                    old: Some(num_side(so)),
+                    new: Some(num_side(sn)),
                     claimed: has(|s| matches!(s, Subject::Status)),
                 });
             }
@@ -303,9 +476,9 @@ fn compare(
                     (Some(a), Some(b)) if a == b => {}
                     (a, b) => out.push(DiffE {
                         field: format!("header `{}`", name),
-                        old: a.map(|s| q(s)),
-                        new: b.map(|s| q(s)),
-                        claimed: false,
+                        old: a.map(|s| text_side(s)),
+                        new: b.map(|s| text_side(s)),
+                        claimed: subjects.iter().any(|s| matches!(s, Subject::Header(h) if h == name)),
                     }),
                 }
             }
@@ -323,18 +496,14 @@ fn compare(
                                 Subject::BodyJson(p) => path_covers(p, &path),
                                 _ => false,
                             });
-                            let field = if path.is_empty() {
-                                "body".into()
-                            } else {
-                                format!("body json \"{}\"", path)
-                            };
-                            out.push(DiffE { field, old, new, claimed });
+                            let field = if path.is_empty() { "body".into() } else { format!("body json \"{}\"", path) };
+                            out.push(DiffE { field, old: old.map(json_side), new: new.map(json_side), claimed });
                         }
                     }
                     _ => out.push(DiffE {
                         field: "body".into(),
-                        old: Some(q(bo)),
-                        new: Some(q(bn)),
+                        old: Some(text_side(bo)),
+                        new: Some(text_side(bn)),
                         claimed: has(|s| matches!(s, Subject::Body)),
                     }),
                 }
@@ -342,8 +511,8 @@ fn compare(
         }
         _ => out.push(DiffE {
             field: "observation".into(),
-            old: Some("<one adapter kind>".into()),
-            new: Some("<another adapter kind>".into()),
+            old: Some(text_side("<one adapter kind>")),
+            new: Some(text_side("<another adapter kind>")),
             claimed: false,
         }),
     }
@@ -352,125 +521,206 @@ fn compare(
 
 // ---------- the drift command ----------
 
-pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Vec<BaseRec>, file: &str) -> i32 {
-    let mut base: HashMap<(String, usize), BaseRec> = baseline
-        .into_iter()
-        .map(|b| ((b.claim.clone(), b.idx), b))
-        .collect();
-    let claimed_by: HashMap<&str, HashMap<usize, Vec<Subject>>> = spec
-        .claims
-        .iter()
-        .map(|c| (c.name.as_str(), claimed_map(c)))
-        .collect();
-    let mask_headers: HashSet<String> = spec
-        .masks
-        .iter()
-        .filter_map(|m| match m {
-            Mask::Header(h) => Some(h.clone()),
-            _ => None,
-        })
-        .collect();
-    let mask_paths: Vec<String> = spec
-        .masks
-        .iter()
-        .filter_map(|m| match m {
-            Mask::BodyJson(p) => Some(p.clone()),
-            _ => None,
-        })
-        .collect();
+/// One change, in claim order.
+pub struct Change {
+    pub claim: String,
+    /// The `when`'s place in its claim, from 1.
+    pub when: usize,
+    pub line: usize,
+    /// `api.get("/total")`.
+    pub call: String,
+    pub field: String,
+    old: Option<Side>,
+    new: Option<Side>,
+    pub claimed: bool,
+}
 
-    let mut compared = 0usize;
-    let mut drifted = 0usize;
-    let mut n_unclaimed = 0usize;
-    let mut n_claimed = 0usize;
-    let mut notes: Vec<String> = Vec::new();
-    let mut had_error = false;
+pub struct Report {
+    pub changes: Vec<Change>,
+    pub notes: Vec<Text>,
+    pub compared: usize,
+    pub drifted: usize,
+    pub unclaimed: usize,
+    pub claimed: usize,
+}
 
-    for r in results {
-        if let ClaimStatus::Error { message, line } = &r.status {
-            notes.push(format!(
-                "claim \"{}\" errored during replay ({}:{}: {})",
-                r.name, file, line, message
+/// The masks of a spec, by what they mask.
+struct Masks<'a> {
+    headers: HashSet<String>,
+    paths: Vec<String>,
+    screen: Vec<&'a crate::screen::Pattern>,
+}
+
+pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report {
+    let mut base: HashMap<(String, usize), BaseRec> =
+        baseline.recs.into_iter().map(|b| ((b.claim.clone(), b.idx), b)).collect();
+    let claimed_by: HashMap<&str, HashMap<usize, Vec<Check>>> =
+        spec.claims.iter().map(|c| (c.name.as_str(), claimed_map(c))).collect();
+    let masks = Masks {
+        headers: spec
+            .masks
+            .iter()
+            .filter_map(|m| match m {
+                Mask::Header(h) => Some(h.clone()),
+                _ => None,
+            })
+            .collect(),
+        paths: spec
+            .masks
+            .iter()
+            .filter_map(|m| match m {
+                Mask::BodyJson(p) => Some(p.clone()),
+                _ => None,
+            })
+            .collect(),
+        screen: spec.screen_masks(),
+    };
+
+    let mut r = Report { changes: vec![], notes: vec![], compared: 0, drifted: 0, unclaimed: 0, claimed: 0 };
+    // pins that changed since the baseline: what the targets saw is not what they saw
+    for tg in &spec.targets {
+        let now = json::parse(&tg.pins.json()).map(|v| json::render(&v)).unwrap_or_default();
+        let then = baseline.pins.iter().find(|(name, _)| *name == tg.name).map_or("{}".to_string(), |(_, p)| p.clone());
+        if now != then {
+            let name = &tg.name;
+            r.notes.push(t(
+                format!("the pins of `{name}` differ from the baseline's: {then} → {now}"),
+                format!("ターゲット `{name}` の固定が、ベースラインと違います: {then} → {now}"),
             ));
-            had_error = true;
         }
-        for o in &r.observations {
-            let key = (r.name.clone(), o.idx);
+    }
+    for res in results {
+        for o in &res.observations {
+            let key = (res.name.clone(), o.idx);
+            let (name, n) = (&res.name, o.idx + 1);
             let Some(b) = base.remove(&key) else {
-                notes.push(format!(
-                    "no baseline for claim \"{}\" when#{} (new claim? run `geas snap`)",
-                    r.name,
-                    o.idx + 1
+                r.notes.push(t(
+                    format!("no baseline for claim \"{name}\" when#{n} (new claim? run `geas snap`)"),
+                    format!("主張 \"{name}\" の when#{n} はベースラインにありません（新しい主張なら `geas snap` を走らせてください）"),
                 ));
                 continue;
             };
             if b.call != o.call {
-                notes.push(format!(
-                    "claim \"{}\" when#{}: the call itself changed ({} → {}); re-snap to compare",
-                    r.name,
-                    o.idx + 1,
-                    b.call,
-                    o.call
+                r.notes.push(t(
+                    format!("claim \"{name}\" when#{n}: the call itself changed ({} → {}); re-snap to compare", b.call, o.call),
+                    format!("主張 \"{name}\" の when#{n} は呼び出しそのものが変わりました（{} → {}）。比べるには `geas snap` をやり直してください", b.call, o.call),
                 ));
                 continue;
             }
-            compared += 1;
-            let empty: Vec<Subject> = Vec::new();
-            let subjects = claimed_by
-                .get(r.name.as_str())
-                .and_then(|m| m.get(&o.idx))
-                .unwrap_or(&empty);
-            let diffs = compare(&b.obs, &o.obs, subjects, &mask_headers, &mask_paths);
+            r.compared += 1;
+            let empty: Vec<Check> = Vec::new();
+            let checks = claimed_by.get(res.name.as_str()).and_then(|m| m.get(&o.idx)).unwrap_or(&empty);
+            let diffs = compare(&b.obs, &recorded(&o.obs, &spec.masks), checks, &masks);
             if diffs.is_empty() {
                 continue;
             }
-            drifted += 1;
-            println!("claim \"{}\" when#{} {}", r.name, o.idx + 1, o.call);
+            r.drifted += 1;
             for d in diffs {
-                let mark = match (&d.old, &d.new) {
-                    (Some(_), Some(_)) => "~",
-                    (None, Some(_)) => "+",
-                    _ => "-",
-                };
-                let change = match (&d.old, &d.new) {
-                    (Some(a), Some(b)) => format!("{} → {}", a, b),
-                    (None, Some(b)) => format!("appeared: {}", b),
-                    (Some(a), None) => format!("disappeared: {}", a),
-                    (None, None) => String::new(),
-                };
-                let tag = if d.claimed {
-                    n_claimed += 1;
-                    "[claimed — `geas check` is the authority]"
+                if d.claimed {
+                    r.claimed += 1;
                 } else {
-                    n_unclaimed += 1;
-                    "[unclaimed]"
-                };
-                println!("  {} {}: {}   {}", mark, d.field, change, tag);
+                    r.unclaimed += 1;
+                }
+                r.changes.push(Change {
+                    claim: res.name.clone(),
+                    when: n,
+                    line: o.line,
+                    call: format!("{}.{}", o.target, o.call),
+                    field: d.field,
+                    old: d.old,
+                    new: d.new,
+                    claimed: d.claimed,
+                });
             }
         }
     }
     let mut leftovers: Vec<(String, usize)> = base.into_keys().collect();
     leftovers.sort();
     for (claim, idx) in leftovers {
-        notes.push(format!(
-            "baseline has claim \"{}\" when#{} but the current run does not (claim removed or errored)",
-            claim,
-            idx + 1
+        let n = idx + 1;
+        r.notes.push(t(
+            format!("baseline has claim \"{claim}\" when#{n} but the current run does not (claim removed or errored)"),
+            format!("ベースラインには主張 \"{claim}\" の when#{n} がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）"),
         ));
     }
+    r
+}
 
-    for n in &notes {
-        println!("note: {}", n);
+impl Report {
+    pub fn text(&self, lang: Lang) -> String {
+        let mut out = String::new();
+        let mut last: Option<(&str, usize)> = None;
+        for c in &self.changes {
+            if last != Some((c.claim.as_str(), c.when)) {
+                out.push_str(&match lang {
+                    Lang::En => format!("claim \"{}\" when#{} {}\n", c.claim, c.when, c.call),
+                    Lang::Ja => format!("主張 \"{}\" の when#{} {}\n", c.claim, c.when, c.call),
+                });
+                last = Some((c.claim.as_str(), c.when));
+            }
+            let (mark, change) = match (&c.old, &c.new) {
+                (Some(a), Some(b)) => ("~", format!("{} → {}", a.shown, b.shown)),
+                (None, Some(b)) => ("+", format!("{}: {}", lang.tr("appeared", "現れた"), b.shown)),
+                (Some(a), None) => ("-", format!("{}: {}", lang.tr("disappeared", "消えた"), a.shown)),
+                (None, None) => ("-", String::new()),
+            };
+            let tag = if c.claimed {
+                lang.tr("[claimed — `geas check` is the authority]", "[主張あり — 判定は geas check]")
+            } else {
+                lang.tr("[unclaimed]", "[主張なし]")
+            };
+            out.push_str(&format!("  {} {}: {}   {}\n", mark, c.field, change, tag));
+        }
+        for n in &self.notes {
+            out.push_str(&format!("{} {}\n", lang.tr("note:", "注意:"), n.get(lang)));
+        }
+        out.push_str(&match lang {
+            Lang::En => format!(
+                "drift: {} compared · {} drifted · {} unclaimed change(s) · {} claimed\n",
+                count(self.compared, "interaction", "interactions"),
+                self.drifted,
+                self.unclaimed,
+                self.claimed
+            ),
+            Lang::Ja => format!(
+                "ドリフト: 比べたやりとり {} 件 · 変わったやりとり {} 件 · 主張なしの変化 {} 件 · 主張ありの変化 {} 件\n",
+                self.compared, self.drifted, self.unclaimed, self.claimed
+            ),
+        });
+        out
     }
-    println!(
-        "drift: {} interactions compared · {} drifted · {} unclaimed change(s) · {} claimed",
-        compared, drifted, n_unclaimed, n_claimed
-    );
-    if had_error {
-        2
-    } else if n_unclaimed + n_claimed > 0 {
-        1
-    } else {
-        0
+
+    /// The JSON of Appendix A; `diagnostics` holds the claims that could not run.
+    pub fn json(&self, file: &str, diagnostics: &[String], lang: Lang) -> String {
+        let side = |s: &Option<Side>| s.as_ref().map(|s| s.json.clone()).unwrap_or_else(|| "null".into());
+        let changes: Vec<String> = self
+            .changes
+            .iter()
+            .map(|c| {
+                format!(
+                    "{{\"claim\":{},\"when\":{},\"line\":{},\"call\":{},\"field\":{},\"old\":{},\"new\":{},\"claimed\":{}}}",
+                    json::quote(&c.claim),
+                    c.when,
+                    c.line,
+                    json::quote(&c.call),
+                    json::quote(&c.field),
+                    side(&c.old),
+                    side(&c.new),
+                    c.claimed
+                )
+            })
+            .collect();
+        let notes: Vec<String> = self.notes.iter().map(|n| json::quote(n.get(lang))).collect();
+        format!(
+            "{{\"geas\":1,\"file\":{},\"compared\":{},\"drifted\":{},\"unclaimed\":{},\"claimed\":{},\"changes\":[{}],\"notes\":[{}],\"diagnostics\":[{}]}}",
+            json::quote(file),
+            self.compared,
+            self.drifted,
+            self.unclaimed,
+            self.claimed,
+            changes.join(","),
+            notes.join(","),
+            diagnostics.join(",")
+        )
     }
 }

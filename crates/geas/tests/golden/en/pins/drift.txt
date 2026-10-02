@@ -1,0 +1,9 @@
+claim "the pins outside any target reach every target" when#1 plain.run()
+  ~ stdout: "GEAS_TOP=top\nGEAS_OWN is not set\nTZ=UTC\nGEAS_FROM_TEST=from the test\n" → "GEAS_TOP=top\nGEAS_OWN is not set\nTZ=Europe/Berlin\nGEAS_FROM_TEST=from the test\n"   [claimed — `geas check` is the authority]
+claim "env clean keeps PATH, what the pins set, and what is passed" when#1 clean.run()
+  ~ stdout: "PATH is set\nGEAS_TOP=top\nGEAS_FROM_TEST is not set\nGEAS_PASSED=passed\nHOME is not set\nTZ=UTC\n" → "PATH is set\nGEAS_TOP=top\nGEAS_FROM_TEST is not set\nGEAS_PASSED=passed\nHOME is not set\nTZ=Europe/Berlin\n"   [claimed — `geas check` is the authority]
+claim "env clean keeps PATH, what the pins set, and what is passed" when#2 clean.run()
+  ~ stdout: "PATH is set\nGEAS_TOP=top\nGEAS_FROM_TEST is not set\nGEAS_PASSED=passed\nHOME is not set\nTZ=UTC\n" → "PATH is set\nGEAS_TOP=top\nGEAS_FROM_TEST is not set\nGEAS_PASSED=passed\nHOME is not set\nTZ=Europe/Berlin\n"   [unclaimed]
+note: the pins of `plain` differ from the baseline's: {"env":{"GEAS_TOP":"top"},"tz":"UTC"} → {"env":{"GEAS_TOP":"top"},"tz":"Europe/Berlin"}
+note: the pins of `clean` differ from the baseline's: {"clean":true,"pass":["GEAS_PASSED"],"env":{"GEAS_TOP":"top"},"tz":"UTC"} → {"clean":true,"pass":["GEAS_PASSED"],"env":{"GEAS_TOP":"top"},"tz":"Europe/Berlin"}
+drift: 4 interactions compared · 3 drifted · 1 unclaimed change(s) · 2 claimed

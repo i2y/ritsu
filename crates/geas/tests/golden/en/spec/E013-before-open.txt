@@ -1,0 +1,4 @@
+error[E013]: E013-before-open.geas:7:12: the page of `web` is not open in this claim yet: open it first, `when web.open("/")`
+     7 |   when web.input("milk")
+error[E013]: E013-before-open.geas:8:12: the page of `web` is not open in this claim yet: open it first, `when web.open("/")`
+     8 |   when web.submit()

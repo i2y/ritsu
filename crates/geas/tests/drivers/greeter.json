@@ -1,0 +1,35 @@
+{
+  "start": "asking",
+  "screens": {
+    "asking": {
+      "role": "window",
+      "name": "Greeter",
+      "children": [
+        {"role": "text", "name": "Your name:"},
+        {"role": "textbox", "name": "type here", "value": "{1}"},
+        {"role": "button", "name": "greet"},
+        {"role": "button", "name": "retry", "states": ["disabled"]}
+      ]
+    },
+    "greeted": {
+      "role": "window",
+      "name": "Greeter",
+      "children": [
+        {"role": "text", "name": "Your name:"},
+        {"role": "textbox", "name": "type here", "value": "{1}"},
+        {"role": "button", "name": "greet"},
+        {"role": "text", "name": "Hello, {1}!"},
+        {"role": "button", "name": "retry"}
+      ]
+    }
+  },
+  "on": {
+    "asking click:greet": "greeted",
+    "asking submit": "greeted",
+    "greeted click:retry": "asking"
+  },
+  "refuse_pins": ["clock"],
+  "garble": "garble",
+  "hang": "hang",
+  "die": "die"
+}

@@ -1,0 +1,2 @@
+エラー[E001]: E001-top-level.geas:5:1: `target`、`claim`、`mask`、固定（`env`、`tz`、`locale`、`clock`、`seed`）のどれかを書くところに `when` があります
+     5 | when calc.run("2", "+", "3")

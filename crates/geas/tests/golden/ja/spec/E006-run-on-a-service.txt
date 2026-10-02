@@ -1,0 +1,2 @@
+エラー[E006]: E006-run-on-a-service.geas:7:12: `api` はサービスのターゲットなので、呼べるのは `get` と `post`、ブラウザーで開いたページへの操作（open、click、input、submit、press、advance）で、`run` は呼べません
+     7 |   when api.run("2", "+", "3")

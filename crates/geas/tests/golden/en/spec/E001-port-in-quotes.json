@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-port-in-quotes.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-port-in-quotes.geas","line":3,"col":8,"message":"expected a port number or `auto`, found `\"8123\"`","notes":[],"path":[]}]}

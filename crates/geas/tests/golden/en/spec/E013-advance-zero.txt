@@ -1,0 +1,2 @@
+error[E013]: E013-advance-zero.geas:6:20: `advance` moves the app's clock forward by at least 1 ms
+     6 |   when app.advance(0)

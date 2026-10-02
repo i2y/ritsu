@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-no-colon.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-no-colon.geas","line":7,"col":30,"message":"expected `:`, found `\"5\"`","notes":[],"path":[]}]}

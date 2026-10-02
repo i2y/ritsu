@@ -1,0 +1,16 @@
+not ok 1 - clicks what is not there (error)
+    error[E034]: w/refused.geas:11:3: GEAS_CHROME names `no-such-chrome`, which is not a file geas can start
+        11 |   when web.open("/")
+      the run that gets there:
+          11  when web.open("/")
+not ok 2 - types into a field that is not there (error)
+    error[E034]: w/refused.geas:17:3: GEAS_CHROME names `no-such-chrome`, which is not a file geas can start
+        17 |   when web.open("/")
+      the run that gets there:
+          17  when web.open("/")
+not ok 3 - a page that does not load (error)
+    error[E034]: w/refused.geas:23:3: GEAS_CHROME names `no-such-chrome`, which is not a file geas can start
+        23 |   when web.open("/broken")
+      the run that gets there:
+          23  when web.open("/broken")
+3 claims · 0 ok · 3 failed · journal: w/.geas/refused.journal.jsonl

@@ -1,0 +1,6 @@
+{"geas_map":1,"spec":"examples/calc/calc.geas","root":"../..","claims":[{"name":"adds two integers","status":"ok","targets":["calc"]},{"name":"multiplies","status":"ok","targets":["calc"]},{"name":"refuses division by zero","status":"ok","targets":["calc"]},{"name":"rejects an unknown operator","status":"ok","targets":["calc"]}]}
+{"file":"examples/calc/calc.py","blob":"7da94440920d43f700088f7f78f67d8d8cf7b5d2","lang":"python","code":"1,3-15,17-18"}
+{"claim":"adds two integers","target":"calc","file":"examples/calc/calc.py","ran":"1,3-6"}
+{"claim":"multiplies","target":"calc","file":"examples/calc/calc.py","ran":"1,3-5,7,9-10"}
+{"claim":"refuses division by zero","target":"calc","file":"examples/calc/calc.py","ran":"1,3-5,7,9,11-14"}
+{"claim":"rejects an unknown operator","target":"calc","file":"examples/calc/calc.py","ran":"1,3-5,7,9,11,17-18"}

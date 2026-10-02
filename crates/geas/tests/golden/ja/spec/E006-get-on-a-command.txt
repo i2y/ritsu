@@ -1,0 +1,2 @@
+エラー[E006]: E006-get-on-a-command.geas:6:13: `calc` はコマンドを走らせるターゲットなので、呼べるのは `run` で、`get` は呼べません
+     6 |   when calc.get("/add?a=2&b=3")

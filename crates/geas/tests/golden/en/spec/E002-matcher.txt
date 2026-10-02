@@ -1,0 +1,2 @@
+error[E002]: E002-matcher.geas:7:15: `equals` is not a way to compare; the ways are is, is not, is above, is below, is at least, is at most, is between, contains, does not contain, matches, does not match, exists and does not exist
+     7 |   then stdout equals "5"

@@ -1,0 +1,4 @@
+ok 1 - the pins outside any target reach every target
+ok 2 - a target's own pins win over those outside
+ok 3 - env clean keeps PATH, what the pins set, and what is passed
+3 claims · 3 ok · 0 failed · journal: p/.geas/pins.journal.jsonl

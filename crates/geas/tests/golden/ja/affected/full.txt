@@ -1,0 +1,23 @@
+差分: full.diff · 記録: .geas/shop.map.jsonl（変更後のコード）
+この変更が関わる主張:
+  1 - lists the items
+      app.py: 23
+  2 - prices an item with tax
+      app.py: 26,30
+      tax.py: 6
+  3 - does not price what it lacks
+      app.py: 26,28
+  `api` を起動するすべての主張: 1、2、3
+      app.py: 6-7
+      app.py: 削除した行 18（通る行の隣）
+      inventory.py: 2
+      tax.py: 2,5
+どの主張も通らないコードの変更:
+  app.py: 31-32
+  legacy.py: 3（どのランタイムもこのファイルを報告していません）
+削除したファイル:
+  old.py（変更前のコードの記録がないので、これを通っていた主張は分かりません）
+記録の外のファイル:
+  README.md
+  logo.png
+主張 4 件 · 関わる主張 3 件 · どの主張も通らない変更 3 行

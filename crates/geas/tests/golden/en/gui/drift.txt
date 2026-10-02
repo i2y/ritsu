@@ -1,0 +1,13 @@
+claim "greets the name typed in" when#3 app.click("greet")
+  - screen in window "Greeter": disappeared: text "Hello, Ada!"   [claimed — `geas check` is the authority]
+  + screen in window "Greeter": appeared: text "Hi, Ada!"   [unclaimed]
+  + screen in window "Greeter": appeared: text "version 2"   [unclaimed]
+claim "greets the wrong name" when#2 app.click("greet")
+  - screen in window "Greeter": disappeared: text "Hello, Ada!"   [unclaimed]
+  + screen in window "Greeter": appeared: text "Hi, Ada!"   [unclaimed]
+  + screen in window "Greeter": appeared: text "version 2"   [unclaimed]
+claim "a command between two actions" when#3 app.submit()
+  - screen in window "Greeter": disappeared: text "Hello, Ada!"   [claimed — `geas check` is the authority]
+  + screen in window "Greeter": appeared: text "Hi, Ada!"   [claimed — `geas check` is the authority]
+  + screen in window "Greeter": appeared: text "version 2"   [unclaimed]
+drift: 8 interactions compared · 3 drifted · 6 unclaimed change(s) · 3 claimed

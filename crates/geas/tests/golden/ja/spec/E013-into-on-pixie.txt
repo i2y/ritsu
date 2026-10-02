@@ -1,0 +1,2 @@
+エラー[E013]: E013-into-on-pixie.geas:6:31: `app` は pixie のアプリで、テキストフィールドは何番目かでしか選べません。`field: n` と書きます
+     6 |   when app.input("Ada", into: "type here")

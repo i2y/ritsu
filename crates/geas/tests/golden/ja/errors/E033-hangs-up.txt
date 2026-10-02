@@ -1,0 +1,8 @@
+not ok 1 - answers（エラー）
+    エラー[E033]: e033.geas:7:3: サービス `api` がレスポンスを返さずに接続を閉じました
+         7 |   when api.get("/")
+      = stderr: closing a connection
+      = stderr: closing a connection
+      ここまでの実行:
+           7  when api.get("/")
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: .geas/e033.journal.jsonl

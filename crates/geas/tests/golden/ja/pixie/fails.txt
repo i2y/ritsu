@@ -1,0 +1,23 @@
+not ok 1 - greets the wrong name
+    p/fails.geas:8: screen contains text "Hello, Bob!" のはずが、実際は当てはまるノードがありません
+         8 |   then screen contains text "Hello, Bob!"
+      画面:
+        text "Your name:"
+        textbox "type here" value "Ada"
+        button "greet"
+        text "name: Ada"
+        text "Hello, Ada!"
+        textbox "scratch note (tab here)"
+        text "note: "
+      ここまでの実行:
+           6  when app.input("Ada")  →  text "Your name:", textbox "type here" value "Ada", button "greet", text "name: Ada", textbox "scra…
+           7  when app.click("greet")  →  text "Your name:", textbox "type here" value "Ada", button "greet", text "name: Ada", text "Hello, …
+not ok 2 - clicks what is not there（エラー）
+    エラー[E035]: p/fails.geas:13:3: `app` が `click("nope")` を拒否しました。pixie はスクリプトを `click:nope` で止め、終了コード 101 で終了しました
+        13 |   when app.click("nope")
+      = そのときの画面: text "Your name:", textbox "type here" value "Ada", button "greet", text "name: Ada", textbox "scratch note (tab here)", text "note: "
+      = クリックできるもの: button "greet"
+      ここまでの実行:
+          12  when app.input("Ada")  →  text "Your name:", textbox "type here" value "Ada", button "greet", text "name: Ada", textbox "scra…
+          13  when app.click("nope")
+主張 2 件 · 成り立った 0 件 · 成り立たなかった 2 件 · ジャーナル: p/.geas/fails.journal.jsonl

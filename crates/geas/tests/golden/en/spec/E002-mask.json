@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E002-mask.geas","diagnostics":[{"code":"E002","severity":"error","file":"E002-mask.geas","line":1,"col":6,"message":"`mask` takes `header \"<name>\"`, `body json \"<path>\"` or `screen <node>`, not `status`","notes":[],"path":[]}]}

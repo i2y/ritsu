@@ -1,0 +1,2 @@
+error[E001]: E001-mask-body-not-json.geas:1:11: expected `json`, found `xml`
+     1 | mask body xml ".debug"

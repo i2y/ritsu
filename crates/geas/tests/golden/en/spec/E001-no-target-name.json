@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-no-target-name.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-no-target-name.geas","line":1,"col":8,"message":"expected the target's name, found `{`","notes":[],"path":[]}]}

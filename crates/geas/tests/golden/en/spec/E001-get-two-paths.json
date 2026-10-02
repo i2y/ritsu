@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-get-two-paths.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-get-two-paths.geas","line":7,"col":26,"message":"expected `)`, found `\"/hello\"`","notes":[],"path":[]}]}

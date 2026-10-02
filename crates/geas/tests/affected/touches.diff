@@ -1,0 +1,16 @@
+diff --git a/app.py b/app.py
+index 06c0710..570f870 100644
+--- a/app.py
++++ b/app.py
+@@ -25,9 +25,9 @@ class Handler(BaseHTTPRequestHandler):
+             name = self.path[len("/price/"):]
+             price = inventory.price(name)
+             if price is None:
+-                self.send(404, {"error": "no such item"})
++                self.send(404, {"error": f"no such item: {name}"})
+                 return
+-            self.send(200, {"price": old.with_tax(price)})
++            self.send(200, {"price": tax.with_tax(price)})
+         elif self.path == "/count":
+             self.send(200, {"count": len(inventory.names())})
+         else:

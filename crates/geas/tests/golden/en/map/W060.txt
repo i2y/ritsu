@@ -1,0 +1,10 @@
+ok 1 - prints five
+1 claim · 1 ok · 0 failed · journal: w060/.geas/w060.journal.jsonl
+map: 0 files · 0 lines of code, 0 run by some claim → w060/.geas/w060.map.jsonl
+--- stderr
+warning[W060]: w060/w060.geas:1:1: the target `five` gave no record: none of the processes it started reported a line of a file under the root
+     1 | target five {
+  = command: echo 5
+  = geas records Python 3.12 and later, Node, a Go program built with -cover and a Rust program built with -C instrument-coverage, in the files under the root; a shell script, an older Python or a program built without coverage gives nothing
+  the run that gets there:
+       6  when five.run()  →  exit 0, stdout "5"

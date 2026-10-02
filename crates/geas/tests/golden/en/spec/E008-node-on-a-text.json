@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E008-node-on-a-text.geas","diagnostics":[{"code":"E008","severity":"error","file":"E008-node-on-a-text.geas","line":7,"col":24,"message":"`stdout` is a text, and a node is what a screen holds; to look for a part of the text, write it in quotes: `stdout contains \"…\"`","notes":[],"path":[]}]}

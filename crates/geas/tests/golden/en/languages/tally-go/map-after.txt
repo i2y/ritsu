@@ -1,0 +1,7 @@
+ok 1 - starts at zero
+ok 2 - adds what it is given
+ok 3 - refuses what is not a number
+ok 4 - reset goes back to zero
+ok 5 - unknown paths are 404
+5 claims · 5 ok · 0 failed · journal: examples/tally-go/.geas/tally.journal.jsonl
+map: 1 file · 44 lines of code, 39 run by some claim → examples/tally-go/.geas/tally.map.jsonl

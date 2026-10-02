@@ -1,0 +1,2 @@
+error[E004]: E004-no-run-or-serve.geas:1:1: the target `calc` has none of `run`, `serve`, `pixie` and `driver`
+     1 | target calc {

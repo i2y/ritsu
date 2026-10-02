@@ -1,0 +1,3 @@
+error[E001]: E001-open-string.geas:1:7: the string is not closed on this line
+     1 | claim "adds {
+  = a string opens and closes with `"` on one line; a line break inside it is written `\n`

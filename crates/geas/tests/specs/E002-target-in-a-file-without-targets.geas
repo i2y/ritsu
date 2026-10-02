@@ -1,0 +1,4 @@
+claim "greets" {
+  when api.get("/greet?name=Ada")
+  then status is 200
+}

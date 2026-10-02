@@ -1,0 +1,3 @@
+error[E050]: dir/e050.geas: there is no baseline at dir/.geas/e050.baseline.jsonl
+  = run `geas snap dir/e050.geas` first; drift compares a run with what snap kept
+  = dir/.geas/baseline.jsonl is a baseline under its older name; rename it to e050.baseline.jsonl, or snap again

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E010-empty-command.geas","diagnostics":[{"code":"E010","severity":"error","file":"E010-empty-command.geas","line":2,"col":7,"message":"the command of `calc` is empty: it needs at least the program to start","notes":[],"path":[]}]}

@@ -1,0 +1,2 @@
+エラー[E060]: shop.geas: .geas/shop.map.jsonl に記録がありません
+  = 先に `geas map shop.geas` を走らせてください。`geas affected` はそれが書く記録を読みます

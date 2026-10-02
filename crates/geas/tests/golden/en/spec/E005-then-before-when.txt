@@ -1,0 +1,2 @@
+error[E005]: E005-then-before-when.geas:6:3: `then` comes before any `when`; a check reads what the `when` before it observed
+     6 |   then stdout is "5"

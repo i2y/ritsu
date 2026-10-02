@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"missing.geas","diagnostics":[{"code":"E081","severity":"error","file":"missing.geas","line":0,"col":0,"message":"cannot read this file: No such file or directory (os error 2)","notes":[],"path":[]}]}

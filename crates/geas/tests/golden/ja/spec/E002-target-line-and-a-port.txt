@@ -1,0 +1,2 @@
+エラー[E002]: E002-target-line-and-a-port.geas:3:3: ターゲットに `prot` という行は書けません。書けるのは run、serve、pixie、driver、port、serial と、固定の env、tz、locale、clock、seed です
+     3 |   prot 8123

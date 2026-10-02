@@ -1,0 +1,2 @@
+error[E011]: E011-clock-not-a-time.geas:3:9: `2026-08-29 09:00` is not a time geas reads: write it as RFC 3339, such as `2026-08-29T09:00:00+09:00` or `2026-08-29T00:00:00Z`
+     3 |   clock "2026-08-29 09:00" env "NOW"

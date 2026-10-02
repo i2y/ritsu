@@ -1,0 +1,4 @@
+diff: unclaimed.diff · record: .geas/shop.map.jsonl (the code after the change)
+changed code no claim runs:
+  app.py: 31-32
+4 claims · 0 touched · 2 changed lines no claim runs

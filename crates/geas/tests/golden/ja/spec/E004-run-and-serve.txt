@@ -1,0 +1,2 @@
+エラー[E004]: E004-run-and-serve.geas:3:3: ターゲット `calc` に `run` と `serve` の両方があります。ターゲットはコマンドかサービスのどちらか一つです
+     3 |   serve "python3 server.py 8123"

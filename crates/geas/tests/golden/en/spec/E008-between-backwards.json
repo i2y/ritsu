@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E008-between-backwards.geas","diagnostics":[{"code":"E008","severity":"error","file":"E008-between-backwards.geas","line":8,"col":26,"message":"`is between 299 and 200` holds for no number; write the smaller end first: `is between 200 and 299`","notes":[],"path":[]}]}

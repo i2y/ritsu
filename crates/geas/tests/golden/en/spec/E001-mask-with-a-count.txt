@@ -1,0 +1,2 @@
+error[E001]: E001-mask-with-a-count.geas:6:13: a mask takes nodes out of drift and names them without a count: `mask screen text "clock"`
+     6 | mask screen exactly 2 text

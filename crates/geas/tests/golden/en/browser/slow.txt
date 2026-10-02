@@ -1,0 +1,7 @@
+not ok 1 - a page that never comes (error)
+    error[E036]: w/slow.geas:11:3: the page `/slow` of `web` did not load within 10 s
+        11 |   when web.open("/slow")
+      = the service did not answer the request for the page
+      the run that gets there:
+          11  when web.open("/slow")
+1 claim · 0 ok · 1 failed · journal: w/.geas/slow.journal.jsonl

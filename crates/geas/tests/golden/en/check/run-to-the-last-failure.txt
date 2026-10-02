@@ -1,0 +1,10 @@
+not ok 1 - says what it is told
+    say.geas:7: stdout is "uno" — got "one"
+         7 |   then stdout is "uno"
+    say.geas:11: stdout is "tres" — got "three"
+        11 |   then stdout is "tres"
+      the run that gets there:
+           6  when say.run("one")  →  exit 0, stdout "one"
+           8  when say.run("two")  →  exit 0, stdout "two"
+          10  when say.run("three")  →  exit 0, stdout "three"
+1 claim · 0 ok · 1 failed · journal: .geas/say.journal.jsonl

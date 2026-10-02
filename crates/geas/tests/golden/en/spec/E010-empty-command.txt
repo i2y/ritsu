@@ -1,0 +1,2 @@
+error[E010]: E010-empty-command.geas:2:7: the command of `calc` is empty: it needs at least the program to start
+     2 |   run "  "

@@ -1,0 +1,2 @@
+error[E006]: E006-click-on-a-command.geas:6:13: `calc` runs a command, so it takes `run`, not `click`
+     6 |   when calc.click("add")

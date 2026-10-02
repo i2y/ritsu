@@ -1,0 +1,2 @@
+エラー[E050]: examples/greeter/greeter.geas: examples/greeter/.geas/greeter.baseline.jsonl にベースラインがありません
+  = 先に `geas snap examples/greeter/greeter.geas` を走らせてください。ドリフトは今回の実行を、snap が残したものと比べます

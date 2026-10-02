@@ -1,0 +1,9 @@
+ok 1 - answers
+主張 1 件 · 成り立った 1 件 · 成り立たなかった 0 件 · ジャーナル: bare/.geas/bare.journal.jsonl
+--- stderr
+エラー[E066]: bare/bare.geas:7:3: `api` が起動した Go のプログラムは、カバレッジのメタデータを書きましたが、カウンターを書いていません。正常に終了しなかったためです
+     7 |   when api.get("/")
+  = コマンド: ./bare 8125
+  = Go のプログラムがカウンターを書くのは、main から戻ったときか os.Exit を呼んだときです。サービスは SIGTERM を受けてそうする必要があります（signal.NotifyContext と Server.Shutdown）
+  ここまでの実行:
+       7  when api.get("/")  →  200, body "ok"

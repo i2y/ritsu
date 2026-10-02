@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E011-clock-not-a-time.geas","diagnostics":[{"code":"E011","severity":"error","file":"E011-clock-not-a-time.geas","line":3,"col":9,"message":"`2026-08-29 09:00` is not a time geas reads: write it as RFC 3339, such as `2026-08-29T09:00:00+09:00` or `2026-08-29T00:00:00Z`","notes":[],"path":[]}]}

@@ -1,0 +1,31 @@
+# Claims for a small shop: a service that prices its stock, and a sign printer.
+
+target api {
+  serve "python3 app.py 8126"
+  port 8126
+}
+
+target sign {
+  run "python3 sign.py"
+}
+
+claim "lists the items" {
+  when api.get("/items")
+  then status is 200
+  and  body json ".items[0]" is "apple"
+}
+
+claim "prices an item with tax" {
+  when api.get("/price/pear")
+  then body json ".price" is 165
+}
+
+claim "does not price what it lacks" {
+  when api.get("/price/plum")
+  then status is 404
+}
+
+claim "prints the sign" {
+  when sign.run("corner shop")
+  then stdout contains "Welcome to the corner shop"
+}

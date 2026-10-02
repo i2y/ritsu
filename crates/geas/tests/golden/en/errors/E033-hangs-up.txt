@@ -1,0 +1,8 @@
+not ok 1 - answers (error)
+    error[E033]: e033.geas:7:3: the service `api` closed the connection without answering
+         7 |   when api.get("/")
+      = stderr: closing a connection
+      = stderr: closing a connection
+      the run that gets there:
+           7  when api.get("/")
+1 claim · 0 ok · 1 failed · journal: .geas/e033.journal.jsonl

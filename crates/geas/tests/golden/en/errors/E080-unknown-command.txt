@@ -1,0 +1,2 @@
+error[E080]: `chekc` is not a command
+  = the commands: check, snap, drift, map, affected, explain, skill; `geas --help` says more

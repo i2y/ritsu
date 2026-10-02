@@ -1,0 +1,3 @@
+error[E061]: .geas/shop.map.jsonl:2: the record cannot be read: the line is not JSON: bad JSON literal (expected `null`)
+     2 | not json
+  = the record is written by `geas map`; run `geas map shop.geas` to write it again

@@ -1,0 +1,3 @@
+claim "totals accumulate across requests" when#4 api.get("/total")
+  ~ body: 12 → 13   [claimed — `geas check` is the authority]
+drift: 7 interactions compared · 1 drifted · 0 unclaimed change(s) · 1 claimed

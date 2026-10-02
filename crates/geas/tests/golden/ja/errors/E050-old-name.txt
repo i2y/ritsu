@@ -1,0 +1,3 @@
+エラー[E050]: dir/e050.geas: dir/.geas/e050.baseline.jsonl にベースラインがありません
+  = 先に `geas snap dir/e050.geas` を走らせてください。ドリフトは今回の実行を、snap が残したものと比べます
+  = dir/.geas/baseline.jsonl は前の名前のベースラインです。e050.baseline.jsonl に名前を変えるか、snap をやり直してください

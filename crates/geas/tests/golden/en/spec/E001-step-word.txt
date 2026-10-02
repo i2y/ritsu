@@ -1,0 +1,2 @@
+error[E001]: E001-step-word.geas:7:3: expected `when`, `then`, `and` or `}`, found `expect`
+     7 |   expect stdout is "5"

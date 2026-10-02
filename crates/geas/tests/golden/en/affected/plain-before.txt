@@ -1,0 +1,5 @@
+diff: trim.plain.diff · record: .geas/shop.map.jsonl (the code before the change)
+claims the change touches:
+  4 - prints the sign
+      sign.py: removed 6
+4 claims · 1 touched · 0 changed lines no claim runs

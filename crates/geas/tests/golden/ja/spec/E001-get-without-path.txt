@@ -1,0 +1,2 @@
+エラー[E001]: E001-get-without-path.geas:7:16: `"` で囲んだパスを書くところに `)` があります
+     7 |   when api.get()

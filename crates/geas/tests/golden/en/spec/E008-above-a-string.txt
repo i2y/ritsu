@@ -1,0 +1,2 @@
+error[E008]: E008-above-a-string.geas:8:24: `is above` compares numbers; write a number without quotes, as `is above 199`
+     8 |   then status is above "199"

@@ -1,0 +1,19 @@
+ok 1 - greets the name typed in
+not ok 2 - greets the wrong name
+    g/greeter.geas:30: screen contains text "Hello, Bob!" — got no such node
+        30 |   then screen contains text "Hello, Bob!"
+      the screen:
+        window "Greeter"
+          text "Your name:"
+          textbox "type here" value "Ada"
+          button "greet"
+          text "Hello, Ada!"
+          button "retry"
+    g/greeter.geas:31: screen does not contain button "retry" — got 1 such node
+        31 |   and  screen does not contain button "retry"
+      the screen: as above
+      the run that gets there:
+          28  when app.input("Ada")  →  window "Greeter", text "Your name:", textbox "type here" value "Ada", button "greet", button "retry…
+          29  when app.click("greet")  →  window "Greeter", text "Your name:", textbox "type here" value "Ada", button "greet", text "Hello, …
+ok 3 - a command between two actions
+3 claims · 2 ok · 1 failed · journal: g/.geas/greeter.journal.jsonl

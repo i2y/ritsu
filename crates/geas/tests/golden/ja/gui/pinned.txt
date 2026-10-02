@@ -1,0 +1,7 @@
+not ok 1 - starts at nine（エラー）
+    エラー[E011]: g/pinned.geas:8:3: `app` のドライバーは、渡した固定を受け付けませんでした: this app cannot pin clock
+         8 |   when app.open()
+      = 渡した固定: {"tz":"Asia/Tokyo","clock":"2026-08-29T09:00:00+09:00"}
+      ここまでの実行:
+           8  when app.open()
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: g/.geas/pinned.journal.jsonl

@@ -1,0 +1,3 @@
+error[E007]: E007-stdout-after-get.geas:8:8: a `get` observes status, header, body and body json, not `stdout`
+     8 |   then stdout contains "Ada"
+  = the `when` it reads is on line 7

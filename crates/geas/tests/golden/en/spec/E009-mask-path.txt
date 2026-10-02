@@ -1,0 +1,3 @@
+error[E009]: E009-mask-path.geas:6:23: the JSON path does not read: expected `]` in JSON path
+     6 | mask body json ".items[x].at"
+  = a path is written `.key`, `.a.b` or `.items[0].name`

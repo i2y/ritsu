@@ -1,0 +1,7 @@
+target calc {
+  run "python3 calc.py"
+}
+
+target calc {
+  run "python3 calc2.py"
+}

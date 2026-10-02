@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E002-target-line-and-a-port.geas","diagnostics":[{"code":"E002","severity":"error","file":"E002-target-line-and-a-port.geas","line":3,"col":3,"message":"a target has no line `prot`; its lines are run, serve, pixie, driver, port, serial, and the pins env, tz, locale, clock and seed","notes":[],"path":[]}]}

@@ -1,0 +1,8 @@
+not ok 1 - keeps the driver running (error)
+    error[E037]: g/gone.geas:7:3: the driver of `app` exited before answering `click("die")` (exit 3)
+         7 |   when app.click("die")
+      = stderr: the fake app fell over
+      the run that gets there:
+           6  when app.open()  →  window "Greeter", text "Your name:", textbox "type here", button "greet", button "retry" disabled
+           7  when app.click("die")
+1 claim · 0 ok · 1 failed · journal: g/.geas/gone.journal.jsonl

@@ -1,0 +1,16 @@
+{"geas_map":1,"spec":"shop.geas","root":".","claims":[{"name":"lists the items","status":"ok","targets":["api"]},{"name":"prices an item with tax","status":"ok","targets":["api"]},{"name":"does not price what it lacks","status":"ok","targets":["api"]},{"name":"prints the sign","status":"ok","targets":["sign"]}]}
+{"file":"app.py","blob":"63d46edaebe39030a23456a1d1a1162cc0be9418","lang":"python","code":"2-4,6-7,10-12,14-20,22-31,33,36"}
+{"file":"legacy.py","blob":"7c79b2c754e11b9726f50cfd41519ddc6211c178","lang":"python","code":null}
+{"file":"old.py","blob":"14041991ea14516e152058f3900d1dad177de142","lang":"python","code":"2-3"}
+{"file":"sign.py","blob":"37ed62231f2400964a6cee3246ff1a95ee768a80","lang":"python","code":"2,4-6"}
+{"file":"stock.py","blob":"2cc26a8b0a136f58738caf773531cd5384800cea","lang":"python","code":"2,5-6,9-10"}
+{"claim":"lists the items","target":"api","file":"app.py","ran":"2-4,6-7,10-12,14-20,22-24,36"}
+{"claim":"lists the items","target":"api","file":"old.py","ran":"2"}
+{"claim":"lists the items","target":"api","file":"stock.py","ran":"2,5-6,9"}
+{"claim":"prices an item with tax","target":"api","file":"app.py","ran":"2-4,6-7,10-12,14-20,22-23,25-28,31,36"}
+{"claim":"prices an item with tax","target":"api","file":"old.py","ran":"2-3"}
+{"claim":"prices an item with tax","target":"api","file":"stock.py","ran":"2,5,9-10"}
+{"claim":"does not price what it lacks","target":"api","file":"app.py","ran":"2-4,6-7,10-12,14-20,22-23,25-30,36"}
+{"claim":"does not price what it lacks","target":"api","file":"old.py","ran":"2"}
+{"claim":"does not price what it lacks","target":"api","file":"stock.py","ran":"2,5,9-10"}
+{"claim":"prints the sign","target":"sign","file":"sign.py","ran":"2,4-6"}

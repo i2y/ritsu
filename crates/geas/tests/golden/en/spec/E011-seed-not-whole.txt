@@ -1,0 +1,2 @@
+error[E011]: E011-seed-not-whole.geas:3:8: `1.5` is not a seed; a seed is a whole number from 0
+     3 |   seed 1.5 env "SEED"

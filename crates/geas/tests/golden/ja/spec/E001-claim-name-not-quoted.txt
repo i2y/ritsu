@@ -1,0 +1,2 @@
+エラー[E001]: E001-claim-name-not-quoted.geas:1:7: `"` で囲んだ主張の名前を書くところに `adds` があります
+     1 | claim adds {

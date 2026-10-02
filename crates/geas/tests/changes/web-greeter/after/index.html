@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Greeter</title>
+<style>.button { display: inline-block; padding: 2px 8px; border: 1px solid #888; border-radius: 4px; cursor: pointer; }</style>
+</head>
+<body>
+<h1>Greeter</h1>
+<p id="today"></p>
+<form id="greet">
+  <label for="name">Your name</label>
+  <input id="name" name="name" autocomplete="off">
+  <div id="go" class="button">Greet</div>
+</form>
+<p role="status" id="greeting"></p>
+<ul id="names" aria-label="Greeted"></ul>
+<p id="fortune"></p>
+<script>
+// The names are the service's: the page reads them from the API the claims call too.
+const list = document.getElementById('names');
+function show(names) {
+  list.replaceChildren(...names.map(n => { const li = document.createElement('li'); li.textContent = n; return li; }));
+}
+async function load() {
+  const r = await fetch('/api/greetings');
+  show((await r.json()).names);
+}
+
+// Greet can be pressed once a name is typed.
+const field = document.getElementById('name');
+const button = document.getElementById('go');
+field.addEventListener('input', () => { button.disabled = field.value.trim() === ''; });
+button.addEventListener('click', () => document.getElementById('greet').requestSubmit());
+
+// The greeting says the time of day, as the page's clock and time zone tell it.
+function partOfDay() {
+  const hour = new Date().getHours();
+  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+}
+document.getElementById('greet').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = field.value.trim();
+  if (!name) return;
+  const r = await fetch('/api/greetings', { method: 'POST', body: name });
+  show((await r.json()).names);
+  document.getElementById('greeting').textContent = partOfDay() + ', ' + name + '!';
+  field.value = '';
+  button.disabled = true;
+});
+
+// The date, as the locale writes it, and a fortune drawn at random.
+const today = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+document.getElementById('today').textContent = 'Today is ' + today + '.';
+const fortunes = [
+  'A pleasant surprise is waiting for you.',
+  'Now is a good time to try something new.',
+  'Someone is thinking of you.',
+];
+document.getElementById('fortune').textContent = 'Your fortune: ' + fortunes[Math.floor(Math.random() * fortunes.length)];
+
+load();
+</script>
+</body>
+</html>

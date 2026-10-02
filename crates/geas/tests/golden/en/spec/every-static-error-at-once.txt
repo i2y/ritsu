@@ -1,0 +1,21 @@
+error[E002]: every-static-error-at-once.geas:2:8: there is no target `api`
+     2 |   when api.get("/greet?name=Ada")
+  = the targets in this file: calc
+error[E007]: every-static-error-at-once.geas:3:8: a `get` observes status, header, body and body json, not `stdout`
+     3 |   then stdout is "Hello, Ada"
+  = the `when` it reads is on line 2
+error[E004]: every-static-error-at-once.geas:8:3: the target `calc` has `port` but no `serve`; only a service has a port
+     8 |   port 8123
+error[E003]: every-static-error-at-once.geas:11:7: a second claim named "greets"
+    11 | claim "greets" {
+  = the first is on line 1
+error[E006]: every-static-error-at-once.geas:12:13: `calc` runs a command, so it takes `run`, not `get`
+    12 |   when calc.get("/add?a=2&b=3")
+error[E007]: every-static-error-at-once.geas:13:8: a `get` observes status, header, body and body json, not `exit`
+    13 |   then exit contains "1"
+  = the `when` it reads is on line 12
+error[E008]: every-static-error-at-once.geas:13:13: `exit` is a number, and `contains` looks for a part of a text; compare it with `is`
+    13 |   then exit contains "1"
+error[E007]: every-static-error-at-once.geas:18:8: a `run` observes stdout, stderr and exit, not `status`
+    18 |   then status is 200
+  = the `when` it reads is on line 17
