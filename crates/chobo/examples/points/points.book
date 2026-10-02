@@ -1,0 +1,29 @@
+# Points a purchase earns wait out its return period; points a checkout spends wait for the payment.
+book points v1
+description "Loyalty points per member. What a purchase earns is held until its return period is over, what a checkout spends is held for 15 minutes while the payment goes through, and what is left unused at the end of a period lapses"
+
+unit pt
+
+account points(member: string) : pt
+  at least 0 refused as not_enough_points
+  at most 1000000 refused as points_cap
+account issued : pt outside
+account redeemed : pt outside
+account lapsed : pt outside
+
+transfer earn(purchase: string, member: string, pts: pt)
+  description "posted when the return period is over, voided when the purchase is returned"
+  key purchase
+  pending never expires
+  move pts from issued to points(member)
+
+transfer spend(checkout: string, member: string, pts: pt)
+  description "posted when the payment goes through, voided when it fails"
+  key checkout
+  pending expires after 15 minutes
+  move pts from points(member) to redeemed
+
+transfer lapse(member: string, period: string, pts: pt)
+  description "what the member did not use in the period"
+  key member, period
+  move pts from points(member) to lapsed

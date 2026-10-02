@@ -1,0 +1,8 @@
+warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move 2 puts into it: when shop_balance(shop) is short at that point, the call is refused with insufficient_balance, even when the two moves together would leave enough
+    13 |   move fee from shop_balance(shop) to fees
+  the operations that get there:
+       1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  refused: insufficient_balance (move 1 takes 1 from shop_balance(shop-2): posted 0, held out 0)
+  hint: write the move that puts into shop_balance(shop) first
+split.book: ok, 1 warning(s)
+  sale.do  may be refused: insufficient_balance (shop_balance(shop) at least 0.00), already_refused
+  key: sale once per order

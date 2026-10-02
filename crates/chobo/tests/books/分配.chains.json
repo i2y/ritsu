@@ -1,0 +1,4441 @@
+[
+  {
+    "scenario": "bound: ドル払い.do move 1 takes 店の売上(店) to 1, one above `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "105",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: ドル払い.do move 1 takes 店の売上(店) to exactly 0, its `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "105",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "d4f7abc915285d5506d4152c9e1d3e56",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "d4f7abc915285d5506d4152c9e1d3e56",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: ドル払い.do move 1 would take 店の売上(店) to -1, below `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "106",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "dd67270f15dfc313714e894a7f32585b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "4",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "dd67270f15dfc313714e894a7f32585b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "dd67270f15dfc313714e894a7f32585b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "985a70c330e70b48cec0a4be0db24dc6",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "985a70c330e70b48cec0a4be0db24dc6",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "key: 売上.do twice with the same arguments",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "1000",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a534bdc2b33216d4d2649d265dc12fc9",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a534bdc2b33216d4d2649d265dc12fc9",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a534bdc2b33216d4d2649d265dc12fc9",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "1000",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a534bdc2b33216d4d2649d265dc12fc9",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a534bdc2b33216d4d2649d265dc12fc9",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a534bdc2b33216d4d2649d265dc12fc9",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "key: 売上.do again with another 代金",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "1000",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a534bdc2b33216d4d2649d265dc12fc9",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a534bdc2b33216d4d2649d265dc12fc9",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a534bdc2b33216d4d2649d265dc12fc9",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8ab7e3e4b02dc33c684c69ae9fcb1ec4",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8ab7e3e4b02dc33c684c69ae9fcb1ec4",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8ab7e3e4b02dc33c684c69ae9fcb1ec4",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "key: 売上.do refused with 売上不足, then again, and again once 店の売上(店) has enough",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "6de588b8642efdac5e6a4a4962d9070a",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "105",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "da82ea64cba2fa53c06bb9d969b804c3",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "9299938361ca9c37a828bc5c25ed2166",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "da82ea64cba2fa53c06bb9d969b804c3",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "6e57d4e849bcfe1b0ae211b84bbe5e20",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "da82ea64cba2fa53c06bb9d969b804c3",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      },
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 4
+      }
+    ]
+  },
+  {
+    "scenario": "key: ドル払い.do twice with the same arguments",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "104",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "28e94dd056f0c5993422905f266f1e38",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "28e94dd056f0c5993422905f266f1e38",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "28e94dd056f0c5993422905f266f1e38",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: ドル払い.do again with another 円額",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "104",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "28e94dd056f0c5993422905f266f1e38",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "28e94dd056f0c5993422905f266f1e38",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "28e94dd056f0c5993422905f266f1e38",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "4",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7c2cf853c87ad2c324d07815ef5ba411",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7c2cf853c87ad2c324d07815ef5ba411",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: ドル払い.do refused with 売上不足, then again, and again once 店の売上(店) has enough",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "e2f67627b4ef5a98df3606ad7d2a0e7b",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "10a6b0fb44495aaa9b36f9f57ac503cf",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "cf3dc0aa73d82a7692b6d0be80841966",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "10a6b0fb44495aaa9b36f9f57ac503cf",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "e2f67627b4ef5a98df3606ad7d2a0e7b",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "10a6b0fb44495aaa9b36f9f57ac503cf",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "cf3dc0aa73d82a7692b6d0be80841966",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "10a6b0fb44495aaa9b36f9f57ac503cf",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "6de588b8642efdac5e6a4a4962d9070a",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "104",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eef838e8e9940c80d09bd1290c8e1afd",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "9299938361ca9c37a828bc5c25ed2166",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eef838e8e9940c80d09bd1290c8e1afd",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "6e57d4e849bcfe1b0ae211b84bbe5e20",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eef838e8e9940c80d09bd1290c8e1afd",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "e2f67627b4ef5a98df3606ad7d2a0e7b",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "10a6b0fb44495aaa9b36f9f57ac503cf",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "cf3dc0aa73d82a7692b6d0be80841966",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "10a6b0fb44495aaa9b36f9f57ac503cf",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 4
+      }
+    ]
+  },
+  {
+    "scenario": "key: ドル送金.do twice with the same arguments",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "105",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "2b1d6402e9cd0bc38c85cf1793c3d58a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "151",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "2b1d6402e9cd0bc38c85cf1793c3d58a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "ドル送金",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "海外の銀行",
+              "id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "ledger": 1838891465,
+              "code": 1358,
+              "flags": [],
+              "user_data_128": "83f70a5e6aa28f72a33e9df906c0179e",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送金手数料",
+              "id": "254c5aa1157f846acb17687fca23cfcf",
+              "ledger": 1838891465,
+              "code": 18022,
+              "flags": [],
+              "user_data_128": "9f870bc3b3171c52d30d7b487df734b3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "3c77ff9e332c37c9ddc42e7b854c0307",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f94068f13b0ca188eea80efeee539785",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "61027b75aa2a4afe00606e8fee32b6d5",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "254c5aa1157f846acb17687fca23cfcf",
+              "amount": "150",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f94068f13b0ca188eea80efeee539785",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      },
+      {
+        "op": "do",
+        "kind": "ドル送金",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "海外の銀行",
+              "id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "ledger": 1838891465,
+              "code": 1358,
+              "flags": [],
+              "user_data_128": "83f70a5e6aa28f72a33e9df906c0179e",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送金手数料",
+              "id": "254c5aa1157f846acb17687fca23cfcf",
+              "ledger": 1838891465,
+              "code": 18022,
+              "flags": [],
+              "user_data_128": "9f870bc3b3171c52d30d7b487df734b3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "3c77ff9e332c37c9ddc42e7b854c0307",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f94068f13b0ca188eea80efeee539785",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "61027b75aa2a4afe00606e8fee32b6d5",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "254c5aa1157f846acb17687fca23cfcf",
+              "amount": "150",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f94068f13b0ca188eea80efeee539785",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": []
+            }
+          ]
+        },
+        "step": 4
+      }
+    ]
+  },
+  {
+    "scenario": "key: ドル送金.do again with another 額",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "105",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f1743565434474691a637181b04bb27a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "2b1d6402e9cd0bc38c85cf1793c3d58a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "151",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "2b1d6402e9cd0bc38c85cf1793c3d58a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "ドル送金",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "海外の銀行",
+              "id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "ledger": 1838891465,
+              "code": 1358,
+              "flags": [],
+              "user_data_128": "83f70a5e6aa28f72a33e9df906c0179e",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送金手数料",
+              "id": "254c5aa1157f846acb17687fca23cfcf",
+              "ledger": 1838891465,
+              "code": 18022,
+              "flags": [],
+              "user_data_128": "9f870bc3b3171c52d30d7b487df734b3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "3c77ff9e332c37c9ddc42e7b854c0307",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f94068f13b0ca188eea80efeee539785",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "61027b75aa2a4afe00606e8fee32b6d5",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "254c5aa1157f846acb17687fca23cfcf",
+              "amount": "150",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "f94068f13b0ca188eea80efeee539785",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      },
+      {
+        "op": "do",
+        "kind": "ドル送金",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "海外の銀行",
+              "id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "ledger": 1838891465,
+              "code": 1358,
+              "flags": [],
+              "user_data_128": "83f70a5e6aa28f72a33e9df906c0179e",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送金手数料",
+              "id": "254c5aa1157f846acb17687fca23cfcf",
+              "ledger": 1838891465,
+              "code": 18022,
+              "flags": [],
+              "user_data_128": "9f870bc3b3171c52d30d7b487df734b3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "3c77ff9e332c37c9ddc42e7b854c0307",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "amount": "4",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "e4ea4c50e06498e885424c726b7a4a9a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "61027b75aa2a4afe00606e8fee32b6d5",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "254c5aa1157f846acb17687fca23cfcf",
+              "amount": "150",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "e4ea4c50e06498e885424c726b7a4a9a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": []
+            }
+          ]
+        },
+        "step": 4
+      }
+    ]
+  },
+  {
+    "scenario": "key: ドル送金.do refused with ドル残高不足, then again, and again once ドル口座(店) has enough",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "ドル送金",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "海外の銀行",
+              "id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "ledger": 1838891465,
+              "code": 1358,
+              "flags": [],
+              "user_data_128": "83f70a5e6aa28f72a33e9df906c0179e",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送金手数料",
+              "id": "254c5aa1157f846acb17687fca23cfcf",
+              "ledger": 1838891465,
+              "code": 18022,
+              "flags": [],
+              "user_data_128": "9f870bc3b3171c52d30d7b487df734b3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "36fb6b4c6c9d22188d64935b65d62b58",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6998aefbbdbc40f8d2a4504c22bb2fbe",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "fdb12b8293642b4b88478aa99c028a32",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "254c5aa1157f846acb17687fca23cfcf",
+              "amount": "150",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6998aefbbdbc40f8d2a4504c22bb2fbe",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル送金",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "海外の銀行",
+              "id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "ledger": 1838891465,
+              "code": 1358,
+              "flags": [],
+              "user_data_128": "83f70a5e6aa28f72a33e9df906c0179e",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送金手数料",
+              "id": "254c5aa1157f846acb17687fca23cfcf",
+              "ledger": 1838891465,
+              "code": 18022,
+              "flags": [],
+              "user_data_128": "9f870bc3b3171c52d30d7b487df734b3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "36fb6b4c6c9d22188d64935b65d62b58",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6998aefbbdbc40f8d2a4504c22bb2fbe",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "fdb12b8293642b4b88478aa99c028a32",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "254c5aa1157f846acb17687fca23cfcf",
+              "amount": "150",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6998aefbbdbc40f8d2a4504c22bb2fbe",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "6de588b8642efdac5e6a4a4962d9070a",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "105",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "da82ea64cba2fa53c06bb9d969b804c3",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "9299938361ca9c37a828bc5c25ed2166",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "da82ea64cba2fa53c06bb9d969b804c3",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "6e57d4e849bcfe1b0ae211b84bbe5e20",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "da82ea64cba2fa53c06bb9d969b804c3",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "0771572191363293ff1a093aaeaee509",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a236ba83877ff4b5663cce88af75eab7",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "e584bd99a050968426c4d8752f0497b1",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a236ba83877ff4b5663cce88af75eab7",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 4
+      },
+      {
+        "op": "do",
+        "kind": "ドル送金",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "海外の銀行",
+              "id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "ledger": 1838891465,
+              "code": 1358,
+              "flags": [],
+              "user_data_128": "83f70a5e6aa28f72a33e9df906c0179e",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送金手数料",
+              "id": "254c5aa1157f846acb17687fca23cfcf",
+              "ledger": 1838891465,
+              "code": 18022,
+              "flags": [],
+              "user_data_128": "9f870bc3b3171c52d30d7b487df734b3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "36fb6b4c6c9d22188d64935b65d62b58",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6998aefbbdbc40f8d2a4504c22bb2fbe",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "fdb12b8293642b4b88478aa99c028a32",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "254c5aa1157f846acb17687fca23cfcf",
+              "amount": "150",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6998aefbbdbc40f8d2a4504c22bb2fbe",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": []
+            }
+          ]
+        },
+        "step": 5
+      }
+    ]
+  },
+  {
+    "scenario": "moves: 売上.do refused at move 2 (店の売上(店)), and no move is made",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "108044b3ae17b04769a6f4722c81427b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      }
+    ]
+  },
+  {
+    "scenario": "moves: 売上.do refused at move 3 (店の売上(店)), and no move is made",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7dd155f1d4f214cc1dd8e4149b1da5c8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7dd155f1d4f214cc1dd8e4149b1da5c8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7dd155f1d4f214cc1dd8e4149b1da5c8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      }
+    ]
+  },
+  {
+    "scenario": "moves: ドル払い.do refused at move 1 (店の売上(店)), and no move is made",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "e2f67627b4ef5a98df3606ad7d2a0e7b",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "10a6b0fb44495aaa9b36f9f57ac503cf",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "cf3dc0aa73d82a7692b6d0be80841966",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "10a6b0fb44495aaa9b36f9f57ac503cf",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      }
+    ]
+  },
+  {
+    "scenario": "moves: ドル送金.do refused at move 1 (ドル口座(店)), and no move is made",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "ドル送金",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "海外の銀行",
+              "id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "ledger": 1838891465,
+              "code": 1358,
+              "flags": [],
+              "user_data_128": "83f70a5e6aa28f72a33e9df906c0179e",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送金手数料",
+              "id": "254c5aa1157f846acb17687fca23cfcf",
+              "ledger": 1838891465,
+              "code": 18022,
+              "flags": [],
+              "user_data_128": "9f870bc3b3171c52d30d7b487df734b3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "36fb6b4c6c9d22188d64935b65d62b58",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "e20ce3a0547ac3241aebedc2d37ab823",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6998aefbbdbc40f8d2a4504c22bb2fbe",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "fdb12b8293642b4b88478aa99c028a32",
+              "debit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "credit_account_id": "254c5aa1157f846acb17687fca23cfcf",
+              "amount": "150",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6998aefbbdbc40f8d2a4504c22bb2fbe",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 23113,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      }
+    ]
+  },
+  {
+    "scenario": "together: two callers take the last 1 of 店の売上(店) with ドル払い.do",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "売上",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "買い手",
+              "id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "ledger": 792519411,
+              "code": 39217,
+              "flags": [],
+              "user_data_128": "4e1dabde6b69d1fad4b41d98370d56fe",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "手数料収入",
+              "id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "ledger": 792519411,
+              "code": 43156,
+              "flags": [],
+              "user_data_128": "6cb01b508f033242553ed70cfc1fa09f",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "送料",
+              "id": "e1dcdf5b79c7b8e74279034795326533",
+              "ledger": 792519411,
+              "code": 41485,
+              "flags": [],
+              "user_data_128": "a9b081f24282df0e9b178ae06a2188fc",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a8b85fe00821bef5ba5257a7def42568",
+              "debit_account_id": "9d1b4547d9e878ecf7b215eece82ea16",
+              "credit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "amount": "105",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "28784569bce763eba629e9859f29b075",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c3ec8d2c5ce783d605a0e5c12902de41",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "4e36486ba56ea6fbd4a30bcf42b65f15",
+              "amount": "4",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "28784569bce763eba629e9859f29b075",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 3,
+              "id": "fa9c1b7c1551defe0cd76a840270f930",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "e1dcdf5b79c7b8e74279034795326533",
+              "amount": "100",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "28784569bce763eba629e9859f29b075",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 63033,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "68ab4fc1bc85b6b8891975f69ff44607",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "c5faef4f17b52d1f15c8491a7b848984",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb4cb2237ca9842b6618911842198950",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 1
+      },
+      {
+        "op": "do",
+        "kind": "ドル払い",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "店の売上(店-2)",
+              "id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "ledger": 792519411,
+              "code": 38915,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "a8e4a0973bb3cc6e7f41a04acf45d875",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "円の両替口",
+              "id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "ledger": 792519411,
+              "code": 63295,
+              "flags": [],
+              "user_data_128": "737faef533415e4113708d534d15e1c8",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドルの両替口",
+              "id": "c115d67eeeaec7357eaf083458c4e15b",
+              "ledger": 1838891465,
+              "code": 28385,
+              "flags": [],
+              "user_data_128": "f5a7fe6eaefb0fafcd28bcb237dd3f62",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "ドル口座(店-2)",
+              "id": "2dfa867ec011916fab48d01e8d1a1354",
+              "ledger": 1838891465,
+              "code": 14812,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "3b9eec2d60c01e41a8345fa1dda19fa7",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "0771572191363293ff1a093aaeaee509",
+              "debit_account_id": "6f99f7b57fa7928fa1f21b1efdf5d2b5",
+              "credit_account_id": "ff579fb1d3b1163dc26d3ff55e250362",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "20b989c51f3556a1828d44ddadb08abc",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 792519411,
+              "code": 48336,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "main",
+              "move": 2,
+              "id": "e584bd99a050968426c4d8752f0497b1",
+              "debit_account_id": "c115d67eeeaec7357eaf083458c4e15b",
+              "credit_account_id": "2dfa867ec011916fab48d01e8d1a1354",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "20b989c51f3556a1828d44ddadb08abc",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1838891465,
+              "code": 48336,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 2
+      }
+    ]
+  }
+]

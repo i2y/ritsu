@@ -1,0 +1,1890 @@
+[
+  {
+    "scenario": {
+      "name": "bound: 後払い.hold takes 与信(会員) to -49999, one above `at least -50000`",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 50001
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 50001
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 50001,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 後払い.hold takes 与信(会員) to exactly -50000, its `at least -50000`",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 50002
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 50002
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 50002,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 後払い.hold would take 与信(会員) to -50001, below `at least -50000`",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 50003
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "与信枠超え"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 返済.do fills 与信(会員) to 9999, one below `at most 10000`",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 9998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 9999,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -9999,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 返済.do fills 与信(会員) to exactly 10000, its `at most 10000`",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 9998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 10000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -10000,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 返済.do would fill 与信(会員) to 10001, past `at most 10000`",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 9998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-3",
+            "会員": "会員-2",
+            "額": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "refused",
+          "reason": "前払い超過"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 9998,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -9998,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 後払い.hold twice with the same arguments",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 後払い.hold again with another 額",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 後払い.hold refused with 与信枠超え, then again, and again once 与信(会員) has enough",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 50001
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 50001
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 50001
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "与信枠超え"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 返済.do twice with the same arguments",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 返済.do again with another 額",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 返済.do refused with 前払い超過, then again",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 10000
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "refused",
+          "reason": "前払い超過"
+        },
+        {
+          "op": "do",
+          "kind": "返済",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 10000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -10000,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 後払い posted in full",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 後払い posted in part",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          },
+          "amounts": {
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 後払い voided",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "後払い",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 後払い posted, then voided",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        },
+        {
+          "op": "void",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "already_posted"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 後払い voided, then posted",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "already_voided"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 後払い posted for more than it holds, then for what it holds",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          },
+          "amounts": {
+            "額": 3
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          },
+          "amounts": {
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "over_hold"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 後払い posted before it is held, then held and posted",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "no_such_hold"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 後払い posted twice, with the same amounts and with others",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          },
+          "amounts": {
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          },
+          "amounts": {
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "pass: 後払い expires, then is posted and voided",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "pass",
+          "duration": "1441 minutes"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        },
+        {
+          "op": "void",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "pass"
+        },
+        {
+          "op": "post",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "expired"
+        },
+        {
+          "op": "void",
+          "kind": "後払い",
+          "result": "refused",
+          "reason": "expired"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "expired"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "pass: 後払い held again with the same key after it expired",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "pass",
+          "duration": "1441 minutes"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done"
+        },
+        {
+          "op": "pass"
+        },
+        {
+          "op": "hold",
+          "kind": "後払い",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "与信",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "後払い",
+          "key": [
+            "注文-1"
+          ],
+          "state": "expired"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 50000 of 与信(会員) with 後払い.hold",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "hold",
+                "kind": "後払い",
+                "args": {
+                  "注文": "注文-1",
+                  "会員": "会員-2",
+                  "額": 50000
+                }
+              }
+            ],
+            [
+              {
+                "op": "hold",
+                "kind": "後払い",
+                "args": {
+                  "注文": "注文-3",
+                  "会員": "会員-2",
+                  "額": 50000
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "result": "refused",
+                    "reason": "与信枠超え"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "与信",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 50000
+            },
+            {
+              "account": "店",
+              "args": [],
+              "posted": 0,
+              "held_in": 50000,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "後払い",
+              "key": [
+                "注文-1"
+              ],
+              "state": "held"
+            }
+          ]
+        },
+        {
+          "steps": [
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "result": "refused",
+                    "reason": "与信枠超え"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "与信",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 50000
+            },
+            {
+              "account": "店",
+              "args": [],
+              "posted": 0,
+              "held_in": 50000,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "後払い",
+              "key": [
+                "注文-3"
+              ],
+              "state": "held"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers fill the last 1 of room in 与信(会員) with 返済.do",
+      "book": "与信",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返済",
+          "args": {
+            "返済番号": "返済番号-1",
+            "会員": "会員-2",
+            "額": 9999
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "返済",
+                "args": {
+                  "返済番号": "返済番号-3",
+                  "会員": "会員-2",
+                  "額": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "返済",
+                "args": {
+                  "返済番号": "返済番号-4",
+                  "会員": "会員-2",
+                  "額": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "返済",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "返済",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "返済",
+                    "result": "refused",
+                    "reason": "前払い超過"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "与信",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 10000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "銀行",
+              "args": [],
+              "posted": -10000,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "返済",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "返済",
+                    "result": "refused",
+                    "reason": "前払い超過"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "返済",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "与信",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 10000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "銀行",
+              "args": [],
+              "posted": -10000,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  }
+]

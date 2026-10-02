@@ -1,0 +1,30 @@
+# 売上は、買い手が払った額を店の取り分とマーケットプレイスの手数料に分ける。額は呼ぶ側が計算して渡す
+book マーケットプレイス v1
+description "店ごとに売上金を持つ。売上は、買い手が払った額を店の売上金と手数料に分ける（額は呼ぶ側が計算して渡す。手数料は規則が決める）。振込は銀行が受け付けるまで押さえ、返金は両方を戻す"
+
+unit 円
+
+account 売上金(店: string) : 円
+  description "マーケットプレイスが店に払う分"
+  at least 0 refused as 売上金不足
+account 買い手 : 円 outside
+account 手数料収入 : 円 outside
+account 銀行 : 円 outside
+
+transfer 売上(注文: string, 店: string, 店の取り分: 円, 手数料: 円)
+  description "店の取り分と手数料を足すと、買い手が払った額になる。手数料は呼ぶ側が計算する"
+  key 注文
+  move 店の取り分 from 買い手 to 売上金(店)
+  move 手数料 from 買い手 to 手数料収入
+
+transfer 返金(返金番号: string, 店: string, 店の取り分: 円, 手数料: 円)
+  description "手数料と店の取り分を、両方とも戻すか、どちらも戻さない"
+  key 返金番号
+  move 手数料 from 手数料収入 to 買い手
+  move 店の取り分 from 売上金(店) to 買い手
+
+transfer 振込(振込番号: string, 店: string, 額: 円)
+  description "銀行振込を始めたときに押さえる。銀行が受け付けたら確定し、失敗したら取り消す"
+  key 振込番号
+  pending never expires
+  move 額 from 売上金(店) to 銀行

@@ -1,0 +1,11 @@
+# W102：取る元へ入れる移動がどこにも無い
+book 断られる v1
+unit 個
+
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 客 : 個 outside
+
+transfer 出荷(注文: string, sku: string, 数: 個)
+  key 注文, sku
+  move 数 from 在庫(sku) to 客

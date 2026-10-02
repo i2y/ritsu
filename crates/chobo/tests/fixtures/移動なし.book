@@ -1,0 +1,8 @@
+book 移動なし v1
+unit 個
+
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+
+transfer 数える(伝票: string)
+  key 伝票

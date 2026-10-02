@@ -1,0 +1,1930 @@
+[
+  {
+    "scenario": {
+      "name": "bound: 引当.hold takes 在庫(sku) to 1, one above `at least 0`",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 引当.hold takes 在庫(sku) to exactly 0, its `at least 0`",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 2
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 2,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 引当.hold would take 在庫(sku) to -1, below `at least 0`",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "在庫切れ"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 入荷.do twice with the same arguments",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 入荷.do again with another 数",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 引当.hold twice with the same arguments",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 引当.hold again with another 数",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 引当.hold refused with 在庫切れ, then again, and again once 在庫(sku) has enough",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-3",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "在庫切れ"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 返品.do twice with the same arguments",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返品",
+          "args": {
+            "返品伝票": "返品伝票-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返品",
+          "args": {
+            "返品伝票": "返品伝票-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返品",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "返品",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 返品.do again with another 数",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返品",
+          "args": {
+            "返品伝票": "返品伝票-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "返品",
+          "args": {
+            "返品伝票": "返品伝票-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "返品",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "返品",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 引当 posted in full",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 引当 posted in part",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          },
+          "amounts": {
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 引当 voided",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "引当",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 引当 posted, then voided",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        },
+        {
+          "op": "void",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "already_posted"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 引当 voided, then posted",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "already_voided"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 引当 posted for more than it holds, then for what it holds",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          },
+          "amounts": {
+            "数": 3
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          },
+          "amounts": {
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "over_hold"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 引当 posted before it is held, then held and posted",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-1",
+            "sku": "sku-2"
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-1",
+            "sku": "sku-2"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "no_such_hold"
+        },
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-1",
+            "sku-2"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 引当 posted twice, with the same amounts and with others",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          },
+          "amounts": {
+            "数": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          },
+          "amounts": {
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "pass: 引当 expires, then is posted and voided",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "pass",
+          "duration": "31 minutes"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        },
+        {
+          "op": "void",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "pass"
+        },
+        {
+          "op": "post",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "expired"
+        },
+        {
+          "op": "void",
+          "kind": "引当",
+          "result": "refused",
+          "reason": "expired"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "expired"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "pass: 引当 held again with the same key after it expired",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        },
+        {
+          "op": "pass",
+          "duration": "31 minutes"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done"
+        },
+        {
+          "op": "pass"
+        },
+        {
+          "op": "hold",
+          "kind": "引当",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "在庫",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "注文-3",
+            "sku-2"
+          ],
+          "state": "expired"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of 在庫(sku) with 引当.hold",
+      "book": "在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "納品書-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "hold",
+                "kind": "引当",
+                "args": {
+                  "注文": "注文-3",
+                  "sku": "sku-2",
+                  "数": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "hold",
+                "kind": "引当",
+                "args": {
+                  "注文": "注文-4",
+                  "sku": "sku-2",
+                  "数": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入荷",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "引当",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "引当",
+                    "result": "refused",
+                    "reason": "在庫切れ"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "在庫",
+              "args": [
+                "sku-2"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 1
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "客",
+              "args": [],
+              "posted": 0,
+              "held_in": 1,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "引当",
+              "key": [
+                "注文-3",
+                "sku-2"
+              ],
+              "state": "held"
+            }
+          ]
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入荷",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "引当",
+                    "result": "refused",
+                    "reason": "在庫切れ"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "引当",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "在庫",
+              "args": [
+                "sku-2"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 1
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "客",
+              "args": [],
+              "posted": 0,
+              "held_in": 1,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "引当",
+              "key": [
+                "注文-4",
+                "sku-2"
+              ],
+              "state": "held"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,10 @@
+warning[W104]: 仮押さえの順序.book:14:3: in a hold, what move 1 puts into 預り(注文) is held coming in, and does not count when move 2 takes from 預り(注文): unless 預り(注文) has enough already, the hold is refused with 預り不足
+    14 |   move 代金 from 預り(注文) to 店への支払
+  the operations that get there:
+       1  決済.hold(注文: 注文-1, 代金: 1)  refused: 預り不足 (move 2 takes 1 from 預り(注文-1): posted 0, held out 0, held in 1)
+  hint: have what it takes in 預り(注文) beforehand, or take it in another transfer after the hold is posted
+仮押さえの順序.book: ok, 1 warning(s)
+  決済.hold  may be refused: 預り不足 (預り(注文) at least 0), already_refused
+  決済.post  may be refused: no_such_hold
+  決済.void  may be refused: no_such_hold
+  key: 決済 once per 注文

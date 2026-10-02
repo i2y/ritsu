@@ -1,0 +1,11 @@
+book 名前 v1
+unit 個
+
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 客 : 箱 outside
+
+transfer 出荷(注文: string, sku: string, 数: 個, メモ: text)
+  key 注文, sku
+  move 数 from 在庫(品番) to 客先
+  move 量 from 在庫(sku) to 客

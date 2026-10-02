@@ -1,0 +1,8 @@
+warning[W102]: 断られる.book:11:3: nothing in the book puts into `在庫`, so `出荷` is refused with 在庫切れ whenever it moves more than 0
+    11 |   move 数 from 在庫(sku) to 客
+  the operations that get there:
+       1  出荷.do(注文: 注文-1, sku: sku-2, 数: 1)  refused: 在庫切れ (move 1 takes 1 from 在庫(sku-2): posted 0, held out 0)
+  hint: write a transfer that puts into `在庫`
+断られる.book: ok, 1 warning(s)
+  出荷.do  may be refused: 在庫切れ (在庫(sku) at least 0), already_refused
+  key: 出荷 once per 注文, sku

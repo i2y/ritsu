@@ -1,0 +1,11 @@
+# W101：入るだけで、取る移動が無い
+book たまる v1
+unit 円
+
+account ポイント(会員: string) : 円
+  at least 0 refused as ポイント不足
+account 店 : 円 outside
+
+transfer 付与(伝票: string, 会員: string, 額: 円)
+  key 伝票
+  move 額 from 店 to ポイント(会員)

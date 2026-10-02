@@ -1,0 +1,11 @@
+warning[W105]: 使われない.book:4:6: the unit `箱` is not used anywhere
+     4 | unit 箱
+warning[W105]: 使われない.book:8:9: no transfer moves into or out of the account `返品棚`
+     8 | account 返品棚(sku: string) : 個
+warning[W105]: 使われない.book:13:44: the parameter `担当` is in neither the key nor any move
+    13 | transfer 入荷(伝票: string, sku: string, 数: 個, 担当: string)
+使われない.book: ok, 3 warning(s)
+  入荷.do  may be refused: key_conflict
+  出荷.do  may be refused: 在庫切れ (在庫(sku) at least 0), key_conflict, already_refused
+  key: 入荷 once per 伝票; a second call that differs only in sku, 数 or 担当 is refused with key_conflict
+  key: 出荷 once per 注文; a second call that differs only in sku or 数 is refused with key_conflict

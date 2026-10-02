@@ -1,0 +1,25 @@
+# ウォレット：下限 0 と上限、期限の無い仮押さえ、外の勘定へ戻す振替
+book ウォレット v1
+description "会員ごとのウォレット。銀行からの入金で増え、支払いのあいだ押さえ、払い戻しで銀行へ戻す"
+
+unit 円
+
+account ウォレット(会員: string) : 円
+  at least 0 refused as 残高不足
+  at most 100000 refused as 上限超え
+account 銀行 : 円 outside
+account 店 : 円 outside
+
+transfer 入金(入金番号: string, 会員: string, 額: 円)
+  key 入金番号
+  move 額 from 銀行 to ウォレット(会員)
+
+transfer 支払(注文: string, 会員: string, 額: 円)
+  description "出荷で確定し、キャンセルで取り消す。押さえを終わらせるのは呼ぶ側だけ"
+  key 注文
+  pending never expires
+  move 額 from ウォレット(会員) to 店
+
+transfer 払い戻し(払戻番号: string, 会員: string, 額: 円)
+  key 払戻番号
+  move 額 from ウォレット(会員) to 銀行

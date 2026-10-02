@@ -1,0 +1,1450 @@
+{
+  "v": 1,
+  "book": "在庫",
+  "version": 1,
+  "source_sha256": "ec6b822e28f40bef83b067b6011fed90f3c8e5cc1ab4dd0639038c465d4a92f4",
+  "units": [
+    {
+      "name": "個",
+      "scale": 0,
+      "ledger": 1653847866
+    }
+  ],
+  "accounts": [
+    {
+      "name": "在庫",
+      "params": [
+        "sku"
+      ],
+      "unit": "個",
+      "outside": false,
+      "lower": {
+        "value": 0,
+        "refused_as": "在庫切れ"
+      },
+      "upper": null,
+      "description": "倉庫の棚にある数",
+      "code": 48630
+    },
+    {
+      "name": "仕入先",
+      "params": [],
+      "unit": "個",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 38743
+    },
+    {
+      "name": "客",
+      "params": [],
+      "unit": "個",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 25906
+    }
+  ],
+  "transfers": [
+    {
+      "name": "入荷",
+      "description": null,
+      "params": [
+        {
+          "name": "納品書",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "数",
+          "type": "amount",
+          "unit": "個"
+        }
+      ],
+      "key": [
+        "納品書",
+        "sku"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "数"
+          },
+          "from": {
+            "account": "仕入先",
+            "args": []
+          },
+          "to": {
+            "account": "在庫",
+            "args": [
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 60194,
+      "definition": "b6ca00ae36684a5a542e39ac484c65cf",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入荷",
+                  "args": {
+                    "納品書": "納品書-1",
+                    "sku": "sku-2",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "入荷",
+                  "args": {
+                    "納品書": "納品書-1",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "納品書",
+              "sku"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "数",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入荷",
+                    "args": {
+                      "納品書": "納品書-1",
+                      "sku": "sku-2",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "入荷",
+                    "args": {
+                      "納品書": "納品書-1",
+                      "sku": "sku-2",
+                      "数": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "引当",
+      "description": "確定は出荷、取消はキャンセル",
+      "params": [
+        {
+          "name": "注文",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "数",
+          "type": "amount",
+          "unit": "個"
+        }
+      ],
+      "key": [
+        "注文",
+        "sku"
+      ],
+      "pending": {
+        "expires_after_seconds": 1800
+      },
+      "moves": [
+        {
+          "amount": {
+            "param": "数"
+          },
+          "from": {
+            "account": "在庫",
+            "args": [
+              {
+                "param": "sku"
+              }
+            ]
+          },
+          "to": {
+            "account": "客",
+            "args": []
+          }
+        }
+      ],
+      "code": 47038,
+      "definition": "c620e0e69038cf99fb5d0b188df32506",
+      "operations": {
+        "hold": {
+          "refusals": [
+            {
+              "name": "在庫切れ",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-1",
+                    "sku": "sku-2",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "在庫切れ"
+                }
+              ],
+              "account": "在庫",
+              "as_written": "在庫(sku)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入荷",
+                  "args": {
+                    "納品書": "納品書-1",
+                    "sku": "sku-2",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-1",
+                    "sku": "sku-2",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "在庫切れ"
+                },
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-1",
+                    "sku": "sku-2",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "注文",
+              "sku"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "数",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入荷",
+                    "args": {
+                      "納品書": "納品書-1",
+                      "sku": "sku-2",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "引当",
+                    "args": {
+                      "注文": "注文-3",
+                      "sku": "sku-2",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "引当",
+                    "args": {
+                      "注文": "注文-3",
+                      "sku": "sku-2",
+                      "数": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "done_before",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入荷",
+                    "args": {
+                      "納品書": "納品書-1",
+                      "sku": "sku-2",
+                      "数": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "引当",
+                    "args": {
+                      "注文": "注文-3",
+                      "sku": "sku-2",
+                      "数": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "pass",
+                    "duration": "30 minutes"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "引当",
+                    "args": {
+                      "注文": "注文-3",
+                      "sku": "sku-2",
+                      "数": 2
+                    },
+                    "result": "done_before"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "post": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入荷",
+                  "args": {
+                    "納品書": "納品書-1",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2"
+                  },
+                  "amounts": {
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_voided",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入荷",
+                  "args": {
+                    "納品書": "納品書-1",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "already_voided"
+                }
+              ]
+            },
+            {
+              "name": "expired",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入荷",
+                  "args": {
+                    "納品書": "納品書-1",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "pass",
+                  "duration": "30 minutes"
+                },
+                {
+                  "op": "post",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "expired"
+                }
+              ]
+            },
+            {
+              "name": "over_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入荷",
+                  "args": {
+                    "納品書": "納品書-1",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2"
+                  },
+                  "amounts": {
+                    "数": 3
+                  },
+                  "result": "refused",
+                  "reason": "over_hold"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "post",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-1",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        },
+        "void": {
+          "refusals": [
+            {
+              "name": "already_posted",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入荷",
+                  "args": {
+                    "納品書": "納品書-1",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "already_posted"
+                }
+              ]
+            },
+            {
+              "name": "expired",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入荷",
+                  "args": {
+                    "納品書": "納品書-1",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "pass",
+                  "duration": "30 minutes"
+                },
+                {
+                  "op": "void",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "expired"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "void",
+                  "kind": "引当",
+                  "args": {
+                    "注文": "注文-1",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "返品",
+      "description": null,
+      "params": [
+        {
+          "name": "返品伝票",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "数",
+          "type": "amount",
+          "unit": "個"
+        }
+      ],
+      "key": [
+        "返品伝票",
+        "sku"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "数"
+          },
+          "from": {
+            "account": "客",
+            "args": []
+          },
+          "to": {
+            "account": "在庫",
+            "args": [
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 32509,
+      "definition": "0871582c39b7f5feafe873e6ffd22b6f",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "返品",
+                  "args": {
+                    "返品伝票": "返品伝票-1",
+                    "sku": "sku-2",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "返品",
+                  "args": {
+                    "返品伝票": "返品伝票-1",
+                    "sku": "sku-2",
+                    "数": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "返品伝票",
+              "sku"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "数",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "返品",
+                    "args": {
+                      "返品伝票": "返品伝票-1",
+                      "sku": "sku-2",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "返品",
+                    "args": {
+                      "返品伝票": "返品伝票-1",
+                      "sku": "sku-2",
+                      "数": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [
+    {
+      "name": "引当",
+      "over": "引当",
+      "carry": {
+        "input": "state",
+        "output": "next_state",
+        "enum": "state"
+      },
+      "held": [],
+      "never": [],
+      "once": [],
+      "states": [
+        "held",
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "initial": "held",
+      "final": [
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "events": [
+        "post",
+        "void",
+        "expire"
+      ],
+      "external": [
+        "expire"
+      ],
+      "certificate": {
+        "enums": {
+          "state": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "event": [
+            "post",
+            "void",
+            "expire"
+          ],
+          "reason": [
+            "none",
+            "already_posted",
+            "already_voided",
+            "expired"
+          ]
+        },
+        "types": {
+          "state": "state",
+          "event": "event",
+          "next_state": "state",
+          "refused": "bool",
+          "reason": "reason"
+        },
+        "machine": {
+          "table": "引当",
+          "carry": {
+            "input": "state",
+            "output": "next_state"
+          },
+          "axis": 1,
+          "states": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "initial": 0,
+          "finals": [
+            1,
+            2,
+            3
+          ],
+          "rows": [
+            {
+              "row": 1,
+              "to": 1
+            },
+            {
+              "row": 2,
+              "to": 2
+            },
+            {
+              "row": 3,
+              "to": 3
+            },
+            {
+              "row": 4,
+              "stay": true
+            },
+            {
+              "row": 5,
+              "stay": true
+            },
+            {
+              "row": 6,
+              "stay": true
+            },
+            {
+              "row": 7,
+              "stay": true
+            },
+            {
+              "row": 8,
+              "stay": true
+            },
+            {
+              "row": 9,
+              "stay": true
+            }
+          ]
+        },
+        "tables": [
+          {
+            "table": "引当",
+            "policy": "first",
+            "axes": [
+              {
+                "column": "event",
+                "coords": [
+                  "post",
+                  "void",
+                  "expire"
+                ]
+              },
+              {
+                "column": "state",
+                "coords": [
+                  "held",
+                  "posted",
+                  "voided",
+                  "expired"
+                ]
+              }
+            ],
+            "decides": [
+              "next_state",
+              "refused",
+              "reason"
+            ],
+            "rows": [
+              {
+                "row": 1,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "posted",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 2,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "voided",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 3,
+                "accepts": [
+                  [
+                    2
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "expired",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 4,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 5,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_posted"
+                ]
+              },
+              {
+                "row": 6,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_voided"
+                ]
+              },
+              {
+                "row": 7,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 8,
+                "accepts": [
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    3
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "expired"
+                ]
+              },
+              {
+                "row": 9,
+                "accepts": [
+                  [
+                    2
+                  ],
+                  [
+                    1,
+                    2,
+                    3
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "在庫",
+      "functions": [
+        {
+          "kind": "入荷",
+          "op": "do",
+          "name": "入荷_do",
+          "params": [
+            "p_tenant",
+            "p_納品書",
+            "p_sku",
+            "p_数"
+          ]
+        },
+        {
+          "kind": "引当",
+          "op": "hold",
+          "name": "引当_hold",
+          "params": [
+            "p_tenant",
+            "p_注文",
+            "p_sku",
+            "p_数"
+          ]
+        },
+        {
+          "kind": "引当",
+          "op": "post",
+          "name": "引当_post",
+          "params": [
+            "p_tenant",
+            "p_注文",
+            "p_sku",
+            "p_数"
+          ],
+          "default_null": [
+            "p_数"
+          ]
+        },
+        {
+          "kind": "引当",
+          "op": "void",
+          "name": "引当_void",
+          "params": [
+            "p_tenant",
+            "p_注文",
+            "p_sku"
+          ]
+        },
+        {
+          "kind": "引当",
+          "op": "status",
+          "name": "引当_status",
+          "params": [
+            "p_tenant",
+            "p_注文",
+            "p_sku"
+          ]
+        },
+        {
+          "kind": "返品",
+          "op": "do",
+          "name": "返品_do",
+          "params": [
+            "p_tenant",
+            "p_返品伝票",
+            "p_sku",
+            "p_数"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "在庫",
+          "name": "balance_在庫",
+          "params": [
+            "p_tenant",
+            "p_sku"
+          ]
+        },
+        {
+          "account": "仕入先",
+          "name": "balance_仕入先",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "客",
+          "name": "balance_客",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "在庫.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "入荷",
+          "member": "入荷",
+          "args": "入荷Args"
+        },
+        {
+          "kind": "引当",
+          "member": "引当",
+          "args": "引当Args",
+          "key": "引当Key",
+          "amounts": "引当Amounts"
+        },
+        {
+          "kind": "返品",
+          "member": "返品",
+          "args": "返品Args"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "在庫",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "入荷",
+          "member": "入荷",
+          "params": {
+            "納品書": "納品書",
+            "sku": "sku",
+            "数": "数"
+          }
+        },
+        {
+          "kind": "引当",
+          "member": "引当",
+          "params": {
+            "注文": "注文",
+            "sku": "sku",
+            "数": "数"
+          }
+        },
+        {
+          "kind": "返品",
+          "member": "返品",
+          "params": {
+            "返品伝票": "返品伝票",
+            "sku": "sku",
+            "数": "数"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "book",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "入荷",
+          "member": "X入荷",
+          "args": "X入荷Args",
+          "fields": {
+            "納品書": "X納品書",
+            "sku": "Sku",
+            "数": "X数"
+          }
+        },
+        {
+          "kind": "引当",
+          "member": "X引当",
+          "args": "X引当Args",
+          "fields": {
+            "注文": "X注文",
+            "sku": "Sku",
+            "数": "X数"
+          },
+          "key": "X引当Key",
+          "amounts": "X引当Amounts"
+        },
+        {
+          "kind": "返品",
+          "member": "X返品",
+          "args": "X返品Args",
+          "fields": {
+            "返品伝票": "X返品伝票",
+            "sku": "Sku",
+            "数": "X数"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "在庫",
+          "method": "X在庫",
+          "args": "X在庫Account",
+          "fields": {
+            "sku": "Sku"
+          }
+        },
+        {
+          "account": "仕入先",
+          "method": "X仕入先"
+        },
+        {
+          "account": "客",
+          "method": "X客"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "入荷",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "引当",
+          "op": "hold",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "引当",
+          "op": "post",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "引当",
+          "op": "void",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "返品",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

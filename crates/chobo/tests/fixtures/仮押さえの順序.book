@@ -1,0 +1,14 @@
+# W104：仮押さえでは、同じ仮押さえのほかの移動が入れた額を使えない
+book 仮押さえの順序 v1
+unit 円
+
+account 買い手 : 円 outside
+account 店への支払 : 円 outside
+account 預り(注文: string) : 円
+  at least 0 refused as 預り不足
+
+transfer 決済(注文: string, 代金: 円)
+  key 注文
+  pending expires after 1 hour
+  move 代金 from 買い手 to 預り(注文)
+  move 代金 from 預り(注文) to 店への支払

@@ -1,0 +1,7 @@
+error[E010]: 単位.book:12:3: the units of this move do not match: the account it moves from, `在庫`, is in `個`, the one it moves to, `客`, in `円`, and the amount `数` in `個`; to exchange one unit for another, write two moves, each through an outside account of its unit
+    12 |   move 数 from 在庫(sku) to 客
+error[E010]: 単位.book:15:3: the units of this move do not match: the account it moves from, `仕入先`, is in `個`, the one it moves to, `在庫`, in `個`, and the amount `額` in `円`; to exchange one unit for another, write two moves, each through an outside account of its unit
+    15 |   move 額 from 仕入先 to 在庫(sku)
+error[E010]: 単位.book:18:3: the units of this move do not match: the account it moves from, `客`, is in `円`, the one it moves to, `仕入先`, in `個`; to exchange one unit for another, write two moves, each through an outside account of its unit
+    18 |   move 500 from 客 to 仕入先
+単位.book: 3 error(s), 0 warning(s)

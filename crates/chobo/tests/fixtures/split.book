@@ -1,0 +1,14 @@
+# W103, with English names: the fee is taken from the shop's balance before the price is put into it
+book split v1
+
+unit USD scale 2
+
+account buyers : USD outside
+account fees : USD outside
+account shop_balance(shop: string) : USD
+  at least 0 refused as insufficient_balance
+
+transfer sale(order: string, shop: string, price: USD, fee: USD)
+  key order
+  move fee from shop_balance(shop) to fees
+  move price from buyers to shop_balance(shop)

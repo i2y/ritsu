@@ -1,0 +1,30 @@
+# A sale splits what the buyer paid between the shop and the marketplace's fee, in amounts the caller works out.
+book marketplace v1
+description "The marketplace keeps a balance for each shop. A sale splits what the buyer paid between the shop's balance and the marketplace's fee, in amounts the caller works out (a rule decides the fee). A payout is held until the bank confirms it, and a refund takes both parts back"
+
+unit USD scale 2
+
+account shop_balance(shop: string) : USD
+  description "what the marketplace owes the shop"
+  at least 0 refused as insufficient_balance
+account buyers : USD outside
+account fees : USD outside
+account bank : USD outside
+
+transfer sale(order: string, shop: string, to_shop: USD, fee: USD)
+  description "to_shop and fee add up to what the buyer paid; the caller works out the fee"
+  key order
+  move to_shop from buyers to shop_balance(shop)
+  move fee from buyers to fees
+
+transfer refund(refund_id: string, shop: string, to_shop: USD, fee: USD)
+  description "gives back the fee and the shop's part, both or neither"
+  key refund_id
+  move fee from fees to buyers
+  move to_shop from shop_balance(shop) to buyers
+
+transfer payout(payout_id: string, shop: string, amount: USD)
+  description "held when the bank transfer starts: posted when the bank confirms it, voided when it fails"
+  key payout_id
+  pending never expires
+  move amount from shop_balance(shop) to bank

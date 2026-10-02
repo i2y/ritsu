@@ -1,0 +1,4 @@
+error[E061]: 名前の長さ.book:15:10: The function's name `注文を受けた商品を倉庫から取り出して客へ送る_do` is 69 bytes long; PostgreSQL keeps a name to 63 bytes, and cuts a longer one short without a word
+    15 | transfer 注文を受けた商品を倉庫から取り出して客へ送る(注文: string, sku: string, 数: 個)
+  hint: Make the name shorter: 63 bytes are 63 ASCII letters, or 21 Japanese characters (a function's name counts what follows it too, `_hold` and the like)
+名前の長さ.book: 1 error(s), 0 warning(s)

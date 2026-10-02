@@ -1,0 +1,6 @@
+error[E060]: リクエスト.book:22:10: 配る.do sends its 43 moves as a chain of 258 TigerBeetle transfers, in one request; a replica started with --development takes at most 253 in one
+    22 | transfer 配る(伝票: string, 元: string, 先: string, 額: 円)
+  the operations that get there:
+       1  配る.do(伝票: 伝票-1, 元: 元-2, 先: 先-3, 額: 1)  sends 258 transfers in one request
+  hint: Split the transfer kind into kinds with fewer moves; a move between bounded accounts takes up to 6 transfers
+リクエスト.book: 1 error(s), 0 warning(s)

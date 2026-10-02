@@ -1,0 +1,15 @@
+warning[W103]: 順序.book:15:3: move 1 takes from 店の売上(店) before move 2 puts into it: when 店の売上(店) is short at that point, the call is refused with 売上不足, even when the two moves together would leave enough
+    15 |   move 手数料 from 店の売上(店) to 手数料収入
+  the operations that get there:
+       1  売上.do(注文: 注文-1, 店: 店-2, 代金: 1, 手数料: 1)  refused: 売上不足 (move 1 takes 1 from 店の売上(店-2): posted 0, held out 0)
+  hint: write the move that puts into 店の売上(店) first
+warning[W103]: 順序.book:19:3: move 1 puts into 予約枠(日) before move 2 takes from it: when 予約枠(日) has no room at that point, the call is refused with 枠超え, even when the two moves together would stay within its bound
+    19 |   move 額 from 枠の元 to 予約枠(日)
+  the operations that get there:
+       1  振り替え.do(伝票: 伝票-1, 日: 日-2, 額: 101)  refused: 枠超え (move 1 puts 101 into 予約枠(日-2): posted 0, held in 0)
+  hint: write the move that takes from 予約枠(日) first
+順序.book: ok, 2 warning(s)
+  売上.do      may be refused: 売上不足 (店の売上(店) at least 0), already_refused
+  振り替え.do  may be refused: 枠超え (予約枠(日) at most 100), key_conflict, already_refused
+  key: 売上 once per 注文
+  key: 振り替え once per 伝票; a second call that differs only in 日 or 額 is refused with key_conflict

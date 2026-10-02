@@ -1,0 +1,14 @@
+[
+  {
+    "name": "more: two refunds of 20.00 at the same time on a sale of 30.00, then one of 10.00",
+    "book": "refunds",
+    "steps": [
+      {"op": "do", "kind": "sale", "args": {"order": "A-100", "amount": 3000}},
+      {"op": "together", "callers": [
+        [{"op": "hold", "kind": "refund", "args": {"request": "R-1", "order": "A-100", "amount": 2000}}],
+        [{"op": "hold", "kind": "refund", "args": {"request": "R-2", "order": "A-100", "amount": 2000}}]
+      ]},
+      {"op": "hold", "kind": "refund", "args": {"request": "R-3", "order": "A-100", "amount": 1000}}
+    ]
+  }
+]

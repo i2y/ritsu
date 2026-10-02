@@ -1,0 +1,1811 @@
+[
+  {
+    "scenario": {
+      "name": "bound: ドル払い.do move 1 takes 店の売上(店) to 1, one above `at least 0`",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 105,
+            "手数料": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-3",
+            "店": "店-2",
+            "円額": 1,
+            "ドル額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: ドル払い.do move 1 takes 店の売上(店) to exactly 0, its `at least 0`",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 105,
+            "手数料": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-3",
+            "店": "店-2",
+            "円額": 2,
+            "ドル額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: ドル払い.do move 1 would take 店の売上(店) to -1, below `at least 0`",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 106,
+            "手数料": 4
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-3",
+            "店": "店-2",
+            "円額": 3,
+            "ドル額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "refused",
+          "reason": "売上不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -106,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 売上.do twice with the same arguments",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 1000,
+            "手数料": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 1000,
+            "手数料": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -1000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 899,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 売上.do again with another 代金",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 1000,
+            "手数料": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 3,
+            "手数料": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -1000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 899,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 売上.do refused with 売上不足, then again, and again once 店の売上(店) has enough",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 1,
+            "手数料": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 1,
+            "手数料": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-3",
+            "店": "店-2",
+            "代金": 105,
+            "手数料": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 1,
+            "手数料": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "refused",
+          "reason": "売上不足"
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: ドル払い.do twice with the same arguments",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 104,
+            "手数料": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-3",
+            "店": "店-2",
+            "円額": 1,
+            "ドル額": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-3",
+            "店": "店-2",
+            "円額": 1,
+            "ドル額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -104,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: ドル払い.do again with another 円額",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 104,
+            "手数料": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-3",
+            "店": "店-2",
+            "円額": 1,
+            "ドル額": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-3",
+            "店": "店-2",
+            "円額": 4,
+            "ドル額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -104,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: ドル払い.do refused with 売上不足, then again, and again once 店の売上(店) has enough",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-1",
+            "店": "店-2",
+            "円額": 1,
+            "ドル額": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-1",
+            "店": "店-2",
+            "円額": 1,
+            "ドル額": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-3",
+            "店": "店-2",
+            "代金": 104,
+            "手数料": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-1",
+            "店": "店-2",
+            "円額": 1,
+            "ドル額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "refused",
+          "reason": "売上不足"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -104,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: ドル送金.do twice with the same arguments",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 105,
+            "手数料": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-3",
+            "店": "店-2",
+            "円額": 2,
+            "ドル額": 151
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "args": {
+            "送金番号": "送金番号-4",
+            "店": "店-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "args": {
+            "送金番号": "送金番号-4",
+            "店": "店-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": -151,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "海外の銀行",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送金手数料",
+          "args": [],
+          "posted": 150,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: ドル送金.do again with another 額",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 105,
+            "手数料": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-3",
+            "店": "店-2",
+            "円額": 2,
+            "ドル額": 151
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "args": {
+            "送金番号": "送金番号-4",
+            "店": "店-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "args": {
+            "送金番号": "送金番号-4",
+            "店": "店-2",
+            "額": 4
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": -151,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "海外の銀行",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送金手数料",
+          "args": [],
+          "posted": 150,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: ドル送金.do refused with ドル残高不足, then again, and again once ドル口座(店) has enough",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "args": {
+            "送金番号": "送金番号-1",
+            "店": "店-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "args": {
+            "送金番号": "送金番号-1",
+            "店": "店-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-3",
+            "店": "店-2",
+            "代金": 105,
+            "手数料": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-4",
+            "店": "店-2",
+            "円額": 2,
+            "ドル額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "args": {
+            "送金番号": "送金番号-1",
+            "店": "店-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "result": "refused",
+          "reason": "ドル残高不足"
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "海外の銀行",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送金手数料",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "moves: 売上.do refused at move 2 (店の売上(店)), and no move is made",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 1,
+            "手数料": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "refused",
+          "reason": "売上不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "moves: 売上.do refused at move 3 (店の売上(店)), and no move is made",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 2,
+            "手数料": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "result": "refused",
+          "reason": "売上不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "買い手",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "手数料収入",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送料",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "moves: ドル払い.do refused at move 1 (店の売上(店)), and no move is made",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "args": {
+            "払出番号": "払出番号-1",
+            "店": "店-2",
+            "円額": 1,
+            "ドル額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ドル払い",
+          "result": "refused",
+          "reason": "売上不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "店の売上",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "円の両替口",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドルの両替口",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "moves: ドル送金.do refused at move 1 (ドル口座(店)), and no move is made",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "args": {
+            "送金番号": "送金番号-1",
+            "店": "店-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ドル送金",
+          "result": "refused",
+          "reason": "ドル残高不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ドル口座",
+          "args": [
+            "店-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "海外の銀行",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "送金手数料",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of 店の売上(店) with ドル払い.do",
+      "book": "分配",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "売上",
+          "args": {
+            "注文": "注文-1",
+            "店": "店-2",
+            "代金": 105,
+            "手数料": 4
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "ドル払い",
+                "args": {
+                  "払出番号": "払出番号-3",
+                  "店": "店-2",
+                  "円額": 1,
+                  "ドル額": 2
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "ドル払い",
+                "args": {
+                  "払出番号": "払出番号-4",
+                  "店": "店-2",
+                  "円額": 1,
+                  "ドル額": 3
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "売上",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "result": "refused",
+                    "reason": "売上不足"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "買い手",
+              "args": [],
+              "posted": -105,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "手数料収入",
+              "args": [],
+              "posted": 4,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "送料",
+              "args": [],
+              "posted": 100,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "店の売上",
+              "args": [
+                "店-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "円の両替口",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "ドルの両替口",
+              "args": [],
+              "posted": -2,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "ドル口座",
+              "args": [
+                "店-2"
+              ],
+              "posted": 2,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "売上",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "result": "refused",
+                    "reason": "売上不足"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "買い手",
+              "args": [],
+              "posted": -105,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "手数料収入",
+              "args": [],
+              "posted": 4,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "送料",
+              "args": [],
+              "posted": 100,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "店の売上",
+              "args": [
+                "店-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "円の両替口",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "ドルの両替口",
+              "args": [],
+              "posted": -3,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "ドル口座",
+              "args": [
+                "店-2"
+              ],
+              "posted": 3,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  }
+]

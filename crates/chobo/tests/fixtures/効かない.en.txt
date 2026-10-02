@@ -1,0 +1,5 @@
+warning[W106]: 効かない.book:7:3: `at most 0` never matters: nothing puts into `与信`
+     7 |   at most 0 refused as 前払い超過
+効かない.book: ok, 1 warning(s)
+  後払い.do  may be refused: 与信枠超え (与信(会員) at least -1000), key_conflict, already_refused
+  key: 後払い once per 伝票; a second call that differs only in 会員 or 額 is refused with key_conflict

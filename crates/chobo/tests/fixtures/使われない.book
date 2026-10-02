@@ -1,0 +1,18 @@
+# W105：使われない単位、勘定、引数
+book 使われない v1
+unit 個
+unit 箱
+
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 返品棚(sku: string) : 個
+  at least 0 refused as 返品棚不足
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 入荷(伝票: string, sku: string, 数: 個, 担当: string)
+  key 伝票
+  move 数 from 仕入先 to 在庫(sku)
+transfer 出荷(注文: string, sku: string, 数: 個)
+  key 注文
+  move 数 from 在庫(sku) to 客

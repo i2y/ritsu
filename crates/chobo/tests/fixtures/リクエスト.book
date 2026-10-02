@@ -1,0 +1,66 @@
+# E060：一つの操作が TigerBeetle の一つのリクエストに入らない。口座と枠のあいだの移動は一つで 6 件の振替になり、43 個で 258 件になる
+book リクエスト v1
+
+unit 円
+
+account 口座(id: string) : 円
+  at least 1 refused as 口座不足
+  at most 1000000 refused as 口座の上限超え
+account 枠(id: string) : 円
+  at least -1000 refused as 枠超え
+  at most 1000 refused as 払いすぎ
+account 銀行 : 円 outside
+
+transfer 入金(伝票: string, id: string, 額: 円)
+  key 伝票
+  move 額 from 銀行 to 口座(id)
+
+transfer 返済(伝票: string, id: string, 額: 円)
+  key 伝票
+  move 額 from 枠(id) to 銀行
+
+transfer 配る(伝票: string, 元: string, 先: string, 額: 円)
+  key 伝票
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)
+  move 額 from 口座(元) to 枠(先)

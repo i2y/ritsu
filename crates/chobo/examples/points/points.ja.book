@@ -1,0 +1,29 @@
+# 購入で付くポイントは返品の期間が過ぎるまで押さえ、会計で使うポイントは支払いが通るまで押さえる
+book ポイント v1
+description "会員ごとのポイント。購入で付く分は返品の期間が過ぎるまで押さえ、会計で使う分は支払いが通るまで 15 分押さえる。期間の終わりに使われずに残った分は失効する"
+
+unit pt
+
+account ポイント(会員: string) : pt
+  at least 0 refused as ポイント不足
+  at most 1000000 refused as 上限超え
+account 発行 : pt outside
+account 利用済み : pt outside
+account 失効済み : pt outside
+
+transfer 付与(購入: string, 会員: string, 数: pt)
+  description "返品の期間が過ぎたら確定し、返品されたら取り消す"
+  key 購入
+  pending never expires
+  move 数 from 発行 to ポイント(会員)
+
+transfer 利用(会計: string, 会員: string, 数: pt)
+  description "支払いが通ったら確定し、通らなかったら取り消す"
+  key 会計
+  pending expires after 15 minutes
+  move 数 from ポイント(会員) to 利用済み
+
+transfer 失効(会員: string, 期間: string, 数: pt)
+  description "その期間に使われなかった分"
+  key 会員, 期間
+  move 数 from ポイント(会員) to 失効済み

@@ -1,0 +1,19 @@
+error[E003]: 二度.book:3:6: the unit `個` is already declared on line 2
+     3 | unit 個
+error[E003]: 二度.book:5:25: the parameter `sku` appears twice
+     5 | account 在庫(sku: string, sku: string) : 個
+error[E003]: 二度.book:7:3: a second `description` line
+     7 |   description "倉庫"
+error[E003]: 二度.book:9:3: a second `at least` line
+     9 |   at least 1 refused as 安全在庫割れ
+error[E003]: 二度.book:10:9: the account `在庫` is already declared on line 5
+    10 | account 在庫(sku: string) : 個
+error[E003]: 二度.book:15:11: `注文` appears twice in the key
+    15 |   key 注文, 注文
+error[E003]: 二度.book:16:3: a second `key` line; write the whole key on one line
+    16 |   key sku
+error[E003]: 二度.book:18:3: a second `pending` line
+    18 |   pending expires after 1 hour
+error[E003]: 二度.book:20:10: the transfer `出荷` is already declared on line 14
+    20 | transfer 出荷(注文: string, 数: 個)
+二度.book: 9 error(s), 0 warning(s)

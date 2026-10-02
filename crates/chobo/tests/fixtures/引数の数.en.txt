@@ -1,0 +1,9 @@
+error[E004]: 引数の数.book:10:15: the account `在庫` takes 2 arguments, and is given 1
+    10 |   move 数 from 在庫(sku) to 客
+error[E004]: 引数の数.book:13:15: the account `客` takes no arguments; write `客` without parentheses
+    13 |   move 数 from 客(sku) to 在庫("本店", sku)
+error[E004]: 引数の数.book:16:15: the account `在庫` takes 2 arguments, and is given none
+    16 |   move 数 from 在庫 to 在庫("本店", sku, "棚")
+error[E004]: 引数の数.book:16:21: the account `在庫` takes 2 arguments, and is given 3
+    16 |   move 数 from 在庫 to 在庫("本店", sku, "棚")
+引数の数.book: 4 error(s), 0 warning(s)

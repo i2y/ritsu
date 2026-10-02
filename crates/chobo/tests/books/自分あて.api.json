@@ -1,0 +1,1526 @@
+{
+  "v": 1,
+  "book": "自分あて",
+  "version": 1,
+  "source_sha256": "d9cb896dfe44626b8e77b0c283f0838d530f113c0b2ec7f174c5f68855ecaccd",
+  "units": [
+    {
+      "name": "個",
+      "scale": 0,
+      "ledger": 1653847866
+    }
+  ],
+  "accounts": [
+    {
+      "name": "倉庫",
+      "params": [
+        "場所",
+        "sku"
+      ],
+      "unit": "個",
+      "outside": false,
+      "lower": {
+        "value": 0,
+        "refused_as": "在庫不足"
+      },
+      "upper": null,
+      "description": null,
+      "code": 37538
+    },
+    {
+      "name": "仕入先",
+      "params": [],
+      "unit": "個",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 18040
+    },
+    {
+      "name": "客",
+      "params": [],
+      "unit": "個",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 46375
+    }
+  ],
+  "transfers": [
+    {
+      "name": "入庫",
+      "description": null,
+      "params": [
+        {
+          "name": "伝票",
+          "type": "string"
+        },
+        {
+          "name": "場所",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "数",
+          "type": "amount",
+          "unit": "個"
+        }
+      ],
+      "key": [
+        "伝票"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "数"
+          },
+          "from": {
+            "account": "仕入先",
+            "args": []
+          },
+          "to": {
+            "account": "倉庫",
+            "args": [
+              {
+                "param": "場所"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 51199,
+      "definition": "7b4122789ad6960480595d4423baa44b",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入庫",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "場所": "場所-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "入庫",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "場所": "場所-2",
+                    "sku": "sku-3",
+                    "数": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "伝票"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "場所",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "場所-4",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "sku",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "場所-2",
+                      "sku": "sku-4",
+                      "数": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "数",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "移し替え",
+      "description": null,
+      "params": [
+        {
+          "name": "伝票",
+          "type": "string"
+        },
+        {
+          "name": "元",
+          "type": "string"
+        },
+        {
+          "name": "先",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "数",
+          "type": "amount",
+          "unit": "個"
+        }
+      ],
+      "key": [
+        "伝票"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "数"
+          },
+          "from": {
+            "account": "倉庫",
+            "args": [
+              {
+                "param": "元"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          },
+          "to": {
+            "account": "倉庫",
+            "args": [
+              {
+                "param": "先"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 58293,
+      "definition": "b7582504f443abfbf461c2149fe61f00",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "在庫不足",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "移し替え",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "元": "元-2",
+                    "先": "先-3",
+                    "sku": "sku-4",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "在庫不足"
+                }
+              ],
+              "account": "倉庫",
+              "as_written": "倉庫(元, sku)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入庫",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "場所": "元-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "移し替え",
+                  "args": {
+                    "伝票": "伝票-4",
+                    "元": "元-2",
+                    "先": "先-5",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "移し替え",
+                  "args": {
+                    "伝票": "伝票-4",
+                    "元": "元-2",
+                    "先": "先-5",
+                    "sku": "sku-3",
+                    "数": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "移し替え",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "元": "元-2",
+                    "先": "先-3",
+                    "sku": "sku-4",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "在庫不足"
+                },
+                {
+                  "op": "do",
+                  "kind": "移し替え",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "元": "元-2",
+                    "先": "先-3",
+                    "sku": "sku-4",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            },
+            {
+              "name": "same_account",
+              "because": "account",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "移し替え",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "元": "元-2",
+                    "先": "元-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "same_account"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "伝票"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "元",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "先": "先-5",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-6",
+                      "先": "先-5",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "先",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "先": "先-5",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "先": "先-6",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "sku",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "先": "先-5",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "先": "先-5",
+                      "sku": "sku-6",
+                      "数": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "数",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "先": "先-5",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "先": "先-5",
+                      "sku": "sku-3",
+                      "数": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "本店へ",
+      "description": null,
+      "params": [
+        {
+          "name": "伝票",
+          "type": "string"
+        },
+        {
+          "name": "元",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "数",
+          "type": "amount",
+          "unit": "個"
+        }
+      ],
+      "key": [
+        "伝票"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "数"
+          },
+          "from": {
+            "account": "倉庫",
+            "args": [
+              {
+                "param": "元"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          },
+          "to": {
+            "account": "倉庫",
+            "args": [
+              {
+                "literal": "本店"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 16658,
+      "definition": "c7107f0254a20cba2c6d0215c9c125b9",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "在庫不足",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "本店へ",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "元": "元-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "在庫不足"
+                }
+              ],
+              "account": "倉庫",
+              "as_written": "倉庫(元, sku)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入庫",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "場所": "元-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "本店へ",
+                  "args": {
+                    "伝票": "伝票-4",
+                    "元": "元-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "本店へ",
+                  "args": {
+                    "伝票": "伝票-4",
+                    "元": "元-2",
+                    "sku": "sku-3",
+                    "数": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "本店へ",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "元": "元-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "在庫不足"
+                },
+                {
+                  "op": "do",
+                  "kind": "本店へ",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "元": "元-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            },
+            {
+              "name": "same_account",
+              "because": "account",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "本店へ",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "元": "本店",
+                    "sku": "sku-2",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "same_account"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "伝票"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "元",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-5",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "sku",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "sku": "sku-5",
+                      "数": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "数",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "元": "元-2",
+                      "sku": "sku-3",
+                      "数": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "出庫",
+      "description": null,
+      "params": [
+        {
+          "name": "伝票",
+          "type": "string"
+        },
+        {
+          "name": "場所",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "数",
+          "type": "amount",
+          "unit": "個"
+        }
+      ],
+      "key": [
+        "伝票"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "数"
+          },
+          "from": {
+            "account": "倉庫",
+            "args": [
+              {
+                "param": "場所"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          },
+          "to": {
+            "account": "客",
+            "args": []
+          }
+        }
+      ],
+      "code": 10584,
+      "definition": "2bd0a4ee3261962cbabd145cd4ebd19c",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "在庫不足",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "出庫",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "場所": "場所-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "在庫不足"
+                }
+              ],
+              "account": "倉庫",
+              "as_written": "倉庫(場所, sku)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "入庫",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "場所": "場所-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "出庫",
+                  "args": {
+                    "伝票": "伝票-4",
+                    "場所": "場所-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "出庫",
+                  "args": {
+                    "伝票": "伝票-4",
+                    "場所": "場所-2",
+                    "sku": "sku-3",
+                    "数": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "出庫",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "場所": "場所-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "在庫不足"
+                },
+                {
+                  "op": "do",
+                  "kind": "出庫",
+                  "args": {
+                    "伝票": "伝票-1",
+                    "場所": "場所-2",
+                    "sku": "sku-3",
+                    "数": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "伝票"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "場所",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "場所": "場所-5",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "sku",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "場所": "場所-2",
+                      "sku": "sku-5",
+                      "数": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "数",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "入庫",
+                    "args": {
+                      "伝票": "伝票-1",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "args": {
+                      "伝票": "伝票-4",
+                      "場所": "場所-2",
+                      "sku": "sku-3",
+                      "数": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "自分あて",
+      "functions": [
+        {
+          "kind": "入庫",
+          "op": "do",
+          "name": "入庫_do",
+          "params": [
+            "p_tenant",
+            "p_伝票",
+            "p_場所",
+            "p_sku",
+            "p_数"
+          ]
+        },
+        {
+          "kind": "移し替え",
+          "op": "do",
+          "name": "移し替え_do",
+          "params": [
+            "p_tenant",
+            "p_伝票",
+            "p_元",
+            "p_先",
+            "p_sku",
+            "p_数"
+          ]
+        },
+        {
+          "kind": "本店へ",
+          "op": "do",
+          "name": "本店へ_do",
+          "params": [
+            "p_tenant",
+            "p_伝票",
+            "p_元",
+            "p_sku",
+            "p_数"
+          ]
+        },
+        {
+          "kind": "出庫",
+          "op": "do",
+          "name": "出庫_do",
+          "params": [
+            "p_tenant",
+            "p_伝票",
+            "p_場所",
+            "p_sku",
+            "p_数"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "倉庫",
+          "name": "balance_倉庫",
+          "params": [
+            "p_tenant",
+            "p_場所",
+            "p_sku"
+          ]
+        },
+        {
+          "account": "仕入先",
+          "name": "balance_仕入先",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "客",
+          "name": "balance_客",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "自分あて.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "入庫",
+          "member": "入庫",
+          "args": "入庫Args"
+        },
+        {
+          "kind": "移し替え",
+          "member": "移し替え",
+          "args": "移し替えArgs"
+        },
+        {
+          "kind": "本店へ",
+          "member": "本店へ",
+          "args": "本店へArgs"
+        },
+        {
+          "kind": "出庫",
+          "member": "出庫",
+          "args": "出庫Args"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "自分あて",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "入庫",
+          "member": "入庫",
+          "params": {
+            "伝票": "伝票",
+            "場所": "場所",
+            "sku": "sku",
+            "数": "数"
+          }
+        },
+        {
+          "kind": "移し替え",
+          "member": "移し替え",
+          "params": {
+            "伝票": "伝票",
+            "元": "元",
+            "先": "先",
+            "sku": "sku",
+            "数": "数"
+          }
+        },
+        {
+          "kind": "本店へ",
+          "member": "本店へ",
+          "params": {
+            "伝票": "伝票",
+            "元": "元",
+            "sku": "sku",
+            "数": "数"
+          }
+        },
+        {
+          "kind": "出庫",
+          "member": "出庫",
+          "params": {
+            "伝票": "伝票",
+            "場所": "場所",
+            "sku": "sku",
+            "数": "数"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "book",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "入庫",
+          "member": "X入庫",
+          "args": "X入庫Args",
+          "fields": {
+            "伝票": "X伝票",
+            "場所": "X場所",
+            "sku": "Sku",
+            "数": "X数"
+          }
+        },
+        {
+          "kind": "移し替え",
+          "member": "X移し替え",
+          "args": "X移し替えArgs",
+          "fields": {
+            "伝票": "X伝票",
+            "元": "X元",
+            "先": "X先",
+            "sku": "Sku",
+            "数": "X数"
+          }
+        },
+        {
+          "kind": "本店へ",
+          "member": "X本店へ",
+          "args": "X本店へArgs",
+          "fields": {
+            "伝票": "X伝票",
+            "元": "X元",
+            "sku": "Sku",
+            "数": "X数"
+          }
+        },
+        {
+          "kind": "出庫",
+          "member": "X出庫",
+          "args": "X出庫Args",
+          "fields": {
+            "伝票": "X伝票",
+            "場所": "X場所",
+            "sku": "Sku",
+            "数": "X数"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "倉庫",
+          "method": "X倉庫",
+          "args": "X倉庫Account",
+          "fields": {
+            "場所": "X場所",
+            "sku": "Sku"
+          }
+        },
+        {
+          "account": "仕入先",
+          "method": "X仕入先"
+        },
+        {
+          "account": "客",
+          "method": "X客"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "入庫",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "移し替え",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "本店へ",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "出庫",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

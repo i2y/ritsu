@@ -1,0 +1,20 @@
+# W103：下限では取る移動が先、上限では入れる移動が先
+book 順序 v1
+unit 円
+
+account 買い手 : 円 outside
+account 手数料収入 : 円 outside
+account 店の売上(店: string) : 円
+  at least 0 refused as 売上不足
+account 予約枠(日: string) : 円
+  at most 100 refused as 枠超え
+account 枠の元 : 円 outside
+
+transfer 売上(注文: string, 店: string, 代金: 円, 手数料: 円)
+  key 注文
+  move 手数料 from 店の売上(店) to 手数料収入
+  move 代金 from 買い手 to 店の売上(店)
+transfer 振り替え(伝票: string, 日: string, 額: 円)
+  key 伝票
+  move 額 from 枠の元 to 予約枠(日)
+  move 額 from 予約枠(日) to 枠の元

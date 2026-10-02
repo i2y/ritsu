@@ -1,0 +1,13 @@
+book 同じ勘定 v1
+unit 個
+
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 仕入先 : 個 outside
+
+transfer 入荷(伝票: string, sku: string, 数: 個)
+  key 伝票
+  move 数 from 仕入先 to 在庫(sku)
+transfer 棚卸し(伝票: string, sku: string, 数: 個)
+  key 伝票
+  move 数 from 在庫(sku) to 在庫(sku)

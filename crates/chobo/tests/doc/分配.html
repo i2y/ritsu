@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="chobo doc">
+<title>分配 v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --box: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --no: #cf222e; --held: #9a6700; --lit: #fff8c5; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --box: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --no: #f85149; --held: #d29922; --lit: #3b2e00; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+header, main { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+header { padding-top: 12px; }
+h1 { font-size: 1.6em; margin: 0.4em 0 0.2em; }
+h2 { font-size: 1.3em; margin: 1.6em 0 0.5em; padding-bottom: 0.2em; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.12em; margin: 1.4em 0 0.4em; }
+h4 { font-size: 1em; margin: 1em 0 0.3em; }
+p, li { overflow-wrap: break-word; }
+nav a { color: var(--accent); }
+.muted { color: var(--muted); }
+code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 0 0.25em; border-radius: 4px; }
+pre { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 8px 12px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+.scroll { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; margin: 0.4em 0 0.8em; }
+th, td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; vertical-align: top; min-width: 4.5em; }
+.states td:first-child { white-space: nowrap; }
+th { background: var(--box); }
+td { overflow-wrap: break-word; }
+td code { white-space: nowrap; }
+figure { margin: 0.6em 0; overflow-x: auto; max-width: 100%; }
+svg { display: block; max-width: none; height: auto; }
+svg text { fill: var(--fg); font-size: 13px; }
+svg .name { font-weight: 600; font-size: 14px; }
+svg .sub { fill: var(--muted); }
+.node rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+.node.outside rect { stroke: var(--muted); stroke-dasharray: 5 3; }
+.edge path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.edge.pending path { stroke-dasharray: 6 4; }
+.head { fill: var(--muted); }
+.head.ok { fill: var(--ok); }
+.head.no { fill: var(--no); }
+.label rect { fill: var(--bg); opacity: 0.92; }
+.label text { font-size: 12px; }
+.edge.lit path { stroke: var(--ok); stroke-width: 3; }
+.edge.no path { stroke: var(--no); stroke-width: 3; }
+.label.lit text { fill: var(--ok); font-weight: 600; }
+.label.no text { fill: var(--no); font-weight: 600; }
+.life .state rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+.life .state rect.inner { fill: none; stroke-width: 0.8; }
+.life .arrow { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.life .arrow.external { stroke-dasharray: 5 3; }
+.life .start { fill: var(--fg); }
+.life .lbl { font-size: 12px; }
+.life .lblbg { fill: var(--bg); opacity: 0.9; }
+.life .note { font-size: 11px; fill: var(--muted); }
+details { margin: 0.5em 0; }
+summary { cursor: pointer; color: var(--accent); }
+.player { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0.8em 0; }
+.player select { max-width: 100%; font: inherit; padding: 2px 4px; }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.outs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.outs button, .ctl button { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--box); color: var(--fg); cursor: pointer; }
+.outs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cols { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 8px; }
+.cols > * { flex: 1 1 320px; min-width: 0; }
+#steps { margin: 0; padding-left: 1.8em; }
+#steps li { padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+#steps li.now { background: var(--lit); }
+#steps li.later { color: var(--muted); }
+#steps .call { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+#steps .res { display: block; font-size: 0.92em; }
+#steps .res.ok { color: var(--ok); }
+#steps .res.no { color: var(--no); }
+#steps .why { display: block; font-size: 0.85em; color: var(--muted); }
+.ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+#bal td.changed { background: var(--lit); font-weight: 600; }
+#bal td.num { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+<h1>分配 v1</h1>
+<p>マーケットプレイスの売上を店と手数料と送料に分け、店の売上をドルで払い出す</p>
+<p class="muted"><code>chobo doc</code> が <code>tests/books/分配.book</code> から作ったページ。勘定ごとに残高を持ち、残高は入った量から出た量を引いたもの。どの振替も勘定の下限と上限を守り、守れない振替は、その境界に付けた名前で断られて、どの移動も行われない。振替には、すぐに動かすもの（<code>do</code>）と、動かす量をまず押さえるもの（<code>hold</code>）がある。押さえた分は、あとで確定される（<code>post</code>。全部か一部）か、取り消される（<code>void</code>）か、有効期限で切れる。</p>
+<nav><a href="#accounts">勘定</a> · <a href="#flow">流れ</a> · <a href="#transfers">振替</a> · <a href="#scenarios">シナリオ</a></nav>
+</header>
+<main>
+<section id="accounts">
+<h2>勘定</h2>
+<div class="scroll"><table><thead><tr><th>勘定</th><th>分け方</th><th>単位</th><th>境界</th><th>説明</th></tr></thead><tbody>
+<tr><td><code>買い手</code></td><td>一つだけ</td><td>円</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+<tr><td><code>手数料収入</code></td><td>一つだけ</td><td>円</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+<tr><td><code>送料</code></td><td>一つだけ</td><td>円</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+<tr><td><code>店の売上</code></td><td><code>店</code> ごと</td><td>円</td><td>0 以上。下回る振替は <code>売上不足</code> で断る</td><td></td></tr>
+<tr><td><code>円の両替口</code></td><td>一つだけ</td><td>円</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+<tr><td><code>ドルの両替口</code></td><td>一つだけ</td><td>USD</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+<tr><td><code>ドル口座</code></td><td><code>店</code> ごと</td><td>USD</td><td>0.00 以上。下回る振替は <code>ドル残高不足</code> で断る</td><td></td></tr>
+<tr><td><code>海外の銀行</code></td><td>一つだけ</td><td>USD</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+<tr><td><code>送金手数料</code></td><td>一つだけ</td><td>USD</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+</tbody></table></div>
+</section>
+<section id="flow">
+<h2>勘定のあいだの流れ</h2>
+<figure><svg class="flow" viewBox="0 0 805 414" width="805" role="img" aria-labelledby="flow-t"><title id="flow-t">分配 の勘定のあいだの流れ</title>
+<defs><marker id="flow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge" data-k="0"><path d="M131 169 C233 169, 233 160, 334 160" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="0"><path d="M478 141 C576 141, 576 49, 674 49" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="0"><path d="M478 160 C576 160, 576 129, 674 129" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="1"><path d="M478 180 C576 180, 576 209, 674 209" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="1"><path d="M136 249 C223 249, 223 263, 309 263" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="2"><path d="M503 252 C586 252, 586 289, 669 289" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="2"><path d="M503 274 C586 274, 586 369, 669 369" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="label" data-k="0"><rect x="191" y="156" width="83" height="16" rx="3"/><text x="233" y="168" text-anchor="middle">売上（代金）</text></g>
+<g class="label" data-k="0"><rect x="528" y="86" width="96" height="16" rx="3"/><text x="576" y="98" text-anchor="middle">売上（手数料）</text></g>
+<g class="label" data-k="0"><rect x="535" y="136" width="81" height="16" rx="3"/><text x="576" y="148" text-anchor="middle">売上（100）</text></g>
+<g class="label" data-k="1"><rect x="522" y="185" width="108" height="16" rx="3"/><text x="576" y="197" text-anchor="middle">ドル払い（円額）</text></g>
+<g class="label" data-k="1"><rect x="162" y="247" width="120" height="16" rx="3"/><text x="223" y="259" text-anchor="middle">ドル払い（ドル額）</text></g>
+<g class="label" data-k="2"><rect x="538" y="261" width="96" height="16" rx="3"/><text x="586" y="273" text-anchor="middle">ドル送金（額）</text></g>
+<g class="label" data-k="2"><rect x="529" y="313" width="113" height="16" rx="3"/><text x="586" y="325" text-anchor="middle">ドル送金（1.50）</text></g>
+<g class="node outside" data-a="0"><rect x="25" y="144" width="106" height="50" rx="16"/><text x="78" y="164" text-anchor="middle" class="name">買い手</text><text x="78" y="182" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node outside" data-a="1"><rect x="674" y="24" width="106" height="50" rx="16"/><text x="727" y="44" text-anchor="middle" class="name">手数料収入</text><text x="727" y="62" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node outside" data-a="2"><rect x="674" y="104" width="106" height="50" rx="16"/><text x="727" y="124" text-anchor="middle" class="name">送料</text><text x="727" y="142" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node" data-a="3"><rect x="334" y="121" width="144" height="78" rx="4"/><text x="406" y="146" text-anchor="middle" class="name">店の売上(店)</text><text x="406" y="164" text-anchor="middle" class="sub">円</text><text x="406" y="182" text-anchor="middle" class="sub">0 以上（売上不足）</text></g>
+<g class="node outside" data-a="4"><rect x="674" y="184" width="106" height="50" rx="16"/><text x="727" y="204" text-anchor="middle" class="name">円の両替口</text><text x="727" y="222" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node outside" data-a="5"><rect x="20" y="224" width="116" height="50" rx="16"/><text x="78" y="244" text-anchor="middle" class="name">ドルの両替口</text><text x="78" y="262" text-anchor="middle" class="sub">USD・外の勘定</text></g>
+<g class="node" data-a="6"><rect x="309" y="229" width="195" height="68" rx="4"/><text x="406" y="249" text-anchor="middle" class="name">ドル口座(店)</text><text x="406" y="267" text-anchor="middle" class="sub">USD</text><text x="406" y="285" text-anchor="middle" class="sub">0.00 以上（ドル残高不足）</text></g>
+<g class="node outside" data-a="7"><rect x="669" y="264" width="116" height="50" rx="16"/><text x="727" y="284" text-anchor="middle" class="name">海外の銀行</text><text x="727" y="302" text-anchor="middle" class="sub">USD・外の勘定</text></g>
+<g class="node outside" data-a="8"><rect x="669" y="344" width="116" height="50" rx="16"/><text x="727" y="364" text-anchor="middle" class="name">送金手数料</text><text x="727" y="382" text-anchor="middle" class="sub">USD・外の勘定</text></g>
+</svg></figure>
+<p class="muted">四角は勘定で、矢印は振替の移動。角の丸い破線の四角は外の勘定で、境界を持たない。破線の矢印は仮押さえの振替で、まず押さえ、確定したときに動く。</p>
+</section>
+<section id="transfers">
+<h2>振替</h2>
+<article id="t0">
+<h3>売上</h3>
+<ul>
+<li>移動は 3 つ。書いた順に行い、どれか一つでも断られたら、どれも行わない:<ol><li><code>買い手</code> から <code>店の売上(店)</code> へ <code>代金</code></li><li><code>店の売上(店)</code> から <code>手数料収入</code> へ <code>手数料</code></li><li><code>店の売上(店)</code> から <code>送料</code> へ <code>100</code></li></ol></li>
+<li>キー: <code>注文</code> ごとに一回。同じ呼び出しの二度目は何もせず、<code>done_before</code> を返す。<code>店</code>、<code>代金</code> か <code>手数料</code> だけが違う二度目は <code>key_conflict</code> で断られる。</li>
+<li>すぐに動かす（<code>do</code>）。</li>
+</ul>
+<div class="scroll"><table><thead><tr><th>操作</th><th>断られうる理由</th><th>いつ</th></tr></thead><tbody>
+<tr><td><code>売上.do</code></td><td><code>売上不足</code></td><td>2 つ目の移動で <code>店の売上(店)</code> が 0 を下回る</td></tr>
+<tr><td><code>売上.do</code></td><td><code>key_conflict</code></td><td><code>注文</code> が同じで、ほかの引数が違う呼び出しが、前に済んでいる</td></tr>
+<tr><td><code>売上.do</code></td><td><code>already_refused</code></td><td><code>注文</code> が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない</td></tr>
+</tbody></table></div>
+<details><summary>断られる例</summary>
+<h4>売上.do: 売上不足</h4>
+<pre> 1  売上.do(注文: 注文-1, 店: 店-2, 代金: 1, 手数料: 2)  売上不足 で断られる（2 つ目の移動が 店の売上(店-2) から 2 を取る。確定 1、出ていく仮押さえ 0）</pre>
+<h4>売上.do: key_conflict</h4>
+<pre> 1  売上.do(注文: 注文-1, 店: 店-2, 代金: 1000, 手数料: 1)  通る
+ 2  売上.do(注文: 注文-1, 店: 店-2, 代金: 3, 手数料: 1)     key_conflict で断られる</pre>
+<h4>売上.do: already_refused</h4>
+<pre> 1  売上.do(注文: 注文-1, 店: 店-2, 代金: 1, 手数料: 2)  売上不足 で断られる（2 つ目の移動が 店の売上(店-2) から 2 を取る。確定 1、出ていく仮押さえ 0）
+ 2  売上.do(注文: 注文-1, 店: 店-2, 代金: 1, 手数料: 2)  already_refused で断られる</pre>
+</details>
+</article>
+<article id="t1">
+<h3>ドル払い</h3>
+<p>両替の率は呼ぶ側が決め、円とドルの額を両方渡す</p>
+<ul>
+<li>移動は 2 つ。書いた順に行い、どれか一つでも断られたら、どれも行わない:<ol><li><code>店の売上(店)</code> から <code>円の両替口</code> へ <code>円額</code></li><li><code>ドルの両替口</code> から <code>ドル口座(店)</code> へ <code>ドル額</code></li></ol></li>
+<li>キー: <code>払出番号</code> ごとに一回。同じ呼び出しの二度目は何もせず、<code>done_before</code> を返す。<code>店</code>、<code>円額</code> か <code>ドル額</code> だけが違う二度目は <code>key_conflict</code> で断られる。</li>
+<li>すぐに動かす（<code>do</code>）。</li>
+</ul>
+<div class="scroll"><table><thead><tr><th>操作</th><th>断られうる理由</th><th>いつ</th></tr></thead><tbody>
+<tr><td><code>ドル払い.do</code></td><td><code>売上不足</code></td><td>1 つ目の移動で <code>店の売上(店)</code> が 0 を下回る</td></tr>
+<tr><td><code>ドル払い.do</code></td><td><code>key_conflict</code></td><td><code>払出番号</code> が同じで、ほかの引数が違う呼び出しが、前に済んでいる</td></tr>
+<tr><td><code>ドル払い.do</code></td><td><code>already_refused</code></td><td><code>払出番号</code> が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない</td></tr>
+</tbody></table></div>
+<details><summary>断られる例</summary>
+<h4>ドル払い.do: 売上不足</h4>
+<pre> 1  ドル払い.do(払出番号: 払出番号-1, 店: 店-2, 円額: 1, ドル額: 0.02)  売上不足 で断られる（1 つ目の移動が 店の売上(店-2) から 1 を取る。確定 0、出ていく仮押さえ 0）</pre>
+<h4>ドル払い.do: key_conflict</h4>
+<pre> 1  売上.do(注文: 注文-1, 店: 店-2, 代金: 104, 手数料: 3)               通る
+ 2  ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 1, ドル額: 0.02)  通る
+ 3  ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 4, ドル額: 0.02)  key_conflict で断られる</pre>
+<h4>ドル払い.do: already_refused</h4>
+<pre> 1  ドル払い.do(払出番号: 払出番号-1, 店: 店-2, 円額: 1, ドル額: 0.02)  売上不足 で断られる（1 つ目の移動が 店の売上(店-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 2  ドル払い.do(払出番号: 払出番号-1, 店: 店-2, 円額: 1, ドル額: 0.02)  already_refused で断られる</pre>
+</details>
+</article>
+<article id="t2">
+<h3>ドル送金</h3>
+<ul>
+<li>移動は 2 つ。書いた順に行い、どれか一つでも断られたら、どれも行わない:<ol><li><code>ドル口座(店)</code> から <code>海外の銀行</code> へ <code>額</code></li><li><code>ドル口座(店)</code> から <code>送金手数料</code> へ <code>1.50</code></li></ol></li>
+<li>キー: <code>送金番号</code> ごとに一回。同じ呼び出しの二度目は何もせず、<code>done_before</code> を返す。<code>店</code> か <code>額</code> だけが違う二度目は <code>key_conflict</code> で断られる。</li>
+<li>すぐに動かす（<code>do</code>）。</li>
+</ul>
+<div class="scroll"><table><thead><tr><th>操作</th><th>断られうる理由</th><th>いつ</th></tr></thead><tbody>
+<tr><td><code>ドル送金.do</code></td><td><code>ドル残高不足</code></td><td>1 つ目の移動で <code>ドル口座(店)</code> が 0.00 を下回る</td></tr>
+<tr><td><code>ドル送金.do</code></td><td><code>key_conflict</code></td><td><code>送金番号</code> が同じで、ほかの引数が違う呼び出しが、前に済んでいる</td></tr>
+<tr><td><code>ドル送金.do</code></td><td><code>already_refused</code></td><td><code>送金番号</code> が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない</td></tr>
+</tbody></table></div>
+<details><summary>断られる例</summary>
+<h4>ドル送金.do: ドル残高不足</h4>
+<pre> 1  ドル送金.do(送金番号: 送金番号-1, 店: 店-2, 額: 0.01)  ドル残高不足 で断られる（1 つ目の移動が ドル口座(店-2) から 0.01 を取る。確定 0.00、出ていく仮押さえ 0.00）</pre>
+<h4>ドル送金.do: key_conflict</h4>
+<pre> 1  売上.do(注文: 注文-1, 店: 店-2, 代金: 105, 手数料: 3)               通る
+ 2  ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 2, ドル額: 1.51)  通る
+ 3  ドル送金.do(送金番号: 送金番号-4, 店: 店-2, 額: 0.01)               通る
+ 4  ドル送金.do(送金番号: 送金番号-4, 店: 店-2, 額: 0.04)               key_conflict で断られる</pre>
+<h4>ドル送金.do: already_refused</h4>
+<pre> 1  ドル送金.do(送金番号: 送金番号-1, 店: 店-2, 額: 0.01)  ドル残高不足 で断られる（1 つ目の移動が ドル口座(店-2) から 0.01 を取る。確定 0.00、出ていく仮押さえ 0.00）
+ 2  ドル送金.do(送金番号: 送金番号-1, 店: 店-2, 額: 0.01)  already_refused で断られる</pre>
+</details>
+</article>
+</section>
+<section id="scenarios">
+<h2>シナリオ</h2>
+<p><code>chobo scenarios</code> が帳簿から作ったシナリオ 17 本。一つ選び、ステップを一つずつ進めると、そのあとの残高と仮押さえが見られる。図では、そのステップで呼んだ振替の矢印に色が付く（断られたものは赤）。</p>
+<div class="player" id="player">
+<div class="pick"><label for="sc">シナリオ</label><select id="sc">
+<option value="0">1. 境界: ドル払い.do の 1 つ目の移動が 店の売上(店) を 1 まで減らす。at least 0 の 1 つ手前</option>
+<option value="1">2. 境界: ドル払い.do の 1 つ目の移動が 店の売上(店) をちょうど 0 まで減らす。at least 0 ちょうど</option>
+<option value="2">3. 境界: ドル払い.do の 1 つ目の移動は 店の売上(店) を -1 まで減らすので断られる。at least 0 を割る</option>
+<option value="3">4. キー: 売上.do を同じ引数で二度呼ぶ</option>
+<option value="4">5. キー: 売上.do を 代金 だけ変えてもう一度呼ぶ</option>
+<option value="5">6. キー: 売上.do が 売上不足 で断られ、同じ引数でもう一度、店の売上(店) が足りるようになってからもう一度呼ぶ</option>
+<option value="6">7. キー: ドル払い.do を同じ引数で二度呼ぶ</option>
+<option value="7">8. キー: ドル払い.do を 円額 だけ変えてもう一度呼ぶ</option>
+<option value="8">9. キー: ドル払い.do が 売上不足 で断られ、同じ引数でもう一度、店の売上(店) が足りるようになってからもう一度呼ぶ</option>
+<option value="9">10. キー: ドル送金.do を同じ引数で二度呼ぶ</option>
+<option value="10">11. キー: ドル送金.do を 額 だけ変えてもう一度呼ぶ</option>
+<option value="11">12. キー: ドル送金.do が ドル残高不足 で断られ、同じ引数でもう一度、ドル口座(店) が足りるようになってからもう一度呼ぶ</option>
+<option value="12">13. 移動: 売上.do が 2 つ目の移動（店の売上(店)）で断られ、どの移動も行われない</option>
+<option value="13">14. 移動: 売上.do が 3 つ目の移動（店の売上(店)）で断られ、どの移動も行われない</option>
+<option value="14">15. 移動: ドル払い.do が 1 つ目の移動（店の売上(店)）で断られ、どの移動も行われない</option>
+<option value="15">16. 移動: ドル送金.do が 1 つ目の移動（ドル口座(店)）で断られ、どの移動も行われない</option>
+<option value="16">17. 同時: 二つの呼び出し元が ドル払い.do で 店の売上(店) の最後の 1 を取り合う</option>
+</select></div>
+<div class="outs" id="outs"></div>
+<div class="cols">
+<ol id="steps"></ol>
+<div>
+<div class="ctl"><button id="prev" type="button" aria-label="前へ">◀</button><span id="pos"></span><button id="next" type="button" aria-label="次へ">▶</button></div>
+<div class="scroll"><table id="bal"><thead><tr><th>勘定</th><th>確定</th><th>出ていく仮押さえ</th><th>入ってくる仮押さえ</th></tr></thead><tbody id="bal-body"></tbody></table></div>
+<div class="scroll"><table id="holds"><thead><tr><th>仮押さえ</th><th>状態</th></tr></thead><tbody id="holds-body"></tbody></table></div>
+</div>
+</div>
+<figure id="mini"><svg class="flow" viewBox="0 0 805 414" width="805" role="img" aria-labelledby="mini-t"><title id="mini-t">分配 の勘定のあいだの流れ</title>
+<defs><marker id="mini-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge" data-k="0"><path d="M131 169 C233 169, 233 160, 334 160" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="0"><path d="M478 141 C576 141, 576 49, 674 49" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="0"><path d="M478 160 C576 160, 576 129, 674 129" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="1"><path d="M478 180 C576 180, 576 209, 674 209" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="1"><path d="M136 249 C223 249, 223 263, 309 263" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="2"><path d="M503 252 C586 252, 586 289, 669 289" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="2"><path d="M503 274 C586 274, 586 369, 669 369" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="label" data-k="0"><rect x="191" y="156" width="83" height="16" rx="3"/><text x="233" y="168" text-anchor="middle">売上（代金）</text></g>
+<g class="label" data-k="0"><rect x="528" y="86" width="96" height="16" rx="3"/><text x="576" y="98" text-anchor="middle">売上（手数料）</text></g>
+<g class="label" data-k="0"><rect x="535" y="136" width="81" height="16" rx="3"/><text x="576" y="148" text-anchor="middle">売上（100）</text></g>
+<g class="label" data-k="1"><rect x="522" y="185" width="108" height="16" rx="3"/><text x="576" y="197" text-anchor="middle">ドル払い（円額）</text></g>
+<g class="label" data-k="1"><rect x="162" y="247" width="120" height="16" rx="3"/><text x="223" y="259" text-anchor="middle">ドル払い（ドル額）</text></g>
+<g class="label" data-k="2"><rect x="538" y="261" width="96" height="16" rx="3"/><text x="586" y="273" text-anchor="middle">ドル送金（額）</text></g>
+<g class="label" data-k="2"><rect x="529" y="313" width="113" height="16" rx="3"/><text x="586" y="325" text-anchor="middle">ドル送金（1.50）</text></g>
+<g class="node outside" data-a="0"><rect x="25" y="144" width="106" height="50" rx="16"/><text x="78" y="164" text-anchor="middle" class="name">買い手</text><text x="78" y="182" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node outside" data-a="1"><rect x="674" y="24" width="106" height="50" rx="16"/><text x="727" y="44" text-anchor="middle" class="name">手数料収入</text><text x="727" y="62" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node outside" data-a="2"><rect x="674" y="104" width="106" height="50" rx="16"/><text x="727" y="124" text-anchor="middle" class="name">送料</text><text x="727" y="142" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node" data-a="3"><rect x="334" y="121" width="144" height="78" rx="4"/><text x="406" y="146" text-anchor="middle" class="name">店の売上(店)</text><text x="406" y="164" text-anchor="middle" class="sub">円</text><text x="406" y="182" text-anchor="middle" class="sub">0 以上（売上不足）</text></g>
+<g class="node outside" data-a="4"><rect x="674" y="184" width="106" height="50" rx="16"/><text x="727" y="204" text-anchor="middle" class="name">円の両替口</text><text x="727" y="222" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node outside" data-a="5"><rect x="20" y="224" width="116" height="50" rx="16"/><text x="78" y="244" text-anchor="middle" class="name">ドルの両替口</text><text x="78" y="262" text-anchor="middle" class="sub">USD・外の勘定</text></g>
+<g class="node" data-a="6"><rect x="309" y="229" width="195" height="68" rx="4"/><text x="406" y="249" text-anchor="middle" class="name">ドル口座(店)</text><text x="406" y="267" text-anchor="middle" class="sub">USD</text><text x="406" y="285" text-anchor="middle" class="sub">0.00 以上（ドル残高不足）</text></g>
+<g class="node outside" data-a="7"><rect x="669" y="264" width="116" height="50" rx="16"/><text x="727" y="284" text-anchor="middle" class="name">海外の銀行</text><text x="727" y="302" text-anchor="middle" class="sub">USD・外の勘定</text></g>
+<g class="node outside" data-a="8"><rect x="669" y="344" width="116" height="50" rx="16"/><text x="727" y="364" text-anchor="middle" class="name">送金手数料</text><text x="727" y="382" text-anchor="middle" class="sub">USD・外の勘定</text></g>
+</svg></figure>
+</div>
+</section>
+</main>
+<script type="application/json" id="chobo-data">{"lang":"ja","scenarios":[{"title":"境界: ドル払い.do の 1 つ目の移動が 店の売上(店) を 1 まで減らす。`at least 0` の 1 つ手前","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 105, 手数料: 3)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["2","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["1","0","0"],["1","0","0"],["-0.02","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]}]]},{"title":"境界: ドル払い.do の 1 つ目の移動が 店の売上(店) をちょうど 0 まで減らす。`at least 0` ちょうど","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 105, 手数料: 3)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["2","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 2, ドル額: 0.01)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["2","0","0"],["-0.01","0.00","0.00"],["0.01","0.00","0.00"]],"holds":[]}]]},{"title":"境界: ドル払い.do の 1 つ目の移動は 店の売上(店) を -1 まで減らすので断られる。`at least 0` を割る","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 106, 手数料: 4)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-106","0","0"],["4","0","0"],["100","0","0"],["2","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 3, ドル額: 0.01)","result":"売上不足 で断られる","detail":"1 つ目の移動が 店の売上(店-2) から 3 を取る。確定 2、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["-106","0","0"],["4","0","0"],["100","0","0"],["2","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]}]]},{"title":"キー: 売上.do を同じ引数で二度呼ぶ","accounts":["買い手","手数料収入","送料","店の売上(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 1000, 手数料: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-1000","0","0"],["1","0","0"],["100","0","0"],["899","0","0"]],"holds":[]},{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 1000, 手数料: 1)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-1000","0","0"],["1","0","0"],["100","0","0"],["899","0","0"]],"holds":[]}]]},{"title":"キー: 売上.do を 代金 だけ変えてもう一度呼ぶ","accounts":["買い手","手数料収入","送料","店の売上(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 1000, 手数料: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-1000","0","0"],["1","0","0"],["100","0","0"],["899","0","0"]],"holds":[]},{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 3, 手数料: 1)","result":"key_conflict で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["-1000","0","0"],["1","0","0"],["100","0","0"],["899","0","0"]],"holds":[]}]]},{"title":"キー: 売上.do が 売上不足 で断られ、同じ引数でもう一度、店の売上(店) が足りるようになってからもう一度呼ぶ","accounts":["買い手","手数料収入","送料","店の売上(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 1, 手数料: 2)","result":"売上不足 で断られる","detail":"2 つ目の移動が 店の売上(店-2) から 2 を取る。確定 1、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 1, 手数料: 2)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"売上.do(注文: 注文-3, 店: 店-2, 代金: 105, 手数料: 3)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["2","0","0"]],"holds":[]},{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 1, 手数料: 2)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["2","0","0"]],"holds":[]}]]},{"title":"キー: ドル払い.do を同じ引数で二度呼ぶ","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 104, 手数料: 3)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-104","0","0"],["3","0","0"],["100","0","0"],["1","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["-104","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["1","0","0"],["-0.02","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["-104","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["1","0","0"],["-0.02","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]}]]},{"title":"キー: ドル払い.do を 円額 だけ変えてもう一度呼ぶ","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 104, 手数料: 3)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-104","0","0"],["3","0","0"],["100","0","0"],["1","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["-104","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["1","0","0"],["-0.02","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 4, ドル額: 0.02)","result":"key_conflict で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["-104","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["1","0","0"],["-0.02","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]}]]},{"title":"キー: ドル払い.do が 売上不足 で断られ、同じ引数でもう一度、店の売上(店) が足りるようになってからもう一度呼ぶ","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"ドル払い.do(払出番号: 払出番号-1, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"売上不足 で断られる","detail":"1 つ目の移動が 店の売上(店-2) から 1 を取る。確定 0、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-1, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"売上.do(注文: 注文-3, 店: 店-2, 代金: 104, 手数料: 3)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-104","0","0"],["3","0","0"],["100","0","0"],["1","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-1, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["-104","0","0"],["3","0","0"],["100","0","0"],["1","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]}]]},{"title":"キー: ドル送金.do を同じ引数で二度呼ぶ","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)","海外の銀行","送金手数料"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 105, 手数料: 3)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["2","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 2, ドル額: 1.51)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["2","0","0"],["-1.51","0.00","0.00"],["1.51","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル送金.do(送金番号: 送金番号-4, 店: 店-2, 額: 0.01)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["2","0","0"],["-1.51","0.00","0.00"],["0.00","0.00","0.00"],["0.01","0.00","0.00"],["1.50","0.00","0.00"]],"holds":[]},{"label":"ドル送金.do(送金番号: 送金番号-4, 店: 店-2, 額: 0.01)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["2","0","0"],["-1.51","0.00","0.00"],["0.00","0.00","0.00"],["0.01","0.00","0.00"],["1.50","0.00","0.00"]],"holds":[]}]]},{"title":"キー: ドル送金.do を 額 だけ変えてもう一度呼ぶ","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)","海外の銀行","送金手数料"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 105, 手数料: 3)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["2","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 2, ドル額: 1.51)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["2","0","0"],["-1.51","0.00","0.00"],["1.51","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル送金.do(送金番号: 送金番号-4, 店: 店-2, 額: 0.01)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["2","0","0"],["-1.51","0.00","0.00"],["0.00","0.00","0.00"],["0.01","0.00","0.00"],["1.50","0.00","0.00"]],"holds":[]},{"label":"ドル送金.do(送金番号: 送金番号-4, 店: 店-2, 額: 0.04)","result":"key_conflict で断られる","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["2","0","0"],["-1.51","0.00","0.00"],["0.00","0.00","0.00"],["0.01","0.00","0.00"],["1.50","0.00","0.00"]],"holds":[]}]]},{"title":"キー: ドル送金.do が ドル残高不足 で断られ、同じ引数でもう一度、ドル口座(店) が足りるようになってからもう一度呼ぶ","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)","海外の銀行","送金手数料"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"ドル送金.do(送金番号: 送金番号-1, 店: 店-2, 額: 0.01)","result":"ドル残高不足 で断られる","detail":"1 つ目の移動が ドル口座(店-2) から 0.01 を取る。確定 0.00、出ていく仮押さえ 0.00","refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル送金.do(送金番号: 送金番号-1, 店: 店-2, 額: 0.01)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"売上.do(注文: 注文-3, 店: 店-2, 代金: 105, 手数料: 3)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["2","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル払い.do(払出番号: 払出番号-4, 店: 店-2, 円額: 2, ドル額: 0.01)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["2","0","0"],["-0.01","0.00","0.00"],["0.01","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"ドル送金.do(送金番号: 送金番号-1, 店: 店-2, 額: 0.01)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["-105","0","0"],["3","0","0"],["100","0","0"],["0","0","0"],["2","0","0"],["-0.01","0.00","0.00"],["0.01","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]}]]},{"title":"移動: 売上.do が 2 つ目の移動（店の売上(店)）で断られ、どの移動も行われない","accounts":["買い手","手数料収入","送料","店の売上(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 1, 手数料: 2)","result":"売上不足 で断られる","detail":"2 つ目の移動が 店の売上(店-2) から 2 を取る。確定 1、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]}]]},{"title":"移動: 売上.do が 3 つ目の移動（店の売上(店)）で断られ、どの移動も行われない","accounts":["買い手","手数料収入","送料","店の売上(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 2, 手数料: 1)","result":"売上不足 で断られる","detail":"3 つ目の移動が 店の売上(店-2) から 100 を取る。確定 1、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]}]]},{"title":"移動: ドル払い.do が 1 つ目の移動（店の売上(店)）で断られ、どの移動も行われない","accounts":["店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"ドル払い.do(払出番号: 払出番号-1, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"売上不足 で断られる","detail":"1 つ目の移動が 店の売上(店-2) から 1 を取る。確定 0、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]}]]},{"title":"移動: ドル送金.do が 1 つ目の移動（ドル口座(店)）で断られ、どの移動も行われない","accounts":["ドル口座(店-2)","海外の銀行","送金手数料"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"ドル送金.do(送金番号: 送金番号-1, 店: 店-2, 額: 0.01)","result":"ドル残高不足 で断られる","detail":"1 つ目の移動が ドル口座(店-2) から 0.01 を取る。確定 0.00、出ていく仮押さえ 0.00","refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]}]]},{"title":"同時: 二つの呼び出し元が ドル払い.do で 店の売上(店) の最後の 1 を取り合う","accounts":["買い手","手数料収入","送料","店の売上(店-2)","円の両替口","ドルの両替口","ドル口座(店-2)"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 105, 手数料: 4)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-105","0","0"],["4","0","0"],["100","0","0"],["1","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"通る","detail":null,"refused":false}],[{"call":"ドル払い.do(払出番号: 払出番号-4, 店: 店-2, 円額: 1, ドル額: 0.03)","result":"売上不足 で断られる","detail":"1 つ目の移動が 店の売上(店-2) から 1 を取る。確定 0、出ていく仮押さえ 0","refused":true}]],"kinds":[[1,true],[1,false]],"balances":[["-105","0","0"],["4","0","0"],["100","0","0"],["0","0","0"],["1","0","0"],["-0.02","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]}],[{"label":"売上.do(注文: 注文-1, 店: 店-2, 代金: 105, 手数料: 4)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-105","0","0"],["4","0","0"],["100","0","0"],["1","0","0"],["0","0","0"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"ドル払い.do(払出番号: 払出番号-3, 店: 店-2, 円額: 1, ドル額: 0.02)","result":"売上不足 で断られる","detail":"1 つ目の移動が 店の売上(店-2) から 1 を取る。確定 0、出ていく仮押さえ 0","refused":true}],[{"call":"ドル払い.do(払出番号: 払出番号-4, 店: 店-2, 円額: 1, ドル額: 0.03)","result":"通る","detail":null,"refused":false}]],"kinds":[[1,false],[1,true]],"balances":[["-105","0","0"],["4","0","0"],["100","0","0"],["0","0","0"],["1","0","0"],["-0.03","0.00","0.00"],["0.03","0.00","0.00"]],"holds":[]}]]}],"words":{"ways":"同時の操作の順序によって、結果は {n} 通り:","outcome":"結果 {n}","caller":"呼び出し元 {n}","before":"最初のステップの前。どの残高も 0","pos":"{n} ステップのうち {i} つ目のあと","noholds":"仮押さえは無い"}}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('chobo-data').textContent);
+  var w = data.words;
+  var sel = document.getElementById('sc');
+  var at = { sc: 0, out: 0, step: 0 };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function steps() { return data.scenarios[at.sc].outcomes[at.out]; }
+  function after(j) { var sc = data.scenarios[at.sc]; return j === 0 ? { balances: sc.zero, holds: [] } : steps()[j - 1]; }
+  function readHash() {
+    var h = {}; location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p.length === 2) h[p[0]] = parseInt(p[1], 10); });
+    if (h.scenario >= 1 && h.scenario <= data.scenarios.length) at.sc = h.scenario - 1;
+    var outs = data.scenarios[at.sc].outcomes.length;
+    at.out = h.outcome >= 1 && h.outcome <= outs ? h.outcome - 1 : 0;
+    var n = steps().length;
+    at.step = h.step >= 0 && h.step <= n ? h.step : n;
+  }
+  function writeHash() {
+    var s = '#scenario=' + (at.sc + 1) + '&step=' + at.step + (data.scenarios[at.sc].outcomes.length > 1 ? '&outcome=' + (at.out + 1) : '');
+    if (location.hash !== s) history.replaceState(null, '', s);
+  }
+  function render() {
+    var sc = data.scenarios[at.sc];
+    sel.value = String(at.sc);
+    var outs = document.getElementById('outs');
+    outs.textContent = '';
+    if (sc.outcomes.length > 1) {
+      outs.appendChild(el('span', 'muted', w.ways.replace('{n}', sc.outcomes.length)));
+      sc.outcomes.forEach(function (_, k) {
+        var b = el('button', null, w.outcome.replace('{n}', k + 1));
+        b.setAttribute('aria-pressed', k === at.out ? 'true' : 'false');
+        b.onclick = function () { at.out = k; at.step = Math.min(at.step, steps().length); go(); };
+        outs.appendChild(b);
+      });
+    }
+    var list = document.getElementById('steps');
+    list.textContent = '';
+    steps().forEach(function (s, j) {
+      var li = el('li', j + 1 === at.step ? 'now' : (j + 1 > at.step ? 'later' : ''));
+      li.setAttribute('data-step', j + 1);
+      if (s.callers.length) {
+        li.appendChild(el('span', 'call', 'together'));
+        s.callers.forEach(function (cs, c) {
+          cs.forEach(function (x) {
+            li.appendChild(el('span', 'call res', w.caller.replace('{n}', c + 1) + ': ' + x.call));
+            li.appendChild(el('span', 'res ' + (x.refused ? 'no' : 'ok'), x.result));
+            if (x.detail) li.appendChild(el('span', 'why', x.detail));
+          });
+        });
+      } else {
+        li.appendChild(el('span', 'call', s.label));
+        if (s.result) li.appendChild(el('span', 'res ' + (s.refused ? 'no' : 'ok'), s.result));
+        if (s.detail) li.appendChild(el('span', 'why', s.detail));
+      }
+      li.onclick = function () { at.step = j + 1; go(); };
+      list.appendChild(li);
+    });
+    var n = steps().length;
+    document.getElementById('pos').textContent = at.step === 0 ? w.before : w.pos.replace('{i}', at.step).replace('{n}', n);
+    document.getElementById('prev').disabled = at.step === 0;
+    document.getElementById('next').disabled = at.step === n;
+    var now = after(at.step), was = at.step > 0 ? after(at.step - 1) : null;
+    var body = document.getElementById('bal-body');
+    body.textContent = '';
+    sc.accounts.forEach(function (name, a) {
+      var tr = el('tr');
+      tr.appendChild(el('td', null, name));
+      for (var q = 0; q < 3; q++) {
+        var changed = was && was.balances[a][q] !== now.balances[a][q];
+        tr.appendChild(el('td', 'num' + (changed ? ' changed' : ''), now.balances[a][q]));
+      }
+      body.appendChild(tr);
+    });
+    var hb = document.getElementById('holds-body');
+    hb.textContent = '';
+    if (!now.holds.length) {
+      var tr = el('tr'); var td = el('td', 'muted', w.noholds); td.colSpan = 2; tr.appendChild(td); hb.appendChild(tr);
+    }
+    now.holds.forEach(function (h) { var tr = el('tr'); tr.appendChild(el('td', null, h[0])); tr.appendChild(el('td', null, h[1])); hb.appendChild(tr); });
+    var lit = {};
+    if (at.step > 0) steps()[at.step - 1].kinds.forEach(function (k) { lit[k[0]] = lit[k[0]] === 'lit' || k[1] ? 'lit' : 'no'; });
+    document.querySelectorAll('#mini [data-k]').forEach(function (g) {
+      var how = lit[g.getAttribute('data-k')];
+      g.classList.remove('lit', 'no');
+      if (how) g.classList.add(how);
+      var p = g.querySelector('path');
+      if (p) p.setAttribute('marker-end', p.getAttribute(how === 'lit' ? 'data-ok' : how === 'no' ? 'data-no' : 'data-a'));
+    });
+  }
+  function go() { writeHash(); render(); }
+  sel.onchange = function () { at.sc = parseInt(sel.value, 10); at.out = 0; at.step = 0; go(); };
+  document.getElementById('prev').onclick = function () { if (at.step > 0) { at.step--; go(); } };
+  document.getElementById('next').onclick = function () { if (at.step < steps().length) { at.step++; go(); } };
+  document.getElementById('player').addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowRight' && at.step < steps().length) { at.step++; go(); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' && at.step > 0) { at.step--; go(); e.preventDefault(); }
+  });
+  window.addEventListener('hashchange', function () { readHash(); render(); });
+  readHash();
+  render();
+})();
+</script>
+</body>
+</html>

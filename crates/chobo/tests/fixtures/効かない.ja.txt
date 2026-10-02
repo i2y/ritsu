@@ -1,0 +1,5 @@
+警告[W106]: 効かない.book:7:3: `at most 0` は効きません。`与信` へ入れる移動がどこにも無いからです
+     7 |   at most 0 refused as 前払い超過
+効かない.book: ok、警告 1 件
+  後払い.do  断られうる理由: 与信枠超え（与信(会員) at least -1000）、key_conflict、already_refused
+  キー: 後払い は 伝票 ごとに一回。会員 か 額 だけが違う二度目は key_conflict で断られる

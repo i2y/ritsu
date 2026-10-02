@@ -1,0 +1,17 @@
+# E061：PostgreSQL の名前は 63 バイトまで。日本語は一字 3 バイトなので、関数の名前は 21 字を超えると収まらない
+book 名前の長さ v1
+
+unit 個
+
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 入荷(伝票: string, sku: string, 数: 個)
+  key 伝票, sku
+  move 数 from 仕入先 to 在庫(sku)
+
+transfer 注文を受けた商品を倉庫から取り出して客へ送る(注文: string, sku: string, 数: 個)
+  key 注文, sku
+  move 数 from 在庫(sku) to 客

@@ -1,0 +1,10 @@
+/target/
+# TigerBeetle's release binary, fetched by tools/tigerbeetle/fetch.sh
+/tools/tigerbeetle/tigerbeetle
+/tools/tigerbeetle/*.zip
+# what the runners install: `npm ci --prefix tools/runner`, and the venv of tools/runner/requirements.txt
+/tools/runner/node_modules/
+/tools/runner/.venv/
+# Mermaid, for tests/doc.rs: `npm ci --prefix tools/mermaid`
+/tools/mermaid/node_modules/
+__pycache__/

@@ -1,0 +1,1332 @@
+{
+  "v": 1,
+  "book": "分配",
+  "version": 1,
+  "source_sha256": "746196b8b3dae4a00cd37eed7192c928c72a48f9b09876572ec5316cc0c49ce4",
+  "units": [
+    {
+      "name": "円",
+      "scale": 0,
+      "ledger": 792519411
+    },
+    {
+      "name": "USD",
+      "scale": 2,
+      "ledger": 1838891465
+    }
+  ],
+  "accounts": [
+    {
+      "name": "買い手",
+      "params": [],
+      "unit": "円",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 39217
+    },
+    {
+      "name": "手数料収入",
+      "params": [],
+      "unit": "円",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 43156
+    },
+    {
+      "name": "送料",
+      "params": [],
+      "unit": "円",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 41485
+    },
+    {
+      "name": "店の売上",
+      "params": [
+        "店"
+      ],
+      "unit": "円",
+      "outside": false,
+      "lower": {
+        "value": 0,
+        "refused_as": "売上不足"
+      },
+      "upper": null,
+      "description": null,
+      "code": 38915
+    },
+    {
+      "name": "円の両替口",
+      "params": [],
+      "unit": "円",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 63295
+    },
+    {
+      "name": "ドルの両替口",
+      "params": [],
+      "unit": "USD",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 28385
+    },
+    {
+      "name": "ドル口座",
+      "params": [
+        "店"
+      ],
+      "unit": "USD",
+      "outside": false,
+      "lower": {
+        "value": 0,
+        "refused_as": "ドル残高不足"
+      },
+      "upper": null,
+      "description": null,
+      "code": 14812
+    },
+    {
+      "name": "海外の銀行",
+      "params": [],
+      "unit": "USD",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 1358
+    },
+    {
+      "name": "送金手数料",
+      "params": [],
+      "unit": "USD",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 18022
+    }
+  ],
+  "transfers": [
+    {
+      "name": "売上",
+      "description": null,
+      "params": [
+        {
+          "name": "注文",
+          "type": "string"
+        },
+        {
+          "name": "店",
+          "type": "string"
+        },
+        {
+          "name": "代金",
+          "type": "amount",
+          "unit": "円"
+        },
+        {
+          "name": "手数料",
+          "type": "amount",
+          "unit": "円"
+        }
+      ],
+      "key": [
+        "注文"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "代金"
+          },
+          "from": {
+            "account": "買い手",
+            "args": []
+          },
+          "to": {
+            "account": "店の売上",
+            "args": [
+              {
+                "param": "店"
+              }
+            ]
+          }
+        },
+        {
+          "amount": {
+            "param": "手数料"
+          },
+          "from": {
+            "account": "店の売上",
+            "args": [
+              {
+                "param": "店"
+              }
+            ]
+          },
+          "to": {
+            "account": "手数料収入",
+            "args": []
+          }
+        },
+        {
+          "amount": {
+            "literal": 100
+          },
+          "from": {
+            "account": "店の売上",
+            "args": [
+              {
+                "param": "店"
+              }
+            ]
+          },
+          "to": {
+            "account": "送料",
+            "args": []
+          }
+        }
+      ],
+      "code": 63033,
+      "definition": "50d8cef08b4a8c36803256ca982903d8",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "売上不足",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "売上",
+                  "args": {
+                    "注文": "注文-1",
+                    "店": "店-2",
+                    "代金": 1,
+                    "手数料": 2
+                  },
+                  "result": "refused",
+                  "reason": "売上不足"
+                }
+              ],
+              "account": "店の売上",
+              "as_written": "店の売上(店)",
+              "bound": "at least 0",
+              "move": 2
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "売上",
+                  "args": {
+                    "注文": "注文-1",
+                    "店": "店-2",
+                    "代金": 1000,
+                    "手数料": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "売上",
+                  "args": {
+                    "注文": "注文-1",
+                    "店": "店-2",
+                    "代金": 3,
+                    "手数料": 1
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "売上",
+                  "args": {
+                    "注文": "注文-1",
+                    "店": "店-2",
+                    "代金": 1,
+                    "手数料": 2
+                  },
+                  "result": "refused",
+                  "reason": "売上不足"
+                },
+                {
+                  "op": "do",
+                  "kind": "売上",
+                  "args": {
+                    "注文": "注文-1",
+                    "店": "店-2",
+                    "代金": 1,
+                    "手数料": 2
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "注文"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "店",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 1000,
+                      "手数料": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-3",
+                      "代金": 1000,
+                      "手数料": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "代金",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 1000,
+                      "手数料": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 3,
+                      "手数料": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "手数料",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 1000,
+                      "手数料": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 1000,
+                      "手数料": 3
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "ドル払い",
+      "description": "両替の率は呼ぶ側が決め、円とドルの額を両方渡す",
+      "params": [
+        {
+          "name": "払出番号",
+          "type": "string"
+        },
+        {
+          "name": "店",
+          "type": "string"
+        },
+        {
+          "name": "円額",
+          "type": "amount",
+          "unit": "円"
+        },
+        {
+          "name": "ドル額",
+          "type": "amount",
+          "unit": "USD"
+        }
+      ],
+      "key": [
+        "払出番号"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "円額"
+          },
+          "from": {
+            "account": "店の売上",
+            "args": [
+              {
+                "param": "店"
+              }
+            ]
+          },
+          "to": {
+            "account": "円の両替口",
+            "args": []
+          }
+        },
+        {
+          "amount": {
+            "param": "ドル額"
+          },
+          "from": {
+            "account": "ドルの両替口",
+            "args": []
+          },
+          "to": {
+            "account": "ドル口座",
+            "args": [
+              {
+                "param": "店"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 48336,
+      "definition": "071844692b8f45b877bb4ac696cb8211",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "売上不足",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "ドル払い",
+                  "args": {
+                    "払出番号": "払出番号-1",
+                    "店": "店-2",
+                    "円額": 1,
+                    "ドル額": 2
+                  },
+                  "result": "refused",
+                  "reason": "売上不足"
+                }
+              ],
+              "account": "店の売上",
+              "as_written": "店の売上(店)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "売上",
+                  "args": {
+                    "注文": "注文-1",
+                    "店": "店-2",
+                    "代金": 104,
+                    "手数料": 3
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "ドル払い",
+                  "args": {
+                    "払出番号": "払出番号-3",
+                    "店": "店-2",
+                    "円額": 1,
+                    "ドル額": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "ドル払い",
+                  "args": {
+                    "払出番号": "払出番号-3",
+                    "店": "店-2",
+                    "円額": 4,
+                    "ドル額": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "ドル払い",
+                  "args": {
+                    "払出番号": "払出番号-1",
+                    "店": "店-2",
+                    "円額": 1,
+                    "ドル額": 2
+                  },
+                  "result": "refused",
+                  "reason": "売上不足"
+                },
+                {
+                  "op": "do",
+                  "kind": "ドル払い",
+                  "args": {
+                    "払出番号": "払出番号-1",
+                    "店": "店-2",
+                    "円額": 1,
+                    "ドル額": 2
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "払出番号"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "店",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 104,
+                      "手数料": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "args": {
+                      "払出番号": "払出番号-3",
+                      "店": "店-2",
+                      "円額": 1,
+                      "ドル額": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "args": {
+                      "払出番号": "払出番号-3",
+                      "店": "店-4",
+                      "円額": 1,
+                      "ドル額": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "円額",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 104,
+                      "手数料": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "args": {
+                      "払出番号": "払出番号-3",
+                      "店": "店-2",
+                      "円額": 1,
+                      "ドル額": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "args": {
+                      "払出番号": "払出番号-3",
+                      "店": "店-2",
+                      "円額": 4,
+                      "ドル額": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "ドル額",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 104,
+                      "手数料": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "args": {
+                      "払出番号": "払出番号-3",
+                      "店": "店-2",
+                      "円額": 1,
+                      "ドル額": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "args": {
+                      "払出番号": "払出番号-3",
+                      "店": "店-2",
+                      "円額": 1,
+                      "ドル額": 4
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "ドル送金",
+      "description": null,
+      "params": [
+        {
+          "name": "送金番号",
+          "type": "string"
+        },
+        {
+          "name": "店",
+          "type": "string"
+        },
+        {
+          "name": "額",
+          "type": "amount",
+          "unit": "USD"
+        }
+      ],
+      "key": [
+        "送金番号"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "額"
+          },
+          "from": {
+            "account": "ドル口座",
+            "args": [
+              {
+                "param": "店"
+              }
+            ]
+          },
+          "to": {
+            "account": "海外の銀行",
+            "args": []
+          }
+        },
+        {
+          "amount": {
+            "literal": 150
+          },
+          "from": {
+            "account": "ドル口座",
+            "args": [
+              {
+                "param": "店"
+              }
+            ]
+          },
+          "to": {
+            "account": "送金手数料",
+            "args": []
+          }
+        }
+      ],
+      "code": 23113,
+      "definition": "a1fdf1072ae8416d84a4f35adad4f8f2",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "ドル残高不足",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "ドル送金",
+                  "args": {
+                    "送金番号": "送金番号-1",
+                    "店": "店-2",
+                    "額": 1
+                  },
+                  "result": "refused",
+                  "reason": "ドル残高不足"
+                }
+              ],
+              "account": "ドル口座",
+              "as_written": "ドル口座(店)",
+              "bound": "at least 0.00",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "売上",
+                  "args": {
+                    "注文": "注文-1",
+                    "店": "店-2",
+                    "代金": 105,
+                    "手数料": 3
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "ドル払い",
+                  "args": {
+                    "払出番号": "払出番号-3",
+                    "店": "店-2",
+                    "円額": 2,
+                    "ドル額": 151
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "ドル送金",
+                  "args": {
+                    "送金番号": "送金番号-4",
+                    "店": "店-2",
+                    "額": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "ドル送金",
+                  "args": {
+                    "送金番号": "送金番号-4",
+                    "店": "店-2",
+                    "額": 4
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "ドル送金",
+                  "args": {
+                    "送金番号": "送金番号-1",
+                    "店": "店-2",
+                    "額": 1
+                  },
+                  "result": "refused",
+                  "reason": "ドル残高不足"
+                },
+                {
+                  "op": "do",
+                  "kind": "ドル送金",
+                  "args": {
+                    "送金番号": "送金番号-1",
+                    "店": "店-2",
+                    "額": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "送金番号"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "店",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 105,
+                      "手数料": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "args": {
+                      "払出番号": "払出番号-3",
+                      "店": "店-2",
+                      "円額": 2,
+                      "ドル額": 151
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル送金",
+                    "args": {
+                      "送金番号": "送金番号-4",
+                      "店": "店-2",
+                      "額": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル送金",
+                    "args": {
+                      "送金番号": "送金番号-4",
+                      "店": "店-5",
+                      "額": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "額",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "売上",
+                    "args": {
+                      "注文": "注文-1",
+                      "店": "店-2",
+                      "代金": 105,
+                      "手数料": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル払い",
+                    "args": {
+                      "払出番号": "払出番号-3",
+                      "店": "店-2",
+                      "円額": 2,
+                      "ドル額": 151
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル送金",
+                    "args": {
+                      "送金番号": "送金番号-4",
+                      "店": "店-2",
+                      "額": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ドル送金",
+                    "args": {
+                      "送金番号": "送金番号-4",
+                      "店": "店-2",
+                      "額": 4
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "分配",
+      "functions": [
+        {
+          "kind": "売上",
+          "op": "do",
+          "name": "売上_do",
+          "params": [
+            "p_tenant",
+            "p_注文",
+            "p_店",
+            "p_代金",
+            "p_手数料"
+          ]
+        },
+        {
+          "kind": "ドル払い",
+          "op": "do",
+          "name": "ドル払い_do",
+          "params": [
+            "p_tenant",
+            "p_払出番号",
+            "p_店",
+            "p_円額",
+            "p_ドル額"
+          ]
+        },
+        {
+          "kind": "ドル送金",
+          "op": "do",
+          "name": "ドル送金_do",
+          "params": [
+            "p_tenant",
+            "p_送金番号",
+            "p_店",
+            "p_額"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "買い手",
+          "name": "balance_買い手",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "手数料収入",
+          "name": "balance_手数料収入",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "送料",
+          "name": "balance_送料",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "店の売上",
+          "name": "balance_店の売上",
+          "params": [
+            "p_tenant",
+            "p_店"
+          ]
+        },
+        {
+          "account": "円の両替口",
+          "name": "balance_円の両替口",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "ドルの両替口",
+          "name": "balance_ドルの両替口",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "ドル口座",
+          "name": "balance_ドル口座",
+          "params": [
+            "p_tenant",
+            "p_店"
+          ]
+        },
+        {
+          "account": "海外の銀行",
+          "name": "balance_海外の銀行",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "送金手数料",
+          "name": "balance_送金手数料",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "分配.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "売上",
+          "member": "売上",
+          "args": "売上Args"
+        },
+        {
+          "kind": "ドル払い",
+          "member": "ドル払い",
+          "args": "ドル払いArgs"
+        },
+        {
+          "kind": "ドル送金",
+          "member": "ドル送金",
+          "args": "ドル送金Args"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "分配",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "売上",
+          "member": "売上",
+          "params": {
+            "注文": "注文",
+            "店": "店",
+            "代金": "代金",
+            "手数料": "手数料"
+          }
+        },
+        {
+          "kind": "ドル払い",
+          "member": "ドル払い",
+          "params": {
+            "払出番号": "払出番号",
+            "店": "店",
+            "円額": "円額",
+            "ドル額": "ドル額"
+          }
+        },
+        {
+          "kind": "ドル送金",
+          "member": "ドル送金",
+          "params": {
+            "送金番号": "送金番号",
+            "店": "店",
+            "額": "額"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "book",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "売上",
+          "member": "X売上",
+          "args": "X売上Args",
+          "fields": {
+            "注文": "X注文",
+            "店": "X店",
+            "代金": "X代金",
+            "手数料": "X手数料"
+          }
+        },
+        {
+          "kind": "ドル払い",
+          "member": "Xドル払い",
+          "args": "Xドル払いArgs",
+          "fields": {
+            "払出番号": "X払出番号",
+            "店": "X店",
+            "円額": "X円額",
+            "ドル額": "Xドル額"
+          }
+        },
+        {
+          "kind": "ドル送金",
+          "member": "Xドル送金",
+          "args": "Xドル送金Args",
+          "fields": {
+            "送金番号": "X送金番号",
+            "店": "X店",
+            "額": "X額"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "買い手",
+          "method": "X買い手"
+        },
+        {
+          "account": "手数料収入",
+          "method": "X手数料収入"
+        },
+        {
+          "account": "送料",
+          "method": "X送料"
+        },
+        {
+          "account": "店の売上",
+          "method": "X店の売上",
+          "args": "X店の売上Account",
+          "fields": {
+            "店": "X店"
+          }
+        },
+        {
+          "account": "円の両替口",
+          "method": "X円の両替口"
+        },
+        {
+          "account": "ドルの両替口",
+          "method": "Xドルの両替口"
+        },
+        {
+          "account": "ドル口座",
+          "method": "Xドル口座",
+          "args": "Xドル口座Account",
+          "fields": {
+            "店": "X店"
+          }
+        },
+        {
+          "account": "海外の銀行",
+          "method": "X海外の銀行"
+        },
+        {
+          "account": "送金手数料",
+          "method": "X送金手数料"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "売上",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 2,
+              "role": "main"
+            },
+            {
+              "move": 3,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "ドル払い",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 2,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "ドル送金",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 2,
+              "role": "main"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

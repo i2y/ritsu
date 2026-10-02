@@ -1,0 +1,17 @@
+error[E001]: 構文.book:5:3: unexpected `keep`; the lines under an account are `description`, `at least` and `at most`
+     5 |   keep 3
+error[E001]: 構文.book:7:1: a tab: indent and separate with spaces
+     7 | 	transfer x
+error[E001]: 構文.book:8:9: `to` is a keyword and cannot be a name
+     8 | account to : 個 outside
+error[E001]: 構文.book:10:15: the string is not closed
+    10 |   description "閉じていない
+error[E001]: 構文.book:11:24: an unexpected character `@`
+    11 | account 台帳 : 個 outside @
+error[E001]: 構文.book:14:1: the indentation does not line up with the lines above it in the same block
+    14 |     at most 10 refused as 満杯
+error[E001]: 構文.book:15:9: a number runs into the next word
+    15 | account 1番 : 個 outside
+error[E001]: 構文.book:16:10: the name has a combining mark U+3099: write the precomposed character instead
+    16 | account がい : 個 outside
+構文.book: 8 error(s), 0 warning(s)

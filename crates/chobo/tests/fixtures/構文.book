@@ -1,0 +1,16 @@
+book 構文 v1
+unit 個
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+  keep 3
+account 客 : 個 outside
+	transfer x
+account to : 個 outside
+account 仕入先 : 個 outside
+  description "閉じていない
+account 台帳 : 個 outside @
+account 倉庫(sku: string) : 個
+  at least 0 refused as 在庫不足
+    at most 10 refused as 満杯
+account 1番 : 個 outside
+account がい : 個 outside
