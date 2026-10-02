@@ -1,0 +1,3 @@
+error[E304]: tests/mutants/E304_例の列が足りない.cal:21:1: The examples have no column for `-> 締め日`
+    21 | examples
+  = Examples have a column for every input and every date: if the reference interpreter and the generated code shared a mistake, comparing them would pass, and only values a person wrote can catch it (DESIGN 1.11).

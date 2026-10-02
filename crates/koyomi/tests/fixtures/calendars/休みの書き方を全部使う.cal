@@ -1,0 +1,12 @@
+calendar 休みの書き方を全部使う(every_closing_rule) v1
+description "表を使わず、休みの書き方を全部使うカレンダー。生成したコードを参照インタプリタと突き合わせるためのもので、どこかの休みを写したものではない"
+offset +05:45
+
+closed weekly sat, sun
+closed every 12-29..01-03 "年末年始"
+closed every 05-01 "創立記念日"
+closed every 02-29 "うるう日"
+closed 2000-08-14..2000-08-16 "夏季休業"
+closed 2099-12-30 "最後の営業日の前"
+open 2000-01-03 "臨時営業"
+open 1999-12-31 "大みそかの営業"

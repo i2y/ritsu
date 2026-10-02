@@ -1,0 +1,10 @@
+dates 支払条件(payment_terms) v1
+use calendar "../fixtures/calendars/土日_オフセットなし.cal"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-12-31
+
+date 支払日(payment) = 受領日
+  + 30 days
+  roll following
+  at 09:00

@@ -1,0 +1,17 @@
+[package]
+name = "koyomi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "A small language for closing days, payment days, business days and month arithmetic, checked on every day of its range and compiled to TypeScript, Python, Go, Rust and SQL"
+
+[dependencies]
+# preserve_order: `koyomi api` and `--format json` print their keys in the order DESIGN.md writes them
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[profile.release]
+strip = true
+
+# The tests walk every day of 1900-2100 several times over; unoptimized, that alone takes minutes.
+[profile.test]
+opt-level = 2

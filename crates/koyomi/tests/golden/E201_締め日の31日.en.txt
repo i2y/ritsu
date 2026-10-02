@@ -1,0 +1,8 @@
+error[E201]: tests/mutants/E201_締め日の31日.cal:8:3: `close day 締め日` can land on a day the month does not have, and the line does not say what to do then
+     8 |   close day 締め日
+  = For 受領日 2026-01-30, 締め日 29 it would be 2026-02-29
+  = To fix it, write one of: `close day 締め日 else end_of_month` (giving 2026-02-28), `close day 締め日 else start_of_next_month` (giving 2026-03-01), `close day 締め日 else reject` (the check makes sure it never happens in the range)
+  the input that gets there:
+      受領日  2026-01-30 Fri
+              締め日 = 29
+      締め                    close day 締め日 (締め日 = 29): 2026-02-29 does not exist

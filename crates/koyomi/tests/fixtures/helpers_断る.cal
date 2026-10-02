@@ -1,0 +1,10 @@
+dates 断る(reject_test) v1
+description "else reject を、無い日に一度も当たらない範囲で使う（2 月 29 日を含む範囲では、範囲の中で当たって検査が止める）。生成したコードを参照インタプリタと突き合わせるためのもの"
+
+inputs
+  起点(origin) : date  range >=2001-03-01 <=2003-12-31
+
+date 一年後(year_later) = 起点
+  + 12 months else reject
+date 一年前(year_before) = 起点
+  - 1 year else reject

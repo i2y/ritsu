@@ -1,0 +1,106 @@
+{
+  "koyomi": "0.1.0",
+  "kind": "calendar",
+  "name": "england_and_wales",
+  "alias": "england_and_wales",
+  "version": "1",
+  "source_sha256": "00a0d8a87344f4f45c2ebbcfe348c82bd794024454c54aae2544b2cfb52c4465",
+  "calendar": {
+    "name": "england_and_wales",
+    "alias": "england_and_wales",
+    "version": "1",
+    "file": "england_and_wales.cal",
+    "source_sha256": "00a0d8a87344f4f45c2ebbcfe348c82bd794024454c54aae2544b2cfb52c4465",
+    "offset": null,
+    "uses": [],
+    "closed": [
+      {
+        "weekly": [
+          "sat",
+          "sun"
+        ]
+      },
+      {
+        "table": "bank_holidays"
+      }
+    ],
+    "open": [],
+    "sources": [
+      {
+        "name": "bank_holidays",
+        "kind": "file",
+        "file": "data/bank-holidays.json",
+        "url": "https://www.gov.uk/bank-holidays.json",
+        "sha256": "538b3482c28b85ec",
+        "format": "govuk",
+        "division": "england-and-wales",
+        "covers": {
+          "listed_years": true,
+          "from": "2019-01-01",
+          "to": "2028-12-31"
+        },
+        "rows": 83
+      }
+    ],
+    "data_range": {
+      "from": "2019-01-01",
+      "to": "2028-12-31"
+    }
+  },
+  "wire": {
+    "date": "YYYY-MM-DD",
+    "int": "a JSON number",
+    "at": "RFC 3339 in UTC, ending in Z, as dandori's timestamp",
+    "errors": [
+      "range",
+      "data",
+      "reject",
+      "date"
+    ]
+  },
+  "typescript": {
+    "file": "typescript/england_and_wales.ts",
+    "module": "england_and_wales",
+    "date_type": "string",
+    "is_open": "export function is_open(day: string): boolean",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "python": {
+    "file": "python/england_and_wales.py",
+    "module": "england_and_wales",
+    "date_type": "datetime.date",
+    "is_open": "def is_open(day: date) -> bool",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "go": {
+    "file": "go/englandandwales/englandandwales.go",
+    "module": "englandandwales",
+    "date_type": "Date",
+    "is_open": "func IsOpen(day Date) (bool, error)",
+    "errors": [
+      "*KoyomiError"
+    ]
+  },
+  "rust": {
+    "file": "rust/england_and_wales.rs",
+    "module": "england_and_wales",
+    "date_type": "Date",
+    "is_open": "pub fn is_open(day: Date) -> Result<bool, KoyomiError>",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "sql": {
+    "file": "sql/england_and_wales.sql",
+    "module": "england_and_wales",
+    "date_type": "date",
+    "is_open": "england_and_wales.is_open(day date) RETURNS boolean",
+    "errors": [
+      "SQLSTATE 22023"
+    ]
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "koyomi": "0.1.0",
+  "kind": "calendar",
+  "name": "東京の営業日",
+  "alias": "tokyo",
+  "version": "1",
+  "source_sha256": "d7b6134e23a8cb9f65c27840e79e6fd52fb0acfbb5babb93732c3504f9427406",
+  "calendar": {
+    "name": "東京の営業日",
+    "alias": "tokyo",
+    "version": "1",
+    "file": "東京の営業日.cal",
+    "source_sha256": "d7b6134e23a8cb9f65c27840e79e6fd52fb0acfbb5babb93732c3504f9427406",
+    "offset": "+09:00",
+    "uses": [],
+    "closed": [
+      {
+        "weekly": [
+          "sat",
+          "sun"
+        ]
+      },
+      {
+        "table": "祝日"
+      },
+      {
+        "every": "12-29..01-03",
+        "name": "年末年始"
+      }
+    ],
+    "open": [],
+    "sources": [
+      {
+        "name": "祝日",
+        "kind": "file",
+        "file": "data/syukujitsu.csv",
+        "url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+        "sha256": "cec37a743c96995c",
+        "format": "csv",
+        "encoding": "shift_jis",
+        "covers": {
+          "from": "1955-01-01",
+          "to": "2027-12-31"
+        },
+        "rows": 1067
+      }
+    ],
+    "data_range": {
+      "from": "1955-01-01",
+      "to": "2027-12-31"
+    }
+  },
+  "wire": {
+    "date": "YYYY-MM-DD",
+    "int": "a JSON number",
+    "at": "RFC 3339 in UTC, ending in Z, as dandori's timestamp",
+    "errors": [
+      "range",
+      "data",
+      "reject",
+      "date"
+    ]
+  },
+  "typescript": {
+    "file": "typescript/tokyo.ts",
+    "module": "tokyo",
+    "date_type": "string",
+    "is_open": "export function is_open(day: string): boolean",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "python": {
+    "file": "python/tokyo.py",
+    "module": "tokyo",
+    "date_type": "datetime.date",
+    "is_open": "def is_open(day: date) -> bool",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "go": {
+    "file": "go/tokyo/tokyo.go",
+    "module": "tokyo",
+    "date_type": "Date",
+    "is_open": "func IsOpen(day Date) (bool, error)",
+    "errors": [
+      "*KoyomiError"
+    ]
+  },
+  "rust": {
+    "file": "rust/tokyo.rs",
+    "module": "tokyo",
+    "date_type": "Date",
+    "is_open": "pub fn is_open(day: Date) -> Result<bool, KoyomiError>",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "sql": {
+    "file": "sql/tokyo.sql",
+    "module": "tokyo",
+    "date_type": "date",
+    "is_open": "tokyo.is_open(day date) RETURNS boolean",
+    "errors": [
+      "SQLSTATE 22023"
+    ]
+  }
+}

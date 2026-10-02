@@ -1,0 +1,29 @@
+dates 営業日(business_days_test) v1
+description "営業日の数え方、四つの慣行、if closed、at（時刻と end of day）を、日数 0〜3 と 1900〜2100 年のすべての日に使う。カレンダーは休みの書き方を全部使う表の無いもの。生成したコードの小さな関数を参照インタプリタと突き合わせるためのもの"
+use calendar "calendars/休みの書き方を全部使う.cal"
+
+inputs
+  起点(origin)    : date  range >=1900-01-01 <=2100-12-31
+  日数(day_count) : int   range >=0 <=3
+
+date 日数後の営業日(business_days_later) = 起点
+  + 日数 business days
+date 日数前の営業日(business_days_earlier) = 起点
+  - 日数 business days
+date 翌営業日(next_business_day) = 起点
+  roll following
+  at 09:00
+date 前営業日(previous_business_day) = 起点
+  roll preceding
+date 修正翌営業日(modified_following_day) = 起点
+  roll modified following
+date 修正前営業日(modified_preceding_day) = 起点
+  roll modified preceding
+  at end of day
+date 休みなら翌日(day_after_if_closed) = 起点
+  if closed + 1 day
+date 休みなら翌月末(month_end_if_closed) = 起点
+  if closed end of month +1
+date 日数後の前日(day_before_days_later) = 起点
+  + 日数 days
+  - 1 day

@@ -1,0 +1,4 @@
+calendar 土日_オフセットなし(weekends_no_offset) v1
+description "土曜と日曜を休む。オフセットを持たない"
+
+closed weekly sat, sun

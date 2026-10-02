@@ -1,0 +1,7 @@
+error[E204]: tests/mutants/E204_条件が扱える日付の外.cal:10:3: `期日 <= 受領日 + 100 days` goes outside 0001-01-01..9999-12-31 for 30 inputs
+    10 |   百日以内 : 期日 <= 受領日 + 100 days
+  = It does on 9999-12-01..9999-12-30
+  the first input it happens on:
+      受領日  9999-12-01 Wed
+      期日    9999-12-02 Thu  + 1 day
+              claim 百日以内: it goes outside 0001-01-01..9999-12-31

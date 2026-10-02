@@ -1,0 +1,2 @@
+error[E104]: tests/mutants/E104_文字コードの書き忘れ.cal:4:8: The copy ../../examples/calendars/data/syukujitsu.csv of the source 祝日 cannot be read at line 1: the bytes from byte 1 on are not UTF-8; for Shift_JIS, write `format csv shift_jis`
+     4 | source 祝日 = file "../../examples/calendars/data/syukujitsu.csv" sha256:cec37a743c96995c

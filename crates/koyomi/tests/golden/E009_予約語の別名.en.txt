@@ -1,0 +1,3 @@
+error[E009]: tests/mutants/E009_予約語の別名.cal:8:10: The alias default is a reserved word of TypeScript, Go and PostgreSQL, so the generated code cannot use it
+     8 | date 締め日(default) = 受領日
+  = Choose another alias.

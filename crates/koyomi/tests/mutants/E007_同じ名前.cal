@@ -1,0 +1,27 @@
+dates 支払条件(payment_terms) v1
+description "20 日締め翌月 10 日払い。支払日が休みなら前の営業日。条件「受領から60日以内」は、この例の条件として文字どおりに書いたもので、法令の読み方を示すものではない"
+use calendar "../../examples/calendars/東京の営業日.cal"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2027-11-20
+
+date 締め日(closing) = 受領日
+  close day 20
+
+date 締め日(closing_25th) = 受領日
+  close day 25
+
+date 支払日(payment) = 締め日
+  day 10 of month +1
+  roll preceding
+  at 09:00
+
+claims
+  営業日に払う       : 支払日 is open
+  受領から60日以内   : 支払日 <= 受領日 + 60 days
+  遅い受領は遅い支払 : 支払日 is monotonic
+
+examples
+| 受領日     | -> 締め日  | -> 支払日  |
+| 2026-04-01 | 2026-04-20 | 2026-05-08 |
+| 2026-12-21 | 2027-01-20 | 2027-02-10 |

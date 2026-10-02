@@ -1,0 +1,2 @@
+error[E104]: tests/mutants/E104_読めないバイト.cal:4:8: The copy ../fixtures/data/sjis-broken.csv of the source 休業日 cannot be read at line 2: the bytes 0x81 0x7F at byte 25 are not Shift_JIS
+     4 | source 休業日 = file "../fixtures/data/sjis-broken.csv" sha256:5b9c45915a5110af

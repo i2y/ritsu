@@ -1,0 +1,4 @@
+error[E111]: tests/mutants/E111_固定していない条.cal:11:42: 民法 第142条 is cited but not pinned
+    11 | date 満了日_142条(last_day_142) = 起算日    @民法 第142条
+  = Every article cited has a pin line under its source, which records the version of the text the line was written against.
+  = The line, fixed: 第142条 sha256:fc8c35a0769d3b35

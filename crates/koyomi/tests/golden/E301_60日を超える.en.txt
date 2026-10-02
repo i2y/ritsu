@@ -1,0 +1,10 @@
+error[E301]: tests/mutants/E301_60日を超える.cal:16:3: The claim 受領から60日以内 fails for 648 of the 669 days of 受領日
+    16 |   受領から60日以内 : 支払日 <= 受領日 + 60 days
+  = It fails on 2026-01-01..2026-01-29 (29 days), 2026-02-01..2026-03-29 (57 days), 2026-04-01..2026-08-30 (152 days), 2026-09-01..2026-10-28 (58 days), 2026-11-01..2026-11-29 (29 days), 2026-12-01..2026-12-27 (27 days), and 4 more runs; --format json lists them all
+  = The farthest is 受領日 2026-05-01, where 支払日 2026-07-31 is 91 days after 受領日
+  the first input it fails on:
+      受領日  2026-01-01 Thu
+      締め日  2026-01-31 Sat  close end of month
+      支払日  2026-03-31 Tue  end of month +2
+              2026-03-31 Tue  roll preceding: a business day, stays
+              支払日 is 89 days after 受領日, and the claim allows at most 60 days after

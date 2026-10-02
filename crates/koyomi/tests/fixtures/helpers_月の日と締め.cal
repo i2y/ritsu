@@ -1,0 +1,31 @@
+dates 月の日と締め(days_of_months_test) v1
+description "k か月後の N 日、N 日締め、月初と月末、年の足し引きを、日 27〜31 と 1900〜2100 年のすべての日に使う。生成したコードの小さな関数を参照インタプリタと突き合わせるためのもの"
+
+inputs
+  起点(origin) : date  range >=1900-01-01 <=2100-12-31
+  日(nth)      : int   range >=27 <=31
+
+date 翌月の日(next_month_nth) = 起点
+  day 日 of month +1 else end_of_month
+date 前月の日(previous_month_nth) = 起点
+  day 日 of month -1 else start_of_next_month
+date 同じ月の日(same_month_nth) = 起点
+  day 日 of month else end_of_month
+date 翌月15日(fifteenth_next_month) = 起点
+  day 15 of month +1
+date 締めて月末に寄せる(closing_to_month_end) = 起点
+  close day 日 else end_of_month
+date 締めて翌月初に送る(closing_to_next_month) = 起点
+  close day 日 else start_of_next_month
+date 二十日締め(closing_20th) = 起点
+  close day 20
+date 月末締め(closing_month_end) = 起点
+  close end of month
+date 前月初(previous_month_start) = 起点
+  start of month -1
+date 二か月後の月末(month_end_two_later) = 起点
+  end of month +2
+date 翌年(next_year) = 起点
+  + 1 year else start_of_next_month
+date 二年前(two_years_before) = 起点
+  - 2 years else end_of_month

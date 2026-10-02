@@ -1,0 +1,11 @@
+calendar 東京の営業日(tokyo) v1
+description "土日、国民の祝日と休日、12 月 29 日から 1 月 3 日までを休む"
+offset +09:00
+
+source 祝日 = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
+  format csv shift_jis
+  covers 1955-01-01..2027-12-31
+
+closed weekly sat, sun
+closed 祝日
+closed every 12-29..01-03 "年末年始"

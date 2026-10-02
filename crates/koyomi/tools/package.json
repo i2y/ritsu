@@ -1,0 +1,9 @@
+{
+  "name": "koyomi-tools",
+  "private": true,
+  "description": "The TypeScript compiler that tests/targets.rs type-checks the generated TypeScript with (tsc --strict --erasableSyntaxOnly). Install with: npm ci --prefix tools",
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "typescript": "7.0.2"
+  }
+}

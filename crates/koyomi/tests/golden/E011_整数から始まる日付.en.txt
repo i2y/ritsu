@@ -1,0 +1,2 @@
+error[E011]: tests/mutants/E011_整数から始まる日付.cal:8:20: The input 締め日 is an integer; a date starts from the date input or another date
+     8 | date 締め(closing) = 締め日

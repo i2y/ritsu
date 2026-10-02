@@ -1,0 +1,4 @@
+error[E103]: tests/mutants/E103_固定と違う.cal:4:8: The copy of the source 休業日 does not match its pin (pinned sha256:cec37a743c96995c, the copy is sha256:56ebcd2f1e91e0a1)
+     4 | source 休業日 = file "../fixtures/data/holidays.csv" sha256:cec37a743c96995c
+  = The copy changed after it was pinned. Read what changed (`koyomi source outdated`), then pin it again.
+  = The line, fixed: source 休業日 = file "../fixtures/data/holidays.csv" sha256:56ebcd2f1e91e0a1

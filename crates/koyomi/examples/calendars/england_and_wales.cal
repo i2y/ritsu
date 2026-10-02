@@ -1,0 +1,9 @@
+calendar england_and_wales v1
+description "Saturdays, Sundays and the bank holidays of England and Wales, as GOV.UK lists them. No offset: England and Wales has daylight saving time, so this calendar gives dates only"
+
+source bank_holidays = file "data/bank-holidays.json" url "https://www.gov.uk/bank-holidays.json" sha256:538b3482c28b85ec
+  format govuk "england-and-wales"
+  covers listed years
+
+closed weekly sat, sun
+closed bank_holidays

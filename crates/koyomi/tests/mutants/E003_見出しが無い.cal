@@ -1,0 +1,5 @@
+# 見出しを書き忘れた
+use calendar "../../examples/calendars/東京の営業日.cal"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-12-31

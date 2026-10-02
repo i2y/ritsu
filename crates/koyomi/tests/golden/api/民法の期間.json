@@ -1,0 +1,436 @@
+{
+  "koyomi": "0.1.0",
+  "kind": "dates",
+  "name": "民法の期間",
+  "alias": "civil_code_period",
+  "version": "1",
+  "source_sha256": "c9b94eecde23e6b51a5143c29bd9bc76123a3522fdd96020f2d7d627cff73493",
+  "description": "期間の満了日を、民法 140 条・141 条・143 条を文字どおりに書いて計算し、142 条の「その翌日」も文字どおりに書いた例。条文の読み方を一つに決めるものではない",
+  "calendar": {
+    "name": "民法142条の休日",
+    "alias": "civil_code_142",
+    "version": "1",
+    "file": "calendars/民法142条の休日.cal",
+    "source_sha256": "b568c9a906b72b17448786b76ad665f2872e60bf300b54dfce32191c66398a27",
+    "offset": null,
+    "uses": [],
+    "closed": [
+      {
+        "weekly": [
+          "sun"
+        ]
+      },
+      {
+        "table": "祝日"
+      }
+    ],
+    "open": [],
+    "sources": [
+      {
+        "name": "祝日",
+        "kind": "file",
+        "file": "calendars/data/syukujitsu.csv",
+        "url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+        "sha256": "cec37a743c96995c",
+        "format": "csv",
+        "encoding": "shift_jis",
+        "covers": {
+          "from": "1955-01-01",
+          "to": "2027-12-31"
+        },
+        "rows": 1067
+      }
+    ],
+    "data_range": {
+      "from": "1955-01-01",
+      "to": "2027-12-31"
+    }
+  },
+  "sources": [
+    {
+      "name": "民法",
+      "kind": "law",
+      "db": "egov",
+      "id": "129AC0000000089",
+      "asof": "2026-10-01",
+      "revision": "129AC0000000089_20260624_508AC0000000045",
+      "pins": [
+        {
+          "fragment": "第140条",
+          "sha256": "e880059021fbb67d"
+        },
+        {
+          "fragment": "第141条",
+          "sha256": "0575c131b9f08063"
+        },
+        {
+          "fragment": "第142条",
+          "sha256": "fc8c35a0769d3b35"
+        },
+        {
+          "fragment": "第143条",
+          "sha256": "6950bdfb988439b6"
+        }
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "name": "起点",
+      "alias": "origin",
+      "type": "date",
+      "range": {
+        "min": "2026-01-01",
+        "max": "2026-12-31"
+      }
+    },
+    {
+      "name": "月数",
+      "alias": "month_count",
+      "type": "int",
+      "range": {
+        "min": 1,
+        "max": 12
+      }
+    }
+  ],
+  "dates": [
+    {
+      "name": "起算日",
+      "alias": "first_day",
+      "params": [
+        "起点"
+      ]
+    },
+    {
+      "name": "満了日",
+      "alias": "last_day",
+      "params": [
+        "起点",
+        "月数"
+      ]
+    },
+    {
+      "name": "満了日_142条",
+      "alias": "last_day_142",
+      "params": [
+        "起点",
+        "月数"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "name": "満了日は単調",
+      "text": "満了日 is monotonic"
+    },
+    {
+      "name": "142条の満了日も単調",
+      "text": "満了日_142条 is monotonic"
+    },
+    {
+      "name": "満了日は起点より後",
+      "text": "満了日 > 起点"
+    },
+    {
+      "name": "142条の満了日は満了日以後",
+      "text": "満了日_142条 >= 満了日"
+    }
+  ],
+  "wire": {
+    "date": "YYYY-MM-DD",
+    "int": "a JSON number",
+    "at": "RFC 3339 in UTC, ending in Z, as dandori's timestamp",
+    "errors": [
+      "range",
+      "data",
+      "reject",
+      "date"
+    ]
+  },
+  "typescript": {
+    "file": "typescript/civil_code_period.ts",
+    "module": "civil_code_period",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "起算日",
+        "function": "first_day",
+        "signature": "export function first_day(origin: string): string",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "満了日",
+        "function": "last_day",
+        "signature": "export function last_day(origin: string, month_count: number): string",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      },
+      {
+        "name": "満了日_142条",
+        "function": "last_day_142",
+        "signature": "export function last_day_142(origin: string, month_count: number): string",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      }
+    ],
+    "is_open": "export function is_open(day: string): boolean",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "python": {
+    "file": "python/civil_code_period.py",
+    "module": "civil_code_period",
+    "date_type": "datetime.date",
+    "functions": [
+      {
+        "name": "起算日",
+        "function": "first_day",
+        "signature": "def first_day(origin: date) -> date",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "date"
+          }
+        ]
+      },
+      {
+        "name": "満了日",
+        "function": "last_day",
+        "signature": "def last_day(origin: date, month_count: int) -> date",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "満了日_142条",
+        "function": "last_day_142",
+        "signature": "def last_day_142(origin: date, month_count: int) -> date",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "def is_open(day: date) -> bool",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "go": {
+    "file": "go/civilcodeperiod/civilcodeperiod.go",
+    "module": "civilcodeperiod",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "起算日",
+        "function": "FirstDay",
+        "signature": "func FirstDay(origin Date) (Date, error)",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "Date"
+          }
+        ]
+      },
+      {
+        "name": "満了日",
+        "function": "LastDay",
+        "signature": "func LastDay(origin Date, month_count int) (Date, error)",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "満了日_142条",
+        "function": "LastDay142",
+        "signature": "func LastDay142(origin Date, month_count int) (Date, error)",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "func IsOpen(day Date) (bool, error)",
+    "errors": [
+      "*KoyomiError"
+    ]
+  },
+  "rust": {
+    "file": "rust/civil_code_period.rs",
+    "module": "civil_code_period",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "起算日",
+        "function": "first_day",
+        "signature": "pub fn first_day(origin: Date) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "Date"
+          }
+        ]
+      },
+      {
+        "name": "満了日",
+        "function": "last_day",
+        "signature": "pub fn last_day(origin: Date, month_count: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "i64"
+          }
+        ]
+      },
+      {
+        "name": "満了日_142条",
+        "function": "last_day_142",
+        "signature": "pub fn last_day_142(origin: Date, month_count: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "i64"
+          }
+        ]
+      }
+    ],
+    "is_open": "pub fn is_open(day: Date) -> Result<bool, KoyomiError>",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "sql": {
+    "file": "sql/civil_code_period.sql",
+    "module": "civil_code_period",
+    "date_type": "date",
+    "functions": [
+      {
+        "name": "起算日",
+        "function": "first_day",
+        "signature": "civil_code_period.first_day(origin date) RETURNS date",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "date"
+          }
+        ]
+      },
+      {
+        "name": "満了日",
+        "function": "last_day",
+        "signature": "civil_code_period.last_day(origin date, month_count integer) RETURNS date",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "integer"
+          }
+        ]
+      },
+      {
+        "name": "満了日_142条",
+        "function": "last_day_142",
+        "signature": "civil_code_period.last_day_142(origin date, month_count integer) RETURNS date",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "integer"
+          }
+        ]
+      }
+    ],
+    "is_open": "civil_code_period.is_open(day date) RETURNS boolean",
+    "errors": [
+      "SQLSTATE 22023"
+    ]
+  }
+}

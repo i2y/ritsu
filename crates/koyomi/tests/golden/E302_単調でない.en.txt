@@ -1,0 +1,9 @@
+error[E302]: tests/mutants/E302_単調でない.cal:11:3: 期日 is not monotonic: on 13 of the 89 pairs of adjacent days of 受領日, the later day gives an earlier 期日
+    11 |   遅い受領は遅い期日 : 期日 is monotonic
+  = The later days that come out earlier: 2026-01-05, 2026-01-12, 2026-01-19, 2026-01-26, 2026-02-02, 2026-02-09, and 7 more runs; --format json lists them all
+  the first pair it fails on:
+      受領日  2026-01-04 Sun
+      期日    2026-01-07 Wed  if closed + 3 days: 2026-01-04 (Sunday) is closed
+      受領日  2026-01-05 Mon
+      期日    2026-01-05 Mon  if closed + 3 days: a business day, nothing to do
+              受領日 goes from 2026-01-04 to 2026-01-05, later, and 期日 from 2026-01-07 to 2026-01-05, earlier

@@ -1,0 +1,413 @@
+{
+  "koyomi": "0.1.0",
+  "kind": "dates",
+  "name": "締め日と支払日を受け取る",
+  "alias": "closing_and_payment_days",
+  "version": "1",
+  "source_sha256": "b9ecb83d731da6748501c08acc90aa4295371c452e8d5c839ad89d8f9b9d126c",
+  "description": "締め日、支払の月、支払の日を整数で受け取る。締め日を規則から受け取る形。支払日が休みなら前の営業日。条件は、この例のために文字どおりに書いたもの",
+  "calendar": {
+    "name": "東京の営業日",
+    "alias": "tokyo",
+    "version": "1",
+    "file": "calendars/東京の営業日.cal",
+    "source_sha256": "d7b6134e23a8cb9f65c27840e79e6fd52fb0acfbb5babb93732c3504f9427406",
+    "offset": "+09:00",
+    "uses": [],
+    "closed": [
+      {
+        "weekly": [
+          "sat",
+          "sun"
+        ]
+      },
+      {
+        "table": "祝日"
+      },
+      {
+        "every": "12-29..01-03",
+        "name": "年末年始"
+      }
+    ],
+    "open": [],
+    "sources": [
+      {
+        "name": "祝日",
+        "kind": "file",
+        "file": "calendars/data/syukujitsu.csv",
+        "url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+        "sha256": "cec37a743c96995c",
+        "format": "csv",
+        "encoding": "shift_jis",
+        "covers": {
+          "from": "1955-01-01",
+          "to": "2027-12-31"
+        },
+        "rows": 1067
+      }
+    ],
+    "data_range": {
+      "from": "1955-01-01",
+      "to": "2027-12-31"
+    }
+  },
+  "sources": [],
+  "inputs": [
+    {
+      "name": "受領日",
+      "alias": "received",
+      "type": "date",
+      "range": {
+        "min": "2026-01-01",
+        "max": "2027-10-01"
+      }
+    },
+    {
+      "name": "締め日",
+      "alias": "closing_day",
+      "type": "int",
+      "range": {
+        "min": 1,
+        "max": 31
+      }
+    },
+    {
+      "name": "支払の月",
+      "alias": "payment_month",
+      "type": "int",
+      "range": {
+        "min": 1,
+        "max": 2
+      }
+    },
+    {
+      "name": "支払の日",
+      "alias": "payment_day",
+      "type": "int",
+      "range": {
+        "min": 10,
+        "max": 31
+      }
+    }
+  ],
+  "dates": [
+    {
+      "name": "締め",
+      "alias": "closing",
+      "params": [
+        "受領日",
+        "締め日"
+      ]
+    },
+    {
+      "name": "支払",
+      "alias": "payment",
+      "params": [
+        "受領日",
+        "締め日",
+        "支払の月",
+        "支払の日"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "name": "営業日に払う",
+      "text": "支払 is open"
+    },
+    {
+      "name": "締めのあとに払う",
+      "text": "支払 > 締め"
+    },
+    {
+      "name": "遅い受領は遅い支払",
+      "text": "支払 is monotonic"
+    }
+  ],
+  "wire": {
+    "date": "YYYY-MM-DD",
+    "int": "a JSON number",
+    "at": "RFC 3339 in UTC, ending in Z, as dandori's timestamp",
+    "errors": [
+      "range",
+      "data",
+      "reject",
+      "date"
+    ]
+  },
+  "typescript": {
+    "file": "typescript/closing_and_payment_days.ts",
+    "module": "closing_and_payment_days",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "締め",
+        "function": "closing",
+        "signature": "export function closing(received: string, closing_day: number): string",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "string"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "number"
+          }
+        ]
+      },
+      {
+        "name": "支払",
+        "function": "payment",
+        "signature": "export function payment(received: string, closing_day: number, payment_month: number, payment_day: number): string",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "string"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "number"
+          },
+          {
+            "name": "支払の月",
+            "alias": "payment_month",
+            "type": "number"
+          },
+          {
+            "name": "支払の日",
+            "alias": "payment_day",
+            "type": "number"
+          }
+        ]
+      }
+    ],
+    "is_open": "export function is_open(day: string): boolean",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "python": {
+    "file": "python/closing_and_payment_days.py",
+    "module": "closing_and_payment_days",
+    "date_type": "datetime.date",
+    "functions": [
+      {
+        "name": "締め",
+        "function": "closing",
+        "signature": "def closing(received: date, closing_day: int) -> date",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "date"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "支払",
+        "function": "payment",
+        "signature": "def payment(received: date, closing_day: int, payment_month: int, payment_day: int) -> date",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "date"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "int"
+          },
+          {
+            "name": "支払の月",
+            "alias": "payment_month",
+            "type": "int"
+          },
+          {
+            "name": "支払の日",
+            "alias": "payment_day",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "def is_open(day: date) -> bool",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "go": {
+    "file": "go/closingandpaymentdays/closingandpaymentdays.go",
+    "module": "closingandpaymentdays",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "締め",
+        "function": "Closing",
+        "signature": "func Closing(received Date, closing_day int) (Date, error)",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "Date"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "支払",
+        "function": "Payment",
+        "signature": "func Payment(received Date, closing_day int, payment_month int, payment_day int) (Date, error)",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "Date"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "int"
+          },
+          {
+            "name": "支払の月",
+            "alias": "payment_month",
+            "type": "int"
+          },
+          {
+            "name": "支払の日",
+            "alias": "payment_day",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "func IsOpen(day Date) (bool, error)",
+    "errors": [
+      "*KoyomiError"
+    ]
+  },
+  "rust": {
+    "file": "rust/closing_and_payment_days.rs",
+    "module": "closing_and_payment_days",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "締め",
+        "function": "closing",
+        "signature": "pub fn closing(received: Date, closing_day: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "Date"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "i64"
+          }
+        ]
+      },
+      {
+        "name": "支払",
+        "function": "payment",
+        "signature": "pub fn payment(received: Date, closing_day: i64, payment_month: i64, payment_day: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "Date"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "i64"
+          },
+          {
+            "name": "支払の月",
+            "alias": "payment_month",
+            "type": "i64"
+          },
+          {
+            "name": "支払の日",
+            "alias": "payment_day",
+            "type": "i64"
+          }
+        ]
+      }
+    ],
+    "is_open": "pub fn is_open(day: Date) -> Result<bool, KoyomiError>",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "sql": {
+    "file": "sql/closing_and_payment_days.sql",
+    "module": "closing_and_payment_days",
+    "date_type": "date",
+    "functions": [
+      {
+        "name": "締め",
+        "function": "closing",
+        "signature": "closing_and_payment_days.closing(received date, closing_day integer) RETURNS date",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "date"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "integer"
+          }
+        ]
+      },
+      {
+        "name": "支払",
+        "function": "payment",
+        "signature": "closing_and_payment_days.payment(received date, closing_day integer, payment_month integer, payment_day integer) RETURNS date",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "date"
+          },
+          {
+            "name": "締め日",
+            "alias": "closing_day",
+            "type": "integer"
+          },
+          {
+            "name": "支払の月",
+            "alias": "payment_month",
+            "type": "integer"
+          },
+          {
+            "name": "支払の日",
+            "alias": "payment_day",
+            "type": "integer"
+          }
+        ]
+      }
+    ],
+    "is_open": "closing_and_payment_days.is_open(day date) RETURNS boolean",
+    "errors": [
+      "SQLSTATE 22023"
+    ]
+  }
+}

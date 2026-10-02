@@ -1,0 +1,296 @@
+{
+  "koyomi": "0.1.0",
+  "kind": "dates",
+  "name": "payment_20th_close_next_10th",
+  "alias": "payment_20th_close_next_10th",
+  "version": "1",
+  "source_sha256": "977edcf4588aec2561f37e5ccb0d44dab88be66e441ab1e0557151accc319d38",
+  "description": "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed. The English twin of 支払_20日締め翌月10日払い.cal. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read",
+  "calendar": {
+    "name": "東京の営業日",
+    "alias": "tokyo",
+    "version": "1",
+    "file": "calendars/東京の営業日.cal",
+    "source_sha256": "d7b6134e23a8cb9f65c27840e79e6fd52fb0acfbb5babb93732c3504f9427406",
+    "offset": "+09:00",
+    "uses": [],
+    "closed": [
+      {
+        "weekly": [
+          "sat",
+          "sun"
+        ]
+      },
+      {
+        "table": "祝日"
+      },
+      {
+        "every": "12-29..01-03",
+        "name": "年末年始"
+      }
+    ],
+    "open": [],
+    "sources": [
+      {
+        "name": "祝日",
+        "kind": "file",
+        "file": "calendars/data/syukujitsu.csv",
+        "url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+        "sha256": "cec37a743c96995c",
+        "format": "csv",
+        "encoding": "shift_jis",
+        "covers": {
+          "from": "1955-01-01",
+          "to": "2027-12-31"
+        },
+        "rows": 1067
+      }
+    ],
+    "data_range": {
+      "from": "1955-01-01",
+      "to": "2027-12-31"
+    }
+  },
+  "sources": [],
+  "inputs": [
+    {
+      "name": "received",
+      "alias": "received",
+      "type": "date",
+      "range": {
+        "min": "2026-01-01",
+        "max": "2027-11-20"
+      }
+    }
+  ],
+  "dates": [
+    {
+      "name": "closing",
+      "alias": "closing",
+      "params": [
+        "received"
+      ]
+    },
+    {
+      "name": "payment",
+      "alias": "payment",
+      "params": [
+        "received"
+      ],
+      "at": {
+        "time": "09:00",
+        "offset": "+09:00"
+      }
+    }
+  ],
+  "claims": [
+    {
+      "name": "paid_on_a_business_day",
+      "text": "payment is open"
+    },
+    {
+      "name": "within_60_days_of_receipt",
+      "text": "payment <= received + 60 days"
+    },
+    {
+      "name": "later_receipt_later_payment",
+      "text": "payment is monotonic"
+    }
+  ],
+  "wire": {
+    "date": "YYYY-MM-DD",
+    "int": "a JSON number",
+    "at": "RFC 3339 in UTC, ending in Z, as dandori's timestamp",
+    "errors": [
+      "range",
+      "data",
+      "reject",
+      "date"
+    ]
+  },
+  "typescript": {
+    "file": "typescript/payment_20th_close_next_10th.ts",
+    "module": "payment_20th_close_next_10th",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "closing",
+        "signature": "export function closing(received: string): string",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "payment",
+        "signature": "export function payment(received: string): string",
+        "at_function": "payment_at",
+        "at_signature": "export function payment_at(received: string): string",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "string"
+          }
+        ]
+      }
+    ],
+    "is_open": "export function is_open(day: string): boolean",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "python": {
+    "file": "python/payment_20th_close_next_10th.py",
+    "module": "payment_20th_close_next_10th",
+    "date_type": "datetime.date",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "closing",
+        "signature": "def closing(received: date) -> date",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "date"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "payment",
+        "signature": "def payment(received: date) -> date",
+        "at_function": "payment_at",
+        "at_signature": "def payment_at(received: date) -> str",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "date"
+          }
+        ]
+      }
+    ],
+    "is_open": "def is_open(day: date) -> bool",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "go": {
+    "file": "go/payment20thclosenext10th/payment20thclosenext10th.go",
+    "module": "payment20thclosenext10th",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "Closing",
+        "signature": "func Closing(received Date) (Date, error)",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "Date"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "Payment",
+        "signature": "func Payment(received Date) (Date, error)",
+        "at_function": "PaymentAt",
+        "at_signature": "func PaymentAt(received Date) (string, error)",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "Date"
+          }
+        ]
+      }
+    ],
+    "is_open": "func IsOpen(day Date) (bool, error)",
+    "errors": [
+      "*KoyomiError"
+    ]
+  },
+  "rust": {
+    "file": "rust/payment_20th_close_next_10th.rs",
+    "module": "payment_20th_close_next_10th",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "closing",
+        "signature": "pub fn closing(received: Date) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "Date"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "payment",
+        "signature": "pub fn payment(received: Date) -> Result<Date, KoyomiError>",
+        "at_function": "payment_at",
+        "at_signature": "pub fn payment_at(received: Date) -> Result<String, KoyomiError>",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "Date"
+          }
+        ]
+      }
+    ],
+    "is_open": "pub fn is_open(day: Date) -> Result<bool, KoyomiError>",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "sql": {
+    "file": "sql/payment_20th_close_next_10th.sql",
+    "module": "payment_20th_close_next_10th",
+    "date_type": "date",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "closing",
+        "signature": "payment_20th_close_next_10th.closing(received date) RETURNS date",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "date"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "payment",
+        "signature": "payment_20th_close_next_10th.payment(received date) RETURNS date",
+        "at_function": "payment_at",
+        "at_signature": "payment_20th_close_next_10th.payment_at(received date) RETURNS timestamptz",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "date"
+          }
+        ]
+      }
+    ],
+    "is_open": "payment_20th_close_next_10th.is_open(day date) RETURNS boolean",
+    "errors": [
+      "SQLSTATE 22023"
+    ]
+  }
+}

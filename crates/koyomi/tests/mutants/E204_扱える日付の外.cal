@@ -1,0 +1,7 @@
+dates 期日(due) v1
+
+inputs
+  受領日(received) : date  range >=9999-11-01 <=9999-12-31
+
+date 期日(due) = 受領日
+  + 30 days

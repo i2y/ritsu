@@ -1,0 +1,366 @@
+//! `koyomi doc` (PLAN D.1, DESIGN 7): the page whoever approves a `.cal` reads.
+//!
+//! - Every example's page, in Markdown, in English and in Japanese, is its golden file in
+//!   `tests/golden/doc/`. `KOYOMI_BLESS=1 cargo test --test doc` writes them again; read the
+//!   diff.
+//! - The HTML loads nothing from anywhere; it marks exactly the input days the check found a
+//!   claim failing on; every holiday name on it is a row of the table the calendar read; and
+//!   every sentence it says an operation with comes from `paraphrase.rs`.
+//! - A file with an error other than a failing claim or example has no page.
+//! - In Chrome (`KOYOMI_CHROME`, else macOS's Google Chrome, else `google-chrome` or `chromium`
+//!   on the PATH), the pages
+//!   of the two examples that break a claim on purpose are drawn in the light and the dark
+//!   palette; `KOYOMI_BLESS=1` keeps the pictures in `docs/images/` for the READMEs.
+
+mod common;
+
+use common::TempDir;
+use koyomi::check::{Checked, check};
+use koyomi::doc::{self, Format, Options};
+use koyomi::i18n::Lang;
+use std::collections::BTreeSet;
+use std::process::Command;
+use std::time::Duration;
+
+const EXAMPLES: &[&str] = &[
+    "examples/calendars/東京の営業日.cal",
+    "examples/calendars/民法142条の休日.cal",
+    "examples/calendars/england_and_wales.cal",
+    "examples/支払_20日締め翌月10日払い.cal",
+    "examples/支払_月末締め翌々月末払い.cal",
+    "examples/民法の期間.cal",
+    "examples/民法の期間_読み方の比較.cal",
+    "examples/締め日と支払日を受け取る.cal",
+    "examples/net30.cal",
+    "examples/payment_20th_close_next_10th.cal",
+    "examples/eom_close_two_months_later.cal",
+];
+
+fn page(path: &str, lang: Lang, f: Format) -> String {
+    let o = check(path).unwrap();
+    let p = doc::page(&o, lang, &Options::default()).unwrap_or_else(|ds| panic!("{path} has no page: {:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>()));
+    doc::render(&p, f)
+}
+
+fn stem(path: &str) -> String {
+    std::path::Path::new(path).file_stem().unwrap().to_string_lossy().to_string()
+}
+
+#[test]
+fn every_example_has_its_golden_page() {
+    let bless = std::env::var("KOYOMI_BLESS").is_ok();
+    std::fs::create_dir_all("tests/golden/doc").unwrap();
+    let mut failures = Vec::new();
+    for p in EXAMPLES {
+        for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
+            let text = page(p, lang, Format::Markdown);
+            let golden = format!("tests/golden/doc/{}.{tag}.md", stem(p));
+            if bless {
+                std::fs::write(&golden, &text).unwrap();
+                continue;
+            }
+            let want = std::fs::read_to_string(&golden).unwrap_or_default();
+            if want != text {
+                let line = want.lines().zip(text.lines()).position(|(a, b)| a != b).unwrap_or(want.lines().count().min(text.lines().count()));
+                failures.push(format!("{p} ({tag}) differs from {golden} at line {}:\n--- want\n{}\n--- got\n{}", line + 1, want.lines().nth(line).unwrap_or(""), text.lines().nth(line).unwrap_or("")));
+            }
+        }
+    }
+    // No golden file is left without its example.
+    for e in std::fs::read_dir("tests/golden/doc").unwrap() {
+        let n = e.unwrap().file_name().to_string_lossy().to_string();
+        let s = n.trim_end_matches(".en.md").trim_end_matches(".ja.md");
+        assert!(EXAMPLES.iter().any(|p| stem(p) == s), "tests/golden/doc/{n} has no example");
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The values of `attr="…"` on every tag named `tag`.
+fn attrs<'a>(html: &'a str, tag: &str, attr: &str) -> Vec<&'a str> {
+    let open = format!("<{tag} ");
+    let key = format!("{attr}=\"");
+    let mut out = Vec::new();
+    let mut rest = html;
+    while let Some(i) = rest.find(&open) {
+        let t = &rest[i..];
+        let end = t.find('>').unwrap();
+        let head = &t[..end];
+        if let Some(j) = head.find(&key) {
+            let v = &head[j + key.len()..];
+            out.push(&v[..v.find('"').unwrap()]);
+        }
+        rest = &t[end..];
+    }
+    out
+}
+
+/// The texts of every `<span class="<class>">…</span>`.
+fn spans(html: &str, class: &str) -> Vec<String> {
+    let open = format!("<span class=\"{class}\">");
+    html.split(&open).skip(1).map(|s| unescape(&s[..s.find("</span>").unwrap()])).collect()
+}
+
+fn unescape(s: &str) -> String {
+    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+}
+
+#[test]
+fn the_html_loads_nothing_and_shows_what_the_check_found() {
+    let mut looked = 0;
+    for p in EXAMPLES {
+        let o = check(p).unwrap();
+        for lang in [Lang::En, Lang::Ja] {
+            let html = page(p, lang, Format::Html);
+            // One file: no script, no stylesheet, no font, no picture from anywhere.
+            for bad in ["<script", "<link", " src=", "@import", "url(", "<img", "<iframe"] {
+                assert!(!html.contains(bad), "{p}: the HTML has {bad}");
+            }
+            assert!(html.starts_with("<!doctype html>\n") && html.ends_with("</html>\n"), "{p}");
+            let cells = attrs(&html, "td", "class");
+            let fails = cells.iter().filter(|c| c.split(' ').any(|x| x == "fail")).count();
+            let mut want: BTreeSet<i32> = BTreeSet::new();
+            let mut names: BTreeSet<String> = BTreeSet::new();
+            let mut sentences: BTreeSet<String> = BTreeSet::new();
+            match o.checked.as_ref().unwrap() {
+                Checked::Dates(m, rep) => {
+                    for cr in &rep.claims {
+                        for (_, a, b) in &cr.runs {
+                            want.extend(a.0..=b.0);
+                        }
+                    }
+                    if let Some(c) = &m.cal {
+                        names.extend(c.tables.iter().flat_map(|t| t.rows.iter().map(|r| r.name.clone())));
+                        for d in &m.dates {
+                            if let Some((at, _)) = d.at {
+                                sentences.insert(koyomi::paraphrase::at_sentence(at, c.offset_text().as_deref()).get(lang).to_string());
+                            }
+                        }
+                    }
+                    for d in &m.dates {
+                        for op in &d.ops {
+                            sentences.insert(koyomi::paraphrase::sentence(m, &op.op).get(lang).to_string());
+                        }
+                    }
+                }
+                Checked::Calendar(c) => names.extend(c.tables.iter().flat_map(|t| t.rows.iter().map(|r| r.name.clone()))),
+            }
+            assert_eq!(fails, want.len(), "{p} ({lang:?}): the days marked failing are not the days the check found failing");
+            for n in spans(&html, "hol") {
+                assert!(names.contains(&n), "{p}: the holiday {n} is not a row of the table");
+            }
+            let said = spans(&html, "say");
+            if matches!(o.checked, Some(Checked::Dates(..))) {
+                assert!(!said.is_empty(), "{p}: no operation is said in words");
+            }
+            for s in said {
+                let lower: String = s.chars().take(1).flat_map(char::to_lowercase).chain(s.chars().skip(1)).collect();
+                assert!(sentences.contains(&s) || sentences.contains(&lower), "{p}: {s:?} is not a sentence of paraphrase.rs");
+            }
+            looked += 1;
+        }
+    }
+    assert_eq!(looked, EXAMPLES.len() * 2);
+    // The examples that break a claim on purpose are marked where the check says.
+    let html = page("examples/支払_月末締め翌々月末払い.cal", Lang::Ja, Format::Html);
+    assert_eq!(attrs(&html, "td", "class").iter().filter(|c| c.contains("fail")).count(), 648);
+    assert!(html.contains("data-day=\"2026-05-03\" title=\"2026-05-03（日）\n休み（日曜、憲法記念日）\n条件「受領から60日以内」が成り立たない\""), "the title of a failing holiday");
+}
+
+fn koyomi(args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).env_remove("KOYOMI_LANG").output().unwrap()
+}
+
+#[test]
+fn the_command() {
+    // A page on standard output, Markdown unless asked otherwise.
+    let o = koyomi(&["doc", "examples/支払_20日締め翌月10日払い.cal"]);
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(String::from_utf8(o.stdout).unwrap(), page("examples/支払_20日締め翌月10日払い.cal", Lang::En, Format::Markdown));
+    let o = koyomi(&["doc", "examples/支払_20日締め翌月10日払い.cal", "--format", "html", "--lang", "ja"]);
+    assert_eq!(String::from_utf8(o.stdout).unwrap(), page("examples/支払_20日締め翌月10日払い.cal", Lang::Ja, Format::Html));
+    // A claim that fails: the page shows it, and doc has done its job.
+    let o = koyomi(&["doc", "examples/支払_月末締め翌々月末払い.cal"]);
+    assert_eq!(o.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&o.stdout).contains("> [!WARNING]"));
+    // Any other error: no page, the diagnostics on standard error.
+    for (f, code) in [("tests/mutants/E201_無い日の扱いが無い.cal", "E201"), ("tests/mutants/E203_表の外.cal", "E203"), ("tests/mutants/E101_写しが無い.cal", "E101")] {
+        let o = koyomi(&["doc", f]);
+        assert_eq!(o.status.code(), Some(1), "{f}");
+        assert!(o.stdout.is_empty(), "{f} has no page");
+        assert!(String::from_utf8_lossy(&o.stderr).contains(&format!("error[{code}]")), "{f}");
+    }
+    // A page for a failing example row too.
+    assert_eq!(koyomi(&["doc", "tests/mutants/E303_例が違う.cal"]).status.code(), Some(0));
+    // The months.
+    let o = koyomi(&["doc", "examples/calendars/東京の営業日.cal", "--months", "2026-04..2027-03", "--lang", "ja"]);
+    let md = String::from_utf8(o.stdout).unwrap();
+    assert!(md.contains("**2026 年 4 月**") && md.contains("**2027 年 3 月**") && !md.contains("**2026 年 3 月**") && !md.contains("**2027 年 4 月**"));
+    for bad in ["2026-13..2027-01", "2027-01..2026-12", "2026-1..2026-12", "2026-01", "2026-01..2026-12x"] {
+        let o = koyomi(&["doc", "examples/calendars/東京の営業日.cal", "--months", bad]);
+        assert_eq!(o.status.code(), Some(2), "--months {bad}");
+    }
+    assert_eq!(koyomi(&["doc", "examples/net30.cal", "--format", "pdf"]).status.code(), Some(2));
+    assert_eq!(koyomi(&["doc"]).status.code(), Some(2));
+    assert_eq!(koyomi(&["doc", "examples/net30.cal", "examples/net30.cal"]).status.code(), Some(2));
+    // A calendar without a table knows every day, and shows months only when asked.
+    let o = koyomi(&["doc", "tests/fixtures/calendars/土日.cal"]);
+    assert_eq!(o.status.code(), Some(0));
+    let md = String::from_utf8(o.stdout).unwrap();
+    assert!(md.contains("--months 2026-01..2026-12") && !md.contains("| Mon |"), "{md}");
+    let o = koyomi(&["doc", "tests/fixtures/calendars/土日.cal", "--months", "2026-10..2026-10"]);
+    assert!(String::from_utf8(o.stdout).unwrap().contains("**October 2026**"));
+}
+
+#[test]
+fn what_the_pages_say() {
+    // DESIGN 7: the calendar page counts the business days and finds the longest run of
+    // closed days in the months it shows.
+    let md = page("examples/calendars/東京の営業日.cal", Lang::Ja, Format::Markdown);
+    assert!(md.contains("| 2026 | 240 | 125 |"), "{md}");
+    assert!(md.contains("2026-01〜2027-12 でいちばん長い連休は 2026-12-29〜2027-01-03 の 6 日です。"));
+    // The article a date cites, quoted from its copy, with the version.
+    let md = page("examples/民法の期間.cal", Lang::Ja, Format::Markdown);
+    assert!(md.contains("> **民法 第143条（e-Gov 法令検索、2026-10-01 時点、版 129AC0000000089_20260624_508AC0000000045）**"));
+    assert!(md.contains("> ２　週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。"));
+    // The other ways of handling a missing day, counted on every input (DESIGN 1.7).
+    let md = page("examples/民法の期間.cal", Lang::En, Format::Markdown);
+    assert!(md.contains("With `else end_of_month` instead, 満了日 would differ on 57 of the 4,380 input combinations."), "{md}");
+    // net30 runs over 36 months; only those with an edge case are shown.
+    let md = page("examples/net30.cal", Lang::En, Format::Markdown);
+    assert!(md.contains("fall in the 36 months of 2026-01..2028-12"), "{md}");
+}
+
+/// Chrome: `KOYOMI_CHROME`, else where macOS installs Google Chrome, else a Chrome or a Chromium
+/// on the PATH (the order dandori and chobo look in).
+fn chrome() -> Option<String> {
+    if let Ok(c) = std::env::var("KOYOMI_CHROME")
+        && !c.is_empty()
+    {
+        return Some(c);
+    }
+    let mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    if std::path::Path::new(mac).is_file() {
+        return Some(mac.to_string());
+    }
+    ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"].iter().find(|c| common::on_path(c)).map(|c| c.to_string())
+}
+
+/// The width and the height of a PNG, from its header.
+fn png_size(b: &[u8]) -> Option<(u32, u32)> {
+    if b.len() < 24 || &b[..8] != b"\x89PNG\r\n\x1a\n" || &b[12..16] != b"IHDR" {
+        return None;
+    }
+    Some((u32::from_be_bytes(b[16..20].try_into().ok()?), u32::from_be_bytes(b[20..24].try_into().ok()?)))
+}
+
+/// Run Chrome until it has written `png`, then stop it: headless Chrome does not always end
+/// by itself after a screenshot (PLAN 0.2). A minute at most. What it said, when it fails.
+fn shoot(cmd: &mut Command, png: &std::path::Path) -> String {
+    use std::process::Stdio;
+    let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().expect("could not run Chrome");
+    let start = std::time::Instant::now();
+    let mut last = 0u64;
+    loop {
+        std::thread::sleep(Duration::from_millis(200));
+        let size = std::fs::metadata(png).map(|m| m.len()).unwrap_or(0);
+        if size > 0 && size == last {
+            break;
+        }
+        last = size;
+        if let Ok(Some(_)) = child.try_wait() {
+            break;
+        }
+        if start.elapsed() > Duration::from_secs(60) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return "Chrome took more than a minute".into();
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    String::new()
+}
+
+/// What the READMEs show: the top of a page, in the light palette, and its month tables, in
+/// the dark one. The page is the one `koyomi doc --format html` writes, with `data-theme` on
+/// its root to choose the palette and, for the month tables, everything but them hidden.
+struct Shot {
+    path: &'static str,
+    lang: Lang,
+    name: &'static str,
+    theme: &'static str,
+    size: (u32, u32),
+    css: &'static str,
+}
+
+/// What hides everything of a page but its month tables.
+const MONTHS_ONLY: &str = "header,.alert,section:not(:last-of-type),section:last-of-type>h2,section:last-of-type>p,section:last-of-type>ul:not(.legend),section:last-of-type>h3:not(:last-of-type){display:none}";
+
+const SHOTS: &[Shot] = &[
+    Shot { path: "examples/eom_close_two_months_later.cal", lang: Lang::En, name: "doc-top.en.png", theme: "light", size: (1100, 1250), css: "" },
+    Shot { path: "examples/eom_close_two_months_later.cal", lang: Lang::En, name: "doc-months.en.png", theme: "dark", size: (1100, 1350), css: MONTHS_ONLY },
+    Shot { path: "examples/支払_月末締め翌々月末払い.cal", lang: Lang::Ja, name: "doc-top.ja.png", theme: "light", size: (1100, 1250), css: "" },
+    Shot { path: "examples/支払_月末締め翌々月末払い.cal", lang: Lang::Ja, name: "doc-months.ja.png", theme: "dark", size: (1100, 1350), css: MONTHS_ONLY },
+];
+
+#[test]
+fn the_pages_in_chrome() {
+    let Some(chrome) = chrome() else {
+        println!("SKIP: Chrome is not found; set KOYOMI_CHROME to draw the pages");
+        return;
+    };
+    let bless = std::env::var("KOYOMI_BLESS").is_ok();
+    let dir = TempDir::new("doc-chrome");
+    let mut sizes = Vec::new();
+    std::thread::scope(|s| {
+        let hs: Vec<_> = SHOTS
+            .iter()
+            .enumerate()
+            .map(|(i, Shot { path: p, lang, name, theme, size: (w, h), css })| {
+                let chrome = chrome.clone();
+                let dir = dir.path().to_path_buf();
+                s.spawn(move || {
+                    let html = page(p, *lang, Format::Html)
+                        .replacen(&format!("<html lang=\"{}\">", lang.code()), &format!("<html lang=\"{}\" data-theme=\"{theme}\">", lang.code()), 1)
+                        .replacen("</style>", &format!("{css}</style>"), 1);
+                    let at = dir.join(format!("{i}.html"));
+                    std::fs::write(&at, html).unwrap();
+                    let png = dir.join(name);
+                    let profile = dir.join(format!("profile-{i}"));
+                    let err = shoot(
+                        Command::new(&chrome).args([
+                            "--headless=new",
+                            "--disable-gpu",
+                            "--no-first-run",
+                            "--no-default-browser-check",
+                            "--hide-scrollbars",
+                            &format!("--user-data-dir={}", profile.display()),
+                            &format!("--window-size={w},{h}"),
+                            &format!("--screenshot={}", png.display()),
+                            &format!("file://{}", at.display()),
+                        ]),
+                        &png,
+                    );
+                    let bytes = std::fs::read(&png).unwrap_or_else(|_| panic!("Chrome drew no picture of {p}: {err}"));
+                    (*name, bytes)
+                })
+            })
+            .collect();
+        for h in hs {
+            sizes.push(h.join().unwrap());
+        }
+    });
+    for ((name, bytes), Shot { size: (w, h), .. }) in sizes.iter().zip(SHOTS) {
+        assert_eq!(png_size(bytes), Some((*w, *h)), "{name} is a {w}x{h} PNG");
+        assert!(bytes.len() > 50_000, "{name} is {} bytes: did the page draw?", bytes.len());
+        if bless {
+            std::fs::create_dir_all("docs/images").unwrap();
+            std::fs::write(format!("docs/images/{name}"), bytes).unwrap();
+        }
+        println!("drawn: {name} ({} bytes)", bytes.len());
+    }
+    // The pictures the READMEs show are there.
+    for Shot { name, .. } in SHOTS {
+        assert!(std::path::Path::new(&format!("docs/images/{name}")).is_file(), "docs/images/{name} is missing; KOYOMI_BLESS=1 cargo test --test doc draws it");
+    }
+}

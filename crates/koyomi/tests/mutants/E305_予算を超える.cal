@@ -1,0 +1,15 @@
+dates 百年分(a_hundred_years) v1
+use calendar "../fixtures/calendars/土日.cal"
+
+inputs
+  受領日(received)        : date  range >=1926-01-01 <=2025-12-31
+  締め日(closing_day)     : int   range >=1 <=31
+  支払の月(payment_month) : int   range >=1 <=12
+  支払の日(payment_day)   : int   range >=1 <=28
+
+date 締め(closing) = 受領日
+  close day 締め日 else end_of_month
+
+date 支払(payment) = 締め
+  day 支払の日 of month +支払の月
+  roll preceding

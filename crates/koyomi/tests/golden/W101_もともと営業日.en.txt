@@ -1,0 +1,4 @@
+warning[W101]: tests/mutants/W101_もともと営業日.cal:11:1: 2026-12-28 Mon written under `open` is a business day anyway
+    11 | open 2026-12-28 "臨時営業"
+  = No `closed` line names it. Unless the date is a slip, the line is not needed.
+tests/mutants/W101_もともと営業日.cal: ok — calendar 東京の営業日: table 祝日 1,067 rows, data range 1955-01-01..2027-12-31

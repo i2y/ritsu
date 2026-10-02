@@ -1,0 +1,9 @@
+calendar 会社の休み(company) v1
+offset +09:00
+
+source 休業日 = file "../fixtures/data/gap.csv" sha256:bec0e9a9279b388d
+  format csv
+  covers listed years
+
+closed weekly sat, sun
+closed 休業日

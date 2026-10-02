@@ -1,0 +1,4 @@
+/target
+/generated
+/tools/node_modules
+/tools/.venv
