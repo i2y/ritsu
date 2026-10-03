@@ -1,0 +1,2 @@
+エラー[E017]: tests/fixtures/service_unknown.flow:1:36: `shop` にサービス `FulfilmentService` はありません（サービスは FulfillmentService）
+     1 | workflow fulfillment v1 implements shop.FulfilmentService

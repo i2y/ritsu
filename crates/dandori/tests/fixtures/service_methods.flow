@@ -1,0 +1,20 @@
+workflow methods v1 implements shop.MethodsService
+description "E017: the methods of the service say wrongly how they reach the workflow"
+
+use proto shop from "services/methods.proto"
+
+record Delivery
+  where : string
+
+record Packing
+  boxes : int
+
+task delivered() -> Delivery
+  event
+
+task pack() -> Packing
+  callback
+
+flow
+  let d = delivered()
+  let p = pack()

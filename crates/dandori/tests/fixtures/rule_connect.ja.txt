@@ -1,0 +1,6 @@
+エラー[E007]: tests/fixtures/rule_connect.flow:6:3: この規則の呼び出し方はもう書かれています（5 行目）。規則の呼び出し方は `lambda` か `connect` のどちらか一つです
+     6 |   connect "https://rules.example.com"
+エラー[E007]: tests/fixtures/rule_connect.flow:9:3: `connection` は `connect` で呼ぶ規則に書きます。`lambda` の規則は、Step Functions が接続なしで呼びます
+     9 |   connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+エラー[E007]: tests/fixtures/rule_connect.flow:12:3: `connect` には、規則のサービスの場所を http:// か https:// で書きます
+    12 |   connect "ftp://rules.example.com"

@@ -1,0 +1,2 @@
+error[E001]: tests/fixtures/range_syntax.flow:4:35: a bound of a range is a whole number in the unit of the type, written without the unit: `0`, not `0円`
+     4 |   額 : money[円, incl_tax]  range >=0円 <=100万円

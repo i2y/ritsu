@@ -1,0 +1,16 @@
+workflow poll_forever v1
+
+record 状況
+  done : bool
+
+task look() -> 状況
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:look"
+  idempotent
+
+flow
+  repeat at most 5000 times
+    wait 1 minute
+    let s = look()
+    match s.done
+      true => break
+      false => pass

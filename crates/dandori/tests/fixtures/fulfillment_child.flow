@@ -1,0 +1,24 @@
+workflow fulfillment_child v1
+description "A draft of the fulfillment whose task for the delivery does not match arrange_delivery.flow, the child it runs"
+
+enum Carrier = standard | next_day | drone
+
+record Delivery
+  tracking_number : int
+
+inputs
+  order_id  : string
+  carrier   : Carrier
+  recipient : string?
+  extra     : json
+
+outputs
+  tracking_number : int
+
+task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery
+  flow "../../examples/fulfillment/arrange_delivery.flow"
+  errors NoVan
+
+flow
+  let delivery = arrange_delivery(order_id: order_id, carrier: carrier, recipient: recipient, extra: extra)
+  succeed tracking_number = delivery.tracking_number

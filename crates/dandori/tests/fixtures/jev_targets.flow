@@ -1,0 +1,25 @@
+workflow jev_targets v1
+description "check には通るが、Step Functions には出せないもの：接続の無い Jev と、HTTP Task の 60 秒を超える timeout の Jev"
+
+enum 種類 = 返品 | 配送 | その他
+
+inputs
+  本文 : string
+
+outputs
+  種類 : 種類
+
+task 選ぶ(本文: string) -> 種類
+  jev "この問い合わせの種類はどれか"
+  model "jev-1.13.0"
+
+task 待って選ぶ(本文: string) -> 種類
+  jev "この問い合わせの種類はどれか"
+  model "jev-1.13.0"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/typesafe/1"
+  timeout 2 minutes
+
+flow
+  let a = 選ぶ(本文: 本文)
+  let b = 待って選ぶ(本文: 本文)
+  succeed 種類 = b

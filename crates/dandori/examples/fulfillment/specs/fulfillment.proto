@@ -1,0 +1,63 @@
+// The service the fulfillment of an order implements: a run starts with the order, and the packing
+// crew answers its callback with how many boxes the order went into. Every English version of the
+// example says so on its `workflow` line (`implements shop.FulfillmentService`), and the checker
+// holds it to this file. The messages are named as buf's lint wants, a request and a response of
+// its own for each method. The order's amount is an int32 here, and a money[JPY, incl_tax] in the
+// flow, which has the unit: the two are held to each other by their shape.
+syntax = "proto3";
+
+package shop.v1;
+
+import "dandori/v1/options.proto";
+import "google/protobuf/struct.proto";
+import "warehouse.proto";
+
+service FulfillmentService {
+  option (dandori.v1.workflow) = {name: "fulfillment", version: 1};
+
+  // Reserve the lines of an order, arrange the delivery, and tell the customer once it is packed.
+  rpc Fulfill(FulfillRequest) returns (FulfillResponse) {
+    option (dandori.v1.start) = {fails: ["OutOfStock", "DeliveryFailed", "PackingLate"]};
+  }
+
+  // The packing crew's answer to the callback of `wait_for_packing`.
+  rpc AnswerPacking(AnswerPackingRequest) returns (AnswerPackingResponse) {
+    option (dandori.v1.answer) = {task: "wait_for_packing"};
+  }
+}
+
+message FulfillRequest {
+  Order order = 1;
+}
+
+message Order {
+  string id = 1;
+  bool member = 2;
+  // in yen, tax included
+  int32 amount = 3;
+  repeated Line lines = 4;
+  Gift gift = 5;
+  // whatever the shop hands on to the delivery, as it is
+  google.protobuf.Value extra = 6;
+}
+
+message Line {
+  string sku = 1;
+  int32 quantity = 2;
+}
+
+message Gift {
+  string recipient = 1;
+  optional string message = 2;
+}
+
+message FulfillResponse {
+  repeated warehouse.v1.ReserveResponse reservations = 1;
+  string tracking_number = 2 [json_name = "tracking_number"];
+}
+
+message AnswerPackingRequest {
+  int32 boxes = 1;
+}
+
+message AnswerPackingResponse {}

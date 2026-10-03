@@ -1,0 +1,10 @@
+エラー[E007]: tests/fixtures/bindings.flow:9:10: AWS の API のエラーは、ステータスではなく `重複 = ConditionalCheckFailedException` のように例外の名前で書きます
+     9 |   errors 重複 = 409
+エラー[E007]: tests/fixtures/bindings.flow:10:3: AWS の API は冪等キーを自分の引数の一つで受け取ります。`key ClientToken` のように `key <引数>` と書いてください
+    10 |   key
+エラー[E007]: tests/fixtures/bindings.flow:15:3: `callback` のタスクがトークンを渡せるのは `lambda` か `aws sqs:sendMessage` です
+    15 |   callback
+エラー[E007]: tests/fixtures/bindings.flow:18:3: Step Functions の AWS SDK 統合に、サービス `dynamo` はありません。`dynamodb` や `secretsmanager` のように、Task の Resource での名前で書いてください
+    18 |   aws dynamo:putItem
+エラー[E007]: tests/fixtures/bindings.flow:22:3: 子ワークフローはプラットフォームが呼び出しごとに一度だけ始めるので、`key` は使えません
+    22 |   key

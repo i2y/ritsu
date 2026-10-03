@@ -1,0 +1,808 @@
+{
+  "events": [
+    {
+      "eventId": "1",
+      "eventTime": "2026-10-01T15:32:32.363195Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED",
+      "taskId": "1049019",
+      "workflowExecutionStartedEventAttributes": {
+        "workflowType": {
+          "name": "引当と発送_v1"
+        },
+        "taskQueue": {
+          "name": "引当と発送_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyLms6jmlociOnsiaWQiOiJpZC0xIiwi5Lya5ZOhIjp0cnVlLCLmmI7ntLAiOlt7InNrdSI6InNrdS00Iiwi5pWwIjoxMDA1fSx7InNrdSI6InNrdS02Iiwi5pWwIjoxMDA3fV0sIui0iOOCiueJqSI6eyLjg6Hjg4Pjgrvjg7zjgrgiOiJ2YWx1ZS0xMSIsIuWum+WQjSI6IuWum+WQjS0xMCJ9LCLph5HpoY0iOjEwMDJ9fQ=="
+            },
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJhdCI6MSwiaXRlbXMiOlt7ImlkIjpudWxsLCJza3UiOiJza3UtOCIsInN0b2NrIjoic2VjdXJlZCJ9LHsiaWQiOm51bGwsInNrdSI6InNrdS05Iiwic3RvY2siOiJzZWN1cmVkIn1dLCJyb3VuZCI6MSwidmFycyI6eyLkuIDjgaQiOnsiaWQiOm51bGwsInNrdSI6InNrdS04Iiwic3RvY2siOiJzZWN1cmVkIn0sIuS4gOiogCI6bnVsbCwi5Yik5a6aIjp7IuS+vyI6IumAmuW4uOS+vyIsIuaApeOBjiI6dHJ1ZX0sIuWum+WQjSI6bnVsbCwi566xIjpudWxsLCLntZDmnpwiOlt7ImlkIjpudWxsLCJza3UiOiJza3UtOCIsInN0b2NrIjoic2VjdXJlZCJ9LHsiaWQiOm51bGwsInNrdSI6InNrdS05Iiwic3RvY2siOiJzZWN1cmVkIn1dLCLotIjjgorniakiOm51bGwsIui2s+OCiuOBquOBhCI6ZmFsc2UsIumFjemAgSI6bnVsbH19"
+            }
+          ]
+        },
+        "workflowExecutionTimeout": "0s",
+        "workflowRunTimeout": "0s",
+        "workflowTaskTimeout": "10s",
+        "continuedExecutionRunId": "01a0f818-84fe-793b-b24b-0b96856a6b19",
+        "initiator": "CONTINUE_AS_NEW_INITIATOR_WORKFLOW",
+        "originalExecutionRunId": "a444c176-8704-4960-a7da-6cb1ed1ded18",
+        "firstExecutionRunId": "01a0f818-84fe-793b-b24b-0b96856a6b19",
+        "attempt": 1,
+        "firstWorkflowTaskBackoff": "0.251292s",
+        "memo": {
+          "fields": {
+            "dandori.cases": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "dHJ1ZQ=="
+            }
+          }
+        },
+        "prevAutoResetPoints": {
+          "points": [
+            {
+              "buildId": "a4189085cd6035c9fb5319c3e7b04c00",
+              "runId": "01a0f818-84fe-793b-b24b-0b96856a6b19",
+              "firstWorkflowTaskCompletedId": "4",
+              "createTime": "2026-10-01T15:32:32.007947Z",
+              "expireTime": "2026-10-02T15:32:32.363195Z",
+              "resettable": true
+            }
+          ]
+        },
+        "header": {},
+        "workflowId": "run-30"
+      }
+    },
+    {
+      "eventId": "2",
+      "eventTime": "2026-10-01T15:32:32.660462Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1049388",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "引当と発送_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "3",
+      "eventTime": "2026-10-01T15:32:32.959836Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1050057",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "2",
+        "identity": "87200@localhost@",
+        "requestId": "775dcef5-64c2-4243-9413-7ddf605e6580",
+        "historySizeBytes": "1093",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "4",
+      "eventTime": "2026-10-01T15:32:32.961456Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1050071",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "2",
+        "startedEventId": "3",
+        "identity": "87200@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {
+          "langUsedFlags": [
+            3,
+            4
+          ],
+          "sdkName": "temporal-go",
+          "sdkVersion": "1.49.0"
+        },
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "5",
+      "eventTime": "2026-10-01T15:32:32.961479Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1050072",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "5",
+        "activityType": {
+          "name": "記録する"
+        },
+        "taskQueue": {
+          "name": "引当と発送_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyLku5jluK8iOnsi44Oh44OD44K744O844K4IjoidmFsdWUtMTEiLCLlrpvlkI0iOiLlrpvlkI0tMTAifSwi5rOo5paHSUQiOiJpZC0xIn0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "20s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "4",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "6",
+      "eventTime": "2026-10-01T15:32:32.961492Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1050077",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "5",
+        "identity": "87200@localhost@",
+        "requestId": "3e4fc5eb-ada1-446b-ae45-763b88e11e61",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "7",
+      "eventTime": "2026-10-01T15:32:32.962970Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1050078",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "bnVsbA=="
+            }
+          ]
+        },
+        "scheduledEventId": "5",
+        "startedEventId": "6",
+        "identity": "87200@localhost@"
+      }
+    },
+    {
+      "eventId": "8",
+      "eventTime": "2026-10-01T15:32:32.962982Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1050079",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:3aea742d-0d07-4866-a655-38654aea68c7",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "引当と発送_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "9",
+      "eventTime": "2026-10-01T15:32:32.981237Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1050149",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "8",
+        "identity": "87200@localhost@",
+        "requestId": "254615c4-0296-4c93-82fd-366ddaa2bd41",
+        "historySizeBytes": "1896",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "10",
+      "eventTime": "2026-10-01T15:32:32.987217Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1050209",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "8",
+        "startedEventId": "9",
+        "identity": "87200@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {
+          "langUsedFlags": [
+            7
+          ]
+        },
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "11",
+      "eventTime": "2026-10-01T15:32:32.987483Z",
+      "eventType": "EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED",
+      "taskId": "1050210",
+      "startChildWorkflowExecutionInitiatedEventAttributes": {
+        "namespace": "default",
+        "namespaceId": "01a0f818-8351-7461-b3a9-2eaefa549605",
+        "workflowId": "run-30/23/1",
+        "workflowType": {
+          "name": "配送の手配_v1"
+        },
+        "taskQueue": {
+          "name": "配送の手配_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyLku5jluK8iOm51bGwsIuS+vyI6IumAmuW4uOS+vyIsIuWum+WQjSI6IuWum+WQjS0xMCIsIuazqOaWh0lEIjoiaWQtMSJ9"
+            }
+          ]
+        },
+        "workflowExecutionTimeout": "0s",
+        "workflowRunTimeout": "0s",
+        "workflowTaskTimeout": "10s",
+        "parentClosePolicy": "PARENT_CLOSE_POLICY_TERMINATE",
+        "workflowTaskCompletedEventId": "10",
+        "workflowIdReusePolicy": "WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE",
+        "header": {}
+      }
+    },
+    {
+      "eventId": "12",
+      "eventTime": "2026-10-01T15:32:33.061539Z",
+      "eventType": "EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_STARTED",
+      "taskId": "1050381",
+      "childWorkflowExecutionStartedEventAttributes": {
+        "namespace": "default",
+        "namespaceId": "01a0f818-8351-7461-b3a9-2eaefa549605",
+        "initiatedEventId": "11",
+        "workflowExecution": {
+          "workflowId": "run-30/23/1",
+          "runId": "01a0f818-8a9c-7e96-8e36-3f7a87c20837"
+        },
+        "workflowType": {
+          "name": "配送の手配_v1"
+        },
+        "header": {}
+      }
+    },
+    {
+      "eventId": "13",
+      "eventTime": "2026-10-01T15:32:33.061550Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1050382",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:3aea742d-0d07-4866-a655-38654aea68c7",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "引当と発送_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "14",
+      "eventTime": "2026-10-01T15:32:33.223476Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1050668",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "13",
+        "identity": "87200@localhost@",
+        "requestId": "33c470f8-f1cb-4617-abca-56cf3fea5ebd",
+        "historySizeBytes": "2642",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "15",
+      "eventTime": "2026-10-01T15:32:33.332775Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1050704",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "13",
+        "startedEventId": "14",
+        "identity": "87200@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "16",
+      "eventTime": "2026-10-01T15:32:33.466Z",
+      "eventType": "EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_FAILED",
+      "taskId": "1051088",
+      "childWorkflowExecutionFailedEventAttributes": {
+        "failure": {
+          "message": "scripted",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "翌日便の空きなし",
+            "nonRetryable": true
+          }
+        },
+        "namespace": "default",
+        "namespaceId": "01a0f818-8351-7461-b3a9-2eaefa549605",
+        "workflowExecution": {
+          "workflowId": "run-30/23/1",
+          "runId": "01a0f818-8a9c-7e96-8e36-3f7a87c20837"
+        },
+        "workflowType": {
+          "name": "配送の手配_v1"
+        },
+        "initiatedEventId": "11",
+        "startedEventId": "12",
+        "retryState": "RETRY_STATE_RETRY_POLICY_NOT_SET"
+      }
+    },
+    {
+      "eventId": "17",
+      "eventTime": "2026-10-01T15:32:33.466006Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1051089",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:3aea742d-0d07-4866-a655-38654aea68c7",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "引当と発送_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "18",
+      "eventTime": "2026-10-01T15:32:33.528885Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1051307",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "17",
+        "identity": "87200@localhost@",
+        "requestId": "de13e838-bbc9-41a9-9c97-4a75f980cc86",
+        "historySizeBytes": "3183",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "19",
+      "eventTime": "2026-10-01T15:32:33.538458Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1051360",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "17",
+        "startedEventId": "18",
+        "identity": "87200@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "20",
+      "eventTime": "2026-10-01T15:32:33.538557Z",
+      "eventType": "EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED",
+      "taskId": "1051361",
+      "startChildWorkflowExecutionInitiatedEventAttributes": {
+        "namespace": "default",
+        "namespaceId": "01a0f818-8351-7461-b3a9-2eaefa549605",
+        "workflowId": "run-30/24/1",
+        "workflowType": {
+          "name": "配送の手配_v1"
+        },
+        "taskQueue": {
+          "name": "配送の手配_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyLku5jluK8iOm51bGwsIuS+vyI6IumAmuW4uOS+vyIsIuWum+WQjSI6IuWum+WQjS0xMCIsIuazqOaWh0lEIjoiaWQtMSJ9"
+            }
+          ]
+        },
+        "workflowExecutionTimeout": "0s",
+        "workflowRunTimeout": "0s",
+        "workflowTaskTimeout": "10s",
+        "parentClosePolicy": "PARENT_CLOSE_POLICY_TERMINATE",
+        "workflowTaskCompletedEventId": "19",
+        "workflowIdReusePolicy": "WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE",
+        "header": {}
+      }
+    },
+    {
+      "eventId": "21",
+      "eventTime": "2026-10-01T15:32:33.569989Z",
+      "eventType": "EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_STARTED",
+      "taskId": "1051493",
+      "childWorkflowExecutionStartedEventAttributes": {
+        "namespace": "default",
+        "namespaceId": "01a0f818-8351-7461-b3a9-2eaefa549605",
+        "initiatedEventId": "20",
+        "workflowExecution": {
+          "workflowId": "run-30/24/1",
+          "runId": "01a0f818-8c9e-7338-9a4e-64893c0e55f0"
+        },
+        "workflowType": {
+          "name": "配送の手配_v1"
+        },
+        "header": {}
+      }
+    },
+    {
+      "eventId": "22",
+      "eventTime": "2026-10-01T15:32:33.570Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1051494",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:3aea742d-0d07-4866-a655-38654aea68c7",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "引当と発送_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "23",
+      "eventTime": "2026-10-01T15:32:33.642462Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1051709",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "22",
+        "identity": "87200@localhost@",
+        "requestId": "8913133d-7f04-466f-8562-bbf98207d477",
+        "historySizeBytes": "3928",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "24",
+      "eventTime": "2026-10-01T15:32:33.644064Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1051729",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "22",
+        "startedEventId": "23",
+        "identity": "87200@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "25",
+      "eventTime": "2026-10-01T15:32:33.734529Z",
+      "eventType": "EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_COMPLETED",
+      "taskId": "1051912",
+      "childWorkflowExecutionCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyLov73ot6Hnlarlj7ciOiLov73ot6Hnlarlj7ctMTIifQ=="
+            }
+          ]
+        },
+        "namespace": "default",
+        "namespaceId": "01a0f818-8351-7461-b3a9-2eaefa549605",
+        "workflowExecution": {
+          "workflowId": "run-30/24/1",
+          "runId": "01a0f818-8c9e-7338-9a4e-64893c0e55f0"
+        },
+        "workflowType": {
+          "name": "配送の手配_v1"
+        },
+        "initiatedEventId": "20",
+        "startedEventId": "21"
+      }
+    },
+    {
+      "eventId": "26",
+      "eventTime": "2026-10-01T15:32:33.734532Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1051913",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:3aea742d-0d07-4866-a655-38654aea68c7",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "引当と発送_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "27",
+      "eventTime": "2026-10-01T15:32:33.803934Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1051978",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "26",
+        "identity": "87200@localhost@",
+        "requestId": "362da3a8-85f1-49ad-b1bb-5f0616eee30e",
+        "historySizeBytes": "4484",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "28",
+      "eventTime": "2026-10-01T15:32:33.817566Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1051986",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "26",
+        "startedEventId": "27",
+        "identity": "87200@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "29",
+      "eventTime": "2026-10-01T15:32:33.817582Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "1051987",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "29",
+        "activityType": {
+          "name": "梱包を待つ"
+        },
+        "taskQueue": {
+          "name": "引当と発送_v1",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJjYWxsYmFja19pZCI6IltcInJ1bi0zMFwiLFwiMjcvMVwiXSIsIuW8leW9kyI6W3siaWQiOm51bGwsInNrdSI6InNrdS04Iiwic3RvY2siOiJzZWN1cmVkIn0seyJpZCI6bnVsbCwic2t1Ijoic2t1LTkiLCJzdG9jayI6InNlY3VyZWQifV0sIuazqOaWh0lEIjoiaWQtMSJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "30s",
+        "workflowTaskCompletedEventId": "28",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 1
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "30",
+      "eventTime": "2026-10-01T15:32:33.817594Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "1051991",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "29",
+        "identity": "87200@localhost@",
+        "requestId": "2a3b1fb8-ffff-40e9-bcfa-7ad1c7dbd3d0",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "31",
+      "eventTime": "2026-10-01T15:32:33.819026Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "1051992",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "bnVsbA=="
+            }
+          ]
+        },
+        "scheduledEventId": "29",
+        "startedEventId": "30",
+        "identity": "87200@localhost@"
+      }
+    },
+    {
+      "eventId": "32",
+      "eventTime": "2026-10-01T15:32:33.819034Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1051993",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:3aea742d-0d07-4866-a655-38654aea68c7",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "引当と発送_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "33",
+      "eventTime": "2026-10-01T15:32:33.921585Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1052074",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "32",
+        "identity": "87200@localhost@",
+        "requestId": "e4404568-bdae-4db9-b8ab-5d858927ce8e",
+        "historySizeBytes": "5345",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "34",
+      "eventTime": "2026-10-01T15:32:33.923689Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1052078",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "32",
+        "startedEventId": "33",
+        "identity": "87200@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "35",
+      "eventTime": "2026-10-01T15:32:33.923701Z",
+      "eventType": "EVENT_TYPE_TIMER_STARTED",
+      "taskId": "1052079",
+      "userMetadata": {
+        "summary": {
+          "metadata": {
+            "encoding": "anNvbi9wbGFpbg=="
+          },
+          "data": "IkF3YWl0V2l0aFRpbWVvdXQi"
+        }
+      },
+      "timerStartedEventAttributes": {
+        "timerId": "35",
+        "startToFireTimeout": "0.010s",
+        "workflowTaskCompletedEventId": "34"
+      }
+    },
+    {
+      "eventId": "36",
+      "eventTime": "2026-10-01T15:32:34.018977Z",
+      "eventType": "EVENT_TYPE_TIMER_FIRED",
+      "taskId": "1052112",
+      "timerFiredEventAttributes": {
+        "timerId": "35",
+        "startedEventId": "35"
+      }
+    },
+    {
+      "eventId": "37",
+      "eventTime": "2026-10-01T15:32:34.018986Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "1052113",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "localhost:3aea742d-0d07-4866-a655-38654aea68c7",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "引当と発送_v1"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "38",
+      "eventTime": "2026-10-01T15:32:34.065735Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "1052117",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "37",
+        "identity": "87200@localhost@",
+        "requestId": "72571c8e-0227-4a8f-a169-3eba89244477",
+        "historySizeBytes": "5802",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        }
+      }
+    },
+    {
+      "eventId": "39",
+      "eventTime": "2026-10-01T15:32:34.066807Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "1052123",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "37",
+        "startedEventId": "38",
+        "identity": "87200@localhost@",
+        "workerVersion": {
+          "buildId": "a4189085cd6035c9fb5319c3e7b04c00"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "40",
+      "eventTime": "2026-10-01T15:32:34.066822Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_FAILED",
+      "taskId": "1052124",
+      "workflowExecutionFailedEventAttributes": {
+        "failure": {
+          "message": "二日たっても梱包の知らせがありません",
+          "source": "GoSDK",
+          "applicationFailureInfo": {
+            "type": "梱包の遅れ",
+            "nonRetryable": true
+          }
+        },
+        "retryState": "RETRY_STATE_RETRY_POLICY_NOT_SET",
+        "workflowTaskCompletedEventId": "39"
+      }
+    }
+  ]
+}

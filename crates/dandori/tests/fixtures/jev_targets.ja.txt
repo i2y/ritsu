@@ -1,0 +1,5 @@
+build --target asl:
+エラー[E050]: tests/fixtures/jev_targets.flow:12:1: Step Functions は `選ぶ` の Jev を HTTP Task で呼ぶので、TypeSafe の API キー（ヘッダ Authorization に `Bearer <キー>`）を持つ `connection "<EventBridge の接続の ARN>"` が要ります
+    12 | task 選ぶ(本文: string) -> 種類
+エラー[E050]: tests/fixtures/jev_targets.flow:16:1: Step Functions は HTTP Task のリクエストを 60 秒で打ち切るので、`待って選ぶ` の `timeout` はそれより長くできません
+    16 | task 待って選ぶ(本文: string) -> 種類

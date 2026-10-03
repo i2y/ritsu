@@ -1,0 +1,6 @@
+error[E031]: tests/fixtures/express.flow:1:1: an Express workflow runs for at most five minutes, and this one can wait longer
+     1 | workflow quick v1
+error[E031]: tests/fixtures/express.flow:7:1: an asynchronous Express workflow may run twice, and `charge` changes things without `key`
+     7 | task charge(amount: int) -> 結果
+error[E031]: tests/fixtures/express.flow:10:1: an Express workflow cannot wait for a callback (`approval`)
+    10 | task approval(id: string) -> 結果

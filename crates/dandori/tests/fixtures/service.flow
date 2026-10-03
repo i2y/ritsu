@@ -1,0 +1,51 @@
+workflow fulfillment v1 implements shop.FulfillmentService
+description "E017: a workflow that does not fit the service it implements, one difference at a time"
+
+use proto shop from "services/shop.proto"
+
+record Code
+  value : string
+
+record Address
+  city : string
+  code : Code
+
+record Order
+  id     : string
+  amount : int
+
+record Approval
+  approver : string
+  level    : int
+
+record Packing
+  boxes : int
+
+inputs
+  order   : Order
+  address : Address
+  rush    : bool
+
+outputs
+  tracking_number : string
+  total           : int
+  note            : string?
+  count           : bool
+  tags            : list[string]?
+  ref             : string?
+
+# Someone approves the order, and the service sends the approval by the order's id.
+task approval() -> Approval
+  event
+
+task pack(order_id: string) -> Packing
+  callback
+
+flow
+  let a = approval()
+  let p = pack(order_id: order.id)
+    on timeout => fail PackingLate "No word of the packing"
+  match rush
+    true => fail OutOfStock "{a.approver} asked too soon"
+    false => pass
+  succeed tracking_number = address.city, total = p.boxes, count = rush

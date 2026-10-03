@@ -1,0 +1,42 @@
+エラー[E017]: tests/fixtures/service.flow:1:36: `shop.v1.FulfillmentService` を実装するのは `fulfilment` v1 ですが、このワークフローは `fulfillment` v1 です
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillRequest` の `priority` は、ワークフローの入力にありません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: 入力 `order` では、`FulfillRequest` の `order` を読めません。`amount` で、64 ビットの整数は、protobuf の JSON では文字列で来ます。`string` にしてください
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: 入力 `rush` は `FulfillRequest` のフィールドにありません（フィールドは order・priority・address）
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillResponse` の `eta` は、ワークフローの出力にありません。クライアントはいつもゼロ値を読むことになります
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: 出力 `total` は `FulfillResponse` のフィールドにありません（フィールドは tracking_number・eta・note・count・tags・ref）。protobuf の JSON を読む側は、知らないフィールドを拒否します
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: 出力 `note` は無いことがありますが、`FulfillResponse` の `note` は `optional` でないので、無いことを表せません。フィールドを `optional` にするか、出力を `string` にしてください
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: 出力 `count` は、`FulfillResponse` の `count` が受け取るものと合いません。`bool` は文字列で運ぶ 64 ビットの整数ではありません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: 出力 `tags` は無いことがありますが、`FulfillResponse` の `tags` は `repeated` か `map` のフィールドなので、無いことを表せません。出力を `list[string]` にしてください
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: 出力 `ref` は無いことがありますが、`FulfillResponse` の `ref` は `required` です。出力を `string` にしてください
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: ワークフローは `PackingLate` で失敗することがありますが、`Fulfill` の `fails` にありません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `Fulfill` の `fails` に `Lost` がありますが、ワークフローがその名前で失敗することはありません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/Delivered` は `delivered` のイベントを送りますが、その名前のタスクはありません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/Arrived` は `pack` のイベントを送りますが、`pack` は `event` のタスクではありません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `approval` では、`FulfillmentService/Approve` の `ApproveRequest` を読めません。メッセージに `level`（`Approval` のフィールド）はありません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/Approve` のレスポンス `ApproveResponse` にはフィールドがありますが、ワークフローはイベントを受け取っても何も返しません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/AnswerPacking` は `approval` のコールバックに応答しますが、`approval` は `callback` のタスクではありません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/GetStatus` のリクエスト `GetStatusRequest` にはフィールドがありますが、実行がいまどこにいるかは、ワークフロー ID だけで聞きます
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/GetStatus` のレスポンス `GetStatusResponse` は、`dandori.v1.Status` の形ではありません。`cases` は `map<string, string>` ですが、`dandori.v1.Status` では `map<string, google.protobuf.Value>` です
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/GetStatus` のレスポンス `GetStatusResponse` は、`dandori.v1.Status` の形ではありません。`events` がありません
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/GetStatus` のレスポンス `GetStatusResponse` は、`dandori.v1.Status` の形ではありません。`dandori.v1.Status` に無い `extra` があります
+     1 | workflow fulfillment v1 implements shop.FulfillmentService

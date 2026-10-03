@@ -1,0 +1,8 @@
+error[E010]: tests/fixtures/optional.flow:22:1: `match` has no arm for none, which `贈り物.宛名` can be here
+    22 |   match 贈り物.宛名
+error[E012]: tests/fixtures/optional.flow:26:1: `r` has not been set here
+    26 |   let b = 送る(本文: r.id)
+  the run that gets there:
+      23  match 贈り物.宛名: some
+      23  a = 送る(…)
+      24  for x in 明細 (at most 10)

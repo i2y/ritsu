@@ -1,0 +1,20 @@
+build --target asl:
+エラー[E050]: tests/fixtures/service_targets.flow:12:1: `approval` はワークフローに名前で送られてくるイベントを待ちます。Step Functions が実行に値を送れるのは、タスクが渡すトークンを通してだけです（`callback`）
+    12 | task approval() -> Approval
+エラー[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` は実行がいまどこにいるかを聞きますが、Step Functions にはそれに答える手段がありません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、Step Functions 向けのフローが実装するサービスからは、このメソッドを外してください
+     1 | workflow targets v1 implements targets.TargetsService
+build --target durable:
+エラー[E050]: tests/fixtures/service_targets.flow:12:1: `approval` はワークフローに名前で送られてくるイベントを待ちます。Lambda durable functions が実行に値を送れるのは、ステップが渡すコールバックの ID を通してだけです（`callback`）
+    12 | task approval() -> Approval
+エラー[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` は実行がいまどこにいるかを聞きますが、Lambda durable functions にはそれに答える手段がありません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、Lambda durable functions 向けのフローが実装するサービスからは、このメソッドを外してください
+     1 | workflow targets v1 implements targets.TargetsService
+build --target argo:
+エラー[E050]: tests/fixtures/service_targets.flow:12:1: `approval` はワークフローに名前で送られてくるイベントを待ちます。Argo Workflows 向けにはまだ書けません。書くなら、名前で再開されるまで止まる suspend のステップにすることになります
+    12 | task approval() -> Approval
+エラー[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` は実行がいまどこにいるかを聞きますが、Argo Workflows ではまだ答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、Argo Workflows 向けのフローが実装するサービスからは、このメソッドを外してください
+     1 | workflow targets v1 implements targets.TargetsService
+build --target pydantic-graph:
+エラー[E050]: tests/fixtures/service_targets.flow:12:1: `approval` はワークフローに名前で送られてくるイベントを待ちます。pydantic-graph 向けにはまだ書けません。書くなら、値はタスクの名前で `Deps` に届くことになります
+    12 | task approval() -> Approval
+エラー[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` は実行がいまどこにいるかを聞きますが、pydantic-graph ではまだ答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、pydantic-graph 向けのフローが実装するサービスからは、このメソッドを外してください
+     1 | workflow targets v1 implements targets.TargetsService

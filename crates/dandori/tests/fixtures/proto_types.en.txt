@@ -1,0 +1,22 @@
+error[E006]: tests/fixtures/proto_types.flow:9:11: `urgency` names both a rule and an API; give them different names
+     9 | use proto urgency from "protos/types.proto"
+error[E016]: tests/fixtures/proto_types.flow:10:11: a `.proto` does not say where the service is; write `url "<where it is>"` under `use proto shop`
+    10 | use proto shop from "protos/shop/v1/order.proto"
+error[E006]: tests/fixtures/proto_types.flow:23:8: `types_Line` and `types.Line` would have one name in the code dandori writes, `types_Line`; rename `types_Line`
+    23 | record types_Line
+error[E002]: tests/fixtures/proto_types.flow:27:11: there is no type `types.Stok`
+    27 |   stock : types.Stok
+  = the messages and enums of `types` are Box, Everything, Everything.Nested, GetRequest, Line, Mode, Status, Ticket
+error[E002]: tests/fixtures/proto_types.flow:30:13: `types.TypesService` is a service of `types`, not a message or an enum
+    30 |   service : types.TypesService
+error[E002]: tests/fixtures/proto_types.flow:33:12: there is no type `stripe.PaymentIntent`
+    33 |   intent : stripe.PaymentIntent
+  = types are made from a `.proto` read by `use proto`; `stripe` is an OpenAPI document, and its schemas are not made into types
+error[E003]: tests/fixtures/proto_types.flow:37:10: `tree.Tree` contains itself, through `children`; a record cannot, so write the record yourself, with `json` where it holds itself
+    37 |   root : tree.Tree
+error[E016]: tests/fixtures/proto_types.flow:40:1: the parameter `quantity` is not what `types` TypesService/PutLine takes: it has no range, and `>=1 <=99` is taken
+    40 | task put_line(sku: string, quantity: int) -> types.Line
+error[E008]: tests/fixtures/proto_types.flow:48:10: the values of `types.Status` (STATUS_OPEN, STATUS_CLOSED) are not the states of `order_state.order` (received, paid, shipped, delivered, cancelled)
+    48 | case a : types.Ticket follows order_state.order
+error[E008]: tests/fixtures/proto_types.flow:51:9: the values of `types.Status` (STATUS_OPEN, STATUS_CLOSED) are not the states of `order_state.order` (received, paid, shipped, delivered, cancelled)
+    51 |   state status

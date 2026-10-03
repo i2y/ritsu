@@ -1,0 +1,14 @@
+[package]
+name = "dandori"
+version = "0.1.0"
+edition = "2021"
+description = "A small typed language for workflows that call business rules, checked before it runs and compiled to AWS Step Functions, Temporal, Lambda durable functions, Argo Workflows and pydantic-graph"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/i2y/dandori"
+
+[dependencies]
+# float_roundtrip: a number another language wrote reads back as the same double
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+
+[profile.release]
+strip = true

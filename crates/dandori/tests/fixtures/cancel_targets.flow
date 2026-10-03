@@ -1,0 +1,22 @@
+workflow cancel_targets v1
+description "check には通るが、Temporal のほかには出せないもの：on cancel"
+
+inputs
+  id : string
+
+task 始める(id: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:start"
+  image "registry.example.com/start:1"
+  idempotent
+
+task 止める(id: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:stop"
+  image "registry.example.com/stop:1"
+  idempotent
+
+flow
+  始める(id: id)
+  wait 1 day
+
+on cancel
+  止める(id: id)

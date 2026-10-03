@@ -1,0 +1,3 @@
+error[E017]: tests/fixtures/service_unread.flow:1:31: the message `shop.v2.StartRequest` of `UnreadService/Start` is not known: a file it may be in was not read
+     1 | workflow unread v1 implements shop.UnreadService
+  = `shop/v2/start.proto` could not be read, so the types in it cannot be used

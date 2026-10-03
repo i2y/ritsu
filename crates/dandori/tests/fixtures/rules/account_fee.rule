@@ -1,0 +1,26 @@
+rule 口座の手数料(account_fee) v1
+description "口座の月の手数料と、次の月の状態。状態の列挙は契約（account.proto）から取り込む。契約の値には接頭辞が無く、0 番も「有効」という状態の一つである。書き下ろしの例"
+
+import proto "account.proto" Status -> 口座の状態
+enum 口座の状態(state) = 有効(active) | 解約(closed)
+
+inputs
+  状態(state)   : 口座の状態
+  残高(balance) : money[円]  range >=0円 <=10000000円
+
+outputs
+  手数料(fee)          : money[円]  round down(10円)
+  次の状態(next_state) : 口座の状態
+
+table 手数料表(fee_table)
+policy unique
+| 状態 | 残高      | -> 手数料(fee) : money[円] | 次の状態 |
+| 有効 | >=10000円 | 0円                        | 有効     |
+| 有効 | <10000円  | 110円                      | 有効     |
+| 解約 | -         | 0円                        | 解約     |
+
+examples
+| 状態 | 残高    | -> 手数料 | 次の状態 |
+| 有効 | 20000円 | 0円       | 有効     |
+| 有効 | 500円   | 110円     | 有効     |
+| 解約 | 0円     | 0円       | 解約     |

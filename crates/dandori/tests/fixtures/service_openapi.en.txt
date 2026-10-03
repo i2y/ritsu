@@ -1,0 +1,2 @@
+error[E017]: tests/fixtures/service_openapi.flow:1:35: `stripe` is read by `use openapi`, and a workflow implements a service of a `.proto` (`use proto`)
+     1 | workflow hotel_stay v1 implements stripe.PaymentIntents

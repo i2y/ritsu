@@ -1,0 +1,2 @@
+エラー[E001]: tests/fixtures/range_syntax.flow:4:35: 範囲の端は、型の単位で数えた整数を、単位を付けずに書きます（`0円` ではなく `0`）
+     4 |   額 : money[円, incl_tax]  range >=0円 <=100万円

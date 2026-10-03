@@ -1,0 +1,3 @@
+error[E005]: tests/flows/connect_rules_contract.flow:4:10: could not read the rule `../fixtures/rules/account_fee.rule`
+     4 | use rule 手数料 from "../fixtures/rules/account_fee.rule"
+  = the enum `口座の状態` of the rule is a contract's (`Status`), and this rulec's `rulec api` does not say what the rule's service calls its values; `connect` needs rulec 0.22.0 or later, whose `rulec api` says them (`connect.enums`)

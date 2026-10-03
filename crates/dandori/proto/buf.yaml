@@ -1,0 +1,8 @@
+# dandori's options for a service a .flow implements (dandori/v1/options.proto).
+version: v2
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

@@ -1,0 +1,174 @@
+# fulfillment v1
+
+Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released. Written for Temporal: the warehouse's calls are activities dandori writes, by Connect; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow, arrange_delivery.flow), and when it finds no next-day van the standard carrier is asked; and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends
+
+`examples/fulfillment/temporal/fulfillment.flow` を `dandori doc` で描いたものです。入力は `order: Order`、出力は `reservations: list[warehouse.ReserveResponse]`, `tracking_number: string` です。このワークフローは `shop.v1.FulfillmentService`（`../specs/fulfillment.proto`）を実装します。
+
+## flow
+
+```mermaid
+flowchart TD
+    start(["fulfillment v1"])
+    s1[["decision = urgency(…)<br>rule urgency.rule"]]
+    subgraph L2 ["let results = for line in order.lines at most 50 in parallel, 10 at a time · yield r"]
+        s3["r = reserve_stock(…)<br>connect warehouse StockService/Reserve<br>retry 2 times every 1 second on busy"]
+    end
+    s4["let any_short = false"]
+    subgraph L5 ["for one in results at most 50"]
+        s6{{"match one.stock"}}
+        s7["let any_short = true"]
+    end
+    s9{{"match any_short"}}
+    subgraph L10 ["for taken in results at most 50 in parallel"]
+        s11{{"match taken.id"}}
+        s12["release_stock(…)<br>connect warehouse StockService/Release"]
+    end
+    s14(["fail OutOfStock<br>#quot;Order {order.id} has lines the stock is short …"])
+    s16["let recipient = none"]
+    s17{{"match order.gift"}}
+    s18["let recipient = gift.recipient"]
+    s19{{"match gift.message"}}
+    s20["audit(…)<br>自分で書くタスク"]
+    s23["delivery = arrange_delivery(…)<br>flow arrange_delivery.flow"]
+    s24["delivery = arrange_delivery(…)<br>flow arrange_delivery.flow"]
+    s25(["fail DeliveryFailed<br>#quot;Could not arrange the delivery of order {order…"])
+    s26(["fail DeliveryFailed<br>#quot;Could not arrange the delivery of order {order…"])
+    s27[/"packed = wait_for_packing(…)<br>自分で書くタスク（応答はコールバック）<br>timeout 2 days"/]
+    s28(["fail PackingLate<br>#quot;No word of the packing in two days#quot;"])
+    s29["notify(…)<br>自分で書くタスク"]
+    s31(["succeed reservations = results, tracking_number = deliv…"])
+    start --> s1
+    s1 --> s3
+    L2 -->|"すべてのイテレーションが終わったら"| s4
+    s4 --> s6
+    s6 -->|"short"| s7
+    s7 -->|"次のイテレーション"| s6
+    s6 -->|"secured"| s6
+    L5 -->|"最後の項目のあと"| s9
+    s9 -->|"true"| s11
+    s11 -->|"some id"| s12
+    L10 -->|"すべてのイテレーションが終わったら"| s14
+    s9 -->|"false"| s16
+    s16 --> s17
+    s17 -->|"some gift"| s18
+    s18 --> s19
+    s19 -->|"some words"| s20
+    s20 --> s23
+    s19 -->|"none"| s23
+    s17 -->|"none"| s23
+    s23 -.->|"on NoVan"| s24
+    s24 -.->|"on failure"| s25
+    s23 -.->|"on failure"| s26
+    s23 --> s27
+    s24 --> s27
+    s27 -.->|"on timeout"| s28
+    s27 --> s29
+    s29 --> s31
+    s29 -.->|"on no_recipient"| s31
+    classDef ok stroke:#2da44e,stroke-width:2px
+    classDef bad stroke:#cf222e,stroke-width:2px
+    class s31 ok
+    class s14,s25,s26,s28 bad
+```
+
+四角はタスク、両脇に線のある四角は規則、斜めの四角は外から値が届くタスク（イベントやコールバックの応答）、六角形は `match`、角の丸い四角は待ち、ステップを囲む枠はループです。破線の矢印は、呼び出しがその場で処理するエラーです。
+
+## サービス
+
+サービスのメソッドと、それぞれが実行に対して何をするかです。
+
+| メソッド | 何をするか | タスク |
+|---|---|---|
+| `Fulfill` | 実行を始めます。失敗の名前は `OutOfStock`・`DeliveryFailed`・`PackingLate` | — |
+| `AnswerPacking` | コールバックに応答します | `wait_for_packing` |
+
+## 呼び出し
+
+| 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
+|---:|---|---|---|---|---|
+| 73 | `decision = urgency(…)` | 規則 `urgency.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
+| 75 | `r = reserve_stock(…)` | `connect warehouse StockService/Reserve`, `key` | 1 秒おきに 2 回（busy） | — | `busy`, `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 86 | `release_stock(…)` | `connect warehouse StockService/Release`, `idempotent` | — | — | `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 95 | `audit(…)` | 自分で書くタスク, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
+| 98 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan` → 99 行目<br>`timeout`, `failure` → 102 行目 |
+| 100 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan`, `timeout`, `failure` → 101 行目 |
+| 103 | `packed = wait_for_packing(…)` | 自分で書くタスク（応答はコールバック） | — | 2 日 | `timeout` → 104 行目<br>`failure` → ワークフローが失敗する |
+| 105 | `notify(…)` | 自分で書くタスク | — | — | `no_recipient` → 106 行目<br>`timeout`, `failure` → ワークフローが失敗する |
+
+## 終わり方
+
+ワークフローの終わり方のすべてです。
+
+| 行 | 終わり方 |
+|---:|---|
+| 88 | `fail OutOfStock` "Order {order.id} has lines the stock is short of" |
+| 101 | `fail DeliveryFailed` "Could not arrange the delivery of order {order.id}" |
+| 102 | `fail DeliveryFailed` "Could not arrange the delivery of order {order.id}" |
+| 104 | `fail PackingLate` "No word of the packing in two days" |
+| 107 | `succeed reservations = results, tracking_number = delivery.tracking_number` |
+
+## 規則
+
+このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。
+
+<details>
+<summary><code>urgency</code> · urgency v1 · <code>../../order/rules/urgency.rule</code></summary>
+
+<!-- rulec 0.22.0 が urgency.rule (sha256:5ff6efc93a9b) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+# 規則 urgency v1
+
+Whether an order goes out in a hurry, and by which carrier: a member's always does, and anyone else's from 30,000 yen. Written for the example
+
+## 入力
+
+| 名前 | 型 | 範囲 | 注記 |
+|---|---|---|---|
+| member | bool |  |  |
+| amount | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+
+## 出力
+
+| 名前 | 型 | 丸め | 注記 |
+|---|---|---|---|
+| urgent | bool |  |  |
+| carrier | carrier（2 値） |  |  |
+
+## 型
+
+列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+
+- **carrier**（2 値）— standard、next_day
+
+## 表 decide（policy unique）
+
+| 列 | 出どころ |
+|---|---|
+| member | 入力 |
+| amount | 入力 |
+| → urgent | この規則の出力 |
+| → carrier | この規則の出力 |
+
+| # | member | amount | → urgent（bool） | → carrier（carrier） |
+|---|---|---|---|---|
+| 1 | true | - | true | next_day |
+| 2 | false | >=30000JPY | true | next_day |
+| 3 | false | <30000JPY | false | standard |
+
+**`rulec check` が確かめたこと**
+
+- どの入力の組合せも、いずれかの行に当てはまります（E101 完全性）
+- どの入力にも当てはまらない行はありません（E102）
+- 二つ以上の行に同時に当てはまる入力はありません（E105 重なり）。行の並べ替えは意味を変えません
+
+## 例（検証済み）
+
+| member | amount | → urgent | carrier |
+|---|---|---|---|
+| true | 1000JPY | true | next_day |
+| false | 5000JPY | false | standard |
+| false | 30000JPY | true | next_day |
+
+この 3 件は `rulec check` が参照評価器で実行し、すべて宣言どおりの値になりました（E107）。例は**実行される仕様**です。
+
+</details>
+

@@ -1,0 +1,10 @@
+build --target asl:
+エラー[E050]: tests/fixtures/rule_connect_targets.flow:4:1: Step Functions は規則 `接続なし` を Connect で HTTP Task から呼ぶので、`use rule` の下に `connection "<EventBridge の接続の ARN>"` が要ります
+     4 | use rule 接続なし from "../../examples/order/rules/出荷の急ぎ.rule"
+エラー[E050]: tests/fixtures/rule_connect_targets.flow:7:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。規則 `平文` のサービスは `http://rules.example.com/rulec.urgency.v1.UrgencyService/Decide` です
+     7 | use rule 平文 from "../../examples/order/rules/出荷の急ぎ.rule"
+エラー[E050]: tests/fixtures/rule_connect_targets.flow:11:1: 規則 `呼び方なし` は呼ばれているので、`use rule` の下に `lambda "<関数>"` か `connect "<URL>"` が要ります
+    11 | use rule 呼び方なし from "../../examples/order/rules/出荷の急ぎ.rule"
+build --target durable:
+エラー[E050]: tests/fixtures/rule_connect_targets.flow:11:1: 規則 `呼び方なし` は呼ばれているので、呼び出す先の `lambda "<関数>"` か `connect "<URL>"` を `use rule` の下に書いてください
+    11 | use rule 呼び方なし from "../../examples/order/rules/出荷の急ぎ.rule"

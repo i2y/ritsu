@@ -1,0 +1,16 @@
+エラー[E002]: tests/fixtures/proto_unread.flow:11:12: `catalog.Priced` を作れません。フィールド `price` の型 `google.type.Money` が分かりません。レコードを自分で書き、`price` は `json` にしてください
+    11 |   priced : catalog.Priced
+  = `google/api/annotations.proto`・`google/type/money.proto`・`shop/v2/cancel.proto` を読めなかったので、そこにある型は使えません
+エラー[E002]: tests/fixtures/proto_unread.flow:18:10: 型 `catalog.Nope` はありません
+    18 |   nope : catalog.Nope
+  = `catalog` のメッセージと列挙は Item・ItemRequest・Kind・Priced・QuoteRequest・QuoteResponse です
+  = `google/api/annotations.proto`・`google/type/money.proto`・`shop/v2/cancel.proto` を読めなかったので、そこにある型は使えません
+エラー[E016]: tests/fixtures/proto_unread.flow:26:1: 引数 `budget` は、`catalog` の CatalogService/Quote が受け取るものと合いません。型 `google.type.Money` が分かりません。それがあるはずのファイルを読めませんでした。`json` にすれば受け渡せます
+    26 | task quote(budget: string) -> catalog.QuoteResponse
+  = `google/api/annotations.proto`・`google/type/money.proto`・`shop/v2/cancel.proto` を読めなかったので、そこにある型は使えません
+エラー[E016]: tests/fixtures/proto_unread.flow:29:1: `catalog` の CatalogService/Cancel が受け取る `shop.v2.CancelRequest` が分かりません（それがあるはずのファイルを読めませんでした）。`cancel` の引数をそれに合わせて確かめられません
+    29 | task cancel(order: string)
+  = `google/api/annotations.proto`・`google/type/money.proto`・`shop/v2/cancel.proto` を読めなかったので、そこにある型は使えません
+エラー[E016]: tests/fixtures/proto_unread.flow:33:3: `catalog` にメソッド `CatalogService/Discontinue` はありません。`Service/Method` と書きます
+    33 |   connect catalog "CatalogService/Discontinue"
+  = `google/api/annotations.proto`・`google/type/money.proto`・`shop/v2/cancel.proto` を読めなかったので、そこにある型は使えません

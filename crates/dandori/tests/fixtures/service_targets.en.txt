@@ -1,0 +1,20 @@
+build --target asl:
+error[E050]: tests/fixtures/service_targets.flow:12:1: `approval` waits for an event sent to the workflow by name; Step Functions sends a value to an execution only through the token a task hands on (`callback`)
+    12 | task approval() -> Approval
+error[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` asks a run where it is, and Step Functions has no way to answer it; only Temporal answers the query `dandori.status`, so leave the method out of the service the flow implements for Step Functions
+     1 | workflow targets v1 implements targets.TargetsService
+build --target durable:
+error[E050]: tests/fixtures/service_targets.flow:12:1: `approval` waits for an event sent to the workflow by name; Lambda durable functions sends a value to an execution only through the id of a callback a step hands on (`callback`)
+    12 | task approval() -> Approval
+error[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` asks a run where it is, and Lambda durable functions has no way to answer it; only Temporal answers the query `dandori.status`, so leave the method out of the service the flow implements for Lambda durable functions
+     1 | workflow targets v1 implements targets.TargetsService
+build --target argo:
+error[E050]: tests/fixtures/service_targets.flow:12:1: `approval` waits for an event sent to the workflow by name; dandori does not write it for Argo Workflows yet; there, it would be a step suspended until it is resumed by its name
+    12 | task approval() -> Approval
+error[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` asks a run where it is, and dandori does not answer it on Argo Workflows yet; only Temporal answers it, by the query `dandori.status`, so leave the method out of the service the flow implements for Argo Workflows
+     1 | workflow targets v1 implements targets.TargetsService
+build --target pydantic-graph:
+error[E050]: tests/fixtures/service_targets.flow:12:1: `approval` waits for an event sent to the workflow by name; dandori does not write it for pydantic-graph yet; there, the value would come to `Deps` by the task's name
+    12 | task approval() -> Approval
+error[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` asks a run where it is, and dandori does not answer it on pydantic-graph yet; only Temporal answers it, by the query `dandori.status`, so leave the method out of the service the flow implements for pydantic-graph
+     1 | workflow targets v1 implements targets.TargetsService

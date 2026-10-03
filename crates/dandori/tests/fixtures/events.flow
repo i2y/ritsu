@@ -1,0 +1,22 @@
+workflow event_mistakes v1
+
+record 承認
+  承認者 : string
+
+inputs
+  ids : list[string]
+
+# An event is sent to the workflow; nothing is called, sent, or tried again.
+task 承認の知らせ(id: string) -> 承認
+  event
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:approve"
+  retry 2 times
+  key
+
+task 待つだけ() -> 承認
+  event
+  timeout 1 day
+
+flow
+  for id in ids at most 3 in parallel
+    let a = 待つだけ()

@@ -1,0 +1,46 @@
+// The service tests/fixtures/service_targets.flow implements, and fits: a run is started, sent the
+// event of an approval, and asked where it is. Only Temporal answers where a run is, so the other
+// platforms refuse the method (E050), as they refuse the event. The response of `GetStatus` has the
+// fields of `dandori.v1.Status`, as buf's lint wants a message of its own.
+syntax = "proto3";
+
+package targets.v1;
+
+import "dandori/v1/options.proto";
+import "google/protobuf/struct.proto";
+
+service TargetsService {
+  option (dandori.v1.workflow) = {name: "targets", version: 1};
+
+  rpc Start(StartRequest) returns (StartResponse) {
+    option (dandori.v1.start) = {};
+  }
+
+  rpc Approve(ApproveRequest) returns (ApproveResponse) {
+    option (dandori.v1.event) = {task: "approval"};
+  }
+
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {
+    option (dandori.v1.status) = {};
+  }
+}
+
+message StartRequest {
+  string id = 1;
+}
+
+message StartResponse {}
+
+message ApproveRequest {
+  string approver = 1;
+}
+
+message ApproveResponse {}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  optional int32 at = 1;
+  map<string, google.protobuf.Value> cases = 2;
+  repeated string events = 3;
+}

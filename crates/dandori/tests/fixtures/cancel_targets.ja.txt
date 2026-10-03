@@ -1,0 +1,12 @@
+build --target asl:
+エラー[E050]: tests/fixtures/cancel_targets.flow:21:1: Step Functions は実行を止めると（StopExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません
+    21 | on cancel
+build --target durable:
+エラー[E050]: tests/fixtures/cancel_targets.flow:21:1: Lambda durable functions は実行を止めると（StopDurableExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません
+    21 | on cancel
+build --target argo:
+エラー[E050]: tests/fixtures/cancel_targets.flow:21:1: Argo Workflows 向けの `on cancel` はまだ書けません。書くなら、`argo stop` で走る exit handler にすることになります
+    21 | on cancel
+build --target pydantic-graph:
+エラー[E050]: tests/fixtures/cancel_targets.flow:21:1: pydantic-graph 向けの `on cancel` はまだ書けません。そこでは、走らせているタスクがキャンセルされたところで実行が止まります
+    21 | on cancel

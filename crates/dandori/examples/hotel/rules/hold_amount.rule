@@ -1,0 +1,33 @@
+rule hold_amount v1
+description "How much a booking holds on the card, and whether the front desk looks at it first: the nightly rate times the nights, and a stay of fifteen nights or more goes to the desk. Written for the example"
+
+enum room = standard | deluxe | suite
+enum handling = auto | review
+
+inputs
+  room   : room
+  nights : number  range >=1 <=30
+
+outputs
+  amount   : money[JPY, incl_tax]  round down(1JPY)
+  handling : handling
+
+table rate
+policy unique
+| room     | -> per_night : money[JPY, incl_tax] |
+| standard | 12000JPY                            |
+| deluxe   | 18000JPY                            |
+| suite    | 40000JPY                            |
+
+table decide
+policy unique
+| nights | -> handling |
+| <=14   | auto        |
+| >=15   | review      |
+
+define amount : money[JPY, incl_tax] = per_night * nights
+
+examples
+| room     | nights | -> amount | handling |
+| standard | 2      | 24000JPY  | auto     |
+| suite    | 15     | 600000JPY | review   |

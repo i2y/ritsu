@@ -1,0 +1,13 @@
+workflow rule_lists v1
+description "並びをたどる規則（rulec の elements）は呼べない：規則のコードを同梱しても、Connect のサービスで呼んでも、use rule が同じ E005 になる"
+
+use rule 送料 from "rules/cart_shipping.rule"
+
+use rule 送料のサービス from "rules/cart_shipping.rule"
+  connect "https://rules.example.com"
+
+inputs
+  会員 : bool
+
+flow
+  pass

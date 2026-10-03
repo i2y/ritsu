@@ -1,0 +1,42 @@
+error[E017]: tests/fixtures/service.flow:1:36: `shop.v1.FulfillmentService` is implemented by `fulfilment` v1, and this workflow is `fulfillment` v1
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillRequest` has `priority`, which is not an input of the workflow
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: the input `order` does not read `order` of `FulfillRequest`: in `amount`, a 64-bit integer comes as a string in protobuf's JSON; declare it `string`
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: the input `rush` is not a field of `FulfillRequest` (its fields are order, priority, address)
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillResponse` has `eta`, which is not an output of the workflow; the client would read its zero value
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: the output `total` is not a field of `FulfillResponse` (its fields are tracking_number, eta, note, count, tags, ref); protobuf's JSON reader refuses a field it does not know
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: the output `note` may be absent, and `note` of `FulfillResponse`, which is not `optional`, cannot say so; make the field `optional`, or the output `string`
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: the output `count` is not what `count` of `FulfillResponse` takes: `bool` is not a 64-bit integer, as a string
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: the output `tags` may be absent, and `tags` of `FulfillResponse`, a `repeated` field or a `map`, cannot say so; make the output `list[string]`
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: the output `ref` may be absent, and `ref` of `FulfillResponse` is `required`; make the output `string`
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: the workflow fails with `PackingLate`, which `fails` of `Fulfill` does not list
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `fails` of `Fulfill` lists `Lost`, and the workflow never fails with it
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/Delivered` sends the event of `delivered`, and the workflow has no task of that name
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/Arrived` sends the event of `pack`, and `pack` is not an `event` task
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `approval` does not read `ApproveRequest` of `FulfillmentService/Approve`: the message has no `level` (a field of `Approval`)
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/Approve` answers `ApproveResponse`, which has fields; the workflow takes an event and answers nothing
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/AnswerPacking` answers the callback of `approval`, and `approval` is not a `callback` task
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/GetStatus` takes `GetStatusRequest`, which has fields; a run is asked where it is by its workflow id alone
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/GetStatus` answers `GetStatusResponse`, which is not the shape of `dandori.v1.Status`: `cases` is `map<string, string>`, and in `dandori.v1.Status` it is `map<string, google.protobuf.Value>`
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/GetStatus` answers `GetStatusResponse`, which is not the shape of `dandori.v1.Status`: it has no `events`
+     1 | workflow fulfillment v1 implements shop.FulfillmentService
+error[E017]: tests/fixtures/service.flow:1:36: `FulfillmentService/GetStatus` answers `GetStatusResponse`, which is not the shape of `dandori.v1.Status`: it has `extra`, which `dandori.v1.Status` does not
+     1 | workflow fulfillment v1 implements shop.FulfillmentService

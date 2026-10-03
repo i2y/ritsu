@@ -1,0 +1,203 @@
+workflow jev v1
+description "Jev の誤り：モデルが無い、結果の型が無い、文字列・整数・オプショナルな値・リストの結果、レコードに一つだけの質問、列挙に質問の無い jev、尋ねていないフィールド、尋ねた文字列のフィールド、レコードに無いフィールド、二度尋ねたフィールド、列挙に無い値の意味、二度書いた意味、意味の抜けた score、段階が多すぎる score、bool の score、片方だけの true と false、true と false でない意味、jev の無い confidence、尋ねていないフィールドの確信度、率でない確信度、100% を割り切れない刻み、failure を下限のエラーにする、errors にもある下限のエラー、はいかいいえだけで 0.5 以下の下限、下限のエラーのリトライ、ステータスの無いエラー、key、コールバック、url、effort、案件を見る Jev、下限のあるエイリアスのモデル（警告）、下限の無いエイリアスのモデル（警告なし）"
+
+enum 種類 = 返品 | 配送 | その他
+enum 十一 = a | b | c | d | e | f | g | h | i | j | k
+
+record 読み
+  種類 : 種類
+  人   : bool
+
+record 文字の読み
+  種類 : 種類
+  要点 : string
+
+record 確かさつき
+  種類   : 種類
+  確かさ : rate[step 1%]
+  件数   : int
+  荒い   : rate[step 3%]
+
+record 注文
+  id   : string
+  状態 : 注文の状態.状態
+
+use rule 注文の状態 from "../../examples/order/rules/注文の状態.rule"
+
+inputs
+  本文 : string
+
+task モデルが無い(本文: string) -> 種類
+  jev "種類はどれか"
+
+task 型が無い(本文: string)
+  jev "種類はどれか"
+  model "jev-1.13.0"
+
+task 文字列(本文: string) -> string
+  jev "要点は何か"
+  model "jev-1.13.0"
+
+task 整数(本文: string) -> int
+  jev "いくつか"
+  model "jev-1.13.0"
+
+task 無いかも(本文: string) -> 種類?
+  jev "種類はどれか"
+  model "jev-1.13.0"
+
+task リスト(本文: string) -> list[種類]
+  jev "種類はどれか"
+  model "jev-1.13.0"
+
+task 一つだけ(本文: string) -> 読み
+  jev "種類はどれか"
+  model "jev-1.13.0"
+
+task 質問が無い(本文: string) -> 種類
+  jev
+  model "jev-1.13.0"
+
+task 尋ねない(本文: string) -> 読み
+  jev
+    種類 "種類はどれか"
+  model "jev-1.13.0"
+
+task 文字を尋ねる(本文: string) -> 文字の読み
+  jev
+    種類 "種類はどれか"
+    要点 "要点は何か"
+  model "jev-1.13.0"
+
+task 無いフィールド(本文: string) -> 読み
+  jev
+    種類 "種類はどれか"
+    人 "人を求めているか"
+    急ぎ "急いでいるか"
+  model "jev-1.13.0"
+
+task 二度尋ねる(本文: string) -> 読み
+  jev
+    種類 "種類はどれか"
+    人 "人を求めているか"
+    種類 "種類はどれか"
+  model "jev-1.13.0"
+
+task 無い値(本文: string) -> 種類
+  jev "種類はどれか"
+    返品 "返したい"
+    請求 "請求のこと"
+  model "jev-1.13.0"
+
+task 二度書く(本文: string) -> 種類
+  jev "種類はどれか"
+    返品 "返したい"
+    返品 "交換したい"
+  model "jev-1.13.0"
+
+task 意味の抜けた段階(本文: string) -> 種類
+  jev score "どの段階か"
+    返品 "低い"
+    配送 "中くらい"
+  model "jev-1.13.0"
+
+task 段階が多い(本文: string) -> 十一
+  jev score "どの段階か"
+    a "一"
+  model "jev-1.13.0"
+
+task はいかいいえの段階(本文: string) -> bool
+  jev score "どの段階か"
+    true "はい"
+    false "いいえ"
+  model "jev-1.13.0"
+
+task 片方だけ(本文: string) -> bool
+  jev "人を求めているか"
+    true "はっきり書いている"
+  model "jev-1.13.0"
+
+task はいといいえでない(本文: string) -> bool
+  jev "人を求めているか"
+    yes "はっきり書いている"
+    no "書いていない"
+  model "jev-1.13.0"
+
+task Jevの無い下限(本文: string) -> 種類
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:kind"
+  confidence 0.8 else 迷い
+
+task 確かさの誤り(本文: string) -> 確かさつき
+  jev
+    種類 "種類はどれか"
+    確かさ confidence of 件数
+    件数 confidence of 種類
+    荒い confidence of 種類
+  model "jev-1.13.0"
+
+task failureの下限(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-1.13.0"
+  confidence 0.8 else failure
+
+task 二度宣言する(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-1.13.0"
+  confidence 0.8 else 迷い
+  errors 迷い = 429
+
+task 半分(本文: string) -> bool
+  jev "人を求めているか"
+  model "jev-1.13.0"
+  confidence 0.5 else 迷い
+
+task 尋ね直す(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-1.13.0"
+  confidence 0.8 else 迷い
+  retry 2 times on 迷い
+
+task ステータスが無い(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-1.13.0"
+  errors 混雑
+
+task 鍵(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-1.13.0"
+  key
+
+task 待つ(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-1.13.0"
+  callback
+
+task 送り先(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-1.13.0"
+  url "https://api.example.com/v1"
+
+task 力を入れる(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-1.13.0"
+  effort high
+
+task 案件を見る(id: string) -> 注文
+  jev "状態はどれか"
+  model "jev-1.13.0"
+  observes
+
+task エイリアス(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-latest"
+  confidence 0.8 else 迷い
+
+task 下限の無いエイリアス(本文: string) -> 種類
+  jev "種類はどれか"
+  model "jev-preview"
+
+flow
+  let a = モデルが無い(本文: 本文)
+  let b = エイリアス(本文: 本文)
+    on 迷い => pass
+  let c = 下限の無いエイリアス(本文: 本文)

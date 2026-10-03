@@ -1,0 +1,18 @@
+// A message that holds itself, which a flow cannot make a record of: tests/fixtures/proto_types.flow.
+syntax = "proto3";
+
+package tree.v1;
+
+message Tree {
+  string name = 1;
+  repeated Tree children = 2;
+}
+
+// holds a message that holds the other back
+message Left {
+  Right right = 1;
+}
+
+message Right {
+  Left left = 1;
+}

@@ -1,0 +1,20 @@
+workflow targets v1 implements targets.TargetsService
+description "E050: a workflow that implements a service with a method that asks where a run is, which only Temporal answers"
+
+use proto targets from "services/targets.proto"
+
+record Approval
+  approver : string
+
+inputs
+  id : string
+
+task approval() -> Approval
+  event
+
+task notify(id: string, text: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:notify"
+
+flow
+  let a = approval()
+  notify(id: id, text: "{a.approver} approved")

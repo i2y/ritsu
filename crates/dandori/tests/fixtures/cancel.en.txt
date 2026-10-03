@@ -1,0 +1,20 @@
+error[E020]: tests/fixtures/cancel.flow:33:1: the workflow can end cancelled here with the case `受注` in 出荷済, which is not final (配達済, 取消 are); settle it in `on cancel`, or end with `fail … leaving 受注` to hand it over as it is
+    33 |   match 受注.状態
+  the run that gets there:
+          before the workflow looks: `入金`, 受注 受付 → 入金済
+          before the workflow looks: `出荷`, 受注 入金済 → 出荷済
+      28  注文を見る: 受注 is 出荷済
+      29  wait 1 day
+      29  the workflow is cancelled (wait)
+      33  on cancel
+      38  match 受注.状態: 出荷済, 配達済, 取消
+      33  `on cancel` ends and the workflow ends cancelled
+warning[W101]: tests/fixtures/cancel.flow:36:1: if `取消を頼む` fails while `on cancel` is settling `受注`, the workflow fails with `受注` in 受付, 入金済 (1 such call(s))
+    36 |       受注 <- 取消を頼む(id: 受注.id)
+  the run that gets there:
+      28  注文を見る: 受注 is 受付
+      29  wait 1 day
+      29  the workflow is cancelled (wait)
+      33  on cancel
+      35  match 受注.状態: 受付, 入金済
+      36  取消を頼む fails (timeout, failure)

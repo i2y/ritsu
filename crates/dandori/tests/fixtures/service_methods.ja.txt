@@ -1,0 +1,16 @@
+エラー[E017]: tests/fixtures/service_methods.flow:1:32: `services/methods.proto` は `import "dandori/v1/options.proto";` を書かずに dandori のオプションを使っています。protoc と buf にはこの import が要ります
+     1 | workflow methods v1 implements shop.MethodsService
+エラー[E017]: tests/fixtures/service_methods.flow:1:32: `shop.v1.MethodsService` は、どのワークフローが実装するかを言いません。`option (dandori.v1.workflow) = {name: "methods", version: 1};` を書いてください
+     1 | workflow methods v1 implements shop.MethodsService
+エラー[E017]: tests/fixtures/service_methods.flow:1:32: `MethodsService/Watch` はストリームです。ワークフローが受け取るのも返すのも、メッセージ一つです
+     1 | workflow methods v1 implements shop.MethodsService
+エラー[E017]: tests/fixtures/service_methods.flow:1:32: `MethodsService/Cancel` がワークフローにどう届くかが書かれていません。`(dandori.v1.start)`・`(dandori.v1.event)`・`(dandori.v1.answer)`・`(dandori.v1.status)` のどれか一つを付けてください
+     1 | workflow methods v1 implements shop.MethodsService
+エラー[E017]: tests/fixtures/service_methods.flow:1:32: `MethodsService/Both` には `(dandori.v1.event)` と `(dandori.v1.answer)` の両方があります。一つにしてください
+     1 | workflow methods v1 implements shop.MethodsService
+エラー[E017]: tests/fixtures/service_methods.flow:1:32: `shop.v1.MethodsService` では、`Fulfill` と `Begin` の両方が実行を始めます。一つにしてください
+     1 | workflow methods v1 implements shop.MethodsService
+エラー[E017]: tests/fixtures/service_methods.flow:1:32: `Delivered` と `Arrived` がどちらも`delivered` のイベントを送ります。一つにしてください
+     1 | workflow methods v1 implements shop.MethodsService
+エラー[E017]: tests/fixtures/service_methods.flow:1:32: `shop.v1.MethodsService` では、`Watch` と `GetStatus` の両方が、実行がいまどこにいるかを聞きます。一つにしてください
+     1 | workflow methods v1 implements shop.MethodsService

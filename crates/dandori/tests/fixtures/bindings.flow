@@ -1,0 +1,25 @@
+workflow bindings v1
+description "タスクの呼び方の誤り：AWS の API の key、コールバック、知らないサービス、子ワークフローの key"
+
+record 結果
+  id : string
+
+task 置く(TableName: string) -> 結果
+  aws dynamodb:putItem
+  errors 重複 = 409
+  key
+
+task 待つ(id: string) -> 結果
+  http POST "https://example.com/wait"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/x/1"
+  callback
+
+task 数える(id: string) -> 結果
+  aws dynamo:putItem
+
+task 手配する(id: string) -> 結果
+  workflow "arrange"
+  key
+
+flow
+  let a = 置く(TableName: "t")

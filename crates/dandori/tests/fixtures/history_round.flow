@@ -1,0 +1,18 @@
+workflow poll_in_rounds v1
+
+record 状況
+  done : bool
+
+task look() -> 状況
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:look"
+  idempotent
+
+# On Temporal, a round of the loop at the top starts in a new run once the history is long; one
+# round itself has to fit in a run.
+flow
+  repeat at most 100 times
+    repeat at most 9000 times
+      let s = look()
+      match s.done
+        true => break
+        false => pass

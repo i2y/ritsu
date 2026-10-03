@@ -1,0 +1,70 @@
+エラー[E007]: tests/fixtures/jev.flow:31:3: Jev には、尋ねるモデルを `model "jev-1.13.0"` のようにバージョンで書いてください
+    31 |   jev "種類はどれか"
+エラー[E007]: tests/fixtures/jev.flow:34:3: Jev が答えるのは、列挙の値のどれか、列挙の値を低いものから並べた段階のどこか（`score`）、はいかいいえ（`bool`）と、それらを並べたレコードです。文章は書きません。結果の型を `-> <型>` と書いてください
+    34 |   jev "種類はどれか"
+エラー[E007]: tests/fixtures/jev.flow:38:3: Jev が答えるのは、列挙の値のどれか、列挙の値を低いものから並べた段階のどこか（`score`）、はいかいいえ（`bool`）と、それらを並べたレコードです。文章は書きません。結果は `string` です
+    38 |   jev "要点は何か"
+エラー[E007]: tests/fixtures/jev.flow:42:3: Jev が答えるのは、列挙の値のどれか、列挙の値を低いものから並べた段階のどこか（`score`）、はいかいいえ（`bool`）と、それらを並べたレコードです。文章は書きません。結果は `int` です
+    42 |   jev "いくつか"
+エラー[E007]: tests/fixtures/jev.flow:46:3: Jev が答えるのは、列挙の値のどれか、列挙の値を低いものから並べた段階のどこか（`score`）、はいかいいえ（`bool`）と、それらを並べたレコードです。文章は書きません。結果は `種類?` です
+    46 |   jev "種類はどれか"
+エラー[E007]: tests/fixtures/jev.flow:50:3: Jev が答えるのは、列挙の値のどれか、列挙の値を低いものから並べた段階のどこか（`score`）、はいかいいえ（`bool`）と、それらを並べたレコードです。文章は書きません。結果は `list[種類]` です
+    50 |   jev "種類はどれか"
+エラー[E007]: tests/fixtures/jev.flow:54:7: 結果はレコードなので、Jev にはフィールドごとに尋ねます。`jev` だけを書き、その下にフィールドごとに `<フィールド> "<質問>"` を書いてください
+    54 |   jev "種類はどれか"
+エラー[E007]: tests/fixtures/jev.flow:58:3: Jev に尋ねることを、`jev "<質問>"` のように `jev` のあとに二重引用符で書いてください
+    58 |   jev
+エラー[E007]: tests/fixtures/jev.flow:62:3: `読み` のフィールド `人` について Jev に尋ねることを、`jev` の下に書いてください（`人 "<質問>"` か `人 confidence of <フィールド>`）
+    62 |   jev
+エラー[E007]: tests/fixtures/jev.flow:69:8: Jev が答えるのは、列挙の値のどれか、列挙の値を低いものから並べた段階のどこか（`score`）、はいかいいえ（`bool`）と、それらを並べたレコードです。文章は書きません。フィールド `要点` は `string` です
+    69 |     要点 "要点は何か"
+エラー[E002]: tests/fixtures/jev.flow:76:5: `急ぎ` は `読み` のフィールドではありません（フィールドは 種類・人）
+    76 |     急ぎ "急いでいるか"
+エラー[E006]: tests/fixtures/jev.flow:83:5: `種類` が二度尋ねられています（81 行目）
+    83 |     種類 "種類はどれか"
+エラー[E002]: tests/fixtures/jev.flow:89:5: `請求` は `種類` の値ではありません（値は 返品・配送・その他）
+    89 |     請求 "請求のこと"
+エラー[E006]: tests/fixtures/jev.flow:95:5: `返品` の意味が二度書かれています（94 行目）
+    95 |     返品 "交換したい"
+エラー[E007]: tests/fixtures/jev.flow:99:13: Jev は score の段階を、書いた意味だけで見分けます。`種類` のすべての値の意味を、低い段階から高い段階の順に下に書いてください。その他 がありません
+    99 |   jev score "どの段階か"
+エラー[E007]: tests/fixtures/jev.flow:105:7: score の段階は 2 から 10 までで、`十一` の値は 11 個です
+   105 |   jev score "どの段階か"
+エラー[E007]: tests/fixtures/jev.flow:110:7: score は、列挙の値を低いものから並べた段階のどこかを答えます。`bool` は、はいかいいえで尋ねます
+   110 |   jev score "どの段階か"
+エラー[E007]: tests/fixtures/jev.flow:116:7: `true` と `false` の意味は、両方書くか、どちらも書かないかです
+   116 |   jev "人を求めているか"
+エラー[E002]: tests/fixtures/jev.flow:122:5: 答えははいかいいえなので、`yes` ではなく `true` と `false` の意味を書きます
+   122 |     yes "はっきり書いている"
+エラー[E007]: tests/fixtures/jev.flow:128:3: `confidence` は Jev の答えにどれだけの確信が要るかを書くところです。このタスクには `jev` がありません
+   128 |   confidence 0.8 else 迷い
+エラー[E007]: tests/fixtures/jev.flow:133:23: `件数` については Jev に尋ねていないので、その答えの確信度はありません
+   133 |     確かさ confidence of 件数
+エラー[E007]: tests/fixtures/jev.flow:134:5: Jev の確信度が入るのは、`rate[step 1%]` や `rate[step 0.01%]` のように、刻みで 100% を割り切れる率です。`件数` は `int` です
+   134 |     件数 confidence of 種類
+エラー[E007]: tests/fixtures/jev.flow:135:5: Jev の確信度が入るのは、`rate[step 1%]` や `rate[step 0.01%]` のように、刻みで 100% を割り切れる率です。`荒い` は `rate[step 3%]` です
+   135 |     荒い confidence of 種類
+エラー[E007]: tests/fixtures/jev.flow:141:23: `failure` はいつもあるエラーです。確信度が足りない答えには、タスク自身のエラーの名前を付けてください
+   141 |   confidence 0.8 else failure
+エラー[E006]: tests/fixtures/jev.flow:146:23: エラー `迷い` が二度書かれています。`confidence … else 迷い` がそれを宣言します
+   146 |   confidence 0.8 else 迷い
+エラー[E007]: tests/fixtures/jev.flow:152:3: はいかいいえの答えには、Jev はいつも半分以上確かなので、`confidence 0.5` で呼び出しが失敗することはありません。0.5 より大きい値を書いてください
+   152 |   confidence 0.5 else 迷い
+エラー[E007]: tests/fixtures/jev.flow:158:20: Jev は同じ入力にはほぼ同じように答えるので、尋ね直しても確信度は上がりません。`迷い` はリトライできません
+   158 |   retry 2 times on 迷い
+エラー[E007]: tests/fixtures/jev.flow:163:10: Jev の API はエラーを HTTP ステータスで伝えます。`混雑` が返ってくるときのステータスを、`混雑 = 429`（レート制限）や `混雑 = 529`（過負荷）のように書きます
+   163 |   errors 混雑
+エラー[E007]: tests/fixtures/jev.flow:168:3: Jev は答えるだけで外部のデータを何も変えないので、`key` は要りません
+   168 |   key
+エラー[E007]: tests/fixtures/jev.flow:173:3: `callback` のタスクがトークンを渡せるのは `lambda` か `aws sqs:sendMessage` です
+   173 |   callback
+エラー[E007]: tests/fixtures/jev.flow:178:3: Jev はいつも TypeSafe の API で呼びます。`url` は、エージェントの Open Responses の API がどのサーバーにあるかを書くところです
+   178 |   url "https://api.example.com/v1"
+エラー[E007]: tests/fixtures/jev.flow:183:3: Jev はすぐに答え、長く推論しません。`effort` はエージェントのモデルが推論にどれだけ力を入れるかを書くところです
+   183 |   effort high
+エラー[E007]: tests/fixtures/jev.flow:186:7: 結果はレコードなので、Jev にはフィールドごとに尋ねます。`jev` だけを書き、その下にフィールドごとに `<フィールド> "<質問>"` を書いてください
+   186 |   jev "状態はどれか"
+エラー[E007]: tests/fixtures/jev.flow:188:3: Jev は渡されたものを読んで答えるだけで、案件を始めたり動かしたり見たりはしません
+   188 |   observes
+警告[W032]: tests/fixtures/jev.flow:192:3: `jev-latest` はエイリアスで、ここを変えなくても Jev の新しいバージョンに移ります。確信度の意味はバージョンごとに違うので、確信度を合わせたバージョンを `model "jev-1.13.0"` のように書いてください
+   192 |   model "jev-latest"

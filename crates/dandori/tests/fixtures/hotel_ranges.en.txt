@@ -1,0 +1,4 @@
+error[E014]: tests/fixtures/hotel_ranges.flow:20:1: `booking.nights` can be outside `>=1 <=30`, the range of `nights` of the rule `hold`: it is `>=1 <=60`
+    20 |   let quote = hold(room: booking.room, nights: booking.nights)
+warning[W104]: tests/fixtures/hotel_ranges.flow:21:1: nothing says what range `extension` is in (the input `extension` has no range), and `nights` of the rule `hold` takes `>=1 <=30`
+    21 |   let longer = hold(room: booking.room, nights: extension)

@@ -1,0 +1,19 @@
+workflow cancel_succeed v1
+description "on cancel の誤り：succeed"
+
+inputs
+  id : string
+
+outputs
+  結果 : string
+
+task 止める(id: string)
+  idempotent
+
+flow
+  wait 1 day
+  succeed 結果 = "待ちました"
+
+on cancel
+  止める(id: id)
+  succeed 結果 = "止めました"

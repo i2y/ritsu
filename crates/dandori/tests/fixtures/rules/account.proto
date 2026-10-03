@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package bank.v1;
+
+// The state of an account, as a contract may have it: its values carry no prefix, and value 0 is a
+// state of its own, not "not set". A message that leaves the field out holds ACTIVE.
+enum Status {
+  ACTIVE = 0;
+  CLOSED = 1;
+}

@@ -1,0 +1,102 @@
+// The service tests/fixtures/service.flow implements, and does not fit: each difference is an E017
+// of its own. The workflow it names is not the flow's, the start's request and response differ from
+// the inputs and the outputs, its `fails` from the flow's `fail`s, and the methods that send an event
+// or answer a callback, and the one that asks where a run is, are wrong in each way they can be.
+syntax = "proto3";
+
+package shop.v1;
+
+import "buf/validate/validate.proto";
+import "dandori/v1/options.proto";
+
+service FulfillmentService {
+  option (dandori.v1.workflow) = {name: "fulfilment", version: 1};
+
+  rpc Fulfill(FulfillRequest) returns (FulfillResponse) {
+    option (dandori.v1.start) = {fails: ["OutOfStock", "Lost"]};
+  }
+
+  rpc Delivered(DeliveredRequest) returns (DeliveredResponse) {
+    option (dandori.v1.event) = {task: "delivered"};
+  }
+
+  rpc Arrived(ArrivedRequest) returns (ArrivedResponse) {
+    option (dandori.v1.event) = {task: "pack"};
+  }
+
+  rpc Approve(ApproveRequest) returns (ApproveResponse) {
+    option (dandori.v1.event) = {task: "approval"};
+  }
+
+  rpc AnswerPacking(AnswerPackingRequest) returns (AnswerPackingResponse) {
+    option (dandori.v1.answer) = {task: "approval"};
+  }
+
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {
+    option (dandori.v1.status) = {};
+  }
+}
+
+message FulfillRequest {
+  Order order = 1;
+  int32 priority = 2;
+  // a message field, which says whether it is set, read by an input without `?`: the workflow says what it needs
+  Address address = 3;
+}
+
+message Order {
+  string id = 1;
+  int64 amount = 2;
+}
+
+message Address {
+  string city = 1;
+  Code code = 2;
+}
+
+message Code {
+  string value = 1;
+}
+
+message FulfillResponse {
+  string tracking_number = 1 [json_name = "tracking_number"];
+  string eta = 2;
+  string note = 3;
+  int64 count = 4;
+  repeated string tags = 5;
+  optional string ref = 6 [(buf.validate.field).required = true];
+}
+
+message DeliveredRequest {
+  string where = 1;
+}
+
+message DeliveredResponse {}
+
+message ArrivedRequest {}
+
+message ArrivedResponse {}
+
+message ApproveRequest {
+  string approver = 1;
+}
+
+message ApproveResponse {
+  bool ok = 1;
+}
+
+message AnswerPackingRequest {
+  int32 boxes = 1;
+}
+
+message AnswerPackingResponse {}
+
+message GetStatusRequest {
+  string id = 1;
+}
+
+message GetStatusResponse {
+  optional int32 at = 1;
+  map<string, string> cases = 2;
+  string extra = 4;
+}

@@ -1,0 +1,3 @@
+エラー[E017]: tests/fixtures/service_unread.flow:1:31: `UnreadService/Start` のメッセージ `shop.v2.StartRequest` が分かりません。それがあるはずのファイルを読めませんでした
+     1 | workflow unread v1 implements shop.UnreadService
+  = `shop/v2/start.proto` を読めなかったので、そこにある型は使えません

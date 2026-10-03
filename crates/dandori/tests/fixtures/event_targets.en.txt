@@ -1,0 +1,12 @@
+build --target asl:
+error[E050]: tests/fixtures/event_targets.flow:10:1: `承認の知らせ` waits for an event sent to the workflow by name; Step Functions sends a value to an execution only through the token a task hands on (`callback`)
+    10 | task 承認の知らせ() -> 承認
+build --target durable:
+error[E050]: tests/fixtures/event_targets.flow:10:1: `承認の知らせ` waits for an event sent to the workflow by name; Lambda durable functions sends a value to an execution only through the id of a callback a step hands on (`callback`)
+    10 | task 承認の知らせ() -> 承認
+build --target argo:
+error[E050]: tests/fixtures/event_targets.flow:10:1: `承認の知らせ` waits for an event sent to the workflow by name; dandori does not write it for Argo Workflows yet; there, it would be a step suspended until it is resumed by its name
+    10 | task 承認の知らせ() -> 承認
+build --target pydantic-graph:
+error[E050]: tests/fixtures/event_targets.flow:10:1: `承認の知らせ` waits for an event sent to the workflow by name; dandori does not write it for pydantic-graph yet; there, the value would come to `Deps` by the task's name
+    10 | task 承認の知らせ() -> 承認

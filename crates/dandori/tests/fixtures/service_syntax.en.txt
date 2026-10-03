@@ -1,0 +1,2 @@
+error[E001]: tests/fixtures/service_syntax.flow:1:36: write the service after the name `use proto` gave the `.proto`, as `implements shop.FulfillmentService`
+     1 | workflow fulfillment v1 implements shop

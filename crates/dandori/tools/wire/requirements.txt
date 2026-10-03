@@ -1,0 +1,6 @@
+# boto3, which the Python the generated code sends AWS calls with, and moto, which plays the AWS
+# APIs on this machine for tools/wire/check.mjs and check.py.
+#   uv venv --python 3.13 tools/wire/.venv
+#   uv pip install --python tools/wire/.venv/bin/python -r tools/wire/requirements.txt
+boto3==1.43.103
+moto[server]==5.2.3

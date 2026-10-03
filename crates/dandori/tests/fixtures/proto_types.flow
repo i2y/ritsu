@@ -1,0 +1,54 @@
+workflow proto_types v1
+description "Types made from a .proto: every kind of field of types.Everything, the ranges and `required` of Protovalidate, and what is said of a name the .proto does not have, of a type that shares its name in the generated code, and of a case whose state is not the machine's"
+
+use rule order_state from "../../examples/order/rules/order_state.rule"
+use rule urgency from "../../examples/order/rules/urgency.rule"
+use openapi stripe from "../../examples/hotel/specs/stripe.json"
+use proto types from "protos/types.proto"
+  url "https://types.example.com"
+use proto urgency from "protos/types.proto"
+use proto shop from "protos/shop/v1/order.proto"
+use proto tree from "protos/tree.proto"
+
+# the kinds of field, all at once
+record Holder
+  everything : types.Everything
+  lines      : list[types.Line]
+  status     : types.Status?
+  mode       : types.Mode
+  money      : shop.common.v1.Money?
+  nested     : types.Everything.Nested?
+
+# a type of the flow's that is the generated name of a made one
+record types_Line
+  sku : string
+
+record Misspelled
+  stock : types.Stok
+
+record NotAType
+  service : types.TypesService
+
+record NotAnOpenApiType
+  intent : stripe.PaymentIntent
+
+# a message that holds itself is no record
+record Forest
+  root : tree.Tree
+
+# a number with a range, sent by a task that does not say what range it is in
+task put_line(sku: string, quantity: int) -> types.Line
+  connect types "TypesService/PutLine"
+
+# asked for where the service is called
+task place(customer: string) -> shop.Order
+  connect shop "OrderService/Place"
+
+# the states of the made enum are not the machine's
+case a : types.Ticket follows order_state.order
+
+case b : types.Ticket follows order_state.order
+  state status
+
+flow
+  pass

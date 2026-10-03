@@ -1,0 +1,29 @@
+rule inquiry_routing v1
+description "Which desk takes an inquiry, and how soon it is first answered, from its kind and whether the customer is a member. Written for the example"
+
+enum kind = returns | delivery | billing | other
+enum desk = logistics | accounting | general
+
+inputs
+  kind   : kind
+  member : bool
+
+outputs
+  desk   : desk
+  within : duration[h]  round down(1h)
+
+table route
+policy unique
+| kind     | member | -> desk    | within |
+| returns  | true   | logistics  | 24h    |
+| returns  | false  | logistics  | 48h    |
+| delivery | -      | logistics  | 24h    |
+| billing  | -      | accounting | 48h    |
+| other    | true   | general    | 48h    |
+| other    | false  | general    | 72h    |
+
+examples
+| kind    | member | -> desk    | within |
+| returns | true   | logistics  | 24h    |
+| billing | false  | accounting | 48h    |
+| other   | false  | general    | 72h    |

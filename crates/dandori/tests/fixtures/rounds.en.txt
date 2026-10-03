@@ -1,0 +1,8 @@
+error[E009]: tests/fixtures/rounds.flow:22:1: `r` is set both inside this `for … in parallel` and outside it; the rounds run at the same time and each keeps its own variables, so give them their own names
+    22 |   for x in 明細 at most 10 in parallel
+error[E009]: tests/fixtures/rounds.flow:24:5: the rounds of `for … in parallel` run at the same time, so there is no `break` from them
+    24 |     break
+error[E009]: tests/fixtures/rounds.flow:26:5: the workflow cannot `succeed` from inside `for … in parallel`, where other rounds may still run
+    26 |     succeed n = 1
+error[E009]: tests/fixtures/rounds.flow:28:11: `yield` is the last line of the body of `let <name> = for …`
+    28 |     yield z

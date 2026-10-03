@@ -1,0 +1,38 @@
+workflow cancel v1
+description "on cancel の誤り：案件を終わりでない状態に残して終わる on cancel、片付けの最中に失敗しうる呼び出し"
+
+use rule 注文の状態 from "../../examples/order/rules/注文の状態.rule"
+
+record 注文
+  id   : string
+  状態 : 注文の状態.状態
+
+task 注文を見る(id: string) -> 注文
+  observes
+  idempotent
+
+task 取消を頼む(id: string) -> 注文
+  sends 取消依頼
+  errors 断られた
+  refused as 断られた
+  key
+
+case 受注 : 注文 follows 注文の状態.注文
+  external 入金, 配達, 取消依頼
+  refused when 受理 = false
+
+inputs
+  注文ID : string
+
+flow
+  受注 <- 注文を見る(id: 注文ID)
+  wait 1 day
+  fail Waited "一日待ちました" leaving 受注
+
+on cancel
+  match 受注.状態
+    none => pass
+    受付, 入金済 =>
+      受注 <- 取消を頼む(id: 受注.id)
+        on 断られた => pass
+    出荷済, 配達済, 取消 => pass

@@ -1,0 +1,40 @@
+// The service tests/flows/events.flow implements: a run is started by the order's id, sent the
+// approval as an event, and asked where it is (Temporal's query `dandori.status`). The JSON names
+// are Japanese, as the flow's are. The carrier's news of the delivery is not a method of it: it
+// carries the order's state as the rule names it, in Japanese, and the values of a `.proto`'s enum
+// are ASCII names. A service has the events its clients send; the flow may wait for others.
+syntax = "proto3";
+
+package approvals.v1;
+
+import "dandori/v1/options.proto";
+
+service ApprovalService {
+  option (dandori.v1.workflow) = {name: "承認と配達", version: 1};
+
+  rpc Start(StartRequest) returns (StartResponse) {
+    option (dandori.v1.start) = {fails: ["Rejected", "NoApproval", "DeliveryLate", "NotDelivered", "Stopped"]};
+  }
+
+  rpc Approve(ApproveRequest) returns (ApproveResponse) {
+    option (dandori.v1.event) = {task: "承認の知らせ"};
+  }
+
+  rpc GetStatus(GetStatusRequest) returns (dandori.v1.Status) {
+    option (dandori.v1.status) = {};
+  }
+}
+
+message StartRequest {
+  string order_id = 1 [json_name = "注文ID"];
+}
+
+message StartResponse {}
+
+message ApproveRequest {
+  string approver = 1 [json_name = "承認者"];
+}
+
+message ApproveResponse {}
+
+message GetStatusRequest {}

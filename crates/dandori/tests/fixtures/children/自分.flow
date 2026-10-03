@@ -1,0 +1,11 @@
+workflow 自分 v1
+description "自分自身を子として走らせるフロー"
+
+inputs
+  n : int
+
+task 自分を呼ぶ(n: int)
+  flow "自分.flow"
+
+flow
+  自分を呼ぶ(n: n)

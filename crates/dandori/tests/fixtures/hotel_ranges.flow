@@ -1,0 +1,22 @@
+workflow hotel_ranges v1
+description "A draft of the hotel booking whose bookings run longer than the rule for the hold takes, and whose extension says nothing of its range"
+
+use rule hold from "../../examples/hotel/rules/hold_amount.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:hold-amount"
+
+record Booking
+  room   : hold.room
+  nights : int  range >=1 <=60
+
+inputs
+  booking   : Booking
+  extension : int
+
+outputs
+  amount : money[JPY, incl_tax]
+  extra  : money[JPY, incl_tax]
+
+flow
+  let quote = hold(room: booking.room, nights: booking.nights)
+  let longer = hold(room: booking.room, nights: extension)
+  succeed amount = quote.amount, extra = longer.amount

@@ -1,0 +1,17 @@
+workflow approval v1
+
+record 承認
+  承認者 : string
+
+outputs
+  承認者 : string
+
+# Someone approves in a tool of their own, which sends the answer to the workflow by its id.
+task 承認の知らせ() -> 承認
+  event
+  timeout 3 days
+
+flow
+  let a = 承認の知らせ()
+    on timeout => fail NoApproval "三日たっても承認がありません"
+  succeed 承認者 = a.承認者

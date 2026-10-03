@@ -1,0 +1,6 @@
+error[E007]: tests/fixtures/rule_connect.flow:6:3: the rule is already called another way (line 5); a rule is called by `lambda` or by `connect`
+     6 |   connect "https://rules.example.com"
+error[E007]: tests/fixtures/rule_connect.flow:9:3: `connection` is for a rule called by `connect`; Step Functions invokes a rule's `lambda` without one
+     9 |   connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+error[E007]: tests/fixtures/rule_connect.flow:12:3: `connect` says where the rule's service is, with http:// or https://
+    12 |   connect "ftp://rules.example.com"

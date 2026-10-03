@@ -1,0 +1,25 @@
+workflow 査定 v1
+description "受付のワークフローが子として走らせる査定：個人の申込には点を付け、法人の申込は人の確認に回し、団体の申込は扱わない"
+
+enum 区分 = 個人 | 法人 | 団体
+enum 結論 = 可 | 保留
+
+record 申込
+  id   : string
+  額   : int  range >=1 <=1000000
+  区分 : 区分
+
+inputs
+  申込 : 申込
+  担当 : string?
+
+outputs
+  結論 : 結論
+  点   : int  range >=0 <=100
+  担当 : string?
+
+flow
+  match 申込.区分
+    個人 => succeed 結論 = 可, 点 = 80, 担当 = 担当
+    法人 => fail 要確認 "申込 {申込.id} は法人の申込です"
+    団体 => fail 対象外 "申込 {申込.id} は扱いません"

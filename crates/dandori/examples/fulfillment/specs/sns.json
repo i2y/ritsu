@@ -1,0 +1,515 @@
+{
+ "smithy": "2.0",
+ "metadata": {
+  "dandori": "A copy of the Smithy model of Amazon SNS (github.com/aws/api-models-aws, models/sns/service/2010-03-31/sns-2010-03-31.json, read on 26 September 2026). Only the operations Publish and the shapes they reach are kept, and the service without its endpoint rules. Made by tools/specs/trim.py."
+ },
+ "shapes": {
+  "com.amazonaws.sns#AmazonSimpleNotificationService": {
+   "type": "service",
+   "version": "2010-03-31",
+   "operations": [
+    {
+     "target": "com.amazonaws.sns#Publish"
+    }
+   ],
+   "traits": {
+    "aws.api#service": {
+     "sdkId": "SNS",
+     "arnNamespace": "sns",
+     "cloudFormationName": "SNS",
+     "cloudTrailEventSource": "sns.amazonaws.com",
+     "endpointPrefix": "sns"
+    },
+    "aws.auth#sigv4": {
+     "name": "sns"
+    },
+    "aws.protocols#awsQuery": {},
+    "smithy.api#documentation": "<fullname>Amazon Simple Notification Service</fullname>\n         <p>Amazon Simple Notification Service (Amazon SNS) is a web service that enables you\n            to build distributed web-enabled applications. Applications can use Amazon SNS to easily push\n            real-time notification messages to interested subscribers over multiple delivery\n            protocols. For more information about this product see the <a href=\"http://aws.amazon.com/sns/\">Amazon SNS product page</a>. For detailed information about Amazon SNS features\n            and their associated API calls, see the <a href=\"https://docs.aws.amazon.com/sns/latest/dg/\">Amazon SNS Developer Guide</a>. </p>\n         <p>For information on the permissions you need to use this API, see <a href=\"https://docs.aws.amazon.com/sns/latest/dg/sns-authentication-and-access-control.html\">Identity and access management in Amazon SNS</a> in the <i>Amazon SNS Developer\n                Guide.</i>\n         </p>\n         <p>We also provide SDKs that enable you to access Amazon SNS from your preferred programming\n            language. The SDKs contain functionality that automatically takes care of tasks such as:\n            cryptographically signing your service requests, retrying requests, and handling error\n            responses. For a list of available SDKs, go to <a href=\"http://aws.amazon.com/tools/\">Tools for Amazon Web Services</a>. </p>",
+    "smithy.api#title": "Amazon Simple Notification Service",
+    "smithy.api#xmlNamespace": {
+     "uri": "http://sns.amazonaws.com/doc/2010-03-31/"
+    }
+   }
+  },
+  "com.amazonaws.sns#AuthorizationErrorException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "AuthorizationError",
+     "httpResponseCode": 403
+    },
+    "smithy.api#documentation": "<p>Indicates that the user has been denied access to the requested resource.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 403
+   }
+  },
+  "com.amazonaws.sns#Binary": {
+   "type": "blob"
+  },
+  "com.amazonaws.sns#EndpointDisabledException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#documentation": "<p>Message for endpoint disabled.</p>"
+     }
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "EndpointDisabled",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>Exception error indicating endpoint disabled.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#InternalErrorException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "InternalError",
+     "httpResponseCode": 500
+    },
+    "smithy.api#documentation": "<p>Indicates an internal service error.</p>",
+    "smithy.api#error": "server",
+    "smithy.api#httpError": 500
+   }
+  },
+  "com.amazonaws.sns#InvalidParameterException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "InvalidParameter",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>Indicates that a request parameter does not comply with the associated\n            constraints.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#InvalidParameterValueException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#documentation": "<p>The parameter of an entry in a request doesn't abide by the specification. </p>"
+     }
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "ParameterValueInvalid",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>Indicates that a request parameter does not comply with the associated constraints.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#InvalidSecurityException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "InvalidSecurity",
+     "httpResponseCode": 403
+    },
+    "smithy.api#documentation": "<p>The credential signature isn't valid. You must use an HTTPS endpoint and sign your\n            request using Signature Version 4.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 403
+   }
+  },
+  "com.amazonaws.sns#KMSAccessDeniedException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMSAccessDenied",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The ciphertext references a key that doesn't exist or that you don't have access\n            to.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#KMSDisabledException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMSDisabled",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The request was rejected because the specified Amazon Web Services KMS key isn't\n            enabled.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#KMSInvalidStateException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMSInvalidState",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The request was rejected because the state of the specified resource isn't valid for\n            this request. For more information, see <a href=\"https://docs.aws.amazon.com/kms/latest/developerguide/key-state.html\">Key states of Amazon Web Services KMS keys</a> in the <i>Key Management Service Developer\n                Guide</i>.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#KMSNotFoundException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMSNotFound",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The request was rejected because the specified entity or resource can't be\n            found.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#KMSOptInRequired": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMSOptInRequired",
+     "httpResponseCode": 403
+    },
+    "smithy.api#documentation": "<p>The Amazon Web Services access key ID needs a subscription for the service.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 403
+   }
+  },
+  "com.amazonaws.sns#KMSThrottlingException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMSThrottling",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The request was denied due to request throttling. For more information about\n            throttling, see <a href=\"https://docs.aws.amazon.com/kms/latest/developerguide/limits.html#requests-per-second\">Limits</a> in\n            the <i>Key Management Service Developer Guide.</i>\n         </p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#MessageAttributeMap": {
+   "type": "map",
+   "key": {
+    "target": "com.amazonaws.sns#String",
+    "traits": {
+     "smithy.api#xmlName": "Name"
+    }
+   },
+   "value": {
+    "target": "com.amazonaws.sns#MessageAttributeValue",
+    "traits": {
+     "smithy.api#xmlName": "Value"
+    }
+   }
+  },
+  "com.amazonaws.sns#MessageAttributeValue": {
+   "type": "structure",
+   "members": {
+    "DataType": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#documentation": "<p>Amazon SNS supports the following logical data types: String, String.Array, Number, and\n            Binary. For more information, see <a href=\"https://docs.aws.amazon.com/sns/latest/dg/SNSMessageAttributes.html#SNSMessageAttributes.DataTypes\">Message\n                Attribute Data Types</a>.</p>",
+      "smithy.api#required": {}
+     }
+    },
+    "StringValue": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#documentation": "<p>Strings are Unicode with UTF8 binary encoding. For a list of code values, see <a href=\"https://en.wikipedia.org/wiki/ASCII#ASCII_printable_characters\">ASCII Printable\n                Characters</a>.</p>"
+     }
+    },
+    "BinaryValue": {
+     "target": "com.amazonaws.sns#Binary",
+     "traits": {
+      "smithy.api#documentation": "<p>Binary type attributes can store any binary data, for example, compressed data,\n            encrypted data, or images.</p>"
+     }
+    }
+   },
+   "traits": {
+    "smithy.api#documentation": "<p>The user-specified message attribute value. For string data types, the value attribute\n            has the same restrictions on the content as the message body. For more information, see\n                <a href=\"https://docs.aws.amazon.com/sns/latest/api/API_Publish.html\">Publish</a>.</p>\n         <p>Name, type, and value must not be empty or null. In addition, the message body should\n            not be empty or null. All parts of the message attribute, including name, type, and\n            value, are included in the message size restriction, which is 256 KiB (262,144 bytes) by\n            default and is determined by the topic's <code>MaximumMessageSize</code> attribute. For\n            more information, see <a href=\"https://docs.aws.amazon.com/sns/latest/dg/large-message-payloads.html\">Large message payloads</a>,\n                <a href=\"https://docs.aws.amazon.com/sns/latest/dg/SNSMessageAttributes.html\">Amazon SNS message attributes</a> and\n                <a href=\"https://docs.aws.amazon.com/sns/latest/dg/sms_publish-to-phone.html\">Publishing\n                to a mobile phone</a> in the <i>Amazon SNS Developer Guide.</i>\n         </p>"
+   }
+  },
+  "com.amazonaws.sns#NotFoundException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "NotFound",
+     "httpResponseCode": 404
+    },
+    "smithy.api#documentation": "<p>Indicates that the requested resource does not exist.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 404
+   }
+  },
+  "com.amazonaws.sns#PhoneNumber": {
+   "type": "string",
+   "traits": {
+    "smithy.api#sensitive": {}
+   }
+  },
+  "com.amazonaws.sns#PlatformApplicationDisabledException": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#documentation": "<p>Message for platform application disabled.</p>"
+     }
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "PlatformApplicationDisabled",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>Exception error indicating platform application disabled.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#Publish": {
+   "type": "operation",
+   "input": {
+    "target": "com.amazonaws.sns#PublishInput"
+   },
+   "output": {
+    "target": "com.amazonaws.sns#PublishResponse"
+   },
+   "errors": [
+    {
+     "target": "com.amazonaws.sns#AuthorizationErrorException"
+    },
+    {
+     "target": "com.amazonaws.sns#EndpointDisabledException"
+    },
+    {
+     "target": "com.amazonaws.sns#InternalErrorException"
+    },
+    {
+     "target": "com.amazonaws.sns#InvalidParameterException"
+    },
+    {
+     "target": "com.amazonaws.sns#InvalidParameterValueException"
+    },
+    {
+     "target": "com.amazonaws.sns#InvalidSecurityException"
+    },
+    {
+     "target": "com.amazonaws.sns#KMSAccessDeniedException"
+    },
+    {
+     "target": "com.amazonaws.sns#KMSDisabledException"
+    },
+    {
+     "target": "com.amazonaws.sns#KMSInvalidStateException"
+    },
+    {
+     "target": "com.amazonaws.sns#KMSNotFoundException"
+    },
+    {
+     "target": "com.amazonaws.sns#KMSOptInRequired"
+    },
+    {
+     "target": "com.amazonaws.sns#KMSThrottlingException"
+    },
+    {
+     "target": "com.amazonaws.sns#NotFoundException"
+    },
+    {
+     "target": "com.amazonaws.sns#PlatformApplicationDisabledException"
+    },
+    {
+     "target": "com.amazonaws.sns#ValidationException"
+    }
+   ],
+   "traits": {
+    "smithy.api#documentation": "<p>Sends a message to an Amazon SNS topic, a text message (SMS message) directly to a phone\n            number, or a message to a mobile platform endpoint (when you specify the\n                <code>TargetArn</code>).</p>\n         <p>If you send a message to a topic, Amazon SNS delivers the message to each endpoint that is\n            subscribed to the topic. The format of the message depends on the notification protocol\n            for each subscribed endpoint.</p>\n         <p>When a <code>messageId</code> is returned, the message is saved and Amazon SNS immediately\n            delivers it to subscribers.</p>\n         <p>To use the <code>Publish</code> action for publishing a message to a mobile endpoint,\n            such as an app on a Kindle device or mobile phone, you must specify the EndpointArn for\n            the TargetArn parameter. The EndpointArn is returned when making a call with the\n                <code>CreatePlatformEndpoint</code> action. </p>\n         <p>For more information about formatting messages, see <a href=\"https://docs.aws.amazon.com/sns/latest/dg/mobile-push-send-custommessage.html\">Send Custom\n                Platform-Specific Payloads in Messages to Mobile Devices</a>. </p>\n         <important>\n            <p>You can publish messages only to topics and endpoints in the same\n                Amazon Web Services Region.</p>\n         </important>"
+   }
+  },
+  "com.amazonaws.sns#PublishInput": {
+   "type": "structure",
+   "members": {
+    "TopicArn": {
+     "target": "com.amazonaws.sns#topicARN",
+     "traits": {
+      "smithy.api#documentation": "<p>The topic you want to publish to.</p>\n         <p>If you don't specify a value for the <code>TopicArn</code> parameter, you must specify\n            a value for the <code>PhoneNumber</code> or <code>TargetArn</code> parameters.</p>"
+     }
+    },
+    "TargetArn": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#documentation": "<p>If you don't specify a value for the <code>TargetArn</code> parameter, you must\n            specify a value for the <code>PhoneNumber</code> or <code>TopicArn</code>\n            parameters.</p>"
+     }
+    },
+    "PhoneNumber": {
+     "target": "com.amazonaws.sns#PhoneNumber",
+     "traits": {
+      "smithy.api#documentation": "<p>The phone number to which you want to deliver an SMS message. Use E.164 format.</p>\n         <p>If you don't specify a value for the <code>PhoneNumber</code> parameter, you must\n            specify a value for the <code>TargetArn</code> or <code>TopicArn</code>\n            parameters.</p>"
+     }
+    },
+    "Message": {
+     "target": "com.amazonaws.sns#message",
+     "traits": {
+      "smithy.api#documentation": "<p>The message you want to send.</p>\n         <p>If you are publishing to a topic and you want to send the same message to all\n            transport protocols, include the text of the message as a String value. If you want to\n            send different messages for each transport protocol, set the value of the\n                <code>MessageStructure</code> parameter to <code>json</code> and use a JSON object\n            for the <code>Message</code> parameter. \n        </p>\n         <p></p>\n         <p>Constraints:</p>\n         <ul>\n            <li>\n               <p>With the exception of SMS, messages must be UTF-8 encoded strings. By default,\n                    a message can be at most 256 KiB in size (262,144 bytes, not 262,144\n                    characters).</p>\n               <p>When you publish to a topic, the maximum size is determined by the topic's\n                        <code>MaximumMessageSize</code> attribute, which supports values up to 1 MiB\n                    (1,048,576 bytes). Amazon SNS validates the combined size of the message body and\n                    message attributes against this value and returns an\n                        <code>InvalidParameter</code> error if the limit is exceeded.</p>\n               <p>For more information, see <a href=\"https://docs.aws.amazon.com/sns/latest/dg/large-message-payloads.html\">Large message\n                        payloads</a> in the <i>Amazon SNS Developer Guide.</i>\n               </p>\n            </li>\n            <li>\n               <p>For SMS, each message can contain up to 140 characters. This character limit\n                    depends on the encoding schema. For example, an SMS message can contain 160 GSM\n                    characters, 140 ASCII characters, or 70 UCS-2 characters.</p>\n               <p>If you publish a message that exceeds this size limit, Amazon SNS sends the message\n                    as multiple messages, each fitting within the size limit. Messages aren't\n                    truncated mid-word but are cut off at whole-word boundaries.</p>\n               <p>The total size limit for a single SMS <code>Publish</code> action is 1,600\n                    characters.</p>\n            </li>\n         </ul>\n         <p>JSON-specific constraints:</p>\n         <ul>\n            <li>\n               <p>Keys in the JSON object that correspond to supported transport protocols must\n                    have simple JSON string values.</p>\n            </li>\n            <li>\n               <p>The values will be parsed (unescaped) before they are used in outgoing\n                    messages.</p>\n            </li>\n            <li>\n               <p>Outbound notifications are JSON encoded (meaning that the characters will be\n                    reescaped for sending).</p>\n            </li>\n            <li>\n               <p>Values have a minimum length of 0 (the empty string, \"\", is allowed).</p>\n            </li>\n            <li>\n               <p>Values have a maximum length bounded by the overall message size (so,\n                    including multiple protocols may limit message sizes).</p>\n            </li>\n            <li>\n               <p>Non-string values will cause the key to be ignored.</p>\n            </li>\n            <li>\n               <p>Keys that do not correspond to supported transport protocols are\n                    ignored.</p>\n            </li>\n            <li>\n               <p>Duplicate keys are not allowed.</p>\n            </li>\n            <li>\n               <p>Failure to parse or validate any key or value in the message will cause the\n                        <code>Publish</code> call to return an error (no partial delivery).</p>\n            </li>\n         </ul>",
+      "smithy.api#required": {}
+     }
+    },
+    "Subject": {
+     "target": "com.amazonaws.sns#subject",
+     "traits": {
+      "smithy.api#documentation": "<p>Optional parameter to be used as the \"Subject\" line when the message is delivered to\n            email endpoints. This field will also be included, if present, in the standard JSON\n            messages delivered to other endpoints.</p>\n         <p>Constraints: Subjects must be UTF-8 text with no line breaks or control characters,\n            and less than 100 characters long.</p>"
+     }
+    },
+    "MessageStructure": {
+     "target": "com.amazonaws.sns#messageStructure",
+     "traits": {
+      "smithy.api#documentation": "<p>Set <code>MessageStructure</code> to <code>json</code> if you want to send a different\n            message for each protocol. For example, using one publish action, you can send a short\n            message to your SMS subscribers and a longer message to your email subscribers. If you\n            set <code>MessageStructure</code> to <code>json</code>, the value of the\n                <code>Message</code> parameter must: </p>\n         <ul>\n            <li>\n               <p>be a syntactically valid JSON object; and</p>\n            </li>\n            <li>\n               <p>contain at least a top-level JSON key of \"default\" with a value that is a\n                    string.</p>\n            </li>\n         </ul>\n         <p>You can define other top-level keys that define the message you want to send to a\n            specific transport protocol (e.g., \"http\").</p>\n         <p>Valid value: <code>json</code>\n         </p>"
+     }
+    },
+    "MessageAttributes": {
+     "target": "com.amazonaws.sns#MessageAttributeMap",
+     "traits": {
+      "smithy.api#documentation": "<p>Message attributes for Publish action.</p>"
+     }
+    },
+    "MessageDeduplicationId": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#documentation": "<ul>\n            <li>\n               <p>This parameter applies only to FIFO (first-in-first-out) topics. The\n                        <code>MessageDeduplicationId</code> can contain up to 128 alphanumeric\n                    characters <code>(a-z, A-Z, 0-9)</code> and punctuation\n                        <code>(!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~)</code>.</p>\n            </li>\n            <li>\n               <p>Every message must have a unique <code>MessageDeduplicationId</code>, which is\n                    a token used for deduplication of sent messages within the 5 minute minimum\n                    deduplication interval.</p>\n            </li>\n            <li>\n               <p>The scope of deduplication depends on the <code>FifoThroughputScope</code>\n                    attribute, when set to <code>Topic</code> the message deduplication scope is\n                    across the entire topic, when set to <code>MessageGroup</code> the message\n                    deduplication scope is within each individual message group.</p>\n            </li>\n            <li>\n               <p>If a message with a particular <code>MessageDeduplicationId</code> is sent\n                    successfully, subsequent messages within the deduplication scope and interval,\n                    with the same <code>MessageDeduplicationId</code>, are accepted successfully but\n                    aren't delivered.</p>\n            </li>\n            <li>\n               <p>Every message must have a unique <code>MessageDeduplicationId</code>:</p>\n               <ul>\n                  <li>\n                     <p>You may provide a <code>MessageDeduplicationId</code>\n                            explicitly.</p>\n                  </li>\n                  <li>\n                     <p>If you aren't able to provide a <code>MessageDeduplicationId</code>\n                            and you enable <code>ContentBasedDeduplication</code> for your topic,\n                            Amazon SNS uses a SHA-256 hash to generate the\n                                <code>MessageDeduplicationId</code> using the body of the message\n                            (but not the attributes of the message).</p>\n                  </li>\n                  <li>\n                     <p>If you don't provide a <code>MessageDeduplicationId</code> and the\n                            topic doesn't have <code>ContentBasedDeduplication</code> set, the\n                            action fails with an error.</p>\n                  </li>\n                  <li>\n                     <p>If the topic has a <code>ContentBasedDeduplication</code> set, your\n                                <code>MessageDeduplicationId</code> overrides the generated one.\n                        </p>\n                  </li>\n               </ul>\n            </li>\n            <li>\n               <p>When <code>ContentBasedDeduplication</code> is in effect, messages with\n                    identical content sent within the deduplication scope and interval are treated\n                    as duplicates and only one copy of the message is delivered.</p>\n            </li>\n            <li>\n               <p>If you send one message with <code>ContentBasedDeduplication</code> enabled,\n                    and then another message with a <code>MessageDeduplicationId</code> that is the\n                    same as the one generated for the first <code>MessageDeduplicationId</code>, the\n                    two messages are treated as duplicates, within the deduplication scope and\n                    interval, and only one copy of the message is delivered.</p>\n            </li>\n         </ul>"
+     }
+    },
+    "MessageGroupId": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#documentation": "<p>The\n                <code>MessageGroupId</code> can contain up to 128 alphanumeric characters\n                <code>(a-z, A-Z, 0-9)</code> and punctuation\n                <code>(!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~)</code>.</p>\n         <p>\n        For FIFO topics: The <code>MessageGroupId</code> is a tag that specifies that a message belongs to a\n            specific message group. Messages that belong to the same message group are processed in\n            a FIFO manner (however, messages in different message groups might be processed out of\n            order). Every message must include a <code>MessageGroupId</code>.\n        </p>\n         <p>\n        For standard topics: The <code>MessageGroupId</code> is optional\n            and is forwarded only to Amazon SQS standard subscriptions to activate <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-fair-queues.html\">fair queues</a>.\n            The <code>MessageGroupId</code> is not used for, or sent to, any other endpoint types.\n            When provided, the same validation rules apply as for FIFO topics.\n        </p>"
+     }
+    }
+   },
+   "traits": {
+    "smithy.api#documentation": "<p>Input for Publish action.</p>",
+    "smithy.api#input": {}
+   }
+  },
+  "com.amazonaws.sns#PublishResponse": {
+   "type": "structure",
+   "members": {
+    "MessageId": {
+     "target": "com.amazonaws.sns#messageId",
+     "traits": {
+      "smithy.api#documentation": "<p>Unique identifier assigned to the published message.</p>\n         <p>Length Constraint: Maximum 100 characters</p>"
+     }
+    },
+    "SequenceNumber": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#documentation": "<p>This response element applies only to FIFO (first-in-first-out) topics. </p>\n         <p>The sequence number is a large, non-consecutive number that Amazon SNS assigns to each\n            message. The length of <code>SequenceNumber</code> is 128 bits.\n                <code>SequenceNumber</code> continues to increase for each\n                <code>MessageGroupId</code>.</p>"
+     }
+    }
+   },
+   "traits": {
+    "smithy.api#documentation": "<p>Response for Publish action.</p>",
+    "smithy.api#output": {}
+   }
+  },
+  "com.amazonaws.sns#String": {
+   "type": "string"
+  },
+  "com.amazonaws.sns#ValidationException": {
+   "type": "structure",
+   "members": {
+    "Message": {
+     "target": "com.amazonaws.sns#String",
+     "traits": {
+      "smithy.api#required": {}
+     }
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "ValidationException",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>Indicates that a parameter in the request is invalid.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sns#message": {
+   "type": "string"
+  },
+  "com.amazonaws.sns#messageId": {
+   "type": "string"
+  },
+  "com.amazonaws.sns#messageStructure": {
+   "type": "string"
+  },
+  "com.amazonaws.sns#subject": {
+   "type": "string"
+  },
+  "com.amazonaws.sns#topicARN": {
+   "type": "string"
+  }
+ }
+}

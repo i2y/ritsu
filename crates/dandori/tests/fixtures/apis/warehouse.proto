@@ -1,0 +1,36 @@
+// A stock service for tests/fixtures/apis.flow: a method that streams, a 64-bit integer and a
+// number with a fraction in an answer, and a field that says whether it is set.
+syntax = "proto3";
+
+package warehouse.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service StockService {
+  rpc Reserve(ReserveRequest) returns (ReserveResponse);
+  rpc Watch(WatchRequest) returns (stream ReserveResponse);
+}
+
+message ReserveRequest {
+  string sku = 1;
+  int32 quantity = 2;
+}
+
+message WatchRequest {
+  string sku = 1;
+}
+
+enum Stock {
+  unspecified = 0;
+  secured = 1;
+  short = 2;
+}
+
+message ReserveResponse {
+  string sku = 1;
+  Stock stock = 2;
+  optional string id = 3;
+  int64 count = 4;
+  double price = 5;
+  google.protobuf.Timestamp reserved_at = 6;
+}

@@ -1,0 +1,11 @@
+{
+  "name": "dandori-wire-check",
+  "private": true,
+  "type": "module",
+  "description": "Sends the calls of the generated workflows through the default Transport of TypeScript to local stand-ins of HTTP, Lambda and the AWS APIs (moto), and checks what arrives and what comes back",
+  "dependencies": {
+    "@aws-sdk/client-lambda": "3.1141.0",
+    "@aws-sdk/client-sns": "3.1141.0",
+    "@aws-sdk/client-sqs": "3.1141.0"
+  }
+}

@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package shop.v1;
+
+// Three of these imports are not on the disk: annotations is only for options, money and the
+// cancel request are types.
+import "google/api/annotations.proto";
+import "google/type/money.proto";
+import "google/protobuf/timestamp.proto";
+import "shop/v2/cancel.proto";
+
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_BOOK = 1;
+  KIND_TOY = 2;
+}
+
+message Item {
+  string sku = 1;
+  Kind kind = 2;
+  google.protobuf.Timestamp listed_at = 3;
+}
+
+message Priced {
+  string sku = 1;
+  google.type.Money price = 2;
+}
+
+message ItemRequest {
+  string sku = 1;
+}
+
+message QuoteRequest {
+  google.type.Money budget = 1;
+}
+
+message QuoteResponse {
+  string sku = 1;
+}
+
+service CatalogService {
+  rpc GetItem(ItemRequest) returns (Item) {
+    option (google.api.http) = {get: "/v1/items/{sku}"};
+  }
+  rpc GetPriced(ItemRequest) returns (Priced);
+  rpc Quote(QuoteRequest) returns (QuoteResponse);
+  rpc Cancel(shop.v2.CancelRequest) returns (Item);
+}

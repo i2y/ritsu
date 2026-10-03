@@ -1,0 +1,555 @@
+{
+ "smithy": "2.0",
+ "metadata": {
+  "dandori": "A copy of the Smithy model of Amazon SQS (github.com/aws/api-models-aws, models/sqs/service/2012-11-05/sqs-2012-11-05.json, read on 26 September 2026). Only the operations SendMessage and the shapes they reach are kept, and the service without its endpoint rules. Made by tools/specs/trim.py."
+ },
+ "shapes": {
+  "com.amazonaws.sqs#AmazonSQS": {
+   "type": "service",
+   "version": "2012-11-05",
+   "operations": [
+    {
+     "target": "com.amazonaws.sqs#SendMessage"
+    }
+   ],
+   "traits": {
+    "aws.api#service": {
+     "sdkId": "SQS",
+     "arnNamespace": "sqs",
+     "cloudFormationName": "SQS",
+     "cloudTrailEventSource": "sqs.amazonaws.com",
+     "endpointPrefix": "sqs"
+    },
+    "aws.auth#sigv4": {
+     "name": "sqs"
+    },
+    "aws.protocols#awsJson1_0": {},
+    "aws.protocols#awsQueryCompatible": {},
+    "smithy.api#documentation": "<p>Welcome to the <i>Amazon SQS API Reference</i>.</p>\n         <p>Amazon SQS is a reliable, highly-scalable hosted queue for storing messages as they travel\n            between applications or microservices. Amazon SQS moves data between distributed application\n            components and helps you decouple these components.</p>\n         <p>For information on the permissions you need to use this API, see <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-authentication-and-access-control.html\">Identity and access management</a> in the <i>Amazon SQS Developer\n                Guide.</i>\n         </p>\n         <p>You can use <a href=\"http://aws.amazon.com/tools/#sdk\">Amazon Web Services SDKs</a> to access\n            Amazon SQS using your favorite programming language. The SDKs perform tasks such as the\n            following automatically:</p>\n         <ul>\n            <li>\n               <p>Cryptographically sign your service requests</p>\n            </li>\n            <li>\n               <p>Retry requests</p>\n            </li>\n            <li>\n               <p>Handle error responses</p>\n            </li>\n         </ul>\n         <p>\n            <b>Additional information</b>\n         </p>\n         <ul>\n            <li>\n               <p>\n                  <a href=\"http://aws.amazon.com/sqs/\">Amazon SQS Product Page</a>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <i>Amazon SQS Developer Guide</i>\n               </p>\n               <ul>\n                  <li>\n                     <p>\n                        <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-making-api-requests.html\">Making API Requests</a>\n                     </p>\n                  </li>\n                  <li>\n                     <p>\n                        <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-message-metadata.html#sqs-message-attributes\">Amazon SQS Message Attributes</a>\n                     </p>\n                  </li>\n                  <li>\n                     <p>\n                        <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html\">Amazon SQS Dead-Letter Queues</a>\n                     </p>\n                  </li>\n               </ul>\n            </li>\n            <li>\n               <p>\n                  <a href=\"https://awscli.amazonaws.com/v2/documentation/api/latest/reference/sqs/index.html\">Amazon SQS in the Command Line Interface</a>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <i>Amazon Web Services General Reference</i>\n               </p>\n               <ul>\n                  <li>\n                     <p>\n                        <a href=\"https://docs.aws.amazon.com/general/latest/gr/rande.html#sqs_region\">Regions and\n                                Endpoints</a>\n                     </p>\n                  </li>\n               </ul>\n            </li>\n         </ul>",
+    "smithy.api#title": "Amazon Simple Queue Service"
+   }
+  },
+  "com.amazonaws.sqs#Binary": {
+   "type": "blob"
+  },
+  "com.amazonaws.sqs#BinaryList": {
+   "type": "list",
+   "member": {
+    "target": "com.amazonaws.sqs#Binary",
+    "traits": {
+     "smithy.api#xmlName": "BinaryListValue"
+    }
+   }
+  },
+  "com.amazonaws.sqs#ExceptionMessage": {
+   "type": "string"
+  },
+  "com.amazonaws.sqs#InvalidAddress": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "InvalidAddress",
+     "httpResponseCode": 404
+    },
+    "smithy.api#documentation": "<p>The specified ID is invalid.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 404
+   }
+  },
+  "com.amazonaws.sqs#InvalidMessageContents": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "smithy.api#documentation": "<p>The message contains characters outside the allowed set.</p>",
+    "smithy.api#error": "client"
+   }
+  },
+  "com.amazonaws.sqs#InvalidSecurity": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "InvalidSecurity",
+     "httpResponseCode": 403
+    },
+    "smithy.api#documentation": "<p>The request was not made over HTTPS or did not use SigV4 for signing.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 403
+   }
+  },
+  "com.amazonaws.sqs#KmsAccessDenied": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMS.AccessDeniedException",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The caller doesn't have the required KMS access.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sqs#KmsDisabled": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMS.DisabledException",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The request was denied due to request throttling.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sqs#KmsInvalidKeyUsage": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMS.InvalidKeyUsageException",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The request was rejected for one of the following reasons:</p>\n         <ul>\n            <li>\n               <p>The KeyUsage value of the KMS key is incompatible with the API\n                    operation.</p>\n            </li>\n            <li>\n               <p>The encryption algorithm or signing algorithm specified for the operation is\n                    incompatible with the type of key material in the KMS key (KeySpec).</p>\n            </li>\n         </ul>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sqs#KmsInvalidState": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMS.InvalidStateException",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The request was rejected because the state of the specified resource is not valid for\n            this request.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sqs#KmsNotFound": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMS.NotFoundException",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>The request was rejected because the specified entity or resource could not be found.\n        </p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sqs#KmsOptInRequired": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMS.OptInRequired",
+     "httpResponseCode": 403
+    },
+    "smithy.api#documentation": "<p>The request was rejected because the specified key policy isn't syntactically or\n            semantically correct.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 403
+   }
+  },
+  "com.amazonaws.sqs#KmsThrottled": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "KMS.ThrottlingException",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>Amazon Web Services KMS throttles requests for the following conditions.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sqs#MessageAttributeValue": {
+   "type": "structure",
+   "members": {
+    "StringValue": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>Strings are Unicode with UTF-8 binary encoding. For a list of code values, see <a href=\"http://en.wikipedia.org/wiki/ASCII#ASCII_printable_characters\">ASCII Printable\n                Characters</a>.</p>"
+     }
+    },
+    "BinaryValue": {
+     "target": "com.amazonaws.sqs#Binary",
+     "traits": {
+      "smithy.api#documentation": "<p>Binary type attributes can store any binary data, such as compressed data, encrypted\n            data, or images.</p>"
+     }
+    },
+    "StringListValues": {
+     "target": "com.amazonaws.sqs#StringList",
+     "traits": {
+      "smithy.api#documentation": "<p>Not implemented. Reserved for future use.</p>",
+      "smithy.api#xmlFlattened": {},
+      "smithy.api#xmlName": "StringListValue"
+     }
+    },
+    "BinaryListValues": {
+     "target": "com.amazonaws.sqs#BinaryList",
+     "traits": {
+      "smithy.api#documentation": "<p>Not implemented. Reserved for future use.</p>",
+      "smithy.api#xmlFlattened": {},
+      "smithy.api#xmlName": "BinaryListValue"
+     }
+    },
+    "DataType": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>Amazon SQS supports the following logical data types: <code>String</code>,\n                <code>Number</code>, and <code>Binary</code>. For the <code>Number</code> data type,\n            you must use <code>StringValue</code>.</p>\n         <p>You can also append custom labels. For more information, see <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-message-metadata.html#sqs-message-attributes\">Amazon SQS Message Attributes</a> in the <i>Amazon SQS Developer\n            Guide</i>.</p>",
+      "smithy.api#required": {}
+     }
+    }
+   },
+   "traits": {
+    "smithy.api#documentation": "<p>The user-specified message attribute value. For string data types, the\n                <code>Value</code> attribute has the same restrictions on the content as the message\n            body. For more information, see <code>\n               <a>SendMessage</a>.</code>\n         </p>\n         <p>\n            <code>Name</code>, <code>type</code>, <code>value</code> and the message body must not\n            be empty or null. All parts of the message attribute, including <code>Name</code>,\n                <code>Type</code>, and <code>Value</code>, are part of the message size restriction\n            (1 MiB or 1,048,576 bytes).</p>"
+   }
+  },
+  "com.amazonaws.sqs#MessageBodyAttributeMap": {
+   "type": "map",
+   "key": {
+    "target": "com.amazonaws.sqs#String",
+    "traits": {
+     "smithy.api#xmlName": "Name"
+    }
+   },
+   "value": {
+    "target": "com.amazonaws.sqs#MessageAttributeValue",
+    "traits": {
+     "smithy.api#xmlName": "Value"
+    }
+   }
+  },
+  "com.amazonaws.sqs#MessageBodySystemAttributeMap": {
+   "type": "map",
+   "key": {
+    "target": "com.amazonaws.sqs#MessageSystemAttributeNameForSends",
+    "traits": {
+     "smithy.api#xmlName": "Name"
+    }
+   },
+   "value": {
+    "target": "com.amazonaws.sqs#MessageSystemAttributeValue",
+    "traits": {
+     "smithy.api#xmlName": "Value"
+    }
+   }
+  },
+  "com.amazonaws.sqs#MessageSystemAttributeNameForSends": {
+   "type": "enum",
+   "members": {
+    "AWSTraceHeader": {
+     "target": "smithy.api#Unit",
+     "traits": {
+      "smithy.api#enumValue": "AWSTraceHeader"
+     }
+    }
+   }
+  },
+  "com.amazonaws.sqs#MessageSystemAttributeValue": {
+   "type": "structure",
+   "members": {
+    "StringValue": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>Strings are Unicode with UTF-8 binary encoding. For a list of code values, see <a href=\"http://en.wikipedia.org/wiki/ASCII#ASCII_printable_characters\">ASCII Printable\n                Characters</a>.</p>"
+     }
+    },
+    "BinaryValue": {
+     "target": "com.amazonaws.sqs#Binary",
+     "traits": {
+      "smithy.api#documentation": "<p>Binary type attributes can store any binary data, such as compressed data, encrypted\n            data, or images.</p>"
+     }
+    },
+    "StringListValues": {
+     "target": "com.amazonaws.sqs#StringList",
+     "traits": {
+      "smithy.api#documentation": "<p>Not implemented. Reserved for future use.</p>",
+      "smithy.api#xmlFlattened": {},
+      "smithy.api#xmlName": "StringListValue"
+     }
+    },
+    "BinaryListValues": {
+     "target": "com.amazonaws.sqs#BinaryList",
+     "traits": {
+      "smithy.api#documentation": "<p>Not implemented. Reserved for future use.</p>",
+      "smithy.api#xmlFlattened": {},
+      "smithy.api#xmlName": "BinaryListValue"
+     }
+    },
+    "DataType": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>Amazon SQS supports the following logical data types: <code>String</code>,\n                <code>Number</code>, and <code>Binary</code>. For the <code>Number</code> data type,\n            you must use <code>StringValue</code>.</p>\n         <p>You can also append custom labels. For more information, see <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-message-metadata.html#sqs-message-attributes\">Amazon SQS Message Attributes</a> in the <i>Amazon SQS Developer\n            Guide</i>.</p>",
+      "smithy.api#required": {}
+     }
+    }
+   },
+   "traits": {
+    "smithy.api#documentation": "<p>The user-specified message system attribute value. For string data types, the\n                <code>Value</code> attribute has the same restrictions on the content as the message\n            body. For more information, see <code>\n               <a>SendMessage</a>.</code>\n         </p>\n         <p>\n            <code>Name</code>, <code>type</code>, <code>value</code> and the message body must not\n            be empty or null.</p>"
+   }
+  },
+  "com.amazonaws.sqs#NullableInteger": {
+   "type": "integer"
+  },
+  "com.amazonaws.sqs#QueueDoesNotExist": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "AWS.SimpleQueueService.NonExistentQueue",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>Ensure that the <code>QueueUrl</code> is correct and that the queue has not been\n            deleted.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  },
+  "com.amazonaws.sqs#RequestThrottled": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "RequestThrottled",
+     "httpResponseCode": 403
+    },
+    "smithy.api#documentation": "<p>The request was denied due to request throttling.</p>\n         <ul>\n            <li>\n               <p>Exceeds the permitted request rate for the queue or for the recipient of the\n                    request.</p>\n            </li>\n            <li>\n               <p>Ensure that the request rate is within the Amazon SQS limits for\n                    sending messages. For more information, see <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-quotas.html#quotas-requests\">Amazon SQS quotas</a> in the <i>Amazon SQS\n                        Developer Guide</i>.</p>\n            </li>\n         </ul>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 403
+   }
+  },
+  "com.amazonaws.sqs#SendMessage": {
+   "type": "operation",
+   "input": {
+    "target": "com.amazonaws.sqs#SendMessageRequest"
+   },
+   "output": {
+    "target": "com.amazonaws.sqs#SendMessageResult"
+   },
+   "errors": [
+    {
+     "target": "com.amazonaws.sqs#InvalidAddress"
+    },
+    {
+     "target": "com.amazonaws.sqs#InvalidMessageContents"
+    },
+    {
+     "target": "com.amazonaws.sqs#InvalidSecurity"
+    },
+    {
+     "target": "com.amazonaws.sqs#KmsAccessDenied"
+    },
+    {
+     "target": "com.amazonaws.sqs#KmsDisabled"
+    },
+    {
+     "target": "com.amazonaws.sqs#KmsInvalidKeyUsage"
+    },
+    {
+     "target": "com.amazonaws.sqs#KmsInvalidState"
+    },
+    {
+     "target": "com.amazonaws.sqs#KmsNotFound"
+    },
+    {
+     "target": "com.amazonaws.sqs#KmsOptInRequired"
+    },
+    {
+     "target": "com.amazonaws.sqs#KmsThrottled"
+    },
+    {
+     "target": "com.amazonaws.sqs#QueueDoesNotExist"
+    },
+    {
+     "target": "com.amazonaws.sqs#RequestThrottled"
+    },
+    {
+     "target": "com.amazonaws.sqs#UnsupportedOperation"
+    }
+   ],
+   "traits": {
+    "smithy.api#documentation": "<p>Delivers a message to the specified queue.</p>\n         <important>\n            <p>A message can include only XML, JSON, and unformatted text. The following Unicode characters are allowed. For more information, see the <a href=\"http://www.w3.org/TR/REC-xml/#charsets\">W3C specification for characters</a>.</p>\n            <p>\n               <code>#x9</code> | <code>#xA</code> | <code>#xD</code> | <code>#x20</code> to <code>#xD7FF</code> | <code>#xE000</code> to <code>#xFFFD</code> | <code>#x10000</code> to <code>#x10FFFF</code>\n            </p>\n            <p>If a message contains characters outside the allowed set, Amazon SQS rejects the message and returns an InvalidMessageContents error. Ensure that your message body includes only valid characters to avoid this exception.</p>\n         </important>"
+   }
+  },
+  "com.amazonaws.sqs#SendMessageRequest": {
+   "type": "structure",
+   "members": {
+    "QueueUrl": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>The URL of the Amazon SQS queue to which a message is sent.</p>\n         <p>Queue URLs and names are case-sensitive.</p>",
+      "smithy.api#required": {}
+     }
+    },
+    "MessageBody": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>The message to send. The minimum size is one character. The maximum size is \n        1 MiB or 1,048,576 bytes</p>\n         <important>\n            <p>A message can include only XML, JSON, and unformatted text. The following Unicode characters are allowed. For more information, see the <a href=\"http://www.w3.org/TR/REC-xml/#charsets\">W3C specification for characters</a>.</p>\n            <p>\n               <code>#x9</code> | <code>#xA</code> | <code>#xD</code> | <code>#x20</code> to <code>#xD7FF</code> | <code>#xE000</code> to <code>#xFFFD</code> | <code>#x10000</code> to <code>#x10FFFF</code>\n            </p>\n            <p>If a message contains characters outside the allowed set, Amazon SQS rejects the message and returns an InvalidMessageContents error. Ensure that your message body includes only valid characters to avoid this exception.</p>\n         </important>",
+      "smithy.api#required": {}
+     }
+    },
+    "DelaySeconds": {
+     "target": "com.amazonaws.sqs#NullableInteger",
+     "traits": {
+      "smithy.api#documentation": "<p> The length of time, in seconds, for which to delay a specific message. Valid values:\n            0 to 900. Maximum: 15 minutes. Messages with a positive <code>DelaySeconds</code> value\n            become available for processing after the delay period is finished. If you don't specify\n            a value, the default value for the queue applies. </p>\n         <note>\n            <p>When you set <code>FifoQueue</code>, you can't set <code>DelaySeconds</code> per message. You can set this parameter only on a queue level.</p>\n         </note>"
+     }
+    },
+    "MessageAttributes": {
+     "target": "com.amazonaws.sqs#MessageBodyAttributeMap",
+     "traits": {
+      "smithy.api#documentation": "<p>Each message attribute consists of a <code>Name</code>, <code>Type</code>, \nand <code>Value</code>. For more information, see \n<a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-message-metadata.html#sqs-message-attributes\">Amazon SQS \nmessage attributes</a> in the <i>Amazon SQS Developer Guide</i>.</p>",
+      "smithy.api#xmlFlattened": {},
+      "smithy.api#xmlName": "MessageAttribute"
+     }
+    },
+    "MessageSystemAttributes": {
+     "target": "com.amazonaws.sqs#MessageBodySystemAttributeMap",
+     "traits": {
+      "smithy.api#documentation": "<p>The message system attribute to send. Each message system attribute consists of a <code>Name</code>, <code>Type</code>, and <code>Value</code>.</p>\n         <important>\n            <ul>\n               <li>\n                  <p>Currently, the only supported message system attribute is <code>AWSTraceHeader</code>.\n                    Its type must be <code>String</code> and its value must be a correctly formatted\n                    X-Ray trace header string.</p>\n               </li>\n               <li>\n                  <p>The size of a message system attribute doesn't count towards the total size of a message.</p>\n               </li>\n            </ul>\n         </important>",
+      "smithy.api#xmlFlattened": {},
+      "smithy.api#xmlName": "MessageSystemAttribute"
+     }
+    },
+    "MessageDeduplicationId": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>This parameter applies only to FIFO (first-in-first-out) queues.</p>\n         <p>The token used for deduplication of sent messages. If a message with a particular\n                <code>MessageDeduplicationId</code> is sent successfully, any messages sent with the\n            same <code>MessageDeduplicationId</code> are accepted successfully but aren't delivered\n            during the 5-minute deduplication interval. For more information, see <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues-exactly-once-processing.html\"> Exactly-once processing</a> in the <i>Amazon SQS Developer\n            Guide</i>.</p>\n         <ul>\n            <li>\n               <p>Every message must have a unique <code>MessageDeduplicationId</code>,</p>\n               <ul>\n                  <li>\n                     <p>You may provide a <code>MessageDeduplicationId</code>\n                            explicitly.</p>\n                  </li>\n                  <li>\n                     <p>If you aren't able to provide a <code>MessageDeduplicationId</code>\n                            and you enable <code>ContentBasedDeduplication</code> for your queue,\n                            Amazon SQS uses a SHA-256 hash to generate the\n                                <code>MessageDeduplicationId</code> using the body of the message\n                            (but not the attributes of the message). </p>\n                  </li>\n                  <li>\n                     <p>If you don't provide a <code>MessageDeduplicationId</code> and the\n                            queue doesn't have <code>ContentBasedDeduplication</code> set, the\n                            action fails with an error.</p>\n                  </li>\n                  <li>\n                     <p>If the queue has <code>ContentBasedDeduplication</code> set, your\n                                <code>MessageDeduplicationId</code> overrides the generated\n                            one.</p>\n                  </li>\n               </ul>\n            </li>\n            <li>\n               <p>When <code>ContentBasedDeduplication</code> is in effect, messages with\n                    identical content sent within the deduplication interval are treated as\n                    duplicates and only one copy of the message is delivered.</p>\n            </li>\n            <li>\n               <p>If you send one message with <code>ContentBasedDeduplication</code> enabled\n                    and then another message with a <code>MessageDeduplicationId</code> that is the\n                    same as the one generated for the first <code>MessageDeduplicationId</code>, the\n                    two messages are treated as duplicates and only one copy of the message is\n                    delivered. </p>\n            </li>\n         </ul>\n         <note>\n            <p>The <code>MessageDeduplicationId</code> is available to the consumer of the\n                message (this can be useful for troubleshooting delivery issues).</p>\n            <p>If a message is sent successfully but the acknowledgement is lost and the message\n                is resent with the same <code>MessageDeduplicationId</code> after the deduplication\n                interval, Amazon SQS can't detect duplicate messages.</p>\n            <p>Amazon SQS continues to keep track of the message deduplication ID even after the message is received and deleted.</p>\n         </note>\n         <p>The maximum length of <code>MessageDeduplicationId</code> is 128 characters.\n                <code>MessageDeduplicationId</code> can contain alphanumeric characters\n                (<code>a-z</code>, <code>A-Z</code>, <code>0-9</code>) and punctuation\n                (<code>!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~</code>).</p>\n         <p>For best practices of using <code>MessageDeduplicationId</code>, see <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagededuplicationid-property.html\">Using the MessageDeduplicationId Property</a> in the <i>Amazon SQS Developer\n                Guide</i>.</p>"
+     }
+    },
+    "MessageGroupId": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>\n            <code>MessageGroupId</code> is an attribute used in Amazon SQS FIFO (First-In-First-Out) and standard queues. \n        In FIFO queues, <code>MessageGroupId</code> organizes messages into distinct groups. \n        Messages within the same message group are always processed one at a time, in strict order, \n        ensuring that no two messages from the same group are processed simultaneously. \n        In standard queues, using <code>MessageGroupId</code> enables fair queues. \n        It is used to identify the tenant a message belongs to, \n        helping maintain consistent message dwell time across all tenants during noisy neighbor events. \n        Unlike FIFO queues, messages with the same <code>MessageGroupId</code> can be processed in parallel, \n        maintaining the high throughput of standard queues.</p>\n         <ul>\n            <li>\n               <p>\n                  <b>FIFO queues:</b>\n                  <code>MessageGroupId</code> acts as the tag \n                that specifies that a message belongs to a specific message group. \n                Messages that belong to the same message group are processed in a FIFO manner \n                (however, messages in different message groups might be processed out of order). \n                To interleave multiple ordered streams within a single queue, use <code>MessageGroupId</code> values \n                (for example, session data for multiple users). \n                In this scenario, multiple consumers can process the queue, \n                but the session data of each user is processed in a FIFO fashion.</p>\n               <p>If you do not provide a <code>MessageGroupId</code> when sending a message to a FIFO queue, the action fails.</p>\n               <p>\n                  <code>ReceiveMessage</code> might return messages with multiple <code>MessageGroupId</code> values. \n                For each <code>MessageGroupId</code>, the messages are sorted by time sent.</p>\n            </li>\n            <li>\n               <p>\n                  <b>Standard queues:</b>Use <code>MessageGroupId</code> in standard queues to enable fair queues. \n                The <code>MessageGroupId</code> identifies the tenant a message belongs to. \n                A tenant can be any entity that shares a queue with others, such as your customer, a client application, \n                or a request type. When one tenant sends a disproportionately large volume of messages \n                or has messages that require longer processing time, fair queues ensure other tenants' \n                messages maintain low dwell time. This preserves quality of service for all tenants while \n                maintaining the scalability and throughput of standard queues. \n                We recommend that you include a <code>MessageGroupId</code> in all messages when using fair queues.</p>\n            </li>\n         </ul>\n         <p>The length of <code>MessageGroupId</code> is 128 characters. Valid values:\n            alphanumeric characters and punctuation\n                <code>(!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~)</code>.</p>\n         <p>For best practices of using <code>MessageGroupId</code>, see <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html\">Using the MessageGroupId Property</a> in the <i>Amazon SQS Developer\n                Guide</i>.</p>"
+     }
+    }
+   },
+   "traits": {
+    "smithy.api#documentation": "<p></p>",
+    "smithy.api#input": {}
+   }
+  },
+  "com.amazonaws.sqs#SendMessageResult": {
+   "type": "structure",
+   "members": {
+    "MD5OfMessageBody": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>An MD5 digest of the non-URL-encoded message body string. You can use this attribute to verify that Amazon SQS received the message correctly. Amazon SQS URL-decodes the message before creating the MD5 digest. For information about MD5, see <a href=\"https://www.ietf.org/rfc/rfc1321.txt\">RFC1321</a>.</p>"
+     }
+    },
+    "MD5OfMessageAttributes": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>An MD5 digest of the non-URL-encoded message attribute string. You can use this attribute to verify that Amazon SQS received the message correctly. Amazon SQS URL-decodes the message before creating the MD5 digest. For information about MD5, see <a href=\"https://www.ietf.org/rfc/rfc1321.txt\">RFC1321</a>.</p>"
+     }
+    },
+    "MD5OfMessageSystemAttributes": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>An MD5 digest of the non-URL-encoded message system attribute string. You can use this \nattribute to verify that Amazon SQS received the message correctly. Amazon SQS URL-decodes the message before creating the MD5 digest.</p>"
+     }
+    },
+    "MessageId": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>An attribute containing the <code>MessageId</code> of the message sent to the queue.\n            For more information, see <a href=\"https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-message-identifiers.html\">Queue and Message Identifiers</a> in the <i>Amazon SQS Developer\n                Guide</i>. </p>"
+     }
+    },
+    "SequenceNumber": {
+     "target": "com.amazonaws.sqs#String",
+     "traits": {
+      "smithy.api#documentation": "<p>This parameter applies only to FIFO (first-in-first-out) queues.</p>\n         <p>The large, non-consecutive number that Amazon SQS assigns to each message.</p>\n         <p>The length of <code>SequenceNumber</code> is 128 bits. <code>SequenceNumber</code>\n            continues to increase for a particular <code>MessageGroupId</code>.</p>"
+     }
+    }
+   },
+   "traits": {
+    "smithy.api#documentation": "<p>The <code>MD5OfMessageBody</code> and <code>MessageId</code> elements.</p>",
+    "smithy.api#output": {}
+   }
+  },
+  "com.amazonaws.sqs#String": {
+   "type": "string"
+  },
+  "com.amazonaws.sqs#StringList": {
+   "type": "list",
+   "member": {
+    "target": "com.amazonaws.sqs#String",
+    "traits": {
+     "smithy.api#xmlName": "StringListValue"
+    }
+   }
+  },
+  "com.amazonaws.sqs#UnsupportedOperation": {
+   "type": "structure",
+   "members": {
+    "message": {
+     "target": "com.amazonaws.sqs#ExceptionMessage"
+    }
+   },
+   "traits": {
+    "aws.protocols#awsQueryError": {
+     "code": "AWS.SimpleQueueService.UnsupportedOperation",
+     "httpResponseCode": 400
+    },
+    "smithy.api#documentation": "<p>Error code 400. Unsupported operation.</p>",
+    "smithy.api#error": "client",
+    "smithy.api#httpError": 400
+   }
+  }
+ }
+}

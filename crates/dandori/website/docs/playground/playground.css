@@ -1,0 +1,189 @@
+/* The playground's own styling. It borrows the theme's variables, so it follows the palette and
+   the dark-mode switch, and it shows what dandori prints in the terminal colours the other pages
+   quote the checker in (.dd-term in stylesheets/extra.css). */
+
+/* The playground takes the width of the column and never asks for more: a long line of the flow or
+   of the output scrolls in its own box, and a narrow screen does not scroll the whole page. */
+.pg {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: .2rem;
+  margin: 1.2em 0;
+  contain: inline-size;
+}
+
+.pg-bar,
+.pg-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem .6rem;
+  padding: .4rem .6rem;
+  background: var(--md-code-bg-color);
+}
+
+.pg-bar { border-bottom: 1px solid var(--md-default-fg-color--lightest); }
+.pg-tabs { border-top: 1px solid var(--md-default-fg-color--lightest); }
+
+.pg button,
+.pg select {
+  font: inherit;
+  font-size: .68rem;
+  padding: .2rem .55rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: .15rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+.pg button { cursor: pointer; }
+.pg select { min-width: 0; max-width: 100%; padding: .2rem; text-overflow: ellipsis; }
+
+.pg button:hover { border-color: var(--dd-mark); color: var(--dd-mark); }
+.pg button.on,
+.pg button.on:hover { background: var(--dd-mark); border-color: var(--dd-mark); color: #fff; }
+
+/* Which file is being edited: the findings name it, and the flow reads the rest from beside it. */
+.pg-path {
+  font-family: var(--md-code-font-family, monospace);
+  font-size: .62rem;
+  color: var(--md-default-fg-color--light);
+  overflow-wrap: anywhere;
+}
+
+/* The status line says which version answered, how long it took and what it found. A stale
+   dandori.wasm in a cache shows there rather than answering quietly. */
+.pg-status {
+  margin-left: auto;
+  font-size: .62rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.pg-src,
+.pg-pre {
+  font-family: var(--md-code-font-family, monospace);
+  font-size: .68rem;
+  line-height: 1.5;
+  letter-spacing: 0;
+  tab-size: 2;
+}
+
+.pg-src {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 26em;
+  min-height: 8em;
+  padding: .7rem .8rem;
+  border: 0;
+  resize: vertical;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow: auto;
+}
+
+.pg-src:focus { outline: 2px solid var(--dd-mark); outline-offset: -2px; }
+
+.pg-out {
+  max-height: 34em;
+  overflow: auto;
+  background: var(--dd-ink);
+  color: #dfe6e8;
+}
+
+/* The theme gives a <pre> its own colours, which on the light scheme are dark on light. */
+.md-typeset .pg .pg-pre {
+  margin: 0;
+  padding: .7rem .8rem;
+  white-space: pre;
+  color: #dfe6e8;
+  background: none;
+  border-radius: 0;
+}
+
+/* Where a finding is takes the reader to that line of the flow. */
+.pg .pg-at {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--dd-mark-light);
+  text-decoration: underline;
+  text-underline-offset: .15em;
+}
+
+.pg .pg-at:hover { color: #fff; }
+
+.pg-note {
+  margin: 0;
+  padding: .7rem .8rem 0;
+  font-size: .68rem;
+}
+
+/* The page `doc` writes is a whole document: it opens in a tab of its own. */
+.pg-board { padding: 1.1em 1.3em; }
+.pg-board p { margin: 0 0 1em; max-width: 44em; font-size: .72rem; }
+.md-typeset .pg-board code { background: rgba(255, 255, 255, .1); color: inherit; padding: 0 .3em; border-radius: .15rem; }
+
+/* A link, not a button, so that a middle click and a cmd click do what they should; it is given
+   the colours of the selected tab with the specificity to win over the theme's link colour. */
+.pg a.pg-open,
+.pg a.pg-open:hover {
+  display: inline-block;
+  padding: .4rem 1rem;
+  border-radius: .15rem;
+  font-size: .72rem;
+  font-weight: 700;
+  text-decoration: none;
+  background: var(--dd-mark);
+  color: #fff;
+}
+
+.pg a.pg-open:hover { background: var(--dd-mark-light); color: var(--dd-ink); }
+
+/* The theme dresses every <details> as an admonition; this one is a plain fold in the pane. */
+.md-typeset .pg details.pg-md {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  color: #dfe6e8;
+  font-size: inherit;
+}
+
+.md-typeset .pg details.pg-md > summary {
+  margin: 0;
+  padding: .6rem 1.3em;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: .68rem;
+  font-weight: normal;
+  color: #dfe6e8;
+  cursor: pointer;
+}
+
+.md-typeset .pg details.pg-md > summary::before,
+.md-typeset .pg details.pg-md > summary::after { display: none; }
+.md-typeset .pg details.pg-md > summary::marker { content: "▸ "; }
+.md-typeset .pg details.pg-md[open] > summary::marker { content: "▾ "; }
+.md-typeset .pg details.pg-md > .pg-pre { margin: 0; }
+
+/* A rule the flow calls: its name, its file and the link to its page, then its text. */
+.pg-rule + .pg-rule { border-top: 1px solid rgba(255, 255, 255, .12); }
+.pg-rule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .3rem .6rem;
+  padding: .7rem .8rem 0;
+  font-size: .68rem;
+}
+.md-typeset .pg-rule-head code { background: rgba(255, 255, 255, .1); color: inherit; padding: 0 .3em; border-radius: .15rem; }
+.pg-rule-file { font-family: var(--md-code-font-family, monospace); opacity: .8; overflow-wrap: anywhere; }
+.pg .pg-rule-head a.pg-open { margin-left: auto; padding: .25rem .7rem; font-size: .66rem; }

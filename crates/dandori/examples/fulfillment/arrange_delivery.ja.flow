@@ -1,0 +1,40 @@
+workflow 配送の手配 v1
+description "注文の配送を、急ぎの規則が選んだ便で頼み、追跡番号を返す。呼び出しはどれも、dandori がプラットフォームごとに生成する HTTP の呼び出しなので、すべてのプラットフォーム向けにこの一つだけを書く（`connection` は Step Functions のためのもの）。引当と発送のどの版も、これを子として走らせる。Temporal では子ワークフロー、Lambda durable functions では invoke する durable function、Argo ではこの WorkflowTemplate のワークフロー、Step Functions ではネストした実行になる"
+
+enum 便 = 通常便 | 翌日便
+
+record 集荷
+  追跡番号 : string
+
+inputs
+  注文ID : string
+  便     : 便
+  宛名   : string?
+  付帯   : json
+
+outputs
+  追跡番号 : string
+
+# 翌日便の運送会社は、荷物を取りに車を出す。忙しい日には、空いている車がないことがある。
+task 翌日便を頼む(注文ID: string, 宛名: string?) -> 集荷
+  http POST "https://next-day.example.com/v1/pickups"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/next-day/2a3b4c"
+  errors 空きなし = 409
+  key
+  retry 2 times every 5 seconds
+
+task 通常便を頼む(注文ID: string, 宛名: string?, 付帯: json) -> 集荷
+  http POST "https://post.example.com/v1/parcels"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/post/3b4c5d"
+  key
+  retry 2 times every 5 seconds
+
+flow
+  match 便
+    翌日便 =>
+      let 受付 = 翌日便を頼む(注文ID: 注文ID, 宛名: 宛名)
+        on 空きなし => fail 翌日便の空きなし "注文 {注文ID} の翌日便の車が空いていません"
+      succeed 追跡番号 = 受付.追跡番号
+    通常便 =>
+      let 受付 = 通常便を頼む(注文ID: 注文ID, 宛名: 宛名, 付帯: 付帯)
+      succeed 追跡番号 = 受付.追跡番号

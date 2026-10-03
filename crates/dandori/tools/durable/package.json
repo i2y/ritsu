@@ -1,0 +1,10 @@
+{
+  "name": "dandori-durable-runner",
+  "private": true,
+  "type": "module",
+  "description": "Runs the Lambda durable functions dandori generates in the SDK's local test runner, against scripted answers",
+  "dependencies": {
+    "@aws/durable-execution-sdk-js": "2.4.0",
+    "@aws/durable-execution-sdk-js-testing": "1.1.4"
+  }
+}

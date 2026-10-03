@@ -1,0 +1,10 @@
+エラー[E014]: tests/fixtures/proto_ranges.flow:33:1: `line.offset` は `>=0` で、`wide` の引数 `n` の範囲 `>=0 <=200` を外れることがあります
+    33 |   wide(n: line.offset)
+警告[W104]: tests/fixtures/proto_ranges.flow:34:1: `line.outside` の範囲が分かりません（`types.Line` のフィールド `outside` に範囲がありません）。`wide` の引数 `n` が受け取るのは `>=0 <=200` です
+    34 |   wide(n: line.outside)
+エラー[E014]: tests/fixtures/proto_ranges.flow:35:1: `line.quantity` は `>=1 <=99` で、`few` の引数 `n` の範囲 `>=1 <=5` を外れることがあります
+    35 |   few(n: line.quantity)
+エラー[E014]: tests/fixtures/proto_ranges.flow:41:1: `many` は `>=1 <=200` で、`types.Box` のフィールド `count` の範囲 `>=1 <=10` を外れることがあります
+    41 |   let too_many: types.Box = {count: many}
+警告[W104]: tests/fixtures/proto_ranges.flow:42:1: `any` の範囲が分かりません（入力 `any` に範囲がありません）。`types.Box` のフィールド `count` が受け取るのは `>=1 <=10` です
+    42 |   let unsure: types.Box = {count: any}

@@ -1,0 +1,14 @@
+# connectrpc, which serves the service rulec gen writes for a rule, and the two plugins buf runs
+# to write the stubs the service imports (protoc-gen-py, protoc-gen-connectrpc); for the test that
+# sends a rule's service what dandori sends it. The service needs them even to serve with the
+# standard library alone (`--http`), so a machine without them skips the test.
+#   uv venv --python 3.13 tools/connect/.venv
+#   uv pip install --python tools/connect/.venv/bin/python -r tools/connect/requirements.txt
+connectrpc==0.12.1
+opentelemetry-api==1.45.0
+protobuf-py==0.6.0
+protobuf-py-ext==0.6.0
+protoc-gen-connectrpc==0.12.1
+protoc-gen-py==0.6.0
+pyqwest==0.11.0
+typing-extensions==4.16.0

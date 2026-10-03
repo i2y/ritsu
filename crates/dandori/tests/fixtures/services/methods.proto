@@ -1,0 +1,80 @@
+// The service tests/fixtures/service_methods.flow implements, whose methods say wrongly how they
+// reach the workflow: two of them start a run, one streams, one has no mark and one two, two send
+// the same event, and two ask where a run is. It names no workflow, and uses dandori's options
+// without importing them, which protoc and buf would refuse.
+syntax = "proto3";
+
+package shop.v1;
+
+service MethodsService {
+  rpc Fulfill(FulfillRequest) returns (FulfillResponse) {
+    option (dandori.v1.start) = {};
+  }
+
+  rpc Begin(BeginRequest) returns (BeginResponse) {
+    option (dandori.v1.start) = {};
+  }
+
+  rpc Watch(WatchRequest) returns (stream WatchResponse) {
+    option (dandori.v1.status) = {};
+  }
+
+  rpc Cancel(CancelRequest) returns (CancelResponse);
+
+  rpc Both(BothRequest) returns (BothResponse) {
+    option (dandori.v1.event) = {task: "delivered"};
+    option (dandori.v1.answer) = {task: "pack"};
+  }
+
+  rpc Delivered(DeliveredRequest) returns (DeliveredResponse) {
+    option (dandori.v1.event) = {task: "delivered"};
+  }
+
+  rpc Arrived(ArrivedRequest) returns (ArrivedResponse) {
+    option (dandori.v1.event) = {task: "delivered"};
+  }
+
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {
+    option (dandori.v1.status) = {};
+  }
+}
+
+message FulfillRequest {}
+
+message FulfillResponse {}
+
+message BeginRequest {}
+
+message BeginResponse {}
+
+message WatchRequest {}
+
+message WatchResponse {}
+
+message CancelRequest {}
+
+message CancelResponse {}
+
+message BothRequest {}
+
+message BothResponse {}
+
+message DeliveredRequest {
+  string where = 1;
+}
+
+message DeliveredResponse {}
+
+message ArrivedRequest {
+  string where = 1;
+}
+
+message ArrivedResponse {}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  optional int32 at = 1;
+  map<string, string> cases = 2;
+  repeated string events = 3;
+}

@@ -1,0 +1,23 @@
+workflow rule_connect v1
+description "規則の呼び出し方の誤り：lambda と connect の両方、connect の無い connection、http でも https でもない connect。正しい connect の規則を呼ぶ流れもある"
+
+use rule 二通り from "../../examples/order/rules/出荷の急ぎ.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
+  connect "https://rules.example.com"
+
+use rule 接続だけ from "../../examples/order/rules/出荷の急ぎ.rule"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+
+use rule 遠い from "../../examples/order/rules/出荷の急ぎ.rule"
+  connect "ftp://rules.example.com"
+
+use rule 正しい from "../../examples/order/rules/出荷の急ぎ.rule"
+  connect "https://rules.example.com"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/rules/5e6f7a"
+
+inputs
+  会員 : bool
+
+flow
+  let 判定 = 正しい(会員: 会員, 金額: 5000)
+  pass

@@ -1,0 +1,62 @@
+// 引当と発送の日本語の版が実装するサービス。fulfillment.proto と同じ形で、ワークフロー、失敗、タスクの
+// 名前を日本語の版のとおりにし、protobuf の JSON での名前（`json_name`）を日本語にしてある。それが
+// 版の入力・出力・フィールドの名前になる。日本語の版はどれも、`workflow` の行でこのサービスを実装すると
+// 書く（`implements 店.FulfillmentService`）。フィールド、メッセージ、サービスの名前は、protoc が
+// 求めるとおり ASCII のままにした。
+syntax = "proto3";
+
+package shop.ja.v1;
+
+import "dandori/v1/options.proto";
+import "google/protobuf/struct.proto";
+import "warehouse.proto";
+
+service FulfillmentService {
+  option (dandori.v1.workflow) = {name: "引当と発送", version: 1};
+
+  // 注文の明細を引き当て、配送を手配し、梱包が済んだらお客さまに知らせる。
+  rpc Fulfill(FulfillRequest) returns (FulfillResponse) {
+    option (dandori.v1.start) = {fails: ["在庫不足", "配送の手配の失敗", "梱包の遅れ"]};
+  }
+
+  // 梱包の担当者が、`梱包を待つ` のコールバックに応答する。
+  rpc AnswerPacking(AnswerPackingRequest) returns (AnswerPackingResponse) {
+    option (dandori.v1.answer) = {task: "梱包を待つ"};
+  }
+}
+
+message FulfillRequest {
+  Order order = 1 [json_name = "注文"];
+}
+
+message Order {
+  string id = 1;
+  bool member = 2 [json_name = "会員"];
+  // 円、税込
+  int32 amount = 3 [json_name = "金額"];
+  repeated Line lines = 4 [json_name = "明細"];
+  Gift gift = 5 [json_name = "贈り物"];
+  // 配送に、そのまま渡すもの
+  google.protobuf.Value extra = 6 [json_name = "付帯"];
+}
+
+message Line {
+  string sku = 1;
+  int32 quantity = 2 [json_name = "数"];
+}
+
+message Gift {
+  string recipient = 1 [json_name = "宛名"];
+  optional string message = 2 [json_name = "メッセージ"];
+}
+
+message FulfillResponse {
+  repeated warehouse.v1.ReserveResponse reservations = 1 [json_name = "引当"];
+  string tracking_number = 2 [json_name = "追跡番号"];
+}
+
+message AnswerPackingRequest {
+  int32 boxes = 1 [json_name = "箱の数"];
+}
+
+message AnswerPackingResponse {}
