@@ -191,7 +191,7 @@ $ rulec check rules/送料.rule --lang ja
 $ RULEC_LANG=ja rulec check rules/送料.rule
 ```
 
-`--lang` beats `RULEC_LANG`, which beats the default. The system locale
+`--lang` beats `RULEC_LANG`, which beats `RITSU_LANG`, which beats the default. The system locale
 is deliberately ignored: generated files are checked with `gen --check`
 and CI logs are diffed, so the output must not change with the machine
 it runs on.

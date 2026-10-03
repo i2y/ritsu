@@ -1,7 +1,8 @@
 //! The output language switch (§11 principle 7): `--lang` beats `RULEC_LANG`,
-//! `RULEC_LANG` beats the default, and the default is English. Every surface
-//! that prints prose — diagnostics, reports, the rendered document, generated
-//! code — must follow the same switch.
+//! `RULEC_LANG` beats `RITSU_LANG` (the variable every language of ritsu reads,
+//! §15.168), and that beats the default, which is English. Every surface that
+//! prints prose — diagnostics, reports, the rendered document, generated code —
+//! must follow the same switch.
 
 use std::process::Command;
 use ritsu_testkit::TempDir;
@@ -10,8 +11,8 @@ fn run(args: &[&str], env: &[(&str, &str)]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_rulec"));
     c.current_dir(env!("CARGO_MANIFEST_DIR")).args(args);
     // The suite passes RULEC_LANG=ja to the rulec it runs, and the shell that runs the
-    // suite may have one set; clear it so the fallback order can be observed.
-    c.env_remove("RULEC_LANG");
+    // suite may have it or RITSU_LANG set; clear both so the fallback order can be observed.
+    c.env_remove("RULEC_LANG").env_remove("RITSU_LANG");
     for (k, v) in env {
         c.env(k, v);
     }
@@ -64,6 +65,32 @@ fn flag_beats_env() {
     assert!(title(&out).contains("完全性の欠落"), "{out}");
     let (_, out, _) = run(&["--lang=en", "check", MUTANT], &[("RULEC_LANG", "ja")]);
     assert!(!has_japanese(&title(&out)), "{out}");
+}
+
+/// `RITSU_LANG` is read after `RULEC_LANG` and before the default (§15.168), as the other six
+/// languages of ritsu read it after their own: it changes nothing where `--lang` or `RULEC_LANG`
+/// says a language. A value of either variable that names no language is passed over, as one that
+/// is not there.
+#[test]
+fn ritsu_lang_comes_after_rulec_lang() {
+    let japanese = |env: &[(&str, &str)], flag: Option<&str>| {
+        let mut args = vec!["check", MUTANT];
+        if let Some(l) = flag {
+            args.extend(["--lang", l]);
+        }
+        let (c, out, _) = run(&args, env);
+        assert_eq!(c, 1, "{env:?} {flag:?}: {out}");
+        let t = title(&out);
+        assert!(t.starts_with("error[E101]:"), "{env:?} {flag:?}: {out}");
+        has_japanese(&t)
+    };
+    assert!(japanese(&[("RITSU_LANG", "ja")], None), "RITSU_LANG alone");
+    assert!(!japanese(&[("RITSU_LANG", "en")], None), "RITSU_LANG alone");
+    assert!(!japanese(&[("RULEC_LANG", "en"), ("RITSU_LANG", "ja")], None), "RULEC_LANG beats RITSU_LANG");
+    assert!(japanese(&[("RULEC_LANG", "ja"), ("RITSU_LANG", "en")], None), "RULEC_LANG beats RITSU_LANG");
+    assert!(!japanese(&[("RULEC_LANG", "ja"), ("RITSU_LANG", "ja")], Some("en")), "--lang beats both");
+    assert!(japanese(&[("RULEC_LANG", "fr"), ("RITSU_LANG", "ja")], None), "a RULEC_LANG that names no language is passed over");
+    assert!(!japanese(&[("RITSU_LANG", "fr")], None), "a RITSU_LANG that names no language is passed over");
 }
 
 #[test]

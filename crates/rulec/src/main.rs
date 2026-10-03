@@ -95,8 +95,8 @@ fn global_flags() -> Vec<Flag> {
             "--lang",
             Some("ja|en"),
             tr!(
-                "文面の言語。無ければ環境変数 RULEC_LANG、それも無ければ en",
-                "language of the prose; else the RULEC_LANG environment variable, else en"
+                "文面の言語。無ければ環境変数 RULEC_LANG、次に RITSU_LANG、どちらも無ければ en",
+                "language of the prose; else the RULEC_LANG environment variable, then RITSU_LANG, else en"
             ),
         )
         .choices(&["ja", "en"])
@@ -753,8 +753,8 @@ fn help_all() -> String {
         "\nFor one command in detail: `rulec <cmd> --help` (`rulec help <cmd>` is the same page).\n"
     ));
     o.push_str(&tr!(
-        "どのコマンドにも --lang ja|en を付けられます（既定は en、環境変数 RULEC_LANG でも指定できます）。\n",
-        "Every command accepts --lang ja|en (default en; the RULEC_LANG environment variable works too).\n"
+        "どのコマンドにも --lang ja|en を付けられます（既定は en、環境変数 RULEC_LANG か RITSU_LANG でも指定できます）。\n",
+        "Every command accepts --lang ja|en (default en; the RULEC_LANG or RITSU_LANG environment variable works too).\n"
     ));
     o.push_str(&tr!(
         "exit code: 0 注記のみ / 1 エラーあり / 2 引数の誤りか、読めないファイル\n",
@@ -1007,7 +1007,7 @@ fn main() -> ExitCode {
     restore_sigpipe();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     // `--lang ja|en` (or `--lang=en`) decides the output language before anything
-    // is printed; `RULEC_LANG` is the fallback, English the default (i18n.rs).
+    // is printed; `RULEC_LANG`, then `RITSU_LANG`, is the fallback, English the default (i18n.rs).
     if let Some(i) = args.iter().position(|a| a == "--lang") {
         let Some(v) = args.get(i + 1).and_then(|v| rulec::i18n::Lang::parse(v)) else {
             eprintln!("error: --lang ja|en");

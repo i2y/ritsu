@@ -3,7 +3,8 @@
 //! generated code.
 //!
 //! The language is chosen explicitly — `--lang` on the command line, else the
-//! `RULEC_LANG` environment variable, else English. The system locale is
+//! `RULEC_LANG` environment variable, else `RITSU_LANG` (the one every language
+//! of ritsu reads, ritsu's DESIGN 4.1), else English. The system locale is
 //! deliberately ignored: generated artifacts are committed and checked with
 //! `gen --check`, and CI logs are diffed, so the output must not change with
 //! the machine it runs on.
@@ -90,9 +91,14 @@ pub fn set(l: Lang) {
     LANG.store(code(l), Ordering::Relaxed);
 }
 
-/// The language `RULEC_LANG` asks for, or English when it is unset or unknown.
+/// The language the environment asks for: `RULEC_LANG`, else `RITSU_LANG`, else English. A value
+/// that names neither language is passed over, as one that is not there (ritsu-base's
+/// `Lang::pick`, which the other languages of ritsu read theirs with).
 pub fn from_env() -> Lang {
-    std::env::var("RULEC_LANG").ok().and_then(|s| Lang::parse(&s)).unwrap_or(Lang::En)
+    match ritsu_base::text::Lang::pick(None, "RULEC_LANG") {
+        ritsu_base::text::Lang::Ja => Lang::Ja,
+        ritsu_base::text::Lang::En => Lang::En,
+    }
 }
 
 pub fn current() -> Lang {

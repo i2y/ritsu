@@ -374,6 +374,7 @@ D.5 でしたこと（2026-10-04）：
 - rulec の `src/i18n.rs` に `with` を足した（スレッドごとの言語。抜ければパニックでも前の言語に戻る。スレッドの言語はプロセスの言語に勝つ）。CLI はこれまでどおり `set` でプロセスの言語を決める。2,800 か所の `tr!` は書き換えていない。rulec の DESIGN §15.165 に書いた。
 - テスト：rulec の `tests/lang.rs` に一本足した。`送料.rule` のページを、Markdown と HTML、英語と日本語の四つのスレッドで同時に四回ずつ描き、どれも `rulec doc --lang …` の出力と同じこと、抜けたスレッドの言語が戻ることを見る。スレッドの言語を読まないようにすると落ちる。rulec の出力の突き合わせも一字も違わなかった。
 - dandori と yuen が rulec を呼ぶところで使うのは、まだできない（どちらもまだ rulec を同じプロセスで呼ばない。D.3 と D.7）。いまは rulec の口の `Rules::doc` が `with` を使い、dandori と yuen はこの口から呼ぶ。rulec に `RITSU_LANG` を読ませることは、CLI の振る舞いを変えないためにしなかった（7.6）。
+- D の二つ目の部分で、作者が決めたとおり、rulec も `--lang`、`RULEC_LANG`、`RITSU_LANG`、英語の順に言語を選ぶようにした（rulec の `src/i18n.rs` の `from_env` が ritsu-base の `Lang::pick` で読む。rulec の §15.168）。`RITSU_LANG` を置いた環境でだけ振る舞いが変わる。`--help` の `--lang` の説明と最後の行、rulec のサイトの入れ方のページの優先順位の文に `RITSU_LANG` を足した。`tests/lang.rs` に一本足し（`ritsu_lang_comes_after_rulec_lang`）、そのファイルのテストは `RULEC_LANG` と `RITSU_LANG` の両方を外して rulec を走らせる。`RULEC_LANG` と `RITSU_LANG` を外した環境での rulec の出力（1,725 回）は、替える前と一字も違わなかった。
 
 ### D.6 dandori の種類の語
 

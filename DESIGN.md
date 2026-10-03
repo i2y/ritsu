@@ -127,7 +127,7 @@ serde_json を使う五つの `Cargo.lock` は、どれも serde_json 1.0.151 �
 - **言語と取り直しの環境変数**：`RULEC_LANG`、`DANDORI_LANG`、`KOYOMI_LANG`、`CHOBO_LANG`、`GEAS_LANG`、`YUEN_LANG`、`SAKAI_LANG`。取り直しは `<名前>_BLESS`。
 - **名前の正規化**：rulec の DESIGN §1.1 は「識別子は NFC に正規化する」と書くが、src には無い。chobo は結合文字を含む名前を E001 で断る。
 
-段階 C で、このうち二つの言語の文の書き方（七つとも `tr!("日本語", "English")`）、SKIP の書き方（七つとも `SKIP: <クレート>: <理由>`）、ルートの決め方（土台の `paths`）、`RITSU_LANG`（rulec のほかの六つ）、`RITSU_BLESS`（`ritsu-testkit` の golden を使う六つ。rulec のテストは自分の取り直しのまま）、chobo と sakai の診断の JSON のキーを、土台の形にそろえた（4.12、10.9）。rulec の `tr!` がプロセスの言語で `String` を返すこと、rulec と dandori の診断の JSON の形、名前の正規化は、まだそれぞれのままである。
+段階 C で、このうち二つの言語の文の書き方（七つとも `tr!("日本語", "English")`）、SKIP の書き方（七つとも `SKIP: <クレート>: <理由>`）、ルートの決め方（土台の `paths`）、`RITSU_LANG`（rulec のほかの六つ。rulec は D の二つ目の部分で読むようにした）、`RITSU_BLESS`（`ritsu-testkit` の golden を使う六つ。rulec のテストは自分の取り直しのまま）、chobo と sakai の診断の JSON のキーを、土台の形にそろえた（4.12、10.9）。rulec の `tr!` がプロセスの言語で `String` を返すこと、rulec と dandori の診断の JSON の形、名前の正規化は、まだそれぞれのままである。
 
 ### 1.4 境目で切れているもの
 
@@ -351,7 +351,7 @@ C.11 で rulec と dandori が `copies` の表を読むようになったので�
 `Text`（日本語と英語の文の組）と `tr!("日本語", "English")` を一つにする。koyomi、chobo、yuen、sakai の形で、どちらの文を出すかは出すところが決める。同じプロセスの中で英語と日本語の golden を取れ、wasm では呼ぶたびに言語を変えられ、ほかの言語のクレートからも、欲しい言語で呼べる。
 
 - geas の `t(en, ja)` と dandori の `(en, ja)` の組は、C の段階で `tr!("日本語", "English")` の順に直す。機械的な直しで、文は一字も変えない。
-- rulec の `tr!` は、プロセスで一つの言語を読む（呼び出しは 2,800 か所）。C の段階ではそのままにする。D の段階で、言語をスレッドごとに持てるようにする（`i18n::with(lang, || …)`）。dandori や yuen が rulec を同じプロセスの中で、ほかのテストと並んで、違う言語で呼ぶからである。CLI の振る舞いは変わらない。D.5 で作った（rulec の §15.165）。`with` の中で作る文はそのスレッドではその言語になり、抜ければ（パニックで抜けても）前の言語に戻る。スレッドの言語はプロセスの言語に勝つ。rulec の `tests/lang.rs` が、英語と日本語の `rulec doc` を四つのスレッドで同時に描いて確かめる。rulec はまだ `RITSU_LANG` を読まない（PLAN 7.6）。rulec のすべての文を `Text` に移すことは、要るとわかるまでしない（15 章）。
+- rulec の `tr!` は、プロセスで一つの言語を読む（呼び出しは 2,800 か所）。C の段階ではそのままにする。D の段階で、言語をスレッドごとに持てるようにする（`i18n::with(lang, || …)`）。dandori や yuen が rulec を同じプロセスの中で、ほかのテストと並んで、違う言語で呼ぶからである。CLI の振る舞いは変わらない。D.5 で作った（rulec の §15.165）。`with` の中で作る文はそのスレッドではその言語になり、抜ければ（パニックで抜けても）前の言語に戻る。スレッドの言語はプロセスの言語に勝つ。rulec の `tests/lang.rs` が、英語と日本語の `rulec doc` を四つのスレッドで同時に描いて確かめる。D の二つ目の部分で、rulec も `RITSU_LANG` を読むようにした（下の順。rulec の §15.168）。rulec のすべての文を `Text` に移すことは、要るとわかるまでしない（15 章）。
 - 言語の選び方は、`--lang`、`<名前>_LANG`、`RITSU_LANG`、英語の順。システムのロケールは見ない（rulec の §11 の原則 7。生成物と CI のログが機械で変わらないため）。
 - 文の幅（East Asian Width で W と F を 2 と数える）、件数、日本語の空白の詰め方の小さな関数も置く。
 

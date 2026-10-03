@@ -141,7 +141,7 @@ $ rulec check rules/送料.rule --lang ja
 $ RULEC_LANG=ja rulec check rules/送料.rule
 ```
 
-優先順位は `--lang` → `RULEC_LANG` → 既定。**システムのロケールは見ません。** 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせたマシンで出力が変わってはいけないからです。
+優先順位は `--lang` → `RULEC_LANG` → `RITSU_LANG` → 既定。**システムのロケールは見ません。** 生成物は `gen --check` で照合され、CI のログは diff されるので、走らせたマシンで出力が変わってはいけないからです。
 
 ## CI に置く
 
