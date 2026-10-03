@@ -1,0 +1,2 @@
+エラー[E002]: E002-gui-argument.geas:6:26: `click` に `index` という名前の引数はありません。書けるのは名前と `nth:` です
+     6 |   when app.click("save", index: 2)

@@ -1,0 +1,25 @@
+geas: hold agent-written code to claims a person has read
+Coding agents: `geas skill` prints the guide; `geas skill --install <dir>` installs it.
+
+usage:
+  geas check <spec.geas>...           run every claim; exit 0 when all hold
+  geas snap <spec.geas>...            run them and keep every observation as the baseline
+  geas drift <spec.geas>...           run them again and report what changed since the baseline
+  geas map <spec.geas>...             run them with coverage on and record the lines each claim runs
+  geas affected <spec.geas> <diff|->  the claims a diff touches, and the changed code no claim runs
+  geas explain <code>... | --all      what a code means and how to fix it
+  geas skill [--install <dir>]        the guide for coding agents, or the guide written as a skill folder
+
+options:
+  --json            the answer as JSON
+  --lang ja         messages in Japanese (also GEAS_LANG=ja)
+  --jobs N, -j N    run up to N claims at once (also GEAS_JOBS); default 1
+  --root <dir>      map, affected: the directory the record's paths are relative to
+  --out <file>      map: where to write the record
+  --map <file>      affected: a record to read; give two for both sides of the diff
+  --install <dir>   skill: write the skill's files to <dir>/geas
+  --force           skill: write over a <dir>/geas that is already there
+  --help, -h        this text
+  --version         the version
+
+exit: 0 all held, or nothing to report · 1 something failed or changed · 2 the spec, a file, or the arguments are wrong

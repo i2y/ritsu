@@ -1,0 +1,23 @@
+not ok 1 - greets the wrong name
+    p/fails.geas:8: screen contains text "Hello, Bob!" — got no such node
+         8 |   then screen contains text "Hello, Bob!"
+      the screen:
+        text "Your name:"
+        textbox "type here" value "Ada"
+        button "greet"
+        text "name: Ada"
+        text "Hello, Ada!"
+        textbox "scratch note (tab here)"
+        text "note: "
+      the run that gets there:
+           6  when app.input("Ada")  →  text "Your name:", textbox "type here" value "Ada", button "greet", text "name: Ada", textbox "scra…
+           7  when app.click("greet")  →  text "Your name:", textbox "type here" value "Ada", button "greet", text "name: Ada", text "Hello, …
+not ok 2 - clicks what is not there (error)
+    error[E035]: p/fails.geas:13:3: `app` refused `click("nope")`: pixie stopped the script at `click:nope` and exited with 101
+        13 |   when app.click("nope")
+      = the screen it was on: text "Your name:", textbox "type here" value "Ada", button "greet", text "name: Ada", textbox "scratch note (tab here)", text "note: "
+      = what it has to click: button "greet"
+      the run that gets there:
+          12  when app.input("Ada")  →  text "Your name:", textbox "type here" value "Ada", button "greet", text "name: Ada", textbox "scra…
+          13  when app.click("nope")
+2 claims · 0 ok · 2 failed · journal: p/.geas/fails.journal.jsonl

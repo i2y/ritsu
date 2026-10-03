@@ -1,0 +1,4 @@
+diff: document.diff · record: .geas/shop.map.jsonl (it fits either side)
+outside the record:
+  README.md
+4 claims · 0 touched · 0 changed lines no claim runs

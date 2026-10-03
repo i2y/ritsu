@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E008-true-on-a-text.geas","diagnostics":[{"code":"E008","severity":"error","file":"E008-true-on-a-text.geas","line":7,"col":18,"message":"`true` is a JSON value, and `stdout` is a text; to compare it with the word, write `stdout is \"true\"`","notes":[],"path":[]}]}

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E009-json-path.geas","diagnostics":[{"code":"E009","severity":"error","file":"E009-json-path.geas","line":8,"col":19,"message":"the JSON path does not read: bad JSON path near `m`","notes":["a path is written `.key`, `.a.b` or `.items[0].name`"],"path":[]}]}

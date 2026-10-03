@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E011-locale.geas","diagnostics":[{"code":"E011","severity":"error","file":"E011-locale.geas","line":3,"col":10,"message":"`ja_JP.UTF-8` is not a locale written as a language and a region; write `ja-JP`","notes":[],"path":[]}]}

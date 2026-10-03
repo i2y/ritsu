@@ -1,0 +1,2 @@
+エラー[E008]: E008-true-on-a-text.geas:7:18: `true` は JSON の値で、`stdout` は文字列です。その語と比べるなら `stdout is "true"` と書きます
+     7 |   then stdout is true

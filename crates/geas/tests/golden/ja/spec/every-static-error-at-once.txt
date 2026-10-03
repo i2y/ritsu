@@ -1,0 +1,21 @@
+エラー[E002]: every-static-error-at-once.geas:2:8: ターゲット `api` はありません
+     2 |   when api.get("/greet?name=Ada")
+  = このファイルのターゲット: calc
+エラー[E007]: every-static-error-at-once.geas:3:8: `get` の結果にあるのは status、header、body、body json で、`stdout` はありません
+     3 |   then stdout is "Hello, Ada"
+  = このチェックが見るのは 2 行目の `when` です
+エラー[E004]: every-static-error-at-once.geas:8:3: ターゲット `calc` に `port` がありますが `serve` がありません。ポートを持つのはサービスだけです
+     8 |   port 8123
+エラー[E003]: every-static-error-at-once.geas:11:7: "greets" という名前の主張が二つあります
+    11 | claim "greets" {
+  = 一つ目は 1 行目です
+エラー[E006]: every-static-error-at-once.geas:12:13: `calc` はコマンドを走らせるターゲットなので、呼べるのは `run` で、`get` は呼べません
+    12 |   when calc.get("/add?a=2&b=3")
+エラー[E007]: every-static-error-at-once.geas:13:8: `get` の結果にあるのは status、header、body、body json で、`exit` はありません
+    13 |   then exit contains "1"
+  = このチェックが見るのは 12 行目の `when` です
+エラー[E008]: every-static-error-at-once.geas:13:13: `exit` は数なので、文字列の一部を探す `contains` は使えません。`is` で比べてください
+    13 |   then exit contains "1"
+エラー[E007]: every-static-error-at-once.geas:18:8: `run` の結果にあるのは stdout、stderr、exit で、`status` はありません
+    18 |   then status is 200
+  = このチェックが見るのは 17 行目の `when` です

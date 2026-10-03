@@ -1,0 +1,25 @@
+target web {
+  serve "python3 server.py {port}"
+  port auto
+  tz "UTC"
+  locale "en-US"
+  clock "2026-08-29T00:00:00Z"
+  seed 7
+}
+
+claim "clicks what is not there" {
+  when web.open("/")
+  when web.click("nope")
+  then screen contains text "done"
+}
+
+claim "types into a field that is not there" {
+  when web.open("/")
+  when web.input("milk", into: "Quantity")
+  then screen contains text "milk"
+}
+
+claim "a page that does not load" {
+  when web.open("/broken")
+  then screen contains heading "Shopping list"
+}

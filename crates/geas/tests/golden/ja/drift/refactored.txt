@@ -1,0 +1,14 @@
+主張 "greets by name" の when#1 api.get("/greet?name=Alice")
+  + body json ".debug": 現れた: {"handler":"greet_v2"}   [主張なし]
+主張 "rejects an empty name" の when#1 api.get("/greet?name=")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [主張なし]
+主張 "totals accumulate across requests" の when#1 api.post("/reset")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [主張なし]
+主張 "totals accumulate across requests" の when#2 api.post("/add", body: "5")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [主張なし]
+主張 "totals accumulate across requests" の when#3 api.post("/add", body: "7")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [主張なし]
+主張 "unknown paths are 404" の when#1 api.get("/nope")
+  ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [主張なし]
+  ~ body: "not found" → "Not Found"   [主張なし]
+ドリフト: 比べたやりとり 7 件 · 変わったやりとり 6 件 · 主張なしの変化 7 件 · 主張ありの変化 0 件

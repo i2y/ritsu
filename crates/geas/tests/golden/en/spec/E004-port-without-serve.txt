@@ -1,0 +1,2 @@
+error[E004]: E004-port-without-serve.geas:3:3: the target `calc` has `port` but no `serve`; only a service has a port
+     3 |   port 8123

@@ -1,0 +1,40 @@
+# A GUI reached through a driver: geas's fake driver plays a small greeter
+# (tests/drivers/greeter.json). `echo` prints its arguments, for a command run
+# between two actions on the app, which a live driver allows.
+
+target app {
+  driver "python3 fake_driver.py greeter.json"
+}
+
+target echo {
+  run "python3 echo.py"
+}
+
+claim "greets the name typed in" {
+  when app.open()
+  then screen contains textbox "type here"
+  and  screen contains button "retry" disabled
+  when app.input("Ada")
+  then screen contains textbox "type here" with value "Ada"
+  when app.click("greet")
+  then screen contains text "Hello, Ada!"
+  and  screen contains button "retry" enabled
+  and  screen does not contain text "Hello, !"
+  and  screen contains exactly 2 button
+  and  screen contains text matching "Hello, \w+!"
+}
+
+claim "greets the wrong name" {
+  when app.input("Ada")
+  when app.click("greet")
+  then screen contains text "Hello, Bob!"
+  and  screen does not contain button "retry"
+}
+
+claim "a command between two actions" {
+  when app.input("Ada", into: "type here")
+  when echo.run("between", "", "0")
+  then stdout is "between"
+  when app.submit()
+  then screen contains text containing "Ada"
+}

@@ -1,0 +1,3 @@
+error[E010]: E010-open-single-quote.geas:2:16: the command opens a single quote that nothing closes
+     2 |   run "python3 'my calc.py"
+  = geas splits a command into words itself, never through a shell: blanks separate words, `'…'` keeps what is in it as it is, `"…"` keeps blanks and reads `\"` and `\\`, and outside quotes a backslash keeps the next character

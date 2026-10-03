@@ -1,0 +1,2 @@
+エラー[E006]: E006-click-on-a-command.geas:6:13: `calc` はコマンドを走らせるターゲットなので、呼べるのは `run` で、`click` は呼べません
+     6 |   when calc.click("add")

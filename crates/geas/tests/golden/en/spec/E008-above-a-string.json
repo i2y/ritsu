@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E008-above-a-string.geas","diagnostics":[{"code":"E008","severity":"error","file":"E008-above-a-string.geas","line":8,"col":24,"message":"`is above` compares numbers; write a number without quotes, as `is above 199`","notes":[],"path":[]}]}

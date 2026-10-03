@@ -1,0 +1,10 @@
+ok 1 - adds
+1 claim · 1 ok · 0 failed · journal: w061/.geas/w061.journal.jsonl
+map: 1 file · 0 lines of code, 0 run by some claim → w061/.geas/w061.map.jsonl
+--- stderr
+warning[W061]: w061/w061.geas:6:3: a Rust program that `tally` started wrote a profile, but geas did not start that program itself, so what it ran is left out of the record
+     6 |   when tally.run("2", "3")
+  = command: sh tally.sh 2 3
+  = llvm-cov needs the program a profile came from, and geas knows only the programs it starts: make the command start the program built with -C instrument-coverage itself (`run "./tally"`), not through `cargo run` or a script
+  the run that gets there:
+       6  when tally.run("2", "3")  →  exit 0, stdout "5"

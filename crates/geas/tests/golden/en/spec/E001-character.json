@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-character.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-character.geas","line":5,"col":1,"message":"`@` is not a character geas reads outside a string or a comment","notes":[],"path":[]}]}

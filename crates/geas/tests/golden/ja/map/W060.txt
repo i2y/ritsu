@@ -1,0 +1,10 @@
+ok 1 - prints five
+主張 1 件 · 成り立った 1 件 · 成り立たなかった 0 件 · ジャーナル: w060/.geas/w060.journal.jsonl
+記録: ファイル 0 件 · コード 0 行 · どれかの主張が通った行 0 行 → w060/.geas/w060.map.jsonl
+--- stderr
+警告[W060]: w060/w060.geas:1:1: ターゲット `five` からは記録が取れませんでした。起動したプロセスのどれも、ルートの下のファイルの行を報告していません
+     1 | target five {
+  = コマンド: echo 5
+  = geas が記録できるのは、ルートの下のファイルを実行する Python 3.12 以降、Node、-cover を付けてビルドした Go のプログラム、-C instrument-coverage を付けてビルドした Rust のプログラムです。シェルスクリプト、古い Python、カバレッジなしでビルドしたプログラムからは何も取れません
+  ここまでの実行:
+       6  when five.run()  →  exit 0, stdout "5"

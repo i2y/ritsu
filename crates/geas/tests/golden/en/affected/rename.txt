@@ -1,0 +1,5 @@
+diff: rename.diff · record: .geas/shop.map.jsonl (the code after the change)
+claims the change touches:
+  every claim that starts `api`: 1, 2, 3
+      inventory.py: 2
+4 claims · 3 touched · 0 changed lines no claim runs

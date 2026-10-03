@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E005-and-before-when.geas","diagnostics":[{"code":"E005","severity":"error","file":"E005-and-before-when.geas","line":6,"col":3,"message":"`and` comes before any `when`; a check reads what the `when` before it observed","notes":[],"path":[]}]}

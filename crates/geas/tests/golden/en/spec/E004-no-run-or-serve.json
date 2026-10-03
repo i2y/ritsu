@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E004-no-run-or-serve.geas","diagnostics":[{"code":"E004","severity":"error","file":"E004-no-run-or-serve.geas","line":1,"col":1,"message":"the target `calc` has none of `run`, `serve`, `pixie` and `driver`","notes":[],"path":[]}]}

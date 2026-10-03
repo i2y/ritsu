@@ -1,0 +1,16 @@
+{"geas_map":1,"spec":"shop.geas","root":".","claims":[{"name":"lists the items","status":"ok","targets":["api"]},{"name":"prices an item with tax","status":"ok","targets":["api"]},{"name":"does not price what it lacks","status":"ok","targets":["api"]},{"name":"prints the sign","status":"ok","targets":["sign"]}]}
+{"file":"app.py","blob":"570f8705349aaddae98018f2df60f38a287b53da","lang":"python","code":"2-4,6-7,10-12,14-19,21-32,34,37"}
+{"file":"inventory.py","blob":"9a995c49fdedc86aefab702a43fb2dbf63dcf7a5","lang":"python","code":"2,5-6,9-10"}
+{"file":"legacy.py","blob":"6bd2b151ad9f782a9537f479f4f975f83e473808","lang":"python","code":null}
+{"file":"sign.py","blob":"37ed62231f2400964a6cee3246ff1a95ee768a80","lang":"python","code":"2,4-6"}
+{"file":"tax.py","blob":"a65107559130786f24f99cfbb3070c98951aea6c","lang":"python","code":"2,5-6"}
+{"claim":"lists the items","target":"api","file":"app.py","ran":"2-4,6-7,10-12,14-19,21-23,37"}
+{"claim":"lists the items","target":"api","file":"inventory.py","ran":"2,5-6,9"}
+{"claim":"lists the items","target":"api","file":"tax.py","ran":"2,5"}
+{"claim":"prices an item with tax","target":"api","file":"app.py","ran":"2-4,6-7,10-12,14-19,21-22,24-27,30,37"}
+{"claim":"prices an item with tax","target":"api","file":"inventory.py","ran":"2,5,9-10"}
+{"claim":"prices an item with tax","target":"api","file":"tax.py","ran":"2,5-6"}
+{"claim":"does not price what it lacks","target":"api","file":"app.py","ran":"2-4,6-7,10-12,14-19,21-22,24-29,37"}
+{"claim":"does not price what it lacks","target":"api","file":"inventory.py","ran":"2,5,9-10"}
+{"claim":"does not price what it lacks","target":"api","file":"tax.py","ran":"2,5"}
+{"claim":"prints the sign","target":"sign","file":"sign.py","ran":"2,4-6"}

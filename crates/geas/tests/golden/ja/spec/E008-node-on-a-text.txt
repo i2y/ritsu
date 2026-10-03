@@ -1,0 +1,2 @@
+エラー[E008]: E008-node-on-a-text.geas:7:24: `stdout` は文字列で、ノードを持つのは画面です。文字列の一部を探すなら、`"` で囲んで書きます（`stdout contains "…"`）
+     7 |   then stdout contains text "5"

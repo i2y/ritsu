@@ -1,0 +1,2 @@
+error[E013]: E013-into-on-pixie.geas:6:31: `app` is a pixie app, which reaches a text field by its place among the fields only; write `field: n`
+     6 |   when app.input("Ada", into: "type here")

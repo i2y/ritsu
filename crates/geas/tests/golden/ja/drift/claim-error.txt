@@ -1,0 +1,32 @@
+エラー[E032]: examples/greeter/greeter.geas:15:3: サービス `api` が、geas が渡したポートを開く前に終了しました（終了コード 1）
+    15 |   when api.get("/greet?name=Alice")
+  = コマンド: python3 server.py {port}
+  = stderr: ImportError: no module named 'greetings'
+  ここまでの実行:
+      15  when api.get("/greet?name=Alice")
+エラー[E032]: examples/greeter/greeter.geas:21:3: サービス `api` が、geas が渡したポートを開く前に終了しました（終了コード 1）
+    21 |   when api.get("/greet?name=")
+  = コマンド: python3 server.py {port}
+  = stderr: ImportError: no module named 'greetings'
+  ここまでの実行:
+      21  when api.get("/greet?name=")
+エラー[E032]: examples/greeter/greeter.geas:26:3: サービス `api` が、geas が渡したポートを開く前に終了しました（終了コード 1）
+    26 |   when api.post("/reset")
+  = コマンド: python3 server.py {port}
+  = stderr: ImportError: no module named 'greetings'
+  ここまでの実行:
+      26  when api.post("/reset")
+エラー[E032]: examples/greeter/greeter.geas:35:3: サービス `api` が、geas が渡したポートを開く前に終了しました（終了コード 1）
+    35 |   when api.get("/nope")
+  = コマンド: python3 server.py {port}
+  = stderr: ImportError: no module named 'greetings'
+  ここまでの実行:
+      35  when api.get("/nope")
+注意: ベースラインには主張 "greets by name" の when#1 がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）
+注意: ベースラインには主張 "rejects an empty name" の when#1 がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）
+注意: ベースラインには主張 "totals accumulate across requests" の when#1 がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）
+注意: ベースラインには主張 "totals accumulate across requests" の when#2 がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）
+注意: ベースラインには主張 "totals accumulate across requests" の when#3 がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）
+注意: ベースラインには主張 "totals accumulate across requests" の when#4 がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）
+注意: ベースラインには主張 "unknown paths are 404" の when#1 がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）
+ドリフト: 比べたやりとり 0 件 · 変わったやりとり 0 件 · 主張なしの変化 0 件 · 主張ありの変化 0 件

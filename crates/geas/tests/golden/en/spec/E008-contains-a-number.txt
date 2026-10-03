@@ -1,0 +1,2 @@
+error[E008]: E008-contains-a-number.geas:7:24: `contains` looks for a part of a text; write the value in quotes: `contains "5"`
+     7 |   then stdout contains 5

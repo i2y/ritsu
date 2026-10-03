@@ -1,0 +1,3 @@
+error[E011]: E011-clock-without-env.geas:2:1: `clock` cannot be kept for `calc` and `report`: no switch sets the time of a program from outside, so geas passes it in a variable the program reads
+     2 | clock "2026-08-29T09:00:00+09:00"
+  = name that variable on the same line: `clock "2026-08-29T09:00:00+09:00" env "NOW"`

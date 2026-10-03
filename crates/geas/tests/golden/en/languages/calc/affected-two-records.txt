@@ -1,0 +1,14 @@
+diff: change.diff · records: before.map.jsonl (the code before the change), examples/calc/.geas/calc.map.jsonl (the code after the change)
+claims the change touches:
+  2 - multiplies
+      examples/calc/calc.py: removed 7
+  3 - refuses division by zero
+      examples/calc/calc.py: 11
+      examples/calc/calc.py: removed 7,13
+  4 - rejects an unknown operator
+      examples/calc/calc.py: 14
+      examples/calc/calc.py: removed 7
+changed code no claim runs:
+  examples/calc/calc.py: 15
+  examples/calc/calc.py: removed 8
+4 claims · 3 touched · 2 changed lines no claim runs

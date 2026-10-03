@@ -1,0 +1,89 @@
+# The test page in Chrome (tests/pages/app/): a shopping list whose items live in
+# the service, a status set 300 ms after a click, a reminder a minute after one,
+# an order button that waits for a checkbox, the date and a number as the time
+# zone and the locale write them, a random number, and a counter kept in the
+# page's storage.
+
+clock "2026-08-29T00:00:00Z"
+seed 7
+
+# what Python's server says about itself and the hour is noise
+mask header "date"
+mask header "server"
+
+target web {
+  serve "python3 server.py {port}"
+  port auto
+  tz "Asia/Tokyo"
+  locale "de-DE"
+}
+
+claim "the first screen" {
+  when web.open("/")
+  then screen contains heading "Shopping list"
+  and  screen contains textbox "Item"
+  and  screen contains exactly 0 listitem
+  and  screen contains text "Today: 29. August 2026 um 09:00 (Asia/Tokyo)"
+  and  screen contains text "Total: 1.234,5"
+}
+
+claim "an item typed in and submitted appears, and the service has it" {
+  when web.open("/")
+  when web.input("milk")
+  then screen contains textbox "Item" with value "milk"
+  when web.submit()
+  then screen contains text "milk" in list "Items"
+  and  screen contains textbox "Item" with value ""
+  when web.get("/api/items")
+  then body is "[\"milk\"]"
+}
+
+claim "an item posted to the service shows on the page" {
+  when web.post("/api/items", body: "eggs")
+  then status is 200
+  when web.open("/")
+  then screen contains exactly 1 listitem
+  and  screen contains text "eggs" in listitem
+}
+
+claim "the status comes 300 ms after the click, and the reminder a minute after" {
+  when web.open("/")
+  when web.click("Check later")
+  then screen contains text "checked" in status
+  when web.click("Remind me")
+  then screen does not contain text "reminded"
+  when web.advance(60000)
+  then screen contains text "reminded" in status
+  and  screen contains text containing "um 09:00"
+}
+
+claim "the order waits for the terms" {
+  when web.open("/")
+  then screen contains checkbox "I agree to the terms" unchecked
+  and  screen contains button "Order" disabled
+  when web.click("I agree to the terms")
+  then screen contains checkbox "I agree to the terms" checked
+  and  screen contains button "Order" enabled
+}
+
+claim "one seed gives one number" {
+  when web.open("/")
+  then screen contains text "Lucky number: 0.000441"
+}
+
+claim "and gives it in another claim too" {
+  when web.open("/")
+  then screen contains text "Lucky number: 0.000441"
+}
+
+claim "the counter counts the visits of this claim" {
+  when web.open("/")
+  then screen contains text "Visits: 1"
+  when web.open("/")
+  then screen contains text "Visits: 2"
+}
+
+claim "and starts again in the next" {
+  when web.open("/")
+  then screen contains text "Visits: 1"
+}

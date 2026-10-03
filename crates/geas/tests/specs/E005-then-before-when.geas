@@ -1,0 +1,7 @@
+target calc {
+  run "python3 calc.py"
+}
+
+claim "adds" {
+  then stdout is "5"
+}

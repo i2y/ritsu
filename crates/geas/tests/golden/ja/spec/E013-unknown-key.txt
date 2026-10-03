@@ -1,0 +1,2 @@
+エラー[E013]: E013-unknown-key.geas:8:18: `hyper-s` は、geas がページに送れるキーではありません。送れるのは、英字、数字、enter・escape・tab・backspace・delete・space・up・down・left・right・home・end・pageup・pagedown、f1〜f12 と、それに cmd・ctrl・alt・shift を組み合わせたもの（`cmd-s` など）です
+     8 |   when web.press("hyper-s")

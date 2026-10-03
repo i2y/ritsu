@@ -1,0 +1,9 @@
+target report {
+  run "python3 report.py"
+  clock "2026-08-29 09:00" env "NOW"
+}
+
+claim "dates the report" {
+  when report.run()
+  then stdout contains "2026-08-29"
+}

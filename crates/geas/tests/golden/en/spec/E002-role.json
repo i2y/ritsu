@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E002-role.geas","diagnostics":[{"code":"E002","severity":"error","file":"E002-role.geas","line":7,"col":24,"message":"`buton` is not a role; a role is one of WAI-ARIA's, such as button, link, textbox, heading, checkbox, dialog or listitem, or `text` for static text","notes":[],"path":[]}]}

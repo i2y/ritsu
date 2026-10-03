@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E006-run-on-a-service.geas","diagnostics":[{"code":"E006","severity":"error","file":"E006-run-on-a-service.geas","line":7,"col":12,"message":"`api` is a service, so it takes `get` and `post`, and the actions on its page in a browser (open, click, input, submit, press, advance), not `run`","notes":[],"path":[]}]}

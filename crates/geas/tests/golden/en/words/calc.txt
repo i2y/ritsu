@@ -1,0 +1,6 @@
+ok 1 - a file name with a space, in single quotes
+ok 2 - a file name with a space, in double quotes
+ok 3 - a file name with a space, after a backslash
+ok 4 - every word as it was written, and nothing expanded
+ok 5 - a shell when one is named
+5 claims · 5 ok · 0 failed · journal: calc/.geas/calc.journal.jsonl

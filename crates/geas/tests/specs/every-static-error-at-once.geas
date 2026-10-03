@@ -1,0 +1,19 @@
+claim "greets" {
+  when api.get("/greet?name=Ada")
+  then stdout is "Hello, Ada"
+}
+
+target calc {
+  run "python3 calc.py"
+  port 8123
+}
+
+claim "greets" {
+  when calc.get("/add?a=2&b=3")
+  then exit contains "1"
+}
+
+claim "adds" {
+  when calc.run("2", "+", "3")
+  then status is 200
+}

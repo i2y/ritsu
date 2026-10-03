@@ -1,0 +1,2 @@
+error[E001]: E001-get-two-paths.geas:7:26: expected `)`, found `"/hello"`
+     7 |   when api.get("/greet", "/hello")

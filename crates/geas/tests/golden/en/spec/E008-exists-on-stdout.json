@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E008-exists-on-stdout.geas","diagnostics":[{"code":"E008","severity":"error","file":"E008-exists-on-stdout.geas","line":7,"col":15,"message":"`exists` asks whether a header was sent or a JSON path leads to a value, and `stdout` is always there; check its value instead","notes":[],"path":[]}]}

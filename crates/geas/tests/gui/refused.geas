@@ -1,0 +1,9 @@
+target app {
+  driver "python3 fake_driver.py greeter.json"
+}
+
+claim "clicks what is not there" {
+  when app.input("Ada")
+  when app.click("nope")
+  then screen contains text "Hello, Ada!"
+}

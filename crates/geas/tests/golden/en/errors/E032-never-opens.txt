@@ -1,0 +1,7 @@
+not ok 1 - answers (error)
+    error[E032]: e032.geas:7:3: the service `api` did not open port 8123 within 5 s, so geas stopped it
+         7 |   when api.get("/")
+      = command: sleep 30
+      the run that gets there:
+           7  when api.get("/")
+1 claim · 0 ok · 1 failed · journal: .geas/e032.journal.jsonl

@@ -1,0 +1,9 @@
+ok 1 - answers
+1 claim · 1 ok · 0 failed · journal: bare/.geas/bare.journal.jsonl
+--- stderr
+error[E066]: bare/bare.geas:7:3: the Go program that `api` started wrote its coverage metadata but no counters: it did not exit normally
+     7 |   when api.get("/")
+  = command: ./bare 8125
+  = a Go program writes its counters when it returns from main or calls os.Exit; a service has to do so on SIGTERM (signal.NotifyContext and Server.Shutdown)
+  the run that gets there:
+       7  when api.get("/")  →  200, body "ok"

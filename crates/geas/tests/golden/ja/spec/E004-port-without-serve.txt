@@ -1,0 +1,2 @@
+エラー[E004]: E004-port-without-serve.geas:3:3: ターゲット `calc` に `port` がありますが `serve` がありません。ポートを持つのはサービスだけです
+     3 |   port 8123

@@ -1,0 +1,13 @@
+{"claim":"greets by name","event":"when","line":15,"target":"api","call":"get(\"/greet?name=Alice\")","obs":{"status":200,"headers":{"content-length":"27","content-type":"application/json","date":"<masked>","server":"<masked>"},"body":"{\"message\": \"Hello, Alice\"}"}}
+{"claim":"greets by name","event":"check","line":16,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"greets by name","event":"check","line":17,"check":"body json \".message\" is","expected":"\"Hello, Alice\"","actual":"\"Hello, Alice\"","ok":true}
+{"claim":"rejects an empty name","event":"when","line":21,"target":"api","call":"get(\"/greet?name=\")","obs":{"status":400,"headers":{"content-length":"13","content-type":"text/plain","date":"<masked>","server":"<masked>"},"body":"name required"}}
+{"claim":"rejects an empty name","event":"check","line":22,"check":"status is","expected":"400","actual":"400","ok":true}
+{"claim":"totals accumulate across requests","event":"when","line":26,"target":"api","call":"post(\"/reset\")","obs":{"status":200,"headers":{"content-length":"2","content-type":"text/plain","date":"<masked>","server":"<masked>"},"body":"ok"}}
+{"claim":"totals accumulate across requests","event":"check","line":27,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"totals accumulate across requests","event":"when","line":28,"target":"api","call":"post(\"/add\", body: \"5\")","obs":{"status":200,"headers":{"content-length":"2","content-type":"text/plain","date":"<masked>","server":"<masked>"},"body":"ok"}}
+{"claim":"totals accumulate across requests","event":"when","line":29,"target":"api","call":"post(\"/add\", body: \"7\")","obs":{"status":200,"headers":{"content-length":"2","content-type":"text/plain","date":"<masked>","server":"<masked>"},"body":"ok"}}
+{"claim":"totals accumulate across requests","event":"when","line":30,"target":"api","call":"get(\"/total\")","obs":{"status":200,"headers":{"content-length":"2","content-type":"text/plain","date":"<masked>","server":"<masked>"},"body":"12"}}
+{"claim":"totals accumulate across requests","event":"check","line":31,"check":"body is","expected":"\"12\"","actual":"\"12\"","ok":true}
+{"claim":"unknown paths are 404","event":"when","line":35,"target":"api","call":"get(\"/nope\")","obs":{"status":404,"headers":{"content-length":"9","content-type":"text/plain","date":"<masked>","server":"<masked>"},"body":"not found"}}
+{"claim":"unknown paths are 404","event":"check","line":36,"check":"status is","expected":"404","actual":"404","ok":true}

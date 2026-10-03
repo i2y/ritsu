@@ -1,0 +1,2 @@
+エラー[E011]: E011-variable-name.geas:3:7: `MODE=fast` は環境変数の名前になりません。空か、`=` を含んでいます
+     3 |   env "MODE=fast" "1"

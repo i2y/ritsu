@@ -1,0 +1,8 @@
+target app {
+  pixie "build/greeter"
+}
+
+claim "answers" {
+  when app.get("/")
+  then status is 200
+}

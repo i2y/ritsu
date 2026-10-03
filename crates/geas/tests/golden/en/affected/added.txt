@@ -1,0 +1,7 @@
+diff: added.diff · record: .geas/shop.map.jsonl (the code after the change)
+claims the change touches:
+  2 - prices an item with tax
+      tax.py: 6
+  every claim that starts `api`: 1, 2, 3
+      tax.py: 2,5
+4 claims · 3 touched · 0 changed lines no claim runs

@@ -1,0 +1,2 @@
+エラー[E002]: E002-target-line.geas:2:3: ターゲットに `exec` という行は書けません。書けるのは run、serve、pixie、driver、port、serial と、固定の env、tz、locale、clock、seed です
+     2 |   exec "python3 calc.py"

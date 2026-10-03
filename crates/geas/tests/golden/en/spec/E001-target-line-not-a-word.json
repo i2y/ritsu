@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-target-line-not-a-word.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-target-line-not-a-word.geas","line":2,"col":3,"message":"expected `run`, `serve`, `pixie`, `driver`, `port`, `serial`, a pin or `}`, found `\"python3 calc.py\"`","notes":[],"path":[]}]}

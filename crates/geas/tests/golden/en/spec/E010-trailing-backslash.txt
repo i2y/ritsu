@@ -1,0 +1,3 @@
+error[E010]: E010-trailing-backslash.geas:2:18: the command ends in a backslash, with nothing after it to keep
+     2 |   run "echo hello\\"
+  = geas splits a command into words itself, never through a shell: blanks separate words, `'…'` keeps what is in it as it is, `"…"` keeps blanks and reads `\"` and `\\`, and outside quotes a backslash keeps the next character

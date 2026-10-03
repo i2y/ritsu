@@ -1,0 +1,2 @@
+error[E008]: E008-screen-is.geas:7:15: `screen` is checked for the nodes it holds, with `contains` or `does not contain` and a node, not with `is`: `screen contains button "greet"`
+     7 |   then screen is "Hello, Ada!"

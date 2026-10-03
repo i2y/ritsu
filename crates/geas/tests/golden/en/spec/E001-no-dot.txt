@@ -1,0 +1,2 @@
+error[E001]: E001-no-dot.geas:6:13: expected `.`, found `run`
+     6 |   when calc run("2", "+", "3")

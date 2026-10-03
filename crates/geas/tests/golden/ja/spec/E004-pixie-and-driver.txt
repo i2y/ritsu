@@ -1,0 +1,2 @@
+エラー[E004]: E004-pixie-and-driver.geas:3:3: ターゲット `app` に `pixie` と `driver` の両方があります。ターゲットは、コマンド（`run`）、サービス（`serve`）、pixie のアプリ（`pixie`）、ドライバーで動かす GUI（`driver`）のどれか一つです
+     3 |   driver "python3 driver.py"

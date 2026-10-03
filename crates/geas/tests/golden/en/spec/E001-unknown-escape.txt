@@ -1,0 +1,2 @@
+error[E001]: E001-unknown-escape.geas:1:9: `\q` is not an escape; a string takes `\n`, `\t`, `\"` and `\\`
+     1 | claim "a\qb" {

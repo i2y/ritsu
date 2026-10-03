@@ -1,0 +1,30 @@
+--- examples/greeter/server.py.orig	2026-10-03 01:02:02
++++ examples/greeter/server.py	2026-10-03 01:02:02
+@@ -7,9 +7,6 @@
+ 
+ 
+ class H(BaseHTTPRequestHandler):
+-    def log_message(self, *args):
+-        pass
+-
+     def _send(self, code, body, ctype="text/plain"):
+         data = body.encode()
+         self.send_response(code)
+@@ -21,7 +18,7 @@
+     def do_GET(self):
+         u = urlparse(self.path)
+         if u.path == "/greet":
+-            name = parse_qs(u.query).get("name", [""])[0]
++            name = parse_qs(u.query).get("name", [""])[0].strip()
+             if not name:
+                 self._send(400, "name required")
+                 return
+@@ -29,6 +26,8 @@
+                        "application/json")
+         elif u.path == "/total":
+             self._send(200, str(total))
++        elif u.path == "/health":
++            self._send(200, "ok")
+         else:
+             self._send(404, "not found")
+ 

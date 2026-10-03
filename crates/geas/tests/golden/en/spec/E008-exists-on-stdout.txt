@@ -1,0 +1,2 @@
+error[E008]: E008-exists-on-stdout.geas:7:15: `exists` asks whether a header was sent or a JSON path leads to a value, and `stdout` is always there; check its value instead
+     7 |   then stdout exists

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E003-two-claims.geas","diagnostics":[{"code":"E003","severity":"error","file":"E003-two-claims.geas","line":10,"col":7,"message":"a second claim named \"adds\"","notes":["the first is on line 5"],"path":[]}]}

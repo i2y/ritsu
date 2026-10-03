@@ -1,0 +1,3 @@
+error[E004]: E004-port-auto-without-port.geas:3:3: the target `api` has `port auto`, and neither its command nor its `env` says `{port}`: the service has no way to learn the port geas gives it
+     3 |   port auto
+  = write `{port}` where the service reads its port: `serve "python3 server.py {port}"`, or `env "PORT" "{port}"`

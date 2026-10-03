@@ -1,0 +1,2 @@
+error[E013]: E013-unknown-key.geas:8:18: `hyper-s` is not a key geas sends to a page; it sends a letter, a digit, enter, escape, tab, backspace, delete, space, up, down, left, right, home, end, pageup, pagedown, f1 to f12, and chords of them with cmd, ctrl, alt and shift, such as `cmd-s`
+     8 |   when web.press("hyper-s")

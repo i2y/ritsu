@@ -1,0 +1,8 @@
+not ok 1 - reads every answer（エラー）
+    エラー[E037]: g/garbled.geas:7:3: `app` のドライバーは、`click("garble")` に geas の読めない行を返しました: `this line is not JSON`
+         7 |   when app.click("garble")
+      = ドライバーは操作ごとに JSON を一行返します。`{"screen":…}` か、アプリが操作を拒否したときは `{"error":"…","screen":…}` です
+      ここまでの実行:
+           6  when app.open()  →  window "Greeter", text "Your name:", textbox "type here", button "greet", button "retry" disabled
+           7  when app.click("garble")
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: g/.geas/garbled.journal.jsonl

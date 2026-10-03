@@ -1,0 +1,1 @@
+error[E080]: `--lang` takes en or ja, not `fr`

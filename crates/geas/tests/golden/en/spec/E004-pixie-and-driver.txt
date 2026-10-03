@@ -1,0 +1,2 @@
+error[E004]: E004-pixie-and-driver.geas:3:3: the target `app` has both `pixie` and `driver`; a target is one of a command (`run`), a service (`serve`), a pixie app (`pixie`) and a GUI reached through a driver (`driver`)
+     3 |   driver "python3 driver.py"

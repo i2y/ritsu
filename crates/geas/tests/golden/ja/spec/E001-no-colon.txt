@@ -1,0 +1,2 @@
+エラー[E001]: E001-no-colon.geas:7:30: `:` を書くところに `"5"` があります
+     7 |   when api.post("/add", body "5")

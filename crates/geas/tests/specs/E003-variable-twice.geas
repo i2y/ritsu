@@ -1,0 +1,11 @@
+tz "UTC"
+
+target report {
+  run "python3 report.py"
+  env "TZ" "Asia/Tokyo"
+}
+
+claim "reports" {
+  when report.run()
+  then exit is 0
+}

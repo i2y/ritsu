@@ -1,0 +1,3 @@
+error[E001]: E001-escape-outside-a-pattern.geas:7:19: `\d` is not an escape; a string takes `\n`, `\t`, `\"` and `\\`
+     7 |   then stdout is "\d"
+  = a pattern, after `matches`, reads `\d` itself; anywhere else write `\\d`

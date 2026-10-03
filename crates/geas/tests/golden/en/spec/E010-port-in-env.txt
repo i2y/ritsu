@@ -1,0 +1,3 @@
+error[E010]: E010-port-in-env.geas:3:31: `{port}` stands for the target's port, and `report` runs a command, which has none
+     3 |   env "API" "http://127.0.0.1:{port}"
+  = only a service has a port: a target with `serve` and `port`

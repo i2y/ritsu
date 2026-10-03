@@ -1,0 +1,4 @@
+エラー[E013]: E013-before-open.geas:7:12: この主張では、`web` のページをまだ開いていません。先に `when web.open("/")` で開きます
+     7 |   when web.input("milk")
+エラー[E013]: E013-before-open.geas:8:12: この主張では、`web` のページをまだ開いていません。先に `when web.open("/")` で開きます
+     8 |   when web.submit()

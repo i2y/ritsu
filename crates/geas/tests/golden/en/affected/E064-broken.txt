@@ -1,0 +1,2 @@
+error[E064]: broken.diff:5: the diff cannot be read: the hunk ends before the lines its header counts
+     5 | @@ -3,8 +3,8 @@

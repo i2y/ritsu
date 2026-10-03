@@ -1,0 +1,8 @@
+target api {
+  serve "python3 server.py 8123"
+  port 8123
+}
+
+claim "adds" {
+  when api.post("/add", body "5")
+}

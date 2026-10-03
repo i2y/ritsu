@@ -1,0 +1,2 @@
+error[E013]: E013-open-a-path-on-pixie.geas:6:17: `app` is a pixie app, which has no paths: `open()` is its first screen
+     6 |   when app.open("/settings")

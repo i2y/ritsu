@@ -1,0 +1,2 @@
+error[E008]: E008-pattern-not-in-quotes.geas:7:23: `matches` holds a text to a pattern written in quotes: `matches "5"`
+     7 |   then stdout matches 5

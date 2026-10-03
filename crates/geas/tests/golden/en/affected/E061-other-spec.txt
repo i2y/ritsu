@@ -1,0 +1,4 @@
+error[E061]: .geas/shop.map.jsonl:1: the record is of `tools/shop.geas`, not of `shop.geas`
+     1 | {"geas_map":1,"spec":"tools/shop.geas","root":".","claims":[{"name":"lists the items","status":"ok","targets":["api"]},…
+  = a record holds its spec's path relative to the root, and a record made with another `--root` names it otherwise
+  = the record is written by `geas map`; run `geas map shop.geas` to write it again

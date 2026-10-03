@@ -1,0 +1,4 @@
+diff: binary.diff · record: .geas/shop.map.jsonl (it fits either side)
+outside the record:
+  logo.png
+4 claims · 0 touched · 0 changed lines no claim runs

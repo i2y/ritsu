@@ -1,0 +1,10 @@
+ok 1 - the first screen
+ok 2 - an item typed in and submitted appears, and the service has it
+ok 3 - an item posted to the service shows on the page
+ok 4 - the status comes 300 ms after the click, and the reminder a minute after
+ok 5 - the order waits for the terms
+ok 6 - one seed gives one number
+ok 7 - and gives it in another claim too
+ok 8 - the counter counts the visits of this claim
+ok 9 - and starts again in the next
+主張 9 件 · 成り立った 9 件 · 成り立たなかった 0 件 · ジャーナル: w/.geas/page.journal.jsonl

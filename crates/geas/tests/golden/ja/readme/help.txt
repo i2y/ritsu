@@ -1,0 +1,26 @@
+$ geas --help --lang ja
+geas: エージェントが書いたコードに、人が読んで確かめた主張を守らせる
+コーディングエージェント向け: `geas skill` が手引きを出します。`geas skill --install <dir>` でスキルとしてインストールできます。
+
+使い方:
+  geas check <spec.geas>...           主張をすべて実行する。すべて成り立てば終了コード 0
+  geas snap <spec.geas>...            主張を実行し、結果をすべてベースラインとして残す
+  geas drift <spec.geas>...           もう一度実行し、ベースラインから変わったところを示す
+  geas map <spec.geas>...             カバレッジを取りながら実行し、主張ごとに通った行を記録する
+  geas affected <spec.geas> <diff|->  差分が関わる主張と、変わったコードのうちどの主張も通らないところを示す
+  geas explain <code>... | --all      コードの意味と直し方
+  geas skill [--install <dir>]        コーディングエージェント向けの手引きを出すか、スキルのフォルダーとして書く
+
+オプション:
+  --json            JSON で出力する
+  --lang ja         メッセージを日本語で出す（GEAS_LANG=ja でも同じ）
+  --jobs N, -j N    主張を一度に N 個まで並列に走らせる（GEAS_JOBS でも同じ）。既定は 1
+  --root <dir>      map、affected: 記録のパスの基準にするディレクトリ
+  --out <file>      map: 記録を書く先
+  --map <file>      affected: 読む記録。変更前と変更後のコードの記録を二つ渡せる
+  --install <dir>   skill: スキルのファイルを <dir>/geas に書く
+  --force           skill: すでにある <dir>/geas に上書きする
+  --help, -h        この説明を出す
+  --version         バージョンを出す
+
+終了コード: 0 すべて成り立った、または報告することがない · 1 成り立たない主張や変化、どの主張も通らないコードの変更がある · 2 主張のファイルや引数に誤りがあるか、ファイルを読み書きできない

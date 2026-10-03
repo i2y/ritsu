@@ -1,0 +1,10 @@
+target web {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "saves" {
+  when web.open("/")
+  when web.press("hyper-s")
+  then screen contains text "saved"
+}

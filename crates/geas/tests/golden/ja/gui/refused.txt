@@ -1,0 +1,9 @@
+not ok 1 - clicks what is not there（エラー）
+    エラー[E035]: g/refused.geas:7:3: `app` が `click("nope")` を拒否しました: nothing to click named "nope"
+         7 |   when app.click("nope")
+      = そのときの画面: window "Greeter", text "Your name:", textbox "type here" value "Ada", button "greet", button "retry" disabled
+      = クリックできるもの: button "greet"、button "retry" disabled
+      ここまでの実行:
+           6  when app.input("Ada")  →  window "Greeter", text "Your name:", textbox "type here" value "Ada", button "greet", button "retry…
+           7  when app.click("nope")
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: g/.geas/refused.journal.jsonl

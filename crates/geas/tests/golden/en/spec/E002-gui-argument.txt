@@ -1,0 +1,2 @@
+error[E002]: E002-gui-argument.geas:6:26: `click` takes no argument named `index`; it takes the name and `nth:`
+     6 |   when app.click("save", index: 2)

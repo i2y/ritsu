@@ -1,0 +1,2 @@
+error[E060]: shop.geas: there is no record at kept.jsonl
+  = run `geas map shop.geas` first; `geas affected` reads the record it writes

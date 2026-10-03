@@ -1,0 +1,2 @@
+error[E080]: `geas affected` takes a spec and a diff, and was given 1 argument(s)
+  = usage: geas affected <spec.geas> <diff|->; `-` reads the diff from stdin

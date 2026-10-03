@@ -1,0 +1,2 @@
+error[E013]: E013-nth-zero.geas:6:31: `nth:` counts from 1: the first is `nth: 1`
+     6 |   when app.click("save", nth: 0)

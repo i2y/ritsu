@@ -1,0 +1,9 @@
+not ok 1 - answers (error)
+    error[E032]: exits/exits.geas:12:3: the service `api` exited before opening port 8123 (exit 3)
+        12 |   when api.get("/")
+      = command: python3 exits.py
+      = stderr: cannot listen: address already in use
+      the run that gets there:
+          11  when hello.run()  →  exit 0, stdout "42"
+          12  when api.get("/")
+1 claim · 0 ok · 1 failed · journal: exits/.geas/exits.journal.jsonl

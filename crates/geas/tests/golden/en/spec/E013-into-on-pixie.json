@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E013-into-on-pixie.geas","diagnostics":[{"code":"E013","severity":"error","file":"E013-into-on-pixie.geas","line":6,"col":31,"message":"`app` is a pixie app, which reaches a text field by its place among the fields only; write `field: n`","notes":[],"path":[]}]}

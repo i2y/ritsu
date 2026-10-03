@@ -1,0 +1,2 @@
+エラー[E013]: E013-open-after-an-action-on-pixie.geas:7:12: `app` は pixie のアプリで、主張の中で一度だけ起動します。`open()` はアプリの最初の画面なので、ほかの操作より前に書きます
+     7 |   when app.open()

@@ -1,0 +1,7 @@
+not ok 1 - adds（エラー）
+    エラー[E030]: e030.geas:6:3: `geas-test-no-such-program` を起動できません: No such file or directory (os error 2)
+         6 |   when calc.run("2", "+", "3")
+      = コマンド: geas-test-no-such-program --flag 2 + 3
+      ここまでの実行:
+           6  when calc.run("2", "+", "3")
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: .geas/e030.journal.jsonl

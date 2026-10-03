@@ -1,0 +1,3 @@
+error[E002]: E002-target.geas:6:8: there is no target `api`
+     6 |   when api.get("/greet?name=Ada")
+  = the targets in this file: calc

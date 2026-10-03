@@ -1,0 +1,27 @@
+diff --git a/examples/tally-rust/src/main.rs b/examples/tally-rust/src/main.rs
+index 5097a21..93fd806 100644
+--- a/examples/tally-rust/src/main.rs
++++ b/examples/tally-rust/src/main.rs
+@@ -10,8 +10,7 @@ fn numbers(args: &[String]) -> Result<Vec<i64>, String> {
+ fn main() -> ExitCode {
+     let args: Vec<String> = std::env::args().skip(1).collect();
+     let Some((command, rest)) = args.split_first() else {
+-        eprintln!("usage: tally add|max <number>...");
+-        eprintln!("       the numbers are whole, and may be negative");
++        eprintln!("usage: tally add|max|min <number>...");
+         return ExitCode::from(2);
+     };
+     let xs = match numbers(rest) {
+@@ -22,10 +21,8 @@ fn main() -> ExitCode {
+         }
+     };
+     match command.as_str() {
+-        "add" => {
+-            let sum: i64 = xs.iter().sum();
+-            println!("{sum}");
+-        }
++        "add" => println!("{}", xs.iter().sum::<i64>()),
++        "min" => println!("{}", xs.iter().min().copied().unwrap_or(0)),
+         "max" => match xs.iter().max() {
+             Some(m) => println!("{m}"),
+             None => {

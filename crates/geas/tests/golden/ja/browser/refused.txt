@@ -1,0 +1,22 @@
+not ok 1 - clicks what is not there（エラー）
+    エラー[E035]: w/refused.geas:12:3: `web` のページに、"nope" という名前のボタン、リンク、チェックボックス、ラジオボタン、スイッチ、タブ、メニュー項目、選択肢がありません
+        12 |   when web.click("nope")
+      = そのときの画面: heading "Shopping list", form, text "Item", textbox "Item", button "Add", list "Items", button "Check later", button "Remind me", status, checkbox "I agree to the terms" unchecked, button "Order" dis…
+      = クリックできるもの: button "Add"、button "Check later"、button "Remind me"、checkbox "I agree to the terms" unchecked、button "Order" disabled
+      ここまでの実行:
+          11  when web.open("/")  →  heading "Shopping list", form, text "Item", textbox "Item", button "Add", list "Items", button "Che…
+          12  when web.click("nope")
+not ok 2 - types into a field that is not there（エラー）
+    エラー[E035]: w/refused.geas:18:3: `web` のページに、`input("milk", into: "Quantity")` が指すテキストフィールドがありません
+        18 |   when web.input("milk", into: "Quantity")
+      = そのときの画面: heading "Shopping list", form, text "Item", textbox "Item", button "Add", list "Items", button "Check later", button "Remind me", status, checkbox "I agree to the terms" unchecked, button "Order" dis…
+      = テキストフィールド: textbox "Item"
+      ここまでの実行:
+          17  when web.open("/")  →  heading "Shopping list", form, text "Item", textbox "Item", button "Add", list "Items", button "Che…
+          18  when web.input("milk", into: "Quantity")
+not ok 3 - a page that does not load（エラー）
+    エラー[E036]: w/refused.geas:23:3: `web` のページ `/broken` を読み込めませんでした: net::ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_LENGTH
+        23 |   when web.open("/broken")
+      ここまでの実行:
+          23  when web.open("/broken")
+主張 3 件 · 成り立った 0 件 · 成り立たなかった 3 件 · ジャーナル: w/.geas/refused.journal.jsonl

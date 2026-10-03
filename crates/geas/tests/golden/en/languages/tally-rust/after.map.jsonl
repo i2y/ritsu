@@ -1,0 +1,6 @@
+{"geas_map":1,"spec":"examples/tally-rust/tally.geas","root":"../..","claims":[{"name":"adds its numbers","status":"ok","targets":["tally"]},{"name":"adds nothing to zero","status":"ok","targets":["tally"]},{"name":"refuses what is not a number","status":"ok","targets":["tally"]},{"name":"says how to use it","status":"ok","targets":["tally"]}]}
+{"file":"examples/tally-rust/src/main.rs","blob":"93fd806f3156d24b78919563e3254afaaeee059c","lang":"rust","code":"6-8,10-14,16-20,23-27,29-30,33-35,38-39"}
+{"claim":"adds its numbers","target":"tally","file":"examples/tally-rust/src/main.rs","ran":"6-8,10-12,16-17,23-24,38-39"}
+{"claim":"adds nothing to zero","target":"tally","file":"examples/tally-rust/src/main.rs","ran":"6-8,10-12,16-17,23-24,38-39"}
+{"claim":"refuses what is not a number","target":"tally","file":"examples/tally-rust/src/main.rs","ran":"6-8,10-12,16,18-20,39"}
+{"claim":"says how to use it","target":"tally","file":"examples/tally-rust/src/main.rs","ran":"10-14,39"}

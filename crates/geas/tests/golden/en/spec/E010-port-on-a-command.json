@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E010-port-on-a-command.geas","diagnostics":[{"code":"E010","severity":"error","file":"E010-port-on-a-command.geas","line":2,"col":31,"message":"`{port}` stands for the target's port, and `calc` runs a command, which has none","notes":["only a service has a port: a target with `serve` and `port`"],"path":[]}]}

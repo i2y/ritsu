@@ -1,0 +1,8 @@
+target say {
+  run "echo \"hello"
+}
+
+claim "says hello" {
+  when say.run()
+  then stdout is "hello"
+}

@@ -1,0 +1,2 @@
+エラー[E013]: E013-advance-zero.geas:6:20: `advance` はアプリの時刻を 1 ミリ秒以上進めます
+     6 |   when app.advance(0)

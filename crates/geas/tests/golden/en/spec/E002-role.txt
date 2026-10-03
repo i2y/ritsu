@@ -1,0 +1,2 @@
+error[E002]: E002-role.geas:7:24: `buton` is not a role; a role is one of WAI-ARIA's, such as button, link, textbox, heading, checkbox, dialog or listitem, or `text` for static text
+     7 |   then screen contains buton "greet"

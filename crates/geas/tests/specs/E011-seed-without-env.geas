@@ -1,0 +1,9 @@
+target dice {
+  run "python3 dice.py"
+  seed 7
+}
+
+claim "rolls" {
+  when dice.run()
+  then stdout is "4"
+}

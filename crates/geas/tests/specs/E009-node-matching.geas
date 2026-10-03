@@ -1,0 +1,8 @@
+target app {
+  driver "python3 driver.py"
+}
+
+claim "shows the time" {
+  when app.open()
+  then screen contains text matching "\d+:(\d+"
+}

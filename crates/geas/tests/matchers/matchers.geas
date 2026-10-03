@@ -1,0 +1,253 @@
+# Every matcher on every kind of subject it takes (DESIGN §9), each once holding
+# and once failing. `echo` prints its first argument on stdout and its second on
+# stderr and exits with its third; `answer` answers `/` with the same JSON and the
+# same headers every time, and `/text` with a text that is not JSON.
+
+target echo {
+  run "python3 echo.py"
+}
+
+target answer {
+  serve "python3 answer.py {port}"
+  port auto
+}
+
+claim "is holds" {
+  when echo.run("42", "warning", "3")
+  then stdout is "42"
+  and  stderr is "warning"
+  and  exit is 3
+  when answer.get("/")
+  then status is 200
+  and  header "X-Version" is "1.2.3"
+  and  body json ".total" is 12
+  and  body json ".count" is "42"
+  and  body json ".ok" is true
+  and  body json ".missing" is null
+}
+
+claim "is fails" {
+  when echo.run("42", "warning", "3")
+  then stdout is "43"
+  and  exit is 0
+  when answer.get("/")
+  then status is 201
+  and  header "x-version" is "1.2.4"
+  and  header "etag" is "x"
+  and  body json ".total" is "12"
+  and  body json ".ok" is false
+  and  body json ".nope" is null
+}
+
+claim "is not holds" {
+  when echo.run("42", "", "3")
+  then stdout is not "43"
+  and  exit is not 0
+  when answer.get("/")
+  then status is not 500
+  and  header "x-version" is not "1.2.4"
+  and  body json ".ok" is not false
+}
+
+claim "is not fails" {
+  when echo.run("42", "", "3")
+  then stdout is not "42"
+  and  exit is not 3
+  when answer.get("/")
+  then status is not 200
+  and  header "etag" is not "x"
+  and  body json ".ok" is not true
+}
+
+claim "is above holds" {
+  when echo.run(" 42 ", "", "3")
+  then stdout is above 41.5
+  and  exit is above 2
+  when answer.get("/")
+  then status is above 199
+  and  header "x-count" is above 41
+  and  body json ".ratio" is above 0.25
+  and  body json ".count" is above 41
+}
+
+claim "is above fails" {
+  when echo.run("many", "", "3")
+  then stdout is above 1
+  and  exit is above 3
+  when answer.get("/")
+  then status is above 200
+  and  body json ".total" is above 12
+  and  body json ".message" is above 0
+}
+
+claim "is below holds" {
+  when echo.run("42", "", "3")
+  then stdout is below 43
+  and  exit is below 4
+  when answer.get("/")
+  then status is below 300
+  and  body json ".ratio" is below 1
+}
+
+claim "is below fails" {
+  when echo.run("42", "", "3")
+  then stdout is below 42
+  and  exit is below 3
+  when answer.get("/")
+  then status is below 200
+  and  body json ".ratio" is below 0.5
+}
+
+claim "is at least holds" {
+  when echo.run("42", "", "3")
+  then stdout is at least 42
+  and  exit is at least 3
+  when answer.get("/")
+  then status is at least 200
+  and  body json ".total" is at least 12
+}
+
+claim "is at least fails" {
+  when echo.run("42", "", "3")
+  then stdout is at least 43
+  and  exit is at least 4
+  when answer.get("/")
+  then status is at least 201
+  and  body json ".total" is at least 13
+}
+
+claim "is at most holds" {
+  when echo.run("42", "", "3")
+  then stdout is at most 42
+  and  exit is at most 3
+  when answer.get("/")
+  then status is at most 200
+  and  body json ".total" is at most 12
+}
+
+claim "is at most fails" {
+  when echo.run("42", "", "3")
+  then stdout is at most 41
+  and  exit is at most 2
+  when answer.get("/")
+  then status is at most 199
+  and  body json ".total" is at most 11
+}
+
+claim "is between holds" {
+  when echo.run("42", "", "3")
+  then stdout is between 42 and 43
+  and  exit is between 1 and 3
+  when answer.get("/")
+  then status is between 200 and 299
+  and  header "x-count" is between 40 and 50
+  and  body json ".ratio" is between 0 and 1
+}
+
+claim "is between fails" {
+  when echo.run("42", "", "3")
+  then stdout is between 0 and 41
+  and  exit is between 4 and 9
+  when answer.get("/")
+  then status is between 300 and 399
+  and  header "etag" is between 0 and 1
+  and  body json ".ratio" is between 0.6 and 1
+}
+
+claim "contains holds" {
+  when echo.run("the answer is 42", "warning: deprecated", "0")
+  then stdout contains "answer"
+  and  stderr contains "deprecated"
+  when answer.get("/")
+  then body contains "Hello"
+  and  header "content-type" contains "json"
+  and  body json ".message" contains "Ada"
+}
+
+claim "contains fails" {
+  when echo.run("the answer is 42", "", "0")
+  then stdout contains "question"
+  when answer.get("/")
+  then header "content-type" contains "xml"
+  and  body json ".message" contains "Bob"
+  and  body json ".tags" contains "x"
+}
+
+claim "does not contain holds" {
+  when echo.run("the answer is 42", "", "0")
+  then stdout does not contain "question"
+  when answer.get("/")
+  then header "content-type" does not contain "xml"
+  and  body json ".message" does not contain "Bob"
+}
+
+claim "does not contain fails" {
+  when echo.run("the answer is 42", "", "0")
+  then stdout does not contain "answer"
+  when answer.get("/")
+  then header "set-cookie" does not contain "a="
+  and  body json ".nope" does not contain "x"
+}
+
+claim "matches holds" {
+  when echo.run("2026-10-03", "", "0")
+  then stdout matches "\d{4}-\d{2}-\d{2}"
+  when answer.get("/")
+  then header "x-version" matches "\d+\.\d+\.\d+"
+  and  body json ".id" matches "[a-f0-9]{6}"
+  and  body matches ".*\"ok\": true.*"
+}
+
+claim "matches fails" {
+  when echo.run("2026-10-3", "", "0")
+  then stdout matches "\d{4}-\d{2}-\d{2}"
+  when answer.get("/")
+  then header "x-version" matches "\d+"
+  and  body json ".total" matches "\d+"
+}
+
+claim "does not match holds" {
+  when echo.run("2026-10-3", "", "0")
+  then stdout does not match "\d{4}-\d{2}-\d{2}"
+  when answer.get("/")
+  then header "x-version" does not match "\d+"
+  and  body json ".id" does not match "[0-9]+"
+}
+
+claim "does not match fails" {
+  when echo.run("2026-10-03", "", "0")
+  then stdout does not match "[0-9-]+"
+  when answer.get("/")
+  then body json ".id" does not match "a.*"
+  and  header "etag" does not match "x"
+}
+
+claim "exists holds" {
+  when answer.get("/")
+  then header "set-cookie" exists
+  and  body json ".tags[1]" exists
+  and  body json ".missing" exists
+}
+
+claim "exists fails" {
+  when answer.get("/")
+  then header "etag" exists
+  and  body json ".tags[2]" exists
+  when answer.get("/text")
+  then body json ".message" exists
+}
+
+claim "does not exist holds" {
+  when answer.get("/")
+  then header "etag" does not exist
+  and  body json ".error" does not exist
+  and  body json ".tags[2]" does not exist
+}
+
+claim "does not exist fails" {
+  when answer.get("/")
+  then header "set-cookie" does not exist
+  and  body json ".missing" does not exist
+  when answer.get("/text")
+  then body json ".error" does not exist
+}

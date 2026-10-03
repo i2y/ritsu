@@ -1,0 +1,2 @@
+error[E006]: E006-get-on-a-command.geas:6:13: `calc` runs a command, so it takes `run`, not `get`
+     6 |   when calc.get("/add?a=2&b=3")

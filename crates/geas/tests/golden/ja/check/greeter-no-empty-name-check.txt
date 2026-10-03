@@ -1,0 +1,9 @@
+ok 1 - greets by name
+not ok 2 - rejects an empty name
+    examples/greeter/greeter.geas:22: status is 400 のはずが、実際は 200
+        22 |   then status is 400
+      ここまでの実行:
+          21  when api.get("/greet?name=")  →  200, body "{\"message\": \"Hello, \"}"
+ok 3 - totals accumulate across requests
+ok 4 - unknown paths are 404
+主張 4 件 · 成り立った 3 件 · 成り立たなかった 1 件 · ジャーナル: examples/greeter/.geas/greeter.journal.jsonl

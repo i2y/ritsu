@@ -1,0 +1,9 @@
+ok 1 - answers
+主張 1 件 · 成り立った 1 件 · 成り立たなかった 0 件 · ジャーナル: ja/.geas/e066.journal.jsonl
+--- stderr
+エラー[E066]: ja/e066.geas:7:3: サービス `api` が SIGTERM から 5 秒のうちに終了しなかったので、geas が強制終了しました。実行した行が記録から抜けているかもしれません
+     7 |   when api.get("/")
+  = コマンド: python3 stubborn.py 8126
+  = サービスが記録されるのは、SIGTERM を受けて自分で終了したときです。Python と Node は、プログラムがシグナルを無視していなければ geas のフックで終了します。Go のサービスは main から戻る必要があり（signal.NotifyContext と Server.Shutdown）、Rust のサービスには SIGTERM を受けて終了するコードが要ります
+  ここまでの実行:
+       7  when api.get("/")  →  200

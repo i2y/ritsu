@@ -1,0 +1,4 @@
+error[E010]: E010-open-double-quote.geas:2:13: the command opens a double quote that nothing closes
+     2 |   run "echo \"hello"
+  = geas splits a command into words itself, never through a shell: blanks separate words, `'…'` keeps what is in it as it is, `"…"` keeps blanks and reads `\"` and `\\`, and outside quotes a backslash keeps the next character
+  = in a claims file a double quote inside a string is written `\"`, so single quotes are the easy form: `run "python3 'my calc.py'"`

@@ -1,0 +1,7 @@
+--- sign.py.orig	2026-10-03 01:07:52
++++ sign.py	2026-10-03 01:07:52
+@@ -3,4 +3,3 @@
+ 
+ name = sys.argv[1] if len(sys.argv) > 1 else "shop"
+ print(f"Welcome to the {name}")
+-print("Open on Sundays")

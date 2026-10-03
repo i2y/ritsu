@@ -1,0 +1,2 @@
+error[E002]: E002-mask.geas:1:6: `mask` takes `header "<name>"`, `body json "<path>"` or `screen <node>`, not `status`
+     1 | mask status

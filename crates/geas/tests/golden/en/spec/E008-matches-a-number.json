@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E008-matches-a-number.geas","diagnostics":[{"code":"E008","severity":"error","file":"E008-matches-a-number.geas","line":7,"col":13,"message":"`exit` is a number, and `matches` holds a text to a pattern; compare it with `is` or `is between`","notes":[],"path":[]}]}

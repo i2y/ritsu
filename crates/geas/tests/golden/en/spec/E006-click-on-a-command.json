@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E006-click-on-a-command.geas","diagnostics":[{"code":"E006","severity":"error","file":"E006-click-on-a-command.geas","line":6,"col":13,"message":"`calc` runs a command, so it takes `run`, not `click`","notes":[],"path":[]}]}

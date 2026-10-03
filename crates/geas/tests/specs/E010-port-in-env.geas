@@ -1,0 +1,9 @@
+target report {
+  run "python3 report.py"
+  env "API" "http://127.0.0.1:{port}"
+}
+
+claim "reports" {
+  when report.run()
+  then exit is 0
+}

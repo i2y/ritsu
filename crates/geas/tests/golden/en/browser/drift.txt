@@ -1,0 +1,33 @@
+claim "the first screen" when#1 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "an item typed in and submitted appears, and the service has it" when#1 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "an item typed in and submitted appears, and the service has it" when#2 web.input("milk")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "an item typed in and submitted appears, and the service has it" when#3 web.submit()
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "an item posted to the service shows on the page" when#2 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "the status comes 300 ms after the click, and the reminder a minute after" when#1 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "the status comes 300 ms after the click, and the reminder a minute after" when#2 web.click("Check later")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "the status comes 300 ms after the click, and the reminder a minute after" when#3 web.click("Remind me")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "the status comes 300 ms after the click, and the reminder a minute after" when#4 web.advance(60000)
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "the order waits for the terms" when#1 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "the order waits for the terms" when#2 web.click("I agree to the terms")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "one seed gives one number" when#1 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "and gives it in another claim too" when#1 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "the counter counts the visits of this claim" when#1 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "the counter counts the visits of this claim" when#2 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+claim "and starts again in the next" when#1 web.open("/")
+  + screen: appeared: text "Delivery on Fridays"   [unclaimed]
+drift: 18 interactions compared · 16 drifted · 16 unclaimed change(s) · 0 claimed

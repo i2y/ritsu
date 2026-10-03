@@ -1,0 +1,2 @@
+{"geas_baseline":1,"pins":{}}
+{"claim":"answers with its version","idx":0,"target":"answer","call":"get(\"/\")","obs":{"kind":"http","status":200,"headers":{"cache-control":"no-store","content-length":"132","content-type":"application/json","set-cookie":"a=1","x-count":"42","x-version":"1.2.3"},"body":"{\"id\": \"a1b2c3\", \"total\": 12, \"ratio\": 0.5, \"count\": \"42\", \"ok\": true, \"missing\": null, \"tags\": [\"x\", \"y\"], \"message\": \"Hello, Ada\"}"}}

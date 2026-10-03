@@ -1,0 +1,6 @@
+{"claim":"an old path sends the client to the new one","event":"when","line":9,"target":"web","call":"get(\"/old\")","obs":{"status":302,"headers":{"content-length":"28","location":"http://127.0.0.1:{port}/new"},"body":"moved to localhost:{port}/new"}}
+{"claim":"an old path sends the client to the new one","event":"check","line":10,"check":"status is","expected":"302","actual":"302","ok":true}
+{"claim":"an old path sends the client to the new one","event":"check","line":11,"check":"header \"location\" is","expected":"\"http://127.0.0.1:{port}/new\"","actual":"\"http://127.0.0.1:{port}/new\"","ok":true}
+{"claim":"an old path sends the client to the new one","event":"check","line":12,"check":"body is","expected":"\"moved to localhost:{port}/new\"","actual":"\"moved to localhost:{port}/new\"","ok":true}
+{"claim":"an old path sends the client to the new one","event":"when","line":13,"target":"web","call":"get(\"/new\")","obs":{"status":200,"headers":{"content-length":"4"},"body":"here"}}
+{"claim":"an old path sends the client to the new one","event":"check","line":14,"check":"body is","expected":"\"here\"","actual":"\"here\"","ok":true}

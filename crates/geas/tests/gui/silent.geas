@@ -1,0 +1,9 @@
+target app {
+  driver "python3 fake_driver.py greeter.json"
+}
+
+claim "gets an answer" {
+  when app.open()
+  when app.click("hang")
+  then screen contains button "greet"
+}

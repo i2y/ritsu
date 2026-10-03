@@ -1,0 +1,2 @@
+error[E001]: E001-no-paren.geas:6:17: expected `(`, found `"2"`
+     6 |   when calc.run "2"

@@ -1,0 +1,2 @@
+error[E004]: E004-serve-without-port.geas:2:3: the target `api` has `serve` but no `port`; geas waits for that port to open and sends its requests there
+     2 |   serve "python3 server.py 8123"

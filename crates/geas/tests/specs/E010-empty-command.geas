@@ -1,0 +1,8 @@
+target calc {
+  run "  "
+}
+
+claim "adds" {
+  when calc.run("python3", "calc.py", "2", "3")
+  then stdout is "5"
+}

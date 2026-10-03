@@ -1,0 +1,6 @@
+ok 1 - adds two integers
+ok 2 - multiplies
+ok 3 - refuses division by zero
+ok 4 - rejects an unknown operator
+主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: examples/calc/.geas/calc.journal.jsonl
+記録: ファイル 1 件 · コード 16 行 · どれかの主張が通った行 14 行 → examples/calc/.geas/calc.map.jsonl

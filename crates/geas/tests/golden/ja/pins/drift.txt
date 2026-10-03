@@ -1,0 +1,9 @@
+主張 "the pins outside any target reach every target" の when#1 plain.run()
+  ~ stdout: "GEAS_TOP=top\nGEAS_OWN is not set\nTZ=UTC\nGEAS_FROM_TEST=from the test\n" → "GEAS_TOP=top\nGEAS_OWN is not set\nTZ=Europe/Berlin\nGEAS_FROM_TEST=from the test\n"   [主張あり — 判定は geas check]
+主張 "env clean keeps PATH, what the pins set, and what is passed" の when#1 clean.run()
+  ~ stdout: "PATH is set\nGEAS_TOP=top\nGEAS_FROM_TEST is not set\nGEAS_PASSED=passed\nHOME is not set\nTZ=UTC\n" → "PATH is set\nGEAS_TOP=top\nGEAS_FROM_TEST is not set\nGEAS_PASSED=passed\nHOME is not set\nTZ=Europe/Berlin\n"   [主張あり — 判定は geas check]
+主張 "env clean keeps PATH, what the pins set, and what is passed" の when#2 clean.run()
+  ~ stdout: "PATH is set\nGEAS_TOP=top\nGEAS_FROM_TEST is not set\nGEAS_PASSED=passed\nHOME is not set\nTZ=UTC\n" → "PATH is set\nGEAS_TOP=top\nGEAS_FROM_TEST is not set\nGEAS_PASSED=passed\nHOME is not set\nTZ=Europe/Berlin\n"   [主張なし]
+注意: ターゲット `plain` の固定が、ベースラインと違います: {"env":{"GEAS_TOP":"top"},"tz":"UTC"} → {"env":{"GEAS_TOP":"top"},"tz":"Europe/Berlin"}
+注意: ターゲット `clean` の固定が、ベースラインと違います: {"clean":true,"pass":["GEAS_PASSED"],"env":{"GEAS_TOP":"top"},"tz":"UTC"} → {"clean":true,"pass":["GEAS_PASSED"],"env":{"GEAS_TOP":"top"},"tz":"Europe/Berlin"}
+ドリフト: 比べたやりとり 4 件 · 変わったやりとり 3 件 · 主張なしの変化 1 件 · 主張ありの変化 2 件

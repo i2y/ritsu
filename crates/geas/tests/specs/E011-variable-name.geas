@@ -1,0 +1,9 @@
+target report {
+  run "python3 report.py"
+  env "MODE=fast" "1"
+}
+
+claim "reports" {
+  when report.run()
+  then exit is 0
+}

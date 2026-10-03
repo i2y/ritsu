@@ -1,0 +1,11 @@
+target api {
+  serve "python3 server.py 8123"
+  port 8123
+}
+
+mask body json ".items[x].at"
+
+claim "greets" {
+  when api.get("/greet?name=Ada")
+  then status is 200
+}

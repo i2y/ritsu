@@ -1,0 +1,3 @@
+エラー[E007]: E007-stdout-after-click.geas:7:8: `click` の結果にあるのは 画面 で、`stdout` はありません
+     7 |   then stdout contains "Hello"
+  = このチェックが見るのは 6 行目の `when` です

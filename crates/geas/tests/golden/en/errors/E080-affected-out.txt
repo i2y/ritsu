@@ -1,0 +1,2 @@
+error[E080]: `--out` is not an option of `geas affected`
+  = it takes: --json, --lang, --root, --map

@@ -1,0 +1,4 @@
+error[E002]: E001-stops-at-the-first.geas:7:8: a check cannot name `output`; it names stdout, stderr, exit, status, header, body, body json or screen
+     7 |   then output is "5"
+error[E001]: E001-stops-at-the-first.geas:8:20: expected `when`, `then`, `and` or `}`, found `)`
+     8 |   when api.get("/"))

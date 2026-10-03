@@ -1,0 +1,2 @@
+エラー[E005]: E005-no-steps.geas:5:1: 主張 "adds" にステップがありません。主張は `when` から始めます
+     5 | claim "adds" {

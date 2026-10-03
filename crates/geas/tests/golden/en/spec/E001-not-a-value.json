@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-not-a-value.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-not-a-value.geas","line":7,"col":18,"message":"expected a value: a string, a number, true, false or null, found `five`","notes":[],"path":[]}]}

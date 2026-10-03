@@ -1,0 +1,3 @@
+error[E051]: .geas/e051.baseline.jsonl:2: the line has no `call`
+     2 | {"claim":"adds","idx":1,"target":"calc"}
+  = `geas snap` writes the baseline; run `geas snap e051.geas` to write it again

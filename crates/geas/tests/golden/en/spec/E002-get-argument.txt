@@ -1,0 +1,2 @@
+error[E002]: E002-get-argument.geas:7:26: `get` takes no argument named `name`; it takes the path
+     7 |   when api.get("/greet", name: "Ada")

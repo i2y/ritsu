@@ -1,0 +1,2 @@
+error[E002]: E002-target-line.geas:2:3: a target has no line `exec`; its lines are run, serve, pixie, driver, port, serial, and the pins env, tz, locale, clock and seed
+     2 |   exec "python3 calc.py"

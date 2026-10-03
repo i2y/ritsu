@@ -1,0 +1,2 @@
+error[E001]: E001-port-in-quotes.geas:3:8: expected a port number or `auto`, found `"8123"`
+     3 |   port "8123"

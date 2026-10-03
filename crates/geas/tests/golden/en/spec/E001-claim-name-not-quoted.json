@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-claim-name-not-quoted.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-claim-name-not-quoted.geas","line":1,"col":7,"message":"expected the claim's name, in quotes, found `adds`","notes":[],"path":[]}]}

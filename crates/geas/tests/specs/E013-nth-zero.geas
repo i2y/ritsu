@@ -1,0 +1,8 @@
+target app {
+  driver "python3 driver.py"
+}
+
+claim "presses the first save" {
+  when app.click("save", nth: 0)
+  then screen contains text "saved"
+}

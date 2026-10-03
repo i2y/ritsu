@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-escape-outside-a-pattern.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-escape-outside-a-pattern.geas","line":7,"col":19,"message":"`\\d` is not an escape; a string takes `\\n`, `\\t`, `\\\"` and `\\\\`","notes":["a pattern, after `matches`, reads `\\d` itself; anywhere else write `\\\\d`"],"path":[]}]}

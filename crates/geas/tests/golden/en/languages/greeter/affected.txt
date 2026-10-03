@@ -1,0 +1,13 @@
+diff: change.diff · record: examples/greeter/.geas/greeter.map.jsonl (the code after the change)
+claims the change touches:
+  1 - greets by name
+      examples/greeter/server.py: 21
+  2 - rejects an empty name
+      examples/greeter/server.py: 21
+  4 - unknown paths are 404
+      examples/greeter/server.py: 29
+  every claim that starts `api`: 1, 2, 3, 4
+      examples/greeter/server.py: removed 10-11 (next to lines they run)
+changed code no claim runs:
+  examples/greeter/server.py: 30
+4 claims · 4 touched · 1 changed line no claim runs

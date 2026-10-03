@@ -1,0 +1,2 @@
+エラー[E001]: E001-not-a-value.geas:7:18: 値（文字列、数、true、false、null）を書くところに `five` があります
+     7 |   then stdout is five

@@ -1,0 +1,29 @@
+# The human-auditable half. The implementation (calc.py) is agent-written;
+# these claims are what a reviewer actually reads.
+
+target calc {
+  run "python3 calc.py"
+}
+
+claim "adds two integers" {
+  when calc.run("2", "+", "3")
+  then stdout is "5"
+  and  exit is 0
+}
+
+claim "multiplies" {
+  when calc.run("6", "*", "7")
+  then stdout is "42"
+}
+
+claim "refuses division by zero" {
+  when calc.run("1", "/", "0")
+  then exit is 1
+  and  stderr contains "division by zero"
+}
+
+claim "rejects an unknown operator" {
+  when calc.run("1", "%", "2")
+  then exit is 2
+  and  stderr contains "unknown op"
+}

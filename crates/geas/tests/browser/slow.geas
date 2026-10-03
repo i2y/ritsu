@@ -1,0 +1,13 @@
+target web {
+  serve "python3 server.py {port}"
+  port auto
+  tz "UTC"
+  locale "en-US"
+  clock "2026-08-29T00:00:00Z"
+  seed 7
+}
+
+claim "a page that never comes" {
+  when web.open("/slow")
+  then screen contains heading "Shopping list"
+}

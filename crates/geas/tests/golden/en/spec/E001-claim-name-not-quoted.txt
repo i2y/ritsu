@@ -1,0 +1,2 @@
+error[E001]: E001-claim-name-not-quoted.geas:1:7: expected the claim's name, in quotes, found `adds`
+     1 | claim adds {

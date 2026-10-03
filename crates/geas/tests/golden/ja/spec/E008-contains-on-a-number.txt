@@ -1,0 +1,2 @@
+エラー[E008]: E008-contains-on-a-number.geas:7:13: `exit` は数なので、文字列の一部を探す `contains` は使えません。`is` で比べてください
+     7 |   then exit contains 0

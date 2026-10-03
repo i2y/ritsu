@@ -1,0 +1,12 @@
+diff --git a/tax.py b/tax.py
+new file mode 100644
+index 0000000..a651075
+--- /dev/null
++++ b/tax.py
+@@ -0,0 +1,6 @@
++# Tax at ten percent, rounded down.
++RATE = 10
++
++
++def with_tax(price):
++    return price * (100 + RATE) // 100

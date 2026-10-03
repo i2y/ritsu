@@ -1,0 +1,3 @@
+error[E011]: E011-seed-without-env.geas:3:3: `seed` cannot be kept for `dice`: no switch seeds the random numbers of a program from outside, so geas passes the seed in a variable the program reads
+     3 |   seed 7
+  = name that variable on the same line: `seed 7 env "SEED"`

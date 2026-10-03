@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E008-pattern-not-in-quotes.geas","diagnostics":[{"code":"E008","severity":"error","file":"E008-pattern-not-in-quotes.geas","line":7,"col":23,"message":"`matches` holds a text to a pattern written in quotes: `matches \"5\"`","notes":[],"path":[]}]}

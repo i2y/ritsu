@@ -1,0 +1,4 @@
+ok 1 - echoes
+主張 1 件 · 成り立った 1 件 · 成り立たなかった 0 件 · ジャーナル: calc/.geas/calc.journal.jsonl
+--- stderr
+エラー[E081]: calc/.geas: このディレクトリを作れません: File exists (os error 17)

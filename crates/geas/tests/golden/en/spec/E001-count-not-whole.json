@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-count-not-whole.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-count-not-whole.geas","line":6,"col":31,"message":"`1.5` is not a whole number, which counts and places are written as","notes":[],"path":[]}]}

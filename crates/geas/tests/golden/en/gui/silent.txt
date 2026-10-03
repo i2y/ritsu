@@ -1,0 +1,7 @@
+not ok 1 - gets an answer (error)
+    error[E037]: g/silent.geas:7:3: the driver of `app` did not answer `click("hang")` within 5 s
+         7 |   when app.click("hang")
+      the run that gets there:
+           6  when app.open()  →  window "Greeter", text "Your name:", textbox "type here", button "greet", button "retry" disabled
+           7  when app.click("hang")
+1 claim · 0 ok · 1 failed · journal: g/.geas/silent.journal.jsonl

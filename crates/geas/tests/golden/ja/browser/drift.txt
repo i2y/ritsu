@@ -1,0 +1,33 @@
+主張 "the first screen" の when#1 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "an item typed in and submitted appears, and the service has it" の when#1 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "an item typed in and submitted appears, and the service has it" の when#2 web.input("milk")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "an item typed in and submitted appears, and the service has it" の when#3 web.submit()
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "an item posted to the service shows on the page" の when#2 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "the status comes 300 ms after the click, and the reminder a minute after" の when#1 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "the status comes 300 ms after the click, and the reminder a minute after" の when#2 web.click("Check later")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "the status comes 300 ms after the click, and the reminder a minute after" の when#3 web.click("Remind me")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "the status comes 300 ms after the click, and the reminder a minute after" の when#4 web.advance(60000)
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "the order waits for the terms" の when#1 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "the order waits for the terms" の when#2 web.click("I agree to the terms")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "one seed gives one number" の when#1 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "and gives it in another claim too" の when#1 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "the counter counts the visits of this claim" の when#1 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "the counter counts the visits of this claim" の when#2 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+主張 "and starts again in the next" の when#1 web.open("/")
+  + screen: 現れた: text "Delivery on Fridays"   [主張なし]
+ドリフト: 比べたやりとり 18 件 · 変わったやりとり 16 件 · 主張なしの変化 16 件 · 主張ありの変化 0 件

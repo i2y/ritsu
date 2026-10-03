@@ -1,0 +1,1 @@
+error[E080]: `geas explain` needs a code, or `--all`

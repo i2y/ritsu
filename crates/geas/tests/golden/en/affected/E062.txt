@@ -1,0 +1,4 @@
+error[E062]: .geas/shop.map.jsonl:5: the record is not of this code: 1 file(s) differ from the code it was made on
+     5 | {"file":"sign.py","blob":"37ed62231f2400964a6cee3246ff1a95ee768a80","lang":"python","code":"2,4-6"}
+  = sign.py: the record has 37ed622, the file on disk c0c760e, and the diff does not touch it
+  = a record answers only for the code it was made on: record this code again with `geas map shop.geas`; a file new to the change has to be in the diff (`git add -N`)

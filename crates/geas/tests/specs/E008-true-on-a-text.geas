@@ -1,0 +1,8 @@
+target calc {
+  run "python3 calc.py"
+}
+
+claim "says yes" {
+  when calc.run("yes")
+  then stdout is true
+}

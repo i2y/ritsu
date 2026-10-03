@@ -1,0 +1,3 @@
+claim "adds {
+  when calc.run("2")
+}

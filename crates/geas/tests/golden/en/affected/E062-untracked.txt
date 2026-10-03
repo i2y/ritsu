@@ -1,0 +1,3 @@
+error[E062]: .geas/shop.map.jsonl: the record is not of this code: 1 file(s) differ from the code it was made on
+  = discount.py: on disk and not in the record, and the diff does not add it
+  = a record answers only for the code it was made on: record this code again with `geas map shop.geas`; a file new to the change has to be in the diff (`git add -N`)

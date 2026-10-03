@@ -1,0 +1,4 @@
+diff: unreported.diff · record: .geas/shop.map.jsonl (the code after the change)
+changed code no claim runs:
+  legacy.py: 3 (no runtime reported this file)
+4 claims · 0 touched · 1 changed line no claim runs

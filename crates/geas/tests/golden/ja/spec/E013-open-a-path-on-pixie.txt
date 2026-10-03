@@ -1,0 +1,2 @@
+エラー[E013]: E013-open-a-path-on-pixie.geas:6:17: `app` は pixie のアプリなので、パスはありません。`open()` がアプリの最初の画面です
+     6 |   when app.open("/settings")

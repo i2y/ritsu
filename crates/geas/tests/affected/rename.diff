@@ -1,0 +1,14 @@
+diff --git a/stock.py b/inventory.py
+similarity index 73%
+rename from stock.py
+rename to inventory.py
+index 2cc26a8..9a995c4 100644
+--- a/stock.py
++++ b/inventory.py
+@@ -1,5 +1,5 @@
+ # What the shop has, and what each costs before tax.
+-ITEMS = {"apple": 120, "pear": 150}
++ITEMS = {"apple": 120, "pear": 150, "quince": 200}
+ 
+ 
+ def names():

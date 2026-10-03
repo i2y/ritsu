@@ -1,0 +1,6 @@
+$ geas check examples/pixie-greeter/greeter.geas
+ok 1 - asks for a name
+ok 2 - greets the name typed in
+ok 3 - greets on Enter too
+ok 4 - the note is a field of its own
+4 claims · 4 ok · 0 failed · journal: examples/pixie-greeter/.geas/greeter.journal.jsonl

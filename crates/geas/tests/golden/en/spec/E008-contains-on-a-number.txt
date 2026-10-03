@@ -1,0 +1,2 @@
+error[E008]: E008-contains-on-a-number.geas:7:13: `exit` is a number, and `contains` looks for a part of a text; compare it with `is`
+     7 |   then exit contains 0

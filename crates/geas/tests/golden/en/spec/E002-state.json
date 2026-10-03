@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E002-state.geas","diagnostics":[{"code":"E002","severity":"error","file":"E002-state.geas","line":7,"col":39,"message":"`focused` is not a state; after a node's role come its name, `with value \"…\"`, a state (disabled, enabled, checked or unchecked) and `in <role>`, in that order","notes":[],"path":[]}]}

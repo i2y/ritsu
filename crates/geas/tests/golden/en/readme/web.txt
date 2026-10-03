@@ -1,0 +1,44 @@
+$ geas check examples/web-greeter/web-greeter.geas
+ok 1 - the first screen asks for a name
+ok 2 - greets the name typed in, by the time of day
+ok 3 - draws a fortune
+ok 4 - the service keeps the names the page greets
+ok 5 - a name sent to the service shows on the page
+ok 6 - the service refuses an empty name
+6 claims · 6 ok · 0 failed · journal: examples/web-greeter/.geas/web-greeter.journal.jsonl
+$ geas snap examples/web-greeter/web-greeter.geas
+6 claims · 6 ok · 0 failed · baseline: 12 interactions → examples/web-greeter/.geas/web-greeter.baseline.jsonl
+$ geas drift examples/web-greeter/web-greeter.geas
+drift: 12 interactions compared · 0 drifted · 0 unclaimed change(s) · 0 claimed
+$ geas check examples/web-greeter/web-greeter.geas
+not ok 1 - the first screen asks for a name
+    examples/web-greeter/web-greeter.geas:27: screen contains button "Greet" disabled — got no such node
+        27 |   and  screen contains button "Greet" disabled
+      the screen:
+        heading "Greeter"
+        text "Today is Saturday, August 29, 2026."
+        form
+          text "Your name"
+          textbox "Your name"
+          text "Greet"
+        status
+        list "Greeted"
+        text "Your fortune: A pleasant surprise is waiting for you."
+      the run that gets there:
+          23  when web.open("/")  →  heading "Greeter", text "Today is Saturday, August 29, 2026.", form, text "Your name", textbox "You…
+not ok 2 - greets the name typed in, by the time of day (error)
+    error[E035]: examples/web-greeter/web-greeter.geas:35:3: the page of `web` has no button, link, checkbox, radio, switch, tab, menu item or option named "Greet"
+        35 |   when web.click("Greet")
+      = the screen it was on: heading "Greeter", text "Today is Saturday, August 29, 2026.", form, text "Your name", textbox "Your name" value "Ada", text "Greet", status, list "Greeted", text "Your fortune: A pleasant surprise i…
+      = nothing on it can be clicked
+      the run that gets there:
+          32  when web.open("/")  →  heading "Greeter", text "Today is Saturday, August 29, 2026.", form, text "Your name", textbox "You…
+          33  when web.input("Ada", into: "Your name")  →  heading "Greeter", text "Today is Saturday, August 29, 2026.", form, text "Your name", textbox "You…
+          35  when web.click("Greet")
+ok 3 - draws a fortune
+ok 4 - the service keeps the names the page greets
+ok 5 - a name sent to the service shows on the page
+ok 6 - the service refuses an empty name
+6 claims · 4 ok · 2 failed · journal: examples/web-greeter/.geas/web-greeter.journal.jsonl
+$ echo $?
+1

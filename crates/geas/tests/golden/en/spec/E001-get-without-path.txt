@@ -1,0 +1,2 @@
+error[E001]: E001-get-without-path.geas:7:16: expected the path, in quotes, found `)`
+     7 |   when api.get()

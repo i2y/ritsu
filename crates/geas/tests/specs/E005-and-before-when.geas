@@ -1,0 +1,8 @@
+target calc {
+  run "python3 calc.py"
+}
+
+claim "adds" {
+  and exit is 0
+  when calc.run("2", "+", "3")
+}

@@ -1,0 +1,2 @@
+error[E008]: E008-number-against-a-string.geas:7:16: `exit` is a number; write the value without quotes: `exit is 0`
+     7 |   then exit is "0"

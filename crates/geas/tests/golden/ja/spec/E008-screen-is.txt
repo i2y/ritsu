@@ -1,0 +1,2 @@
+エラー[E008]: E008-screen-is.geas:7:15: `screen` は画面にあるノードを、`contains` か `does not contain` と後ろに書いたノードでチェックします。`is` は使えません（`screen contains button "greet"`）
+     7 |   then screen is "Hello, Ada!"

@@ -1,0 +1,7 @@
+not ok 1 - finishes (error)
+    error[E031]: e031.geas:6:3: `sleep` did not finish within 5 s, so geas stopped it
+         6 |   when slow.run()
+      = command: sleep 10
+      the run that gets there:
+           6  when slow.run()
+1 claim · 0 ok · 1 failed · journal: .geas/e031.journal.jsonl

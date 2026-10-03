@@ -1,0 +1,3 @@
+error[E010]: E010-port-in-a-pixie-command.geas:2:31: `{port}` stands for the target's port, and `app` is a pixie app, which has none
+     2 |   pixie "build/greeter --port={port}"
+  = only a service has a port: a target with `serve` and `port`

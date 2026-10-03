@@ -1,0 +1,2 @@
+error[E001]: E001-not-a-number.geas:7:16: `1.2.3` is not a number
+     7 |   then exit is 1.2.3

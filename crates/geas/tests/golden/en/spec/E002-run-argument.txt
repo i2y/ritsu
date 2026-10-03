@@ -1,0 +1,2 @@
+error[E002]: E002-run-argument.geas:6:22: `run` takes no argument named `op`; its arguments are strings
+     6 |   when calc.run("2", op: "+", "3")

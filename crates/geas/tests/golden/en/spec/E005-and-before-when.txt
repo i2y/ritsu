@@ -1,0 +1,2 @@
+error[E005]: E005-and-before-when.geas:6:3: `and` comes before any `when`; a check reads what the `when` before it observed
+     6 |   and exit is 0

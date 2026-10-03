@@ -1,0 +1,2 @@
+error[E001]: E001-character.geas:5:1: `@` is not a character geas reads outside a string or a comment
+     5 | @claim "adds" {

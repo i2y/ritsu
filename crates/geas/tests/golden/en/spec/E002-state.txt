@@ -1,0 +1,2 @@
+error[E002]: E002-state.geas:7:39: `focused` is not a state; after a node's role come its name, `with value "…"`, a state (disabled, enabled, checked or unchecked) and `in <role>`, in that order
+     7 |   then screen contains button "greet" focused

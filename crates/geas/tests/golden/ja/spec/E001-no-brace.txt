@@ -1,0 +1,2 @@
+エラー[E001]: E001-no-brace.geas:2:3: `{` を書くところに `run` があります
+     2 |   run "python3 calc.py"

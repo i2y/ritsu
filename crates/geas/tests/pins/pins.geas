@@ -1,0 +1,41 @@
+# What each pin gives the processes of a target. env.py prints the variables it
+# is asked about; the test sets GEAS_FROM_TEST and GEAS_PASSED for geas.
+
+env "GEAS_TOP" "top"
+tz "UTC"
+
+target plain {
+  run "python3 env.py GEAS_TOP GEAS_OWN TZ GEAS_FROM_TEST"
+}
+
+target pinned {
+  run "python3 env.py GEAS_TOP GEAS_OWN TZ LANG LC_ALL NOW SEED"
+  env "GEAS_OWN" "own"
+  tz "Asia/Tokyo"
+  locale "ja-JP"
+  clock "2026-08-29T09:00:00+09:00" env "NOW"
+  seed 7 env "SEED"
+}
+
+target clean {
+  run "python3 env.py ?PATH GEAS_TOP GEAS_FROM_TEST GEAS_PASSED HOME TZ"
+  env clean
+  env pass "GEAS_PASSED"
+}
+
+claim "the pins outside any target reach every target" {
+  when plain.run()
+  then stdout is "GEAS_TOP=top\nGEAS_OWN is not set\nTZ=UTC\nGEAS_FROM_TEST=from the test"
+}
+
+claim "a target's own pins win over those outside" {
+  when pinned.run()
+  then stdout is "GEAS_TOP=top\nGEAS_OWN=own\nTZ=Asia/Tokyo\nLANG=ja_JP.UTF-8\nLC_ALL=ja_JP.UTF-8\nNOW=2026-08-29T09:00:00+09:00\nSEED=7"
+}
+
+claim "env clean keeps PATH, what the pins set, and what is passed" {
+  when clean.run()
+  then stdout is "PATH is set\nGEAS_TOP=top\nGEAS_FROM_TEST is not set\nGEAS_PASSED=passed\nHOME is not set\nTZ=UTC"
+  when clean.run()
+  then exit is 0
+}

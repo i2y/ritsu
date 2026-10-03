@@ -1,0 +1,8 @@
+ok 1 - says hello
+1 claim · 1 ok · 0 failed · journal: d/.geas/echo.journal.jsonl
+not ok 1 - succeeds
+    d/fail.geas:7: exit is 0 — got 1
+         7 |   then exit is 0
+      the run that gets there:
+           6  when f.run()  →  exit 1
+1 claim · 0 ok · 1 failed · journal: d/.geas/fail.journal.jsonl

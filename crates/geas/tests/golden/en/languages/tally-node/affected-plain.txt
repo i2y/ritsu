@@ -1,0 +1,13 @@
+diff: change.plain.diff · record: examples/tally-node/.geas/tally.map.jsonl (the code after the change)
+claims the change touches:
+  2 - adds what it is given
+      examples/tally-node/server.ts: 31
+  3 - refuses what is not a number
+      examples/tally-node/server.ts: 26
+  4 - reset goes back to zero
+      examples/tally-node/server.ts: 31
+  every claim that starts `tally`: 1, 2, 3, 4, 5
+      examples/tally-node/server.ts: removed 8 (next to lines they run)
+changed code no claim runs:
+  examples/tally-node/server.ts: 32
+5 claims · 5 touched · 1 changed line no claim runs

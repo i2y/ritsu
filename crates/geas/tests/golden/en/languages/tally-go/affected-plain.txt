@@ -1,0 +1,9 @@
+diff: change.plain.diff · record: examples/tally-go/.geas/tally.map.jsonl (the code after the change)
+claims the change touches:
+  3 - refuses what is not a number
+      examples/tally-go/main.go: 43
+  every claim that starts `tally`: 1, 2, 3, 4, 5
+      examples/tally-go/main.go: removed 27 (next to lines they run)
+changed code no claim runs:
+  examples/tally-go/main.go: 48-49
+5 claims · 5 touched · 2 changed lines no claim runs

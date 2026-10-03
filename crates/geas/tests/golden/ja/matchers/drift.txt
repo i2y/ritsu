@@ -1,0 +1,4 @@
+主張 "answers with its version" の when#1 answer.get("/")
+  + header `x-debug`: 現れた: "on"   [主張なし]
+  ~ header `x-version`: "1.2.3" → "1.3.0"   [主張あり — 判定は geas check]
+ドリフト: 比べたやりとり 1 件 · 変わったやりとり 1 件 · 主張なしの変化 1 件 · 主張ありの変化 1 件

@@ -1,0 +1,15 @@
+diff --git a/app.py b/app.py
+index 5e4058f..570f870 100644
+--- a/app.py
++++ b/app.py
+@@ -3,8 +3,8 @@ import json
+ import sys
+ from http.server import BaseHTTPRequestHandler, HTTPServer
+ 
+-import old
+-import stock
++import inventory
++import tax
+ 
+ 
+ class Handler(BaseHTTPRequestHandler):

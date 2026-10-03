@@ -1,0 +1,9 @@
+$ geas skill --install .claude/skills
+wrote the geas skill to .claude/skills/geas (7 files)
+$ geas skill --install .claude/skills
+error[E081]: .claude/skills/geas is already there; `geas skill --install` writes over it only with `--force`
+  = with `--force`, the skill's files are written again and any other file in the folder is left as it is
+$ echo $?
+2
+$ geas skill --install .claude/skills --force
+wrote the geas skill to .claude/skills/geas (7 files)

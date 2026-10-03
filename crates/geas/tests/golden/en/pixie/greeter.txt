@@ -1,0 +1,5 @@
+ok 1 - starts asking for a name
+ok 2 - greets the name typed in
+ok 3 - greets on Enter, a comma and all
+ok 4 - types into the second field
+4 claims · 4 ok · 0 failed · journal: p/.geas/greeter.journal.jsonl

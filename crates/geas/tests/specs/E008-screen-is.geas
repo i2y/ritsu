@@ -1,0 +1,8 @@
+target app {
+  driver "python3 driver.py"
+}
+
+claim "greets" {
+  when app.click("greet")
+  then screen is "Hello, Ada!"
+}

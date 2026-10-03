@@ -1,0 +1,6 @@
+/target
+.geas/
+__pycache__/
+/examples/tally-go/tally
+/examples/tally-rust/tally
+/examples/pixie-greeter/greeter

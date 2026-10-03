@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E002-matcher.geas","diagnostics":[{"code":"E002","severity":"error","file":"E002-matcher.geas","line":7,"col":15,"message":"`equals` is not a way to compare; the ways are is, is not, is above, is below, is at least, is at most, is between, contains, does not contain, matches, does not match, exists and does not exist","notes":[],"path":[]}]}

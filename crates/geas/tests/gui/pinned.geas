@@ -1,0 +1,10 @@
+target app {
+  driver "python3 fake_driver.py greeter.json"
+  tz "Asia/Tokyo"
+  clock "2026-08-29T09:00:00+09:00"
+}
+
+claim "starts at nine" {
+  when app.open()
+  then screen contains button "greet"
+}

@@ -1,0 +1,13 @@
+主張 "greets the name typed in" の when#3 app.click("greet")
+  - screen in window "Greeter": 消えた: text "Hello, Ada!"   [主張あり — 判定は geas check]
+  + screen in window "Greeter": 現れた: text "Hi, Ada!"   [主張なし]
+  + screen in window "Greeter": 現れた: text "version 2"   [主張なし]
+主張 "greets the wrong name" の when#2 app.click("greet")
+  - screen in window "Greeter": 消えた: text "Hello, Ada!"   [主張なし]
+  + screen in window "Greeter": 現れた: text "Hi, Ada!"   [主張なし]
+  + screen in window "Greeter": 現れた: text "version 2"   [主張なし]
+主張 "a command between two actions" の when#3 app.submit()
+  - screen in window "Greeter": 消えた: text "Hello, Ada!"   [主張あり — 判定は geas check]
+  + screen in window "Greeter": 現れた: text "Hi, Ada!"   [主張あり — 判定は geas check]
+  + screen in window "Greeter": 現れた: text "version 2"   [主張なし]
+ドリフト: 比べたやりとり 8 件 · 変わったやりとり 3 件 · 主張なしの変化 6 件 · 主張ありの変化 3 件

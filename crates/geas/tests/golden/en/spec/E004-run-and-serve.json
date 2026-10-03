@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E004-run-and-serve.geas","diagnostics":[{"code":"E004","severity":"error","file":"E004-run-and-serve.geas","line":3,"col":3,"message":"the target `calc` has both `run` and `serve`; a target runs a command or serves, not both","notes":[],"path":[]}]}

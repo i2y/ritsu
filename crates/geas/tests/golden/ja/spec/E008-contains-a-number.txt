@@ -1,0 +1,2 @@
+エラー[E008]: E008-contains-a-number.geas:7:24: `contains` は文字列の一部を探します。値は `"` で囲んで書きます（`contains "5"`）
+     7 |   then stdout contains 5

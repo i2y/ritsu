@@ -1,0 +1,2 @@
+error[E001]: E001-no-brace.geas:2:3: expected `{`, found `run`
+     2 |   run "python3 calc.py"

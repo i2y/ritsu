@@ -1,0 +1,4 @@
+ok 1 - echoes
+1 claim · 1 ok · 0 failed · journal: calc/.geas/calc.journal.jsonl
+--- stderr
+error[E081]: calc/.geas: cannot make this directory: File exists (os error 17)

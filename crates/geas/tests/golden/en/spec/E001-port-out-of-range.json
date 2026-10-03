@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-port-out-of-range.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-port-out-of-range.geas","line":3,"col":8,"message":"`70000` is not a port; a port is a whole number from 1 to 65535","notes":[],"path":[]}]}
