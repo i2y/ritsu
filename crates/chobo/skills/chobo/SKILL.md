@@ -191,9 +191,10 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
 
 ## 6. For a machine
 
-- `chobo check --format json <file.book>…` prints `{"v": 1, "files": [...]}`: each file's
-  `diagnostics` (`code`, `severity`, `line`, `column`, `title`, `excerpt`, `operations`,
-  `hint`) and its `report` (each operation's `refusals`, each with an `example` that gets there).
+- `chobo check --format json <file.book>…` prints `{"v": 2, "files": [...]}`: each file's
+  `diagnostics` (`code`, `severity`, `file`, `line`, `col`, `message`, `notes`, `excerpt`,
+  `operations`, `hint`, `fix`) and its `report` (each operation's `refusals`, each with an
+  `example` that gets there).
 - `chobo api <file.book>` prints how to call the book, the reasons of each operation, the life of
   a hold as a state machine, how IDs are made, and what each target names things.
 - The exit code is 0 when there is no error (warnings may be), 1 when there is, and 2 for a

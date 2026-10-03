@@ -12,7 +12,8 @@
 //! book writes its literals, not in the smallest step a target stores.
 
 use crate::check::Report;
-use crate::diag::{Diag, Lang, Text};
+use crate::diag::{Diag, Show};
+use ritsu_base::text::{Lang, Text};
 use crate::interp::{AccountId, At, Bal, Call, HoldState, Op, Outcome, State, Val};
 use crate::model::*;
 use crate::scenario::{self, Step, StepOut};
@@ -491,7 +492,7 @@ fn warnings_md(i: &Input) -> String {
     let mut o = format!("## {}\n\n", tr!("検査の警告", "What the check warns about").get(i.lang));
     o.push_str(tr!("`chobo check` が言うこと。どれも、ここに書いた操作の列で起きる。\n\n", "What `chobo check` says; each comes with the operations that get there.\n\n").get(i.lang));
     for d in i.diags {
-        o.push_str(&format!("```text\n{}```\n\n", d.render(i.file, i.src, i.lang)));
+        o.push_str(&format!("```text\n{}```\n\n", d.shown(i.file, i.src, i.lang)));
     }
     o
 }

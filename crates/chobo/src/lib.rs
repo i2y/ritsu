@@ -4,17 +4,10 @@
 //! between them. chobo checks it, runs it in the reference interpreter, and generates the
 //! scenarios that the outputs are matched against.
 
-/// One sentence in Japanese and English, side by side: `tr!("日本語 {x}", "English {x}")`.
-/// Neither language can be written without the other.
-#[macro_export]
-macro_rules! tr {
-    ($ja:literal, $en:literal) => {
-        $crate::diag::Text { ja: ::std::format!($ja), en: ::std::format!($en) }
-    };
-    ($ja:literal, $en:literal, $($arg:tt)+) => {
-        $crate::diag::Text { ja: ::std::format!($ja, $($arg)+), en: ::std::format!($en, $($arg)+) }
-    };
-}
+/// `tr!("日本語 {x}", "English {x}")`, one sentence in Japanese and English side by side, is
+/// ritsu-base's: neither language can be written without the other.
+#[macro_use]
+extern crate ritsu_base;
 
 pub mod api;
 pub mod check;

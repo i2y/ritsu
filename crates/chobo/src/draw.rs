@@ -4,7 +4,9 @@
 //! image from elsewhere. The colours follow the reader's light or dark setting, and nothing is
 //! wider than a narrow screen (tables and code scroll in their own box, the charts shrink).
 
-use crate::diag::{Lang, Text};
+use crate::diag::Show;
+use ritsu_base::docpage::{self, Palette};
+use ritsu_base::text::{Lang, Text};
 use crate::doc::{self, Input, html_escape};
 use crate::model::*;
 use serde_json::json;
@@ -525,10 +527,14 @@ pub fn life_svg(t: &TransferKind, lang: Lang) -> String {
 
 // ── the page ──────────────────────────────────────────────────────────────
 
-const STYLE: &str = r#"
-:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --box: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --no: #cf222e; --held: #9a6700; --lit: #fff8c5; }
-@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --box: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --no: #f85149; --held: #d29922; --lit: #3b2e00; } }
-* { box-sizing: border-box; }
+/// The colours of the page: ritsu-base's palette (whose values were chobo's), and the background
+/// of the step a scenario is at, chobo's own.
+fn palette() -> Palette {
+    Palette::default().set("lit", "#fff8c5", "#3b2e00")
+}
+
+/// The rules, after the palette's variables.
+const STYLE: &str = r#"* { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
 header, main { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
 header { padding-top: 12px; }
@@ -538,7 +544,7 @@ h3 { font-size: 1.12em; margin: 1.4em 0 0.4em; }
 h4 { font-size: 1em; margin: 1em 0 0.3em; }
 p, li { overflow-wrap: break-word; }
 nav a { color: var(--accent); }
-.muted { color: var(--muted); }
+.muted { color: var(--dim); }
 code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 0 0.25em; border-radius: 4px; }
 pre { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 8px 12px; border-radius: 6px; overflow-x: auto; }
 pre code { background: none; padding: 0; }
@@ -546,54 +552,54 @@ pre code { background: none; padding: 0; }
 table { border-collapse: collapse; margin: 0.4em 0 0.8em; }
 th, td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; vertical-align: top; min-width: 4.5em; }
 .states td:first-child { white-space: nowrap; }
-th { background: var(--box); }
+th { background: var(--soft); }
 td { overflow-wrap: break-word; }
 td code { white-space: nowrap; }
 figure { margin: 0.6em 0; overflow-x: auto; max-width: 100%; }
 svg { display: block; max-width: none; height: auto; }
 svg text { fill: var(--fg); font-size: 13px; }
 svg .name { font-weight: 600; font-size: 14px; }
-svg .sub { fill: var(--muted); }
-.node rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
-.node.outside rect { stroke: var(--muted); stroke-dasharray: 5 3; }
-.edge path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+svg .sub { fill: var(--dim); }
+.node rect { fill: var(--soft); stroke: var(--fg); stroke-width: 1.2; }
+.node.outside rect { stroke: var(--dim); stroke-dasharray: 5 3; }
+.edge path { fill: none; stroke: var(--dim); stroke-width: 1.5; }
 .edge.pending path { stroke-dasharray: 6 4; }
-.head { fill: var(--muted); }
+.head { fill: var(--dim); }
 .head.ok { fill: var(--ok); }
-.head.no { fill: var(--no); }
+.head.no { fill: var(--bad); }
 .label rect { fill: var(--bg); opacity: 0.92; }
 .label text { font-size: 12px; }
 .edge.lit path { stroke: var(--ok); stroke-width: 3; }
-.edge.no path { stroke: var(--no); stroke-width: 3; }
+.edge.no path { stroke: var(--bad); stroke-width: 3; }
 .label.lit text { fill: var(--ok); font-weight: 600; }
-.label.no text { fill: var(--no); font-weight: 600; }
-.life .state rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+.label.no text { fill: var(--bad); font-weight: 600; }
+.life .state rect { fill: var(--soft); stroke: var(--fg); stroke-width: 1.2; }
 .life .state rect.inner { fill: none; stroke-width: 0.8; }
-.life .arrow { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.life .arrow { fill: none; stroke: var(--dim); stroke-width: 1.5; }
 .life .arrow.external { stroke-dasharray: 5 3; }
 .life .start { fill: var(--fg); }
 .life .lbl { font-size: 12px; }
 .life .lblbg { fill: var(--bg); opacity: 0.9; }
-.life .note { font-size: 11px; fill: var(--muted); }
+.life .note { font-size: 11px; fill: var(--dim); }
 details { margin: 0.5em 0; }
 summary { cursor: pointer; color: var(--accent); }
 .player { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0.8em 0; }
 .player select { max-width: 100%; font: inherit; padding: 2px 4px; }
 .pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .outs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
-.outs button, .ctl button { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--box); color: var(--fg); cursor: pointer; }
+.outs button, .ctl button { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); color: var(--fg); cursor: pointer; }
 .outs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .cols { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 8px; }
 .cols > * { flex: 1 1 320px; min-width: 0; }
 #steps { margin: 0; padding-left: 1.8em; }
 #steps li { padding: 2px 6px; border-radius: 4px; cursor: pointer; }
 #steps li.now { background: var(--lit); }
-#steps li.later { color: var(--muted); }
+#steps li.later { color: var(--dim); }
 #steps .call { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
 #steps .res { display: block; font-size: 0.92em; }
 #steps .res.ok { color: var(--ok); }
-#steps .res.no { color: var(--no); }
-#steps .why { display: block; font-size: 0.85em; color: var(--muted); }
+#steps .res.no { color: var(--bad); }
+#steps .why { display: block; font-size: 0.85em; color: var(--dim); }
 .ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 #bal td.changed { background: var(--lit); font-weight: 600; }
 #bal td.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -725,12 +731,8 @@ pub fn page(i: &Input) -> String {
     let (book, lang) = (i.book, i.lang);
     let words = |t: Text| t.get(lang).to_string();
     let mut o = String::new();
-    o.push_str(&format!(
-        "<!doctype html>\n<html lang=\"{}\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"generator\" content=\"chobo doc\">\n<title>{} v{}</title>\n<style>{STYLE}</style>\n</head>\n<body>\n",
-        if lang == Lang::Ja { "ja" } else { "en" },
-        html_escape(&book.name),
-        book.version
-    ));
+    let css = format!("{}{STYLE}", palette().css());
+    o.push_str(&docpage::html_head(lang, &format!("chobo {}", env!("CARGO_PKG_VERSION")), &format!("{} v{}", book.name, book.version), &css));
     // the header
     o.push_str(&format!("<header>\n<h1>{} v{}</h1>\n", html_escape(&book.name), book.version));
     if let Some(d) = &book.description {
@@ -751,7 +753,7 @@ pub fn page(i: &Input) -> String {
     if !i.diags.is_empty() {
         o.push_str(&format!("<section id=\"warnings\">\n<h2>{}</h2>\n", words(tr!("検査の警告", "What the check warns about"))));
         for d in i.diags {
-            o.push_str(&format!("<pre>{}</pre>\n", html_escape(&d.render(i.file, i.src, lang))));
+            o.push_str(&format!("<pre>{}</pre>\n", html_escape(&d.shown(i.file, i.src, lang))));
         }
         o.push_str("</section>\n");
     }

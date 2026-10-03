@@ -7,7 +7,7 @@
 //! src/syntax.rs's.
 
 mod common;
-use chobo::diag::Lang;
+use ritsu_base::text::Lang;
 use common::*;
 use std::collections::BTreeSet;
 

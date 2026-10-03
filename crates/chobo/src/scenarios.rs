@@ -5,7 +5,7 @@
 //! Each one is built by calling the book in the reference interpreter (`witness::Builder`),
 //! and kept only when the interpreter answers what its name says.
 
-use crate::diag::Text;
+use ritsu_base::text::Text;
 use crate::interp::{Call, Op, Outcome, Val};
 use crate::model::*;
 use crate::scenario::{self, Scenario, Step};

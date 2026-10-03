@@ -5,7 +5,8 @@
 //! The scenarios (`scenarios.rs`), the report of what each operation can be refused with
 //! (`check.rs`) and the diagnostics' operations all come from the `Builder` here.
 
-use crate::diag::{OpLine, Text};
+use crate::diag::OpLine;
+use ritsu_base::text::Text;
 use crate::interp::{AccountId, At, Call, Op, Outcome, State, Val};
 use crate::model::*;
 use crate::scenario::{self, Scenario, Step, StepOut};

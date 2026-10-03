@@ -126,22 +126,21 @@ $ chobo run examples/refunds/refunds.book --scenario examples/refunds/refunds.mo
 ```console
 $ chobo check tests/fixtures/split.book --format json
 {
-  "v": 1,
+  "v": 2,
   "files": [
     {
       "file": "tests/fixtures/split.book",
       "ok": true,
       "diagnostics": [
         {
-          "v": 1,
-          "severity": "warning",
           "code": "W103",
+          "severity": "warning",
           "file": "tests/fixtures/split.book",
           "line": 13,
-          "column": 3,
-          "title": "move 1 takes from shop_balance(shop) before move 2 puts into it: when shop_balance(shop) is short at that point, the call is refused with insufficient_balance, even when the two moves together would leave enough",
-          "excerpt": "  move fee from shop_balance(shop) to fees",
+          "col": 3,
+          "message": "move 1 takes from shop_balance(shop) before move 2 puts into it: when shop_balance(shop) is short at that point, the call is refused with insufficient_balance, even when the two moves together would leave enough",
           "notes": [],
+          "excerpt": "  move fee from shop_balance(shop) to fees",
           "operations": [
             {
               "op": "do",
@@ -156,7 +155,8 @@ $ chobo check tests/fixtures/split.book --format json
               "reason": "insufficient_balance"
             }
           ],
-          "hint": "write the move that puts into shop_balance(shop) first"
+          "hint": "write the move that puts into shop_balance(shop) first",
+          "fix": null
         }
       ],
       "report": [
@@ -178,9 +178,12 @@ $ chobo check tests/fixtures/split.book --format json
 …
 ```
 
-- A diagnostic has its `code`, `severity` (`error` or `warning`), `line` and `column`, the
-  `title` and the `hint` in the language asked for, the source line it is about (`excerpt`), and
-  the `operations` that get there, as scenario steps with what each answered.
+- A diagnostic has the keys every language of ritsu writes — its `code`, `severity` (`error` or
+  `warning`), `file`, `line` and `col`, the `message` and the `notes` in the language asked for, and
+  `fix` (null: chobo says how to fix it in a sentence, the `hint`) — and chobo's own: the source
+  line it is about (`excerpt`), the `operations` that get there, as scenario steps with what each
+  answered, and the `hint` in the language asked for. `v` is 2 since the diagnostics took these
+  keys (1 had `column` and `title`, and a `v` in each).
 - `ok` is false when the file has an error; the exit code is then 1.
 - `report` is there when the book has no error: for each transfer and operation, the reasons it
   can be refused with (`refusals`), each with an `example` that gets there. `because` is `bound`,

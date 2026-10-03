@@ -9,7 +9,7 @@
 mod common;
 use chobo::scenario;
 use common::runners::*;
-use common::servers::TigerBeetle;
+use common::servers::{Tb, TigerBeetle};
 use common::*;
 use serde_json::{Value, json};
 use std::process::Command;
@@ -28,7 +28,7 @@ fn run(tb: &TigerBeetle, lang: &str, cases: &[Case], work: &Path, go: Option<&Go
     let (cmd, clients): (Command, Vec<String>) = match lang {
         "typescript" => {
             if let Err(why) = node() {
-                eprintln!("SKIP: {why}; the TypeScript client is not tried");
+                skip(&format!("{why}; the TypeScript client is not tried"));
                 return None;
             }
             let dir = ts_dir(work).join(format!("tb-{}", cases[0].stem));
@@ -41,7 +41,7 @@ fn run(tb: &TigerBeetle, lang: &str, cases: &[Case], work: &Path, go: Option<&Go
             let py = match python() {
                 Ok(p) => p,
                 Err(why) => {
-                    eprintln!("SKIP: {why}; the Python client is not tried");
+                    skip(&format!("{why}; the Python client is not tried"));
                     return None;
                 }
             };
@@ -53,7 +53,7 @@ fn run(tb: &TigerBeetle, lang: &str, cases: &[Case], work: &Path, go: Option<&Go
         }
         _ => {
             let Some(g) = go else {
-                eprintln!("SKIP: the Go runner is not built; the Go client is not tried");
+                skip("the Go runner is not built; the Go client is not tried");
                 return None;
             };
             (Command::new(&g.bin), cases.iter().map(|c| g.keys[&(c.stem.clone(), "tigerbeetle")].clone()).collect())
@@ -104,6 +104,9 @@ fn bounds_changed(tb: &TigerBeetle, lang: &str, work: &Path, v1: &Case, v2: &Cas
 
 #[test]
 fn what_only_tigerbeetle_has() {
+    if !need(Need::TigerBeetle) {
+        return;
+    }
     // E060 needs no replica
     let out_dir = TempDir::new("e060");
     let out = chobo().args(["build", root().join("tests/fixtures/リクエスト.book").to_str().unwrap(), "--target", "tigerbeetle-typescript", "--out", out_dir.path().to_str().unwrap()]).output().unwrap();
@@ -115,7 +118,7 @@ fn what_only_tigerbeetle_has() {
     let tb = match TigerBeetle::start() {
         Ok(tb) => tb,
         Err(why) => {
-            eprintln!("SKIP: {why}; what only TigerBeetle has is not tried");
+            skip(&format!("{why}; what only TigerBeetle has is not tried"));
             return;
         }
     };
@@ -136,7 +139,7 @@ fn what_only_tigerbeetle_has() {
             Some(build_go(std::slice::from_ref(&v2), &work.path().join("go2")).unwrap_or_else(|e| panic!("{e}"))),
         ),
         Err(why) => {
-            eprintln!("SKIP: {why}; the Go client is not tried");
+            skip(&format!("{why}; the Go client is not tried"));
             (None, None)
         }
     };

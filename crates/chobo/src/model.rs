@@ -1,7 +1,8 @@
 //! The book with its names and units resolved (PLAN B4). Every error of how the book is
 //! written is found here; what only shows when the book is called is `check`'s.
 
-use crate::diag::{Diag, Text};
+use crate::diag::{self, Diag};
+use ritsu_base::text::Text;
 use crate::parse::{self, AmountExpr, ArgExpr, PendingKind};
 use std::collections::BTreeMap;
 
@@ -233,7 +234,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
     for u in &b.units {
         if let Some(&i) = unit_ix.get(&u.name.text) {
             let (n, l) = (&u.name.text, units[i].line);
-            d.push(Diag::error("E003", u.name.span.line, u.name.span.col, tr!("単位 `{n}` は {l} 行目で宣言済みです", "the unit `{n}` is already declared on line {l}")));
+            d.push(diag::error("E003", u.name.span.line, u.name.span.col, tr!("単位 `{n}` は {l} 行目で宣言済みです", "the unit `{n}` is already declared on line {l}")));
             continue;
         }
         let scale = match &u.scale {
@@ -241,7 +242,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             Some((s, sp)) => match s.parse::<u32>() {
                 Ok(n) if n <= 18 => n,
                 _ => {
-                    d.push(Diag::error("E001", sp.line, sp.col, tr!("`scale` は 0 から 18 までの整数です", "`scale` is a whole number from 0 to 18")));
+                    d.push(diag::error("E001", sp.line, sp.col, tr!("`scale` は 0 から 18 までの整数です", "`scale` is a whole number from 0 to 18")));
                     0
                 }
             },
@@ -257,12 +258,12 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
         let name = &a.name.text;
         if let Some(&i) = acct_ix.get(name) {
             let l = accounts[i].line;
-            d.push(Diag::error("E003", a.name.span.line, a.name.span.col, tr!("勘定 `{name}` は {l} 行目で宣言済みです", "the account `{name}` is already declared on line {l}")));
+            d.push(diag::error("E003", a.name.span.line, a.name.span.col, tr!("勘定 `{name}` は {l} 行目で宣言済みです", "the account `{name}` is already declared on line {l}")));
             continue;
         }
         let mut params: Vec<String> = Vec::new();
         match &a.params {
-            Some(ps) if ps.is_empty() => d.push(Diag::error(
+            Some(ps) if ps.is_empty() => d.push(diag::error(
                 "E001",
                 a.name.span.line,
                 a.name.span.col,
@@ -272,12 +273,12 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                 for p in ps {
                     let pn = &p.name.text;
                     if params.contains(pn) {
-                        d.push(Diag::error("E003", p.name.span.line, p.name.span.col, tr!("引数 `{pn}` が二度あります", "the parameter `{pn}` appears twice")));
+                        d.push(diag::error("E003", p.name.span.line, p.name.span.col, tr!("引数 `{pn}` が二度あります", "the parameter `{pn}` appears twice")));
                     }
                     let ty = &p.ty.text;
                     if ty != "string" {
                         if unit_ix.contains_key(ty) {
-                            d.push(Diag::error(
+                            d.push(diag::error(
                                 "E005",
                                 p.ty.span.line,
                                 p.ty.span.col,
@@ -287,7 +288,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                                 ),
                             ));
                         } else {
-                            d.push(Diag::error("E002", p.ty.span.line, p.ty.span.col, tr!("型 `{ty}` がありません。勘定の引数の型は string です", "there is no type `{ty}`; an account's parameters are strings")));
+                            d.push(diag::error("E002", p.ty.span.line, p.ty.span.col, tr!("型 `{ty}` がありません。勘定の引数の型は string です", "there is no type `{ty}`; an account's parameters are strings")));
                         }
                     }
                     params.push(pn.clone());
@@ -299,7 +300,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             Some(&u) => u,
             None => {
                 let un = &a.unit.text;
-                d.push(Diag::error("E002", a.unit.span.line, a.unit.span.col, tr!("単位 `{un}` が宣言されていません", "no unit `{un}` is declared")));
+                d.push(diag::error("E002", a.unit.span.line, a.unit.span.col, tr!("単位 `{un}` が宣言されていません", "no unit `{un}` is declared")));
                 usize::MAX
             }
         };
@@ -308,7 +309,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             if i == 0 {
                 description = Some(s.clone());
             } else {
-                d.push(Diag::error("E003", sp.line, sp.col, tr!("`description` の行が二つあります", "a second `description` line")));
+                d.push(diag::error("E003", sp.line, sp.col, tr!("`description` の行が二つあります", "a second `description` line")));
             }
         }
         let scale = if unit == usize::MAX { 0 } else { units[unit].scale };
@@ -319,19 +320,19 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             let word = if bl.upper { "at most" } else { "at least" };
             let slot = if bl.upper { &mut upper } else { &mut lower };
             if slot.is_some() {
-                d.push(Diag::error("E003", bl.span.line, bl.span.col, tr!("`{word}` の行が二つあります", "a second `{word}` line")));
+                d.push(diag::error("E003", bl.span.line, bl.span.col, tr!("`{word}` の行が二つあります", "a second `{word}` line")));
                 continue;
             }
             let value = match parse_amount(&bl.value, &unit_name, scale) {
                 Ok(v) => v,
                 Err(t) => {
-                    d.push(Diag::error("E011", bl.value_span.line, bl.value_span.col, t));
+                    d.push(diag::error("E011", bl.value_span.line, bl.value_span.col, t));
                     continue;
                 }
             };
             let refusal = match &bl.refusal {
                 None => {
-                    d.push(Diag::error(
+                    d.push(diag::error(
                         "E023",
                         bl.span.line,
                         bl.span.col,
@@ -344,7 +345,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                 }
                 Some(n) if REASONS.contains(&n.text.as_str()) => {
                     let r = &n.text;
-                    d.push(Diag::error(
+                    d.push(diag::error(
                         "E023",
                         n.span.line,
                         n.span.col,
@@ -362,7 +363,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
         let outside = a.outside.is_some();
         if outside {
             for bl in &a.bounds {
-                d.push(Diag::error(
+                d.push(diag::error(
                     "E021",
                     bl.span.line,
                     bl.span.col,
@@ -373,7 +374,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                 ));
             }
         } else if a.bounds.is_empty() {
-            d.push(Diag::error(
+            d.push(diag::error(
                 "E020",
                 a.name.span.line,
                 a.name.span.col,
@@ -386,7 +387,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
         if let Some(u) = &upper {
             if u.value < 0 {
                 let v = format_amount(u.value, scale);
-                d.push(Diag::error(
+                d.push(diag::error(
                     "E022",
                     u.line,
                     u.col,
@@ -400,7 +401,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
         if let (Some(l), Some(u)) = (&lower, &upper) {
             if l.value > u.value {
                 let (lv, uv) = (format_amount(l.value, scale), format_amount(u.value, scale));
-                d.push(Diag::error(
+                d.push(diag::error(
                     "E022",
                     l.line,
                     l.col,
@@ -429,14 +430,14 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
         let tname = &t.name.text;
         if let Some(&i) = tr_ix.get(tname) {
             let l = transfers[i].line;
-            d.push(Diag::error("E003", t.name.span.line, t.name.span.col, tr!("振替 `{tname}` は {l} 行目で宣言済みです", "the transfer `{tname}` is already declared on line {l}")));
+            d.push(diag::error("E003", t.name.span.line, t.name.span.col, tr!("振替 `{tname}` は {l} 行目で宣言済みです", "the transfer `{tname}` is already declared on line {l}")));
             continue;
         }
         let mut params: Vec<TParam> = Vec::new();
         for p in &t.params {
             let pn = &p.name.text;
             if params.iter().any(|x| &x.name == pn) {
-                d.push(Diag::error("E003", p.name.span.line, p.name.span.col, tr!("引数 `{pn}` が二度あります", "the parameter `{pn}` appears twice")));
+                d.push(diag::error("E003", p.name.span.line, p.name.span.col, tr!("引数 `{pn}` が二度あります", "the parameter `{pn}` appears twice")));
                 continue;
             }
             let ty = if p.ty.text == "string" {
@@ -445,7 +446,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                 Ty::Amount(u)
             } else {
                 let tn = &p.ty.text;
-                d.push(Diag::error(
+                d.push(diag::error(
                     "E002",
                     p.ty.span.line,
                     p.ty.span.col,
@@ -462,7 +463,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             if i == 0 {
                 description = Some(s.clone());
             } else {
-                d.push(Diag::error("E003", sp.line, sp.col, tr!("`description` の行が二つあります", "a second `description` line")));
+                d.push(diag::error("E003", sp.line, sp.col, tr!("`description` の行が二つあります", "a second `description` line")));
             }
         }
 
@@ -470,7 +471,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
         let mut key: Vec<usize> = Vec::new();
         let mut key_line = t.line;
         match t.keys.as_slice() {
-            [] => d.push(Diag::error(
+            [] => d.push(diag::error(
                 "E030",
                 t.name.span.line,
                 t.name.span.col,
@@ -482,16 +483,16 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             [k, rest @ ..] => {
                 key_line = k.span.line;
                 for extra in rest {
-                    d.push(Diag::error("E003", extra.span.line, extra.span.col, tr!("`key` の行が二つあります。キーは一行にまとめて書いてください", "a second `key` line; write the whole key on one line")));
+                    d.push(diag::error("E003", extra.span.line, extra.span.col, tr!("`key` の行が二つあります。キーは一行にまとめて書いてください", "a second `key` line; write the whole key on one line")));
                 }
                 for n in &k.names {
                     let x = &n.text;
                     match param(x) {
-                        None => d.push(Diag::error("E030", n.span.line, n.span.col, tr!("キーの `{x}` は振替 `{tname}` の引数にありません", "`{x}` in the key is not a parameter of `{tname}`"))),
-                        Some(i) if key.contains(&i) => d.push(Diag::error("E003", n.span.line, n.span.col, tr!("キーに `{x}` が二度あります", "`{x}` appears twice in the key"))),
+                        None => d.push(diag::error("E030", n.span.line, n.span.col, tr!("キーの `{x}` は振替 `{tname}` の引数にありません", "`{x}` in the key is not a parameter of `{tname}`"))),
+                        Some(i) if key.contains(&i) => d.push(diag::error("E003", n.span.line, n.span.col, tr!("キーに `{x}` が二度あります", "`{x}` appears twice in the key"))),
                         Some(i) => {
                             if matches!(params[i].ty, Ty::Amount(_)) {
-                                d.push(Diag::error(
+                                d.push(diag::error(
                                     "E031",
                                     n.span.line,
                                     n.span.col,
@@ -512,11 +513,11 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
         let mut pending: Option<Expiry> = None;
         for (i, p) in t.pendings.iter().enumerate() {
             if i > 0 {
-                d.push(Diag::error("E003", p.span.line, p.span.col, tr!("`pending` の行が二つあります", "a second `pending` line")));
+                d.push(diag::error("E003", p.span.line, p.span.col, tr!("`pending` の行が二つあります", "a second `pending` line")));
                 continue;
             }
             match &p.kind {
-                PendingKind::Missing => d.push(Diag::error(
+                PendingKind::Missing => d.push(diag::error(
                     "E040",
                     p.span.line,
                     p.span.col,
@@ -531,7 +532,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                     let secs = n.parse::<u64>().ok().and_then(|x| x.checked_mul(per));
                     match secs {
                         Some(s) if (1..=MAX_EXPIRY).contains(&s) => pending = Some(Expiry::After(s)),
-                        Some(s) => d.push(Diag::error(
+                        Some(s) => d.push(diag::error(
                             "E041",
                             n_span.line,
                             n_span.col,
@@ -540,7 +541,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                                 "the expiry must be from 1 second to 4294967295 seconds (about 136 years); this is {s} seconds"
                             ),
                         )),
-                        None => d.push(Diag::error(
+                        None => d.push(diag::error(
                             "E041",
                             n_span.line,
                             n_span.col,
@@ -556,7 +557,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
 
         // moves
         if t.moves.is_empty() {
-            d.push(Diag::error(
+            d.push(diag::error(
                 "E013",
                 t.name.span.line,
                 t.name.span.col,
@@ -572,7 +573,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             let resolve_ref = |r: &parse::AccountRef, d: &mut Vec<Diag>| -> Option<Ref> {
                 let an = &r.name.text;
                 let Some(&k) = acct_ix.get(an) else {
-                    d.push(Diag::error("E002", r.name.span.line, r.name.span.col, tr!("勘定 `{an}` が宣言されていません", "no account `{an}` is declared")));
+                    d.push(diag::error("E002", r.name.span.line, r.name.span.col, tr!("勘定 `{an}` が宣言されていません", "no account `{an}` is declared")));
                     return None;
                 };
                 let want = accounts[k].params.len();
@@ -587,7 +588,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                     } else {
                         tr!("勘定 `{an}` は引数を {want} つ取りますが、渡しているのは {given} つです", "the account `{an}` takes {wa}, and is given {ga}")
                     };
-                    d.push(Diag::error("E004", r.span.line, r.span.col, msg));
+                    d.push(diag::error("E004", r.span.line, r.span.col, msg));
                     return None;
                 }
                 let mut args = Vec::new();
@@ -599,12 +600,12 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                             let pn = &n.text;
                             match param(pn) {
                                 None => {
-                                    d.push(Diag::error("E002", n.span.line, n.span.col, tr!("振替 `{tname}` に引数 `{pn}` がありません", "the transfer `{tname}` has no parameter `{pn}`")));
+                                    d.push(diag::error("E002", n.span.line, n.span.col, tr!("振替 `{tname}` に引数 `{pn}` がありません", "the transfer `{tname}` has no parameter `{pn}`")));
                                     good = false;
                                 }
                                 Some(i) => {
                                     if matches!(params[i].ty, Ty::Amount(_)) {
-                                        d.push(Diag::error(
+                                        d.push(diag::error(
                                             "E005",
                                             n.span.line,
                                             n.span.col,
@@ -637,13 +638,13 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                     let pn = &n.text;
                     match param(pn) {
                         None => {
-                            d.push(Diag::error("E002", n.span.line, n.span.col, tr!("振替 `{tname}` に引数 `{pn}` がありません", "the transfer `{tname}` has no parameter `{pn}`")));
+                            d.push(diag::error("E002", n.span.line, n.span.col, tr!("振替 `{tname}` に引数 `{pn}` がありません", "the transfer `{tname}` has no parameter `{pn}`")));
                             ok = false;
                             None
                         }
                         Some(i) => match params[i].ty {
                             Ty::Str => {
-                                d.push(Diag::error(
+                                d.push(diag::error(
                                     "E005",
                                     n.span.line,
                                     n.span.col,
@@ -663,14 +664,14 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                     let scale = move_unit.map(|u| units[u].scale).unwrap_or(0);
                     let uname = move_unit.map(|u| units[u].name.clone()).unwrap_or_default();
                     if text.starts_with('-') {
-                        d.push(Diag::error("E011", sp.line, sp.col, tr!("移動の額に負の数は書けません。向きを変えるなら from と to を入れ替えてください", "the amount of a move cannot be negative; swap `from` and `to` to move the other way")));
+                        d.push(diag::error("E011", sp.line, sp.col, tr!("移動の額に負の数は書けません。向きを変えるなら from と to を入れ替えてください", "the amount of a move cannot be negative; swap `from` and `to` to move the other way")));
                         ok = false;
                         None
                     } else {
                         match parse_amount(text, &uname, scale) {
                             Ok(v) => Some((Amount::Lit(v), None)),
                             Err(t) => {
-                                d.push(Diag::error("E011", sp.line, sp.col, t));
+                                d.push(diag::error("E011", sp.line, sp.col, t));
                                 ok = false;
                                 None
                             }
@@ -697,7 +698,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                     }
                     msg.ja.push_str("。別の単位へ替えるなら、単位ごとに外の勘定を置き、二つの移動で書いてください");
                     msg.en.push_str("; to exchange one unit for another, write two moves, each through an outside account of its unit");
-                    d.push(Diag::error("E010", m.span.line, m.span.col, msg));
+                    d.push(diag::error("E010", m.span.line, m.span.col, msg));
                     ok = false;
                 }
             }

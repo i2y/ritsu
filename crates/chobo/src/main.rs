@@ -7,65 +7,20 @@
 
 use chobo::check;
 use chobo::codes;
-use chobo::diag::{self, Lang, Text};
+use chobo::diag::{self, Show};
+use ritsu_base::cli::{Cmd, Flag, Misuse, Reading, Table, flag, help_flag, lang_flag};
+use ritsu_base::text::Lang;
 use chobo::render;
 use chobo::scenario;
 use chobo::target::Target;
-use chobo::tr;
+use ritsu_base::tr;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-struct Flag {
-    name: &'static str,
-    /// the placeholder for its value; None for a flag without one
-    value: Option<&'static str>,
-    /// the only values it takes, when they are few
-    choices: &'static [&'static str],
-    default: Option<&'static str>,
-    help: Text,
-}
-
-fn flag(name: &'static str, value: Option<&'static str>, help: Text) -> Flag {
-    Flag { name, value, choices: &[], default: None, help }
-}
-
-impl Flag {
-    fn choices(mut self, c: &'static [&'static str]) -> Flag {
-        self.choices = c;
-        self
-    }
-    fn default(mut self, d: &'static str) -> Flag {
-        self.default = Some(d);
-        self
-    }
-    fn spelled(&self) -> String {
-        match self.value {
-            Some(v) => format!("{} {v}", self.name),
-            None => self.name.to_string(),
-        }
-    }
-}
-
-struct Cmd {
-    name: &'static str,
-    usage: &'static str,
-    purpose: Text,
-    params: Vec<(&'static str, Text)>,
-    flags: Vec<Flag>,
-    exits: Vec<(u8, Text)>,
-    examples: [&'static str; 2],
-    codes: Vec<&'static str>,
-}
-
 fn global_flags() -> Vec<Flag> {
-    vec![
-        flag("--lang", Some("ja|en"), tr!("文面の言語。無ければ環境変数 CHOBO_LANG、それも無ければ en", "the language of the messages; else the CHOBO_LANG environment variable, else en"))
-            .choices(&["ja", "en"])
-            .default("en"),
-        flag("--help", None, tr!("この画面を出す", "print this page")),
-    ]
+    vec![lang_flag("CHOBO_LANG"), help_flag()]
 }
 
 fn every_code() -> Vec<&'static str> {
@@ -83,7 +38,8 @@ fn commands() -> Vec<Cmd> {
     vec![
         Cmd {
             name: "check",
-            usage: "chobo check <file.book>... [--format json] [--diff-base <rev>]",
+            usage: Some("chobo check <file.book>... [--format json] [--diff-base <rev>]"),
+            args: "",
             purpose: tr!(
                 "帳簿を検査する。書き方の誤り、呼ぶと分かること（そうなる例つき）、使われない宣言と効かない境界。そのあと、振替の種類と操作ごとに断られうる理由を並べる",
                 "check a book: how it is written, what only shows when it is called (with the operations that get there), what is never used and what never matters; then list what each operation of each transfer can be refused with"
@@ -98,12 +54,13 @@ fn commands() -> Vec<Cmd> {
                 (1, tr!("エラーがある", "errors")),
                 (2, usage_exit.clone()),
             ],
-            examples: ["chobo check inventory.book", "chobo check inventory.book --diff-base HEAD --format json"],
+            examples: vec!["chobo check inventory.book", "chobo check inventory.book --diff-base HEAD --format json"],
             codes: every_code(),
         },
         Cmd {
             name: "run",
-            usage: "chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle] [--format json]",
+            usage: Some("chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle] [--format json]"),
+            args: "",
             purpose: tr!(
                 "シナリオを参照インタプリタで流し、操作ごとの結果と、終わりの残高と仮押さえを出す。together があれば、とりうる結果を全部出す",
                 "run a scenario in the reference interpreter, and print what each operation answered and the balances and holds at the end; with together, every way it can come out"
@@ -127,12 +84,13 @@ fn commands() -> Vec<Cmd> {
                 (1, tr!("帳簿にエラーがある", "the book has errors")),
                 (2, tr!("使い方の誤り、読めないファイル、シナリオの誤り", "a mistake in how the command is called, a file that cannot be read, or a mistake in the scenario")),
             ],
-            examples: ["chobo run inventory.book --scenario 001.json", "chobo run inventory.book --scenario 001.json --show tigerbeetle --format json"],
+            examples: vec!["chobo run inventory.book --scenario 001.json", "chobo run inventory.book --scenario 001.json --show tigerbeetle --format json"],
             codes: vec![],
         },
         Cmd {
             name: "scenarios",
-            usage: "chobo scenarios <file.book> [--out <dir>]",
+            usage: Some("chobo scenarios <file.book> [--out <dir>]"),
+            args: "",
             purpose: tr!(
                 "帳簿からシナリオを作る。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、移動の途中での断り、二つの呼び出し元の取り合い",
                 "write scenarios for a book: each bound just before, at and past it, each key used twice, every way a hold ends, a refusal partway through the moves, and two callers after the last of something"
@@ -140,12 +98,13 @@ fn commands() -> Vec<Cmd> {
             params: vec![book(false)],
             flags: vec![flag("--out", Some("<dir>"), tr!("001.json から一つずつ書く先。無ければ JSON の配列を標準出力に出す", "the directory to write them into, from 001.json; without it, a JSON list on standard output"))],
             exits: vec![(0, tr!("作れた", "written")), (1, tr!("帳簿にエラーがある", "the book has errors")), (2, usage_exit.clone())],
-            examples: ["chobo scenarios inventory.book", "chobo scenarios inventory.book --out scenarios/"],
+            examples: vec!["chobo scenarios inventory.book", "chobo scenarios inventory.book --out scenarios/"],
             codes: vec![],
         },
         Cmd {
             name: "build",
-            usage: "chobo build <file.book> --target <target> [--out <dir>]",
+            usage: Some("chobo build <file.book> --target <target> [--out <dir>]"),
+            args: "",
             purpose: tr!(
                 "帳簿を、PostgreSQL のスキーマと関数の SQL か、TypeScript・Python・Go のクライアント（PostgreSQL を呼ぶもの、TigerBeetle を呼ぶもの）にする",
                 "build the book into PostgreSQL's schema and functions, as SQL, or into a client in TypeScript, Python or Go that calls PostgreSQL or TigerBeetle"
@@ -160,12 +119,13 @@ fn commands() -> Vec<Cmd> {
                 (1, tr!("帳簿にエラーがある、またはその出力先が帳簿を受け取れない（E060、E061）", "the book has errors, or the target cannot take it (E060, E061)")),
                 (2, usage_exit.clone()),
             ],
-            examples: ["chobo build inventory.book --target postgres --out db/", "chobo build inventory.book --target tigerbeetle-go --out internal/"],
+            examples: vec!["chobo build inventory.book --target postgres --out db/", "chobo build inventory.book --target tigerbeetle-go --out internal/"],
             codes: vec!["E060", "E061"],
         },
         Cmd {
             name: "doc",
-            usage: "chobo doc <file.book> [--format html] [--out <dir>]",
+            usage: Some("chobo doc <file.book> [--format html] [--out <dir>]"),
+            args: "",
             purpose: tr!(
                 "帳簿を、経理や運用の人が読むページにする。勘定と境界、勘定のあいだの流れの図、振替ごとの移動とキーと断られうる理由（そうなる例つき）、仮押さえのライフサイクルの図、シナリオとステップごとの残高",
                 "write the book as a page for the people who keep the accounts and run the operations: the accounts and their bounds, a chart of how things move between them, each transfer's moves, key and what it can be refused with (with the operations that get there), the life of a hold as a chart, and the scenarios with the balances after each step"
@@ -176,12 +136,13 @@ fn commands() -> Vec<Cmd> {
                 flag("--out", Some("<dir>"), tr!("<ファイル名>.md か <ファイル名>.html を書く先のディレクトリ。無ければ標準出力に出す", "the directory to write <file>.md or <file>.html into; without it, standard output")),
             ],
             exits: vec![(0, tr!("書いた", "written")), (1, tr!("帳簿にエラーがある", "the book has errors")), (2, usage_exit.clone())],
-            examples: ["chobo doc inventory.book > inventory.md", "chobo doc inventory.book --format html --out site/ --lang ja"],
+            examples: vec!["chobo doc inventory.book > inventory.md", "chobo doc inventory.book --format html --out site/ --lang ja"],
             codes: vec![],
         },
         Cmd {
             name: "api",
-            usage: "chobo api <file.book>",
+            usage: Some("chobo api <file.book>"),
+            args: "",
             purpose: tr!(
                 "呼び方、操作ごとに断られうる理由、仮押さえのステートマシン、ID の決め方を JSON で出す（dandori のようなツールが読む）",
                 "print how to call the book, what each operation can be refused with, the life of a hold as a state machine, and how IDs are made, as JSON (for tools such as dandori)"
@@ -189,12 +150,13 @@ fn commands() -> Vec<Cmd> {
             params: vec![book(false)],
             flags: vec![],
             exits: vec![(0, tr!("出せた", "printed")), (1, tr!("帳簿にエラーがある", "the book has errors")), (2, usage_exit.clone())],
-            examples: ["chobo api inventory.book", "chobo api inventory.book > inventory.api.json"],
+            examples: vec!["chobo api inventory.book", "chobo api inventory.book > inventory.api.json"],
             codes: vec![],
         },
         Cmd {
             name: "explain",
-            usage: "chobo explain <code> | --all [--format markdown]",
+            usage: Some("chobo explain <code> | --all [--format markdown]"),
+            args: "",
             purpose: tr!(
                 "診断のコードを説明する。いつ出るか、どう直すか、最小の再現",
                 "explain a diagnostic code: when it appears, how to fix it, and the smallest book that shows it"
@@ -205,10 +167,27 @@ fn commands() -> Vec<Cmd> {
                 flag("--format", Some("markdown"), tr!("Markdown で出す", "print Markdown")).choices(&["markdown"]),
             ],
             exits: vec![(0, tr!("出せた", "printed")), (2, tr!("知らないコード、使い方の誤り", "a code chobo does not have, or a mistake in how the command is called"))],
-            examples: ["chobo explain E020", "chobo explain --all --format markdown --lang ja"],
+            examples: vec!["chobo explain E020", "chobo explain --all --format markdown --lang ja"],
             codes: vec![],
         },
     ]
+}
+
+/// The table every command line is read against and `--help` is drawn from. Only what starts
+/// with `--` is a flag, `--format=json` is one word, and a flag's value does not start with `--`.
+fn table() -> Table {
+    Table {
+        tool: "chobo",
+        version: env!("CARGO_PKG_VERSION"),
+        summary: tr!(
+            "在庫、お金、ポイント、予約の枠のように、数で持っていて勘定から勘定へ動かすものの小さな言語",
+            "a small language for the things you count and move between accounts: stock, money, points, seats"
+        ),
+        globals: global_flags(),
+        commands: commands(),
+        footer: vec![],
+        reading: Reading { no_dashes_in_values: true, no_inline_values: true, single_dash_args: true, ..Reading::default() },
+    }
 }
 
 /// The values of `--target`: chobo::target::Target's names, in its order.
@@ -216,23 +195,20 @@ const TARGETS: [&str; 7] = ["postgres", "postgres-typescript", "postgres-python"
 
 fn top_help(lang: Lang) -> String {
     let mut o = String::new();
-    o.push_str(tr!(
-        "chobo — 在庫、お金、ポイント、予約の枠のように、数で持っていて勘定から勘定へ動かすものの小さな言語\n\n",
-        "chobo — a small language for the things you count and move between accounts: stock, money, points, seats\n\n"
-    )
-    .get(lang));
+    let t = table();
+    o.push_str(&format!("chobo — {}\n\n", t.summary.get(lang)));
     o.push_str(tr!("使い方:\n", "Usage:\n").get(lang));
-    let cmds = commands();
-    for c in &cmds {
-        o.push_str(&format!("  {}\n", c.usage));
+    let cmds = &t.commands;
+    for c in cmds {
+        o.push_str(&format!("  {}\n", t.usage_line(c)));
     }
     o.push_str(tr!("\nコマンド:\n", "\nCommands:\n").get(lang));
     let w = cmds.iter().map(|c| c.name.len()).max().unwrap_or(0);
-    for c in &cmds {
+    for c in cmds {
         o.push_str(&format!("  {:w$}  {}\n", c.name, c.purpose.get(lang)));
     }
     o.push_str(tr!("\nどのコマンドにも付けられるフラグ:\n", "\nFlags for every command:\n").get(lang));
-    for f in global_flags() {
+    for f in &t.globals {
         o.push_str(&format!("  {:14} {}\n", f.spelled(), f.help.get(lang)));
     }
     o.push_str(&format!("  {:14} {}\n", "--version", tr!("バージョンを出す", "print the version").get(lang)));
@@ -245,17 +221,16 @@ fn top_help(lang: Lang) -> String {
 }
 
 fn cmd_help(c: &Cmd, lang: Lang) -> String {
-    let mut o = format!("{}\n\n{}\n", c.usage, c.purpose.get(lang));
+    let t = table();
+    let mut o = format!("{}\n\n{}\n", t.usage_line(c), c.purpose.get(lang));
     o.push_str(tr!("\n引数:\n", "\nArguments:\n").get(lang));
     for (p, h) in &c.params {
         o.push_str(&format!("  {:16} {}\n", p, h.get(lang)));
     }
     o.push_str(tr!("\nフラグ:\n", "\nFlags:\n").get(lang));
-    let mut flags: Vec<Flag> = c.flags.iter().map(|f| Flag { name: f.name, value: f.value, choices: f.choices, default: f.default, help: f.help.clone() }).collect();
-    flags.extend(global_flags());
-    for f in &flags {
+    for f in c.flags.iter().chain(t.globals.iter()) {
         let mut h = f.help.get(lang).to_string();
-        if let Some(d) = f.default {
+        if let Some(d) = &f.default {
             h.push_str(&tr!("（既定: {d}）", " (default: {d})").get(lang).to_string());
         }
         o.push_str(&format!("  {:24} {}\n", f.spelled(), h));
@@ -265,7 +240,7 @@ fn cmd_help(c: &Cmd, lang: Lang) -> String {
         o.push_str(&format!("  {n}  {}\n", h.get(lang)));
     }
     o.push_str(tr!("\n例:\n", "\nExamples:\n").get(lang));
-    for e in c.examples {
+    for e in &c.examples {
         o.push_str(&format!("  {e}\n"));
     }
     if !c.codes.is_empty() {
@@ -290,7 +265,7 @@ enum Parsed {
 fn parse(argv: Vec<String>) -> Parsed {
     // the language first, so that every message, the help among them, is in it
     let lang_flag = argv.windows(2).find(|w| w[0] == "--lang").map(|w| w[1].clone());
-    let lang = Lang::pick(lang_flag.as_deref());
+    let lang = Lang::pick(lang_flag.as_deref(), "CHOBO_LANG");
     let Some(cmd) = argv.first().cloned() else {
         return Parsed::Print(top_help(lang), 2, true);
     };
@@ -299,49 +274,45 @@ fn parse(argv: Vec<String>) -> Parsed {
         "--version" | "-V" => return Parsed::Print(format!("chobo {}\n", env!("CARGO_PKG_VERSION")), 0, false),
         _ => {}
     }
-    let cmds = commands();
-    let Some(c) = cmds.iter().find(|c| c.name == cmd) else {
+    let t = table();
+    let Some(c) = t.command(&cmd) else {
         let msg = tr!("知らないコマンド `{cmd}` です\n\n", "unknown command `{cmd}`\n\n").get(lang).to_string();
         return Parsed::Print(msg + &top_help(lang), 2, true);
     };
-    let mut flags_known: Vec<Flag> = global_flags();
-    flags_known.extend(c.flags.iter().map(|f| Flag { name: f.name, value: f.value, choices: f.choices, default: f.default, help: f.help.clone() }));
-    let mut a = Args { cmd: cmd.clone(), positional: vec![], flags: BTreeMap::new(), lang };
-    let mut it = argv.into_iter().skip(1);
-    while let Some(x) = it.next() {
-        if x == "--help" || x == "-h" {
-            return Parsed::Print(cmd_help(c, lang), 0, false);
-        }
-        if !x.starts_with("--") {
-            a.positional.push(x);
-            continue;
-        }
-        let Some(f) = flags_known.iter().find(|f| f.name == x) else {
-            let msg = tr!(
-                "`chobo {cmd}` に `{x}` というフラグはありません\n\n",
-                "`chobo {cmd}` has no flag `{x}`\n\n"
-            );
-            return Parsed::Print(msg.get(lang).to_string() + &cmd_help(c, lang), 2, true);
-        };
-        if a.flags.contains_key(f.name) {
-            return Parsed::Print(tr!("`{x}` が二度あります\n", "`{x}` is given twice\n").get(lang).to_string(), 2, true);
-        }
-        let value = match f.value {
-            None => None,
-            Some(ph) => match it.next() {
-                Some(v) if !v.starts_with("--") => {
-                    if !f.choices.is_empty() && !f.choices.contains(&v.as_str()) {
-                        let ch = f.choices.join(", ");
-                        return Parsed::Print(tr!("`{x}` に渡せるのは {ch} です（`{v}` ではなく）\n", "`{x}` takes {ch}, not `{v}`\n").get(lang).to_string(), 2, true);
-                    }
-                    Some(v)
-                }
-                _ => return Parsed::Print(tr!("`{x}` には値 {ph} が要ります\n", "`{x}` needs a value: {ph}\n").get(lang).to_string(), 2, true),
-            },
-        };
-        a.flags.insert(f.name.to_string(), value);
+    // `--help` ends the line: what comes before it is read, and what comes after it is not
+    let rest = &argv[1..];
+    let until = rest.iter().position(|x| x == "--help" || x == "-h").unwrap_or(rest.len());
+    let got = match t.read(c, &rest[..until]) {
+        Ok(g) => g,
+        Err(m) => return Parsed::Print(misuse(&m, &cmd, c, lang), 2, true),
+    };
+    if until < rest.len() {
+        return Parsed::Print(cmd_help(c, lang), 0, false);
+    }
+    let mut a = Args { cmd: cmd.clone(), positional: got.pos.clone(), flags: BTreeMap::new(), lang };
+    for (k, v) in &got.got {
+        let takes = c.flags.iter().chain(t.globals.iter()).find(|f| f.name == *k).is_some_and(|f| f.value.is_some());
+        a.flags.insert(k.to_string(), takes.then(|| v.clone()));
     }
     Parsed::Run(a)
+}
+
+/// What stopped a command line, in chobo's words; a flag it does not know is followed by the
+/// command's help.
+fn misuse(m: &Misuse, cmd: &str, c: &Cmd, lang: Lang) -> String {
+    match m {
+        Misuse::UnknownFlag(x) => tr!("`chobo {cmd}` に `{x}` というフラグはありません\n\n", "`chobo {cmd}` has no flag `{x}`\n\n").get(lang).to_string() + &cmd_help(c, lang),
+        Misuse::TakesNoValue { flag, value } => {
+            let x = format!("{flag}={value}");
+            tr!("`chobo {cmd}` に `{x}` というフラグはありません\n\n", "`chobo {cmd}` has no flag `{x}`\n\n").get(lang).to_string() + &cmd_help(c, lang)
+        }
+        Misuse::Twice(x) => tr!("`{x}` が二度あります\n", "`{x}` is given twice\n").get(lang).to_string(),
+        Misuse::NotAChoice { flag: x, value: v, choices } => {
+            let ch = choices.join(", ");
+            tr!("`{x}` に渡せるのは {ch} です（`{v}` ではなく）\n", "`{x}` takes {ch}, not `{v}`\n").get(lang).to_string()
+        }
+        Misuse::MissingValue { flag: x, placeholder: ph } => tr!("`{x}` には値 {ph} が要ります\n", "`{x}` needs a value: {ph}\n").get(lang).to_string(),
+    }
 }
 
 fn main() -> ExitCode {
@@ -371,8 +342,9 @@ fn main() -> ExitCode {
 }
 
 fn usage(a: &Args) -> u8 {
-    if let Some(c) = commands().iter().find(|c| c.name == a.cmd) {
-        eprintln!("{}", c.usage);
+    let t = table();
+    if let Some(c) = t.command(&a.cmd) {
+        eprintln!("{}", t.usage_line(c));
     }
     2
 }
@@ -396,7 +368,7 @@ fn load(path: &Path, lang: Lang) -> Result<(String, chobo::model::Book, check::C
     };
     let file = path.display().to_string();
     for d in &c.diags {
-        eprint!("{}", d.render(&file, &src, lang));
+        eprint!("{}", d.shown(&file, &src, lang));
     }
     if diag::has_errors(&c.diags) {
         eprintln!("{}", diag::summary(&file, &c.diags, lang));
@@ -459,7 +431,9 @@ fn cmd_check(a: &Args) -> u8 {
         }
     }
     if json_out {
-        println!("{}", serde_json::to_string_pretty(&json!({"v": 1, "files": files})).unwrap());
+        // 2: the diagnostics have ritsu's keys (`col`, `message`, `fix`) since chobo moved onto
+        // ritsu-base; 1 had `v`, `column` and `title` in each (DESIGN 8.1)
+        println!("{}", serde_json::to_string_pretty(&json!({"v": 2, "files": files})).unwrap());
     }
     worst
 }
@@ -582,7 +556,7 @@ fn cmd_build(a: &Args) -> u8 {
         Ok(f) => f,
         Err(diags) => {
             for d in &diags {
-                eprint!("{}", d.render(&file, &src, a.lang));
+                eprint!("{}", d.shown(&file, &src, a.lang));
             }
             eprintln!("{}", diag::summary(&file, &diags, a.lang));
             return 1;

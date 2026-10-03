@@ -1,6 +1,6 @@
 //! Lines, indentation and tokens, and the one table of keywords.
 
-use crate::diag::Diag;
+use crate::diag::{self, Diag};
 
 /// Where a keyword is a keyword (DESIGN 1.6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,7 +114,7 @@ pub fn lex(src: &str) -> (Vec<Line>, Vec<Diag>) {
         let raw = raw.strip_suffix('\r').unwrap_or(raw);
         let chars: Vec<char> = raw.chars().collect();
         if no == 1 && chars.first() == Some(&'\u{feff}') {
-            diags.push(Diag::error(
+            diags.push(diag::error(
                 "E001",
                 1,
                 1,
@@ -149,10 +149,10 @@ fn lex_line(chars: &[char], no: usize) -> Result<Option<Line>, Diag> {
             break;
         }
         if c == '\t' {
-            return Err(Diag::error("E001", no, col, tr!("タブがあります。字下げと区切りには空白を使ってください", "a tab: indent and separate with spaces")));
+            return Err(diag::error("E001", no, col, tr!("タブがあります。字下げと区切りには空白を使ってください", "a tab: indent and separate with spaces")));
         }
         if combining(c) {
-            return Err(Diag::error(
+            return Err(diag::error(
                 "E001",
                 no,
                 col,
@@ -195,7 +195,7 @@ fn lex_line(chars: &[char], no: usize) -> Result<Option<Line>, Diag> {
                             j += 2;
                         }
                         _ => {
-                            return Err(Diag::error(
+                            return Err(diag::error(
                                 "E001",
                                 no,
                                 j + 1,
@@ -213,7 +213,7 @@ fn lex_line(chars: &[char], no: usize) -> Result<Option<Line>, Diag> {
                 }
             }
             if !closed {
-                return Err(Diag::error("E001", no, col, tr!("文字列が閉じていません", "the string is not closed")));
+                return Err(diag::error("E001", no, col, tr!("文字列が閉じていません", "the string is not closed")));
             }
             toks.push(Token { tok: Tok::Str(s), col, len: j + 1 - i });
             i = j + 1;
@@ -232,7 +232,7 @@ fn lex_line(chars: &[char], no: usize) -> Result<Option<Line>, Diag> {
                 }
             }
             if chars.get(j).is_some_and(|d| name_rest(*d) || *d == '.') {
-                return Err(Diag::error("E001", no, col, tr!("数のすぐあとに文字が続いています", "a number runs into the next word")));
+                return Err(diag::error("E001", no, col, tr!("数のすぐあとに文字が続いています", "a number runs into the next word")));
             }
             toks.push(Token { tok: Tok::Num(chars[i..j].iter().collect()), col, len: j - i });
             i = j;
@@ -245,7 +245,7 @@ fn lex_line(chars: &[char], no: usize) -> Result<Option<Line>, Diag> {
             }
             if chars.get(j).is_some_and(|d| combining(*d)) {
                 let d = chars[j];
-                return Err(Diag::error(
+                return Err(diag::error(
                     "E001",
                     no,
                     j + 1,
@@ -260,7 +260,7 @@ fn lex_line(chars: &[char], no: usize) -> Result<Option<Line>, Diag> {
             i = j;
             continue;
         }
-        return Err(Diag::error("E001", no, col, tr!("読めない文字 `{c}` があります", "an unexpected character `{c}`")));
+        return Err(diag::error("E001", no, col, tr!("読めない文字 `{c}` があります", "an unexpected character `{c}`")));
     }
     if toks.is_empty() {
         return Ok(None);

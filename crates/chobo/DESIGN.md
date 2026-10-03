@@ -879,7 +879,22 @@ chobo explain <コード> | --all [--format markdown]
 
 段階 B で `check`、`run`、`scenarios`、`api`、`explain` と `--help`、`--version` を、段階 C で `build` と `run --show` を、段階 D で `doc` を作った。`doc` は標準出力に書き、`--out <dir>` があれば、帳簿のファイル名から `<名前>.md` か `<名前>.html` を書く（`build` と違い、帳簿の名前ではなくファイル名を使う。英語の版と日本語の版が同じディレクトリにあっても、ぶつからない）。`run` の `--scenario` には、シナリオを一つ書いたファイルか、`chobo scenarios` が出す配列をそのまま渡せる。`build` は、書いたファイルのパスを一つずつ標準エラーに出す。帳簿にエラーがあるとき、出力先が帳簿を受け取れないとき（E060、E061）は何も書かずに exit 1 で終わる。
 
-どのコマンドにも `--lang ja` を付けられ、無ければ環境変数 `CHOBO_LANG`、無ければ英語（rulec と同じ。システムのロケールは見ない）。exit code は、0（問題なし、警告だけ）、1（エラー）、2（使い方の誤り、内部の異常）。`--format json` の診断のキーは、`--lang` にかかわらず英語で固定する。`chobo run --show` は、参照インタプリタの結果の代わりに、操作ごとにその出力先へ送るものを出す（テナントは空の文字列）。PostgreSQL では呼ぶ SQL と引数、TigerBeetle では、確定と取消の前に読む仮押さえの ID、作る勘定、開始の振替、チェーンである。`--format json` では、クライアントが送るものと一字ずつ比べられる形で、テキストでは勘定を帳簿の名前で書いた表で出す。
+どのコマンドにも `--lang ja` を付けられ、無ければ環境変数 `CHOBO_LANG`、次に ritsu のどの言語も読む `RITSU_LANG`、どちらも無ければ英語（rulec と同じ。システムのロケールは見ない）。exit code は、0（問題なし、警告だけ）、1（エラー）、2（使い方の誤り、内部の異常）。`--format json` の診断のキーは、`--lang` にかかわらず英語で固定する。`chobo run --show` は、参照インタプリタの結果の代わりに、操作ごとにその出力先へ送るものを出す（テナントは空の文字列）。PostgreSQL では呼ぶ SQL と引数、TigerBeetle では、確定と取消の前に読む仮押さえの ID、作る勘定、開始の振替、チェーンである。`--format json` では、クライアントが送るものと一字ずつ比べられる形で、テキストでは勘定を帳簿の名前で書いた表で出す。
+
+### 8.1 ritsu の土台へ移したもの
+
+chobo は ritsu（七つの言語を一つにまとめる処理系）に取り込まれ、ほかの言語と重なっていたコードを、ritsu の土台のクレート（ritsu-base と ritsu-testkit）のものに替えた（ritsu の PLAN の C.5）。替えたのは、SHA-256（ID の決め方は chobo に残した）、二つの言語の文（`tr!`、`Text`、`Lang`）、診断の共通の部分、コマンドの表の型と引数の読み方、`chobo doc` の HTML の頭と配色の変数、テストの共通の部分（一時ディレクトリ、golden、SKIP、使い捨ての PostgreSQL と TigerBeetle、Chrome、Mermaid）である。chobo に残したのは、そこに至る操作とヒント（診断の chobo の部分 `Ops`）、`--help` の組み立て、台帳と `explain` の書き方、ページの中身である。`explain` の形（見出しごとに字下げした本文、Markdown の頭の表、比べるリビジョンの帳簿や出力先を添えた再現）と `--help` の形は chobo だけのもので、`docs/codes.md` やほかの言語の形にそろえると、読む人の見るものが変わるので、そのままにした。
+
+出力は、次のものを除いて変えていない。
+
+- **`check --format json` の診断のキー**：ritsu のどの言語とも同じ `code`、`severity`、`file`、`line`、`col`、`message`、`notes`、`fix` に、chobo の部分（`excerpt`、`operations`、`hint`）を足した形になった。前は `v`、`column`、`title` で、キーの名前が言語ごとに違うと、ritsu の中で診断を一つの形で扱えず、外のツールもツールごとに読み方を変えることになる。chobo は直した行を出さないので `fix` はいつも null で、直し方は `hint` に文で書く。外側の `{"v": …, "files": […]}` の `v` は 1 から 2 にした。形が変わったことを、読む側が `v` で見分けられるようにするためである。
+- **言語の選び方に `RITSU_LANG` が入った**：`--lang`、`CHOBO_LANG`、`RITSU_LANG`、英語の順に読む。`--lang` の説明はこの順を書き、英語の文は ritsu の土台のもの（"the language of the text"）になった。
+- **`chobo doc --format html` の頭と配色**：`generator` が `chobo doc` から `chobo 0.1.0`（ツールとバージョン）になった。配色の変数は ritsu-base の名前（`--dim`、`--soft`、`--bad`、`--warn`）になり、`data-theme="light"` と `data-theme="dark"` でも選べるようになった。色の値は前と同じ（ritsu-base の値は chobo の値を元にした）なので、見た目は変わらない。
+- テストの SKIP の行は、ritsu のどのクレートとも同じ `SKIP: chobo: <理由>` の形で、標準出力に出る。
+
+引数の読み方は、前と同じになるようにした。`--` で始まるものだけがフラグで（`-x` は引数）、`--format=json` は一語として知らないフラグになり、フラグの値は `--` で始まらない（ritsu-base の `Reading` で選ぶ）。誤りの文も chobo の文のままで、知らないフラグにはコマンドの説明を添える。
+
+続く C.10 で、クライアントと SQL の生成の、生成先の言語の表面にかかわるところを、ritsu の生成器が共に使うクレート（ritsu-emit）のものに替えた。Python と Go のキーワードの表、Go が名前を外に見せる書き方（`Sku`、`X引当`）と ASCII の識別子かどうかの見分け、二つ目の同じ名前に `_2` を付けること、文字列のリテラル（TypeScript は JSON の文字列、Python は `'…'`、Go は `"…"`、SQL は `'…'` と `"…"` の名前）、Go のファイルの頭の `Code generated … DO NOT EDIT.` の一行である。chobo に残したのは、名前を避ける語のうち生成物が自分で使うもの（`self`、`_str` など）、TypeScript と Python のファイルの頭の文（`Written by …`）、生成器の中身である。三つの例の帳簿を七つの組み合わせに生成したファイル（72 個）が一バイトも変わらないこと、生成したクライアントを本物の PostgreSQL と TigerBeetle で走らせる突き合わせのテストと golden が通ることを確かめた。
 
 ## 9. 捨てたもの
 

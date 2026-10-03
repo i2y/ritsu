@@ -2,7 +2,7 @@
 //! answer and send is compared with the reference interpreter and `chobo run --show` (PLAN C5).
 #![allow(dead_code)]
 
-use super::servers::Postgres;
+use super::servers::{Pg, Postgres};
 use super::*;
 use chobo::interp::Op;
 use chobo::model::{Book, Expiry};
@@ -96,7 +96,7 @@ pub fn cases() -> Vec<Case> {
 // ── the tools ─────────────────────────────────────────────────────────────
 
 fn runs(cmd: &str, arg: &str) -> bool {
-    Command::new(cmd).arg(arg).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+    ritsu_testkit::tools::runs(cmd, &[arg])
 }
 
 pub fn runner_dir() -> PathBuf {
@@ -147,7 +147,7 @@ pub fn build_all(cases: &[Case], target: Target, dir: &Path) -> Vec<PathBuf> {
     cases
         .iter()
         .map(|c| {
-            let files = target::build(&c.copy, &c.stem, target).unwrap_or_else(|d| panic!("{}: {target:?}: {}", c.stem, d[0].msg.en));
+            let files = target::build(&c.copy, &c.stem, target).unwrap_or_else(|d| panic!("{}: {target:?}: {}", c.stem, d[0].message.en));
             let mut first = None;
             for (rel, text) in &files {
                 let p = dir.join(rel);
@@ -262,7 +262,7 @@ pub fn build_go(cases: &[Case], work: &Path) -> Result<GoRunner, String> {
     for (i, c) in cases.iter().enumerate() {
         for (backend, target, pg) in [("postgres", Target::PostgresGo, true), ("tigerbeetle", Target::TigerBeetleGo, false)] {
             let key = format!("{}{i}", if pg { "pg" } else { "tb" });
-            let files = target::build(&c.copy, &c.stem, target).map_err(|d| d[0].msg.en.clone())?;
+            let files = target::build(&c.copy, &c.stem, target).map_err(|d| d[0].message.en.clone())?;
             for (rel, text) in &files {
                 let name = Path::new(rel).file_name().unwrap();
                 write(&module.join("books").join(&key).join(name), text);
@@ -374,7 +374,7 @@ static EXPIRING: Mutex<()> = Mutex::new(());
 
 impl Psql {
     fn open(pg: &Postgres) -> Psql {
-        let mut child = pg.psql().args(["-A", "-t", "-F", "|", "-v", "ON_ERROR_STOP=0"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+        let mut child = pg.db().args(["-A", "-t", "-F", "|", "-v", "ON_ERROR_STOP=0"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
         let stdin = child.stdin.take().unwrap();
         let stdout = BufReader::new(child.stdout.take().unwrap());
         let mut err = BufReader::new(child.stderr.take().unwrap());

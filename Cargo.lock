@@ -6,6 +6,9 @@ version = 4
 name = "chobo"
 version = "0.1.0"
 dependencies = [
+ "ritsu-base",
+ "ritsu-emit",
+ "ritsu-testkit",
  "serde_json",
 ]
 

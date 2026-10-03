@@ -2,7 +2,9 @@
 //! goldens; every code the checker has appears in them in both languages.
 
 mod common;
-use chobo::{check, codes, diag::Lang, diffbase};
+use chobo::diag::Show;
+use chobo::{check, codes, diffbase};
+use ritsu_base::text::Lang;
 use common::*;
 
 /// The text `chobo check` prints for a fixture: compared with its `.before.book` when there
@@ -28,7 +30,7 @@ fn render(path: &std::path::Path, lang: Lang) -> String {
         assert!(!chobo::diag::has_errors(&c.diags), "{}: the book has errors before it is built", path.display());
         let mut d = c.diags.clone();
         d.extend(chobo::target::check(book, target));
-        let mut out: String = d.iter().map(|x| x.render(&file, &src, lang)).collect();
+        let mut out: String = d.iter().map(|x| x.shown(&file, &src, lang)).collect();
         out.push_str(&chobo::diag::summary(&file, &d, lang));
         out.push('\n');
         return out;
@@ -66,7 +68,7 @@ fn the_test_books_check_clean() {
     for p in books_in("tests/books") {
         let src = std::fs::read_to_string(&p).unwrap();
         let c = check::check_source(&src);
-        let shown: Vec<String> = c.diags.iter().map(|d| d.render(&stem(&p), &src, Lang::En)).collect();
+        let shown: Vec<String> = c.diags.iter().map(|d| d.shown(&stem(&p), &src, Lang::En)).collect();
         assert!(c.diags.is_empty(), "{}:\n{}", p.display(), shown.join(""));
         assert!(c.report.is_some());
     }
@@ -82,5 +84,5 @@ fn the_design_book_checks() {
     let end = start + rest[start..].find("```").unwrap();
     let src = &rest[start..end];
     let c = check::check_source(src);
-    assert!(c.diags.is_empty(), "{:?}", c.diags.iter().map(|d| d.msg.en.clone()).collect::<Vec<_>>());
+    assert!(c.diags.is_empty(), "{:?}", c.diags.iter().map(|d| d.message.en.clone()).collect::<Vec<_>>());
 }

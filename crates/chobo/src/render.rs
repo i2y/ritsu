@@ -5,7 +5,7 @@
 //! A `post` or `void` depends on the hold as the client reads it first; an operation of a
 //! `together` is shown from the state before the `together`, as `ids::scenario_chains` does.
 
-use crate::diag::Lang;
+use ritsu_base::text::Lang;
 use crate::ids::{chain, chain_json, hold_chain_ids, id_hex};
 use crate::interp::{Call, Op, State};
 use crate::model::*;

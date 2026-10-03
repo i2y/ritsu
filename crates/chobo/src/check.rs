@@ -3,7 +3,8 @@
 //! never used or never matters (W105, W106), and the report of what each operation can be
 //! refused with (DESIGN 3).
 
-use crate::diag::{self, Diag, Lang};
+use crate::diag::{self, DiagExt, Diag, Show};
+use ritsu_base::text::Lang;
 use crate::interp::{Op, Outcome};
 use crate::model::{self, *};
 use crate::scenario;
@@ -90,7 +91,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
             let Some(b) = witness::same_account(book, k, i) else { continue };
             let r = book.ref_text(t, &m.from);
             d.push(
-                Diag::error(
+                diag::error(
                     "E012",
                     m.line,
                     m.col,
@@ -123,7 +124,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
         stuck[x] = true;
         let n = &a.name;
         d.push(
-            Diag::warning(
+            diag::warning(
                 "W101",
                 a.line,
                 a.col,
@@ -151,7 +152,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
             let Some(b) = witness::bound_refusal(book, k, i, false) else { continue };
             let (n, tn, reason) = (&a.name, &t.name, &l.refusal);
             d.push(
-                Diag::warning(
+                diag::warning(
                     "W102",
                     m.line,
                     m.col,
@@ -206,7 +207,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                     tr!("{rt} へ入れる移動を先に書きます", "write the move that puts into {rt} first"),
                                 )
                             };
-                            d.push(Diag::warning(code, tm.line, tm.col, msg).with_ops(b.op_lines()).hint(hint));
+                            d.push(diag::warning(code, tm.line, tm.col, msg).with_ops(b.op_lines()).hint(hint));
                         }
                     }
                 }
@@ -237,7 +238,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                     tr!("{rt} から取る移動を先に書きます", "write the move that takes from {rt} first"),
                                 )
                             };
-                            d.push(Diag::warning(code, pm.line, pm.col, msg).with_ops(b.op_lines()).hint(hint));
+                            d.push(diag::warning(code, pm.line, pm.col, msg).with_ops(b.op_lines()).hint(hint));
                         }
                     }
                 }
@@ -251,14 +252,14 @@ pub fn findings(book: &Book) -> Vec<Diag> {
         let used = book.accounts.iter().any(|a| a.unit == u) || book.transfers.iter().any(|t| t.params.iter().any(|p| p.ty == Ty::Amount(u)));
         if !used {
             let n = &unit.name;
-            d.push(Diag::warning("W105", unit.line, unit.col, tr!("単位 `{n}` はどこにも使われていません", "the unit `{n}` is not used anywhere")));
+            d.push(diag::warning("W105", unit.line, unit.col, tr!("単位 `{n}` はどこにも使われていません", "the unit `{n}` is not used anywhere")));
         }
     }
     for (x, a) in book.accounts.iter().enumerate() {
         if !puts(x) && !takes(x) {
             unused_account[x] = true;
             let n = &a.name;
-            d.push(Diag::warning("W105", a.line, a.col, tr!("勘定 `{n}` を使う振替がありません", "no transfer moves into or out of the account `{n}`")));
+            d.push(diag::warning("W105", a.line, a.col, tr!("勘定 `{n}` を使う振替がありません", "no transfer moves into or out of the account `{n}`")));
         }
     }
     for t in &book.transfers {
@@ -268,7 +269,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
             });
             if !t.key.contains(&i) && !in_moves {
                 let n = &p.name;
-                d.push(Diag::warning("W105", p.line, p.col, tr!("引数 `{n}` はキーにも移動にも使われていません", "the parameter `{n}` is in neither the key nor any move")));
+                d.push(diag::warning("W105", p.line, p.col, tr!("引数 `{n}` はキーにも移動にも使われていません", "the parameter `{n}` is in neither the key nor any move")));
             }
         }
     }
@@ -282,7 +283,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
         if let Some(l) = &a.lower {
             if !takes(x) && !stuck[x] {
                 let (n, v) = (&a.name, format_amount(l.value, scale));
-                d.push(Diag::warning(
+                d.push(diag::warning(
                     "W106",
                     l.line,
                     l.col,
@@ -293,7 +294,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
         if let Some(u) = &a.upper {
             if !puts(x) {
                 let (n, v) = (&a.name, format_amount(u.value, scale));
-                d.push(Diag::warning(
+                d.push(diag::warning(
                     "W106",
                     u.line,
                     u.col,
@@ -514,7 +515,7 @@ pub fn report_json(book: &Book, rep: &Report) -> Value {
 pub fn render(file: &str, src: &str, c: &Checked, lang: Lang) -> String {
     let mut out = String::new();
     for d in &c.diags {
-        out.push_str(&d.render(file, src, lang));
+        out.push_str(&d.shown(file, src, lang));
     }
     out.push_str(&diag::summary(file, &c.diags, lang));
     out.push('\n');
@@ -528,7 +529,7 @@ pub fn to_json(file: &str, src: &str, c: &Checked, lang: Lang) -> Value {
     json!({
         "file": file,
         "ok": !diag::has_errors(&c.diags),
-        "diagnostics": c.diags.iter().map(|d| d.to_json(file, src, lang)).collect::<Vec<_>>(),
+        "diagnostics": c.diags.iter().map(|d| d.json_in(file, src, lang)).collect::<Vec<_>>(),
         "report": match (&c.book, &c.report) {
             (Some(b), Some(r)) => report_json(b, r),
             _ => Value::Null,

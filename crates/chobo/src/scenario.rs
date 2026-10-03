@@ -2,7 +2,7 @@
 //! interpreter. `together` is run in every order its callers' operations can interleave,
 //! and the result is every distinct way it can come out (DESIGN 2.6).
 
-use crate::diag::{Lang, Text};
+use ritsu_base::text::{Lang, Text};
 use crate::interp::{AccountId, Call, HoldState, Op, Outcome, State, Val};
 use crate::model::*;
 use serde_json::{Map, Value, json};

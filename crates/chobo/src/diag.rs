@@ -1,73 +1,22 @@
 //! Diagnostics: a code, a place, what is wrong in English and Japanese, and, when it only
 //! shows when someone calls the book, the operations that get there.
 //!
-//! Every sentence a person reads is written twice, side by side, with `tr!` (in `lib.rs`), so
-//! that neither language can be written without the other. A diagnostic keeps both and is
-//! rendered in the one asked for, so the same check serves `--lang en` and `--lang ja`.
+//! Every sentence a person reads is written twice, side by side, with `tr!`, so that neither
+//! language can be written without the other. A diagnostic keeps both and is rendered in the
+//! one asked for, so the same check serves `--lang en` and `--lang ja`.
+//!
+//! What every language's diagnostic has is ritsu-base's ([`ritsu_base::diag`]): the headline,
+//! the source line, `= ` notes, and the JSON with its keys in English. What is chobo's is
+//! [`Ops`]: the operations that get there, as a person reads them and as scenario steps, and the
+//! hint. A check finds a diagnostic before it knows the file's name, so the file and its line are
+//! put in when it is printed ([`Show`]).
 
-use serde_json::{Value, json};
+use ritsu_base::diag::Extra;
+use ritsu_base::json::Json;
+use ritsu_base::text::{Lang, Text};
+use serde_json::Value;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Lang {
-    En,
-    Ja,
-}
-
-impl Lang {
-    /// `--lang` wins, then `CHOBO_LANG`, then English. The system locale is not read: the
-    /// output is diffed in tests and CI, so it must not change with the machine.
-    pub fn pick(flag: Option<&str>) -> Lang {
-        let env = std::env::var("CHOBO_LANG").ok();
-        match flag.or(env.as_deref()) {
-            Some(s) if s.trim().to_ascii_lowercase().starts_with("ja") => Lang::Ja,
-            _ => Lang::En,
-        }
-    }
-}
-
-/// One sentence in both languages.
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Text {
-    pub ja: String,
-    pub en: String,
-}
-
-impl Text {
-    pub fn get(&self, lang: Lang) -> &str {
-        match lang {
-            Lang::En => &self.en,
-            Lang::Ja => &self.ja,
-        }
-    }
-
-    /// The same words in both languages: a name, a number.
-    pub fn same(s: impl Into<String>) -> Text {
-        let s = s.into();
-        Text { ja: s.clone(), en: s }
-    }
-
-    /// Put `val` where the sentence has `{key}`, in each language its own words. A sentence
-    /// that takes words that differ by language is written with `{{key}}` in `tr!`.
-    pub fn sub(mut self, key: &str, val: &Text) -> Text {
-        let k = format!("{{{key}}}");
-        self.ja = self.ja.replace(&k, &val.ja);
-        self.en = self.en.replace(&k, &val.en);
-        self
-    }
-
-    pub fn join(parts: &[Text], ja_sep: &str, en_sep: &str) -> Text {
-        Text {
-            ja: parts.iter().map(|t| t.ja.as_str()).collect::<Vec<_>>().join(ja_sep),
-            en: parts.iter().map(|t| t.en.as_str()).collect::<Vec<_>>().join(en_sep),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Severity {
-    Error,
-    Warning,
-}
+pub use ritsu_base::diag::Severity;
 
 /// One operation of the list that shows a finding: the call as a person reads it, with its
 /// result, and the same call as a scenario step with its result, for a program.
@@ -77,60 +26,17 @@ pub struct OpLine {
     pub json: Value,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Diag {
-    pub code: &'static str,
-    pub severity: Severity,
-    pub line: usize,
-    pub col: usize,
-    pub msg: Text,
-    pub notes: Vec<Text>,
+/// chobo's part of a diagnostic.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Ops {
     pub ops: Vec<OpLine>,
     pub hint: Option<Text>,
+    /// The line of the book it is about, as written (the JSON's `excerpt`).
+    pub excerpt: String,
 }
 
-impl Diag {
-    pub fn error(code: &'static str, line: usize, col: usize, msg: Text) -> Diag {
-        Diag { code, severity: Severity::Error, line, col, msg, notes: vec![], ops: vec![], hint: None }
-    }
-
-    pub fn warning(code: &'static str, line: usize, col: usize, msg: Text) -> Diag {
-        Diag { code, severity: Severity::Warning, line, col, msg, notes: vec![], ops: vec![], hint: None }
-    }
-
-    pub fn note(mut self, t: Text) -> Diag {
-        self.notes.push(t);
-        self
-    }
-
-    pub fn hint(mut self, t: Text) -> Diag {
-        self.hint = Some(t);
-        self
-    }
-
-    pub fn with_ops(mut self, ops: Vec<OpLine>) -> Diag {
-        self.ops = ops;
-        self
-    }
-
-    /// The text a person reads: the headline, the source line, the notes, the operations
-    /// that get there, and how to fix it.
-    pub fn render(&self, file: &str, src: &str, lang: Lang) -> String {
-        let kind = match (self.severity, lang) {
-            (Severity::Error, Lang::En) => "error",
-            (Severity::Warning, Lang::En) => "warning",
-            (Severity::Error, Lang::Ja) => "エラー",
-            (Severity::Warning, Lang::Ja) => "警告",
-        };
-        let mut out = format!("{kind}[{}]: {file}:{}:{}: {}\n", self.code, self.line, self.col, self.msg.get(lang));
-        if self.line > 0 {
-            if let Some(text) = src.lines().nth(self.line - 1) {
-                out.push_str(&format!("  {:>4} | {}\n", self.line, text));
-            }
-        }
-        for n in &self.notes {
-            out.push_str(&format!("  = {}\n", n.get(lang)));
-        }
+impl Extra for Ops {
+    fn after_fix(&self, lang: Lang, out: &mut String) {
         if !self.ops.is_empty() {
             out.push_str(if lang == Lang::Ja { "  そうなる例:\n" } else { "  the operations that get there:\n" });
             for (i, op) in self.ops.iter().enumerate() {
@@ -140,35 +46,89 @@ impl Diag {
         if let Some(h) = &self.hint {
             out.push_str(&format!("  {}: {}\n", if lang == Lang::Ja { "ヒント" } else { "hint" }, h.get(lang)));
         }
-        out
     }
 
+    fn json(&self, lang: Lang) -> Vec<(String, Json)> {
+        let ops = self.ops.iter().map(|o| ritsu_base::json::parse(&o.json.to_string()).expect("serde_json writes JSON ritsu-base reads"));
+        vec![
+            ("excerpt".into(), Json::str(&self.excerpt)),
+            ("operations".into(), Json::arr(ops)),
+            ("hint".into(), Json::opt_str(self.hint.as_ref().map(|h| h.get(lang)))),
+        ]
+    }
+}
+
+/// A diagnostic of chobo's: ritsu-base's, with the operations that get there.
+pub type Diag = ritsu_base::diag::Diag<Ops>;
+
+/// An error at a line and a column of the book.
+pub fn error(code: &'static str, line: usize, col: usize, msg: Text) -> Diag {
+    Diag::error(code, "", line, col, msg)
+}
+
+/// A warning at a line and a column of the book.
+pub fn warning(code: &'static str, line: usize, col: usize, msg: Text) -> Diag {
+    Diag::warning(code, "", line, col, msg)
+}
+
+/// What chobo adds to a diagnostic as it is built.
+pub trait DiagExt {
+    /// How to fix it, in a sentence.
+    fn hint(self, t: Text) -> Self;
+    /// The operations that get there.
+    fn with_ops(self, ops: Vec<OpLine>) -> Self;
+}
+
+impl DiagExt for Diag {
+    fn hint(mut self, t: Text) -> Diag {
+        self.extra.hint = Some(t);
+        self
+    }
+
+    fn with_ops(mut self, ops: Vec<OpLine>) -> Diag {
+        self.extra.ops = ops;
+        self
+    }
+}
+
+/// A diagnostic printed for a file: its name as the command line gave it, and its source.
+pub trait Show {
+    /// The same diagnostic in the file, its line's text kept as written (not trimmed).
+    fn placed(&self, file: &str, src: &str) -> Diag;
+    /// The text a person reads: the headline, the source line, the notes, the operations
+    /// that get there, and how to fix it.
+    fn shown(&self, file: &str, src: &str, lang: Lang) -> String;
     /// The same finding for a program. The keys are English whatever the language.
-    pub fn to_json(&self, file: &str, src: &str, lang: Lang) -> Value {
-        let excerpt = if self.line > 0 { src.lines().nth(self.line - 1).unwrap_or("") } else { "" };
-        json!({
-            "v": 1,
-            "severity": match self.severity { Severity::Error => "error", Severity::Warning => "warning" },
-            "code": self.code,
-            "file": file,
-            "line": self.line,
-            "column": self.col,
-            "title": self.msg.get(lang),
-            "excerpt": excerpt,
-            "notes": self.notes.iter().map(|n| n.get(lang)).collect::<Vec<_>>(),
-            "operations": self.ops.iter().map(|o| o.json.clone()).collect::<Vec<_>>(),
-            "hint": self.hint.as_ref().map(|h| h.get(lang)),
-        })
+    fn json_in(&self, file: &str, src: &str, lang: Lang) -> Value;
+}
+
+impl Show for Diag {
+    fn placed(&self, file: &str, src: &str) -> Diag {
+        let mut d = self.clone();
+        d.file = file.to_string();
+        d.rel = file.to_string();
+        d.src = d.line.and_then(|l| src.lines().nth(l - 1)).map(str::to_string);
+        d.extra.excerpt = d.src.clone().unwrap_or_default();
+        d
+    }
+
+    fn shown(&self, file: &str, src: &str, lang: Lang) -> String {
+        self.placed(file, src).render(lang)
+    }
+
+    fn json_in(&self, file: &str, src: &str, lang: Lang) -> Value {
+        serde_json::from_str(&self.placed(file, src).to_json(lang).compact()).expect("ritsu-base writes JSON serde_json reads")
     }
 }
 
 pub fn has_errors(diags: &[Diag]) -> bool {
-    diags.iter().any(|d| d.severity == Severity::Error)
+    ritsu_base::diag::has_errors(diags)
 }
 
+/// The errors, and the rest (chobo has no notes).
 pub fn count(diags: &[Diag]) -> (usize, usize) {
-    let e = diags.iter().filter(|d| d.severity == Severity::Error).count();
-    (e, diags.len() - e)
+    let c = ritsu_base::diag::count(diags);
+    (c.errors, c.warnings + c.notes)
 }
 
 /// The line after the diagnostics: `ok`, or how many of each.

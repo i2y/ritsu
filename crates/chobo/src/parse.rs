@@ -1,6 +1,7 @@
 //! The syntax tree of a book, every node with its place in the source (PLAN B3).
 
-use crate::diag::{Diag, Text};
+use crate::diag::{self, Diag};
+use ritsu_base::text::Text;
 use crate::syntax::{self, Line, Tok, Token};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -205,7 +206,7 @@ impl<'a> Cur<'a> {
             None => tr!("行が途中で終わっています。{{form}} の形で書いてください", "the line ends early; write {{form}}"),
         }
         .sub("form", &self.form);
-        Diag::error("E001", at.line, at.col, msg)
+        diag::error("E001", at.line, at.col, msg)
     }
 
     fn at_word(&self, w: &str) -> bool {
@@ -241,7 +242,7 @@ impl<'a> Cur<'a> {
             Some(Token { tok: Tok::Word(w), .. }) => {
                 let span = self.here();
                 if syntax::reserved(w) {
-                    return Err(Diag::error(
+                    return Err(diag::error(
                         "E001",
                         span.line,
                         span.col,
@@ -354,13 +355,13 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
     let mut diags = Vec::new();
     let mut it = lines.iter().peekable();
     let Some(first) = it.next() else {
-        diags.push(Diag::error("E001", 1, 1, tr!("帳簿が空です。最初の行に {{form}} を書いてください", "the book is empty; start it with {{form}}").sub("form", &form_book())));
+        diags.push(diag::error("E001", 1, 1, tr!("帳簿が空です。最初の行に {{form}} を書いてください", "the book is empty; start it with {{form}}").sub("form", &form_book())));
         return (None, diags);
     };
     let head = (|| -> Result<(Name, u32), Diag> {
         let mut c = Cur::new(first, form_book());
         if first.indent != 0 {
-            return Err(Diag::error("E001", first.no, 1, tr!("`book` の行は字下げしません", "the `book` line is not indented")));
+            return Err(diag::error("E001", first.no, 1, tr!("`book` の行は字下げしません", "the `book` line is not indented")));
         }
         c.word("book")?;
         let name = c.name()?;
@@ -372,7 +373,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
             _ => None,
         };
         let Some(version) = version else {
-            return Err(Diag::error("E001", vspan.line, vspan.col, tr!("バージョンは `v1` のように v と 1 以上の数で書きます", "the version is a v and a number from 1, like `v1`")));
+            return Err(diag::error("E001", vspan.line, vspan.col, tr!("バージョンは `v1` のように v と 1 以上の数で書きます", "the version is a v and a number from 1, like `v1`")));
         };
         c.i += 1;
         c.end()?;
@@ -413,7 +414,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
                 Some(n) => n == l.indent,
             };
             if !ok_indent {
-                diags.push(Diag::error(
+                diags.push(diag::error(
                     "E001",
                     l.no,
                     1,
@@ -423,7 +424,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
             }
             match open {
                 Open::None => {
-                    diags.push(Diag::error(
+                    diags.push(diag::error(
                         "E001",
                         l.no,
                         1,
@@ -466,8 +467,8 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
                 }
                 Err(d) => diags.push(d),
             },
-            "book" => diags.push(Diag::error("E001", l.no, 1, tr!("`book` の行は先頭に一度だけ書きます", "`book` comes once, on the first line"))),
-            "description" => diags.push(Diag::error(
+            "book" => diags.push(diag::error("E001", l.no, 1, tr!("`book` の行は先頭に一度だけ書きます", "`book` comes once, on the first line"))),
+            "description" => diags.push(diag::error(
                 "E001",
                 l.no,
                 1,
@@ -476,7 +477,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
                     "the book's `description` goes right under the `book` line; an account's or a transfer's goes indented under it"
                 ),
             )),
-            "key" | "pending" | "move" | "at" => diags.push(Diag::error(
+            "key" | "pending" | "move" | "at" => diags.push(diag::error(
                 "E001",
                 l.no,
                 1,
@@ -484,7 +485,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
             )),
             _ => {
                 let s = l.toks.first().map(|t| show(&t.tok)).unwrap_or_default();
-                diags.push(Diag::error(
+                diags.push(diag::error(
                     "E001",
                     l.no,
                     1,
@@ -547,7 +548,7 @@ fn account_line(l: &Line) -> Result<AccountLine, Diag> {
     let mut c = Cur::new(l, form_bound());
     if !c.at_word("at") {
         let s = l.toks.first().map(|t| show(&t.tok)).unwrap_or_default();
-        return Err(Diag::error(
+        return Err(diag::error(
             "E001",
             l.no,
             l.indent + 1,
@@ -667,7 +668,7 @@ fn transfer_line(l: &Line) -> Result<TransferLine, Diag> {
         }
         _ => {
             let s = l.toks.first().map(|t| show(&t.tok)).unwrap_or_default();
-            Err(Diag::error(
+            Err(diag::error(
                 "E001",
                 l.no,
                 l.indent + 1,

@@ -6,7 +6,8 @@
 //! against what the moves before it left. The rows of the accounts are locked in the order of
 //! their IDs, so two calls never wait on each other in a circle.
 
-use crate::diag::{Diag, Text};
+use crate::diag::{self, DiagExt, Diag};
+use ritsu_base::text::Text;
 use crate::ids;
 use crate::interp::{Call, Op, Val};
 use crate::model::*;
@@ -15,15 +16,8 @@ use serde_json::{Value, json};
 /// PostgreSQL keeps an identifier to 63 bytes, and cuts a longer one short without a word.
 pub const NAME_MAX: usize = 63;
 
-/// A name as SQL quotes it: `"在庫"`.
-pub fn ident(s: &str) -> String {
-    format!("\"{}\"", s.replace('"', "\"\""))
-}
-
-/// A string as SQL writes it: `'本店'`.
-pub fn lit(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "''"))
-}
+/// A name as SQL quotes it (`"在庫"`), and a string as SQL writes it (`'本店'`).
+pub use ritsu_emit::lit::{sql as lit, sql_ident as ident};
 
 /// `"在庫"."引当_hold"`.
 pub fn qualified(book: &Book, name: &str) -> String {
@@ -67,7 +61,7 @@ fn too_long(name: &str, what: Text, line: usize, col: usize) -> Option<Diag> {
         "{{what}} `{name}` is {n} bytes long; PostgreSQL keeps a name to 63 bytes, and cuts a longer one short without a word"
     )
     .sub("what", &what);
-    Some(Diag::error("E061", line, col, msg).hint(tr!(
+    Some(diag::error("E061", line, col, msg).hint(tr!(
         "名前を短くします。日本語は一字 3 バイトなので、63 バイトは 21 字です（関数の名前は、後ろに付く `_hold` なども含めて数えます）",
         "Make the name shorter: 63 bytes are 63 ASCII letters, or 21 Japanese characters (a function's name counts what follows it too, `_hold` and the like)"
     )))
@@ -97,7 +91,7 @@ pub fn check_names(book: &Book) -> Vec<Diag> {
         }
     }
     crate::model::sort(&mut d);
-    d.dedup_by(|a, b| a.line == b.line && a.col == b.col && a.msg == b.msg);
+    d.dedup_by(|a, b| a.line == b.line && a.col == b.col && a.message == b.message);
     d
 }
 

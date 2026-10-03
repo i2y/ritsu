@@ -7,4 +7,9 @@ description = "A small language for the things you count and move between accoun
 repository = "https://github.com/i2y/chobo"
 
 [dependencies]
+ritsu-base = { path = "../ritsu-base" }
+ritsu-emit = { path = "../ritsu-emit" }
 serde_json = { version = "1", features = ["preserve_order"] }
+
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }

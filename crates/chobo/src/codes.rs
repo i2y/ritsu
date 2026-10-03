@@ -2,7 +2,8 @@
 //! the smallest book that makes it appear. `chobo explain` renders from here, and a test
 //! checks every example so that none of them can drift from what the checker says.
 
-use crate::diag::{Lang, Severity, Text};
+use crate::diag::Severity;
+use ritsu_base::text::{Lang, Text};
 
 pub struct Entry {
     pub code: &'static str,
@@ -770,12 +771,7 @@ pub fn find(code: &str) -> Option<Entry> {
 }
 
 fn word(s: Severity, lang: Lang) -> &'static str {
-    match (s, lang) {
-        (Severity::Error, Lang::En) => "error",
-        (Severity::Warning, Lang::En) => "warning",
-        (Severity::Error, Lang::Ja) => "エラー",
-        (Severity::Warning, Lang::Ja) => "警告",
-    }
+    s.word(lang)
 }
 
 fn indent(s: &str) -> String {

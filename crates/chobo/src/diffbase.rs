@@ -2,7 +2,8 @@
 //! database cannot follow (DESIGN 2.8). An account's identity and a transfer's ID leave the
 //! book's version out, so the accounts and holds made under the old book go on under the new.
 
-use crate::diag::{Diag, Text};
+use crate::diag::{self, DiagExt, Diag};
+use ritsu_base::text::Text;
 use crate::ids;
 use crate::model::{self, *};
 use std::path::Path;
@@ -40,7 +41,7 @@ pub fn compare(old: &Book, new: &Book, rev: &str) -> Vec<Diag> {
     let mut d = Vec::new();
     if old.name != new.name {
         let (o, n) = (&old.name, &new.name);
-        d.push(Diag::warning(
+        d.push(diag::warning(
             "W107",
             1,
             1,
@@ -54,7 +55,7 @@ pub fn compare(old: &Book, new: &Book, rev: &str) -> Vec<Diag> {
     for oa in &old.accounts {
         let n = &oa.name;
         let Some(na) = new.accounts.iter().find(|a| a.name == oa.name) else {
-            d.push(Diag::warning(
+            d.push(diag::warning(
                 "W107",
                 1,
                 1,
@@ -93,7 +94,7 @@ pub fn compare(old: &Book, new: &Book, rev: &str) -> Vec<Diag> {
         if !changes.is_empty() {
             let what = Text::join(&changes, "、", ", ");
             d.push(
-                Diag::error(
+                diag::error(
                     "E050",
                     na.line,
                     na.col,
@@ -124,7 +125,7 @@ pub fn compare(old: &Book, new: &Book, rev: &str) -> Vec<Diag> {
                     "the transfer `{n}` of {rev} is gone: a retry of it still in flight can no longer be made"
                 )
             };
-            d.push(Diag::warning("W107", 1, 1, msg));
+            d.push(diag::warning("W107", 1, 1, msg));
             continue;
         };
         let (a, b) = (ids::transfer_text(old, ot), ids::transfer_text(new, nt));
@@ -160,7 +161,7 @@ pub fn compare(old: &Book, new: &Book, rev: &str) -> Vec<Diag> {
             )
         };
         d.push(
-            Diag::error("E051", nt.line, nt.col, msg.sub("what", &what))
+            diag::error("E051", nt.line, nt.col, msg.sub("what", &what))
             .hint(tr!(
                 "新しい名前の振替を宣言し、前の振替は、その仮押さえがどれも終わるまで残しておきます",
                 "declare the new form under a new name, and keep the old one until every hold it made has ended"

@@ -11,7 +11,7 @@ pub mod go;
 pub mod python;
 pub mod typescript;
 
-use crate::diag::{Diag, OpLine};
+use crate::diag::{self, DiagExt, Diag, OpLine};
 use crate::ids;
 use crate::model::*;
 use crate::witness::Builder;
@@ -53,7 +53,7 @@ pub fn check_requests(book: &Book) -> Vec<Diag> {
             },
         };
         d.push(
-            Diag::error(
+            diag::error(
                 "E060",
                 t.line,
                 t.col,
@@ -234,18 +234,4 @@ pub fn banner(book: &Book, target: &str) -> String {
 }
 
 /// Names made unique: the second of two that come out the same gets `_2`, the third `_3`.
-pub fn unique(names: Vec<String>, taken: &[&str]) -> Vec<String> {
-    let mut seen: Vec<String> = taken.iter().map(|s| s.to_string()).collect();
-    let mut out = Vec::new();
-    for n in names {
-        let mut m = n.clone();
-        let mut i = 2;
-        while seen.contains(&m) {
-            m = format!("{n}_{i}");
-            i += 1;
-        }
-        seen.push(m.clone());
-        out.push(m);
-    }
-    out
-}
+pub use ritsu_emit::ident::unique;

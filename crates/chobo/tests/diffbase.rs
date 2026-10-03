@@ -18,7 +18,7 @@ fn git(dir: &std::path::Path, args: &[&str]) -> bool {
 #[test]
 fn changes_since_a_revision() {
     if Command::new("git").arg("--version").output().is_err() {
-        println!("SKIP: git is not on the PATH; --diff-base needs it");
+        skip("git is not on the PATH; --diff-base needs it");
         return;
     }
     let tmp = TempDir::new("diffbase");

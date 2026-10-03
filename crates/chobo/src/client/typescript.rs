@@ -8,9 +8,7 @@ const TB_RUNTIME: &str = include_str!("runtime/tigerbeetle.ts");
 const PG_RUNTIME: &str = include_str!("runtime/postgres.ts");
 
 /// A string as a TypeScript literal.
-fn q(s: &str) -> String {
-    serde_json::to_string(s).unwrap()
-}
+use ritsu_emit::lit::json as q;
 
 /// The members of the book value, one per transfer kind, kept apart from `balance` and `expire`
 /// (the PostgreSQL client's), so that the two clients name them alike.

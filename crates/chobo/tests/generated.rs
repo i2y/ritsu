@@ -10,8 +10,11 @@ use std::process::Command;
 
 #[test]
 fn typescript_type_checks() {
+    if !need(Need::Node) {
+        return;
+    }
     if let Err(why) = node() {
-        eprintln!("SKIP: {why}; the TypeScript clients are not type-checked");
+        skip(&format!("{why}; the TypeScript clients are not type-checked"));
         return;
     }
     let cases = cases();
@@ -46,10 +49,13 @@ fn typescript_type_checks() {
 
 #[test]
 fn python_compiles() {
+    if !need(Need::Python) {
+        return;
+    }
     let py = match python() {
         Ok(p) => p,
         Err(why) => {
-            eprintln!("SKIP: {why}; the Python clients are not compiled");
+            skip(&format!("{why}; the Python clients are not compiled"));
             return;
         }
     };
@@ -64,8 +70,11 @@ fn python_compiles() {
 
 #[test]
 fn go_is_formatted_and_vets() {
+    if !need(Need::Go) {
+        return;
+    }
     if let Err(why) = go() {
-        eprintln!("SKIP: {why}; the Go clients are not vetted");
+        skip(&format!("{why}; the Go clients are not vetted"));
         return;
     }
     let cases = cases();

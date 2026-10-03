@@ -10,7 +10,7 @@
 
 mod common;
 use common::runners::*;
-use common::servers::{Postgres, TigerBeetle};
+use common::servers::{Pg, Postgres, Tb, TigerBeetle};
 use common::*;
 use serde_json::Value;
 use std::process::Command;
@@ -62,7 +62,7 @@ fn input(backend: &str, conn: Value, combo: &str, cases: &[Case], clients: &[Str
 fn postgres(pg: &Postgres, cases: &[Case], work: &std::path::Path, go: Option<&GoRunner>, failures: &mut Vec<String>) {
     let sql = work.join("sql");
     for (c, f) in cases.iter().zip(build_all(cases, chobo::target::Target::Postgres, &sql)) {
-        let out = pg.psql().arg("-f").arg(&f).output().unwrap();
+        let out = pg.db().arg("-f").arg(&f).output().unwrap();
         assert!(out.status.success(), "{}: the SQL does not load:\n{}", c.stem, String::from_utf8_lossy(&out.stderr));
     }
     let started = Instant::now();
@@ -83,7 +83,7 @@ fn postgres(pg: &Postgres, cases: &[Case], work: &std::path::Path, go: Option<&G
             }
             eprintln!("ran postgres-typescript in {:.1} s", started.elapsed().as_secs_f64());
         }
-        Err(why) => eprintln!("SKIP: {why}; postgres-typescript is not run"),
+        Err(why) => skip(&format!("{why}; postgres-typescript is not run")),
     }
     match python() {
         Ok(py) => {
@@ -98,7 +98,7 @@ fn postgres(pg: &Postgres, cases: &[Case], work: &std::path::Path, go: Option<&G
             }
             eprintln!("ran postgres-python in {:.1} s", started.elapsed().as_secs_f64());
         }
-        Err(why) => eprintln!("SKIP: {why}; postgres-python is not run"),
+        Err(why) => skip(&format!("{why}; postgres-python is not run")),
     }
     match go {
         Some(g) => {
@@ -110,12 +110,12 @@ fn postgres(pg: &Postgres, cases: &[Case], work: &std::path::Path, go: Option<&G
             }
             eprintln!("ran postgres-go in {:.1} s", started.elapsed().as_secs_f64());
         }
-        None => eprintln!("SKIP: the Go runner is not built; postgres-go is not run"),
+        None => skip("the Go runner is not built; postgres-go is not run"),
     }
     // every balance is what its entries add up to
     for c in cases {
         let s = chobo::postgres::ident(&c.copy.name);
-        let off = pg.sql(&format!(
+        let off = pg.exec(&format!(
             "select count(*) from {s}.accounts a left join (select tenant, account, sum(d_posted) p, sum(d_held_in) i, sum(d_held_out) o from {s}.entries group by tenant, account) e on e.tenant = a.tenant and e.account = a.id where a.posted <> coalesce(e.p, 0) or a.held_in <> coalesce(e.i, 0) or a.held_out <> coalesce(e.o, 0)"
         ));
         if off.trim() != "0" {
@@ -138,7 +138,7 @@ fn tigerbeetle(tb: &TigerBeetle, cases: &[Case], work: &std::path::Path, go: Opt
             }
             eprintln!("ran tigerbeetle-typescript in {:.1} s", started.elapsed().as_secs_f64());
         }
-        Err(why) => eprintln!("SKIP: {why}; tigerbeetle-typescript is not run"),
+        Err(why) => skip(&format!("{why}; tigerbeetle-typescript is not run")),
     }
     match python() {
         Ok(py) => {
@@ -153,7 +153,7 @@ fn tigerbeetle(tb: &TigerBeetle, cases: &[Case], work: &std::path::Path, go: Opt
             }
             eprintln!("ran tigerbeetle-python in {:.1} s", started.elapsed().as_secs_f64());
         }
-        Err(why) => eprintln!("SKIP: {why}; tigerbeetle-python is not run"),
+        Err(why) => skip(&format!("{why}; tigerbeetle-python is not run")),
     }
     match go {
         Some(g) => {
@@ -165,19 +165,22 @@ fn tigerbeetle(tb: &TigerBeetle, cases: &[Case], work: &std::path::Path, go: Opt
             }
             eprintln!("ran tigerbeetle-go in {:.1} s", started.elapsed().as_secs_f64());
         }
-        None => eprintln!("SKIP: the Go runner is not built; tigerbeetle-go is not run"),
+        None => skip("the Go runner is not built; tigerbeetle-go is not run"),
     }
 }
 
 #[test]
 fn every_scenario_matches_on_every_target() {
+    if !need(Need::Postgres) || !need(Need::TigerBeetle) {
+        return;
+    }
     let started = Instant::now();
     let cases = cases();
     let work = TempDir::new("backends");
     let go = match go() {
         Ok(()) => Some(build_go(&cases, work.path()).unwrap_or_else(|e| panic!("{e}"))),
         Err(why) => {
-            eprintln!("SKIP: {why}; the Go clients are not run");
+            skip(&format!("{why}; the Go clients are not run"));
             None
         }
     };
@@ -188,11 +191,11 @@ fn every_scenario_matches_on_every_target() {
     std::thread::scope(|s| {
         s.spawn(|| match &tb {
             Ok(tb) => tigerbeetle(tb, &cases, work.path(), go.as_ref(), &mut tb_failures),
-            Err(why) => eprintln!("SKIP: {why}; no TigerBeetle target is run"),
+            Err(why) => skip(&format!("{why}; no TigerBeetle target is run")),
         });
         match &pg {
             Ok(pg) => postgres(pg, &cases, work.path(), go.as_ref(), &mut failures),
-            Err(why) => eprintln!("SKIP: {why}; no PostgreSQL target is run"),
+            Err(why) => skip(&format!("{why}; no PostgreSQL target is run")),
         }
     });
     failures.extend(tb_failures);

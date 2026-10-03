@@ -55,7 +55,7 @@ transfer 移し替え(伝票: string, 元: string, 先: string, 数: 個)
 
 fn book() -> Book {
     let (b, d) = chobo::model::load(BOOK);
-    assert!(d.is_empty(), "{:?}", d.iter().map(|x| x.msg.en.clone()).collect::<Vec<_>>());
+    assert!(d.is_empty(), "{:?}", d.iter().map(|x| x.message.en.clone()).collect::<Vec<_>>());
     b.unwrap()
 }
 

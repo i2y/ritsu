@@ -7,34 +7,16 @@ use crate::postgres;
 const TB_RUNTIME: &str = include_str!("runtime/tigerbeetle.py");
 const PG_RUNTIME: &str = include_str!("runtime/postgres.py");
 
-const KEYWORDS: &[&str] = &[
-    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for",
-    "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield",
-];
+use ritsu_emit::words::python::KEYWORDS;
 
 /// A name of the book as Python can take it: a keyword, or a name the method's body uses itself,
 /// gets `_` after it.
 pub fn name(s: &str) -> String {
-    if KEYWORDS.contains(&s) || ["self", "_str", "_amt", "_amounts"].contains(&s) { format!("{s}_") } else { s.to_string() }
+    ritsu_emit::ident::aside(s, |w| KEYWORDS.contains(&w) || ["self", "_str", "_amt", "_amounts"].contains(&w))
 }
 
 /// A string as a Python literal, in single quotes.
-fn q(s: &str) -> String {
-    let mut o = String::from("'");
-    for c in s.chars() {
-        match c {
-            '\\' => o.push_str("\\\\"),
-            '\'' => o.push_str("\\'"),
-            '\n' => o.push_str("\\n"),
-            '\r' => o.push_str("\\r"),
-            '\t' => o.push_str("\\t"),
-            c if (c as u32) < 0x20 => o.push_str(&format!("\\x{:02x}", c as u32)),
-            c => o.push(c),
-        }
-    }
-    o.push('\'');
-    o
-}
+use ritsu_emit::lit::python as q;
 
 /// The attributes of the book value, one per transfer kind, kept apart from `balance` and
 /// `expire` (the PostgreSQL client's), so that the two clients name them alike.

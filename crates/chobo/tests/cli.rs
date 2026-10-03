@@ -106,7 +106,7 @@ fn each_command_runs() {
     let (code, out, _) = run(&["check", b, "--format", "json"]);
     assert_eq!(code, 0);
     let v: Value = serde_json::from_str(&out).unwrap();
-    assert_eq!(v["v"], 1);
+    assert_eq!(v["v"], 2);
     assert!(v["files"][0]["report"].as_array().unwrap().iter().any(|r| r["kind"] == "引当" && r["op"] == "hold"));
 
     let dir = tmp.path().join("sc");

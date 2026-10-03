@@ -6,19 +6,17 @@
 //! Mermaid 11 and 12 in headless Chrome; and in Chrome, a page shows the balances its data says,
 //! and lights up the transfers each step called.
 //!
-//! Mermaid is in tools/mermaid (`npm ci --prefix tools/mermaid`); Chrome is `CHOBO_CHROME`, else
-//! Google Chrome where macOS keeps it, else `google-chrome` or `chromium` on the PATH. A test that
-//! cannot find them says so and skips; read the skip lines. `CHOBO_BLESS=1` rewrites the golden
-//! files and the examples' pages.
+//! Mermaid is in tools/mermaid (`npm ci --prefix tools/mermaid`); Chrome is found by ritsu-testkit
+//! (`RITSU_CHROME` or `CHOBO_CHROME`, else Google Chrome where macOS keeps it, else `google-chrome`
+//! or `chromium` on the PATH). A test that cannot find them says so and skips; read the skip lines.
+//! `CHOBO_BLESS=1` (or `RITSU_BLESS=1`) rewrites the golden files and the examples' pages.
 
 mod common;
-use chobo::diag::Lang;
+use ritsu_base::text::Lang;
 use chobo::scenario;
 use common::*;
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::io::Read;
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 fn rel(p: &Path) -> String {
@@ -178,111 +176,43 @@ fn every_step_shows_what_the_interpreter_left() {
 
 // ── in a browser ──────────────────────────────────────────────────────────
 
-fn chrome() -> Option<String> {
-    if let Ok(c) = std::env::var("CHOBO_CHROME") {
-        // named, and there: a Chrome that is named but not there is not found either
-        return Path::new(&c).is_file().then_some(c);
-    }
-    let mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-    if Path::new(mac).exists() {
-        return Some(mac.into());
-    }
-    ["google-chrome", "chromium", "chromium-browser"].iter().find(|c| Command::new(c).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)).map(|c| c.to_string())
-}
-
-/// The DOM of a page after its scripts ran, as headless Chrome dumps it. Chrome is stopped as
-/// soon as the page is out: it can take a long while to quit by itself.
-fn dump_dom(chrome: &str, url: &str, profile: &Path) -> String {
-    let mut child = Command::new(chrome)
-        .args(["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--allow-file-access-from-files", "--virtual-time-budget=20000"])
-        .arg(format!("--user-data-dir={}", profile.display()))
-        .args(["--dump-dom", url])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("could not run chrome");
-    let mut out = child.stdout.take().unwrap();
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut all = Vec::new();
-        let mut buf = [0u8; 65536];
-        loop {
-            match out.read(&mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    all.extend_from_slice(&buf[..n]);
-                    if all.windows(7).any(|w| w == b"</html>") {
-                        break;
-                    }
-                }
-            }
-        }
-        let _ = tx.send(all);
-    });
-    let got = rx.recv_timeout(Duration::from_secs(90)).unwrap_or_default();
-    let _ = child.kill();
-    let _ = child.wait();
-    String::from_utf8_lossy(&got).into_owned()
-}
-
-/// The Mermaid charts of a Markdown page.
-fn charts(text: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut open: Option<String> = None;
-    for line in text.lines() {
-        match (&mut open, line) {
-            (None, "```mermaid") => open = Some(String::new()),
-            (Some(c), "```") => {
-                out.push(std::mem::take(c));
-                open = None;
-            }
-            (Some(c), l) => {
-                c.push_str(l);
-                c.push('\n');
-            }
-            (None, _) => {}
-        }
-    }
-    out
+/// The DOM of a page after its scripts ran, as headless Chrome dumps it (ritsu-testkit stops Chrome
+/// as soon as the page is out: it can take a long while to quit by itself).
+fn dump_dom(chrome: &Path, url: &str) -> String {
+    ritsu_testkit::chrome::dump_dom(chrome, url, 20000, Duration::from_secs(90))
 }
 
 #[test]
 fn every_mermaid_chart_draws() {
-    if bless() {
-        eprintln!("SKIP: the golden files are being rewritten; run this test again without CHOBO_BLESS");
+    if !need(Need::Mermaid) {
         return;
     }
-    let Some(chrome) = chrome() else {
-        eprintln!("SKIP: Chrome is not found; set CHOBO_CHROME to its binary to run this test");
+    if bless() {
+        skip("the golden files are being rewritten; run this test again without CHOBO_BLESS");
+        return;
+    }
+    let Some(chrome) = ritsu_testkit::chrome::find() else {
+        skip("Chrome is not found; set RITSU_CHROME (or CHOBO_CHROME) to its binary to run this test");
         return;
     };
-    let mm = root().join("tools/mermaid/node_modules");
-    if !mm.join("mermaid-11/dist/mermaid.min.js").exists() || !mm.join("mermaid-12/dist/mermaid.min.js").exists() {
-        eprintln!("SKIP: tools/mermaid/node_modules is missing; run `npm ci --prefix tools/mermaid`");
-        return;
-    }
+    let scripts = match ritsu_testkit::mermaid::scripts(&root().join("tools/mermaid/node_modules")) {
+        Ok(s) => s,
+        Err(why) => {
+            skip(&why);
+            return;
+        }
+    };
     let mut all: Vec<(String, String)> = Vec::new();
     for p in pages() {
-        for (k, c) in charts(&std::fs::read_to_string(&p.md).unwrap()).into_iter().enumerate() {
+        for (k, c) in ritsu_testkit::mermaid::charts(&std::fs::read_to_string(&p.md).unwrap()).into_iter().enumerate() {
             all.push((format!("{} #{}", rel(&p.md), k + 1), c));
         }
     }
     assert!(all.len() > 30, "only {} charts", all.len());
-    let work = TempDir::new("mermaid");
-    let sources: Vec<&String> = all.iter().map(|(_, c)| c).collect();
-    for major in ["11", "12"] {
-        let script = mm.join(format!("mermaid-{major}/dist/mermaid.min.js"));
-        let page = format!(
-            "<!doctype html><html><head><meta charset=\"utf-8\"><script src=\"file://{}\"></script></head><body><pre id=\"out\">not run</pre><script>\nconst charts = {};\nmermaid.initialize({{ startOnLoad: false, securityLevel: 'strict' }});\n(async () => {{ const out = []; for (let k = 0; k < charts.length; k++) {{ try {{ await mermaid.render('c' + k, charts[k]); out.push('ok'); }} catch (e) {{ out.push('error: ' + String(e && e.message || e).split('\\n').join(' ')); }} }} document.getElementById('out').textContent = out.join('\\n'); }})();\n</script></body></html>",
-            script.display(),
-            serde_json::to_string(&sources).unwrap().replace("</", "<\\/")
-        );
-        let at = work.path().join(format!("mermaid-{major}.html"));
-        std::fs::write(&at, page).unwrap();
-        let dom = dump_dom(&chrome, &format!("file://{}", at.display()), &work.path().join(format!("profile-{major}")));
-        let body = dom.split("<pre id=\"out\">").nth(1).and_then(|r| r.split("</pre>").next()).unwrap_or("");
-        let results: Vec<&str> = body.lines().collect();
-        assert_eq!(results.len(), all.len(), "Mermaid {major} drew {} of {} charts: {body}", results.len(), all.len());
+    let sources: Vec<String> = all.iter().map(|(_, c)| c.clone()).collect();
+    for (major, script) in scripts {
+        let results = ritsu_testkit::mermaid::draw(&chrome, &script, &sources).unwrap_or_default();
+        assert_eq!(results.len(), all.len(), "Mermaid {major} drew {} of {} charts", results.len(), all.len());
         let failed: Vec<String> = results.iter().zip(&all).filter(|(r, _)| **r != "ok").map(|(r, (name, _))| format!("{name}: {r}")).collect();
         assert!(failed.is_empty(), "Mermaid {major} could not draw:\n{}", failed.join("\n"));
         eprintln!("compared: Mermaid {major} drew all {} charts", all.len());
@@ -317,15 +247,17 @@ fn lit(dom: &str) -> (BTreeSet<String>, BTreeSet<String>) {
 
 #[test]
 fn a_page_shows_what_its_data_says() {
-    if bless() {
-        eprintln!("SKIP: the golden files are being rewritten; run this test again without CHOBO_BLESS");
+    if !need(Need::Chrome) {
         return;
     }
-    let Some(chrome) = chrome() else {
-        eprintln!("SKIP: Chrome is not found; set CHOBO_CHROME to its binary to run this test");
+    if bless() {
+        skip("the golden files are being rewritten; run this test again without CHOBO_BLESS");
+        return;
+    }
+    let Some(chrome) = ritsu_testkit::chrome::find() else {
+        skip("Chrome is not found; set RITSU_CHROME (or CHOBO_CHROME) to its binary to run this test");
         return;
     };
-    let work = TempDir::new("page");
     let mut looked = 0;
     let started = Instant::now();
     for stem in ["marketplace", "refunds.ja"] {
@@ -341,7 +273,7 @@ fn a_page_shows_what_its_data_says() {
             let steps = outs[o].as_array().unwrap();
             for step in [0, steps.len()] {
                 let url = format!("file://{}#scenario={}&step={step}&outcome={}", page.display(), k + 1, o + 1);
-                let dom = dump_dom(&chrome, &url, &work.path().join(format!("profile-{looked}")));
+                let dom = dump_dom(&chrome, &url);
                 let want: Vec<Vec<String>> = s["accounts"]
                     .as_array()
                     .unwrap()
