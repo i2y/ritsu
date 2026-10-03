@@ -3,60 +3,14 @@
 //! undocumented. An unknown flag, a value outside a closed set, a flag without its value and a
 //! flag given twice all stop the run with exit 2: an agent that is told nothing believes the flag
 //! worked (koyomi's and chobo's `cli.rs` work the same way).
+//! The table is sakai's; how it is drawn and read is ritsu-base's ([`ritsu_base::cli`]).
 
-use crate::i18n::{Lang, Text, pad, width};
+use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
 
-pub struct Flag {
-    pub name: &'static str,
-    /// The placeholder of the value; None for a flag that takes none.
-    pub value: Option<&'static str>,
-    /// The values taken, when the set is closed.
-    pub choices: &'static [&'static str],
-    pub default: Option<String>,
-    pub help: Text,
-}
-
-fn flag(name: &'static str, value: Option<&'static str>, help: Text) -> Flag {
-    Flag { name, value, choices: &[], default: None, help }
-}
-
-impl Flag {
-    fn choices(mut self, c: &'static [&'static str]) -> Flag {
-        self.choices = c;
-        self
-    }
-
-    fn default(mut self, d: impl Into<String>) -> Flag {
-        self.default = Some(d.into());
-        self
-    }
-
-    pub fn spelled(&self) -> String {
-        match self.value {
-            Some(v) => format!("{} {v}", self.name),
-            None => self.name.to_string(),
-        }
-    }
-}
-
-pub struct Cmd {
-    pub name: &'static str,
-    pub args: &'static str,
-    pub purpose: Text,
-    pub params: Vec<(&'static str, Text)>,
-    pub flags: Vec<Flag>,
-    pub exits: Vec<(u8, Text)>,
-    pub examples: Vec<&'static str>,
-    pub codes: Vec<&'static str>,
-}
+pub use ritsu_base::cli::Args;
 
 pub fn global_flags() -> Vec<Flag> {
-    vec![
-        flag("--lang", Some("ja|en"), tr!("文面の言語。無ければ環境変数 SAKAI_LANG、それも無ければ en", "the language of the text; else the SAKAI_LANG environment variable, else en"))
-            .choices(&["ja", "en"])
-            .default("en"),
-        flag("--help", None, tr!("この画面を出す", "print this page")),
-    ]
+    vec![lang_flag("SAKAI_LANG"), help_flag()]
 }
 
 fn root_flag() -> Flag {
@@ -71,12 +25,13 @@ fn root_flag() -> Flag {
 }
 
 fn check_codes() -> Vec<&'static str> {
-    crate::codes::ledger().iter().filter(|e| e.implemented() && !e.code.starts_with("E5")).map(|e| e.code).collect()
+    crate::codes::ledger().entries.iter().filter(|e| crate::codes::implemented(e) && !e.code.starts_with("E5")).map(|e| e.code).collect()
 }
 
 pub fn commands() -> Vec<Cmd> {
     vec![
         Cmd {
+            usage: None,
             name: "check",
             args: "<map.ctx|dir>...",
             purpose: tr!(
@@ -100,6 +55,7 @@ pub fn commands() -> Vec<Cmd> {
             codes: check_codes(),
         },
         Cmd {
+            usage: None,
             name: "build",
             args: "<map.ctx>",
             purpose: tr!(
@@ -129,6 +85,7 @@ pub fn commands() -> Vec<Cmd> {
             codes: vec!["E501", "E502"],
         },
         Cmd {
+            usage: None,
             name: "export",
             args: "cml <map.ctx>",
             purpose: tr!("地図を Context Mapper の CML に書き出す", "write the map as Context Mapper's CML"),
@@ -146,6 +103,7 @@ pub fn commands() -> Vec<Cmd> {
             codes: vec![],
         },
         Cmd {
+            usage: None,
             name: "api",
             args: "<map.ctx>",
             purpose: tr!(
@@ -163,6 +121,7 @@ pub fn commands() -> Vec<Cmd> {
             codes: vec![],
         },
         Cmd {
+            usage: None,
             name: "explain",
             args: "<CODE>",
             purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look a diagnostic code up: when it comes, how to fix it, the smallest reproduction"),
@@ -178,153 +137,25 @@ pub fn commands() -> Vec<Cmd> {
     ]
 }
 
-fn usage_line(c: &Cmd) -> String {
-    let mut o = format!("sakai {} {}", c.name, c.args).trim_end().to_string();
-    for f in &c.flags {
-        o.push_str(&format!(" [{}]", f.spelled()));
+/// The whole table: the commands, the flags every command takes, and the lines at the end of
+/// `sakai --help`. A flag's value never starts with `--`: `--root --format` misses its value.
+pub fn table() -> Table {
+    Table {
+        tool: "sakai",
+        version: env!("CARGO_PKG_VERSION"),
+        summary: tr!(
+            "境界づけられたコンテキストと、そのあいだの関係を書く小さな言語。コンテキストマップのうち、成果物と突き合わせられる部分だけを書き、確かめる。",
+            "A small language for bounded contexts and the relationships between them: the part of a context map that can be checked against the artifacts, and checked."
+        ),
+        globals: global_flags(),
+        commands: commands(),
+        footer: vec![
+            tr!(
+                "どのコマンドにも --lang ja|en を付けられます（既定は en。環境変数 SAKAI_LANG か RITSU_LANG でも指定できます）。",
+                "Every command takes --lang ja|en (default en; the SAKAI_LANG or RITSU_LANG environment variable works too)."
+            ),
+            tr!("exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル", "Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read"),
+        ],
+        reading: Reading { no_dashes_in_values: true, ..Reading::default() },
     }
-    o
-}
-
-/// `sakai <cmd> --help` and `sakai help <cmd>`.
-pub fn help_cmd(c: &Cmd, lang: Lang) -> String {
-    let t = |x: Text| x.get(lang).to_string();
-    let mut o = format!("sakai {} — {}\n\n", c.name, c.purpose.get(lang));
-    o.push_str(&t(tr!("使い方:\n", "Usage:\n")));
-    o.push_str(&format!("  {}\n", usage_line(c)));
-    if !c.params.is_empty() {
-        o.push_str(&t(tr!("\n引数:\n", "\nArguments:\n")));
-        let w = c.params.iter().map(|(n, _)| width(n)).max().unwrap_or(0);
-        for (n, h) in &c.params {
-            o.push_str(&format!("  {}  {}\n", pad(n, w), h.get(lang)));
-        }
-    }
-    o.push_str(&t(tr!("\nフラグ:\n", "\nFlags:\n")));
-    let globals = global_flags();
-    let flags: Vec<&Flag> = c.flags.iter().chain(globals.iter()).collect();
-    let w = flags.iter().map(|f| width(&f.spelled())).max().unwrap_or(0);
-    for f in &flags {
-        let d = match &f.default {
-            Some(d) => t(tr!("（既定 {d}）", " (default {d})")),
-            None => String::new(),
-        };
-        o.push_str(&format!("  {}  {}{d}\n", pad(&f.spelled(), w), f.help.get(lang)));
-    }
-    o.push_str(&t(tr!("\nexit code:\n", "\nExit codes:\n")));
-    for (n, h) in &c.exits {
-        o.push_str(&format!("  {n}  {}\n", h.get(lang)));
-    }
-    o.push_str(&t(tr!("\n例:\n", "\nExamples:\n")));
-    for e in &c.examples {
-        o.push_str(&format!("  $ {e}\n"));
-    }
-    if !c.codes.is_empty() {
-        o.push_str(&t(tr!("\n出しうる診断（`sakai explain <CODE>` が引きます）:\n  ", "\nDiagnostics it can print (`sakai explain <CODE>` looks one up):\n  ")));
-        o.push_str(&c.codes.join(" "));
-        o.push('\n');
-    }
-    o
-}
-
-/// `sakai --help`.
-pub fn help_all(lang: Lang) -> String {
-    let t = |x: Text| x.get(lang).to_string();
-    let cs = commands();
-    let mut o = format!("sakai {}\n\n", env!("CARGO_PKG_VERSION"));
-    o.push_str(&t(tr!(
-        "境界づけられたコンテキストと、そのあいだの関係を書く小さな言語。コンテキストマップのうち、成果物と突き合わせられる部分だけを書き、確かめる。\n\n",
-        "A small language for bounded contexts and the relationships between them: the part of a context map that can be checked against the artifacts, and checked.\n\n"
-    )));
-    o.push_str(&t(tr!("使い方:\n", "Usage:\n")));
-    let w = cs.iter().map(|c| width(&format!("{} {}", c.name, c.args))).max().unwrap_or(0);
-    for c in &cs {
-        o.push_str(&format!("  sakai {}  {}\n", pad(&format!("{} {}", c.name, c.args), w), c.purpose.get(lang)));
-    }
-    o.push_str(&t(tr!(
-        "\n一つのコマンドの詳しい説明は `sakai <cmd> --help`（`sakai help <cmd>` も同じ）。\n",
-        "\nFor one command in detail: `sakai <cmd> --help` (`sakai help <cmd>` is the same page).\n"
-    )));
-    o.push_str(&t(tr!(
-        "どのコマンドにも --lang ja|en を付けられます（既定は en。環境変数 SAKAI_LANG でも指定できます）。\n",
-        "Every command takes --lang ja|en (default en; the SAKAI_LANG environment variable works too).\n"
-    )));
-    o.push_str(&t(tr!(
-        "exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル\n",
-        "Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read\n"
-    )));
-    o
-}
-
-/// What one command line said.
-pub struct Args {
-    pub got: Vec<(&'static str, String)>,
-    pub pos: Vec<String>,
-}
-
-impl Args {
-    pub fn has(&self, n: &str) -> bool {
-        self.got.iter().any(|(k, _)| *k == n)
-    }
-
-    pub fn get(&self, n: &str) -> Option<&str> {
-        self.got.iter().find(|(k, _)| *k == n).map(|(_, v)| v.as_str())
-    }
-}
-
-/// Read a command line against the command's flags.
-pub fn parse(c: &Cmd, argv: &[String]) -> Result<Args, Text> {
-    let globals = global_flags();
-    let find = |name: &str| c.flags.iter().chain(globals.iter()).find(|f| f.name == name);
-    let mut out = Args { got: Vec::new(), pos: Vec::new() };
-    let mut i = 0;
-    while i < argv.len() {
-        let a = &argv[i];
-        if a == "-h" {
-            out.got.push(("--help", String::new()));
-            i += 1;
-            continue;
-        }
-        if !a.starts_with('-') || a == "-" {
-            out.pos.push(a.clone());
-            i += 1;
-            continue;
-        }
-        let (name, inline) = match a.split_once('=') {
-            Some((k, v)) => (k.to_string(), Some(v.to_string())),
-            None => (a.clone(), None),
-        };
-        let Some(f) = find(&name) else {
-            let cmd = c.name;
-            return Err(tr!("知らないフラグ `{name}` です。`sakai {cmd} --help` を読んでください", "unknown flag `{name}`; run `sakai {cmd} --help`"));
-        };
-        let v = match (f.value, inline) {
-            (None, Some(v)) => {
-                let n = f.name;
-                return Err(tr!("`{n}` は値を取りません（`={v}` が付いています）", "`{n}` takes no value (it was given `={v}`)"));
-            }
-            (None, None) => String::new(),
-            (Some(_), Some(v)) => v,
-            (Some(_), None) => {
-                i += 1;
-                match argv.get(i) {
-                    Some(v) if !v.starts_with("--") => v.clone(),
-                    _ => {
-                        let s = f.spelled();
-                        return Err(tr!("`{s}` に値がありません", "`{s}` is missing its value"));
-                    }
-                }
-            }
-        };
-        if !f.choices.is_empty() && !f.choices.contains(&v.as_str()) {
-            let (n, cs) = (f.name, f.choices.join(" | "));
-            return Err(tr!("`{n} {v}` は知らない値です。書けるのは {cs} だけです", "`{n} {v}` is not a value this flag takes; it takes only {cs}"));
-        }
-        if out.has(f.name) {
-            let n = f.name;
-            return Err(tr!("`{n}` が二度書かれています", "`{n}` is given twice"));
-        }
-        out.got.push((f.name, v));
-        i += 1;
-    }
-    Ok(out)
 }

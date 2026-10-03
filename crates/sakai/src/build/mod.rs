@@ -10,8 +10,8 @@ pub mod go_arch_lint;
 pub mod import_linter;
 
 use crate::check::{self, Checked, Outcome};
-use crate::diag::Diag;
-use crate::i18n::{Lang, Text, say};
+use crate::diag::{self, Diag};
+use ritsu_base::text::{Lang, Text, spaced};
 use crate::model::Model;
 use crate::paths;
 use areas::{Areas, Language};
@@ -125,7 +125,7 @@ fn default_dir(c: &Checked, a: &Areas, target: Target) -> Result<String, Box<Dia
     let code = m.map.code.iter().find(|x| x.language == "java").expect("the areas of java have a code line");
     code.test.clone().ok_or_else(|| {
         let line = m.map.ast.code.iter().find(|x| x.language == "java").map(|x| x.pos).unwrap_or_default();
-        Box::new(Diag::at("E501", &m.map.file, line.line, line.col, tr!("`code java` に `test` の行がありません", "The `code java` line has no `test` line under it")).source(&m.map.src).note(tr!(
+        Box::new(diag::at("E501", &m.map.file, line.line, line.col, tr!("`code java` に `test` の行がありません", "The `code java` line has no `test` line under it")).source(&m.map.src).note(tr!(
             "ArchUnit の規則は JUnit のテストとして書くので、テストの置き場所を `  test \"<パス>\"` で書きます（`--out` で替えることもできます）。",
             "The rules of ArchUnit are a JUnit test, written where the tests are: write it with `  test \"<path>\"` under the line (or give `--out`)."
         )))
@@ -153,7 +153,7 @@ pub fn run(root: &Path, map: &str, target: Target, out: Option<&Path>, check_onl
         let m = &c.model;
         let line = m.map.ast.code.iter().find(|x| x.language == "python").map(|x| x.pos).unwrap_or_default();
         let sf = paths::shown(&paths::join(&a.dir, f).unwrap_or_default());
-        o.diags.push(Diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} は Python の置き場所の直下のモジュールで、import-linter が読めません", "The module {sf} is right in the place of the Python code, where import-linter cannot read it")).source(&m.map.src).note(tr!(
+        o.diags.push(diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} は Python の置き場所の直下のモジュールで、import-linter が読めません", "The module {sf} is right in the place of the Python code, where import-linter cannot read it")).source(&m.map.src).note(tr!(
             "import-linter（grimp）はパッケージだけをルートとして読みます。モジュールをパッケージのディレクトリに入れるか、`code python` に、パッケージを持つディレクトリを書きます。",
             "Only packages can be the roots import-linter (grimp) reads: put the module in a package's directory, or make `code python` the directory that holds the packages."
         )));
@@ -166,7 +166,7 @@ pub fn run(root: &Path, map: &str, target: Target, out: Option<&Path>, check_onl
         let m = &c.model;
         let line = m.map.ast.code.iter().find(|x| x.language == "java").map(|x| x.pos).unwrap_or_default();
         let sf = paths::shown(&paths::join(&a.dir, f).unwrap_or_default());
-        o.diags.push(Diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} はデフォルトパッケージのクラスで、ArchUnit の規則に書けません", "The class {sf} is in the default package, which no ArchUnit rule can name")).source(&m.map.src).note(tr!(
+        o.diags.push(diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} はデフォルトパッケージのクラスで、ArchUnit の規則に書けません", "The class {sf} is in the default package, which no ArchUnit rule can name")).source(&m.map.src).note(tr!(
             "ArchUnit の規則は、まとまりをパッケージで書きます。クラスに `package` を書き、そのディレクトリに置きます。",
             "The rules of ArchUnit name a group by its packages: give the class a `package`, and put it in that directory."
         )));
@@ -176,7 +176,7 @@ pub fn run(root: &Path, map: &str, target: Target, out: Option<&Path>, check_onl
         let m = &c.model;
         let line = m.map.ast.code.iter().find(|x| x.language == "go").map(|x| x.pos).unwrap_or_default();
         let d = paths::shown(&a.dir);
-        o.diags.push(Diag::at("E501", &m.map.file, line.line, line.col, tr!("{d} に go.mod がありません", "There is no go.mod in {d}")).source(&m.map.src).note(tr!(
+        o.diags.push(diag::at("E501", &m.map.file, line.line, line.col, tr!("{d} に go.mod がありません", "There is no go.mod in {d}")).source(&m.map.src).note(tr!(
             "go-arch-lint は、go.mod のあるディレクトリをモジュールのルートとして読みます。`code go` には go.mod のあるディレクトリを書きます。",
             "go-arch-lint reads the directory with go.mod as the module's root: write that directory in `code go`."
         )));
@@ -228,11 +228,11 @@ fn stale(target: Target, root: &Path, file: &Path, old: Option<&str>, new: &str,
     let f = paths::shown(&at);
     let t = target.word();
     let Some(old) = old else {
-        return Diag::file("E502", &at, tr!("{f} がありません", "The settings file {f} is not there")).note(tr!("`sakai build --target {t}` で書きます。", "Write it with `sakai build --target {t}`."));
+        return diag::whole("E502", &at, tr!("{f} がありません", "The settings file {f} is not there")).note(tr!("`sakai build --target {t}` で書きます。", "Write it with `sakai build --target {t}`."));
     };
     let (ol, nl): (Vec<&str>, Vec<&str>) = (old.lines().collect(), new.lines().collect());
     let i = (0..ol.len().max(nl.len())).find(|&i| ol.get(i) != nl.get(i)).unwrap_or(0);
-    let mut d = Diag::at("E502", &at, i + 1, 1, tr!("{f} が、いまの地図から書く設定と違います", "The settings file {f} differs from what the map writes now")).source(old);
+    let mut d = diag::at("E502", &at, i + 1, 1, tr!("{f} が、いまの地図から書く設定と違います", "The settings file {f} differs from what the map writes now")).source(old);
     match nl.get(i) {
         Some(l) => {
             let l = l.trim();
@@ -252,5 +252,5 @@ fn stale(target: Target, root: &Path, file: &Path, old: Option<&str>, new: &str,
 /// What `build` prints after the diagnostics: the file, from where sakai runs, and what was done.
 pub fn render_done(root: &Path, done: &(PathBuf, Text), lang: Lang) -> String {
     let f = paths::shown(&diag_path(root, &done.0));
-    format!("{f}: {}\n", say(&done.1, lang))
+    format!("{f}: {}\n", spaced(&done.1, lang))
 }

@@ -9,7 +9,7 @@
 mod common;
 
 use sakai::check::{check_args, render, to_json};
-use sakai::i18n::Lang;
+use ritsu_base::text::Lang;
 
 #[test]
 fn every_mutant_gives_its_code_and_says_what_its_golden_files_say() {
@@ -62,7 +62,7 @@ fn the_json_of_a_diagnostic() {
     for lang in [Lang::En, Lang::Ja] {
         let v = to_json(&os[0], lang);
         let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
-        assert_eq!(keys, ["file", "ok", "summary", "diagnostics"]);
+        assert_eq!(keys, ["root", "file", "ok", "summary", "diagnostics"]);
         let d = &v["diagnostics"][0];
         let keys: Vec<&String> = d.as_object().unwrap().keys().collect();
         assert_eq!(keys, ["code", "severity", "file", "line", "col", "message", "notes", "references", "fix"]);

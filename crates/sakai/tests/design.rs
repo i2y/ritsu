@@ -45,7 +45,7 @@ fn every_command_in_design_prints_what_design_shows() {
         }
         for (cmd, want) in runs {
             let args: Vec<&str> = cmd.split_whitespace().skip(1).collect();
-            let o = Command::new(env!("CARGO_BIN_EXE_sakai")).args(&args).env_remove("SAKAI_LANG").output().unwrap();
+            let o = Command::new(env!("CARGO_BIN_EXE_sakai")).args(&args).env_remove("SAKAI_LANG").env_remove("RITSU_LANG").output().unwrap();
             let got = String::from_utf8_lossy(&o.stdout).to_string();
             if got != want {
                 failures.push(format!("$ {cmd}\n--- DESIGN.md shows\n{want}--- it prints\n{got}"));
@@ -104,7 +104,7 @@ fn the_name_design_shows_in_json_is_the_name_it_spells() {
     for (_, b) in blocks().iter().filter(|(info, b)| info == "json" && b.starts_with("{\"text\"")) {
         let v: serde_json::Value = serde_json::from_str(b.trim()).unwrap();
         let name = sakai::naming::parse(v["text"].as_str().unwrap(), ".").unwrap();
-        assert_eq!(serde_json::to_string(&name.to_json()).unwrap(), b.trim());
+        assert_eq!(name.to_json().compact(), b.trim());
         n += 1;
     }
     assert!(n >= 1);

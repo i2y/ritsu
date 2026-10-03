@@ -127,6 +127,9 @@ version = "0.22.1"
 name = "sakai"
 version = "0.1.0"
 dependencies = [
+ "ritsu-base",
+ "ritsu-proto",
+ "ritsu-testkit",
  "serde_json",
 ]
 

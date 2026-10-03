@@ -3,13 +3,13 @@
 //! E313 the owners, and E308 the bytes of the shared kernel's copies.
 
 use crate::ast::{Pos, Role};
-use crate::diag::{Diag, Ref};
-use crate::i18n::Text;
+use crate::diag::{self, Diag, Ref};
+use ritsu_base::text::Text;
 use crate::model::{Model, Own, Rel, RelK};
 use crate::owners::{self, Artifact};
 use crate::paths;
 use crate::proto::Protos;
-use crate::sha256;
+use ritsu_base::sha256;
 
 struct P<'a> {
     m: &'a Model,
@@ -19,7 +19,7 @@ struct P<'a> {
 impl P<'_> {
     fn at(&mut self, c: usize, p: Pos, code: &'static str, msg: Text) -> &mut Diag {
         let cx = &self.m.contexts[c];
-        self.diags.push(Diag::at(code, &cx.file, p.line, p.col, msg).source(&cx.src));
+        self.diags.push(diag::at(code, &cx.file, p.line, p.col, msg).source(&cx.src));
         self.diags.last_mut().unwrap()
     }
 
@@ -181,7 +181,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact]) -> Vec<Diag> {
                     if has(Role::Customer) && !m.writes(r.partner, ci, |k| matches!(k, RelK::Downstream)) {
                         let d = p.at(ci, r.pos, "E303", tr!("「{me}」は「{pn}」の顧客だと書いていますが、「{pn}」の側に `downstream {me} supplier` がありません", "{me} says it is {pn}'s customer, and {pn} has no `downstream {me} supplier`"));
                         d.notes.push(tr!("顧客／供給者は二つのチームの合意なので、両方のファイルに書きます。", "Customer and supplier is an agreement of two teams, written in both files."));
-                        d.fix = Some(format!("downstream {me} supplier"));
+                        d.fix = Some(ritsu_base::diag::Fix::Line(format!("downstream {me} supplier")));
                     }
                 }
                 RelK::Downstream => {
@@ -200,7 +200,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact]) -> Vec<Diag> {
                     if !m.writes(r.partner, ci, |k| matches!(k, RelK::Partnership)) {
                         let d = p.at(ci, r.pos, "E309", tr!("パートナーシップが「{me}」の側にしか書かれていません", "The partnership is written on {me}'s side only"));
                         d.notes.push(tr!("パートナーシップは二つのチームの合意なので、「{pn}」のファイルにも `partnership with {me}` を書きます。", "A partnership is an agreement of two teams; write `partnership with {me}` in {pn}'s file too."));
-                        d.fix = Some(format!("partnership with {me}"));
+                        d.fix = Some(ritsu_base::diag::Fix::Line(format!("partnership with {me}")));
                     }
                 }
                 RelK::Separate => {
@@ -232,7 +232,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact]) -> Vec<Diag> {
                         "共有カーネルは二つのチームが一緒に持つものなので、「{pn}」のファイルにも `shared kernel with {me}` を書き、同じものを並べます。",
                         "A shared kernel is held by two teams together; write `shared kernel with {me}` in {pn}'s file too, with the same entries."
                     ));
-                    d.refs.push(r);
+                    d.extra.0.push(r);
                 }
                 (Some((ra, la)), Some((rb, lb))) if a < b => {
                     let pa: Vec<&str> = la.iter().map(|o| o.path.as_str()).collect();
@@ -284,8 +284,8 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact]) -> Vec<Diag> {
                                 xs.join("、"), ys.join("、"); xs.join(", "), ys.join(", ")
                             ));
                             d.notes.push(tr!("写しを両側に置くときは、中身を同じに保ちます。", "When each side keeps a copy, the copies are kept the same."));
-                            d.refs.push(ra_ref);
-                            d.refs.push(rb_ref);
+                            d.extra.0.push(ra_ref);
+                            d.extra.0.push(rb_ref);
                         }
                         continue;
                     }
@@ -300,8 +300,8 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact]) -> Vec<Diag> {
                     if !only_b.is_empty() {
                         d.notes.push(tr!("「{nb}」の側にだけあるもの: {}", "only on {nb}'s side: {}", only_b.join("、"); only_b.join(", ")));
                     }
-                    d.refs.push(ra_ref);
-                    d.refs.push(rb_ref);
+                    d.extra.0.push(ra_ref);
+                    d.extra.0.push(rb_ref);
                 }
                 _ => {}
             }
@@ -348,7 +348,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact]) -> Vec<Diag> {
                 "互いに上流のコンテキストは、どちらも相手の変更に引きずられます。向きを一つにそろえるか、パートナーシップにすることを考えます。",
                 "Contexts upstream of each other are each dragged along by the other's changes; consider one direction, or a partnership."
             ));
-            d.refs = refs;
+            d.extra.0 = refs;
         }
     }
     p.diags

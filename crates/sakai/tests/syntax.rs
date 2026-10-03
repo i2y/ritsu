@@ -47,7 +47,7 @@ fn every_ctx_block_of_design_and_plan_reads() {
             let text = as_file(&block);
             let (f, ds) = parse("block.ctx", &text);
             if f.is_none() || !ds.is_empty() {
-                let shown: String = ds.iter().map(|d| d.render(sakai::i18n::Lang::En)).collect();
+                let shown: String = ds.iter().map(|d| d.render(ritsu_base::text::Lang::En)).collect();
                 failures.push(format!("{doc}:{line}:\n{shown}"));
             }
             n += 1;

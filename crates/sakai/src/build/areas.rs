@@ -9,8 +9,8 @@
 
 use crate::ast::Role;
 use crate::check::Checked;
-use crate::diag::Diag;
-use crate::i18n::Text;
+use crate::diag::{self, Diag};
+use ritsu_base::text::Text;
 use crate::model::{Model, RelK};
 use crate::naming::Tool;
 use crate::owners;
@@ -167,14 +167,14 @@ pub fn importers_phrase(m: &Model, areas: &Areas, to: usize) -> Text {
 /// The sentence a setting describes group `to` with: who may import it. `verb` is the tool's word
 /// for it (`import する` and `imported`; ArchUnit reads the dependencies of classes, `使う` and
 /// `used`).
-pub fn rule_text(m: &Model, areas: &Areas, to: usize, verb: &Text, lang: crate::i18n::Lang) -> String {
+pub fn rule_text(m: &Model, areas: &Areas, to: usize, verb: &Text, lang: ritsu_base::text::Lang) -> String {
     let p = phrase(m, &areas.areas[to]);
     let who = importers_phrase(m, areas, to);
-    crate::i18n::say(&tr!("{}は、{}だけが{}", "{} is {} only by {}", p.ja, who.ja, verb.ja; p.en, verb.en, who.en), lang)
+    ritsu_base::text::spaced(&tr!("{}は、{}だけが{}", "{} is {} only by {}", p.ja, who.ja, verb.ja; p.en, verb.en, who.en), lang)
 }
 
 fn e501(file: &str, line: usize, col: usize, src: &str, msg: Text, note: Text) -> Diag {
-    Diag::at("E501", file, line, col, msg).source(src).note(note)
+    diag::at("E501", file, line, col, msg).source(src).note(note)
 }
 
 /// The groups of `language` in a map that passed check, or why its settings cannot be written
@@ -185,7 +185,7 @@ pub fn areas(c: &Checked, language: Language) -> Result<Areas, Vec<Diag>> {
     let Some(code) = m.map.code.iter().find(|x| x.language == lw) else {
         let h = &m.map.ast.heading;
         return Err(vec![
-            Diag::at("E501", &m.map.file, h.pos.line, h.pos.col, tr!("地図に `code {lw}` の行がありません", "The map has no `code {lw}` line"))
+            diag::at("E501", &m.map.file, h.pos.line, h.pos.col, tr!("地図に `code {lw}` の行がありません", "The map has no `code {lw}` line"))
                 .source(&m.map.src)
                 .note(tr!(
                     "その言語のコードの置き場所を `code {lw} \"<パス>\"` で書くと、その下のコードの設定を書けます。",

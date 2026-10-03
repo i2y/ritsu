@@ -8,7 +8,7 @@
 
 use super::areas::{self, Areas};
 use crate::check::Checked;
-use crate::i18n::Lang;
+use ritsu_base::text::Lang;
 
 /// A Java identifier from a group's name: `sakai-ordering-pl-shop.ordering.v1` →
 /// `sakai_ordering_pl_shop_ordering_v1`.
@@ -62,7 +62,7 @@ pub fn render(c: &Checked, a: &Areas, lang: Lang) -> (String, usize) {
     s.push_str(&format!("@AnalyzeClasses(packages = {{{}}})\n", tops.iter().map(|t| java(t)).collect::<Vec<_>>().join(", ")));
     s.push_str("class SakaiContextsTest {\n");
     for (i, x) in a.areas.iter().enumerate() {
-        s.push_str(&format!("  // {}\n", crate::i18n::say(&areas::phrase(m, x), lang)));
+        s.push_str(&format!("  // {}\n", ritsu_base::text::spaced(&areas::phrase(m, x), lang)));
         s.push_str(&format!("  private static final DescribedPredicate<JavaClass> {} = {};\n", consts[i], predicate(a, i)));
     }
     let mut n = 0;

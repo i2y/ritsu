@@ -3,8 +3,8 @@
 //! things the names point at are `resolve.rs`'s.
 
 use crate::ast::*;
-use crate::diag::Diag;
-use crate::i18n::Text;
+use crate::diag::{self, Diag};
+use ritsu_base::text::Text;
 use crate::kw;
 use crate::lex::{self, Line, Node, Tok, Token};
 use crate::naming::{self, Tool};
@@ -128,7 +128,7 @@ impl<'a> P<'a> {
     }
 
     fn push(&mut self, code: &'static str, l: &Line, col: usize, msg: Text) -> &mut Diag {
-        self.diags.push(Diag::at(code, self.file, l.no, col, msg).source(self.src));
+        self.diags.push(diag::at(code, self.file, l.no, col, msg).source(self.src));
         self.diags.last_mut().unwrap()
     }
 
@@ -832,7 +832,7 @@ impl<'a> P<'a> {
             let mut child = None;
             if let Some(ct) = l.tokens.get(i + 2) {
                 let ck = ct.word().unwrap_or("").to_string();
-                if Tool::Proto.child(w) != Some(ck.as_str()) {
+                if !Tool::Proto.children(w).is_some_and(|cs| cs.contains(&ck.as_str())) {
                     let msg = match Tool::Proto.parent(&ck) {
                         Some(p) => tr!("`{ck}` は `{p}` のすぐあとにだけ書けます", "`{ck}` comes only right after `{p}`"),
                         None => tr!("`{ck}` は `{w}` の下に書けません", "`{ck}` cannot come under `{w}`"),

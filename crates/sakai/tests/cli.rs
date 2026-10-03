@@ -106,7 +106,7 @@ fn check_exit_codes_and_formats() {
     // Without --root the root is the nearest directory above with a .git: here a copy of the map
     // two levels below one. The text writes the map as it was given; `api` writes it from the
     // root, which shows the root that was taken.
-    let dir = common::TempDir::new();
+    let dir = common::TempDir::new("root");
     std::fs::create_dir_all(dir.path().join(".git")).unwrap();
     let here = dir.path().join("a/b");
     common::copy_dir(std::path::Path::new(ROOT), &here.join("基本"));
@@ -122,18 +122,21 @@ fn check_exit_codes_and_formats() {
     let o = common::sakai_in(&here, &["api", "基本/基本.ctx"]);
     let v: serde_json::Value = serde_json::from_str(&out(&o)).unwrap();
     assert_eq!(v["map"]["file"], "基本.ctx");
-    // One JSON object a map; a directory stands for every map under it.
+    // One JSON object a map; a directory stands for every map under it. The map is written from
+    // the root, and the root from where sakai runs.
     let o = sakai(&["check", "tests/maps", "--format", "json", "--root", "tests/maps"]);
     assert_eq!(code(&o), 0, "{}", err(&o));
     let lines: Vec<serde_json::Value> = out(&o).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
     let files: Vec<&str> = lines.iter().map(|v| v["file"].as_str().unwrap()).collect();
-    assert_eq!(files, ["tests/maps/パターン/パターン.ctx", "tests/maps/入れ子/入れ子.ctx", "tests/maps/基本/基本.ctx"]);
+    assert_eq!(files, ["パターン/パターン.ctx", "入れ子/入れ子.ctx", "基本/基本.ctx"]);
+    assert!(lines.iter().all(|v| v["root"] == "tests/maps"));
     assert!(lines.iter().all(|v| v["ok"] == true && v["diagnostics"].as_array().unwrap().is_empty()));
 }
 
 /// A diagnostic writes the place of a file as the suite's tools do: from where sakai runs, the way
-/// the path given was written (DESIGN 2.4, 5.1). A name keeps its path from the root, in the text
-/// as in JSON, so that read again it is the same name.
+/// the path given was written (DESIGN 2.4, 5.1). JSON writes it from the root, with the root
+/// beside it. A name keeps its path from the root, in the text as in JSON, so that read again it
+/// is the same name.
 #[test]
 fn the_paths_of_a_diagnostic_are_written_from_where_sakai_runs() {
     let dir = common::mutant("E401_注文の状態に値が増えた");
@@ -159,13 +162,15 @@ fn the_paths_of_a_diagnostic_are_written_from_where_sakai_runs() {
     let t = out(&o);
     let want = dir.path().join("ctx/請求.ctx");
     assert!(t.starts_with(&format!("error[E401]: {}:17:3:", want.display())), "{t}");
-    // In JSON the places of files are written the same way, and a name keeps its path from the root.
+    // In JSON the places of files are written from the root, and the root from where sakai runs;
+    // a name keeps its path from the root.
     let o = common::sakai_in(parent, &["check", &format!("{base}/基本.ctx"), "--root", &base, "--format", "json"]);
     let v: serde_json::Value = serde_json::from_str(out(&o).trim()).unwrap();
-    assert_eq!(v["file"], format!("{base}/基本.ctx"));
+    assert_eq!(v["root"], base);
+    assert_eq!(v["file"], "基本.ctx");
     let d = &v["diagnostics"][0];
-    assert_eq!(d["file"], format!("{base}/ctx/請求.ctx"));
-    assert_eq!(d["references"][0]["file"], format!("{base}/ctx/請求.ctx"));
+    assert_eq!(d["file"], "ctx/請求.ctx");
+    assert_eq!(d["references"][0]["file"], "ctx/請求.ctx");
     assert_eq!(d["references"][1]["name"]["text"], "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus");
     assert_eq!(d["references"][1]["name"]["path"], "proto/shop/ordering/v1/order.proto");
 }

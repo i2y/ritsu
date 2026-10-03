@@ -7,45 +7,8 @@
 //! gives the code (`sakai build …` for the codes of the settings). The codes of the suite's tools
 //! (E104, E105, N101, E405) have no reproduction yet.
 
-use crate::diag::Severity;
-use crate::i18n::{Lang, Text};
-
-pub struct Entry {
-    pub code: &'static str,
-    pub severity: Severity,
-    /// One line in the words of the map, like the diagnostic's own first line.
-    pub title: Text,
-    /// When it is printed.
-    pub when: Text,
-    /// How to get rid of it, down to what to write.
-    pub fix: Text,
-    /// The files laid over [`BASE`] to get it; empty for a code sakai does not print yet.
-    pub files: &'static [(&'static str, &'static str)],
-    pub related: &'static [&'static str],
-    /// The command the reproduction is run with, after `sakai`, in its directory: `check .`
-    /// unless it says otherwise (`build` gives E501 and E502).
-    pub command: &'static [&'static str],
-}
-
-impl Entry {
-    /// Whether sakai prints the code yet: a code with a reproduction.
-    pub fn implemented(&self) -> bool {
-        !self.files.is_empty() || !self.command.is_empty()
-    }
-
-    /// The command the reproduction is run with, after `sakai`.
-    pub fn run(&self) -> Vec<&'static str> {
-        if self.command.is_empty() { vec!["check", "."] } else { self.command.to_vec() }
-    }
-
-    /// The files of the reproduction: [`BASE`] in its order, each replaced by the entry's file of
-    /// the same path, then the entry's other files.
-    pub fn reproduction(&self) -> Vec<(&'static str, &'static str)> {
-        let mut out: Vec<(&str, &str)> = BASE.iter().map(|(p, b)| self.files.iter().find(|(q, _)| q == p).copied().unwrap_or((*p, *b))).collect();
-        out.extend(self.files.iter().filter(|(q, _)| !BASE.iter().any(|(p, _)| p == q)).copied());
-        out
-    }
-}
+use ritsu_base::ledger::{Entry, Ledger, Repro};
+use ritsu_base::text::Text;
 
 /// The map every reproduction starts from: 甲 and 乙, 乙 publishing `b.v1`, and no
 /// relationship. It passes check.
@@ -68,19 +31,52 @@ const A_USES_PLAIN: (&str, &str) = ("a/a.proto", "syntax = \"proto3\";\npackage 
 const A_CONFORMS: (&str, &str) = ("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 conformist\n  through b.v1\n");
 const A_PUBLISHES: (&str, &str) = ("a/v1/a1.proto", "syntax = \"proto3\";\npackage a.v1;\nenum AKind {\n  A_KIND_UNSPECIFIED = 0;\n  A_KIND_X = 1;\n}\nmessage A1 {}\n");
 
-fn e(code: &'static str, title: Text, when: Text, fix: Text, files: &'static [(&'static str, &'static str)], related: &'static [&'static str]) -> Entry {
-    Entry { code, severity: Severity::of(code), title, when, fix, files, related, command: &[] }
+/// The files of a reproduction: [`BASE`] in its order, each replaced by the entry's file of the
+/// same path, then the entry's other files.
+fn laid(files: &'static [(&'static str, &'static str)]) -> Vec<(&'static str, &'static str)> {
+    let mut out: Vec<(&str, &str)> = BASE.iter().map(|(p, b)| files.iter().find(|(q, _)| q == p).copied().unwrap_or((*p, *b))).collect();
+    out.extend(files.iter().filter(|(q, _)| !BASE.iter().any(|(p, _)| p == q)).copied());
+    out
 }
 
-impl Entry {
+/// An entry whose reproduction is `files` laid over [`BASE`], checked with `sakai check .`; one
+/// with no files is a code sakai does not print yet, and has no reproduction.
+fn e(code: &'static str, title: Text, when: Text, fix: Text, files: &'static [(&'static str, &'static str)], related: &'static [&'static str]) -> Entry {
+    let repro = if files.is_empty() { Repro::Later } else { Repro::Dir { files: laid(files), command: vec!["check", "."] } };
+    Entry::new(code, title, when, fix, repro, related)
+}
+
+/// An entry run with another command than `check .` (`build` gives E501 and E502).
+trait Running {
+    fn running(self, command: &'static [&'static str]) -> Entry;
+}
+
+impl Running for Entry {
     fn running(mut self, command: &'static [&'static str]) -> Entry {
-        self.command = command;
+        let files = match self.repro {
+            Repro::Dir { files, .. } => files,
+            _ => laid(&[]),
+        };
+        self.repro = Repro::Dir { files, command: command.to_vec() };
         self
     }
 }
 
-pub fn ledger() -> Vec<Entry> {
-    vec![
+/// Whether sakai prints a code yet: a code with a reproduction.
+pub fn implemented(e: &Entry) -> bool {
+    !matches!(e.repro, Repro::Later)
+}
+
+/// The command a reproduction is run with, after `sakai`, and its files.
+pub fn reproduction(e: &Entry) -> (Vec<&'static str>, Vec<(&'static str, &'static str)>) {
+    match &e.repro {
+        Repro::Dir { files, command } => (command.clone(), files.clone()),
+        _ => (vec![], vec![]),
+    }
+}
+
+pub fn ledger() -> Ledger {
+    let entries = vec![
         // ── Words, sections, names, paths ──
         e(
             "E001",
@@ -697,80 +693,19 @@ pub fn ledger() -> Vec<Entry> {
             &["E501"],
         )
         .running(&["build", "地図.ctx", "--target", "import-linter", "--check"]),
-    ]
+    ];
+    Ledger {
+        tool: "sakai",
+        example_file: "",
+        fence: "ctx",
+        repro_heading: tr!("再現", "Reproduction"),
+        later_text: tr!("(sakai はこのコードをまだ出さないので、再現はありません)", "(sakai does not print this code yet; it has no reproduction)"),
+        later_markdown: tr!("sakai はこのコードをまだ出さないので、再現はありません", "sakai does not print this code yet; it has no reproduction"),
+        entries,
+    }
 }
 
+/// The entry of a code, written in either case.
 pub fn find(code: &str) -> Option<Entry> {
-    let code = code.to_ascii_uppercase();
-    ledger().into_iter().find(|e| e.code == code)
-}
-
-fn headings(lang: Lang) -> (&'static str, &'static str, &'static str, &'static str, &'static str) {
-    match lang {
-        Lang::En => ("When", "Fix", "Reproduction", "See also", "sakai does not print this code yet; it has no reproduction"),
-        Lang::Ja => ("いつ出るか", "直し方", "再現", "関連", "sakai はこのコードをまだ出さないので、再現はありません"),
-    }
-}
-
-/// `sakai explain <CODE>` for a terminal.
-pub fn render_text(e: &Entry, lang: Lang) -> String {
-    let (when, fix, repro, also, later) = headings(lang);
-    let mut o = format!("{} ({}) — {}\n\n", e.code, e.severity.word(lang), e.title.get(lang));
-    o.push_str(&format!("{when}: {}\n\n{fix}: {}\n\n{repro}:\n", e.when.get(lang), e.fix.get(lang)));
-    if !e.implemented() {
-        o.push_str(&format!("    ({later})\n"));
-    } else {
-        let cmd = e.run().join(" ");
-        let run = if lang == Lang::Ja { format!("下のファイルを一つのディレクトリに置き、そこで `sakai {cmd}` を走らせます") } else { format!("put the files below in one directory, and run `sakai {cmd}` there") };
-        o.push_str(&format!("  ({run})\n"));
-        for (name, body) in e.reproduction() {
-            o.push_str(&format!("\n  {name}:\n"));
-            for l in body.lines() {
-                o.push_str(format!("    {l}").trim_end());
-                o.push('\n');
-            }
-        }
-    }
-    if !e.related.is_empty() {
-        o.push_str(&format!("\n{also}: {}\n", e.related.join(" ")));
-    }
-    o
-}
-
-/// One code in Markdown, under an anchor of its own (`#e301`).
-pub fn render_markdown_one(e: &Entry, lang: Lang) -> String {
-    let (when, fix, repro, also, later) = headings(lang);
-    let mut o = format!("<a id=\"{}\"></a>\n\n## {} — {}\n\n", e.code.to_lowercase(), e.code, e.title.get(lang));
-    o.push_str(&format!("**{when}**: {}\n\n**{fix}**: {}\n\n**{repro}**:", e.when.get(lang), e.fix.get(lang)));
-    if !e.implemented() {
-        o.push_str(&format!(" {later}\n"));
-    } else {
-        let cmd = e.run().join(" ");
-        o.push_str(&match lang {
-            Lang::Ja => format!(" 下のファイルを一つのディレクトリに置き、そこで `sakai {cmd}` を走らせます。\n"),
-            Lang::En => format!(" put the files below in one directory, and run `sakai {cmd}` there.\n"),
-        });
-        for (name, body) in e.reproduction() {
-            let fence = if name.ends_with(".ctx") { "ctx" } else if name.ends_with(".proto") { "proto" } else { "" };
-            o.push_str(&format!("\n`{name}`:\n\n```{fence}\n{body}```\n"));
-        }
-    }
-    if !e.related.is_empty() {
-        let links: Vec<String> = e.related.iter().map(|c| format!("[{c}](#{})", c.to_lowercase())).collect();
-        o.push_str(&format!("\n{also}: {}\n", links.join(", ")));
-    }
-    o
-}
-
-/// `sakai explain --all --format markdown`: every code (`docs/codes.md`, stage D).
-pub fn render_markdown(lang: Lang) -> String {
-    let mut o = match lang {
-        Lang::En => "# Diagnostic codes\n\nWritten by `sakai explain --all --format markdown`; do not edit.\n".to_string(),
-        Lang::Ja => "# 診断のコード\n\n`sakai explain --all --format markdown --lang ja` の出力です。手で直しません。\n".to_string(),
-    };
-    for e in ledger() {
-        o.push('\n');
-        o.push_str(&render_markdown_one(&e, lang));
-    }
-    o
+    ledger().find(code).cloned()
 }

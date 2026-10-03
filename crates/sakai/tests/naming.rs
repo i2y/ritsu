@@ -26,7 +26,7 @@ const REASONS: &[(&str, &str)] = &[
 
 #[test]
 fn every_line_of_the_table_gives_its_json_or_is_refused() {
-    let table = std::fs::read_to_string("tests/fixtures/naming.tsv").unwrap();
+    let table = std::fs::read_to_string("../ritsu-base/tests/fixtures/naming.tsv").unwrap();
     let mut failures = Vec::new();
     let (mut ok, mut refused) = (0, 0);
     for (i, line) in table.lines().enumerate() {
@@ -50,7 +50,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused() {
         }
         match got {
             Ok(n) => {
-                let json = serde_json::to_string(&n.to_json()).unwrap();
+                let json = n.to_json().compact();
                 if json != want {
                     failures.push(format!("line {}: `{name}`\n  want {want}\n  got  {json}", i + 1));
                 } else {
@@ -67,11 +67,11 @@ fn every_line_of_the_table_gives_its_json_or_is_refused() {
     assert_eq!((ok, refused), (21, 15), "the table has 21 names and 15 refusals");
 }
 
-/// The table is the same as the one in yuen's repository; this test only says what it holds,
-/// so that a line dropped by accident shows.
+/// The table is ritsu-base's, and yuen is held to it too; this test only says what it holds, so
+/// that a line dropped by accident shows.
 #[test]
 fn the_table_names_every_tool_but_dir() {
-    let table = std::fs::read_to_string("tests/fixtures/naming.tsv").unwrap();
+    let table = std::fs::read_to_string("../ritsu-base/tests/fixtures/naming.tsv").unwrap();
     for t in sakai::naming::Tool::ALL {
         assert!(table.lines().any(|l| l.starts_with(&format!("{} ", t.word()))), "{} is in the table", t.word());
     }

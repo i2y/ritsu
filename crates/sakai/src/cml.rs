@@ -7,7 +7,7 @@
 
 use crate::ast::Role;
 use crate::check::Checked;
-use crate::i18n::{Lang, say};
+use ritsu_base::text::{Lang, spaced};
 use crate::model::{Model, Rel, RelK};
 
 /// A CML string.
@@ -60,14 +60,14 @@ fn relationship(m: &Model, ci: usize, r: &Rel, lang: Lang) -> Option<String> {
             } else {
                 ("D,CF", if ohs { "U,OHS,PL".to_string() } else { "U,PL".to_string() }, tr!("「{an}」は「{bn}」に順応する", "{an} conforms to {bn}"))
             };
-            Some(format!("  // {}\n  {a} [{down}]<-[{up}] {b} {{\n    implementationTechnology = {}\n  }}\n", say(&said, lang), string(&tech)))
+            Some(format!("  // {}\n  {a} [{down}]<-[{up}] {b} {{\n    implementationTechnology = {}\n  }}\n", spaced(&said, lang), string(&tech)))
         }
         RelK::Downstream => None,
-        RelK::Kernel(_) => Some(format!("  // {}\n  {a} [SK]<->[SK] {b}\n", say(&tr!("「{an}」と「{bn}」の共有カーネル", "the shared kernel of {an} and {bn}"), lang))),
-        RelK::Partnership => Some(format!("  // {}\n  {a} [P]<->[P] {b}\n", say(&tr!("「{an}」と「{bn}」のパートナーシップ", "the partnership of {an} and {bn}"), lang))),
+        RelK::Kernel(_) => Some(format!("  // {}\n  {a} [SK]<->[SK] {b}\n", spaced(&tr!("「{an}」と「{bn}」の共有カーネル", "the shared kernel of {an} and {bn}"), lang))),
+        RelK::Partnership => Some(format!("  // {}\n  {a} [P]<->[P] {b}\n", spaced(&tr!("「{an}」と「{bn}」のパートナーシップ", "the partnership of {an} and {bn}"), lang))),
         RelK::Separate => Some(format!(
             "  // {}\n",
-            say(&tr!("「{an}」({a}) と「{bn}」({b}) は別々の道（CML には書く形が無い）", "{an} ({a}) and {bn} ({b}) go separate ways (CML has no way to write it)"), lang)
+            spaced(&tr!("「{an}」({a}) と「{bn}」({b}) は別々の道（CML には書く形が無い）", "{an} ({a}) and {bn} ({b}) go separate ways (CML has no way to write it)"), lang)
         )),
     }
 }
@@ -108,7 +108,7 @@ pub fn render(c: &Checked, from: &str, lang: Lang) -> String {
             }
             None => tr!("「{n}」({a})", "{n} ({a})"),
         };
-        s.push_str(&format!("\n// {}\n", say(&said, lang)));
+        s.push_str(&format!("\n// {}\n", spaced(&said, lang)));
         let mut body: Vec<String> = Vec::new();
         if let Some(d) = &x.ast.description {
             body.push(format!("  domainVisionStatement = {}", string(&d.value)));

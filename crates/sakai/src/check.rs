@@ -12,9 +12,9 @@
 //! who owns what, there is nothing to hold the references to. From stage 3 on every stage runs,
 //! on what could be read, so one unreadable file does not hide the rest of the map.
 
-use crate::diag::{Diag, has_errors};
+use crate::diag::{self, Diag, has_errors};
 use crate::elements::{self, Elements};
-use crate::i18n::{Lang, Text, say};
+use ritsu_base::text::{Lang, Text, spaced};
 use crate::model::{Model, RelK};
 use crate::owners::{self, Artifact};
 use crate::paths::shown;
@@ -64,9 +64,9 @@ fn proto_diags(m: &Model, issues: &[Issue]) -> Vec<Diag> {
     for i in issues {
         match i {
             Issue::Unreadable { file, err } => {
-                let msg = &err.message;
+                let msg = &err.message("sakai");
                 let f = shown(file);
-                out.push(Diag::at("E106", file, err.line, err.col, tr!("{f} を読めません: {}", "The file {f} cannot be read: {}", msg.ja; msg.en)).source(&src(file)));
+                out.push(diag::at("E106", file, err.line, err.col, tr!("{f} を読めません: {}", "The file {f} cannot be read: {}", msg.ja; msg.en)).source(&src(file)));
             }
             Issue::NotFound { file, import, tried } => {
                 let ip = &import.path;
@@ -74,7 +74,7 @@ fn proto_diags(m: &Model, issues: &[Issue]) -> Vec<Diag> {
                 let tried: Vec<String> = tried.iter().map(|t| shown(t)).collect();
                 let (tj, te) = (tried.join("、"), tried.join(", "));
                 out.push(
-                    Diag::at("W102", file, import.line, import.col, tr!("{f} の import \"{ip}\" が見つかりません。範囲の外のものとして扱います", "The import \"{ip}\" of {f} is not found; it is taken as outside the scope"))
+                    diag::at("W102", file, import.line, import.col, tr!("{f} の import \"{ip}\" が見つかりません。範囲の外のものとして扱います", "The import \"{ip}\" of {f} is not found; it is taken as outside the scope"))
                         .source(&src(file))
                         .note(tr!("探した場所: {tj}", "looked for at: {te}"))
                         .note(tr!(
@@ -86,7 +86,7 @@ fn proto_diags(m: &Model, issues: &[Issue]) -> Vec<Diag> {
             Issue::OutOfScope { file, import, at } => {
                 let (f, at) = (shown(file), shown(at));
                 out.push(
-                    Diag::at("E103", file, import.line, import.col, tr!("{f} が、地図の範囲の外の {at} を import しています", "The file {f} imports {at}, which is outside the map's scope"))
+                    diag::at("E103", file, import.line, import.col, tr!("{f} が、地図の範囲の外の {at} を import しています", "The file {f} imports {at}, which is outside the map's scope"))
                         .source(&src(file))
                         .note(owners::scope_note(m)),
                 );
@@ -179,18 +179,20 @@ pub fn check_map(root: &Path, map: &str) -> Result<Outcome, Text> {
 pub fn render(o: &Outcome, lang: Lang) -> String {
     let mut s: String = o.diags.iter().map(|d| d.render(lang)).collect();
     if let Some(t) = &o.summary {
-        s.push_str(&format!("{}: ok — {}\n", shown(&o.file), say(t, lang)));
+        s.push_str(&format!("{}: ok — {}\n", shown(&o.file), spaced(t, lang)));
     }
     s
 }
 
-/// The `--format json` of one map (DESIGN 5.1).
+/// The `--format json` of one map (DESIGN 5.1): every path from the root, and the root as seen
+/// from where sakai runs.
 pub fn to_json(o: &Outcome, lang: Lang) -> Value {
     json!({
-        "file": shown(&o.file),
+        "root": crate::paths::shown_root(),
+        "file": o.file,
         "ok": !o.has_errors(),
-        "summary": o.summary.as_ref().map(|t| say(t, lang)),
-        "diagnostics": o.diags.iter().map(|d| d.to_json(lang)).collect::<Vec<_>>(),
+        "summary": o.summary.as_ref().map(|t| spaced(t, lang)),
+        "diagnostics": o.diags.iter().map(|d| crate::diag::value(&d.to_json(lang))).collect::<Vec<_>>(),
     })
 }
 
@@ -254,7 +256,7 @@ pub fn check_args(root: &Path, args: &[String]) -> Result<Vec<Outcome>, Text> {
                 for (f, src) in contexts {
                     if !reads.contains(&f) {
                         let sf = shown(&f);
-                        let d = Diag::at("W103", &f, 1, 1, tr!("{sf} を読む地図がありません", "No map reads {sf}")).source(&src).note(tr!(
+                        let d = diag::at("W103", &f, 1, 1, tr!("{sf} を読む地図がありません", "No map reads {sf}")).source(&src).note(tr!(
                             "地図の `use context` に足すか、ファイルを消します。どの地図にも読まれないコンテキストは、検査されません。",
                             "Add it to a map's `use context`, or delete the file; a context no map reads is not checked."
                         ));

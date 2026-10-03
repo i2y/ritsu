@@ -5,8 +5,8 @@
 //! rule's element is checked from stage C, with `rulec api`.
 
 use crate::ast::{Element, Pos, Target};
-use crate::diag::Diag;
-use crate::i18n::Text;
+use crate::diag::{self, Diag};
+use ritsu_base::text::Text;
 use crate::model::{Model, RelK};
 use crate::naming::{Name, Tool};
 use crate::owners::Artifact;
@@ -112,7 +112,7 @@ struct E<'a> {
 impl E<'_> {
     fn err(&mut self, c: usize, p: Pos, code: &'static str, msg: Text) -> &mut Diag {
         let cx = &self.m.contexts[c];
-        self.diags.push(Diag::at(code, &cx.file, p.line, p.col, msg).source(&cx.src));
+        self.diags.push(diag::at(code, &cx.file, p.line, p.col, msg).source(&cx.src));
         self.diags.last_mut().unwrap()
     }
 

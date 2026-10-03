@@ -80,13 +80,16 @@ fn what_was_copied_passes_the_suite() {
 
 #[test]
 fn buf_lints_the_protos_written_for_the_example() {
-    let Some(buf) = common::program("SAKAI_BUF", "", "buf", &["--version"]) else {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Buf) {
+        return;
+    }
+    let Some(buf) = common::program("BUF", "", "buf", &["--version"]) else {
         common::skip("buf is not there (SAKAI_BUF or the PATH)");
         return;
     };
     // The other two import files buf would fetch from the BSR (buf/validate) or read from
     // dandori (options.proto); these two stand alone.
-    let dir = common::TempDir::new();
+    let dir = common::TempDir::new("buf-lint");
     for f in ["shop/ordering/v1/order.proto", "warehouse/v1/stock.proto"] {
         dir.write(f, &std::fs::read_to_string(Path::new(common::EXAMPLE).join("proto").join(f)).unwrap());
     }
@@ -95,7 +98,7 @@ fn buf_lints_the_protos_written_for_the_example() {
 }
 
 fn changed(edits: &[(&str, &str, &str)]) -> Vec<sakai::check::Outcome> {
-    let dir = common::TempDir::new();
+    let dir = common::TempDir::new("example");
     common::copy_dir(Path::new(common::EXAMPLE), dir.path());
     for (f, old, new) in edits {
         let p = dir.path().join(f);

@@ -6,7 +6,7 @@
 //! version apart by position, and reads a name of an artifact (DESIGN 2) from the characters of
 //! the line, since such a name may hold a `,`.
 
-use crate::diag::Diag;
+use crate::diag::{self, Diag};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tok {
@@ -65,7 +65,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
     for (i, text) in src.lines().enumerate() {
         let no = i + 1;
         let all: Vec<char> = text.chars().collect();
-        let err = |code: &'static str, col: usize, msg: crate::i18n::Text| Diag::at(code, file, no, col, msg).source(src);
+        let err = |code: &'static str, col: usize, msg: ritsu_base::text::Text| diag::at(code, file, no, col, msg).source(src);
         // Indentation is spaces. A tab is refused: how wide it is depends on the editor, and the
         // lines of a block are told apart by lining up.
         let mut indent = 0;
@@ -207,7 +207,7 @@ pub fn tree(file: &str, src: &str, lines: &[Line]) -> (Vec<Node>, Vec<Diag>) {
             None => {
                 if l.indent > 0 {
                     diags.push(
-                        Diag::at("E005", file, l.no, l.indent + 1, tr!("字下げした行の上に、それを受ける行がありません", "This line is indented, and no line above takes it"))
+                        diag::at("E005", file, l.no, l.indent + 1, tr!("字下げした行の上に、それを受ける行がありません", "This line is indented, and no line above takes it"))
                             .source(src)
                             .note(tr!("節の最初の行は字下げしません。", "The first line of a section is not indented.")),
                     );
@@ -223,7 +223,7 @@ pub fn tree(file: &str, src: &str, lines: &[Line]) -> (Vec<Node>, Vec<Diag>) {
                     let want = lines[first.line].indent;
                     if want != l.indent {
                         diags.push(
-                            Diag::at("E005", file, l.no, l.indent + 1, tr!("字下げがそろっていません", "The indentation does not line up"))
+                            diag::at("E005", file, l.no, l.indent + 1, tr!("字下げがそろっていません", "The indentation does not line up"))
                                 .source(src)
                                 .note(tr!(
                                     "同じ節の行は、同じ幅だけ字下げします。上の行の字下げは {want} 文字です。",

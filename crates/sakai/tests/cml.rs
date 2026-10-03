@@ -6,7 +6,7 @@
 
 mod common;
 
-use sakai::i18n::Lang;
+use ritsu_base::text::Lang;
 use std::process::Command;
 use std::time::Duration;
 
@@ -31,7 +31,7 @@ fn the_cml_of_the_example_is_its_golden_file() {
 /// The command writes what the library renders, to a file or to standard output.
 #[test]
 fn export_cml_on_the_command_line() {
-    let dir = common::TempDir::new();
+    let dir = common::TempDir::new("export");
     let out = dir.path().join("shop.cml");
     let o = common::sakai(&["export", "cml", "examples/通販/通販.ctx", "--out", out.to_str().unwrap(), "--root", "examples/通販"]);
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -48,11 +48,14 @@ fn export_cml_on_the_command_line() {
 
 #[test]
 fn context_mapper_finds_nothing_wrong_in_it() {
+    if !common::linters() {
+        return;
+    }
     let (Some(java), Some(javac), Some(lib)) = (common::java("java"), common::java("javac"), common::cml_lib()) else {
         common::skip("Java or the Context Mapper CLI is not there (SAKAI_JAVA and SAKAI_JAVAC, or JAVA_HOME; SAKAI_CML_LIB, or tools/cml: tools/cml/fetch.sh)");
         return;
     };
-    let dir = common::TempDir::new();
+    let dir = common::TempDir::new("context-mapper");
     let classes = dir.path().join("classes");
     let cp = format!("{}/*", lib.display());
     let limit = Duration::from_secs(180);

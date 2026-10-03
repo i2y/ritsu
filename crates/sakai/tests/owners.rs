@@ -55,7 +55,7 @@ fn files_no_context_owns_are_told_once_a_directory() {
     let e: Vec<(&str, &str, &str)> = edits.iter().map(|(p, b)| (p.as_str(), "", b.as_str())).collect();
     let dir = variant("基本", &e);
     let os = check_dir(dir.path());
-    assert_eq!(codes(&os), ["E101"], "{}", common::text(&os, sakai::i18n::Lang::En));
+    assert_eq!(codes(&os), ["E101"], "{}", common::text(&os, ritsu_base::text::Lang::En));
     let d = &os[0].diags[0];
     assert_eq!(d.file, "py/scripts/");
     assert!(d.message.ja.contains("ファイル 12 件"), "{}", d.message.ja);
@@ -69,5 +69,5 @@ fn two_contexts_writing_one_entry() {
     let dir = common::mutant("E102_同じ深さで二つが持つ");
     let os = check_dir(dir.path());
     assert_eq!(codes(&os), ["E102"]);
-    assert_eq!(os[0].diags[0].refs.len(), 2);
+    assert_eq!(os[0].diags[0].extra.0.len(), 2);
 }

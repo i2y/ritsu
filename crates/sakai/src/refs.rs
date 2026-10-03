@@ -5,8 +5,8 @@
 //! the line of the import.
 
 use crate::ast::Role;
-use crate::diag::{Diag, Ref};
-use crate::i18n::Text;
+use crate::diag::{self, Diag, DiagExt, Ref};
+use ritsu_base::text::Text;
 use crate::model::{Model, RelK};
 use crate::naming::{Name, Tool};
 use crate::owners::Artifact;
@@ -172,7 +172,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing]) -> Vec<Diag> {
             None => tr!("「{yn}」の内側のファイル", "a file inside {yn}"),
         };
         let to_ref = Ref::name(Some(&yn), c.to_name(), to_what);
-        let diag = |code: &'static str, msg: Text| Diag::at(code, &p, c.line, c.col, msg).source(&src).with(from_ref.clone()).with(to_ref.clone());
+        let diag = |code: &'static str, msg: Text| diag::at(code, &p, c.line, c.col, msg).source(&src).refer(from_ref.clone()).refer(to_ref.clone());
         let separate = m.writes(x, y, |k| matches!(k, RelK::Separate)) || m.writes(y, x, |k| matches!(k, RelK::Separate));
         if separate {
             diags.push(diag("E206", tr!("「{xn}」の {sp} が、別々の道の相手「{yn}」の {sq} を import しています", "The file {sp} of {xn} imports {sq} of {yn}, and the two go separate ways")).note(tr!(
@@ -237,7 +237,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing]) -> Vec<Diag> {
             diags.push(diag("E203", tr!("「{xn}」が、`through` に無い package {k} を通って「{yn}」を参照しています", "{xn} refers to {yn} through the package {k}, which its `through` does not list")).note(tr!(
                 "上流と下流の関係は、下流が通ってよい上流の公表された言語を `through` に並べます。",
                 "An upstream relationship lists under `through` the upstream's published languages the downstream may go through."
-            )).fix(fix).with(rel_ref));
+            )).fix_line(fix).refer(rel_ref));
             continue;
         }
         if r.has(Role::Acl) {
@@ -247,7 +247,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing]) -> Vec<Diag> {
                 diags.push(diag("E205", tr!("「{xn}」の公表された言語 {own} に、上流「{yn}」の型が出ています", "The published language {own} of {xn} shows the upstream {yn}'s types")).note(tr!(
                     "{sp} は {used} を使っています。腐敗防止層の下流は、上流のモデルを自分の公表された言語に出しません。層の中で自分の型に読み替えます。",
                     "The file {sp} uses {used}. Downstream of an anticorruption layer, the upstream's model stays out of the downstream's own published language; the layer maps it to the downstream's types."
-                )).with(rel_ref));
+                )).refer(rel_ref));
                 continue;
             }
             if !layer.is_empty() && !layer.iter().any(|o| o.holds(&p)) {
@@ -256,7 +256,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing]) -> Vec<Diag> {
                     "「{xn}」は `layer` を書いているので、上流の公表された言語を参照できるのは層（{}）の中だけです。",
                     "{xn} writes a `layer`, so only the layer ({}) may refer to the upstream's published language.",
                     ls.join("、"); ls.join(", ")
-                )).with(rel_ref));
+                )).refer(rel_ref));
                 continue;
             }
         }

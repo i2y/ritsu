@@ -145,8 +145,11 @@ fn buf_reads(buf: &str, root: &Path, file: &str) -> Vec<String> {
 
 #[test]
 fn sakai_reads_what_buf_reads() {
-    let Some(buf) = common::tool("SAKAI_BUF", "", "buf") else {
-        println!("SKIP: buf is not installed (SAKAI_BUF or the PATH); the reader of .proto files is not compared with it");
+    if !ritsu_testkit::need(ritsu_testkit::Need::Buf) {
+        return;
+    }
+    let Some(buf) = common::program("BUF", "", "buf", &["--version"]) else {
+        common::skip("buf is not installed (SAKAI_BUF or the PATH); the reader of .proto files is not compared with it");
         return;
     };
     let cases = [
@@ -206,7 +209,7 @@ fn the_value_zero_that_says_nothing_is_set_on_real_files() {
 
 #[test]
 fn an_import_that_is_not_there_is_told() {
-    let dir = common::TempDir::new();
+    let dir = common::TempDir::new("import");
     dir.write("a/v1/a.proto", "syntax = \"proto3\";\npackage a.v1;\nimport \"google/api/annotations.proto\";\nimport \"b/v1/b.proto\";\nmessage A { b.v1.B b = 1; c.v1.C c = 2; }\n");
     let (ps, issues) = proto::load(dir.path(), &["a/v1/a.proto".to_string()], &[]);
     assert_eq!(issues.len(), 2, "{issues:?}");

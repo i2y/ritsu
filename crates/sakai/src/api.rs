@@ -3,6 +3,8 @@
 //! owns it; a future dandori could read whether its references follow the map. Names are in the
 //! form of DESIGN 2.6, paths from the root, and the keys come in the order written here.
 
+use crate::proto::Naming;
+use crate::diag::value;
 use crate::ast::{Element, Role, Target, ValueTo};
 use crate::check::Checked;
 use crate::elements::At;
@@ -10,13 +12,13 @@ use crate::model::{Model, Own, RelK};
 use crate::naming::{Name, Tool};
 use crate::paths;
 use crate::refs::Allowed;
-use crate::sha256;
+use ritsu_base::sha256;
 use serde_json::{Value, json};
 
 fn own(o: &Own) -> Value {
     match o.tool {
         None => json!({"dir": o.path}),
-        Some(t) => json!({"name": Name::file(t, o.path.clone()).to_json()}),
+        Some(t) => json!({"name": value(&Name::file(t, o.path.clone()).to_json())}),
     }
 }
 
@@ -48,9 +50,9 @@ pub fn api(c: &Checked) -> Value {
                 "also": a.also.iter().map(|s| s.value.clone()).collect::<Vec<_>>(),
                 "owns": x.owns.iter().map(own).collect::<Vec<_>>(),
                 "published": x.published.iter().map(|p| {
-                    let mut from: Vec<Value> = p.protos.iter().map(|(f, _)| Name::file(Tool::Proto, f.clone()).to_json()).collect();
+                    let mut from: Vec<Value> = p.protos.iter().map(|(f, _)| value(&Name::file(Tool::Proto, f.clone()).to_json())).collect();
                     if let Some((f, _)) = &p.rulec {
-                        from.push(Name::file(Tool::Rulec, f.clone()).to_json());
+                        from.push(value(&Name::file(Tool::Rulec, f.clone()).to_json()));
                     }
                     json!({
                         "package": p.package,
@@ -63,7 +65,7 @@ pub fn api(c: &Checked) -> Value {
                     "name": t.name,
                     "definition": t.definition.as_ref().map(|s| s.value.clone()),
                     "also": t.also.iter().map(|s| s.value.clone()).collect::<Vec<_>>(),
-                    "means": (0..t.means.len()).filter_map(|mi| c.elements.get(At::Means(ci, ti, mi))).map(Name::to_json).collect::<Vec<_>>(),
+                    "means": (0..t.means.len()).filter_map(|mi| c.elements.get(At::Means(ci, ti, mi))).map(|n| value(&n.to_json())).collect::<Vec<_>>(),
                     "as": t.as_term.as_ref().map(|x| json!({"context": x.context, "term": x.term})),
                 })).collect::<Vec<_>>(),
             })
@@ -87,7 +89,7 @@ pub fn api(c: &Checked) -> Value {
             let (ci, oi) = a.owner.expect("api is printed for a map whose artifacts all have an owner");
             let x = &m.contexts[ci];
             json!({
-                "name": a.name().to_json(),
+                "name": value(&a.name().to_json()),
                 "context": x.name,
                 "by": at(&x.file, x.owns[oi].pos.line),
                 "sha256": digest(m, &a.path)[..16].to_string(),
@@ -111,13 +113,13 @@ pub fn api(c: &Checked) -> Value {
                 None => Value::Null,
             };
             json!({
-                "from": cr.from_name().to_json(),
+                "from": value(&cr.from_name().to_json()),
                 "line": cr.line,
-                "to": cr.to_name().to_json(),
+                "to": value(&cr.to_name().to_json()),
                 "from_context": x.name,
                 "to_context": m.contexts[cr.to_ctx].name,
                 "via": "proto import",
-                "elements": cr.reach.iter().map(|s| s.naming().to_json()).collect::<Vec<_>>(),
+                "elements": cr.reach.iter().map(|s| value(&s.naming().to_json())).collect::<Vec<_>>(),
                 "allowed_by": allowed,
             })
         }).collect::<Vec<_>>(),
@@ -151,14 +153,14 @@ fn relationships(c: &Checked) -> Vec<Value> {
                         .iter()
                         .enumerate()
                         .map(|(ei, em)| {
-                            let from = c.elements.get(At::From(ci, ri, ei)).map(Name::to_json).unwrap_or(Value::Null);
+                            let from = c.elements.get(At::From(ci, ri, ei)).map(|n| value(&n.to_json())).unwrap_or(Value::Null);
                             let (to, checked) = match &em.target {
                                 Target::Name(n, _) => (json!({"name": n}), false),
                                 Target::Element(e) => {
                                     let n = c.elements.get(At::To(ci, ri, ei));
                                     let checked = n.is_some_and(|n| n.tool == Tool::Proto);
                                     let v = match (n, e) {
-                                        (Some(n), _) => n.to_json(),
+                                        (Some(n), _) => value(&n.to_json()),
                                         (None, Element::Long { .. } | Element::Short { .. }) => Value::Null,
                                     };
                                     (v, checked)

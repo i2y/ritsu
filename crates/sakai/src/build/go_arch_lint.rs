@@ -5,7 +5,7 @@
 
 use super::areas::{self, Areas};
 use crate::check::Checked;
-use crate::i18n::Lang;
+use ritsu_base::text::Lang;
 
 /// A YAML string in double quotes (JSON's strings are YAML's).
 fn yaml(s: &str) -> String {
@@ -41,7 +41,7 @@ pub fn render(c: &Checked, a: &Areas, lang: Lang) -> (String, usize) {
     }
     s.push_str("\ncomponents:\n");
     for (i, x) in a.areas.iter().enumerate() {
-        s.push_str(&format!("  # {}\n", crate::i18n::say(&areas::phrase(m, x), lang)));
+        s.push_str(&format!("  # {}\n", ritsu_base::text::spaced(&areas::phrase(m, x), lang)));
         if x.roots.len() == 1 {
             s.push_str(&format!("  {}:\n    in: {}\n", names[i], yaml(&glob(&x.roots[0]))));
         } else {

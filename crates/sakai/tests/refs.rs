@@ -80,6 +80,6 @@ fn every_code_of_the_crossings_points_at_the_import() {
         let d = os.iter().flat_map(|o| o.diags.iter()).find(|d| d.code == code).unwrap();
         assert!(d.file.ends_with(".proto"), "{name}: {}", d.file);
         assert!(d.src.as_deref().is_some_and(|s| s.starts_with("import ")), "{name}: {:?}", d.src);
-        assert!(d.refs.len() >= 2, "{name}");
+        assert!(d.extra.0.len() >= 2, "{name}");
     }
 }

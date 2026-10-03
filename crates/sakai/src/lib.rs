@@ -2,11 +2,10 @@
 //! artifacts. The design is DESIGN.md; the plan it is built by is PLAN.md.
 
 #[macro_use]
-pub mod i18n;
+extern crate ritsu_base;
 
 pub mod naming;
 pub mod paths;
-pub mod sha256;
 pub mod ast;
 pub mod diag;
 pub mod kw;

@@ -11,7 +11,7 @@
 
 use super::areas::{self, Areas};
 use crate::check::Checked;
-use crate::i18n::Lang;
+use ritsu_base::text::Lang;
 use std::collections::BTreeSet;
 
 /// The `.py` files of the code directory, from it.

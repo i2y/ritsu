@@ -5,9 +5,9 @@
 //! nothing is set needs none (W402). A rule as the target is read from stage C.
 
 use crate::ast::{Role, Target, ValueTo};
-use crate::diag::{Diag, Ref};
+use crate::diag::{self, Diag, DiagExt, Ref};
 use crate::elements::{At, Elements};
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::model::{Model, RelK};
 use crate::naming::{Name, Tool};
 use crate::proto::{self, Protos};
@@ -57,7 +57,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
                             let vm = em.values.iter().find(|x| x.from == v.name).unwrap();
                             let vn = &v.name;
                             diags.push(
-                                Diag::at("W402", &c.file, vm.from_pos.line, vm.from_pos.col, tr!("値が無いことを表す 0 番の値 {vn} に、対応は要りません", "The value 0, {vn}, says nothing is set and needs no mapping"))
+                                diag::at("W402", &c.file, vm.from_pos.line, vm.from_pos.col, tr!("値が無いことを表す 0 番の値 {vn} に、対応は要りません", "The value 0, {vn}, says nothing is set and needs no mapping"))
                                     .source(&c.src)
                                     .note(tr!(
                                         "0 番の値で、名前から列挙の接頭辞を外すと unspecified になるものは、値が設定されていないことを表す印です。rulec の `import proto` と dandori の proto から作る型も、同じ値を外します。",
@@ -72,7 +72,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
                 if !missing.is_empty() {
                     let names: Vec<&str> = missing.iter().map(|v| v.name.as_str()).collect();
                     let (ja, en) = (names.join("、"), names.join(", "));
-                    let mut d = Diag::at("E401", &c.file, em.pos.line, em.pos.col, tr!("「{xn}」の腐敗防止層の対応に、「{yn}」の列挙 {full} の値 {ja} がありません", "The anticorruption layer of {xn} maps no value for {en} of {yn}'s enum {full}")).source(&c.src);
+                    let mut d = diag::at("E401", &c.file, em.pos.line, em.pos.col, tr!("「{xn}」の腐敗防止層の対応に、「{yn}」の列挙 {full} の値 {ja} がありません", "The anticorruption layer of {xn} maps no value for {en} of {yn}'s enum {full}")).source(&c.src);
                     for v in missing.iter().take(3) {
                         let (vn, fp, l) = (&v.name, crate::paths::shown(&f.path), v.line);
                         d = d.note(tr!("{vn} は {fp}:{l} の値です。", "{vn} is the value at {fp}:{l}."));
@@ -82,10 +82,10 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
                         "Every value of the upstream enum gets a value of the downstream or refuse; when the upstream adds a value, the check fails until someone decides what it becomes."
                     ));
                     let first = names[0];
-                    d = d.fix(format!("{first} -> refuse \"…\""));
+                    d = d.fix_line(format!("{first} -> refuse \"…\""));
                     let counted = e.values.iter().filter(|v| !proto::is_unset(e, v)).count();
                     let k = missing.len();
-                    d = d.with(rel_ref.clone()).with(Ref::name(Some(&yn), from.clone(), tr!("値は {counted} 個で、対応が無いのは {k} 個", "{counted} values, {k} of them unmapped")));
+                    d = d.refer(rel_ref.clone()).refer(Ref::name(Some(&yn), from.clone(), tr!("値は {counted} 個で、対応が無いのは {k} 個", "{counted} values, {k} of them unmapped")));
                     diags.push(d);
                 }
                 for v in &em.values {
@@ -93,7 +93,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
                         let vn = &v.from;
                         let have: Vec<&str> = e.values.iter().map(|x| x.name.as_str()).collect();
                         diags.push(
-                            Diag::at("E402", &c.file, v.from_pos.line, v.from_pos.col, tr!("対応の {vn} は、列挙 {full} にありません", "The mapping names {vn}, which is not a value of the enum {full}"))
+                            diag::at("E402", &c.file, v.from_pos.line, v.from_pos.col, tr!("対応の {vn} は、列挙 {full} にありません", "The mapping names {vn}, which is not a value of the enum {full}"))
                                 .source(&c.src)
                                 .note(tr!("{full} の値は {} です。", "The values of {full} are {}.", have.join("、"); have.join(", "))),
                         );
@@ -103,7 +103,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
                     {
                         let have: Vec<&str> = te.values.iter().map(|y| y.name.as_str()).collect();
                         diags.push(
-                            Diag::at("E403", &c.file, at.line, at.col, tr!("対応の先の {x} は、列挙 {tfull} にありません", "The mapping maps to {x}, which is not a value of the target enum {tfull}"))
+                            diag::at("E403", &c.file, at.line, at.col, tr!("対応の先の {x} は、列挙 {tfull} にありません", "The mapping maps to {x}, which is not a value of the target enum {tfull}"))
                                 .source(&c.src)
                                 .note(tr!("{tfull} の値は {} です。", "The values of {tfull} are {}.", have.join("、"); have.join(", "))),
                         );
@@ -127,15 +127,15 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
                     let (p, l, imp) = (&cr.from, cr.line, &cr.import);
                     let short = sym.name.clone();
                     diags.push(
-                        Diag::at("E404", &c.file, r.pos.line, r.pos.col, tr!("「{xn}」は「{yn}」の列挙 {full} を参照していますが、腐敗防止層に対応がありません", "{xn} refers to {yn}'s enum {full}, and its anticorruption layer has no mapping for it"))
+                        diag::at("E404", &c.file, r.pos.line, r.pos.col, tr!("「{xn}」は「{yn}」の列挙 {full} を参照していますが、腐敗防止層に対応がありません", "{xn} refers to {yn}'s enum {full}, and its anticorruption layer has no mapping for it"))
                             .source(&c.src)
                             .note(tr!(
                                 "腐敗防止層の下流は、参照している上流の列挙を、値ごとに自分の値か refuse に読み替えます。",
                                 "Downstream of an anticorruption layer, every upstream enum referred to is mapped, value by value, to the downstream's values or refuse."
                             ))
-                            .fix(format!("enum {short} -> <…>"))
-                            .with(Ref::line(Some(&xn), p, l, Text::same(format!("import \"{imp}\""))).via("proto import"))
-                            .with(Ref::name(Some(&yn), Name::file(Tool::Proto, sym.file.clone()).with("enum", short.clone()), Text::default())),
+                            .fix_line(format!("enum {short} -> <…>"))
+                            .refer(Ref::line(Some(&xn), p, l, Text::same(format!("import \"{imp}\""))).via("proto import"))
+                            .refer(Ref::name(Some(&yn), Name::file(Tool::Proto, sym.file.clone()).with("enum", short.clone()), Text::default())),
                     );
                 }
             }

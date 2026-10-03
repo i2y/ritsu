@@ -13,7 +13,7 @@ mod common;
 
 use common::TempDir;
 use sakai::build::{self, Target};
-use sakai::i18n::Lang;
+use ritsu_base::text::Lang;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
@@ -82,7 +82,7 @@ fn count(dir: &Path, ext: &str) -> usize {
 /// A copy of the case with the settings sakai writes (`--lang ja`), and the mutant's files over
 /// its code, added after the settings were written.
 fn prepared(case: &Case, t: Target, mutant: Option<&Path>) -> TempDir {
-    let dir = TempDir::new();
+    let dir = TempDir::new(case.dir.rsplit('/').next().unwrap_or("case"));
     common::copy_dir(Path::new(case.dir), dir.path());
     let b = build::run(dir.path(), case.map, t, None, false, Lang::Ja).unwrap();
     let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
@@ -158,6 +158,9 @@ fn each(t: Target, run: &(dyn Fn(&Path) -> Said + Sync), at_least: &(dyn Fn(usiz
 
 #[test]
 fn import_linter_keeps_the_map() {
+    if !common::linters() {
+        return;
+    }
     let Some(tool) = common::lint_imports() else {
         common::skip("import-linter is not there (SAKAI_LINT_IMPORTS, or tools/.venv: uv venv --python 3.13 tools/.venv && uv pip install --python tools/.venv/bin/python --require-hashes -r tools/requirements.txt)");
         return;
@@ -177,6 +180,9 @@ fn import_linter_keeps_the_map() {
 
 #[test]
 fn dependency_cruiser_keeps_the_map() {
+    if !common::linters() {
+        return;
+    }
     let Some(tool) = common::depcruise() else {
         common::skip("dependency-cruiser is not there (SAKAI_DEPCRUISE, or tools/node_modules: npm ci --prefix tools)");
         return;
@@ -204,6 +210,9 @@ fn dependency_cruiser_keeps_the_map() {
 
 #[test]
 fn archunit_keeps_the_map() {
+    if !common::linters() {
+        return;
+    }
     let (Some(java), Some(javac), Some(lib)) = (common::java("java"), common::java("javac"), common::archunit_lib()) else {
         common::skip("Java or the jars of ArchUnit are not there (SAKAI_JAVA and SAKAI_JAVAC, or JAVA_HOME; SAKAI_ARCHUNIT_LIB, or tools/java/lib: tools/java/fetch.sh)");
         return;
@@ -270,12 +279,15 @@ fn collect(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
 
 #[test]
 fn go_arch_lint_keeps_the_map() {
+    if !common::linters() {
+        return;
+    }
     let (Some(gal), Some(go)) = (common::go_arch_lint(), common::go()) else {
         common::skip("go or go-arch-lint is not there (SAKAI_GO and SAKAI_GO_ARCH_LINT, or tools/go/bin: tools/go/install.sh)");
         return;
     };
     // go-arch-lint runs `go list`; go's caches go in a directory of the test.
-    let cache = TempDir::new();
+    let cache = TempDir::new("go-cache");
     // go-arch-lint finds go on the PATH: the go named by SAKAI_GO goes first.
     let path = match Path::new(&go).parent().filter(|d| !d.as_os_str().is_empty()) {
         Some(d) => format!("{}:{}", d.display(), std::env::var("PATH").unwrap_or_default()),

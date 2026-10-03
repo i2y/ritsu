@@ -510,13 +510,14 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 
 JSON（`api` と、名指しの JSON の形）では、パスをルートからの相対にする。ルートは、`sakai` に最初に渡したパスの上で `.git` を持つ一番近いディレクトリで、git は走らせずにディレクトリを見て探す。無ければ、渡したディレクトリ（ファイルなら、それがあるディレクトリ）がルートになる。`--root` で替えられる。ルートそのものは `"."` と書く。ルートの外に出るパスは E012 である。geas の `map` の記録も git の差分も、このルートからの相対でパスを書くので、そのまま突き合わせられる。
 
-診断の文面では、ファイルの場所を、一式のツール（koyomi、chobo、dandori、geas）と同じく、sakai を走らせたディレクトリから、渡したパスと同じ書き方で書く。相対パスを渡したなら走らせたディレクトリからの相対、絶対パスを渡したなら絶対パスになる。ファイルの場所とは、位置の `<パス>:<行>:<列>`、関わるものの `<パス>:<行>`、文と注の中のファイルのパス（「「在庫」の proto/warehouse/v1/stock.proto が…」）、通ったときの要約の行の地図である。一方、名指しを文字にして出すときは（関わるものの `proto "…" enum OrderStatus`、文と注の中の名指し、`.ctx` の項を写した `dir "…"`）、JSON と同じくルートからの相対の形のままにする。`--format json` では、ファイルの場所である `file` と `references[].file` を文面と同じに書き、`references[].name` はルートからの相対である。ルートで走らせれば、二つの書き方は同じになる（`tests/golden/` の変異の診断は、変異のディレクトリをルートにして、そこで `sakai check .` を走らせた形である）。`tests/cli.rs` が、ルートの上のディレクトリ、ルートの下のディレクトリ、絶対パスの三つで走らせて、この書き方を確かめる。
+診断の文面では、ファイルの場所を、一式のツール（koyomi、chobo、dandori、geas）と同じく、sakai を走らせたディレクトリから、渡したパスと同じ書き方で書く。相対パスを渡したなら走らせたディレクトリからの相対、絶対パスを渡したなら絶対パスになる。ファイルの場所とは、位置の `<パス>:<行>:<列>`、関わるものの `<パス>:<行>`、文と注の中のファイルのパス（「「在庫」の proto/warehouse/v1/stock.proto が…」）、通ったときの要約の行の地図である。一方、名指しを文字にして出すときは（関わるものの `proto "…" enum OrderStatus`、文と注の中の名指し、`.ctx` の項を写した `dir "…"`）、JSON と同じくルートからの相対の形のままにする。`--format json` では、ファイルの場所である `file` と `references[].file` も、名指しと同じくルートからの相対で書き、地図ごとの JSON の外側に `root`（走らせたディレクトリから見たルート。絶対パスを渡したなら絶対パス）を添える。JSON は人が開くためでなく、ほかのツールと突き合わせるためのもので、ritsu のどの言語も同じ形で書く（ritsu の C.8 で替えた。12.1）。開くときは `root` と `file` をつなぐ。文と注の中のファイルのパスは、JSON でも文面と同じに書く。ルートで走らせれば、文面と JSON の書き方は同じになる（`tests/golden/` の変異の診断は、変異のディレクトリをルートにして、そこで `sakai check .` を走らせた形である）。`tests/cli.rs` が、ルートの上のディレクトリ、ルートの下のディレクトリ、絶対パスの三つで走らせて、この書き方を確かめる。
 
-**理由**：ファイルの場所は、読む人がそのまま開くためのものなので、走らせた場所から書く。名指しは、読み直すと同じ名指しになり、ほかのツール（yuen、git の差分、geas の記録）や api の JSON と突き合わせられることが大事なので、どこで走らせても同じ形にする。
+**理由**：文面のファイルの場所は、読む人がそのまま開くためのものなので、走らせた場所から書く。名指しと JSON は、読み直すと同じものを指し、ほかのツール（yuen、git の差分、geas の記録）や api の JSON と突き合わせられることが大事なので、どこで走らせても同じ形にする。
 
 **捨てたもの**：
 
-- 診断のパスを全部ルートからの相対にすること（B の段階の形）。リポジトリの下のディレクトリで走らせると、診断に出るファイルの場所がそこからは開けないパスになり、一式のツールの診断と並べたときに書き方がそろわない。
+- 文面の診断のパスを全部ルートからの相対にすること（B の段階の形）。リポジトリの下のディレクトリで走らせると、診断に出るファイルの場所がそこからは開けないパスになり、一式のツールの診断と並べたときに書き方がそろわない。
+- JSON のファイルの場所を文面と同じく走らせたディレクトリから書くこと（ritsu の C.8 の前の形）。同じ診断が、走らせた場所によって違う JSON になり、yuen（ルートからの相対）と食い違っていた。
 - 名指しの中のパスも走らせたディレクトリから書くこと。同じ名指しが、走らせた場所によって違う文字になり、読み直しても api の名指しと一致しない。
 
 ### 2.5 同じ・含む
@@ -705,7 +706,7 @@ koyomi の api のパスは、api に渡したファイルのディレクトリ�
 
 ### 4.2 proto
 
-proto は sakai が直接読む（P2）。読み手は自分で書く（依存を足さない。rulec と dandori もそうしている）。読むのは `syntax`、`package`、`import`（`public` と `weak` も）、メッセージ（入れ子）、フィールド（型、番号、`json_name`、`optional`、`repeated`、`map`、`oneof`）、列挙と値、サービスとメソッド（ストリームかどうか）、サービスとメソッドのオプションの名前と値（dandori の `(dandori.v1.workflow)` を doc に出すため）である。拡張（`extend`）と、ほかのオプションは読み飛ばす。
+proto は sakai が直接読む（P2）。読み手は自分で書いた（依存を足さない。rulec と dandori もそうしていた）。ritsu の C.9 で、この読み手を元に ritsu の一つの読み手（ritsu-proto）を作り、sakai はそれで読むようになった（12.1）。読むのは `syntax`、`package`、`import`（`public` と `weak` も）、メッセージ（入れ子）、フィールド（型、番号、`json_name`、`optional`、`repeated`、`map`、`oneof`）、列挙と値、サービスとメソッド（ストリームかどうか）、サービスとメソッドのオプションの名前と値（dandori の `(dandori.v1.workflow)` を doc に出すため）である。拡張（`extend`）と、ほかのオプションは読み飛ばす。
 
 `import` は、地図の `proto root` のディレクトリから順に探し、無ければ、dandori と同じ決まり（ファイルのディレクトリが自分の package の形で終わっていればその上から、次にファイルのディレクトリから）で探す。Google の well-known types、`buf/validate/validate.proto`、`dandori/v1/options.proto` は、ファイルが無くても知っているものとして扱う（中は読まない）。それ以外で見つからない import は W102 で、そのファイルの型は分からないものとして、参照の検査からも外す（buf の依存のように、リポジトリの外にある契約は地図の範囲の外である）。
 
@@ -776,9 +777,9 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 
 位置は、参照のもとの成果物の行が分かるときはそこにする（proto の import）。一式のツールの api は行を言わないので（rulec の `import proto` と `shape`、koyomi の `use calendar`）、そのときはファイルまでを位置にし（`billing/rules/出荷の送料.rule: …`。行と列を書かない）、注に「rulec の api は行を言わないので、ファイルまでを示します」と添え、api のどのフィールドから読んだかを書く。パターンと対応と語の診断は、`.ctx` の行を位置にする。
 
-文面は英語が既定で、`--lang ja` か `SAKAI_LANG=ja` で日本語にする。システムのロケールは見ない。日本語と英語は `tr!` で隣に書き、文は描くときに言語を渡す（koyomi と同じ。テストが英語と日本語の golden を同じプロセスで並行して描けるように）。日本語の文で、ASCII の名前と日本語のあいだには空白を入れる（koyomi と同じ）。コンテキストと語の名前は「」で囲む。
+文面は英語が既定で、`--lang ja`、`SAKAI_LANG=ja`、ritsu のどの言語も読む `RITSU_LANG=ja` のどれかで日本語にする（この順に読む）。システムのロケールは見ない。日本語と英語は `tr!` で隣に書き、文は描くときに言語を渡す（koyomi と同じ。テストが英語と日本語の golden を同じプロセスで並行して描けるように）。日本語の文で、ASCII の名前と日本語のあいだには空白を入れる（koyomi と同じ）。コンテキストと語の名前は「」で囲む。
 
-`--format json` は、地図ごとに一行で `{"file", "ok", "summary", "diagnostics": [{"code", "severity", "file", "line", "col", "message", "notes", "references", "fix"}]}` を出す。`references` は「関わるもの」の並びで、要素ごとに `{"context", "name", "file", "line", "what", "via"}` を持つ。`name` は 2 章の JSON の形の名指し（ファイルの行なら null。パスはルートからの相対）、`file` と `line` はファイルの行（名指しなら null。パスは文面と同じく、走らせたディレクトリから書く。2.4）、`via` は読んだところ（proto の import なら `proto import`。一式の読み込みを作れば、一式のツールの api のフィールド）である。`fix` は `.ctx` にそのまま貼れる書き換え後の行（無ければ null）。`line` と `col` は分からなければ null。キーは `--lang` に依らず英語。
+`--format json` は、地図ごとに一行で `{"root", "file", "ok", "summary", "diagnostics": [{"code", "severity", "file", "line", "col", "message", "notes", "references", "fix"}]}` を出す。`root` は走らせたディレクトリから見たルート、`file` はルートからの相対である（2.4）。`references` は「関わるもの」の並びで、要素ごとに `{"context", "name", "file", "line", "what", "via"}` を持つ。`name` は 2 章の JSON の形の名指し（ファイルの行なら null。パスはルートからの相対）、`file` と `line` はファイルの行（名指しなら null。パスはルートからの相対。2.4）、`via` は読んだところ（proto の import なら `proto import`。一式の読み込みを作れば、一式のツールの api のフィールド）である。`fix` は `.ctx` にそのまま貼れる書き換え後の行（無ければ null）。`line` と `col` は分からなければ null。キーは `--lang` に依らず英語。
 
 `severity` は `error`、`warning`、`note` の三つ。exit code は 0（エラーなし。警告と note はあってよい）、1（エラーあり）、2（引数の誤り、読めないファイル、sakai 自身の不具合）。
 
@@ -938,7 +939,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 | `sakai api <map.ctx> [--root <dir>]` | 地図、属し方、境界を越える参照を JSON で（9 章） |
 | `sakai explain <コード>`、`sakai explain --all [--format markdown]` | 診断のコードを引く |
 
-`--lang ja|en` はどのコマンドにも付けられる（無ければ `SAKAI_LANG`、それも無ければ英語）。`--root` は、パスを数えるルートを替える（2.4。無ければ、最初に渡したパスの上で `.git` を持つ一番近いディレクトリ）。`sakai --help`、`sakai <コマンド> --help`、`sakai --version`。
+`--lang ja|en` はどのコマンドにも付けられる（無ければ `SAKAI_LANG`、次に ritsu のどの言語も読む `RITSU_LANG`、どちらも無ければ英語）。`--root` は、パスを数えるルートを替える（2.4。無ければ、最初に渡したパスの上で `.git` を持つ一番近いディレクトリ）。`sakai --help`、`sakai <コマンド> --help`、`sakai --version`。
 
 **決定**：コマンドとフラグの定義を `src/cli.rs` の一枚の表に置き、`--help` の表示と引数の読み取りが同じ表を引く（rulec の 12.1、koyomi、chobo と同じ）。知らないフラグ、閉じた集合の外の値（`--target depguard`）、値の無いフラグ、二度書いたフラグは exit 2 で止める。黙って無視すると、エージェントはフラグが効いたと信じて次に進むからである。
 
@@ -1151,7 +1152,7 @@ depguard の利点は、golangci-lint に入っていて、多くのチームが
 
 `tests/build.rs` は、例の地図のまとまりと、それぞれを import してよいまとまり（7.1 の表）、例に置いた四つの設定がいまの地図から書くものと一字も違わないこと（`SAKAI_BLESS=1` で書き直す。この章に貼った設定は、そのファイルから抜き出した）、地図を変えると `--check` が E502 を言うこと、E501 の場合を確かめる。
 
-ツールの置き場所は sakai の `tools/` の下で、git に入れない（版を書いたファイルと取ってくるスクリプトだけを入れる。入れ方は `tools/README.md`）。環境変数でほかの場所のものも使える。ツールが無ければ、そのテストは `SKIP: <理由>` の一行を出して通す（PLAN の 0 章）。
+ツールの置き場所は sakai の `tools/` の下で、git に入れない（版を書いたファイルと取ってくるスクリプトだけを入れる。入れ方は `tools/README.md`）。環境変数でほかの場所のものも使える。ツールが無ければ、そのテストは `SKIP: sakai: <理由>` の一行を出して通す（PLAN の 0 章）。
 
 ## 8. CML への出力
 
@@ -1373,14 +1374,26 @@ C の段階で、この例を作った（`通販.ctx` と五つのコンテキ�
 ## 12. 実装
 
 - Rust（edition 2024、手元の stable 1.94.1 で通ること）。依存は serde_json だけ（`preserve_order` の機能を使う）。
-- SHA-256 は自分で書く（rulec、koyomi と同じ。FIPS 180-4 の既知の値でテストする）。地図とコンテキストのファイルのハッシュ（api）と、共有カーネルの写しの比べ合わせ（E308）に使う。
-- proto の読み手は自分で書く（4.2）。テストは、buf があれば、例と fixture の proto を `buf build -o -#format=json` の結果と比べる（package、import、メッセージ、列挙と値、サービスとメソッド）。`buf/validate` を import する proto は、buf が BSR の依存なしに組めないので比べない。
+- SHA-256 は ritsu-base のもの（FIPS 180-4 の既知の値でテストしてある）。地図とコンテキストのファイルのハッシュ（api）と、共有カーネルの写しの比べ合わせ（E308）に使う。
+- proto の読み手は ritsu-proto（4.2。ritsu の C.9 で、sakai の読み手を元に作った）。sakai に残したのは、要素の名指し方と、何も設定していないことを言う列挙の値の決め方（1.7）である。テストは、buf があれば、例と fixture の proto を `buf build -o -#format=json` の結果と比べる（package、import、メッセージ、列挙と値、サービスとメソッド）。`buf/validate` を import する proto は、buf が BSR の依存なしに組めないので比べない。
 - 一式のツールは子プロセスで呼ぶ（`src/suite/`。PLAN の C.1〜C.5 で作る。一式の言語を一つの処理系にまとめるかが決まるまで止めてある）。時間の上限は Rust の側で `Child::try_wait` を回して決める（macOS に `timeout` が無い）。
 - 診断の文面は `tr!` で英語と日本語を隣に書く。台帳は `src/codes.rs`。
 - コードの import の検査の設定は `src/build/`（`areas.rs` が 7.1 の表を作り、`import_linter.rs`、`depcruise.rs`、`archunit.rs`、`go_arch_lint.rs` がツールごとの言葉に写し、`mod.rs` が頭と書き出しと `--check` を受け持つ）。CML は `src/cml.rs`。doc は `src/doc/`（D の段階）。
 - 外のツールは、版を固定して `tools/` に置く。import-linter は `tools/requirements.txt`（2.15。`uv venv --python 3.13 tools/.venv`）、dependency-cruiser と TypeScript は `tools/package.json` と `tools/package-lock.json`（16.10.4 と 5.9.3）、ArchUnit と JUnit は `tools/java/fetch.sh`（Maven Central から取って SHA-256 を確かめる）、go-arch-lint は `tools/go/install.sh`（`go install …@v1.19.0`、`-trimpath`）、Context Mapper は `tools/cml/fetch.sh` と `tools/cml/Validate.java`、Mermaid は `tools/mermaid/`。どれも、取ってきたものは git に入れない。
 
 モジュールの分け方と、各段階の作業は PLAN.md にある。
+
+### 12.1 ritsu の土台へ移したもの
+
+sakai は ritsu（七つの言語を一つにまとめる処理系）に取り込まれ、ほかの言語と重なっていたコードを、ritsu の土台のクレート（ritsu-base と ritsu-testkit）のものに替えた（ritsu の PLAN の C.8）。替えたのは、SHA-256、二つの言語の文（`tr!`、`Text`、`Lang`）、診断の共通の部分、台帳の書き出しと `explain`、コマンドの表の読み方と `--help` の組み立て、名指しを読む仕組み（2 章の決まりのうち、ツールの語と種類の語と組の読み方）、ルートの探し方とパスの畳み方と表示のパス、テストの共通の部分（一時ディレクトリ、時間の上限つきの実行、golden、ツールの探し方、SKIP の行）である。sakai に残したのは、`.ctx` の字句と構文、診断の sakai の部分（関わるもの。`Refs`）、名指しの診断の文、台帳とコマンドの表の中身、地図の検査、`build`、`export cml`、`api` である。名指しを試す表は ritsu-base の `tests/fixtures/naming.tsv` 一つになり、sakai の写しは消した。
+
+出力は、次のものを除いて一字も変えていない。
+
+- **`--format json` のファイルの場所**：`file` と `references[].file` を、走らせたディレクトリからでなくルートからの相対で書き、地図ごとの JSON の先頭に `root`（走らせたディレクトリから見たルート）を足した（2.4、5.1）。ritsu のどの言語も JSON のパスを同じ形で書くためで（ritsu の DESIGN 6.2 の 9）、yuen とも食い違わなくなる。文面と `api` は変わらない。
+- **言語の選び方に `RITSU_LANG` が入った**：`--lang`、`SAKAI_LANG`、`RITSU_LANG`、英語の順に読む。`--lang` の説明と `sakai --help` の最後の行が、この順を書くようになった。
+- テストの SKIP の行は、ritsu のどのクレートとも同じ `SKIP: sakai: <理由>` の形になった。`RITSU_TEST_LEVEL` が `fast` なら、外の linter と buf を使うテストは走らせずに SKIP を言う。
+
+続く C.9 で、proto の読み手を ritsu-proto に移した。ritsu-proto は sakai の読み手を元にし、rulec と dandori の読み手が読むもの（Protovalidate の規則、`buf.yaml` と `buf.lock`、オプションの木、import の先を何段でも読むこと）を足したものである。移す前と後で、三つのリポジトリの `.proto` の全部について sakai の読み手が出すもの（要素と行、読めないときの位置と文、import の行き先、型の名前の解決）が一字も違わないことを確かめ、それを ritsu-proto の `tests/golden/sakai.txt` に残した。読み手の単体のテスト（入れ子、`group`、名前の解決、import を探す場所）も ritsu-proto に移した。sakai の出力は変わらない。
 
 ## 13. 捨てたもの
 

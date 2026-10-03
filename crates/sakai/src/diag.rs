@@ -2,47 +2,21 @@
 //! what to write instead, and what is involved — the artifacts, the lines of the `.ctx` and the
 //! relationships the diagnostic is about, one a line.
 //!
-//! The shape follows koyomi's and chobo's `src/diag.rs`: the headline, the line of the source,
-//! `= ` notes, then the things involved. The JSON keeps its keys in English whatever the
-//! language.
+//! What every language's diagnostic has is ritsu-base's (`ritsu_base::diag`): the headline, the
+//! line of the source, `= ` notes, the fixed line, and the JSON with its keys in English whatever
+//! the language. What is sakai's is [`Refs`], the things involved, printed after the fixed line.
+//! A message is spaced and capitalized as the suite writes it ([`ritsu_base::text::spaced`]).
+//!
+//! A place is written twice (DESIGN 2.4): for a person from where sakai was run, the way the
+//! path given was written ([`shown`]), and in the JSON from the root, with the root beside it.
 
-use crate::i18n::{Lang, Text, pad, say, width};
 use crate::naming::Name;
 use crate::paths::shown;
-use serde_json::{Value, json};
+use ritsu_base::diag::Extra;
+use ritsu_base::json::Json;
+use ritsu_base::text::{Lang, Text, pad, spaced, width};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Severity {
-    Error,
-    Warning,
-    Note,
-}
-
-impl Severity {
-    /// E… is an error, W… a warning, N… a note.
-    pub fn of(code: &str) -> Severity {
-        match code.as_bytes().first() {
-            Some(b'W') => Severity::Warning,
-            Some(b'N') => Severity::Note,
-            _ => Severity::Error,
-        }
-    }
-
-    pub fn word(self, lang: Lang) -> &'static str {
-        match (self, lang) {
-            (Severity::Error, Lang::En) => "error",
-            (Severity::Warning, Lang::En) => "warning",
-            (Severity::Note, Lang::En) => "note",
-            (Severity::Error, Lang::Ja) => "エラー",
-            (Severity::Warning, Lang::Ja) => "警告",
-            (Severity::Note, Lang::Ja) => "備考",
-        }
-    }
-
-    pub fn key(self) -> &'static str {
-        self.word(Lang::En)
-    }
-}
+pub use ritsu_base::diag::Severity;
 
 /// One thing a diagnostic is about: the context it belongs to, where it is (a name, or a line of
 /// a file), and what it is there.
@@ -85,130 +59,80 @@ impl Ref {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Diag {
-    pub code: &'static str,
-    pub severity: Severity,
-    /// The file, as a path from the root.
-    pub file: String,
-    pub line: Option<usize>,
-    pub col: Option<usize>,
-    /// The text of that line.
-    pub src: Option<String>,
-    pub message: Text,
-    pub notes: Vec<Text>,
-    pub refs: Vec<Ref>,
-    /// The line to write in the `.ctx` instead, ready to paste.
-    pub fix: Option<String>,
+/// sakai's part of a diagnostic: what is involved.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Refs(pub Vec<Ref>);
+
+impl Extra for Refs {
+    fn after_fix(&self, lang: Lang, out: &mut String) {
+        let refs = &self.0;
+        if refs.is_empty() {
+            return;
+        }
+        out.push_str(if lang == Lang::Ja { "  関わるもの:\n" } else { "  involved:\n" });
+        let cw = refs.iter().map(|r| r.context.as_deref().map(width).unwrap_or(0)).max().unwrap_or(0);
+        let pw = refs.iter().map(|r| width(&r.place())).max().unwrap_or(0);
+        for r in refs {
+            // The context's column, when any line has one.
+            let c = if cw == 0 { String::new() } else { format!("{}  ", pad(r.context.as_deref().unwrap_or(""), cw)) };
+            // What a reference is, is often a line of a `.ctx` or a proto: written as it is.
+            let what = r.what.get(lang).to_string();
+            let line = if what.is_empty() { format!("{c}{}", r.place()) } else { format!("{c}{}  {what}", pad(&r.place(), pw)) };
+            out.push_str(&format!("      {}\n", line.trim_end()));
+        }
+    }
+
+    /// The things involved; a file's path from the root, as every path of the JSON is.
+    fn json(&self, lang: Lang) -> Vec<(String, Json)> {
+        let refs = self.0.iter().map(|r| {
+            Json::obj([
+                ("context", Json::opt_str(r.context.clone())),
+                ("name", r.name.as_ref().map(Name::to_json).unwrap_or(Json::Null)),
+                ("file", Json::opt_str(r.file.clone())),
+                ("line", r.line.into()),
+                ("what", Json::str(r.what.get(lang))),
+                ("via", Json::opt_str(r.via.clone())),
+            ])
+        });
+        vec![("references".into(), Json::arr(refs))]
+    }
+
+    fn say(&self, t: &Text, lang: Lang) -> String {
+        spaced(t, lang)
+    }
 }
 
-impl Diag {
-    pub fn new(code: &'static str, file: &str, line: Option<usize>, col: Option<usize>, message: Text) -> Diag {
-        Diag { code, severity: Severity::of(code), file: file.to_string(), line, col, src: None, message, notes: vec![], refs: vec![], fix: None }
-    }
+/// A diagnostic of sakai's: ritsu-base's, with what is involved.
+pub type Diag = ritsu_base::diag::Diag<Refs>;
 
-    /// At a line and column of a file.
-    pub fn at(code: &'static str, file: &str, line: usize, col: usize, message: Text) -> Diag {
-        Diag::new(code, file, Some(line), Some(col), message)
-    }
+/// At a line and a column of a file (a path from the root).
+pub fn at(code: &'static str, file: &str, line: usize, col: usize, message: Text) -> Diag {
+    Diag::at(code, &shown(file), line, col, message).rel(file)
+}
 
-    /// About a whole file: a tool's api says no line, or the finding is about the file itself.
-    pub fn file(code: &'static str, file: &str, message: Text) -> Diag {
-        Diag::new(code, file, None, None, message)
-    }
+/// About a whole file: a tool's api says no line, or the finding is about the file itself.
+pub fn whole(code: &'static str, file: &str, message: Text) -> Diag {
+    Diag::whole(code, &shown(file), message).rel(file)
+}
 
-    /// The line's text, from the file's source.
-    pub fn source(mut self, src: &str) -> Diag {
-        if let Some(l) = self.line
-            && l > 0
-        {
-            self.src = src.lines().nth(l - 1).map(|s| s.trim_end().to_string());
-        }
+/// What sakai adds to a diagnostic as it is built.
+pub trait DiagExt {
+    /// One more thing involved.
+    fn refer(self, r: Ref) -> Self;
+}
+
+impl DiagExt for Diag {
+    fn refer(mut self, r: Ref) -> Diag {
+        self.extra.0.push(r);
         self
     }
+}
 
-    pub fn note(mut self, t: Text) -> Diag {
-        self.notes.push(t);
-        self
-    }
-
-    pub fn with(mut self, r: Ref) -> Diag {
-        self.refs.push(r);
-        self
-    }
-
-    pub fn fix(mut self, f: impl Into<String>) -> Diag {
-        self.fix = Some(f.into());
-        self
-    }
-
-    pub fn is_error(&self) -> bool {
-        self.severity == Severity::Error
-    }
-
-    /// Where it is, the path written from where sakai was run (DESIGN 5.1).
-    pub fn place(&self) -> String {
-        let f = shown(&self.file);
-        match (self.line, self.col) {
-            (Some(l), Some(c)) => format!("{f}:{l}:{c}"),
-            (Some(l), None) => format!("{f}:{l}"),
-            _ => f,
-        }
-    }
-
-    /// What a person reads.
-    pub fn render(&self, lang: Lang) -> String {
-        let mut out = format!("{}[{}]: {}: {}\n", self.severity.word(lang), self.code, self.place(), say(&self.message, lang));
-        if let (Some(s), Some(l)) = (&self.src, self.line) {
-            out.push_str(&format!("  {l:>4} | {s}\n"));
-        }
-        for n in &self.notes {
-            out.push_str(&format!("  = {}\n", say(n, lang)));
-        }
-        if let Some(f) = &self.fix {
-            let head = if lang == Lang::Ja { "直した行" } else { "The line, fixed" };
-            out.push_str(&format!("  = {head}: {}\n", f.trim()));
-        }
-        if !self.refs.is_empty() {
-            out.push_str(if lang == Lang::Ja { "  関わるもの:\n" } else { "  involved:\n" });
-            let cw = self.refs.iter().map(|r| r.context.as_deref().map(width).unwrap_or(0)).max().unwrap_or(0);
-            let pw = self.refs.iter().map(|r| width(&r.place())).max().unwrap_or(0);
-            for r in &self.refs {
-                // The context's column, when any line has one.
-                let c = if cw == 0 { String::new() } else { format!("{}  ", pad(r.context.as_deref().unwrap_or(""), cw)) };
-                // What a reference is, is often a line of a `.ctx` or a proto: written as it is.
-                let what = r.what.get(lang).to_string();
-                let line = if what.is_empty() { format!("{c}{}", r.place()) } else { format!("{c}{}  {what}", pad(&r.place(), pw)) };
-                out.push_str(&format!("      {}\n", line.trim_end()));
-            }
-        }
-        out
-    }
-
-    /// The same finding for a program (DESIGN 5.1). The files are written as the text writes them,
-    /// from where sakai was run; a name keeps its path from the root, as names do in JSON.
-    pub fn to_json(&self, lang: Lang) -> Value {
-        json!({
-            "code": self.code,
-            "severity": self.severity.key(),
-            "file": shown(&self.file),
-            "line": self.line,
-            "col": self.col,
-            "message": say(&self.message, lang),
-            "notes": self.notes.iter().map(|n| say(n, lang)).collect::<Vec<_>>(),
-            "references": self.refs.iter().map(|r| json!({
-                "context": r.context,
-                "name": r.name.as_ref().map(Name::to_json),
-                "file": r.file.as_deref().map(shown),
-                "line": r.line,
-                "what": r.what.get(lang),
-                "via": r.via,
-            })).collect::<Vec<_>>(),
-            "fix": self.fix,
-        })
-    }
+/// ritsu-base's JSON as serde_json's, for the outputs sakai writes with serde_json.
+pub fn value(j: &Json) -> serde_json::Value {
+    serde_json::from_str(&j.compact()).expect("ritsu-base writes JSON serde_json reads")
 }
 
 pub fn has_errors(diags: &[Diag]) -> bool {
-    diags.iter().any(Diag::is_error)
+    ritsu_base::diag::has_errors(diags)
 }

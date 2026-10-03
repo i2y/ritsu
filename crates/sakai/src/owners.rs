@@ -2,8 +2,8 @@
 //! to the context of the deepest entry of `owns` that holds it (E101, E102), the entries are in
 //! the scope (E103), and hold something (W101).
 
-use crate::diag::{Diag, Ref};
-use crate::i18n::Text;
+use crate::diag::{self, Diag, DiagExt, Ref};
+use ritsu_base::text::Text;
 use crate::model::{Model, Own};
 use crate::naming::{Name, Tool};
 use crate::paths;
@@ -114,14 +114,14 @@ pub fn own(m: &Model) -> (Vec<Artifact>, Vec<Diag>) {
                 let (a, b) = (&m.contexts[cj].name, &c.name);
                 let t = o.text();
                 diags.push(
-                    Diag::at("E102", &c.file, o.pos.line, o.pos.col, tr!("{t} を、「{a}」と「{b}」の二つのコンテキストが同じ深さで持っています", "Both {a} and {b} own {t}, at the same depth"))
+                    diag::at("E102", &c.file, o.pos.line, o.pos.col, tr!("{t} を、「{a}」と「{b}」の二つのコンテキストが同じ深さで持っています", "Both {a} and {b} own {t}, at the same depth"))
                         .source(&c.src)
                         .note(tr!(
                             "成果物は、それを含むいちばん深い項のコンテキストに属します。同じ深さの項が二つあると、どちらのものか決められません。",
                             "An artifact belongs to the context of the deepest entry that holds it; two entries at the same depth leave it undecided."
                         ))
-                        .with(Ref::line(Some(a), &m.contexts[cj].file, m.contexts[cj].owns.iter().find(|x| x.path == o.path).unwrap().pos.line, Text::same(t.clone())))
-                        .with(Ref::line(Some(b), &c.file, o.pos.line, Text::same(t.clone()))),
+                        .refer(Ref::line(Some(a), &m.contexts[cj].file, m.contexts[cj].owns.iter().find(|x| x.path == o.path).unwrap().pos.line, Text::same(t.clone())))
+                        .refer(Ref::line(Some(b), &c.file, o.pos.line, Text::same(t.clone()))),
                 );
             }
         }
@@ -136,7 +136,7 @@ pub fn own(m: &Model) -> (Vec<Artifact>, Vec<Diag>) {
             if !arts.iter().any(|a| o.holds(&a.path)) {
                 let t = o.text();
                 diags.push(
-                    Diag::at("W101", &c.file, o.pos.line, o.pos.col, tr!("{t} は成果物を一つも含みません", "The entry {t} holds no artifact"))
+                    diag::at("W101", &c.file, o.pos.line, o.pos.col, tr!("{t} は成果物を一つも含みません", "The entry {t} holds no artifact"))
                         .source(&c.src)
                         .note(tr!(
                             "パスの書き誤りかもしれません。成果物は、.rule、.flow、.cal、.book、.geas、.proto のファイルと、地図の `code` に書いた言語の、その置き場所の下のコードです。",
@@ -174,16 +174,16 @@ pub fn own(m: &Model) -> (Vec<Artifact>, Vec<Diag>) {
             Some(d) if unowned.iter().filter(|x| paths::contains(&d, &x.path)).count() > 1 => {
                 let n = unowned.iter().filter(|x| paths::contains(&d, &x.path)).count();
                 let dir = if d == "." { "./".to_string() } else { format!("{d}/") };
-                let mut dg = Diag::file("E101", &dir, tr!("この下のファイル {n} 件は、どのコンテキストにも属しません", "No context owns the {n} files under it")).note(note);
+                let mut dg = diag::whole("E101", &dir, tr!("この下のファイル {n} 件は、どのコンテキストにも属しません", "No context owns the {n} files under it")).note(note);
                 for x in unowned.iter().filter(|x| paths::contains(&d, &x.path)).take(3) {
-                    dg = dg.with(Ref::name(None, x.name(), Text::default()));
+                    dg = dg.refer(Ref::name(None, x.name(), Text::default()));
                 }
                 diags.push(dg);
                 said.push(d);
             }
             _ => {
                 let sp = paths::shown(&a.path);
-                diags.push(Diag::file("E101", &a.path, tr!("{sp} は、どのコンテキストにも属しません", "No context owns {sp}")).note(note));
+                diags.push(diag::whole("E101", &a.path, tr!("{sp} は、どのコンテキストにも属しません", "No context owns {sp}")).note(note));
                 said.push(a.path.clone());
             }
         }
@@ -193,7 +193,7 @@ pub fn own(m: &Model) -> (Vec<Artifact>, Vec<Diag>) {
 
 pub fn out_of_scope(m: &Model, file: &str, src: &str, o: &Own) -> Diag {
     let t = o.text();
-    Diag::at("E103", file, o.pos.line, o.pos.col, tr!("{t} は地図の範囲の外です", "The entry {t} is outside the map's scope")).source(src).note(scope_note(m))
+    diag::at("E103", file, o.pos.line, o.pos.col, tr!("{t} は地図の範囲の外です", "The entry {t} is outside the map's scope")).source(src).note(scope_note(m))
 }
 
 /// What the scope is (DESIGN 1.3), with the map's `covers` as paths from the root.

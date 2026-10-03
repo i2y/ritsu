@@ -7,7 +7,7 @@ mod common;
 
 use sakai::build::areas::{self, Language};
 use sakai::build::{self, Target};
-use sakai::i18n::Lang;
+use ritsu_base::text::Lang;
 use std::path::{Path, PathBuf};
 
 fn checked(dir: &Path, map: &str) -> sakai::check::Outcome {
@@ -75,7 +75,7 @@ sakai-ordering [ordering] <- sakai-ordering
 #[test]
 fn the_settings_of_the_example_are_what_the_map_writes() {
     let ex = example();
-    let bless = std::env::var("SAKAI_BLESS").is_ok();
+    let bless = ritsu_testkit::golden::bless();
     let mut failures = Vec::new();
     for t in Target::ALL {
         let b = build::run(&ex, "通販.ctx", t, None, !bless, Lang::Ja).unwrap();
@@ -90,7 +90,7 @@ fn the_settings_of_the_example_are_what_the_map_writes() {
 /// of ordering and delivery is gone, and each tool's settings would change.
 #[test]
 fn check_says_when_the_map_moved_on() {
-    let dir = common::TempDir::new();
+    let dir = common::TempDir::new("check");
     common::copy_dir(&example(), dir.path());
     for t in Target::ALL {
         let b = build::run(dir.path(), "通販.ctx", t, None, true, Lang::Ja).unwrap();
@@ -131,7 +131,7 @@ fn e501(base: &str, edits: &[(&str, &str, &str)], map: &str, t: Target) -> Strin
 }
 
 fn example_variant(edits: &[(&str, &str, &str)]) -> common::TempDir {
-    let dir = common::TempDir::new();
+    let dir = common::TempDir::new("example");
     common::copy_dir(&example(), dir.path());
     for (file, old, new) in edits {
         let p = dir.path().join(file);

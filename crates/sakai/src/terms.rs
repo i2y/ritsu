@@ -5,9 +5,9 @@
 //! relationship (E410); and every term crosses a boundary (W401).
 
 use crate::ast::{Element, Role, Target, Term, ValueTo};
-use crate::diag::{Diag, Ref};
+use crate::diag::{self, Diag, DiagExt, Ref};
 use crate::elements::{At, Elements};
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::model::{Model, RelK};
 use crate::naming::{Name, Tool};
 use crate::proto::{Protos, Symbol};
@@ -39,7 +39,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
     let mut diags = Vec::new();
     let at = |c: usize, p: crate::ast::Pos, code: &'static str, msg: Text| {
         let cx = &m.contexts[c];
-        Diag::at(code, &cx.file, p.line, p.col, msg).source(&cx.src)
+        diag::at(code, &cx.file, p.line, p.col, msg).source(&cx.src)
     };
     // E408: what a term means is in its own published language.
     for (ci, c) in m.contexts.iter().enumerate() {
@@ -181,7 +181,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                                 dg = dg.note(tr!("「{xn}」の「{to}」は「{dv}」で、「{yn}」の「{tn}」とは違う意味です。", "{xn}'s {to} is \"{dv}\", which is not what {yn}'s {tn} means."));
                             }
                             dg = dg.note(tr!("読み替えた先には、違う名前を付けます。", "Give what it is mapped to another name."));
-                            diags.push(dg.with(t_ref).with(d_ref));
+                            diags.push(dg.refer(t_ref).refer(d_ref));
                         }
                         continue;
                     }
@@ -216,7 +216,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                             "To fix it: rename {xn}'s term; if it means the same, write `{dn} as {yn}.{tn}`; to map it, make `upstream {yn}` an anticorruption layer and write `term {tn} -> <a term of {xn}>`."
                         ));
                     }
-                    diags.push(dg.with(from_ref).with(el_ref).with(t_ref).with(d_ref));
+                    diags.push(dg.refer(from_ref).refer(el_ref).refer(t_ref).refer(d_ref));
                 }
             }
         }

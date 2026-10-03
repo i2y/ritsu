@@ -9,7 +9,7 @@
 
 use super::areas::{self, Areas};
 use crate::check::Checked;
-use crate::i18n::Lang;
+use ritsu_base::text::Lang;
 
 /// `s` with the characters a regular expression gives a meaning to escaped.
 fn escape(s: &str) -> String {

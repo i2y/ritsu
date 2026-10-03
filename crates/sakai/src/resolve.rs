@@ -5,8 +5,8 @@
 //! files are read (`elements.rs`).
 
 use crate::ast::*;
-use crate::diag::Diag;
-use crate::i18n::Text;
+use crate::diag::{self, Diag};
+use ritsu_base::text::Text;
 use crate::model::*;
 use crate::naming::Tool;
 use crate::parse;
@@ -29,7 +29,7 @@ struct R<'a> {
 
 impl R<'_> {
     fn at(&mut self, code: &'static str, file: &str, src: &str, p: Pos, msg: Text) -> &mut Diag {
-        self.diags.push(Diag::at(code, file, p.line, p.col, msg).source(src));
+        self.diags.push(diag::at(code, file, p.line, p.col, msg).source(src));
         self.diags.last_mut().unwrap()
     }
 
@@ -39,7 +39,7 @@ impl R<'_> {
         let p = match paths::join(base, &s.value) {
             Ok(p) => p,
             Err(e) => {
-                let d = self.at("E012", file, src, s.pos, e.text(&s.value));
+                let d = self.at("E012", file, src, s.pos, paths::error_text(e, &s.value));
                 if e != paths::PathError::Empty {
                     d.notes.push(root_note());
                 }

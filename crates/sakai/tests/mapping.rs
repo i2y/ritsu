@@ -14,7 +14,7 @@ fn a_value_the_upstream_adds_is_named() {
     for other in ["ORDER_STATUS_RECEIVED", "ORDER_STATUS_PAID", "ORDER_STATUS_SHIPPED", "ORDER_STATUS_CANCELLED", "ORDER_STATUS_UNSPECIFIED"] {
         assert!(!d.message.en.contains(other), "{other} is mapped");
     }
-    assert_eq!(d.fix.as_deref(), Some("ORDER_STATUS_RETURNED -> refuse \"…\""));
+    assert_eq!(d.fixed_line(), Some("ORDER_STATUS_RETURNED -> refuse \"…\""));
 }
 
 #[test]
