@@ -14,6 +14,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -74,8 +75,8 @@ fn 規則は自分自身と同じ() {
 #[test]
 fn 一つの金額を動かすと_その行の届く範囲だけが出る() {
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
-    let dir = std::env::temp_dir().join("rulec-vdiff-送料");
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("vdiff-送料");
+    let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
     std::fs::write(&a, &src).unwrap();
     // 遠隔地・2000g 超えの基本送料だけを上げる。examples はこの行に当たらない。
@@ -109,8 +110,8 @@ fn 一つの金額を動かすと_その行の届く範囲だけが出る() {
 #[test]
 fn 並びを畳む規則は_歩く側が変わったら比べられないと言う() {
     let src = std::fs::read_to_string(root().join("tests/corpus/全国運賃.rule")).unwrap();
-    let dir = std::env::temp_dir().join("rulec-vdiff-fold");
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("vdiff-fold");
+    let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
     std::fs::write(&a, &src).unwrap();
     let (as_, bs) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string());
@@ -160,8 +161,8 @@ fn 領域と記録の二つの答えが食い違わない() {
     for p in corpus() {
         let name = p.file_stem().unwrap().to_string_lossy().to_string();
         let src = std::fs::read_to_string(&p).unwrap();
-        let dir = std::env::temp_dir().join(format!("rulec-vdiff-{name}"));
-        let _ = std::fs::create_dir_all(&dir);
+        let tmp = TempDir::new(&format!("vdiff-{name}"));
+        let dir = tmp.path().to_path_buf();
         let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
         std::fs::write(&a, &src).unwrap();
         let (as_, bs) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string());
@@ -266,8 +267,8 @@ fn 領域と記録の二つの答えが食い違わない() {
 #[test]
 fn 予算を超えたら_領域を出さずにそう言う() {
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
-    let dir = std::env::temp_dir().join("rulec-vdiff-budget");
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("vdiff-budget");
+    let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
     std::fs::write(&a, &src).unwrap();
     std::fs::write(&b, src.replace("| 遠隔地      | >2000g  | 1800円", "| 遠隔地      | >2000g  | 2000円")).unwrap();
@@ -288,8 +289,8 @@ fn 予算を超えたら_領域を出さずにそう言う() {
 #[test]
 fn 受け付ける入力が変わったことは_答えの差とは別に出る() {
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
-    let dir = std::env::temp_dir().join("rulec-vdiff-domain");
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("vdiff-domain");
+    let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
     std::fs::write(&a, &src).unwrap();
     let widened = src.replace("range >=1g <=40kg", "range >=1g <=60kg");
@@ -376,8 +377,8 @@ fn bump_each_amount(src: &str) -> Vec<String> {
 #[test]
 fn 文書に載せた実演は_いまの出力と一致する() {
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
-    let dir = std::env::temp_dir().join("rulec-vdiff-demo");
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("vdiff-demo");
+    let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("v3.rule"), dir.join("v4.rule"));
     std::fs::write(&a, src.replace("rule 送料(shipping_fee) v4", "rule 送料(shipping_fee) v3")).unwrap();
     std::fs::write(&b, src.replace("| 遠隔地      | >2000g  | 1800円", "| 遠隔地      | >2000g  | 2000円")).unwrap();
@@ -423,8 +424,8 @@ fn 意味の無い旗は断り_意味のある旗は効く() {
 
     // --terse keeps the example out of both renderings, in the mode that has one.
     let src = std::fs::read_to_string(&p).unwrap();
-    let dir = std::env::temp_dir().join("rulec-vdiff-terse");
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("vdiff-terse");
+    let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
     std::fs::write(&a, &src).unwrap();
     std::fs::write(&b, src.replace("| 遠隔地      | >2000g  | 1800円", "| 遠隔地      | >2000g  | 2000円")).unwrap();
@@ -451,8 +452,8 @@ fn 意味の無い旗は断り_意味のある旗は効く() {
 #[test]
 fn 答えを決めるものを変えたら_短絡してはいけない() {
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
-    let dir = std::env::temp_dir().join("rulec-vdiff-decides");
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("vdiff-decides");
+    let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
     std::fs::write(&a, &src).unwrap();
     let (as_, bs) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string());
@@ -504,8 +505,8 @@ fn 答えを決めるものを変えたら_短絡してはいけない() {
 #[test]
 fn 書き方だけ変えたら_短絡してよい() {
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
-    let dir = std::env::temp_dir().join("rulec-vdiff-same");
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("vdiff-same");
+    let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
     std::fs::write(&a, &src).unwrap();
     let (as_, bs) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string());
@@ -533,8 +534,8 @@ fn 書き方だけ変えたら_短絡してよい() {
 #[test]
 fn 入力を共有する導出の規則でも_外について言い切れる() {
     let src = std::fs::read_to_string(root().join("tests/corpus/クーポン併用.rule")).unwrap();
-    let dir = std::env::temp_dir().join(format!("rulec-vdiff-stack-{}", std::process::id()));
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("vdiff-stack");
+    let dir = tmp.path().to_path_buf();
     let old = dir.join("old.rule");
     let new = dir.join("new.rule");
     std::fs::write(&old, &src).unwrap();
@@ -547,5 +548,4 @@ fn 入力を共有する導出の規則でも_外について言い切れる() {
     assert!(is_true(&j, "total"), "外について言い切れていない\n{out}");
     assert!(int(&j, "differing") > 0, "差があるはず\n{out}");
     assert_eq!(code, 1, "差があるので exit は 1");
-    let _ = std::fs::remove_dir_all(&dir);
 }

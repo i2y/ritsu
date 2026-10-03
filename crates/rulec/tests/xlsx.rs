@@ -10,7 +10,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready, skip};
+use ritsu_testkit::{Need, TempDir, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -34,11 +34,10 @@ fn run(args: &[&str]) -> (i32, String, String) {
     )
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-xlsx-{}-{tag}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("xlsx-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 /// Write a workbook from the spec and return its path.
@@ -87,7 +86,7 @@ fn シートは表になり_日付と率と単位が読める() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("fee");
+    let (_tmp, d) = dir("fee");
     let x = book(&d, "運賃.xlsx", &FEE.replace("COMP", "deflate"));
     let (c, out, e) = run(&["import", "xlsx", &x, "--sheet", "運賃表", "--lang", "ja"]);
     assert_eq!(c, 0, "{e}");
@@ -106,7 +105,6 @@ fn シートは表になり_日付と率と単位が読める() {
     std::fs::write(&rule, &out).unwrap();
     let (c, o, e) = run(&["fmt", rule.to_str().unwrap()]);
     assert_eq!(c, 0, "{o}{e}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -114,7 +112,7 @@ fn xlsxとcsvは同じ下書きになる() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("same");
+    let (_tmp, d) = dir("same");
     let x = book(&d, "t.xlsx", &FEE.replace("COMP", "deflate"));
     let (_, from_xlsx, _) = run(&["import", "xlsx", &x, "--sheet", "運賃表", "--lang", "ja"]);
     // The same grid, written out as a CSV by hand: the reader is what differs, and nothing
@@ -133,7 +131,6 @@ fn xlsxとcsvは同じ下書きになる() {
     // Only the name of the source differs, and the draft is supposed to say which it was.
     let norm = |s: String| s.replace("t.xlsx（シート 運賃表）", "SOURCE").replace("t.csv", "SOURCE");
     assert_eq!(norm(from_xlsx), norm(from_csv), "xlsx と csv で下書きが違う");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -141,14 +138,13 @@ fn 無圧縮のzipも読める() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("stored");
+    let (_tmp, d) = dir("stored");
     let a = book(&d, "d.xlsx", &FEE.replace("COMP", "deflate"));
     let b = book(&d, "s.xlsx", &FEE.replace("COMP", "stored"));
     let (c1, one, _) = run(&["import", "xlsx", &a, "--sheet", "運賃表", "--name", "運賃"]);
     let (c2, two, _) = run(&["import", "xlsx", &b, "--sheet", "運賃表", "--name", "運賃"]);
     assert_eq!((c1, c2), (0, 0));
     assert_eq!(one.replace("d.xlsx", "X"), two.replace("s.xlsx", "X"));
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A sheet long enough that deflate uses dynamic Huffman codes and back-references that
@@ -158,7 +154,7 @@ fn 長いシートも読める() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("long");
+    let (_tmp, d) = dir("long");
     let mut rows = String::from(r#"[[["s","区分"],["s","下限"],["s","運賃"]]"#);
     for i in 0..400 {
         rows.push_str(&format!(r#",[["s","区分{}"],["n","{}"],["yen","{}"]]"#, i % 7, i * 10, 800 + i));
@@ -176,7 +172,6 @@ fn 長いシートも読める() {
         .count();
     assert_eq!(data, 400, "行が落ちている");
     assert!(has_row(&out, &["区分0", "3990", "1199円"]), "最後の行まで読めていない: {out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -184,7 +179,7 @@ fn シートの選び方() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("sheets");
+    let (_tmp, d) = dir("sheets");
     let x = book(&d, "b.xlsx", &FEE.replace("COMP", "deflate"));
     // Without --sheet it is the first one, which here is the sheet of prose: one column, so
     // it is not a table, and the refusal says so rather than drafting nonsense.
@@ -194,7 +189,6 @@ fn シートの選び方() {
     let (c, _, e) = run(&["import", "xlsx", &x, "--sheet", "料金"]);
     assert_eq!(c, 2);
     assert!(e.contains("説明") && e.contains("運賃表"), "あるシートを挙げること: {e}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -202,7 +196,7 @@ fn 一九〇四年のブックも読める() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("1904");
+    let (_tmp, d) = dir("1904");
     let spec = r#"{"out":"OUT","compress":"deflate","date1904":true,"sheets":[{"name":"日付","rows":[
       [["s","区分"],["s","日"]],
       [["s","A"],["date1904","2026-04-01"]],
@@ -211,12 +205,11 @@ fn 一九〇四年のブックも読める() {
     let (c, out, e) = run(&["import", "xlsx", &x]);
     assert_eq!(c, 0, "{e}");
     assert!(has_row(&out, &["B", "2026-05-01"]), "1904 年起点の通し番号: {out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn xlsxでないファイルは断る() {
-    let d = dir("bad");
+    let (_tmp, d) = dir("bad");
     let p = d.join("not.xlsx");
     std::fs::write(&p, b"this is not a zip at all").unwrap();
     let (c, _, e) = run(&["import", "xlsx", p.to_str().unwrap()]);
@@ -240,7 +233,6 @@ fn xlsxでないファイルは断る() {
         assert_eq!(c, 2);
         assert!(e.contains("workbook.xml"), "{e}");
     }
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The fixtures above are written by this repository; a workbook written by a library that
@@ -250,7 +242,7 @@ fn 実物の道具が書いたブックも読める() {
     if !ready(Need::Python, || have("uv"), "uv が無い（openpyxl を一時的に呼べない）") {
         return;
     }
-    let d = dir("openpyxl");
+    let (_tmp, d) = dir("openpyxl");
     let py = d.join("make.py");
     std::fs::write(
         &py,
@@ -290,7 +282,6 @@ wb.save(sys.argv[1])
     let (c, out, e) = run(&["import", "xlsx", x.to_str().unwrap(), "--lang", "ja"]);
     assert_eq!(c, 0, "{e}");
     assert!(has_row(&out, &["遠隔地", "2026-04-01", "18.3%", "1200円"]), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A workbook's fragments are its sheets, in the order the workbook lists them, so that
@@ -300,7 +291,7 @@ fn ブックの引用箇所はシートで_順番はシートの順番() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("fragments");
+    let (_tmp, d) = dir("fragments");
     let x = book(&d, "運賃.xlsx", &FEE.replace("COMP", "deflate"));
     let p = std::path::PathBuf::from(&x);
     let bytes = std::fs::read(&p).unwrap();
@@ -309,5 +300,4 @@ fn ブックの引用箇所はシートで_順番はシートの順番() {
     assert_eq!(ts[0], vec![vec!["このシートは説明です"]]);
     assert_eq!(ts[1][0], vec!["あて先", "サイズ", "改定日", "割引率", "運賃"]);
     assert_eq!(ts[1][2], vec!["近畿圏", "S80", "2026-04-01", "18.3%", "1310円"]);
-    let _ = std::fs::remove_dir_all(&d);
 }

@@ -9,6 +9,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -299,9 +300,8 @@ fn 呼び手が満たすべき前提が_グラフにも乗る() {
 /// does not, because then there is nothing to draw an edge between.
 #[test]
 fn グラフは検査より手前で出る() {
-    let d = std::env::temp_dir().join(format!("rulec-graph-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let tmp = TempDir::new("graph");
+    let d = tmp.path().to_path_buf();
 
     let hole = d.join("hole.rule");
     std::fs::write(&hole, "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x | -> r(r) : bool |\n| true | true |\n").unwrap();
@@ -314,7 +314,6 @@ fn グラフは検査より手前で出る() {
     std::fs::write(&broken, "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| しらない列 | -> r(r) : bool |\n| true | true |\n").unwrap();
     let (c, out) = run(&["graph", broken.to_str().unwrap()]);
     assert_eq!(c, 1, "名前が解決しないのにグラフが出た: {out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// **The board is the data, laid out.** Every card is a decider of `rulec graph` and every

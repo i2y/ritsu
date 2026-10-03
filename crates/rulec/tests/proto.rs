@@ -9,16 +9,16 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-proto-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("proto-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 fn run(args: &[&str]) -> (i32, String) {
@@ -66,12 +66,12 @@ fn rule(values: &str, rows: &str) -> String {
 }
 
 /// Writes the pair and returns the path of the `.rule`.
-fn pair(tag: &str, proto: &str, rule: &str) -> String {
-    let d = dir(tag);
+fn pair(tag: &str, proto: &str, rule: &str) -> (TempDir, String) {
+    let (t, d) = dir(tag);
     std::fs::write(d.join("order.proto"), proto).unwrap();
     let p = d.join("配送料金.rule");
     std::fs::write(&p, rule).unwrap();
-    p.to_string_lossy().into_owned()
+    (t, p.to_string_lossy().into_owned())
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn ゼロ値が_unspecified_でなければ落とさない() {
 
 #[test]
 fn 一致していれば何も言わない() {
-    let p = pair("ok", PROTO, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
+    let (_tmp, p) = pair("ok", PROTO, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("ok"), "{out}");
@@ -121,7 +121,7 @@ fn 一致していれば何も言わない() {
 #[test]
 fn 契約に値が増えたら止まる() {
     let grown = PROTO.replace("  MEMBER_TIER_GOLD = 2;", "  MEMBER_TIER_GOLD = 2;\n  MEMBER_TIER_PLATINUM = 3;");
-    let p = pair("grown", &grown, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
+    let (_tmp, p) = pair("grown", &grown, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E032"), "{out}");
@@ -133,7 +133,7 @@ fn 契約に値が増えたら止まる() {
 
 #[test]
 fn 規則にだけある値も止まる() {
-    let p = pair(
+    let (_tmp, p) = pair(
         "extra",
         PROTO,
         &rule("一般(basic) | ゴールド(gold) default | 白金(platinum) default", "| 一般 | 800円 |\n| - | 400円 |\n"),
@@ -149,7 +149,7 @@ fn 規則にだけある値も止まる() {
 fn 既定の行があっても_決めていない値は止まる() {
     let grown = PROTO.replace("  MEMBER_TIER_GOLD = 2;", "  MEMBER_TIER_GOLD = 2;\n  MEMBER_TIER_PLATINUM = 3;");
     let r = rule("一般(basic) | ゴールド(gold) default | 白金(platinum)", "| 一般 | 800円 |\n| - | 400円 |\n");
-    let p = pair("undecided", &grown, &r);
+    let (_tmp, p) = pair("undecided", &grown, &r);
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E033") && out.contains("白金"), "{out}");
@@ -161,11 +161,11 @@ fn 既定の行があっても_決めていない値は止まる() {
 fn 行を足すか_default_を付ければ通る() {
     let grown = PROTO.replace("  MEMBER_TIER_GOLD = 2;", "  MEMBER_TIER_GOLD = 2;\n  MEMBER_TIER_PLATINUM = 3;");
     let values = "一般(basic) | ゴールド(gold) default | 白金(platinum)";
-    let row = pair("decided-row", &grown, &rule(values, "| 一般 | 800円 |\n| 白金 | 0円 |\n| - | 400円 |\n"));
+    let (_tmp, row) = pair("decided-row", &grown, &rule(values, "| 一般 | 800円 |\n| 白金 | 0円 |\n| - | 400円 |\n"));
     let (code, out) = run(&["check", &row]);
     assert_eq!(code, 0, "{out}");
 
-    let marked = pair(
+    let (_tmp, marked) = pair(
         "decided-default",
         &grown,
         &rule("一般(basic) | ゴールド(gold) default | 白金(platinum) default", "| 一般 | 800円 |\n| - | 400円 |\n"),
@@ -177,17 +177,17 @@ fn 行を足すか_default_を付ければ通る() {
 #[test]
 fn 読めないファイルと_無い列挙と_形の違う行を断る() {
     let plain = rule("一般(basic) | ゴールド(gold) default", "| - | 400円 |\n");
-    let missing = pair("missing", PROTO, &plain.replace("order.proto", "nope.proto"));
+    let (_tmp, missing) = pair("missing", PROTO, &plain.replace("order.proto", "nope.proto"));
     let (code, out) = run(&["check", &missing]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E013") && out.contains("nope.proto"), "{out}");
 
-    let wrong = pair("wrong-enum", PROTO, &plain.replace("MemberTier", "Tier"));
+    let (_tmp, wrong) = pair("wrong-enum", PROTO, &plain.replace("MemberTier", "Tier"));
     let (code, out) = run(&["check", &wrong]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E013") && out.contains("MemberTier"), "そのファイルにある列挙を並べる: {out}");
 
-    let shape = pair(
+    let (_tmp, shape) = pair(
         "shape",
         PROTO,
         &plain
@@ -200,7 +200,7 @@ fn 読めないファイルと_無い列挙と_形の違う行を断る() {
 
 #[test]
 fn 承認者の資料が出どころを書く() {
-    let p = pair("doc", PROTO, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
+    let (_tmp, p) = pair("doc", PROTO, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
     let (code, out) = run(&["doc", &p]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("order.proto") && out.contains("MemberTier"), "{out}");

@@ -13,7 +13,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -68,11 +68,10 @@ fn verify(dir: &std::path::Path) -> (i32, String) {
     (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-fn tmp(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-backends-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn tmp(name: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("backends-{name}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 #[test]
@@ -80,7 +79,7 @@ fn 文書のクエリはec261と全件一致する() {
     if !ready(Need::Python, || have("python3"), "python3 が無い（sqlite3 は標準ライブラリなので他に要るものは無い）") {
         return;
     }
-    let dir = tmp("ok");
+    let (_tmp, dir) = tmp("ok");
     lay_out(&dir, false);
     let (code, out) = verify(&dir);
     assert_eq!(code, 0, "一致しているなら終了コードは 0:\n{out}");
@@ -89,7 +88,6 @@ fn 文書のクエリはec261と全件一致する() {
     assert!(out.contains("Compared 94 / matched 94 (100.000%)"), "文書の 94/94 と違う:\n{out}");
     assert!(out.contains("Counterpart: sqlite3/ec261.sql"), "impl 名が文書と違う:\n{out}");
     assert!(out.contains("No mismatches."), "不一致が出ている:\n{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -97,7 +95,7 @@ fn 閾値を一つ壊すとその入力ごと報告される() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let dir = tmp("broken");
+    let (_tmp, dir) = tmp("broken");
     lay_out(&dir, true);
     let (code, out) = verify(&dir);
     assert_eq!(code, 1, "不一致があるなら終了コードは 1:\n{out}");
@@ -112,5 +110,4 @@ fn 閾値を一つ壊すとその入力ごと報告される() {
     ] {
         assert!(out.contains(want), "文書が見せている「{want}」が出ていない:\n{out}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

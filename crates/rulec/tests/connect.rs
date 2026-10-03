@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, need, ready, skip};
+use ritsu_testkit::{Need, TempDir, need, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -19,9 +19,9 @@ fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn generate(tag: &str, rules: &[&str]) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rulec-connect-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn generate(tag: &str, rules: &[&str]) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("connect-{tag}"));
+    let dir = t.path().to_path_buf();
     let mut args: Vec<&str> = vec!["gen"];
     args.extend_from_slice(rules);
     args.extend_from_slice(&["--out", dir.to_str().unwrap()]);
@@ -32,7 +32,7 @@ fn generate(tag: &str, rules: &[&str]) -> PathBuf {
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-    dir
+    (t, dir)
 }
 
 fn api(rule: &str) -> rulec::json::Json {
@@ -60,7 +60,7 @@ const RULE: &str = "tests/corpus/送料.rule";
 /// same thing as the file that was written.
 #[test]
 fn 出た場所と_api_が言う場所が同じ() {
-    let dir = generate("where", &[RULE]);
+    let (_tmp, dir) = generate("where", &[RULE]);
     let a = api(RULE);
     let c = a.get("connect").expect("connect の項が無い");
     let proto = c.get("proto").and_then(|x| x.as_str()).expect("proto が無い").to_string();
@@ -88,7 +88,6 @@ fn 出た場所と_api_が言う場所が同じ() {
         let f = c.get(k).and_then(|x| x.as_str()).expect(k).to_string();
         assert!(dir.join(&f).is_file(), "{f} が書かれていない");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The values in the generated `.proto` are the rule's own, read back by the reader rulec
@@ -96,7 +95,7 @@ fn 出た場所と_api_が言う場所が同じ() {
 /// rulec can read.
 #[test]
 fn 書いた列挙を自分で読み返せる() {
-    let dir = generate("roundtrip", &[RULE]);
+    let (_tmp, dir) = generate("roundtrip", &[RULE]);
     let body = std::fs::read_to_string(dir.join("proto/rulec/shipping_fee/v4/shipping_fee.proto")).unwrap();
     let es = rulec::proto::enums(&body);
     let member = es.iter().find(|e| e.name == "MemberKind").expect("MemberKind が無い");
@@ -107,16 +106,14 @@ fn 書いた列挙を自分で読み返せる() {
     // The zero value is proto3's "not set" and is not one of the rule's values.
     assert!(body.contains("PREFECTURE_UNSPECIFIED = 0;"), "{body}");
     assert_eq!(rulec::proto::package(&body).as_deref(), Some("rulec.shipping_fee.v4"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// An enum whose values belong to a contract outside the rule is imported, not copied: the
 /// rule cites that file (§15.59) and the service speaks the contract's own type.
 #[test]
 fn 取り込んだ列挙は宣言し直さずに_import_する() {
-    let d = std::env::temp_dir().join(format!("rulec-connect-import-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let tmp = TempDir::new("connect-import");
+    let d = tmp.path().to_path_buf();
     std::fs::write(
         d.join("order.proto"),
         "syntax = \"proto3\";\npackage shop.v1;\nenum MemberTier {\n  MEMBER_TIER_UNSPECIFIED = 0;\n  MEMBER_TIER_BASIC = 1;\n  MEMBER_TIER_GOLD = 2;\n}\n",
@@ -193,7 +190,6 @@ fn 取り込んだ列挙は宣言し直さずに_import_する() {
             .collect();
         assert_eq!(values, [("一般".into(), "MEMBER_TIER_BASIC".into(), 1), ("ゴールド".into(), "MEMBER_TIER_GOLD".into(), 2)]);
     }
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Every corpus rule's service and runner parse as Python. It costs a second and it is the
@@ -211,7 +207,7 @@ fn 生成した_python_は全部構文として通る() {
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     let refs: Vec<&str> = rules.iter().map(|s| s.as_str()).collect();
-    let dir = generate("syntax", &refs);
+    let (_tmp, dir) = generate("syntax", &refs);
     let py = dir.join("python");
     let files: Vec<String> = std::fs::read_dir(&py)
         .unwrap()
@@ -228,7 +224,6 @@ fn 生成した_python_は全部構文として通る() {
         .output()
         .expect("python3 を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// What the proto toolchain says about the file, where it is installed: `buf lint` finds
@@ -243,7 +238,7 @@ fn 生成した_proto_は_buf_が受け取る() {
         "tests/corpus/期間区分.rule",
         "tests/corpus/parcel_rate.rule",
     ];
-    let dir = generate("toolchain", &rules);
+    let (_tmp, dir) = generate("toolchain", &rules);
     let proto = dir.join("proto");
     if ready(Need::Buf, || have("buf"), "buf が無いので lint を飛ばします") {
         // No configuration is written here: `gen` wrote the module's own `buf.yaml`, and what
@@ -263,7 +258,6 @@ fn 生成した_proto_は_buf_が受け取る() {
     }
     let files: Vec<String> = walk(&proto).iter().map(|p| p.strip_prefix(&proto).unwrap().to_string_lossy().into_owned()).collect();
     assert_eq!(files.len(), rules.len(), "規則ごとに一つのはずです: {files:?}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Every `.proto` under a directory.
@@ -305,9 +299,8 @@ fn アダプタのテンプレートは呼び先を包む() {
         assert!(t.contains(want), "テンプレートに `{want}` がありません:\n{t}");
     }
     if ready(Need::Python, || have("python3"), "python3 が無いので adapter.py の構文の確かめを飛ばします") {
-        let d = std::env::temp_dir().join(format!("rulec-connect-adapter-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
+        let tmp = TempDir::new("connect-adapter");
+        let d = tmp.path().to_path_buf();
         std::fs::write(d.join("adapter.py"), &t).unwrap();
         let c = Command::new("python3")
             .current_dir(&d)
@@ -315,7 +308,6 @@ fn アダプタのテンプレートは呼び先を包む() {
             .output()
             .expect("python3 を起動できない");
         assert!(c.status.success(), "{}", String::from_utf8_lossy(&c.stderr));
-        let _ = std::fs::remove_dir_all(&d);
     }
 }
 
@@ -324,9 +316,8 @@ fn アダプタのテンプレートは呼び先を包む() {
 /// never asked for is a late and confusing way to find out.
 #[test]
 fn プロトが取る名前とぶつかる別名は_check_が言う() {
-    let d = std::env::temp_dir().join(format!("rulec-connect-name-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let tmp = TempDir::new("connect-name");
+    let d = tmp.path().to_path_buf();
     let rule = d.join("demo.rule");
     std::fs::write(
         &rule,
@@ -344,7 +335,6 @@ fn プロトが取る名前とぶつかる別名は_check_が言う() {
     // A warning, not an error: a rule nobody serves is free to name an output `trace`.
     assert_eq!(o.status.code(), Some(0), "{out}");
     assert!(out.contains("W121") && out.contains("Connect:"), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The two files that speak Connect, held to `mypy --strict` like every other generated
@@ -357,7 +347,7 @@ fn 生成した_python_は_mypy_strict_を通る() {
     if !ready(Need::Buf, || rulec_connect_ready().is_some(), "buf・プラグイン・connectrpc・uvicorn・mypy のどれかが無いので飛ばします") {
         return;
     }
-    let dir = generate("mypy", &[RULE, "tests/corpus/期間区分.rule", "tests/corpus/買物かごの送料.rule"]);
+    let (_tmp, dir) = generate("mypy", &[RULE, "tests/corpus/期間区分.rule", "tests/corpus/買物かごの送料.rule"]);
     let py = dir.join("python");
     let o = Command::new("buf")
         .current_dir(&py)
@@ -389,7 +379,6 @@ fn 生成した_python_は_mypy_strict_を通る() {
         .filter(|l| files.iter().any(|f| l.starts_with(f.as_str())))
         .collect();
     assert!(ours.is_empty(), "生成した Python が mypy --strict を通りません:\n{}", ours.join("\n"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Whether everything the Connect side needs is here: the compiler, the plugin, the runtime
@@ -420,9 +409,8 @@ fn rulec_connect_ready() -> Option<()> {
 fn 承認者のページは走らせた場所によらない() {
     let rule = root().join("tests/corpus/出荷の送料.rule");
     let rule = rule.to_str().unwrap();
-    let dir = std::env::temp_dir().join(format!("rulec-connect-page-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("connect-page");
+    let dir = tmp.path().to_path_buf();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(&dir)
@@ -442,7 +430,6 @@ fn 承認者のページは走らせた場所によらない() {
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
         assert_eq!(String::from_utf8_lossy(&o.stdout).trim_end(), page.trim_end(), "{} から描いたページが違う", cwd.display());
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// What `rulec api` says about the wire is what the `.proto` says, read back by rulec's own
@@ -451,7 +438,7 @@ fn 承認者のページは走らせた場所によらない() {
 #[test]
 fn connect_の目録は生成した_proto_と一致する() {
     let rules = [RULE, "tests/corpus/全国運賃.rule"];
-    let dir = generate("inventory", &rules);
+    let (_tmp, dir) = generate("inventory", &rules);
     for (rule, alias, version) in [(RULE, "shipping_fee", "v4"), ("tests/corpus/全国運賃.rule", "freight", "v1")] {
         let a = api(rule);
         let c = a.get("connect").expect("connect の項が無い");
@@ -491,7 +478,6 @@ fn connect_の目録は生成した_proto_と一致する() {
     let fields = c.get("connect").and_then(|c| c.get("element_fields")).map(items).expect("element_fields");
     assert!(fields.iter().any(|f| f.get("enum").and_then(|x| x.as_str()) == Some("ゾーン区分")), "要素の列挙の項が無い");
     assert_eq!(api(RULE).get("connect").and_then(|c| c.get("element_fields")), Some(&rulec::json::Json::Null));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Names the way buf splits them. buf lint asks for `HTTP_METHOD_` in front of the values of
@@ -500,9 +486,8 @@ fn connect_の目録は生成した_proto_と一致する() {
 /// digit keeps its prefix, which is an alias a rule can declare (§15.160).
 #[test]
 fn 名前は_buf_と同じに切る() {
-    let d = std::env::temp_dir().join(format!("rulec-connect-split-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let tmp = TempDir::new("connect-split");
+    let d = tmp.path().to_path_buf();
     std::fs::write(
         d.join("web.proto"),
         "syntax = \"proto3\";\npackage web.v1;\nenum HTTPMethod {\n  HTTP_METHOD_UNSPECIFIED = 0;\n  HTTP_METHOD_GET = 1;\n  HTTP_METHOD_POST = 2;\n}\n\
@@ -547,15 +532,14 @@ fn 名前は_buf_と同じに切る() {
         let o = Command::new("buf").current_dir(out.join("proto")).arg("lint").output().expect("buf を起動できない");
         assert!(o.status.success(), "buf lint:\n{}", String::from_utf8_lossy(&o.stdout));
     }
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Two rules may import one contract, but not two different files under one path: the second
 /// would overwrite the first, and one of the two services would speak the other's enum.
 #[test]
 fn 同じパスに違う契約は写さない() {
-    let d = std::env::temp_dir().join(format!("rulec-connect-clash-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
+    let tmp = TempDir::new("connect-clash");
+    let d = tmp.path().to_path_buf();
     for (sub, extra) in [("a", ""), ("b", "  MEMBER_TIER_PLATINUM = 3;\n")] {
         let at = d.join(sub);
         std::fs::create_dir_all(&at).unwrap();
@@ -586,7 +570,6 @@ fn 同じパスに違う契約は写さない() {
     let err = String::from_utf8_lossy(&o.stderr).into_owned();
     assert_eq!(o.status.code(), Some(1), "{err}");
     assert!(err.contains("proto/shop/v1/order.proto"), "{err}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The service as `gen` leaves it, stood up with nothing added to the path: the contracts it
@@ -604,9 +587,8 @@ fn 生成したまま立ち_名前の誤りと省いた入力を断る() {
     if !ready(Need::Buf, || have("buf") && have("protoc-gen-py") && have("protoc-gen-connectrpc") && importable("connectrpc"), "buf・プラグイン・connectrpc のどれかが無いので飛ばします") {
         return;
     }
-    let d = std::env::temp_dir().join(format!("rulec-connect-stand-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let tmp = TempDir::new("connect-stand");
+    let d = tmp.path().to_path_buf();
     std::fs::write(
         d.join("order.proto"),
         "syntax = \"proto3\";\npackage shop.v1;\nenum MemberTier {\n  MEMBER_TIER_UNSPECIFIED = 0;\n  MEMBER_TIER_BASIC = 1;\n  MEMBER_TIER_GOLD = 2;\n}\n",
@@ -732,7 +714,6 @@ print(json.dumps(out, ensure_ascii=False))
     assert_eq!(got[5].0, 400, "知らないフィールドが通った: {}", got[5].1);
     assert!(got[5].1.contains("amonut"), "{}", got[5].1);
     assert_eq!(got[6].0, 400, "未設定の値が通った: {}", got[6].1);
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A pin of protovalidate as `buf dep update` writes it, for the fixtures below. The tests
@@ -742,9 +723,9 @@ const PROTOVALIDATE_PIN: &str = "  - name: buf.build/bufbuild/protovalidate\n   
 /// A contract that imports protovalidate, in a buf workspace of its own beside a rule that
 /// imports its enum: `<d>/proto/shop/v1/order.proto` under `<d>/proto/buf.yaml`, and the rule
 /// at `<d>/rules/fee.rule`. `lock` is the workspace's `buf.lock`, when it has one.
-fn bsr_fixture(tag: &str, buf_yaml: Option<&str>, lock: Option<&str>) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-connect-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
+fn bsr_fixture(tag: &str, buf_yaml: Option<&str>, lock: Option<&str>) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("connect-{tag}"));
+    let d = t.path().to_path_buf();
     std::fs::create_dir_all(d.join("proto/shop/v1")).unwrap();
     std::fs::create_dir_all(d.join("rules")).unwrap();
     std::fs::write(
@@ -771,7 +752,7 @@ fn bsr_fixture(tag: &str, buf_yaml: Option<&str>, lock: Option<&str>) -> PathBuf
          | 会員 | -> 送料(fee) : money[円, incl_tax] |\n| 一般 | 800円 |\n| - | 400円 |\n",
     )
     .unwrap();
-    d
+    (t, d)
 }
 
 /// `gen` run in `d` over its rules: the exit code and what it said on stderr.
@@ -797,7 +778,7 @@ fn 契約の依存を_buf_yaml_と_buf_lock_に引き継ぐ() {
     let lock = format!(
         "# Generated by buf. DO NOT EDIT.\nversion: v2\ndeps:\n{PROTOVALIDATE_PIN}  - name: buf.build/googleapis/googleapis\n    commit: c17df5b2beca46928cc87d5656bd5343\n    digest: b5:648a\n"
     );
-    let d = bsr_fixture(
+    let (_tmp, d) = bsr_fixture(
         "deps",
         Some("version: v2\ndeps:\n  - buf.build/bufbuild/protovalidate\n  - buf.build/googleapis/googleapis\n"),
         Some(&lock),
@@ -816,11 +797,9 @@ fn 契約の依存を_buf_yaml_と_buf_lock_に引き継ぐ() {
     let deps: Vec<&str> = a.get("connect").and_then(|c| c.get("deps")).map(items).unwrap().iter().filter_map(|x| x.as_str()).collect();
     assert_eq!(deps, ["buf.build/bufbuild/protovalidate"]);
     // A rule with no contract leaves the module as it was: no dependency, no lock.
-    let plain = generate("nodeps", &[RULE]);
+    let (_tmp, plain) = generate("nodeps", &[RULE]);
     assert!(!std::fs::read_to_string(plain.join("proto/buf.yaml")).unwrap().contains("deps:"));
     assert!(!plain.join("proto/buf.lock").exists());
-    let _ = std::fs::remove_dir_all(&plain);
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// When nothing beside the contract pins the module, `gen` declares what it can and says what
@@ -829,7 +808,7 @@ fn 契約の依存を_buf_yaml_と_buf_lock_に引き継ぐ() {
 /// module holds one.
 #[test]
 fn 固定できない依存は言い_食い違うピンは止める() {
-    let d = bsr_fixture("nopin", None, None);
+    let (_tmp, d) = bsr_fixture("nopin", None, None);
     let (code, err) = gen_in(&d, &["rules/fee.rule"]);
     assert_eq!(code, 0, "{err}");
     assert!(err.contains("buf.build/bufbuild/protovalidate") && err.contains("buf dep update"), "{err}");
@@ -838,7 +817,7 @@ fn 固定できない依存は言い_食い違うピンは止める() {
     let _ = std::fs::remove_dir_all(&d);
 
     let v1 = "version: v1\ndeps:\n  - remote: buf.build\n    owner: bufbuild\n    repository: protovalidate\n    commit: 511051f7f4374c3ca873b53ae68a9288\n    digest: shake256:b911\n";
-    let d = bsr_fixture("v1lock", Some("version: v1\ndeps:\n  - buf.build/bufbuild/protovalidate\n"), Some(v1));
+    let (_tmp, d) = bsr_fixture("v1lock", Some("version: v1\ndeps:\n  - buf.build/bufbuild/protovalidate\n"), Some(v1));
     let (code, err) = gen_in(&d, &["rules/fee.rule"]);
     assert_eq!(code, 0, "{err}");
     assert!(err.contains("v1") && err.contains("buf config migrate"), "{err}");
@@ -846,8 +825,8 @@ fn 固定できない依存は言い_食い違うピンは止める() {
     let _ = std::fs::remove_dir_all(&d);
 
     // Two workspaces, one module, two commits.
-    let a = bsr_fixture("pin-a", Some("version: v2\ndeps:\n  - buf.build/bufbuild/protovalidate\n"), Some(&format!("version: v2\ndeps:\n{PROTOVALIDATE_PIN}")));
-    let b = bsr_fixture("pin-b", Some("version: v2\ndeps:\n  - buf.build/bufbuild/protovalidate\n"), Some(&format!("version: v2\ndeps:\n{}", PROTOVALIDATE_PIN.replace("511051f7", "00000000"))));
+    let (_tmp, a) = bsr_fixture("pin-a", Some("version: v2\ndeps:\n  - buf.build/bufbuild/protovalidate\n"), Some(&format!("version: v2\ndeps:\n{PROTOVALIDATE_PIN}")));
+    let (_tmp, b) = bsr_fixture("pin-b", Some("version: v2\ndeps:\n  - buf.build/bufbuild/protovalidate\n"), Some(&format!("version: v2\ndeps:\n{}", PROTOVALIDATE_PIN.replace("511051f7", "00000000"))));
     // The second contract is another package, so that only the pins meet.
     let other = std::fs::read_to_string(b.join("proto/shop/v1/order.proto")).unwrap().replace("package shop.v1;", "package shop.v2;");
     std::fs::create_dir_all(b.join("proto/shop/v2")).unwrap();
@@ -857,8 +836,6 @@ fn 固定できない依存は言い_食い違うピンは止める() {
     let (code, err) = gen_in(&a, &["rules/fee.rule", b.join("rules/fee.rule").to_str().unwrap()]);
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("511051f7") && err.contains("00000000"), "{err}");
-    let _ = std::fs::remove_dir_all(&a);
-    let _ = std::fs::remove_dir_all(&b);
 }
 
 /// The module builds with its dependency, the stubs of protovalidate's file are written with
@@ -877,7 +854,7 @@ fn 依存のある契約のサービスが立つ() {
     if !ready(Need::Buf, || have("buf") && have("protoc-gen-py") && have("protoc-gen-connectrpc") && importable("connectrpc"), "buf・プラグイン・connectrpc のどれかが無いので飛ばします") {
         return;
     }
-    let d = bsr_fixture(
+    let (_tmp, d) = bsr_fixture(
         "bsr-stand",
         Some("version: v2\ndeps:\n  - buf.build/bufbuild/protovalidate\n"),
         Some(&format!("version: v2\ndeps:\n{PROTOVALIDATE_PIN}")),
@@ -893,7 +870,6 @@ fn 依存のある契約のサービスが立つ() {
             .any(|w| said.contains(w))
     {
         skip(&format!("BSR に届かないので飛ばします: {said}"));
-        let _ = std::fs::remove_dir_all(&d);
         return;
     }
     assert!(o.status.success(), "buf build が断りました:\n{said}");
@@ -908,5 +884,4 @@ fn 依存のある契約のサービスが立つ() {
     assert!(o.status.success() && said.contains("delivery_fee (Python, Connect/WSGI) "), "{said}{}", String::from_utf8_lossy(&o.stderr));
     assert!(!said.contains("FAIL"), "{said}");
     assert!(out.join("python/stubs/buf/validate/validate_pb.py").is_file(), "protovalidate の stub が書かれていない");
-    let _ = std::fs::remove_dir_all(&d);
 }

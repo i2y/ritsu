@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use ritsu_testkit::{Need, ready, skip};
+use ritsu_testkit::{Need, TempDir, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -49,16 +49,15 @@ fn fixtures_from_vectors(vectors: &str) -> String {
 }
 
 /// Prepare a workspace and put the vectors and synthetic fixtures in it.
-fn setup(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rulec-m3-{}-{tag}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn setup(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("m3-{tag}"));
+    let dir = t.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     let (c, _, e) = rulec(&["vectors", RULE, "--out", &out]);
     assert_eq!(c, 0, "{e}");
     let v = std::fs::read_to_string(dir.join("yupack_fee.jsonl")).expect("ベクタが無い");
     std::fs::write(dir.join("fx.jsonl"), fixtures_from_vectors(&v)).unwrap();
-    dir
+    (t, dir)
 }
 
 /// A rewrite matched by content. If it does not match, it does not pass silently.
@@ -73,9 +72,8 @@ fn tweak(src: &str, from: &str, to: &str, want: usize) -> String {
 /// on every record — every vector is a record of the reference evaluator's own answer.
 #[test]
 fn 期待値のファイルはそのまま記録として通る() {
-    let dir = std::env::temp_dir().join(format!("rulec-m3-{}-expected", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("m3-expected");
+    let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     for (rule, alias) in [(RULE, "yupack_fee"), ("tests/corpus/期間区分.rule", "period"), ("tests/corpus/会員特典.rule", "member_perk")] {
         let (c, _, e) = rulec(&["gen", rule, "--out", &out]);
@@ -89,14 +87,13 @@ fn 期待値のファイルはそのまま記録として通る() {
         assert_eq!(c, 0, "{alias}: {o}{e}");
         assert!(o.contains("(100.000%)"), "{alias}: 期待値の再生が全件一致しない:\n{o}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A `trace` that names a table or a row the rule does not have is a record of some other
 /// version, and it is reported by kind rather than read.
 #[test]
 fn 実在しない行を指す記録は種類つきで報告される() {
-    let dir = setup("badtrace");
+    let (_tmp, dir) = setup("badtrace");
     let fx = std::fs::read_to_string(dir.join("fx.jsonl")).unwrap();
     let mut lines: Vec<String> = fx.lines().map(|l| l.to_string()).collect();
     let l0 = lines[0].strip_suffix('}').unwrap().to_string();
@@ -113,7 +110,6 @@ fn 実在しない行を指す記録は種類つきで報告される() {
     assert!(out.contains("存在しない表 はこの規則にありません"), "{out}");
     // The third one is a real row, so it is read, not reported: only two problems.
     assert!(out.contains("\"count\":1"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A record that carries the rows that matched is compared row by row as well (§15.35). A
@@ -121,9 +117,8 @@ fn 実在しない行を指す記録は種類つきで報告される() {
 /// and clustered by the move; a mismatch's cluster names the move too.
 #[test]
 fn 記録の行が規則の行と違えば行の移動として出る() {
-    let dir = std::env::temp_dir().join(format!("rulec-m3-{}-moved", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("m3-moved");
+    let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     let (c, _, e) = rulec(&["gen", RULE, "--out", &out]);
     assert_eq!(c, 0, "{e}");
@@ -158,18 +153,16 @@ fn 記録の行が規則の行と違えば行の移動として出る() {
     let (_, j, _) = rulec(&["replay", RULE, "--fixtures", fx.to_str().unwrap(), "--format", "json"]);
     assert!(j.contains("\"moved\":[{\"rows\":[{\"table\":\"サイズ判定\",\"from\":7,\"to\":1}"), "{j}");
     assert!(j.contains(&format!("\"matched\":{}", lines.len() - 1)), "行の移動は一致に数える:\n{j}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn 忠実な記録とは完全に一致する() {
-    let dir = setup("clean");
+    let (_tmp, dir) = setup("clean");
     let fx = dir.join("fx.jsonl");
     let (c, out, e) = rulec(&["replay", RULE, "--fixtures", fx.to_str().unwrap()]);
     assert_eq!(c, 0, "{out}{e}");
     assert!(out.contains("(100.000%)"), "{out}");
     assert!(out.contains("不一致はありません"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §10.2: only type and range validation is taken on. Broken records are **reported, not
@@ -177,7 +170,7 @@ fn 忠実な記録とは完全に一致する() {
 /// denominator shrank.
 #[test]
 fn 汚れた記録は種類ごとに数えて報告する() {
-    let dir = setup("lint");
+    let (_tmp, dir) = setup("lint");
     let mut lines: Vec<String> =
         std::fs::read_to_string(dir.join("fx.jsonl")).unwrap().lines().map(String::from).collect();
     let bad = [
@@ -218,7 +211,6 @@ fn 汚れた記録は種類ごとに数えて報告する() {
     assert!(out.contains("フィールドが欠けていたので外した記録: 5 件"), "{out}");
     // A witness (which line, which record) is required.
     assert!(out.contains("order:b3"), "証人を出す: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §10.3: the headline match rate comes from the measured series alone. Filling only affects the
@@ -226,7 +218,7 @@ fn 汚れた記録は種類ごとに数えて報告する() {
 /// field**.
 #[test]
 fn 補った記録は分けて数え_使った既定値を書き残す() {
-    let dir = setup("fill");
+    let (_tmp, dir) = setup("fill");
     let mut lines: Vec<String> =
         std::fs::read_to_string(dir.join("fx.jsonl")).unwrap().lines().map(String::from).collect();
     let base = lines.len();
@@ -257,14 +249,13 @@ fn 補った記録は分けて数え_使った既定値を書き残す() {
     // --fill is a temporary override for sensitivity analysis. It applies after the manifest.
     let (_, over, _) = rulec(&["replay", RULE, "--fixtures", fx, "--manifest", m.to_str().unwrap(), "--fill", "重量=2000"]);
     assert!(over.contains("使った既定値: 重量 = 2000"), "上書きが効いていない: {over}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §10.4: in a version where only a value changed, the firing rows stay the same and only the
 /// amount moves.
 #[test]
 fn 値の変更は発火行を動かさない() {
-    let dir = setup("value");
+    let (_tmp, dir) = setup("value");
     let src = std::fs::read_to_string(root().join(RULE)).unwrap();
     let v2 = dir.join("v2.rule");
     std::fs::write(&v2, tweak(&src, "| 沖縄       | S60    | 1450円", "| 沖縄       | S60    | 1550円", 1)).unwrap();
@@ -281,13 +272,12 @@ fn 値の変更は発火行を動かさない() {
     assert!(out.contains("金額 +700"), "動く金額を出す: {out}");
     assert!(out.contains("差 +100 一様"), "一様なら一行に畳む: {out}");
     assert!(!out.contains("→行"), "行は動いていないのに遷移を出している: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §10.4: a version where a boundary moved shows up as a transition of firing rows.
 #[test]
 fn 境界の変更は発火行の遷移として出る() {
-    let dir = setup("shift");
+    let (_tmp, dir) = setup("shift");
     let src = std::fs::read_to_string(root().join(RULE)).unwrap();
     let v3 = dir.join("v3.rule");
     std::fs::write(&v3, tweak(&src, "| <=60cm   | S60", "| <=50cm   | S60", 1)).unwrap();
@@ -307,14 +297,13 @@ fn 境界の変更は発火行の遷移として出る() {
     let clusters = out.lines().filter(|l| l.starts_with("  表 ")).count();
     let rows = out.lines().filter(|l| l.contains("行1→行2")).count();
     assert!(rows >= 5 && clusters == rows, "遷移ごとに一クラスタのはず: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §10.4: a cluster made only of deviations smaller than the output grid gets tagged as a
 /// suspected rounding difference.
 #[test]
 fn 刻み未満のずれは丸め方の違いとして括られる() {
-    let dir = setup("round");
+    let (_tmp, dir) = setup("round");
     // Shift the recorded side by just 3 yen. The output grid is 10円, so this has the shape of a
     // difference in rounding convention.
     let src = std::fs::read_to_string(dir.join("fx.jsonl")).unwrap();
@@ -337,7 +326,6 @@ fn 刻み未満のずれは丸め方の違いとして括られる() {
     assert_eq!(c, 1);
     assert!(r.contains("丸め方の違いの疑い（出力の刻み 10円 未満"), "{r}");
     assert!(r.contains("差 +3 一様"), "{r}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §1.4: `送料@v3` is sugar for looking up the git tag `rules/送料/v3`.
@@ -348,7 +336,7 @@ fn 版の参照はgitタグを引く() {
         skip("git が無いので飛ばした");
         return;
     };
-    let dir = setup("git");
+    let (_tmp, dir) = setup("git");
     let repo = dir.join("repo");
     std::fs::create_dir_all(repo.join("rules")).unwrap();
     let git = |args: &[&str]| {
@@ -402,14 +390,13 @@ fn 版の参照はgitタグを引く() {
     let (c, _, e) = rulec_in(&repo, &["diff", "ゆうパック運賃@v1", "other.rule", "--fixtures", "fx.jsonl"]);
     assert_eq!(c, 2, "別の規則を通している");
     assert!(e.contains("別の規則"), "{e}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §12: the form to paste into a PR. The tool takes care of the formatting; posting is left to a
 /// single line in CI.
 #[test]
 fn markdownで貼れる形が出る() {
-    let dir = setup("md");
+    let (_tmp, dir) = setup("md");
     let src = std::fs::read_to_string(root().join(RULE)).unwrap();
     let v2 = dir.join("v2.rule");
     std::fs::write(&v2, tweak(&src, "| 沖縄       | S60    | 1450円", "| 沖縄       | S60    | 1550円", 1)).unwrap();
@@ -445,7 +432,6 @@ fn markdownで貼れる形が出る() {
     assert!(plain.contains("影響 7 件") && !plain.contains("例:"), "{plain}");
     let (c, _, e) = rulec(&["diff", RULE, v2.to_str().unwrap(), "--fixtures", fx.to_str().unwrap(), "--format", "json", "--terse"]);
     assert_eq!(c, 2, "{e}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §9.3-3, §12: the generated code can also be run in the user's CI.
@@ -454,8 +440,8 @@ fn rulec_testが生成物を走らせる() {
     if !ready(Need::Python, || which("python3").is_some() || which("go").is_some(), "python3 も go も無いので飛ばした") {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-m3-test-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("m3-test");
+    let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     let (c, _, e) = rulec(&["gen", RULE, "--out", &out]);
     assert_eq!(c, 0, "{e}");
@@ -475,7 +461,6 @@ fn rulec_testが生成物を走らせる() {
         assert!(r.contains("FAIL  yupack_fee (Python)"), "{r}");
         assert!(r.contains("行目"), "何行目で食い違ったかを言う: {r}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn which(cmd: &str) -> Option<()> {
@@ -491,14 +476,13 @@ fn which(cmd: &str) -> Option<()> {
 /// mismatches" over none of them used to end the run with exit 0.
 #[test]
 fn 一件も照合できなければ1で終わる() {
-    let dir = setup("none");
+    let (_tmp, dir) = setup("none");
     let p = dir.join("unreadable.jsonl");
     let rec = r#"{"tag":"order:x","in":{"あて先":"東京都","三辺合計":900,"重量":1000},"observed":{"運賃":820}}"#;
     std::fs::write(&p, format!("{rec}\n{rec}\n")).unwrap();
     let (c, out, _) = rulec(&["replay", RULE, "--fixtures", p.to_str().unwrap(), "--lang", "en"]);
     assert_eq!(c, 1, "照合 0 件で通ってしまった:\n{out}");
     assert!(out.contains("Not one record was compared") && !out.contains("No mismatches"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 
@@ -509,7 +493,7 @@ fn 一件も照合できなければ1で終わる() {
 /// by the git revision that holds the old version.
 #[test]
 fn 刻みや単位を変える前の記録は書いた版で読める() {
-    let dir = setup("read-as");
+    let (_tmp, dir) = setup("read-as");
     let old = "rule 料率(rate_demo) v1\n\nenum 区分(kind) = 一般(general) | 建設(construction)\n\ninputs\n  区分(kind) : 区分\n\noutputs\n  料率(rate) : rate[step 1%]  round down(1%)\n\ntable 料率表(rates)\npolicy unique\n| 区分 | -> 料率 : rate[step 1%] |\n| 一般 | 1% |\n| 建設 | 2% |\n";
     let new = old.replace("rate[step 1%]  round down(1%)", "rate[step 0.1%]  round down(0.1%)").replace("-> 料率 : rate[step 1%]", "-> 料率 : rate[step 0.1%]");
     std::fs::write(dir.join("old.rule"), old).unwrap();
@@ -559,5 +543,4 @@ fn 刻みや単位を変える前の記録は書いた版で読める() {
         assert_eq!(c, 0, "{out}{e}");
         assert!(out.contains("Compared 2 / matched 2"), "{out}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

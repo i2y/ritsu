@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -23,12 +23,12 @@ fn toolchain() -> bool {
 }
 
 /// Generate the shipping rule into a fresh directory; the `wasm/` directory inside it.
-fn generate(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rulec-wasm-target-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn generate(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("wasm-target-{tag}"));
+    let dir = t.path().to_path_buf();
     let (c, out, e) = run(&["gen", "tests/corpus/送料.rule", "--out", dir.to_str().unwrap()]);
     assert_eq!(c, 0, "{out}{e}");
-    dir
+    (t, dir)
 }
 
 /// Build the module the way `rulec api` says to, in the `wasm/` directory.
@@ -43,7 +43,7 @@ fn build(dir: &std::path::Path) {
 
 #[test]
 fn genはwasmの一式を書く() {
-    let dir = generate("files");
+    let (_tmp, dir) = generate("files");
     for f in ["shipping_fee.rs", "shipping_fee_wasm.rs", "shipping_fee.wit", "shipping_fee_runner.mjs", "_round.rs", "_round_test.mjs"] {
         assert!(dir.join("wasm").join(f).exists(), "wasm/{f} が無い");
     }
@@ -58,12 +58,11 @@ fn genはwasmの一式を書く() {
         std::fs::read_to_string(dir.join("wasm/shipping_fee.rs")).unwrap(),
         std::fs::read_to_string(dir.join("rust/shipping_fee.rs")).unwrap()
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn apiのwasmの項は生成物を指している() {
-    let dir = generate("api");
+    let (_tmp, dir) = generate("api");
     let (c, api, e) = run(&["api", "tests/corpus/送料.rule"]);
     assert_eq!(c, 0, "{e}");
     let j = rulec::json::parse(api.trim()).unwrap();
@@ -79,7 +78,6 @@ fn apiのwasmの項は生成物を指している() {
     assert_eq!(s("realloc"), "cabi_realloc");
     assert!(s("build").contains("--target wasm32-unknown-unknown") && s("build").ends_with(&format!("-o {}", s("module"))), "{}", s("build"));
     assert!(s("component").contains("wasm-tools component new"), "{}", s("component"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -87,12 +85,11 @@ fn モジュールは参照評価器と一致しtestがそう言う() {
     if !ready(Need::Rustc, toolchain, "node か rustc か wasm32-unknown-unknown が無いので飛ばした") {
         return;
     }
-    let dir = generate("test");
+    let (_tmp, dir) = generate("test");
     let (c, out, e) = run(&["test", dir.to_str().unwrap(), "--lang", "en"]);
     assert_eq!(c, 0, "{out}{e}");
     assert!(out.contains("shipping_fee (Wasm) 70 vectors"), "{out}");
     assert!(out.contains("rounding helper (Wasm) unit vectors"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -100,7 +97,7 @@ fn 契約の外の入力はerrorの行で返る() {
     if !ready(Need::Rustc, toolchain, "node か rustc か wasm32-unknown-unknown が無いので飛ばした") {
         return;
     }
-    let dir = generate("error");
+    let (_tmp, dir) = generate("error");
     build(&dir);
     // A host of its own, twenty lines, the way generated-code.md shows it.
     let js = r#"
@@ -138,7 +135,6 @@ console.log(call('{"届け先":"北海道","重量":"2.5kg","注文金額":12000
     assert_eq!(lines[3], lines[0], "エスケープした入力で答えが変わった\n{out}");
     assert!(lines[4].starts_with("{\"error\":") && lines[4].contains("重量") && lines[4].contains("missing"), "{out}");
     assert!(lines[5].starts_with("{\"error\":") && lines[5].contains("重量") && lines[5].contains("whole number"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -146,7 +142,7 @@ fn witとモジュールはcomponentになりwasmtimeが呼べる() {
     if !ready(Need::Rustc, || toolchain() && have("wasm-tools"), "toolchain か wasm-tools が無いので飛ばした") {
         return;
     }
-    let dir = generate("component");
+    let (_tmp, dir) = generate("component");
     build(&dir);
     let w = dir.join("wasm");
     let sh = |args: &[&str]| {
@@ -189,5 +185,4 @@ fn witとモジュールはcomponentになりwasmtimeが呼べる() {
     let got = String::from_utf8_lossy(&o.stdout).trim().to_string();
     let unquoted = got.trim_matches('"').replace("\\\"", "\"");
     assert_eq!(unquoted, want.lines().next().unwrap(), "{got}");
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -9,7 +9,7 @@
 use rulec::ast::Item;
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, need};
+use ritsu_testkit::{Need, TempDir, need};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -82,9 +82,8 @@ fn 呼び先の行は呼び先のとおりに当たり_trace_は呼び出しの�
 #[test]
 fn 固定と違う呼び先は_e040_で止まり_pin_が見出しを書き換える() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let dir = std::env::temp_dir().join(format!("rulec-apply-pin-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("apply-pin");
+    let dir = tmp.path().to_path_buf();
     std::fs::copy(root().join(CALLEE), dir.join("退職手当.rule")).unwrap();
     let caller = std::fs::read_to_string(root().join(CALLER)).unwrap().replace("sha256:fb21d081458c197e", "sha256:0000000000000000  # 固定");
     let path = dir.join("非常勤退職手当.rule");
@@ -105,7 +104,6 @@ fn 固定と違う呼び先は_e040_で止まり_pin_が見出しを書き換え
     assert!(o.changed);
     assert!(text.contains("sha256:fb21d081458c197e  # 固定"), "{text}");
     assert!(rulec::report(&text, &p).diags.iter().all(|d| d.code != "E040"));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -136,9 +134,8 @@ fn 整形は呼び出しの本体を二字下げる() {
 #[test]
 fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別子は衝突しない() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = std::env::temp_dir().join(format!("rulec-bundle-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let tmp = TempDir::new("bundle");
+    let d = tmp.path().to_path_buf();
     // 旧: a table whose output column carries the output's name, rounded `half_up` (the
     // Python helper `_round_half`). 新: a rate arithmetic held in 1/20000 円, rounded
     // `half_down` — a callee output that has to come back to whole 円 before this rule
@@ -173,7 +170,6 @@ fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別�
     assert!(idents.contains(&"旧税額".to_string()), "別名の無い付け替え先は名前そのものが識別子になる: {idents:?}");
     // And the generated code answers like the evaluator wherever a toolchain is installed.
     if !need(Need::Python) {
-        let _ = std::fs::remove_dir_all(&d);
         return;
     }
     let generated = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["gen", "束.rule", "--out", "out"]).output().unwrap();
@@ -181,7 +177,6 @@ fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別�
     let test = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["test", "out"]).output().unwrap();
     let text = String::from_utf8_lossy(&test.stdout).into_owned() + &String::from_utf8_lossy(&test.stderr);
     assert!(test.status.success() && !text.contains("FAIL"), "{text}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A callee with the shapes the corpus's one applied rule does not have.
@@ -246,9 +241,8 @@ fn 呼び先の形が揃った規則も生成物は評価器と全言語で一�
     if !need(Need::Python) {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-apply-run-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("apply-run");
+    let dir = tmp.path().to_path_buf();
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
@@ -265,5 +259,4 @@ fn 呼び先の形が揃った規則も生成物は評価器と全言語で一�
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
     assert!(!text.lines().any(|l| l.starts_with("FAIL")), "一致しない言語がある:\n{text}");
     assert!(out.status.success(), "{text}");
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -10,6 +10,8 @@
 //! never be dropped, because that is the direction a tool claiming to prove things must not
 //! fail in. The pair of rules below differ in one character and land on opposite sides.
 
+use ritsu_testkit::TempDir;
+
 /// The same rule twice, with the lower bound of `b` as the only difference.
 fn rule(b_low: &str) -> String {
     format!(
@@ -277,8 +279,8 @@ fn 数の集合は値ごとの点になる() {
     let src = "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n";
     let ds = rulec::check_source(src, "pieces.rule");
     assert!(!rulec::has_error(&ds), "{:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>());
-    let dir = std::env::temp_dir().join(format!("rulec-region-set-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("region-set");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("pieces.rule");
     std::fs::write(&p, src).unwrap();
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["vectors", p.to_str().unwrap()]).output().unwrap();
@@ -296,5 +298,4 @@ fn 数の集合は値ごとの点になる() {
     for n in [99, 101, 199, 201] {
         assert_eq!(got(n).first(), Some(&false), "{n} が境目のベクタに無いか、行を取り違えている: {text}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

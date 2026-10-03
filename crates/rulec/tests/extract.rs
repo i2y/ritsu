@@ -7,17 +7,16 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().is_ok()
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-extract-{}-{tag}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("extract-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 fn rulec(d: &PathBuf, args: &[&str]) -> (i32, String) {
@@ -49,11 +48,11 @@ const GOOD: &str = "print(json.dumps({'rulec': 'extract/1', 'impl': 'fake-extrac
                     print(json.dumps({'block': 'table', 'page': 12, 'grid': [['あて先','S60'],['近畿','990円'],['関東','880円']]}, ensure_ascii=False), flush=True)\n\
                     print(json.dumps({'done': True}), flush=True)\n";
 
-fn scratch(tag: &str) -> PathBuf {
-    let d = dir(tag);
+fn scratch(tag: &str) -> (TempDir, PathBuf) {
+    let (t, d) = dir(tag);
     std::fs::write(d.join("料金表.pdf"), b"not really a pdf\n").unwrap();
     std::fs::write(d.join("a.rule"), RULE).unwrap();
-    d
+    (t, d)
 }
 
 /// Without an extractor a PDF is refused by name; with one the table comes out of it, the
@@ -64,7 +63,7 @@ fn 抽出器を通して写しを取る() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = scratch("via");
+    let (_tmp, d) = scratch("via");
     let (c, out) = rulec(&d, &["source", "fetch", "a.rule"]);
     assert_eq!(c, 0, "{out}");
     assert!(out.contains(".pdf") && out.contains("csv"), "the formats it does read are named: {out}");
@@ -96,7 +95,6 @@ fn 抽出器を通して写しを取る() {
     let (c, out) = rulec(&d, &["check", "a.rule"]);
     assert_eq!(c, 1, "{out}");
     assert!(out.contains("E116"), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// An extractor that does not name itself, one that stops half way, and one that fails: all
@@ -107,7 +105,7 @@ fn 途中で終わった抽出は写しにしない() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = scratch("bad");
+    let (_tmp, d) = scratch("bad");
     let good = extractor(&d, "good.py", GOOD);
     let (c, _) = rulec(&d, &["source", "fetch", "a.rule", "--via", &good]);
     assert_eq!(c, 0);
@@ -131,14 +129,13 @@ fn 途中で終わった抽出は写しにしない() {
         // The copy that was approved is still the copy.
         assert_eq!(std::fs::read_to_string(d.join("料金表.pdf.fragments/表1.tsv")).unwrap(), before, "{name}");
     }
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The template is the shape of an extractor, and it says which documents of this rule need
 /// one at all — a question only the rule can answer.
 #[test]
 fn テンプレートは文書を名指しする() {
-    let d = scratch("template");
+    let (_tmp, d) = scratch("template");
     let (c, out) = rulec(&d, &["source", "fetch", "a.rule"]);
     assert_eq!(c, 0, "{out}");
     let (c, out) = rulec(&d, &["adapter", "a.rule", "--template", "docling", "--lang", "ja"]);
@@ -146,7 +143,6 @@ fn テンプレートは文書を名指しする() {
     assert!(out.contains("料金表.pdf"), "the document that needs one is named: {out}");
     assert!(out.contains("extract/1") && out.contains("\"done\": True"), "{out}");
     assert!(out.contains("rulec source fetch a.rule --via"), "the line that runs it names this rule: {out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The template, run the way its own usage line says — `--via ./extract.py`, so the `#!` line
@@ -158,7 +154,7 @@ fn テンプレートは書いてある使い方のとおりに動く() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = scratch("docling");
+    let (_tmp, d) = scratch("docling");
     std::fs::write(d.join("a.rule"), RULE.replace("@料金表 表1", "@料金表 表1, 表2")).unwrap();
     let (c, out) = rulec(&d, &["adapter", "a.rule", "--template", "docling"]);
     assert_eq!(c, 0, "{out}");
@@ -190,5 +186,4 @@ fn テンプレートは書いてある使い方のとおりに動く() {
     assert_eq!(std::fs::read_to_string(copies.join("表1.tsv")).unwrap(), "あて先\tS60\n近畿\t990円\n関東\t880円\n");
     assert_eq!(std::fs::read_to_string(copies.join("表2.tsv")).unwrap(), "注\t税込\n", "the numbered header was written as a row");
     assert_eq!(std::fs::read_to_string(copies.join("extractor.txt")).unwrap(), "docling 0-stub\n");
-    let _ = std::fs::remove_dir_all(&d);
 }

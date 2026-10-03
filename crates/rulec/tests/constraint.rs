@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -17,11 +17,10 @@ fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-constraint-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("constraint-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 fn run(args: &[&str]) -> (i32, String, String) {
@@ -74,7 +73,7 @@ fn write(d: &PathBuf, name: &str, body: &str) -> String {
 
 #[test]
 fn 起きない組み合わせには行を要求しない() {
-    let d = dir("gap");
+    let (_tmp, d) = dir("gap");
     let with = write(&d, "with.rule", RULE);
     let without = write(&d, "without.rule", &RULE.replace("constraint 全条件一致数 <= 会社名一致数\n\n", ""));
 
@@ -88,12 +87,11 @@ fn 起きない組み合わせには行を要求しない() {
     // With it, the same table is complete over everything that can happen.
     let (code, out, e) = run(&["check", &with]);
     assert_eq!(code, 0, "{out}{e}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn ベクタは制約を満たすものだけ() {
-    let d = dir("vectors");
+    let (_tmp, d) = dir("vectors");
     let p = write(&d, "r.rule", RULE);
     let (code, out, e) = run(&["vectors", &p]);
     assert_eq!(code, 0, "{e}");
@@ -105,7 +103,6 @@ fn ベクタは制約を満たすものだけ() {
         n += 1;
     }
     assert!(n > 0, "ベクタが空");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -113,7 +110,7 @@ fn 生成物は制約を破る入力を断る() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("guard");
+    let (_tmp, d) = dir("guard");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
     let (code, o, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
@@ -152,22 +149,20 @@ fn 生成物は制約を破る入力を断る() {
     let said = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(said.starts_with("refused:"), "断っていない: {said}{}", String::from_utf8_lossy(&o.stderr));
     assert!(said.contains("全条件一致数 <= 会社名一致数"), "何を破ったか言っていない: {said}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn 制約を破る例は誤り() {
-    let d = dir("example");
+    let (_tmp, d) = dir("example");
     let p = write(&d, "r.rule", &RULE.replace("| 1            | 3            | 自動確定 |", "| 3            | 1            | 自動確定 |"));
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("\"code\":\"E019\""), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn 形と型が違えば断る() {
-    let d = dir("bad");
+    let (_tmp, d) = dir("bad");
     // No comparison at all.
     let a = write(&d, "a.rule", &RULE.replace("constraint 全条件一致数 <= 会社名一致数", "constraint 全条件一致数"));
     let (code, out, _) = run(&["check", &a, "--format", "json"]);
@@ -179,19 +174,17 @@ fn 形と型が違えば断る() {
     let (code, out, _) = run(&["check", &b, "--format", "json"]);
     assert_eq!(code, 1);
     assert!(out.contains("\"code\":\"E018\""), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The approver is told what the checks were allowed to assume (§1.6).
 #[test]
 fn 資料は起きない組み合わせを載せる() {
-    let d = dir("doc");
+    let (_tmp, d) = dir("doc");
     let p = write(&d, "r.rule", RULE);
     let (code, out, e) = run(&["doc", &p, "--lang", "ja"]);
     assert_eq!(code, 0, "{e}");
     assert!(out.contains("起きない組み合わせ"), "{out}");
     assert!(out.contains("全条件一致数 <= 会社名一致数"), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Two rates of one type but different steps, related by a constraint. The door used to
@@ -229,7 +222,7 @@ fn 刻みの違う率どうしの制約を門が正しく比べる() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("steps");
+    let (_tmp, d) = dir("steps");
     let p = write(&d, "r.rule", STEPS);
     let out = d.join("out");
     let (code, o, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
@@ -252,7 +245,6 @@ fn 刻みの違う率どうしの制約を門が正しく比べる() {
     let said = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(said.contains("50 100 refused"), "50% ≤ 10% を通している: {said}{}", String::from_utf8_lossy(&o.stderr));
     assert!(said.contains("5 200 ok") && said.contains("30 300 ok"), "成り立つ組を断っている: {said}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A rate passed in with no step counted whole units of 100%, so `10%` in its range became
@@ -260,11 +252,10 @@ fn 刻みの違う率どうしの制約を門が正しく比べる() {
 #[test]
 fn 刻みの無い率の入力は止まる() {
     let src = STEPS.replace("割引率(rate) : rate[step 1%]", "割引率(rate) : rate");
-    let d = dir("nostep");
+    let (_tmp, d) = dir("nostep");
     let p = write(&d, "r.rule", &src);
     let (code, o, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1, "{o}");
     assert!(o.contains("\"E103\""), "{o}");
     assert!(o.contains("rate[step 1%]"), "刻みの書き方を言っていない: {o}");
-    let _ = std::fs::remove_dir_all(&d);
 }

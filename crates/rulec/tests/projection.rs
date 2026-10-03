@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use ritsu_testkit::{Need, need, ready};
+use ritsu_testkit::{Need, TempDir, need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -26,9 +26,9 @@ fn have(cmd: &str) -> bool {
 }
 
 /// The corpus rule that projects, generated once.
-fn generated(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rulec-projection-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn generated(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("projection-{tag}"));
+    let dir = t.path().to_path_buf();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
@@ -36,7 +36,7 @@ fn generated(tag: &str) -> PathBuf {
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
-    dir
+    (t, dir)
 }
 
 /// One order: Okinawa, eleven lines, one of them chilled. The rule's own `examples` pin the
@@ -75,7 +75,7 @@ fn 射影は五つの言語で同じ答えを出す() {
     if !need(Need::Python) {
         return;
     }
-    let dir = generated("run");
+    let (_tmp, dir) = generated("run");
     let mut ran = 0;
 
     // --- Python
@@ -135,7 +135,6 @@ fn 射影は五つの言語で同じ答えを出す() {
     }
 
     eprintln!("射影を走らせた言語: {ran}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A PHP single-quoted string for `php -r`.
@@ -147,7 +146,7 @@ fn php_str(s: &str) -> String {
 /// deciding to is a target whose caller's object this tool started naming (§15.125).
 #[test]
 fn 射影を出すのは五つの言語だけ() {
-    let dir = generated("where");
+    let (_tmp, dir) = generated("where");
     let has = |rel: &str, needle: &str| {
         std::fs::read_to_string(dir.join(rel)).map(|s| s.contains(needle)).unwrap_or(false)
     };
@@ -163,14 +162,13 @@ fn 射影を出すのは五つの言語だけ() {
     for rel in ["rust/order_shipping.rs", "go/ordershipping/order_shipping.go", "swift/order_shipping.swift", "java/OrderShipping.java", "sql/order_shipping.sql"] {
         assert!(!has(rel, "_from("), "{rel} に射影関数が出ています");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The paths are held to the contract, and the contract is read from beside the rule.
 #[test]
 fn 契約のフィールドが変われば止まる() {
-    let dir = std::env::temp_dir().join(format!("rulec-projection-moved-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("projection-moved");
+    let dir = tmp.path().to_path_buf();
     std::fs::create_dir_all(dir.join("contracts")).unwrap();
     let rule = std::fs::read_to_string(root().join("tests/corpus/注文の送料.rule")).unwrap();
     let schema = std::fs::read_to_string(root().join("tests/corpus/contracts/order.schema.json")).unwrap();
@@ -185,15 +183,14 @@ fn 契約のフィールドが変われば止まる() {
     let out = String::from_utf8_lossy(&o.stdout);
     assert!(out.contains("\"E121\""), "フィールドの名前が変わっても止まらない:\n{out}");
     assert_eq!(o.status.code(), Some(1), "E121 は error です");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A rule that projects nothing gets no projection function and no `_Obj` type: the five
 /// emitters ask before writing anything.
 #[test]
 fn 射影の無い規則には何も出ない() {
-    let dir = std::env::temp_dir().join(format!("rulec-projection-none-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("projection-none");
+    let dir = tmp.path().to_path_buf();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
@@ -211,7 +208,6 @@ fn 射影の無い規則には何も出ない() {
             assert!(!s.contains("_Obj"), "{lang}/{n} に射影の型が出ています");
         }
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A projected **date** becomes the day number the rule counts in, which means each of the
@@ -226,9 +222,8 @@ fn 日付の射影は五つの言語で同じ日を指す() {
     if !need(Need::Python) {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-projection-date-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("projection-date");
+    let dir = tmp.path().to_path_buf();
     std::fs::write(
         dir.join("o.json"),
         "{\"$defs\":{\"O\":{\"type\":\"object\",\"properties\":{\"placed_at\":{\"type\":\"string\"}},\"required\":[\"placed_at\"]}}}\n",
@@ -306,7 +301,6 @@ fn 日付の射影は五つの言語で同じ日を指す() {
     }
 
     eprintln!("日付の射影を走らせた言語: {ran}（日付 {} 件）", dates.len());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The first and last day of every month in the declared range, both kinds of February
@@ -371,9 +365,8 @@ fn 省略できる入力は無いフィールドを_none_として読む() {
         table 割引表(t)\npolicy unique\n| 種別    | -> 割引 |\n| none    | 0円     |\n| percent | 100円   |\n| fixed   | 200円   |\n";
     const SCHEMA: &str = "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"coupon\":{\"$ref\":\"#/$defs/Coupon\"}}},\
         \"Coupon\":{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"enum\":[\"percent\",\"fixed\"]}}}}}";
-    let dir = std::env::temp_dir().join(format!("rulec-projection-opt-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("projection-opt");
+    let dir = tmp.path().to_path_buf();
     std::fs::write(dir.join("r.rule"), RULE).unwrap();
     std::fs::write(dir.join("order.json"), SCHEMA).unwrap();
     let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().expect("rulec を起動できない");
@@ -412,15 +405,13 @@ fn 省略できる入力は無いフィールドを_none_として読む() {
             want("PHP", Command::new("php").current_dir(g.join("php")).args(["-r", &php]), w, case);
         }
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A rule and its contract written to a fresh directory, checked and generated: the directory
 /// the five modules are in.
-fn built(tag: &str, rule: &str, contract: (&str, &str)) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rulec-projection-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn built(tag: &str, rule: &str, contract: (&str, &str)) -> (TempDir, PathBuf) {
+    let tmp = TempDir::new(&format!("projection-{tag}"));
+    let dir = tmp.path().to_path_buf();
     std::fs::write(dir.join("r.rule"), rule).unwrap();
     std::fs::write(dir.join(contract.0), contract.1).unwrap();
     let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().expect("rulec を起動できない");
@@ -428,7 +419,7 @@ fn built(tag: &str, rule: &str, contract: (&str, &str)) -> PathBuf {
     assert!(o.status.success(), "契約と規則はそろっているはず:\n{}", String::from_utf8_lossy(&o.stdout));
     let o = rulec(&["gen", "r.rule", "--out", "gen"]);
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
-    dir
+    (tmp, dir)
 }
 
 /// Each case — an object as JSON text, and the answer it has to get — through the projection
@@ -443,7 +434,6 @@ fn five(dir: &Path, alias: &str, cases: &[(String, &str)]) {
         assert_eq!(out, want, "{lang}: {case} の答えが違う");
     };
     if !need(Need::Python) {
-        let _ = std::fs::remove_dir_all(dir);
         return;
     }
     assert!(have("python3"), "python3 が要ります");
@@ -465,7 +455,6 @@ fn five(dir: &Path, alias: &str, cases: &[(String, &str)]) {
             want("PHP", Command::new("php").current_dir(g.join("php")).args(["-r", &php]), w, case);
         }
     }
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// A `.proto` shape is read in the JSON form protojson gives it (§15.133): a field under its
@@ -501,7 +490,7 @@ fn protoの形はprotojsonのとおりに読む() {
         | -       | -        | >10    | -         | -     | 1000円  |\n\
         | -       | -        | -      | -         | fixed | 700円   |\n\
         | -       | -        | -      | -         | -     | 800円   |\n";
-    let dir = built("pb", RULE, ("order.proto", PROTO));
+    let (_tmp, dir) = built("pb", RULE, ("order.proto", PROTO));
     let eleven = vec!["{}"; 11].join(",");
     five(
         &dir,
@@ -548,7 +537,7 @@ fn protoの要素のwhereはprotojsonの値で比べる() {
         | -        | true     | -        | -        | 500円   |\n\
         | -        | -        | -        | true     | 700円   |\n\
         | -        | -        | -        | -        | 800円   |\n";
-    let dir = built("pb-where", RULE, ("order.proto", PROTO));
+    let (_tmp, dir) = built("pb-where", RULE, ("order.proto", PROTO));
     five(
         &dir,
         "line_checks",
@@ -584,7 +573,7 @@ fn whereの日付は文字列として比べる() {
         | -     | true     | 0円     |\n\
         | true  | -        | 500円   |\n\
         | false | -        | 800円   |\n";
-    let dir = built("where-date", RULE, ("order.json", SCHEMA));
+    let (_tmp, dir) = built("where-date", RULE, ("order.json", SCHEMA));
     five(
         &dir,
         "ship_dates",
@@ -603,8 +592,8 @@ fn whereの日付は文字列として比べる() {
 /// reference evaluator already agreed with.
 #[test]
 fn コーパスのprotoの規則は要求をそのまま読む() {
-    let dir = std::env::temp_dir().join(format!("rulec-projection-shipment-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("projection-shipment");
+    let dir = tmp.path().to_path_buf();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())

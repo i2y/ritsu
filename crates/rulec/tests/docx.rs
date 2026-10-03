@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -18,11 +18,10 @@ fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().is_ok()
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-docx-{}-{tag}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("docx-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 /// Write a document from the spec and return its path.
@@ -71,7 +70,7 @@ fn ワードの表を読む() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("read");
+    let (_tmp, d) = dir("read");
     let p = docx(&d, "料金表.docx", TARIFF);
     let bytes = std::fs::read(&p).unwrap();
     let ts = rulec::extract::tables(&p, &bytes).unwrap();
@@ -83,7 +82,6 @@ fn ワードの表を読む() {
     // The continuation of a vertical merge is empty, as the document has it.
     assert_eq!(ts[0][3], vec!["", "1050円", "1270円"]);
     assert_eq!(ts[1], vec![vec!["区分", "割増"], vec!["離島", "500円"]]);
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -91,7 +89,7 @@ fn ワードの表を引いて写しにする() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
-    let d = dir("cite");
+    let (_tmp, d) = dir("cite");
     docx(&d, "料金表.docx", TARIFF);
     let rule = "rule t(t) v1\n\nsource 料金表 = file \"料金表.docx\"\n\nenum あて先(dest) = 近畿(kinki) | 関東(kanto)\n\n\
                 inputs\n  あて先(dest) : あて先\n\noutputs\n  運賃(fee) : money[円]  round up(10円)\n\n\
@@ -114,5 +112,4 @@ fn ワードの表を引いて写しにする() {
     let (c, out) = rulec(&d, &["check", "a.rule"]);
     assert_eq!(c, 1, "{out}");
     assert!(out.contains("E116"), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }

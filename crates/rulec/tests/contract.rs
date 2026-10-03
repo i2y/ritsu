@@ -5,26 +5,22 @@
 //! 0 through, an unset message lets everything under it through unvalidated, and an
 //! `optional` field is unset rather than zero.
 
-use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 /// A rule and its contract, checked; the codes and titles that came out, in order. Each call
 /// gets a directory of its own: the tests run side by side in one process.
 fn check(tag: &str, rule: &str, file: &str, contract: &str) -> Vec<(String, String, String)> {
-    static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("rulec-contract-{tag}-{}-{n}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new(&format!("contract-{tag}"));
+    let dir = tmp.path();
     std::fs::write(dir.join("r.rule"), rule).unwrap();
     std::fs::write(dir.join(file), contract).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
-        .current_dir(&dir)
+        .current_dir(dir)
         .args(["check", "r.rule", "--format", "json", "--lang", "ja"])
         .output()
         .expect("rulec を起動できない");
-    let _ = std::fs::remove_dir_all(PathBuf::from(&dir));
     String::from_utf8_lossy(&o.stdout)
         .lines()
         .filter(|l| l.starts_with('{'))

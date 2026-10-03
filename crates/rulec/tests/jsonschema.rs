@@ -10,6 +10,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 use rulec::jsonschema::{self, Found};
 
@@ -17,11 +18,10 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-schema-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("schema-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 fn run(args: &[&str]) -> (i32, String) {
@@ -61,12 +61,12 @@ fn rule(values: &str, rows: &str) -> String {
     )
 }
 
-fn pair(tag: &str, doc: &str, rule: &str) -> String {
-    let d = dir(tag);
+fn pair(tag: &str, doc: &str, rule: &str) -> (TempDir, String) {
+    let (t, d) = dir(tag);
     std::fs::write(d.join("api.json"), doc).unwrap();
     let p = d.join("配送料金.rule");
     std::fs::write(&p, rule).unwrap();
-    p.to_string_lossy().into_owned()
+    (t, p.to_string_lossy().into_owned())
 }
 
 fn values_at(doc: &str, ptr: &str) -> Vec<String> {
@@ -101,7 +101,7 @@ fn 値はそのまま別名になる() {
 
 #[test]
 fn 一致していれば何も言わない() {
-    let p = pair("ok", DOC, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
+    let (_tmp, p) = pair("ok", DOC, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 0, "{out}");
 }
@@ -109,7 +109,7 @@ fn 一致していれば何も言わない() {
 #[test]
 fn スキーマに値が増えたら止まる() {
     let grown = DOC.replace(r#""enum": ["basic", "gold"]"#, r#""enum": ["basic", "gold", "platinum"]"#);
-    let p = pair("grown", &grown, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
+    let (_tmp, p) = pair("grown", &grown, &rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n"));
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E032") && out.contains("platinum"), "{out}");
@@ -117,7 +117,7 @@ fn スキーマに値が増えたら止まる() {
 
 #[test]
 fn 既定の行があっても_決めていない値は止まる() {
-    let p = pair("undecided", DOC, &rule("一般(basic) | ゴールド(gold)", "| 一般 | 800円 |\n| - | 400円 |\n"));
+    let (_tmp, p) = pair("undecided", DOC, &rule("一般(basic) | ゴールド(gold)", "| 一般 | 800円 |\n| - | 400円 |\n"));
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E033") && out.contains("ゴールド"), "{out}");
@@ -128,7 +128,7 @@ fn 既定の行があっても_決めていない値は止まる() {
 fn 届かないポインタは_そこにある鍵を並べる() {
     let r = rule("一般(basic) | ゴールド(gold) default", "| - | 400円 |\n")
         .replace("#/components/schemas/MemberTier", "#/components/schemas/MemberTiers");
-    let p = pair("nopointer", DOC, &r);
+    let (_tmp, p) = pair("nopointer", DOC, &r);
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E013"), "{out}");
@@ -139,7 +139,7 @@ fn 届かないポインタは_そこにある鍵を並べる() {
 fn 列挙でないものと_名前でない値は断る() {
     let r = rule("一般(basic) | ゴールド(gold) default", "| - | 400円 |\n")
         .replace("#/components/schemas/MemberTier", "#/components/schemas/Order");
-    let p = pair("notenum", DOC, &r);
+    let (_tmp, p) = pair("notenum", DOC, &r);
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E013") && out.contains("列挙ではありません"), "{out}");
@@ -147,7 +147,7 @@ fn 列挙でないものと_名前でない値は断る() {
     let nums = r#"{"$defs": {"T": {"enum": [1, 2]}}}"#;
     let r2 = rule("一般(basic) | ゴールド(gold) default", "| - | 400円 |\n")
         .replace("#/components/schemas/MemberTier", "#/$defs/T");
-    let p2 = pair("numbers", nums, &r2);
+    let (_tmp, p2) = pair("numbers", nums, &r2);
     let (code, out) = run(&["check", &p2]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E013") && out.contains("名前でない値"), "{out}");
@@ -156,7 +156,7 @@ fn 列挙でないものと_名前でない値は断る() {
 #[test]
 fn yamlは名前で断る() {
     let yaml = "openapi: 3.1.0\ncomponents:\n  schemas:\n    MemberTier:\n      enum: [basic, gold]\n";
-    let d = dir("yaml");
+    let (_tmp, d) = dir("yaml");
     std::fs::write(d.join("api.yaml"), yaml).unwrap();
     let p = d.join("配送料金.rule");
     let r = rule("一般(basic) | ゴールド(gold) default", "| - | 400円 |\n").replace("api.json", "api.yaml");

@@ -7,6 +7,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -58,9 +59,9 @@ fn 台帳の例は本当にそのコードを出す() {
         let budget = e.budget.unwrap_or(rulec::region::DEFAULT_BUDGET);
         // An example that needs a file beside it (the `.proto` imports) is run where that
         // file really is, so the companion is held to the same standard as the example.
-        let dir = e.files.is_empty().then(PathBuf::new).unwrap_or_else(|| {
-            let d = std::env::temp_dir().join(format!("rulec-explain-{}", e.code));
-            std::fs::create_dir_all(&d).expect("作業ディレクトリを作れない");
+        let tmp = (!e.files.is_empty()).then(|| TempDir::new(&format!("explain-{}", e.code)));
+        let dir = tmp.as_ref().map_or_else(PathBuf::new, |t| {
+            let d = t.path().to_path_buf();
             for (name, text) in e.files {
                 // A copy of a source lives under `sources/law/…`, so the directories come first.
                 let p = d.join(name);

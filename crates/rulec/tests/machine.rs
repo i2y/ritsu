@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use ritsu_testkit::{Need, need, ready};
+use ritsu_testkit::{Need, TempDir, need, ready};
 
 use rulec::json::Json;
 
@@ -43,11 +43,10 @@ fn int(j: &Json, k: &str) -> i64 {
 }
 
 /// A scratch directory of this test's own.
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-machine-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn scratch(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("machine-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 fn corpus() -> String {
@@ -168,7 +167,7 @@ fn 手順の例の食い違いは呼び出しの並びつきで出る() {
 /// Ten of them read a field that is not there until this was written.
 #[test]
 fn 出力が状態だけの機械も生成したコードで回る() {
-    let d = scratch("single");
+    let (_tmp, d) = scratch("single");
     let rule = write(
         &d,
         "信号.rule",
@@ -196,14 +195,13 @@ fn 出力が状態だけの機械も生成したコードで回る() {
         let (c, out) = rulec(&["test", &out_dir, "--format", "json"]);
         assert_eq!(c, 0, "生成したコードが手順で食い違う:\n{out}");
     }
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Two versions compared as machines: the shortest sequence of calls they answer differently,
 /// and what the change does to a case already on its way.
 #[test]
 fn 二つの版の差は呼び出しの並びと処理中の案件で出る() {
-    let d = scratch("diff");
+    let (_tmp, d) = scratch("diff");
     let v2 = write(&d, "v2.rule", &refund_after_shipment());
     let v3 = write(&d, "v3.rule", &strands_paid_orders());
     for v in [&v2, &v3] {
@@ -229,14 +227,13 @@ fn 二つの版の差は呼び出しの並びと処理中の案件で出る() {
     let mig = arr(&m, "migration");
     assert_eq!(mig.len(), 1, "{out}");
     assert_eq!((s(&mig[0], "state"), s(&mig[0], "kind")), ("入金済", "stranded"));
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Records that share a tag are one case's calls, and the case is played again with the state
 /// the version itself answered.
 #[test]
 fn 過去の記録は案件ごとに通し直す() {
-    let d = scratch("replay");
+    let (_tmp, d) = scratch("replay");
     let log = write(
         &d,
         "log.jsonl",
@@ -268,7 +265,6 @@ fn 過去の記録は案件ごとに通し直す() {
     let at: Vec<(String, i64)> = arr(&cs, "diverged").iter().map(|x| (s(x, "tag").to_string(), int(x, "line"))).collect();
     assert_eq!(at, [("order:1".to_string(), 1), ("order:2".to_string(), 3)], "{out}");
     assert!(arr(&cs, "refused").is_empty(), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -286,7 +282,7 @@ fn 網羅の基準にステートマシンの遷移が入る() {
 /// other one — the traces have to look for it there, as the coverage counts it there.
 #[test]
 fn 片方の世界でしか続かない遷移の対も手順に入る() {
-    let d = scratch("pair-world");
+    let (_tmp, d) = scratch("pair-world");
     let rule = write(
         &d,
         "hold_flow.rule",
@@ -328,7 +324,6 @@ machine flow over step
     let j = &objects(&out)[0];
     let m = arr(j, "criteria").iter().find(|x| s(x, "name") == "machine_transition").cloned().expect("machine_transition が無い");
     assert_eq!(int(&m, "satisfied"), int(&m, "total"), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -366,13 +361,12 @@ fn 承認者の資料に状態の移り方が載る() {
     for want in ["受付", "配達済", "never", "once"] {
         assert!(md.contains(want), "{want} が載っていない");
     }
-    let d = scratch("doc");
+    let (_tmp, d) = scratch("doc");
     let out = d.to_string_lossy().into_owned();
     let (c, _) = rulec(&["doc", RULE, "--format", "html", "--out", &out]);
     assert_eq!(c, 0);
     let html = std::fs::read_to_string(d.join("order_state.html")).unwrap();
     assert!(html.contains("<figure class=\"machine\""), "ページに状態の図が無い");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -460,7 +454,7 @@ fn グラフは持ち越しを辺にしない() {
 /// `vectors --out` writes the sequences of calls beside the single calls, as `gen` does.
 #[test]
 fn ベクタは手順も書き出す() {
-    let d = scratch("vectors");
+    let (_tmp, d) = scratch("vectors");
     let out = d.to_string_lossy().into_owned();
     let (c, said) = rulec(&["vectors", RULE, "--out", &out]);
     assert_eq!(c, 0, "{said}");
@@ -469,7 +463,6 @@ fn ベクタは手順も書き出す() {
     assert_eq!(s(&first, "machine"), "meta");
     assert!(traces.lines().any(|l| l.contains(r#""step":"start""#)));
     assert!(traces.lines().any(|l| l.contains(r#""step":"next""#)));
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -564,7 +557,7 @@ fn 手順のベクタはheldの入力を保つ() {
 /// the case there.
 #[test]
 fn heldの入力が変わる案件は断る() {
-    let d = scratch("fixed-replay");
+    let (_tmp, d) = scratch("fixed-replay");
     let log = write(
         &d,
         "log.jsonl",
@@ -577,7 +570,6 @@ fn heldの入力が変わる案件は断る() {
     let refused = arr(&cs, "refused");
     assert_eq!(refused.len(), 1, "{out}");
     assert_eq!(int(&refused[0], "line"), 2, "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -593,7 +585,7 @@ fn apiがheldの入力を言う() {
 /// made with another world's amount.
 #[test]
 fn 世界ごとの証明書は再検査を通り_偽れば落ちる() {
-    let d = scratch("worlds");
+    let (_tmp, d) = scratch("worlds");
     let rule = write(&d, "review.rule", REVIEW);
     let (c, cert) = rulec(&["certificate", &rule]);
     assert_eq!(c, 0, "{cert}");
@@ -632,7 +624,6 @@ fn 世界ごとの証明書は再検査を通り_偽れば落ちる() {
             assert_eq!(c, 1, "{what}: Lean が通した:\n{said}");
         }
     }
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The review rule in every language that runs here. Its `final` line lists the states in an
@@ -642,12 +633,11 @@ fn heldのある機械も生成したコードで回る() {
     if !need(Need::Python) {
         return;
     }
-    let d = scratch("review-gen");
+    let (_tmp, d) = scratch("review-gen");
     let rule = write(&d, "review.rule", REVIEW);
     let out_dir = d.join("gen").to_string_lossy().into_owned();
     let (c, out) = rulec(&["gen", &rule, "--out", &out_dir]);
     assert_eq!(c, 0, "{out}");
     let (c, out) = rulec(&["test", &out_dir, "--format", "json"]);
     assert_eq!(c, 0, "生成したコードが食い違う:\n{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }

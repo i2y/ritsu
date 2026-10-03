@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use ritsu_testkit::{Need, need, ready};
+use ritsu_testkit::{Need, TempDir, need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -31,15 +31,14 @@ fn run(args: &[&str]) -> (i32, String) {
 }
 
 /// Write the rule, generate, and give back the output directory.
-fn generate(tag: &str, rule: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rulec-shapes-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn generate(tag: &str, rule: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("shapes-{tag}"));
+    let dir = t.path().to_path_buf();
     let src = dir.join("r.rule");
     std::fs::write(&src, rule).unwrap();
     let (c, out) = run(&["gen", &src.to_string_lossy(), "--out", &dir.to_string_lossy()]);
     assert_eq!(c, 0, "{tag}: 生成できない:\n{out}");
-    dir
+    (t, dir)
 }
 
 /// Run the generated code in every language a toolchain is present for, and hold it to the
@@ -215,7 +214,7 @@ result 区分 = 区分
 
 #[test]
 fn 読まれない列があっても生成物はコンパイルできる() {
-    let dir = generate("unused", UNUSED);
+    let (_tmp, dir) = generate("unused", UNUSED);
     go_builds(&dir, "unusedcol");
     py_imports(&dir, "unused_col");
     rb_loads(&dir, "unused_col");
@@ -226,21 +225,18 @@ fn 読まれない列があっても生成物はコンパイルできる() {
     // The cell is still written out, so that the branch and the row stay 1:1.
     assert!(go.contains("aux = false"), "セルが省かれている:\n{go}");
     assert!(go.contains("_ = aux"), "読まれない局所変数に印が無い:\n{go}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn 読まれない列はW111で名指しされる() {
-    let dir = std::env::temp_dir().join(format!("rulec-shapes-w111-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("shapes-w111");
+    let dir = tmp.path().to_path_buf();
     let src = dir.join("r.rule");
     std::fs::write(&src, UNUSED).unwrap();
     let (c, out) = run(&["check", &src.to_string_lossy()]);
     assert_eq!(c, 0, "{out}");
     assert!(out.contains("W111"), "読まれない列が警告されない:\n{out}");
     assert!(out.contains("補助"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// One boolean output on its own: the guard's early return and the final return both have to
@@ -266,7 +262,7 @@ result 可否 = 可否
 
 #[test]
 fn 真偽ひとつだけを返す規則も生成物はコンパイルできる() {
-    let dir = generate("boolonly", BOOL_ONLY);
+    let (_tmp, dir) = generate("boolonly", BOOL_ONLY);
     go_builds(&dir, "boolonly");
     py_imports(&dir, "bool_only");
     rb_loads(&dir, "bool_only");
@@ -275,7 +271,6 @@ fn 真偽ひとつだけを返す規則も生成物はコンパイルできる()
     sw_typechecks(&dir, "bool_only");
     let go = std::fs::read_to_string(dir.join("go").join("boolonly").join("bool_only.go")).unwrap();
     assert!(go.contains("return false, nil, &RuleInputError{"), "入口ガードが 0 を返している:\n{go}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A rule written entirely in ASCII. §1.3 asks for an alias because a kanji has no uppercase
@@ -306,20 +301,18 @@ result fee = fee
 
 #[test]
 fn 全部asciiで書いた規則は別名を求められない() {
-    let dir = std::env::temp_dir().join(format!("rulec-shapes-en-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("shapes-en");
+    let dir = tmp.path().to_path_buf();
     let src = dir.join("r.rule");
     std::fs::write(&src, ENGLISH).unwrap();
     let (c, out) = run(&["check", &src.to_string_lossy()]);
     assert_eq!(c, 0, "ASCII だけの規則が別名を要求されている:\n{out}");
     assert!(!out.contains("E011"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn 全部asciiで書いた規則も生成物はコンパイルできる() {
-    let dir = generate("english", ENGLISH);
+    let (_tmp, dir) = generate("english", ENGLISH);
     go_builds(&dir, "bulkfee");
     py_imports(&dir, "bulk_fee");
     rb_loads(&dir, "bulk_fee");
@@ -328,7 +321,6 @@ fn 全部asciiで書いた規則も生成物はコンパイルできる() {
     sw_typechecks(&dir, "bulk_fee");
     let py = std::fs::read_to_string(dir.join("python").join("bulk_fee.py")).unwrap();
     assert!(py.contains("def bulk_fee(weight: Gram, member: MemberKind) -> YenInclTax:"), "{py}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §1.3: an alias on an internal name is optional, and writing one makes the generated code
@@ -336,7 +328,7 @@ fn 全部asciiで書いた規則も生成物はコンパイルできる() {
 /// name the output never contained.
 #[test]
 fn 内部名の別名は生成コードの識別子になる() {
-    let dir = generate("alias", "\
+    let (_tmp, dir) = generate("alias", "\
 rule alias_demo(alias_demo) v1
 description \"内部名に別名を書いたら、生成コードがその名前を使う\"
 
@@ -377,7 +369,6 @@ result 結果 = 中間
     php_loads(&dir, "alias_demo");
     java_compiles(&dir, "AliasDemo");
     sw_typechecks(&dir, "alias_demo");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// An alias that happens to be one of Swift's own words, at every level a rule has one:
@@ -390,7 +381,7 @@ result 結果 = 中間
 /// identifiers (`r#where`) are the fix, and it is a separate change from this one.
 #[test]
 fn swiftの予約語に当たる別名でも生成物はコンパイルできる() {
-    let dir = generate("keyword", "\
+    let (_tmp, dir) = generate("keyword", "\
 rule 予約語(keyword_demo) v1
 description \"Swift の予約語に当たる別名を、入力・出力・列挙・グループ・表に書く\"
 
@@ -434,7 +425,6 @@ result 可否 = 可否
     java_compiles(&dir, "KeywordDemo");
     go_builds(&dir, "keyworddemo");
     sw_typechecks(&dir, "keyword_demo");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Every identifier a runner binds, read out of a runner that was just generated.
@@ -475,7 +465,7 @@ fn runner_locals(dir: &Path, alias: &str) -> Vec<String> {
 #[test]
 fn ランナーの局所変数と同じ名前の規則でも生成物は動く() {
     // `d` is the one that actually collided, and it gets the full sweep.
-    let dir = generate("locald", &collide_rule("d"));
+    let (_tmp, dir) = generate("locald", &collide_rule("d"));
     py_imports(&dir, "d");
     rb_loads(&dir, "d");
     php_loads(&dir, "d");
@@ -489,10 +479,9 @@ fn ランナーの局所変数と同じ名前の規則でも生成物は動く()
     let names = runner_locals(&dir, "d");
     let _ = std::fs::remove_dir_all(&dir);
     for name in names {
-        let d = generate(&format!("local{name}"), &collide_rule(&name));
+        let (_tmp, d) = generate(&format!("local{name}"), &collide_rule(&name));
         sw_typechecks(&d, &name);
         ts_runs(&d, &name);
-        let _ = std::fs::remove_dir_all(&d);
     }
 }
 
@@ -528,7 +517,7 @@ result 料 = 料
 /// rule to compare a date with a literal in a definition found it (§15.38).
 #[test]
 fn 定義の中の日付リテラルは通算日になる() {
-    let dir = generate(
+    let (_tmp, dir) = generate(
         "datelit",
         "\
 rule 期限(deadline) v1
@@ -558,7 +547,6 @@ examples
     assert!(py.contains("made <= 20908"), "日付が通算日になっていない:\n{py}");
     let go = std::fs::read_to_string(dir.join("go").join("deadline").join("deadline.go")).unwrap();
     assert!(go.contains("<= 20908"), "{go}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The five dimensions added in §15.83 and §15.84, in one rule. None of them is in the
@@ -601,7 +589,7 @@ examples
 
 #[test]
 fn 新しい次元の規則も生成物はコンパイルできる() {
-    let dir = generate("dimensions", DIMENSIONS);
+    let (_tmp, dir) = generate("dimensions", DIMENSIONS);
     go_builds(&dir, "facility");
     py_imports(&dir, "facility");
     rb_loads(&dir, "facility");
@@ -615,7 +603,6 @@ fn 新しい次元の規則も生成物はコンパイルできる() {
         assert!(py.contains(brand), "{brand} が生成コードに無い:\n{py}");
     }
     assert!(py.contains("area[坪]") && py.contains("temperature[℉]"), "単位が注記に残っていない:\n{py}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The words the corpus never uses. Counted from the grammar against `tests/corpus/*.rule`
@@ -671,7 +658,7 @@ examples
 
 #[test]
 fn コーパスに無い語も生成物はコンパイルできる() {
-    let dir = generate("surface", SURFACE);
+    let (_tmp, dir) = generate("surface", SURFACE);
     go_builds(&dir, "surface");
     py_imports(&dir, "surface");
     rb_loads(&dir, "surface");
@@ -679,21 +666,18 @@ fn コーパスに無い語も生成物はコンパイルできる() {
     java_compiles(&dir, "Surface");
     sw_typechecks(&dir, "surface");
     ts_runs(&dir, "surface");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn コーパスに無い語も評価器と全言語で一致する() {
-    let dir = generate("surface-run", SURFACE);
+    let (_tmp, dir) = generate("surface-run", SURFACE);
     agrees_everywhere("surface", &dir);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn 新しい次元の規則も評価器と全言語で一致する() {
-    let dir = generate("dimensions-run", DIMENSIONS);
+    let (_tmp, dir) = generate("dimensions-run", DIMENSIONS);
     agrees_everywhere("dimensions", &dir);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A sequence is a parameter of every generated function and the fields of one element are
@@ -707,17 +691,16 @@ fn 新しい次元の規則も評価器と全言語で一致する() {
 #[test]
 fn 並びの別名が局所変数と同じでも生成物は動く() {
     // `rows` is the one that actually collided, and it gets the full sweep.
-    let dir = generate("seqrows", &seq_rule("rows"));
+    let (_tmp, dir) = generate("seqrows", &seq_rule("rows"));
     agrees_everywhere("seqrows", &dir);
     let _ = std::fs::remove_dir_all(&dir);
 
     // The rest only have to parse and run: a collision shows up as a module that will not
     // load at all, which is what `ts_runs` and the JavaScript beside it catch.
     for name in TEMP_LOCALS {
-        let d = generate(&format!("seq{name}"), &seq_rule(name));
+        let (_tmp, d) = generate(&format!("seq{name}"), &seq_rule(name));
         ts_runs(&d, "seq");
         js_runs(&d, "seq");
-        let _ = std::fs::remove_dir_all(&d);
     }
 }
 

@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, need, ready};
+use ritsu_testkit::{Need, TempDir, need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -39,20 +39,18 @@ fn keys(j: &rulec::json::Json, want: &[&str], what: &str) {
     }
 }
 
-const TMP: &str = "rulec-formats";
-
-fn gen_dir(tag: &str, rule: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("{TMP}-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn gen_dir(tag: &str, rule: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("formats-{tag}"));
+    let dir = t.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     let (c, _) = run(&["gen", rule, "--out", &out]);
     assert_eq!(c, 0);
-    dir
+    (t, dir)
 }
 
 /// A corpus rule with the padding squeezed out of one table row: a file `fmt --check` has to
 /// name. Made here rather than borrowed from `tests/mutants`, whose files are formatted.
-fn unformatted(tag: &str) -> PathBuf {
+fn unformatted(tag: &str) -> (TempDir, PathBuf) {
     let src = std::fs::read_to_string(root().join("tests/corpus/ゆうパック運賃.rule")).unwrap();
     let mut done = false;
     let text: String = src
@@ -68,17 +66,15 @@ fn unformatted(tag: &str) -> PathBuf {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(done, "崩す行が見つからない");
-    let dir = std::env::temp_dir().join(format!("{TMP}-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let p = dir.join("崩れた表.rule");
+    let t = TempDir::new(&format!("formats-{tag}"));
+    let p = t.path().join("崩れた表.rule");
     std::fs::write(&p, text + "\n").unwrap();
-    p
+    (t, p)
 }
 
 #[test]
 fn fmtは整形されていないファイルを名指しする() {
-    let broken = unformatted("fmt");
+    let (_tmp, broken) = unformatted("fmt");
     let (c, out) = run(&["fmt", "--check", broken.to_str().unwrap(), "--format", "json"]);
     assert_eq!(c, 1);
     let js = objects(&out);
@@ -87,7 +83,6 @@ fn fmtは整形されていないファイルを名指しする() {
     let rulec::json::Json::Arr(un) = js[0].get("unformatted").unwrap() else { panic!() };
     assert_eq!(un.len(), 1);
     assert!(un[0].as_str().unwrap().ends_with("崩れた表.rule"));
-    let _ = std::fs::remove_dir_all(broken.parent().unwrap());
     // A clean file names nothing, and still says so.
     let (c, out) = run(&["fmt", "--check", "tests/corpus/送料.rule", "--format", "json"]);
     assert_eq!(c, 0);
@@ -98,8 +93,8 @@ fn fmtは整形されていないファイルを名指しする() {
 
 #[test]
 fn genは古い生成物と欠けた生成物を分ける() {
-    let dir = std::env::temp_dir().join(format!("{TMP}-gen-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("formats-gen");
+    let dir = tmp.path().join("out");
     let out_dir = dir.to_string_lossy().to_string();
     let rule = "tests/corpus/送料.rule";
 
@@ -128,7 +123,6 @@ fn genは古い生成物と欠けた生成物を分ける() {
     let j = obj(&out);
     assert_eq!(arr(&j, "stale"), 1, "{out}");
     assert_eq!(arr(&j, "missing"), 0, "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -159,7 +153,7 @@ fn testは言語ごとの結果と最初の食い違いを出す() {
     if !need(Need::Python) {
         return;
     }
-    let dir = gen_dir("run", "tests/corpus/期間区分.rule");
+    let (_tmp, dir) = gen_dir("run", "tests/corpus/期間区分.rule");
     let (c, out) = run(&["test", dir.to_str().unwrap(), "--format", "json"]);
     assert_eq!(c, 0, "{out}");
     let j = obj(&out);
@@ -200,14 +194,12 @@ fn testは言語ごとの結果と最初の食い違いを出す() {
     // The rounding helpers are reported under a stable id, not under a translated name.
     let rules: Vec<&str> = rs.iter().map(|r| r.get("rule").unwrap().as_str().unwrap()).collect();
     assert!(rules.contains(&"_round"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn fixtures_lintは問題を種類つきで数える() {
-    let dir = std::env::temp_dir().join(format!("{TMP}-fx-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("formats-fx");
+    let dir = tmp.path().to_path_buf();
     // Two records: one clean, one whose destination is not a prefecture.
     let good = r#"{"tag":"a","in":{"届け先":"東京都","重量":1000,"注文金額":5000,"会員":"一般"},"observed":{"送料":600}}"#;
     let bad = r#"{"tag":"b","in":{"届け先":"江戸","重量":1000,"注文金額":5000,"会員":"一般"},"observed":{"送料":600}}"#;
@@ -241,12 +233,11 @@ fn fixtures_lintは問題を種類つきで数える() {
     let rulec::json::Json::Arr(ps2) = jj.get("problems").unwrap() else { panic!() };
     assert_eq!(ps[0].get("kind"), ps2[0].get("kind"), "kind が言語で変わっている");
     assert_ne!(ps[0].get("what"), ps2[0].get("what"), "what は文面なので変わるはず");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn verifyは一致率とクラスタを構造で出す() {
-    let Some(dir) = adapter_dir() else { return };
+    let Some((_tmp, dir)) = adapter_dir() else { return };
     let (_, out) = verify_json(&dir, "1");
     let j = obj(&out);
     keys(
@@ -283,25 +274,24 @@ fn verifyは一致率とクラスタを構造で出す() {
         cs2.iter().all(|c| c.get("suspect_rounding") == Some(&rulec::json::Json::Bool(true))),
         "{out2}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The same fake legacy implementation `tests/verify.rs` uses: the generated Python, with an
 /// optional defect. Returns None when python3 is not installed.
-fn adapter_dir() -> Option<PathBuf> {
+fn adapter_dir() -> Option<(TempDir, PathBuf)> {
     let ok = || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
     if !ready(Need::Python, ok, "python3 が無いので飛ばした") {
         return None;
     }
-    let dir = std::env::temp_dir().join(format!("{TMP}-vf-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let t = TempDir::new("formats-vf");
+    let dir = t.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     let (c, _) = run(&["gen", "tests/corpus/ゆうパック運賃.rule", "--out", &out]);
     assert_eq!(c, 0);
     let src = std::fs::read_to_string(root().join("tests/verify.rs")).unwrap();
     let body = src.split("const ADAPTER: &str = r#\"").nth(1).unwrap().split("\"#;").next().unwrap();
     std::fs::write(dir.join("adapter.py"), body).unwrap();
-    Some(dir)
+    Some((t, dir))
 }
 
 fn verify_json(dir: &PathBuf, bug: &str) -> (i32, String) {
@@ -320,7 +310,7 @@ fn verify_json(dir: &PathBuf, bug: &str) -> (i32, String) {
 fn 鍵は言語で変わらない() {
     // One sweep over every command that has `--format json`: the set of keys is the contract,
     // so it must be identical in both languages, top level and one level down.
-    let dir = gen_dir("keys", "tests/corpus/期間区分.rule");
+    let (_tmp, dir) = gen_dir("keys", "tests/corpus/期間区分.rule");
     let d = dir.to_string_lossy().to_string();
     let mut cases: Vec<Vec<&str>> = vec![
         vec!["check", "tests/mutants/m_e101.rule", "--format", "json"],
@@ -351,7 +341,6 @@ fn 鍵は言語で変わらない() {
         };
         assert_eq!(shape(&a), shape(&b), "鍵が言語で変わる: rulec {}", case.join(" "));
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// docs/formats.md is the definition these tests are written against; it must name every
@@ -380,7 +369,7 @@ fn 走らなかった実行は食い違いとして報告されない() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let dir = gen_dir("broken", "tests/corpus/期間区分.rule");
+    let (_tmp, dir) = gen_dir("broken", "tests/corpus/期間区分.rule");
     // Break the module the runner imports, so the run cannot produce a line to compare.
     let module = dir.join("python").join("period.py");
     std::fs::write(&module, "this is not python\n").unwrap();
@@ -401,7 +390,6 @@ fn 走らなかった実行は食い違いとして報告されない() {
     assert_eq!(py.get("ran").unwrap(), &rulec::json::Json::Bool(false));
     assert_eq!(py.get("first_diff").unwrap(), &rulec::json::Json::Null);
     assert!(py.get("error").unwrap().as_str().is_some(), "prose が error に無い: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A language skipped for a missing toolchain narrows what the run proved, so the summary says
@@ -414,7 +402,7 @@ fn 飛ばした言語があると要求時に落ちる() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let dir = gen_dir("skipped", "tests/corpus/期間区分.rule");
+    let (_tmp, dir) = gen_dir("skipped", "tests/corpus/期間区分.rule");
     // A PATH holding python3 and nothing else, so the other five are skipped.
     let bin = dir.join("_bin");
     std::fs::create_dir_all(&bin).unwrap();
@@ -447,7 +435,6 @@ fn 飛ばした言語があると要求時に落ちる() {
 
     let (c, out) = run_with_path(&["--require-all"]);
     assert_eq!(c, 1, "--require-all が飛ばしを見逃した: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// `diff --format json` names **every** record that moved, not only one per cluster.
@@ -457,8 +444,8 @@ fn 飛ばした言語があると要求時に落ちる() {
 /// of its own can still be found.
 #[test]
 fn diffは動いた記録を全部名指しする() {
-    let dir = std::env::temp_dir().join("rulec-formats-names");
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("formats-names");
+    let dir = tmp.path().to_path_buf();
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
     let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
     std::fs::write(&a, &src).unwrap();
@@ -506,5 +493,4 @@ fn diffは動いた記録を全部名指しする() {
     assert!(named.iter().any(|(_, t)| t.is_empty()), "tag の無い記録が落ちている");
     let total: i128 = cs.iter().map(|c| c.get("count").unwrap().as_int().unwrap()).sum();
     assert_eq!(total, want.len() as i128);
-    let _ = std::fs::remove_dir_all(&dir);
 }

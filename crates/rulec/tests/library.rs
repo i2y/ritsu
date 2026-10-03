@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -55,9 +55,8 @@ fn 記録は転記から作り直しても変わらない() {
     if !ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無いので飛ばした") {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-oracle-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("oracle");
+    let dir = tmp.path().to_path_buf();
     std::fs::copy(root().join("tests/oracle/make.py"), dir.join("make.py")).unwrap();
     let o = Command::new("python3").arg(dir.join("make.py")).output().expect("python3 を起動できない");
     assert!(
@@ -72,5 +71,4 @@ fn 記録は転記から作り直しても変わらない() {
         let fresh = std::fs::read_to_string(dir.join(name)).unwrap();
         assert_eq!(committed, fresh, "{fx}: `python3 tests/oracle/make.py` で作り直してください");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

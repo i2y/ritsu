@@ -9,6 +9,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -44,13 +45,13 @@ policy first
 result 可否 = 可否
 ";
 
-fn write_tmp(tag: &str, text: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rulec-wire-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let p = dir.join("r.rule");
+/// The rule written to a directory of its own; the path of the file, and the `TempDir` that
+/// removes the directory when the test is done with it.
+fn write_tmp(tag: &str, text: &str) -> (TempDir, PathBuf) {
+    let tmp = TempDir::new(&format!("wire-{tag}"));
+    let p = tmp.path().join("r.rule");
     std::fs::write(&p, text).unwrap();
-    p
+    (tmp, p)
 }
 
 const COUPON: &str = "tests/corpus/クーポン一枚.rule";
@@ -84,7 +85,7 @@ fn スキーマは別名でも出せる() {
 
 #[test]
 fn 証人の率は書き戻せる形で出る() {
-    let p = write_tmp("hole", HOLE);
+    let (_tmp, p) = write_tmp("hole", HOLE);
     let p = p.to_string_lossy().to_string();
     let (_, text) = run(&["check", &p]);
     // Written back into a cell, so it is percent, and on the declared step: one step past
@@ -105,7 +106,7 @@ fn 証人の行を貼ると穴が閉じる() {
     let mut text = HOLE.to_string();
     let mut seen = Vec::new();
     for _ in 0..6 {
-        let p = write_tmp("close", &text);
+        let (_tmp, p) = write_tmp("close", &text);
         let p = p.to_string_lossy().to_string();
         let (code, js) = run(&["check", &p, "--format", "json"]);
         if code == 0 {
@@ -124,8 +125,8 @@ fn 証人の行を貼ると穴が閉じる() {
 
 #[test]
 fn 入口のガードは刻みの個数で比べる() {
-    let dir = std::env::temp_dir().join(format!("rulec-wire-gen-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("wire-gen");
+    let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     let (c, msg) = run(&["gen", COUPON, "--out", &out]);
     assert_eq!(c, 0, "{msg}");
@@ -138,7 +139,6 @@ fn 入口のガードは刻みの個数で比べる() {
     // told the field runs 0..1.
     assert!(go.contains("// 割引率 範囲 0..100"), "Go のフィールドの注記がガードと食い違う:\n{go}");
     assert!(go.contains("int64(in.Rate) < 0 || int64(in.Rate) > 100"), "Go のガードが刻みの個数でない:\n{go}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -148,9 +148,8 @@ fn 記録の率は刻みの個数として読まれる() {
     let rec = "{\"in\":{\"商品合計\":10000,\"適用済割引\":0,\"種別\":\"率引き\",\
 \"割引率\":10,\"額面\":0,\"同商品適用済\":false},\
 \"observed\":{\"可否\":true,\"素割引\":1000}}\n";
-    let dir = std::env::temp_dir().join(format!("rulec-wire-rec-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("wire-rec");
+    let dir = tmp.path().to_path_buf();
     let f = dir.join("one.jsonl");
     std::fs::write(&f, rec).unwrap();
     let f = f.to_string_lossy().to_string();
@@ -162,7 +161,6 @@ fn 記録の率は刻みの個数として読まれる() {
     let (c, out) = run(&["replay", COUPON, "--fixtures", &f]);
     assert_eq!(c, 0, "{out}");
     assert!(out.contains("1 / 1") || out.contains("(100.000%)"), "10% が掛かっていない:\n{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A rule whose rate moves in tenths of a percent, which is what §2.1 asks for and what the
@@ -191,7 +189,7 @@ result 手数料 = 手数料
 
 #[test]
 fn 一パーセントより細かい刻みが書ける() {
-    let p = write_tmp("fine", FINE);
+    let (_tmp, p) = write_tmp("fine", FINE);
     let p = p.to_string_lossy().to_string();
     let (c, out) = run(&["check", &p]);
     assert_eq!(c, 0, "{out}");
@@ -215,19 +213,18 @@ fn 小数は正確な有理数として読まれる() {
     // `3.6%` at a step of 0.1% is 36 steps. Truncating the literal to 3, or reading `.6` as
     // six tenths of a percent of something else, both land elsewhere.
     let rule = FINE.replace("<=0.5%", "<=3.6%").replace(">0.5%", ">3.6%");
-    let p = write_tmp("exact", &rule);
+    let (_tmp, p) = write_tmp("exact", &rule);
     let p = p.to_string_lossy().to_string();
     let (c, out) = run(&["check", &p]);
     assert_eq!(c, 0, "{out}");
 
-    let dir = std::env::temp_dir().join(format!("rulec-wire-exact-gen-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("wire-exact-gen");
+    let dir = tmp.path().to_path_buf();
     let o = dir.to_string_lossy().to_string();
     let (c, msg) = run(&["gen", &p, "--out", &o]);
     assert_eq!(c, 0, "{msg}");
     let py = std::fs::read_to_string(dir.join("python").join("fine_rate.py")).unwrap();
     assert!(py.contains("rate <= 36"), "3.6% が 36 刻みになっていない:\n{py}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -235,7 +232,7 @@ fn 刻みに載らない値は止まる() {
     // `0.05%` is half a step of 0.1%, so the runtime integer cannot hold it. Moving it to
     // the nearest step quietly would put a different boundary in the code than on the page.
     let rule = FINE.replace("<=0.5%", "<=0.05%").replace(">0.5%", ">0.05%");
-    let p = write_tmp("offstep", &rule);
+    let (_tmp, p) = write_tmp("offstep", &rule);
     let p = p.to_string_lossy().to_string();
     let (c, out) = run(&["check", &p]);
     assert_eq!(c, 1, "刻みの間の値が通ってしまう:\n{out}");
@@ -248,7 +245,7 @@ fn 出力のセルに式を書くと止まる() {
     // §3.2 allows one name or one value. The first word used to be taken and the rest
     // dropped, so `取引額 × 手数料率` generated code that never multiplied.
     let rule = FINE.replace("| >0.5%    | 率手数料                             |", "| >0.5%    | 取引額 × 手数料率 |");
-    let p = write_tmp("expr", &rule);
+    let (_tmp, p) = write_tmp("expr", &rule);
     let p = p.to_string_lossy().to_string();
     let (c, out) = run(&["check", &p]);
     assert_eq!(c, 1, "式のセルが通ってしまう:\n{out}");
@@ -275,13 +272,13 @@ result 点数 = 基本点
 
 #[test]
 fn 単位のない数が書けて割り算が単位を消す() {
-    let p = write_tmp("count", COUNT);
+    let (_tmp, p) = write_tmp("count", COUNT);
     let p = p.to_string_lossy().to_string();
     let (c, out) = run(&["check", &p]);
     assert_eq!(c, 0, "{out}");
 
-    let dir = std::env::temp_dir().join(format!("rulec-wire-count-gen-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("wire-count-gen");
+    let dir = tmp.path().to_path_buf();
     let o = dir.to_string_lossy().to_string();
     let (c, msg) = run(&["gen", &p, "--out", &o]);
     assert_eq!(c, 0, "{msg}");
@@ -294,7 +291,6 @@ fn 単位のない数が書けて割り算が単位を消す() {
     // stays 1050 and the single rounding at the end turns it into 10 points.
     assert!(py.contains("base = paid"), "除算が整数を割ってしまっている:\n{py}");
     assert!(py.contains("// 100"), "スケールが戻されていない:\n{py}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -302,7 +298,7 @@ fn 単位のある数とない数は混ざらない() {
     // `number` is dimensionless, so it multiplies money — but it is not money, and putting
     // one where the other is expected has to stop.
     let bad = COUNT.replace("点数(pts) : number round down(1)", "点数(pts) : money[円, incl_tax] round down(1円)");
-    let p = write_tmp("mix", &bad);
+    let (_tmp, p) = write_tmp("mix", &bad);
     let p = p.to_string_lossy().to_string();
     let (c, out) = run(&["check", &p]);
     assert_eq!(c, 1, "単位のない数が金額の位置に通ってしまう:\n{out}");
@@ -344,13 +340,13 @@ examples
 
 #[test]
 fn defineの中の率のリテラルは名前と同じ尺度で保管される() {
-    let p = write_tmp("ratedef", RATE_IN_DEFINE);
+    let (_tmp, p) = write_tmp("ratedef", RATE_IN_DEFINE);
     let p = p.to_string_lossy().to_string();
     let (c, out) = run(&["check", &p]);
     assert_eq!(c, 0, "{out}");
 
-    let dir = std::env::temp_dir().join(format!("rulec-wire-ratedef-gen-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("wire-ratedef-gen");
+    let dir = tmp.path().to_path_buf();
     let o = dir.to_string_lossy().to_string();
     let (c, msg) = run(&["gen", &p, "--out", &o]);
     assert_eq!(c, 0, "{msg}");
@@ -363,5 +359,4 @@ fn defineの中の率のリテラルは名前と同じ尺度で保管される()
     // that the generated code agrees too. That is what the factor of four broke.
     let want = std::fs::read_to_string(dir.join("vectors").join("rate_def.expected.jsonl")).unwrap();
     assert!(want.contains("{\"結果\":360}"), "参照評価器の期待値が変わっている:\n{want}");
-    let _ = std::fs::remove_dir_all(&dir);
 }

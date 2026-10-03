@@ -9,6 +9,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -203,9 +204,8 @@ fn e101のfixを貼り続けると穴が閉じる() {
     // "the fix does not lie" means here is that every application really removes the witness
     // it named and the loop ends — not that one paste finishes the job.
     let mut src = std::fs::read_to_string(root().join("tests/mutants/m_e101.rule")).unwrap();
-    let dir = std::env::temp_dir().join(format!("rulec-fix-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("fix");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("t.rule");
     let mut seen: Vec<String> = Vec::new();
     for round in 0..30 {
@@ -213,7 +213,6 @@ fn e101のfixを貼り続けると穴が閉じる() {
         let (_, out) = run(&["check", p.to_str().unwrap(), "--format", "json"]);
         let Some(line) = out.lines().find(|l| l.contains("\"code\":\"E101\"")) else {
             assert!(round > 0, "そもそも E101 が出ていない");
-            let _ = std::fs::remove_dir_all(&dir);
             return;
         };
         let j = rulec::json::parse(line).unwrap();

@@ -10,7 +10,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready, skip};
+use ritsu_testkit::{Need, TempDir, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -238,8 +238,8 @@ fn 制約で閉じた葉も検査される() {
     let Some(bin) = checker() else {
         return;
     };
-    let dir = std::env::temp_dir().join(format!("rulec-lean-con-{}", std::process::id()));
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("lean-con");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("con.rule");
     std::fs::write(&p, BY_CONSTRAINT).unwrap();
     let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
@@ -262,7 +262,6 @@ fn 制約で閉じた葉も検査される() {
         assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
         assert!(said.contains("FAILED"), "{what}: 何が悪いか言っていない\n{said}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A rule whose completeness rests on a `constraint` (§15.55), as `tests/cert.rs` has it.
@@ -369,8 +368,8 @@ fn 定理が立つ公理は三つだけ() {
         "RulecCert.eval_mem_interval",
         "RulecCert.runTotal_exact",
     ];
-    let dir = std::env::temp_dir().join(format!("rulec-axioms-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("axioms");
+    let dir = tmp.path().to_path_buf();
     let file = dir.join("Axioms.lean");
     let mut src = String::from("import RulecCert\n");
     for t in THEOREMS {
@@ -383,7 +382,6 @@ fn 定理が立つ公理は三つだけ() {
         .output()
         .expect("lake を起動できない");
     let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
-    let _ = std::fs::remove_dir_all(&dir);
     assert!(o.status.success(), "{said}");
     let mut seen = 0;
     for line in said.lines() {
@@ -414,8 +412,8 @@ fn 線形のモデルの乗数は証明付きの検査器でも確かめられ�
         ("gap", "rule 連なる制約(chain) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=100円\n  b(b) : money[円]  range >=0円 <=100円\n  x(x) : money[円]  range >=0円 <=100円\n\nconstraint a <= b\nconstraint b <= x\n\noutputs\n  y(y) : bool\n\ntable 表(t)\npolicy unique\n| a      | x     | -> y  |\n| <=50円 | -     | true  |\n| >50円  | >50円 | false |\n"),
         ("overlap", "rule 連なる制約(chain) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=100円\n  b(b) : money[円]  range >=0円 <=100円\n  x(x) : money[円]  range >=0円 <=100円\n\nconstraint a <= b\nconstraint b <= x\n\noutputs\n  y(y) : bool\n\ntable 表(t)\npolicy unique\n| a      | x      | -> y  |\n| >50円  | -      | true  |\n| -      | <50円  | false |\n| <=50円 | >=50円 | false |\n"),
     ];
-    let dir = std::env::temp_dir().join(format!("rulec-lean-chain-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("lean-chain");
+    let dir = tmp.path().to_path_buf();
     for (tag, src) in rules {
         let p = dir.join(format!("{tag}.rule"));
         std::fs::write(&p, src).unwrap();
@@ -432,7 +430,6 @@ fn 線形のモデルの乗数は証明付きの検査器でも確かめられ�
         let (code, said) = lean(&bin, &forged, None);
         assert_eq!(code, 1, "{tag}: 別の事実を指した乗数が通ってしまった:\n{said}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Ways to lie about a contract, on the certificate of 速達の見積 (§15.142): each with
@@ -518,8 +515,8 @@ fn 数の集合の箱は証明付きの検査器でも組み直される() {
     let Some(bin) = checker() else {
         return;
     };
-    let dir = std::env::temp_dir().join(format!("rulec-lean-set-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("lean-set");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("pieces.rule");
     std::fs::write(&p, "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n").unwrap();
     let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
@@ -532,7 +529,6 @@ fn 数の集合の箱は証明付きの検査器でも組み直される() {
     let mut wide = cert.clone();
     wide.insert_str(acc, "0,");
     let (code, said) = lean(&bin, &wide, None);
-    let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(code, 1, "広げた箱が通ってしまった:\n{said}");
     assert!(said.contains("is not the one its cell describes"), "{said}");
 }

@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -64,13 +64,12 @@ for line in sys.stdin:
 /// `remove_dir_all` at the start of one ran while another was reading `adapter.py`, and
 /// `verify` exited 2 ("cannot read") instead of 1. It stayed green on a laptop for as long as
 /// the timing held, and failed the first time CI ran the suite (DESIGN §15.94).
-fn setup(tag: &str) -> Option<PathBuf> {
+fn setup(tag: &str) -> Option<(TempDir, PathBuf)> {
     if !ready(Need::Python, || have("python3"), "python3 が無いので等価検証を飛ばした") {
         return None;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-verify-{}-{tag}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new(&format!("verify-{tag}"));
+    let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
@@ -80,7 +79,7 @@ fn setup(tag: &str) -> Option<PathBuf> {
         .unwrap();
     assert!(o.status.success());
     std::fs::write(dir.join("adapter.py"), ADAPTER).unwrap();
-    Some(dir)
+    Some((tmp, dir))
 }
 
 fn verify(dir: &PathBuf, bug: &str) -> (i32, String) {
@@ -105,7 +104,7 @@ fn verify_env(dir: &PathBuf, env: &[(&str, &str)]) -> ((i32, String), String) {
 
 #[test]
 fn 忠実なアダプタとは完全に一致する() {
-    let Some(dir) = setup("忠実なアダプタとは完全に一致する") else { return };
+    let Some((_tmp, dir)) = setup("忠実なアダプタとは完全に一致する") else { return };
     let (code, out) = verify(&dir, "0");
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("(100.000%)"), "{out}");
@@ -114,12 +113,11 @@ fn 忠実なアダプタとは完全に一致する() {
     // empty.
     assert!(n_of(&out, "照合 ") > 50, "ベクタが少なすぎる: {out}");
     assert!(out.contains("legacy@fake-1"), "旧実装の識別子を出す: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn 旧実装の欠陥は件数と証人つきで出る() {
-    let Some(dir) = setup("旧実装の欠陥は件数と証人つきで出る") else { return };
+    let Some((_tmp, dir)) = setup("旧実装の欠陥は件数と証人つきで出る") else { return };
     let (code, out) = verify(&dir, "1");
     assert_eq!(code, 1, "不一致があれば 1 で終わる: {out}");
     let total = n_of(&out, "照合 ");
@@ -134,14 +132,13 @@ fn 旧実装の欠陥は件数と証人つきで出る() {
     assert!(out.contains("運賃=1450 / 現行 運賃=1460"), "証人を出す: {out}");
     // A deviation of exactly one grid step is a value mismatch, not rounding. Do not tag it.
     assert!(!out.contains("丸め方の違い"), "刻みちょうどの差を丸めのせいにしている: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §10.4: a cluster made up solely of deviations smaller than the output grid gets tagged
 /// "suspected rounding difference".
 #[test]
 fn 刻み未満のずれは丸め方の違いとして括られる() {
-    let Some(dir) = setup("刻み未満のずれは丸め方の違いとして括られる") else { return };
+    let Some((_tmp, dir)) = setup("刻み未満のずれは丸め方の違いとして括られる") else { return };
     let (code, out) = verify(&dir, "2");
     assert_eq!(code, 1, "{out}");
     assert!(n_of(&out, "影響 ") > 0, "{out}");
@@ -150,7 +147,6 @@ fn 刻み未満のずれは丸め方の違いとして括られる() {
     assert!(clusters > 0, "クラスタが出ていない: {out}");
     assert_eq!(tagged, clusters, "全クラスタが刻み未満なので全部に付くはず: {out}");
     assert!(out.contains("出力の刻み 10円 未満"), "刻みを書いて根拠を示す: {out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -184,22 +180,20 @@ fn 雛形とスキーマが出る() {
 /// `json_encode` — was never found: an adapter that answered every case right came out at 0%.
 #[test]
 fn エスケープしたjsonで答えるアダプタとも一致する() {
-    let Some(dir) = setup("エスケープしたjsonで答えるアダプタとも一致する") else { return };
+    let Some((_tmp, dir)) = setup("エスケープしたjsonで答えるアダプタとも一致する") else { return };
     let ((code, out), err) = verify_env(&dir, &[("BUG", "0"), ("ESCAPE", "1")]);
     assert_eq!(code, 0, "{out}{err}");
     assert!(out.contains("(100.000%)"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A line that is not JSON stops the run and says which record, rather than being read as an
 /// answer with no values in it.
 #[test]
 fn jsonでない答えは止まって何件目かを言う() {
-    let Some(dir) = setup("jsonでない答えは止まって何件目かを言う") else { return };
+    let Some((_tmp, dir)) = setup("jsonでない答えは止まって何件目かを言う") else { return };
     let ((code, out), err) = verify_env(&dir, &[("BUG", "0"), ("BROKEN", "1")]);
     assert_eq!(code, 2, "{out}{err}");
     assert!(err.contains("0 件目の答え") && err.contains("運賃は"), "{err}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// An optional output with no value is `null` on the wire, which is how the vectors write it;
@@ -209,9 +203,8 @@ fn 任意の出力のnullはnoneとして比べる() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので等価検証を飛ばした") {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-verify-{}-optional", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("verify-optional");
+    let dir = tmp.path().to_path_buf();
     let rule = "\
 rule 任意(opt) v1
 
@@ -250,7 +243,6 @@ for line in sys.stdin:
     let out = String::from_utf8_lossy(&o.stdout).into_owned();
     assert_eq!(o.status.code(), Some(0), "{out}{}", String::from_utf8_lossy(&o.stderr));
     assert!(out.contains("(100.000%)"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The example on the compare page is what the tool prints: the head of the report in each
@@ -259,7 +251,7 @@ for line in sys.stdin:
 /// `diff` example the same way.
 #[test]
 fn 文書に載せた実演は_いまの出力と一致する() {
-    let Some(dir) = setup("文書に載せた実演は_いまの出力と一致する") else { return };
+    let Some((_tmp, dir)) = setup("文書に載せた実演は_いまの出力と一致する") else { return };
     let run = |lang: &str, json: bool| -> String {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_rulec"));
         cmd.current_dir(root()).args(["verify", RULE, "--lang", lang]);
@@ -290,5 +282,4 @@ fn 文書に載せた実演は_いまの出力と一致する() {
             assert!(page.contains(piece), "{lang}: JSON の実演に無い部分:\n{piece}\n出力:\n{js}");
         }
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -14,7 +14,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -53,20 +53,19 @@ const len = new DataView(e.memory.buffer).getUint32(rp, true);
 process.stdout.write(Buffer.from(new Uint8Array(e.memory.buffer, rp + 4, len)));
 "#;
 
-fn tmp(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-wasm-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn tmp(name: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("wasm-{name}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 /// A directory holding the driver and one `playground.rule` — the name the module gives
 /// what the reader typed, so that the paths in the findings line up with the binary's.
-fn bench(name: &str, src: &str) -> PathBuf {
-    let d = tmp(name);
+fn bench(name: &str, src: &str) -> (TempDir, PathBuf) {
+    let (t, d) = tmp(name);
     std::fs::write(d.join("driver.mjs"), DRIVER).unwrap();
     std::fs::write(d.join("playground.rule"), src).unwrap();
-    d
+    (t, d)
 }
 
 fn drive(d: &Path, lang: &str, what: &str) -> String {
@@ -158,7 +157,7 @@ fn 版がバイナリと同じ() {
     if !ready(Need::Node, || have("node") && wasm().exists(), "node が無いか rulec.wasm が無い") {
         return;
     }
-    let d = bench("version", "");
+    let (_tmp, d) = bench("version", "");
     let got = drive(&d, "en", "version");
     assert_eq!(
         got,
@@ -173,7 +172,7 @@ fn checkの文面がコマンドと一字一句同じ() {
         return;
     }
     for (name, src) in cases() {
-        let d = bench(&format!("check-{name}"), &src);
+        let (_tmp, d) = bench(&format!("check-{name}"), &src);
         for lang in ["en", "ja"] {
             let (_, want) = rulec(&d, lang, &["check", "playground.rule"]);
             let got = json(&drive(&d, lang, "check"));
@@ -188,7 +187,7 @@ fn genが書くファイルがコマンドと一字一句同じ() {
         return;
     }
     for (name, src) in cases() {
-        let d = bench(&format!("gen-{name}"), &src);
+        let (_tmp, d) = bench(&format!("gen-{name}"), &src);
         let got = json(&drive(&d, "en", "gen"));
         let (code, _) = rulec(&d, "en", &["gen", "playground.rule", "--out", "out"]);
         if !yes(&got, "ok") {
@@ -232,7 +231,7 @@ fn 承認者向けのページがコマンドと一字一句同じ() {
         return;
     }
     let (name, src) = cases().into_iter().next().unwrap();
-    let d = bench(&format!("doc-{name}"), &src);
+    let (_tmp, d) = bench(&format!("doc-{name}"), &src);
     for lang in ["en", "ja"] {
         let got = json(&drive(&d, lang, "doc"));
         rulec(&d, lang, &["doc", "playground.rule", "--format", "html", "--out", "out"]);

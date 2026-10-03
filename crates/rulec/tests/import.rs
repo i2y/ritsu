@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
@@ -36,16 +37,15 @@ fn has_row(out: &str, cells: &[&str]) -> bool {
     })
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-import-{}-{tag}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("import-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 #[test]
 fn 表引きのcsvは列挙と表になり_そのままcheckを通る() {
-    let d = dir("lookup");
+    let (_tmp, d) = dir("lookup");
     let csv = d.join("運賃.csv");
     std::fs::write(&csv, "\u{feff}あて先,サイズ,運賃\r\n近畿圏,S60,\"990円\"\r\n近畿圏,S80,\"1,310円\"\r\n遠隔地,S60,1200円\r\n遠隔地,S80,1800円\r\n").unwrap();
     let (c, out, e) = run(&["import", "csv", csv.to_str().unwrap()]);
@@ -66,12 +66,11 @@ fn 表引きのcsvは列挙と表になり_そのままcheckを通る() {
     assert_eq!(c, 0, "下書きが fmt のとおりになっていない:\n{o}{e}");
     let (c, o, e) = run(&["check", rule.to_str().unwrap()]);
     assert_eq!(c, 0, "下書きが check を通らない:\n{o}{e}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn 数値の列は範囲つきの入力になり_等値で写したと断る() {
-    let d = dir("numeric");
+    let (_tmp, d) = dir("numeric");
     let csv = d.join("wt.csv");
     std::fs::write(&csv, "weight,fee\n1000g,800円\n2000g,800円\n5000g,1100円\n").unwrap();
     let (c, out, e) = run(&["import", "csv", csv.to_str().unwrap(), "--name", "重さ運賃"]);
@@ -86,12 +85,11 @@ fn 数値の列は範囲つきの入力になり_等値で写したと断る() {
     let (c, o, _) = run(&["check", rule.to_str().unwrap(), "--format", "json"]);
     assert_eq!(c, 1, "{o}");
     assert!(o.contains("\"code\":\"E101\""), "{o}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn 日付と率の列() {
-    let d = dir("mixed");
+    let (_tmp, d) = dir("mixed");
     let csv = d.join("rt.csv");
     std::fs::write(&csv, "kind,date,rate\nA,2026-04-01,10%\nB,2026/05/01,12.5%\n").unwrap();
     let (c, out, e) = run(&["import", "csv", csv.to_str().unwrap()]);
@@ -100,12 +98,11 @@ fn 日付と率の列() {
     assert!(out.contains("  rate : rate[step 0.1%]  round down(0.1%)"), "小数の率は 0.1% 刻みで、丸めの刻みも同じ: {out}");
     assert!(out.contains("# 出典: rt.csv（"), "出典はファイル名だけ: {out}");
     assert!(has_row(&out, &["B", "2026-05-01", "12.5%"]), "日付の綴りをそろえる: {out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn 表の形でないcsvは断る() {
-    let d = dir("bad");
+    let (_tmp, d) = dir("bad");
     let csv = d.join("one.csv");
     std::fs::write(&csv, "only\n1\n2\n").unwrap();
     let (c, _, e) = run(&["import", "csv", csv.to_str().unwrap()]);
@@ -115,7 +112,6 @@ fn 表の形でないcsvは断る() {
     let (c, _, e) = run(&["import", "csv", ragged.to_str().unwrap()]);
     assert_eq!(c, 2);
     assert!(e.contains("3 行目"), "{e}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The draft has to parse, and the language's own words are not names (E009). Two sources of
@@ -124,7 +120,7 @@ fn 表の形でないcsvは断る() {
 /// is `表`, so the English draft was broken for as long as it existed.
 #[test]
 fn キーワードと同じ名前の下書きは作らない() {
-    let d = dir("keywords");
+    let (_tmp, d) = dir("keywords");
     let csv = d.join("kw.csv");
     std::fs::write(&csv, "count,source,fee\n1,near,100円\n2,far,200円\n").unwrap();
     for lang in ["en", "ja"] {
@@ -142,5 +138,4 @@ fn キーワードと同じ名前の下書きは作らない() {
         // E101 is what is left: the gaps between the values, which is a person's to decide.
         assert_eq!(c, 1, "{lang}: {o}");
     }
-    let _ = std::fs::remove_dir_all(&d);
 }

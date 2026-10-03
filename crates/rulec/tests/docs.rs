@@ -6,6 +6,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -216,8 +217,8 @@ fn 文書が並べる対象言語はレジストリと同じ() {
 /// was removed, both fail here.
 #[test]
 fn genが書く言語のディレクトリはレジストリと同じ() {
-    let dir = std::env::temp_dir().join(format!("rulec-docs-langs-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("docs-langs");
+    let dir = tmp.path().to_path_buf();
     let (code, out) = run(&["gen", "tests/corpus/ec261.rule", "--out", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "{out}");
     let mut got: Vec<String> = std::fs::read_dir(&dir)
@@ -234,7 +235,6 @@ fn genが書く言語のディレクトリはレジストリと同じ() {
     let mut want: Vec<String> = rulec::backend::ids().iter().map(|s| s.to_string()).collect();
     want.sort();
     assert_eq!(got, want, "gen が書くディレクトリとレジストリが食い違います");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A table in a `rule` block is shown the way `rulec fmt` leaves it: a Japanese character two

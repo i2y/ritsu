@@ -8,17 +8,16 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-count-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("count-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 fn run(args: &[&str]) -> (i32, String, String) {
@@ -111,23 +110,21 @@ examples
 
 #[test]
 fn 数えた結果は表の列になる() {
-    let d = dir("ok");
+    let (_tmp, d) = dir("ok");
     let p = write(&d, "r.rule", &format!("{RULE}{EXAMPLES}"));
     let (code, said, e) = run(&["check", &p]);
     assert_eq!(code, 0, "{said}{e}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The range is the universe the completeness check quantifies over. Without it the check
 /// would ask for a row covering a count of −1, so it is required rather than guessed.
 #[test]
 fn 範囲の無い数え上げは断る() {
-    let d = dir("range");
+    let (_tmp, d) = dir("range");
     let p = write(&d, "r.rule", &RULE.replace("  range >=0 <=100", ""));
     let (code, said, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1);
     assert!(codes(&said).contains(&"E030".to_string()), "{said}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Counting something there is one of per call could only ever answer 0 or 1, and an enum
@@ -141,30 +138,28 @@ fn 数えられない列は名指しされる() {
         )),
         ("値の無い列挙", RULE.replace("where 照合 = 一致", "where 照合")),
     ] {
-        let d = dir("bad");
+        let (_tmp, d) = dir("bad");
         let p = write(&d, "r.rule", &src);
         let (code, said, _) = run(&["check", &p, "--format", "json"]);
         assert_eq!(code, 1, "{what}: {said}");
         assert!(codes(&said).contains(&"E029".to_string()), "{what}: {said}");
-        let _ = std::fs::remove_dir_all(&d);
     }
 }
 
 #[test]
 fn 書き方の間違いは名指しされる() {
-    let d = dir("shape");
+    let (_tmp, d) = dir("shape");
     let p = write(&d, "r.rule", &RULE.replace("over 候補 where", "where"));
     let (code, said, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1);
     assert!(codes(&said).contains(&"E028".to_string()), "{said}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Two endings for one walk. A fold may stop partway, and what a count means on a walk that
 /// stopped is not decided — so the rule is refused rather than answered.
 #[test]
 fn foldとcountは一緒に書けない() {
-    let d = dir("both");
+    let (_tmp, d) = dir("both");
     let src = format!(
         "{RULE}\nfold 照合 over 候補\n  一致 -> next\n  不一致 -> next\n  empty -> 該当なし\n  exhausted -> 該当なし\n"
     );
@@ -172,19 +167,17 @@ fn foldとcountは一緒に書けない() {
     let (code, said, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1);
     assert!(codes(&said).contains(&"E031".to_string()), "{said}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A count nothing reads is a walk for nothing.
 #[test]
 fn 使われない数え上げは注意される() {
-    let d = dir("unused");
+    let (_tmp, d) = dir("unused");
     let src = RULE.replace("| 一致数 | -> 結果(result) : 判定 |\n| 0      | 該当なし               |\n| 1      | 一件                   |\n| >=2    | 複数                   |",
                            "| 会社名一致 | -> 結果(result) : 判定 |\n| -          | 該当なし               |");
     let p = write(&d, "r.rule", &src);
     let (_, said, _) = run(&["check", &p, "--format", "json"]);
     assert!(codes(&said).contains(&"W111".to_string()), "{said}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The declared range caps the sequence: a longer one leaves the universe the proof was made
@@ -194,7 +187,7 @@ fn 上限を超えた並びは断られる() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let d = dir("cap");
+    let (_tmp, d) = dir("cap");
     let p = write(&d, "r.rule", &RULE.replace("<=100", "<=2"));
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
@@ -214,7 +207,6 @@ fn 上限を超えた並びは断られる() {
     .unwrap();
     let o = Command::new("python3").current_dir(&out).arg(&call).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "refused", "{:?}", o);
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Every language counts the same elements the reference evaluator counts.
@@ -223,7 +215,7 @@ fn 生成された数え上げは参照評価器と一致する() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let d = dir("agree");
+    let (_tmp, d) = dir("agree");
     let p = write(&d, "r.rule", &format!("{RULE}{EXAMPLES}"));
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
@@ -241,18 +233,16 @@ fn 生成された数え上げは参照評価器と一致する() {
         assert_eq!(r.get("ok"), Some(&rulec::json::Json::Bool(true)), "{said}");
     }
     assert!(ran >= 1, "どの言語も走らなかった: {said}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// SQL gets no walk at all, and a count is a walk.
 #[test]
 fn sqlには生成しない() {
-    let d = dir("sql");
+    let (_tmp, d) = dir("sql");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
     assert_eq!(code, 0, "{said}{e}");
     assert!(!out.join("sql").exists(), "SQL を書いてしまった");
     assert!(said.contains("SQL"), "断ったことを言っていない:\n{said}");
-    let _ = std::fs::remove_dir_all(&d);
 }

@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -20,17 +20,17 @@ fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn generate(tag: &str, rule: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rulec-sql-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn generate(tag: &str, rule: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("sql-{tag}"));
+    let dir = t.path().to_path_buf();
     let (c, _, e) = run(&["gen", rule, "--out", dir.to_str().unwrap()]);
     assert_eq!(c, 0, "{e}");
-    dir
+    (t, dir)
 }
 
 #[test]
 fn 問い合わせは一つの関係に対して書かれている() {
-    let dir = generate("shape", "tests/corpus/送料.rule");
+    let (_tmp, dir) = generate("shape", "tests/corpus/送料.rule");
     let sql = std::fs::read_to_string(dir.join("sql/shipping_fee.sql")).unwrap();
     // The input relation, its numbers widened, the row comments, the row column per table,
     // the rounding as arithmetic, and the order of the rows.
@@ -48,7 +48,6 @@ fn 問い合わせは一つの関係に対して書かれている() {
         assert!(sql.contains(want), "無い: {want}\n{sql}");
     }
     assert!(!sql.contains("_round_up("), "丸めが関数呼び出しのまま: {sql}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -85,7 +84,7 @@ fn 問い合わせは関係ごと答える() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let dir = generate("relation", "tests/corpus/送料.rule");
+    let (_tmp, dir) = generate("relation", "tests/corpus/送料.rule");
     let script = r#"
 import json, sqlite3, sys
 sql = open("sql/shipping_fee.sql", encoding="utf-8").read()
@@ -132,7 +131,6 @@ print(json.dumps([r[-1] for r in db.execute(sql)], ensure_ascii=False))
         String::from_utf8_lossy(&o.stdout).trim(),
         "[\"届け先 が列挙 都道府県 の値ではありません\", \"重量 が範囲の外です\", \"重量 が整数ではありません\", \"重量 がありません\"]"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The function is the other door on the same query (§15.80). What matters most is that its
@@ -140,7 +138,7 @@ print(json.dumps([r[-1] for r in db.execute(sql)], ensure_ascii=False))
 /// last `ORDER BY`, unchanged, so the two shapes cannot drift apart.
 #[test]
 fn 関数の本体は問い合わせそのものである() {
-    let dir = generate("function", "tests/corpus/送料.rule");
+    let (_tmp, dir) = generate("function", "tests/corpus/送料.rule");
     let query = std::fs::read_to_string(dir.join("sql/shipping_fee.sql")).unwrap();
     let f = std::fs::read_to_string(dir.join("sql/shipping_fee_function.sql")).unwrap();
     let body = {
@@ -166,7 +164,6 @@ fn 関数の本体は問い合わせそのものである() {
     ] {
         assert!(f.contains(want), "無い: {want}\n{f}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -183,10 +180,9 @@ fn apiはsqlの関数を言う() {
     assert!(sig.starts_with("\"shipping_fee\"(\"dest\" text,"), "{sig}");
     assert!(sig.contains("RETURNS TABLE (\"fee\" bigint,"), "{sig}");
     // And it is the signature the file really declares, not a second spelling of it.
-    let dir = generate("apisig", "tests/corpus/送料.rule");
+    let (_tmp, dir) = generate("apisig", "tests/corpus/送料.rule");
     let decl = std::fs::read_to_string(dir.join("sql/shipping_fee_function.sql")).unwrap().replace('\n', " ");
     assert!(decl.contains(sig), "api の signature が生成物と違う: {sig}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The function on a real PostgreSQL: the three examples by argument name, and an input
@@ -201,7 +197,7 @@ fn 関数は宣言の外の入力に投げる() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let dir = generate("pg", "tests/corpus/送料.rule");
+    let (_tmp, dir) = generate("pg", "tests/corpus/送料.rule");
     let script = r#"
 import json, subprocess
 PSQL = ["psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
@@ -226,5 +222,4 @@ print(json.dumps({
         got,
         r#"{"answers": [{"fee": 0, "base_fee_row": 2, "payer_row": 1}, {"fee": 400, "base_fee_row": 3, "payer_row": 2}, {"fee": 1200, "base_fee_row": 1, "payer_row": 3}], "refused": true}"#
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

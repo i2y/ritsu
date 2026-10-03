@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 const RULE: &str = "tests/corpus/印紙税の本則と軽減.rule";
 
@@ -16,13 +16,12 @@ fn root() -> PathBuf {
 }
 
 /// A scratch directory holding the corpus rule and the copies of its sources.
-fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-sources-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+fn scratch(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("sources-{tag}"));
+    let d = t.path().to_path_buf();
     copy_dir(&root().join("tests/corpus/sources"), &d.join("sources"));
     std::fs::copy(root().join(RULE), d.join("a.rule")).unwrap();
-    d
+    (t, d)
 }
 
 fn copy_dir(from: &Path, to: &Path) {
@@ -62,7 +61,7 @@ fn 写しと固定が合っていれば通る() {
 #[test]
 fn 固定の欠け_写しの変化_写しの欠け_余った固定() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = scratch("diags");
+    let (_tmp, d) = scratch("diags");
     let src = std::fs::read_to_string(d.join("a.rule")).unwrap();
     let pin = "  第91条 sha256:85faf53f6f6e8196\n";
     assert!(src.contains(pin), "the corpus rule pins 第91条");
@@ -91,13 +90,12 @@ fn 固定の欠け_写しの変化_写しの欠け_余った固定() {
 
     let undeclared = src.replace("@措置法 第91条", "@措置 第91条");
     assert!(codes(&undeclared, &d.join("a.rule")).contains(&"E012".to_string()));
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn pinは固定行だけを書き換える() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = scratch("pin");
+    let (_tmp, d) = scratch("pin");
     let src = std::fs::read_to_string(d.join("a.rule")).unwrap();
     let pin = "  第91条 sha256:85faf53f6f6e8196\n";
     // Drop one pin, add a stale one: `pin` restores the first and removes the second.
@@ -114,7 +112,6 @@ fn pinは固定行だけを書き換える() {
     let (c, out) = rulec(&d, &["source", "pin", "a.rule", "--lang", "ja"]);
     assert_eq!(c, 0, "{out}");
     assert!(out.contains("固定済み") && !out.contains("宣言がありません"), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
@@ -159,7 +156,7 @@ fn ページは引いた断片を引用する() {
 #[test]
 fn ファイルは丸ごと引用でき_法令は箇所が要る() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = scratch("whole");
+    let (_tmp, d) = scratch("whole");
     std::fs::write(d.join("料金表.txt"), "S60 990円\n").unwrap();
     let h = rulec::sha256::short(b"S60 990\xe5\x86\x86\n");
     let head = format!(
@@ -174,7 +171,6 @@ fn ファイルは丸ごと引用でき_法令は箇所が要る() {
     let ds = rulec::check_source(&odd, &p.to_string_lossy());
     let e = ds.iter().find(|x| x.code == "E037").expect("E037");
     assert!(e.notes.iter().any(|n| n.contains("表3")), "the note says how a document's fragment is written: {:?}", e.notes);
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A document's tables are fragments, held to their copies exactly as a law's articles are
@@ -183,7 +179,7 @@ fn ファイルは丸ごと引用でき_法令は箇所が要る() {
 #[test]
 fn 文書の表を引いて写しに固定する() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = scratch("fragments");
+    let (_tmp, d) = scratch("fragments");
     let doc = "# 料金表\n\n前書き。\n\n| あて先 | S60 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n";
     std::fs::write(d.join("料金表.md"), doc).unwrap();
     let rule = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\"\n\nenum あて先(dest) = 近畿(kinki) | 関東(kanto)\n\ninputs\n  あて先(dest) : あて先\n\noutputs\n  運賃(fee) : money[円]  round up(10円)\n\ntable 運賃表(fee_table)  @料金表 表1\n| あて先 | -> 運賃 |\n| 近畿   | 990円   |\n| 関東   | 880円   |\n";
@@ -223,7 +219,6 @@ fn 文書の表を引いて写しに固定する() {
     let moved: Vec<&str> = ds.iter().filter(|x| x.code == "E038").map(|x| x.title.as_str()).collect();
     assert_eq!(moved.len(), 2, "the document and the fragment both moved: {ds:?}");
     assert!(ds.iter().any(|x| x.code == "E038" && x.notes.iter().any(|n| n.contains("運賃表"))), "{ds:?}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Every generated file names the documents the rule transcribes, in the same words in every
@@ -231,8 +226,8 @@ fn 文書の表を引いて写しに固定する() {
 #[test]
 fn 生成物のヘッダは出典を名指す() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = std::env::temp_dir().join(format!("rulec-cites-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
+    let tmp = TempDir::new("cites");
+    let d = tmp.path().to_path_buf();
     let (c, out) = rulec(&root(), &["gen", RULE, "--out", &d.to_string_lossy(), "--lang", "en"]);
     assert_eq!(c, 0, "{out}");
     let py = std::fs::read_to_string(d.join("python/stamp_duty_split.py")).unwrap();
@@ -240,7 +235,6 @@ fn 生成物のヘッダは出典を名指す() {
     assert!(py.contains("# Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)\n"), "{py}");
     let sql = std::fs::read_to_string(d.join("sql/stamp_duty_split.sql")).unwrap();
     assert!(sql.contains("-- Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)\n"), "{sql}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A file source may say where its copy came from (§15.76). The address rides through
@@ -250,7 +244,7 @@ fn 生成物のヘッダは出典を名指す() {
 #[test]
 fn ファイルの出典はurlを持ち_それが下流まで届く() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = scratch("url");
+    let (_tmp, d) = scratch("url");
     std::fs::write(d.join("料金表.txt"), "S60 990円\n").unwrap();
     let url = "https://raw.githubusercontent.com/o/r/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/docs/t.md";
     let body = |pin: &str| {
@@ -291,7 +285,6 @@ fn ファイルの出典はurlを持ち_それが下流まで届く() {
     assert!(rulec::check_source(&none, &p.to_string_lossy()).iter().any(|x| x.code == "E037"));
     let bad = body("").replace(&format!("url \"{url}\""), "urrl \"x\"");
     assert!(rulec::check_source(&bad, &p.to_string_lossy()).iter().any(|x| x.code.starts_with('E')));
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The rows against the copy they say they were transcribed from (§15.82): an amount that the
@@ -301,7 +294,7 @@ fn ファイルの出典はurlを持ち_それが下流まで届く() {
 #[test]
 fn 写した金額と写しを突き合わせる() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = scratch("transcribe");
+    let (_tmp, d) = scratch("transcribe");
     let doc = "# 料金表\n\n| あて先 | S60 | S80 |\n|---|---|---|\n| 近畿 | 990円 | 1210円 |\n| 関東 | 880円 | 1100円 |\n";
     std::fs::write(d.join("料金表.md"), doc).unwrap();
     let rule = |fee: &str, cite_table: &str, cite_row: &str| {
@@ -353,7 +346,6 @@ fn 写した金額と写しを突き合わせる() {
     let merged = std::fs::read_to_string(&q).unwrap();
     let cs = codes(&merged, &q);
     assert!(!cs.contains(&"W120".to_string()) && !cs.contains(&"E116".to_string()), "{cs:?}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// An amount is looked for under the headings the row's own words name — the row `関東`, the
@@ -364,7 +356,7 @@ fn 写した金額と写しを突き合わせる() {
 #[test]
 fn 金額は行の見出しの下で探す() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = scratch("heading");
+    let (_tmp, d) = scratch("heading");
     let doc = "# 料金表\n\n| あて先 | S60 | S80 |\n|---|---|---|\n| 近畿 | 990円 | 1210円 |\n| 関東 | 880円 | 1100円 |\n";
     std::fs::write(d.join("料金表.md"), doc).unwrap();
     let rule = |kinki: (&str, &str), kanto: (&str, &str)| {
@@ -421,7 +413,6 @@ fn 金額は行の見出しの下で探す() {
     let swapped = pinned.replace("| 一般 | 0.5% |", "| 一般 | 0.6% |");
     assert_ne!(swapped, pinned);
     assert!(codes(&swapped, &q).contains(&"E116".to_string()), "{:?}", codes(&swapped, &q));
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The four formats a document may be, through the one loop: `fetch` takes the cited table
@@ -459,7 +450,7 @@ fn 四つの形式が同じ写しと同じ固定になる() {
         ("料金表.xlsx", 2),
         ("料金表.docx", 3),
     ] {
-        let d = scratch(&format!("fmt-{}", name.replace('.', "-")));
+        let (_tmp, d) = scratch(&format!("fmt-{}", name.replace('.', "-")));
         match build {
             0 => std::fs::write(
                 d.join(name),
@@ -512,7 +503,6 @@ fn 四つの形式が同じ写しと同じ固定になる() {
             "{name}: 固定したあとも落ちる:\n{after}"
         );
         digests.push((name.to_string(), rulec::sha256::short(tsv.as_bytes())));
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     // The copy is the table, so the four containers pin to one digest.
@@ -553,7 +543,7 @@ fn have(cmd: &str) -> bool {
 #[test]
 fn 写しが無い_固定が無い_引用が読めない() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = scratch("sources-errors");
+    let (_tmp, d) = scratch("sources-errors");
     let rule = |src: &str, cite: &str| {
         format!(
             "rule t(t) v1\n\nsource 料金表 = file \"{src}\"\n\n\
@@ -613,7 +603,6 @@ fn 写しが無い_固定が無い_引用が読めない() {
     // cited by article and has its own wording; that branch needs a law's copies.)
     let notes = e037.notes.join(" ");
     assert!(notes.contains("表3") && notes.contains("table3"), "書ける形を並べない: {notes}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// `source pin` writes a fragment's digest, and writes it **again** when the document has
@@ -621,7 +610,7 @@ fn 写しが無い_固定が無い_引用が読めない() {
 #[test]
 fn pinは変わった写しの固定を書き換える() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = scratch("sources-repin");
+    let (_tmp, d) = scratch("sources-repin");
     let doc = |fee: &str| format!("| あて先 | 運賃 |\n|---|---|\n| 近畿 | {fee} |\n");
     std::fs::write(d.join("料金表.md"), doc("990円")).unwrap();
     let src = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\"\n\n\
@@ -654,7 +643,6 @@ fn pinは変わった写しの固定を書き換える() {
         second.lines().find(|l| l.contains("表1 sha256:")),
         "固定が書き換わっていない"
     );
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A second statute database is a row of a registry, not a second way of doing things: the
@@ -664,9 +652,8 @@ fn pinは変わった写しの固定を書き換える() {
 #[test]
 fn ecfrの出典は引用からピンまで通る() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    let d = std::env::temp_dir().join(format!("rulec-ecfr-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let tmp = TempDir::new("ecfr");
+    let d = tmp.path().to_path_buf();
     copy_dir(&root().join("tests/corpus/sources"), &d.join("sources"));
     std::fs::copy(root().join("tests/corpus/osha_extinguisher.rule"), d.join("a.rule")).unwrap();
     let src = std::fs::read_to_string(d.join("a.rule")).unwrap();
@@ -686,7 +673,6 @@ fn ecfrの出典は引用からピンまで通る() {
     // A fragment that is not a section of that part cannot be read.
     let bad = src.replace("\"§1910.157\"", "\"§(d)(2)\"");
     assert!(codes(&bad, &d.join("a.rule")).contains(&"E037".to_string()), "読めない箇所が通ってしまいます");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A fragment is quoted on the pin line when, and only when, the language cannot read it as

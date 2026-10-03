@@ -7,6 +7,7 @@
 // language for the whole process (src/i18n.rs), and English is the default.
 
 use std::path::Path;
+use ritsu_testkit::TempDir;
 
 const CORPUS: &[&str] = &[
     "tests/corpus/品番の扱い.rule",
@@ -659,8 +660,8 @@ fn 変異はコーパスから作り直せる() {
         "m_w114.rule",
     ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let tmp = std::env::temp_dir().join(format!("rulec-mutants-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&tmp);
+    let t = TempDir::new("mutants");
+    let tmp = t.path().to_path_buf();
     let out = std::process::Command::new("sh")
         .current_dir(root)
         .env("RULEC", env!("CARGO_BIN_EXE_rulec"))
@@ -698,7 +699,6 @@ fn 変異はコーパスから作り直せる() {
              コーパスを直したなら `sh tests/make-mutants.sh` で焼き直してください"
         );
     }
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 /// The contracts beside the mutants are copies of the corpus's, so that a mutant reaches its

@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -93,14 +93,12 @@ fn groups_rule(g1: &str, g2: &str) -> String {
 }
 
 fn doc_of(src: &str, name: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("rulec-doc-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new(&format!("doc-{name}"));
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("t.rule");
     std::fs::write(&p, src).unwrap();
     let (c, out, e) = run(&["doc", p.to_str().unwrap()]);
     assert_eq!(c, 0, "資料を書き出せない: {out}{e}");
-    let _ = std::fs::remove_dir_all(&dir);
     out
 }
 
@@ -210,9 +208,8 @@ fn もとの規則の刻印が入る() {
     assert!(first.contains("本物は .rule のほう"), "一方向であることを言う: {first}");
 
     // Changing one character of the source changes the stamp.
-    let dir = std::env::temp_dir().join(format!("rulec-doc-stamp-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("doc-stamp");
+    let dir = tmp.path().to_path_buf();
     let src = std::fs::read_to_string(root().join(rel)).unwrap();
     let p = dir.join("送料.rule");
     let n = src.matches("1100円").count();
@@ -221,7 +218,6 @@ fn もとの規則の刻印が入る() {
     let (_, other, _) = run(&["doc", p.to_str().unwrap()]);
     let h = |s: &str| s.lines().next().unwrap().split("sha256:").nth(1).unwrap()[..12].to_string();
     assert_ne!(h(&out), h(&other), "もとの規則が変わったのに刻印が同じ");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Must be deterministic. If what gets pasted into a PR wobbled from run to run, the diff would be
@@ -349,23 +345,20 @@ fn html版は表の行に名前と番号を持ち_生成したjavascriptを積�
     if ready(Need::Node, || have("node"), "node が無いので、ページのモジュールを走らせる確かめを飛ばした") {
         let start = html.find("<script type=\"module\">\n").expect("script が無い") + "<script type=\"module\">\n".len();
         let end = html[start..].find("</script>").unwrap() + start;
-        let dir = std::env::temp_dir().join(format!("rulec-doc-html-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let tmp = TempDir::new("doc-html");
+        let dir = tmp.path().to_path_buf();
         let p = dir.join("page.mjs");
         std::fs::write(&p, &html[start..end]).unwrap();
         let o = Command::new("node").args(["--check"]).arg(&p).output().expect("node を起動できない");
         assert!(o.status.success(), "ページの script を node が読めない:\n{}", String::from_utf8_lossy(&o.stderr));
-        let _ = std::fs::remove_dir_all(&dir);
     }
     // `--out` writes `<alias>.html`.
-    let dir = std::env::temp_dir().join(format!("rulec-doc-html-out-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("doc-html-out");
+    let dir = tmp.path().to_path_buf();
     let d = dir.to_string_lossy().to_string();
     let (c, out, _) = run(&["doc", "tests/corpus/送料.rule", "--format", "html", "--out", &d]);
     assert_eq!(c, 0, "{out}");
     assert!(dir.join("shipping_fee.html").exists(), "shipping_fee.html が出ていない");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 fn have(cmd: &str) -> bool {
@@ -374,8 +367,8 @@ fn have(cmd: &str) -> bool {
 
 #[test]
 fn out_で書き出せる() {
-    let dir = std::env::temp_dir().join(format!("rulec-doc-out-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("doc-out");
+    let dir = tmp.path().to_path_buf();
     let d = dir.to_string_lossy().to_string();
     let (c, out, _) = run(&["doc", "tests/corpus", "--out", &d]);
     assert_eq!(c, 0, "{out}");
@@ -383,7 +376,6 @@ fn out_で書き出せる() {
     assert_eq!(n, CORPUS.len(), "コーパスの本数だけ出るはず");
     let one = std::fs::read_to_string(dir.join("shipping_fee.md")).expect("送料 が出ていない");
     assert!(one.starts_with("<!-- rulec "), "{one}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The rendering excerpt pasted into the documentation must not diverge from the real
@@ -494,9 +486,6 @@ fn 以外のグループには件数を添える() {
 /// happen, and nothing else in the suite would notice if it were dropped.
 #[test]
 fn ページはホストの枠の中で名乗る() {
-    let dir = std::env::temp_dir().join(format!("rulec-doc-ui-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
@@ -514,5 +503,4 @@ fn ページはホストの枠の中で名乗る() {
     ] {
         assert!(html.contains(needle), "ページに {needle} が無い");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -10,7 +10,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use ritsu_testkit::{Need, need, ready, skip};
+use ritsu_testkit::{Need, TempDir, need, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -117,8 +117,8 @@ fn 評価器と生成コードが全言語で一致する() {
     if !need(Need::Python) {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-3way-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("3way");
+    let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
 
     let files: Vec<&str> = CORPUS.iter().map(|(f, _)| *f).collect();
@@ -218,7 +218,6 @@ fn 評価器と生成コードが全言語で一致する() {
         CORPUS.len(),
         present.iter().map(|b| b.name).collect::<Vec<_>>().join(" / ")
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -226,8 +225,8 @@ fn 生成物は決定的である() {
     // §8.5: the same .rule and the same rulec give byte-identical output. Any leakage of hash order
     // is a failure.
     let mk = |tag: &str| -> Vec<(String, String)> {
-        let dir = std::env::temp_dir().join(format!("rulec-det-{}-{tag}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let tmp = TempDir::new(&format!("det-{tag}"));
+        let dir = tmp.path().to_path_buf();
         let out = dir.to_string_lossy().to_string();
         let mut args = vec!["gen"];
         let files: Vec<&str> = CORPUS.iter().map(|(f, _)| *f).collect();
@@ -238,7 +237,6 @@ fn 生成物は決定的である() {
         let mut v: Vec<(String, String)> = Vec::new();
         collect(&dir, &dir, &mut v);
         v.sort();
-        let _ = std::fs::remove_dir_all(&dir);
         v
     };
     assert_eq!(mk("a"), mk("b"), "二度生成して食い違った");
@@ -264,8 +262,8 @@ fn 生成物は両言語の整形器に素で通る() {
     if !ready(Need::Go, || have("go"), "go が無いので gofmt の検査を飛ばした") {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-fmt-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("fmt");
+    let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     let mut args = vec!["gen"];
     let files: Vec<&str> = CORPUS.iter().map(|(f, _)| *f).collect();
@@ -298,7 +296,6 @@ fn 生成物は両言語の整形器に素で通る() {
     // formatter, so the claim is split in two and measured separately.
     let Some(ruff) = ruff() else {
         skip("ruff が無いので PEP 8 の検査を飛ばした");
-        let _ = std::fs::remove_dir_all(&dir);
         return;
     };
     let py_dir = dir.join("python");
@@ -341,7 +338,6 @@ fn 生成物は両言語の整形器に素で通る() {
         "整形器の指摘のうち、行長で説明できないものがある:\n{}",
         short.join("\n")
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// How to launch ruff. Use it if it is on PATH, otherwise go through uvx. If neither exists, skip.
@@ -363,8 +359,8 @@ fn 丸めヘルパは両言語で参照実装と一致する() {
     if !need(Need::Python) {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-round-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("round");
+    let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     rulec(&["gen", CORPUS[0].0, "--out", &out]);
 
@@ -385,7 +381,6 @@ fn 丸めヘルパは両言語で参照実装と一致する() {
             .expect("go を起動できない");
         assert!(o.status.success(), "Go の丸めが合わない: {}", String::from_utf8_lossy(&o.stdout));
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// `mypy`, the way `ruff` is found: installed, or reachable through `uvx`.
@@ -543,9 +538,8 @@ fn 数の集合は全言語で集合として読まれる() {
     if !need(Need::Python) {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-threeway-set-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("threeway-set");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("pieces.rule");
     std::fs::write(&p, "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n").unwrap();
     let out = dir.join("gen");
@@ -557,7 +551,6 @@ fn 数の集合は全言語で集合として読まれる() {
     for l in said.lines().filter(|l| l.starts_with("warning")) {
         eprintln!("{l}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 
@@ -569,9 +562,8 @@ fn 率の出力は全言語で宣言した刻みで返る() {
     if !need(Need::Python) {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-threeway-step-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("threeway-step");
+    let dir = tmp.path().to_path_buf();
     for (name, src) in [("rate.rule", "rule 料率(rate_demo) v1\n\nenum 区分(kind) = 一般(general) | 建設(construction) | 特別(special)\n\ninputs\n  区分(kind)      : 区分\n  特別率(special) : rate[step 0.01%]  range >=0% <=5%\n\noutputs\n  料率(rate) : rate[step 0.1%]  round down(1%)\n\ntable 料率表(rates)\npolicy unique\n| 区分 | -> 料率 : rate[step 0.1%] |\n| 一般 | 1%                        |\n| 建設 | 2%                        |\n| 特別 | 特別率                    |\n"), ("result.rule", "rule 率の結果(rate_result) v1\n\ninputs\n  基本率(base) : rate[step 0.1%]  range >=0% <=20%\n\noutputs\n  率(rate) : rate[step 0.1%]  round half_up(0.1%)\n\nresult 率 = 基本率\n\nexamples\n| 基本率 | -> 率  |\n| 12.3%  | 12.3% |\n")] {
         let p = dir.join(name);
         std::fs::write(&p, src).unwrap();
@@ -582,5 +574,4 @@ fn 率の出力は全言語で宣言した刻みで返る() {
         assert!(o.status.success(), "{name}: {said}");
         assert!(said.contains("matched"), "{name}: {said}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

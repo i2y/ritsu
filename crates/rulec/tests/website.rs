@@ -11,7 +11,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -794,8 +794,8 @@ fn サイトが並べる対象言語はレジストリと同じ() {
 #[test]
 fn kaniの件数はページと記録と実物で揃っている() {
     // `gen` の書いたハーネスを数える。kani そのものは要らない。
-    let out = std::env::temp_dir().join("rulec-kani-count");
-    let _ = std::fs::remove_dir_all(&out);
+    let tmp = TempDir::new("kani-count");
+    let out = tmp.path().to_path_buf();
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
@@ -809,7 +809,6 @@ fn kaniの件数はページと記録と実物で揃っている() {
             real += std::fs::read_to_string(e.path()).unwrap().matches("#[kani::proof]").count();
         }
     }
-    let _ = std::fs::remove_dir_all(&out);
     assert!(real > 0, "ハーネスが一本も出ていない");
 
     // 記録した実測と同じ本数か。ずれていたら、どちらかが古い。

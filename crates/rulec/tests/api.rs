@@ -12,7 +12,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -56,13 +56,13 @@ fn arr<'a>(j: &'a rulec::json::Json, k: &str) -> &'a Vec<rulec::json::Json> {
 }
 
 /// Generate a rule into a fresh directory and return it with its inventory.
-fn setup(tag: &str, rule: &str) -> (PathBuf, rulec::json::Json) {
-    let dir = std::env::temp_dir().join(format!("rulec-api-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn setup(tag: &str, rule: &str) -> (TempDir, PathBuf, rulec::json::Json) {
+    let tmp = TempDir::new(&format!("api-{tag}"));
+    let dir = tmp.path().to_path_buf();
     let out = dir.to_string_lossy().to_string();
     let (c, _, e) = run(&["gen", rule, "--out", &out]);
     assert_eq!(c, 0, "{e}");
-    (dir, api(rule))
+    (tmp, dir, api(rule))
 }
 
 const RULES: &[(&str, &str)] = &[
@@ -129,7 +129,7 @@ fn 形だけでは足りない前提が_目録に並び_実際に断られる() 
     ];
 
     for (tag, rule, want, over, under) in cases {
-        let (dir, inv) = setup(tag, rule);
+        let (_tmp, dir, inv) = setup(tag, rule);
         // One line per entry, in the words the rule was written with, so a mismatch reads
         // as the precondition it is rather than as a diff of JSON.
         let got: Vec<String> = arr(&inv, "preconditions")
@@ -183,7 +183,6 @@ fn 形だけでは足りない前提が_目録に並び_実際に断られる() 
         );
         let said = String::from_utf8_lossy(&outside.stderr);
         assert!(said.contains("RuleInputError"), "{rule}: 入口で断ったのではない:\n{said}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -209,7 +208,7 @@ fn 署名とガードが生成物と一致する() {
     // The cheapest check that cannot be fooled: every name and number the inventory states
     // has to occur in the file the generator wrote.
     for (tag, rule) in RULES {
-        let (dir, j) = setup(tag, rule);
+        let (_tmp, dir, j) = setup(tag, rule);
         let py_j = j.get("python").unwrap();
         let go_j = j.get("go").unwrap();
         let py = std::fs::read_to_string(dir.join("python").join(format!("{}.py", s(&j, "alias")))).unwrap();
@@ -402,7 +401,6 @@ fn 署名とガードが生成物と一致する() {
             let n = err.as_str().unwrap();
             assert!(py.contains(&format!("class {n}(")), "{n} が生成物に無い");
         }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -412,7 +410,7 @@ fn pythonの実物の署名と一致する() {
         return;
     }
     for (tag, rule) in RULES {
-        let (dir, j) = setup(&format!("py{tag}"), rule);
+        let (_tmp, dir, j) = setup(&format!("py{tag}"), rule);
         let py_j = j.get("python").unwrap();
         let module = s(py_j, "module");
         let func = s(py_j, "function");
@@ -452,7 +450,6 @@ fn pythonの実物の署名と一致する() {
             "{rule}: api と実物の署名が食い違う\n{}",
             String::from_utf8_lossy(&o.stderr)
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -462,7 +459,7 @@ fn goは目録から組んだ呼び出しがvetを通る() {
         return;
     }
     for (tag, rule) in RULES {
-        let (dir, j) = setup(&format!("go{tag}"), rule);
+        let (_tmp, dir, j) = setup(&format!("go{tag}"), rule);
         let go_j = j.get("go").unwrap();
         let pkg = s(go_j, "package");
         // Build the call from the inventory alone: the field names, their types, and the
@@ -524,7 +521,6 @@ fn goは目録から組んだ呼び出しがvetを通る() {
             "{rule}: 目録から組んだ呼び出しが通らない\n{body}\n{}",
             String::from_utf8_lossy(&o.stderr)
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -552,7 +548,7 @@ fn 出力の範囲は表の列のセルから来る() {
 #[test]
 fn 生成物の文書が実物の名前を使っている() {
     let doc = std::fs::read_to_string(root().join("docs/generated-code.md")).unwrap();
-    let (dir, j) = setup("doc", "tests/corpus/クーポン一枚.rule");
+    let (_tmp, _, j) = setup("doc", "tests/corpus/クーポン一枚.rule");
     let py_j = j.get("python").unwrap();
     let go_j = j.get("go").unwrap();
     let php_j = j.get("php").unwrap();
@@ -571,7 +567,6 @@ fn 生成物の文書が実物の名前を使っている() {
     ] {
         assert!(doc.contains(&want), "docs/generated-code.md に `{want}` が無い");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The inventory has to be enough to *call* the TypeScript without opening the generated
@@ -583,7 +578,7 @@ fn typescriptは目録から組んだ呼び出しが動く() {
         return;
     }
     for (tag, rule) in RULES {
-        let (dir, j) = setup(&format!("ts{tag}"), rule);
+        let (_tmp, dir, j) = setup(&format!("ts{tag}"), rule);
         let ts_j = j.get("typescript").unwrap();
         let func = s(ts_j, "function");
         let module = s(ts_j, "module");
@@ -639,7 +634,6 @@ fn typescriptは目録から組んだ呼び出しが動く() {
             "{tag}: 目録から組んだ TypeScript の呼び出しが動かない:\n{}",
             String::from_utf8_lossy(&o.stderr)
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -652,7 +646,7 @@ fn rubyの実物の署名と一致する() {
         return;
     }
     for (tag, rule) in RULES {
-        let (dir, j) = setup(&format!("rb{tag}"), rule);
+        let (_tmp, dir, j) = setup(&format!("rb{tag}"), rule);
         let rb_j = j.get("ruby").unwrap();
         let module = s(rb_j, "module");
         let func = s(rb_j, "function");
@@ -706,7 +700,6 @@ fn rubyの実物の署名と一致する() {
             "{rule}: api と実物の Ruby が食い違う\n{}",
             String::from_utf8_lossy(&o.stderr)
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -720,7 +713,7 @@ fn swiftは目録から組んだ呼び出しが動く() {
         return;
     }
     for (tag, rule) in RULES {
-        let (dir, j) = setup(&format!("sw{tag}"), rule);
+        let (_tmp, dir, j) = setup(&format!("sw{tag}"), rule);
         let sw_j = j.get("swift").unwrap();
         let enums = arr(sw_j, "enums");
         // One argument per parameter, built from what the inventory says about it: an enum
@@ -783,7 +776,6 @@ fn swiftは目録から組んだ呼び出しが動く() {
             "{rule}: api から組んだ Swift の呼び出しが通らない\n{}",
             String::from_utf8_lossy(&o.stderr)
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -812,7 +804,7 @@ fn 出典は目録に載る() {
 /// to, which is the failure this file exists to prevent.
 #[test]
 fn wasiの項は実際に組めて同じ答えを返す() {
-    let (dir, j) = setup("wasi", "tests/corpus/送料.rule");
+    let (_tmp, dir, j) = setup("wasi", "tests/corpus/送料.rule");
     let rs = j.get("rust").expect("rust の項が無い");
     let w = rs.get("wasi").expect("rust の中に wasi の項が無い");
     let rust = dir.join("rust");
@@ -826,7 +818,6 @@ fn wasiの項は実際に組めて同じ答えを返す() {
     }
 
     if !ready(Need::Rustc, || have("rustc") && have("wasmtime") && rulec::backend::rust_target("wasm32-wasip1"), "rustc か wasmtime か wasm32-wasip1 が無いので飛ばした") {
-        let _ = std::fs::remove_dir_all(&dir);
         return;
     }
     let build = s(w, "build");
@@ -855,7 +846,6 @@ fn wasiの項は実際に組めて同じ答えを返す() {
         String::from_utf8_lossy(&b.stdout),
         "WASI の答えがネイティブと違う"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A rate's rounding grid is written the way the rate travels, in its steps — the scale
@@ -879,9 +869,8 @@ fn 率の丸めの刻みは段で書く() {
 /// answer count hundredths, and a `result` fell back on whole percents and cut 12.3% to 12.
 #[test]
 fn 率の出力は宣言した刻みで渡る() {
-    let dir = std::env::temp_dir().join(format!("rulec-api-step-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("api-step");
+    let dir = tmp.path().to_path_buf();
     let rate = dir.join("rate.rule");
     std::fs::write(&rate, "rule 料率(rate_demo) v1\n\nenum 区分(kind) = 一般(general) | 建設(construction) | 特別(special)\n\ninputs\n  区分(kind)      : 区分\n  特別率(special) : rate[step 0.01%]  range >=0% <=5%\n\noutputs\n  料率(rate) : rate[step 0.1%]  round down(1%)\n\ntable 料率表(rates)\npolicy unique\n| 区分 | -> 料率 : rate[step 0.1%] |\n| 一般 | 1%                        |\n| 建設 | 2%                        |\n| 特別 | 特別率                    |\n").unwrap();
     let j = api(rate.to_str().unwrap());
@@ -911,5 +900,4 @@ fn 率の出力は宣言した刻みで渡る() {
     let (c, out, _) = run(&["check", off.to_str().unwrap(), "--lang", "en"]);
     assert_eq!(c, 1, "{out}");
     assert!(out.contains("E114") && out.contains("does not sit on the output's step of 1%"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -2,7 +2,7 @@
 //! not the wording.
 
 use std::process::Command;
-use ritsu_testkit::{Need, need};
+use ritsu_testkit::{Need, TempDir, need};
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
@@ -109,15 +109,13 @@ fn fmt_は冪等で_check_は直すべきものを言う() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(done, "崩す行が見つからない");
-    let dir = std::env::temp_dir().join(format!("rulec-cli-fmt-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("cli-fmt");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("崩れた表.rule");
     std::fs::write(&p, broken + "\n").unwrap();
     let (c, out, _) = run(&["fmt", "--check", p.to_str().unwrap()]);
     assert_eq!(c, 1, "崩れたファイルは 1");
     assert!(out.contains("整形されていません"), "{out}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -184,9 +182,8 @@ table t(t)\npolicy first\n\
 
 #[test]
 fn diff_base_は新たに生じた発見だけを出す() {
-    let dir = std::env::temp_dir().join(format!("rulec-diff-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("diff");
+    let dir = tmp.path().to_path_buf();
     git(&dir, &["init", "-q"]);
     git(&dir, &["config", "user.email", "t@example.com"]);
     git(&dir, &["config", "user.name", "t"]);
@@ -211,8 +208,6 @@ fn diff_base_は新たに生じた発見だけを出す() {
     let (_, diffed) = run_in(&dir, &["check", "t.rule", "--diff-base", "HEAD"]);
     assert_eq!(diffed.matches("warning[W105]").count(), 1, "新規の一件だけ: {diffed}");
     assert!(diffed.contains("伏せました"), "伏せた件数を言う: {diffed}");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §8.4: generated code is committed to git, and `--check` in CI verifies that it matches a fresh
@@ -220,8 +215,8 @@ fn diff_base_は新たに生じた発見だけを出す() {
 /// it is no gate for CI.
 #[test]
 fn gen_check_は生成物のずれを見つける() {
-    let dir = std::env::temp_dir().join(format!("rulec-genchk-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("genchk");
+    let dir = tmp.path().join("out");
     let out = dir.to_string_lossy().to_string();
     let rule = "tests/corpus/送料.rule";
 
@@ -260,8 +255,6 @@ fn gen_check_は生成物のずれを見つける() {
     assert_eq!(c, 0);
     let (c, o, _) = run(&["gen", rule, "--out", &out, "--check"]);
     assert_eq!(c, 0, "{o}");
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// §12: CI writes `rulec check rules/`. A directory expands to the `.rule` files inside it.
@@ -287,15 +280,14 @@ fn ディレクトリを渡すと中の規則を全部見る() {
     if !need(Need::Python) {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-dir-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let tmp = TempDir::new("dir");
+    let dir = tmp.path().to_path_buf();
     let d = dir.to_string_lossy().to_string();
     let (c, _, _) = run(&["gen", "tests/corpus/期間区分.rule", "--out", &d]);
     assert_eq!(c, 0);
     let (c, r, _) = run(&["test", &d]);
     assert_eq!(c, 0, "test がディレクトリを展開してしまった:\n{r}");
     assert!(r.contains("period"), "{r}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // ── §2 of the plan: one table behind `--help` and the parser ─────────────
@@ -392,9 +384,8 @@ fn 一文字のフラグは何もせずに2で止まる() {
     // `-o` was taken for a file, after the file before it had been worked on: `gen` wrote into
     // `generated/` and `fmt` rewrote a file it was asked only to look at, and then both said
     // they could not read `-o` (§15.156).
-    let dir = std::env::temp_dir().join(format!("rulec-short-flag-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("short-flag");
+    let dir = tmp.path().to_path_buf();
     let rule = dir.join("r.rule");
     std::fs::copy(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus/決済手数料.rule"), &rule).unwrap();
     // A file fmt would change, so that a rewrite would show.
@@ -425,7 +416,6 @@ fn 一文字のフラグは何もせずに2で止まる() {
     let (code, _, err) = run(&["gen", "tests/corpus/決済手数料.rule", "--outt", "x"]);
     assert_eq!(code, 2);
     assert!(err.contains("`--out`"), "{err}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -479,9 +469,8 @@ fn budget_の上限を超えるとE109で止まる() {
 /// the default of one, a two-output table comes back with the first of them read as an input.
 #[test]
 fn importのoutputsは末尾の列を出力にする() {
-    let d = std::env::temp_dir().join(format!("rulec-cli-outputs-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let tmp = TempDir::new("cli-outputs");
+    let d = tmp.path().to_path_buf();
     let csv = d.join("t.csv");
     std::fs::write(&csv, "区分,送料,手数料\n近,100円,10円\n遠,200円,20円\n").unwrap();
     let p = csv.to_str().unwrap();
@@ -495,7 +484,6 @@ fn importのoutputsは末尾の列を出力にする() {
     assert_eq!(c, 0, "{e}");
     assert!(two.contains("-> 送料"), "二列を出力にしたら 送料 も出力: {two}");
     assert!(two.contains("手数料"), "{two}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Every flag the CLI declares is passed by some test.
@@ -564,9 +552,8 @@ fn ブロックの途中のコメント行はブロックを切らない() {
 /// and what does not and says so.
 #[test]
 fn 検査を通らない規則に_どのコマンドが何を返すか() {
-    let d = std::env::temp_dir().join(format!("rulec-exit-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let tmp = TempDir::new("exit");
+    let d = tmp.path().to_path_buf();
     // A hole, and nothing else: the names and the types all resolve.
     let p = d.join("hole.rule");
     std::fs::write(
@@ -610,5 +597,4 @@ fn 検査を通らない規則に_どのコマンドが何を返すか() {
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("E101"), "何が悪いか言っていない: {err}");
     assert!(String::from_utf8_lossy(&o.stdout).trim().is_empty(), "断ったのに標準出力に何か書いた");
-    let _ = std::fs::remove_dir_all(&d);
 }

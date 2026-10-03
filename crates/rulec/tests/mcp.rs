@@ -6,6 +6,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -155,8 +156,8 @@ fn 文書はリソースで_互いへのリンクはリソースを指す() {
 /// call.
 #[test]
 fn サブコマンドは選択肢として渡る() {
-    let d = std::env::temp_dir().join(format!("rulec-mcp-sub-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
+    let tmp = TempDir::new("mcp-sub");
+    let d = tmp.path().to_path_buf();
     std::fs::create_dir_all(d.join("sources/paypal-us-fees.md.fragments")).unwrap();
     for f in ["paypal_fee.rule", "sources/paypal-us-fees.md", "sources/paypal-us-fees.md.fragments/table1.tsv"] {
         std::fs::copy(root().join("tests/corpus").join(f), d.join(f)).unwrap();
@@ -195,7 +196,6 @@ fn サブコマンドは選択肢として渡る() {
     assert!(text(r, 0).contains("rule fees"), "{}", text(r, 0));
     let e = a[3].get("error").expect("選択肢に無いサブコマンドを通している");
     assert!(s(e, "message").contains("subcommand"), "{e:?}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]

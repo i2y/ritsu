@@ -10,7 +10,7 @@
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -195,8 +195,8 @@ fn 証明書はどのファイルのものかを言う() {
     if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-cert-sha-{}", std::process::id()));
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("cert-sha");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("c.json");
     let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);
     assert_eq!(c, 0, "{cert}");
@@ -214,7 +214,6 @@ fn 証明書はどのファイルのものかを言う() {
     assert!(said.contains("digest"), "{said}");
     let (code, said) = run("tests/corpus/送料.rule");
     assert_eq!(code, 1, "別のファイルを指しても通ってしまった:\n{said}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The other half of the tampering: the cover and the int64 claim, on a rule that has both
@@ -283,8 +282,8 @@ fn 制約で閉じた穴は証明書に出て_再検査される() {
     if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-cert-con-{}", std::process::id()));
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("cert-con");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("con.rule");
     std::fs::write(&p, BY_CONSTRAINT).unwrap();
     let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
@@ -303,7 +302,6 @@ fn 制約で閉じた穴は証明書に出て_再検査される() {
     let (code, said) = recheck(&forged);
     assert_eq!(code, 1, "向きを変えた制約が通ってしまった:
 {said}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The certificate quotes the file: every cell is read back out of the `.rule` text at the
@@ -369,8 +367,8 @@ fn 到達の点は篩を通る() {
     if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-cert-sieve-{}", std::process::id()));
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new("cert-sieve");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("con.rule");
     std::fs::write(&p, BY_CONSTRAINT).unwrap();
     let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
@@ -389,7 +387,6 @@ fn 到達の点は篩を通る() {
     let (code, said) = recheck(&forged);
     assert_eq!(code, 1, "制約を破る点が通ってしまった:\n{said}");
     assert!(said.contains("does not hold at"), "制約ではなく別の検査が落としている:\n{said}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The span discipline (§15.99). A cell is read back from **its own place** in the file:
@@ -479,12 +476,11 @@ const CHAIN_GAP: &str = "rule 連なる制約(chain) v1\n\ninputs\n  a(a) : mone
 const CHAIN_OVERLAP: &str = "rule 連なる制約(chain) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=100円\n  b(b) : money[円]  range >=0円 <=100円\n  x(x) : money[円]  range >=0円 <=100円\n\nconstraint a <= b\nconstraint b <= x\n\noutputs\n  y(y) : bool\n\ntable 表(t)\npolicy unique\n| a      | x      | -> y  |\n| >50円  | -      | true  |\n| -      | <50円  | false |\n| <=50円 | >=50円 | false |\n";
 
 fn chain_cert(tag: &str, src: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("rulec-cert-chain-{tag}-{}", std::process::id()));
-    let _ = std::fs::create_dir_all(&dir);
+    let tmp = TempDir::new(&format!("cert-chain-{tag}"));
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("chain.rule");
     std::fs::write(&p, src).unwrap();
     let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
-    let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(c, 0, "{cert}");
     cert
 }
@@ -620,12 +616,11 @@ fn 数の集合の箱は値から組み直される() {
     if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("rulec-cert-set-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("cert-set");
+    let dir = tmp.path().to_path_buf();
     let p = dir.join("pieces.rule");
     std::fs::write(&p, "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n").unwrap();
     let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
-    let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(c, 0, "{cert}");
     assert!(cert.contains(r#"{"cell":"in","values":["100","200"]}"#), "{cert}");
     assert!(cert.contains(r#"{"cell":"not_in","values":["300","400"]}"#), "{cert}");

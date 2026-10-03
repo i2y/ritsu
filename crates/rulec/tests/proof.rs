@@ -8,17 +8,16 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use ritsu_testkit::{Need, need, ready};
+use ritsu_testkit::{Need, TempDir, need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-proof-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("proof-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 fn run(args: &[&str]) -> (i32, String) {
@@ -47,7 +46,7 @@ fn rows(json: &str) -> Vec<rulec::json::Json> {
 /// The file is written, and what `rulec api` says is in it is what is in it.
 #[test]
 fn 証明のハーネスは生成され_apiの名前と一致する() {
-    let out = dir("gen");
+    let (_tmp, out) = dir("gen");
     let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
     assert_eq!(c, 0, "{said}");
     let f = out.join("rust").join("coupon_stack_proof.rs");
@@ -70,7 +69,6 @@ fn 証明のハーネスは生成され_apiの名前と一致する() {
     assert!(body.contains("#[cfg(kani)]"), "cfg(kani) の外に出ている");
     // The W114 guard is the reason this rule is here: the harness says it never fires.
     assert!(body.contains("is_ok()"), "答えが返ることを言っていない");
-    let _ = std::fs::remove_dir_all(&out);
 }
 
 /// `rustc` compiles the file to nothing: the harnesses cost a reader of the generated code
@@ -80,7 +78,7 @@ fn 証明のファイルは普通のビルドでは空である() {
     if !ready(Need::Rustc, || have("rustc"), "rustc が無い") {
         return;
     }
-    let out = dir("rustc");
+    let (_tmp, out) = dir("rustc");
     let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
     assert_eq!(c, 0, "{said}");
     let o = Command::new("rustc")
@@ -89,7 +87,6 @@ fn 証明のファイルは普通のビルドでは空である() {
         .output()
         .expect("rustc を起動できない");
     assert!(o.status.success(), "rustc が通らない:\n{}", String::from_utf8_lossy(&o.stderr));
-    let _ = std::fs::remove_dir_all(&out);
 }
 
 /// The pass is asked for, not assumed: it is minutes where the vectors are milliseconds
@@ -100,7 +97,7 @@ fn フラグが無ければ証明は走らない() {
     if !need(Need::Python) {
         return;
     }
-    let out = dir("noflag");
+    let (_tmp, out) = dir("noflag");
     let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
     assert_eq!(c, 0, "{said}");
     let (_, said) = run(&["test", out.to_str().unwrap(), "--format", "json"]);
@@ -109,7 +106,6 @@ fn フラグが無ければ証明は走らない() {
         "`--proofs` が無いのに証明が走った: {said}"
     );
     assert!(!said.contains("kani"), "`--proofs` が無いのに kani の話をしている: {said}");
-    let _ = std::fs::remove_dir_all(&out);
 }
 
 /// With the flag and the checker, the pass runs and the generated Rust holds.
@@ -118,7 +114,7 @@ fn フラグを付ければ証明が走る() {
     if !ready(Need::Kani, || have("kani") && have("rustc"), "kani が無い") {
         return;
     }
-    let out = dir("flag");
+    let (_tmp, out) = dir("flag");
     let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
     assert_eq!(c, 0, "{said}");
     let (code, said) = run(&["test", out.to_str().unwrap(), "--proofs", "--format", "json"]);
@@ -130,5 +126,4 @@ fn フラグを付ければ証明が走る() {
     assert_eq!(p[0].get("ok"), Some(&rulec::json::Json::Bool(true)), "{said}");
     // `vectors` carries the number of harnesses for this pass, and there is more than one.
     assert!(p[0].get("vectors").and_then(|v| v.as_int()).unwrap_or(0) >= 2, "{said}");
-    let _ = std::fs::remove_dir_all(&out);
 }
