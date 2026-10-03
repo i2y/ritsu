@@ -39,23 +39,11 @@ const ANTHROPIC_SDK: &str = "github.com/anthropics/anthropic-sdk-go v1.78.0";
 /// Functions gives each: the package of the AWS SDK for Go v2 has the same name.
 const AWS_SERVICES: &[&str] = &["bedrockruntime", "dynamodb", "ecs", "eventbridge", "kinesis", "lambda", "s3", "secretsmanager", "sesv2", "sfn", "sns", "sqs", "ssm"];
 
-/// What a name of the flow cannot be in the generated Go, with an `_` after it when it is: the
-/// keywords, the predeclared names, and the names the generated code uses.
-const GO_RESERVED: &[&str] = &[
-    "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range",
-    "return", "select", "struct", "switch", "type", "var", "any", "bool", "byte", "comparable", "complex64", "complex128", "error", "float32", "float64", "int", "int8", "int16",
-    "int32", "int64", "rune", "string", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr", "true", "false", "iota", "nil", "append", "cap", "clear", "close", "complex",
-    "copy", "delete", "imag", "len", "make", "max", "min", "new", "panic", "print", "println", "real", "recover", "ctx", "input", "resume", "workflow", "time", "errors", "err", "out",
-    "WorkflowType", "TaskQueue", "Events", "Workflow",
-];
-
-/// The exported names every package has, which a record's, an enum's or a method's name gives way to.
-const GO_EXPORTED: &[&str] = &[
-    "WorkflowType", "TaskQueue", "Events", "Workflow", "RegisterWorkflow", "OwnTasks", "OwnTasksBy", "Activities", "RegisterActivities", "BuildID", "WorkerOptions", "NewWorker",
-    "History", "ReplayFailure", "Replay", "Start", "CallbackAnswer", "Answer", "Send", "Where", "Status", "Histories", "Outcome", "HTTPRequest", "HTTPResponse", "AgentCall",
-    "Transport", "TransportOptions", "NewTransport", "DefaultTransport", "AgentHTTPError", "AgentStopped", "JevURL", "ClaudeMaxTokens", "WorkflowInput", "WorkflowOutput",
-    "IsWorkflowInput", "Decode", "TIMESTAMP", "Service",
-];
+/// What a name of the flow cannot be in the generated Go, with an `_` after it when it is (the
+/// keywords, the predeclared names, and the names the generated code uses), and the exported
+/// names every package has, which a record's, an enum's or a method's name gives way to:
+/// ritsu-emit's copies of the tables that were kept here.
+use ritsu_emit::copies::dandori::{GO_EXPORTED, GO_RESERVED};
 
 /// A local name of the flow (a variable) as a Go identifier.
 pub fn go_name(name: &str) -> String {

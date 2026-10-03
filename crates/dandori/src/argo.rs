@@ -68,8 +68,7 @@ pub fn document(m: &Model) -> Result<Value, Vec<Diag>> {
 fn fit(m: &Model) -> Result<(), Vec<Diag>> {
     let mut errs = Vec::new();
     errs.extend(m.refuse_on_cancel(
-        "dandori does not write `on cancel` for Argo Workflows yet; there, it would have to be the exit handler that `argo stop` runs",
-        "Argo Workflows 向けの `on cancel` はまだ書けません。書くなら、`argo stop` で走る exit handler にすることになります",
+        tr!("Argo Workflows 向けの `on cancel` はまだ書けません。書くなら、`argo stop` で走る exit handler にすることになります", "dandori does not write `on cancel` for Argo Workflows yet; there, it would have to be the exit handler that `argo stop` runs"),
     ));
     errs.extend(crate::check::history_limit(m, Platform::Argo));
     errs.extend(m.refuse_events(Platform::Argo));
@@ -82,15 +81,13 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("`{}` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows", t.name),
-                format!("`{}` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります", t.name),
+                tr!("`{}` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります", "`{}` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows", t.name),
             )),
             Some(Via::ArgoTemplate(_)) if !t.errors.is_empty() => errs.push(Diag::error(
                 "E050",
                 t.line,
                 1,
-                format!("Argo reports a workflow's failure without its error, so the errors of `{}` cannot be told apart there; leave out `errors` and handle `failure`", t.name),
-                format!("Argo はワークフローの失敗をそのエラーなしで伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で処理してください", t.name),
+                tr!("Argo はワークフローの失敗をそのエラーなしで伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で処理してください", "Argo reports a workflow's failure without its error, so the errors of `{}` cannot be told apart there; leave out `errors` and handle `failure`", t.name),
             )),
             _ => {}
         }
@@ -99,8 +96,7 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("Argo would retry only the step that hands the id of `{}` on, not the wait for its answer; leave out `retry`", t.name),
-                format!("Argo でリトライできるのは `{}` の ID を渡すステップだけで、応答を待つところはリトライできません。`retry` を外してください", t.name),
+                tr!("Argo でリトライできるのは `{}` の ID を渡すステップだけで、応答を待つところはリトライできません。`retry` を外してください", "Argo would retry only the step that hands the id of `{}` on, not the wait for its answer; leave out `retry`", t.name),
             ));
         }
     }

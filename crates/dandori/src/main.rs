@@ -1,37 +1,15 @@
+//! The `dandori` command. What exists and what it takes is `cli.rs`'s table (ritsu's DESIGN 4.4).
+
 use dandori::check;
+use dandori::cli;
 use dandori::commands;
-use dandori::diag::{self, Lang};
+use dandori::diag::{self, Lang, Text};
+use ritsu_base::tr;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const USAGE: &str = "dandori — a small typed language for workflows that call business rules
-
-Usage:
-  dandori check <file.flow>...                    check: types, every arm, every state a case can be left in, retries
-  dandori build <file.flow> --target asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph [--out <dir>]
-                                                  compile to AWS Step Functions (ASL, JSONata), to Temporal (TypeScript, Python or Go),
-                                                  to AWS Lambda durable functions (TypeScript), to Argo Workflows (YAML),
-                                                  or to pydantic-graph (Python); a build also refuses what the platform
-                                                  cannot do, and a run that can outgrow its history
-  dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
-                                                  run the workflow in the reference interpreter against scripted answers,
-                                                  and print the trace as the target would show it
-  dandori scenarios <file.flow> [--out <dir>]     write scenarios that take every arm and every way a case can move
-  dandori doc <file.flow> [--format html] [--out <dir>]
-                                                  draw the workflow for the person who reviews it: the flow, what each
-                                                  call does and where its errors go, every way it can end; Markdown with
-                                                  Mermaid, or one HTML page where each scenario lights up the way it goes
-
-Flags:
-  --format json   machine-facing JSON (check)
-  --format html   one HTML page (doc); Markdown by default
-  --lang ja|en    language of the messages; else DANDORI_LANG, else en
-
-The rules are read with rulec: DANDORI_RULEC names the binary, else `rulec` on the PATH.
-Exit codes: 0 notes only / 1 errors found / 2 bad arguments or an unreadable file";
-
+/// What one command line asked for, as the commands below read it.
 struct Args {
-    cmd: String,
     files: Vec<PathBuf>,
     format_json: bool,
     format_html: bool,
@@ -41,56 +19,113 @@ struct Args {
     scenario: Option<PathBuf>,
 }
 
-fn parse_args() -> Result<Args, String> {
-    let mut it = std::env::args().skip(1);
-    let cmd = it.next().ok_or_else(|| USAGE.to_string())?;
-    if cmd == "--help" || cmd == "-h" || cmd == "help" {
-        return Err(USAGE.to_string());
-    }
-    let mut a = Args { cmd, files: vec![], format_json: false, format_html: false, lang: Lang::En, target: None, out: None, scenario: None };
-    let mut lang_flag: Option<String> = None;
-    while let Some(x) = it.next() {
-        match x.as_str() {
-            "--format" => match it.next().as_deref() {
-                Some("json") => a.format_json = true,
-                Some("text") => a.format_json = false,
-                Some("html") => a.format_html = true,
-                Some("md") => a.format_html = false,
-                _ => return Err("--format takes json or text (check), html or md (doc)".into()),
-            },
-            "--lang" => lang_flag = Some(it.next().ok_or("--lang takes ja or en")?),
-            "--target" => a.target = Some(it.next().ok_or("--target takes asl, temporal, temporal-python, temporal-go, durable, argo, pydantic-graph or reference")?),
-            "--out" => a.out = Some(PathBuf::from(it.next().ok_or("--out takes a directory")?)),
-            "--scenario" => a.scenario = Some(PathBuf::from(it.next().ok_or("--scenario takes a file")?)),
-            "--help" | "-h" => return Err(USAGE.to_string()),
-            f if f.starts_with("--") => return Err(format!("unknown flag {f}\n\n{USAGE}")),
-            f => a.files.push(PathBuf::from(f)),
+impl Args {
+    fn from(a: &cli::Args, lang: Lang) -> Args {
+        Args {
+            files: a.pos.iter().map(PathBuf::from).collect(),
+            format_json: a.get("--format") == Some("json"),
+            format_html: a.get("--format") == Some("html"),
+            lang,
+            target: a.get("--target").map(str::to_string),
+            out: a.get("--out").map(PathBuf::from),
+            scenario: a.get("--scenario").map(PathBuf::from),
         }
     }
-    a.lang = Lang::pick(lang_flag.as_deref());
-    Ok(a)
+}
+
+fn refuse(msg: Text, lang: Lang) -> ExitCode {
+    let head = if lang == Lang::Ja { "エラー" } else { "error" };
+    eprintln!("{head}: {}", msg.get(lang));
+    ExitCode::from(2)
+}
+
+/// `--lang ja`, `--lang=ja`, anywhere on the line: decided before anything is printed.
+fn lang_flag(args: &[String]) -> Option<String> {
+    for (i, a) in args.iter().enumerate() {
+        if a == "--lang" {
+            return args.get(i + 1).cloned();
+        }
+        if let Some(v) = a.strip_prefix("--lang=") {
+            return Some(v.to_string());
+        }
+    }
+    None
 }
 
 fn main() -> ExitCode {
-    let a = match parse_args() {
-        Ok(a) => a,
-        Err(msg) => {
-            eprintln!("{msg}");
-            return ExitCode::from(2);
-        }
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let lang = Lang::pick(lang_flag(&args).as_deref(), "DANDORI_LANG");
+    let table = cli::table();
+    let Some(first) = args.first() else {
+        eprint!("{}", table.help_all(lang));
+        return ExitCode::from(2);
     };
-    let code = match a.cmd.as_str() {
+    match first.as_str() {
+        "--help" | "-h" => {
+            print!("{}", table.help_all(lang));
+            return ExitCode::SUCCESS;
+        }
+        "--version" | "-V" => {
+            println!("dandori {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        "help" => {
+            let mut rest = Vec::new();
+            let mut i = 1;
+            while i < args.len() {
+                if args[i] == "--lang" {
+                    i += 2;
+                    continue;
+                }
+                if !args[i].starts_with("--lang=") {
+                    rest.push(args[i].clone());
+                }
+                i += 1;
+            }
+            return match rest.first() {
+                None => {
+                    print!("{}", table.help_all(lang));
+                    ExitCode::SUCCESS
+                }
+                Some(n) => match table.command(n) {
+                    Some(c) => {
+                        print!("{}", table.help_cmd(c, lang));
+                        ExitCode::SUCCESS
+                    }
+                    None => refuse(tr!("`{n}` というコマンドはありません。`dandori --help` を読んでください", "there is no command `{n}`; run `dandori --help`"), lang),
+                },
+            };
+        }
+        _ => {}
+    }
+    let Some(cmd) = table.command(first) else {
+        return refuse(tr!("`{first}` というコマンドはありません。`dandori --help` を読んでください", "there is no command `{first}`; run `dandori --help`"), lang);
+    };
+    let parsed = match table.parse(cmd, &args[1..]) {
+        Ok(a) => a,
+        Err(e) => return refuse(e, lang),
+    };
+    if parsed.has("--help") {
+        print!("{}", table.help_cmd(cmd, lang));
+        return ExitCode::SUCCESS;
+    }
+    let a = Args::from(&parsed, lang);
+    let code = match cmd.name {
         "check" => cmd_check(&a),
         "build" => cmd_build(&a),
         "run" => cmd_run(&a),
         "scenarios" => cmd_scenarios(&a),
         "doc" => cmd_doc(&a),
-        other => {
-            eprintln!("unknown command {other}\n\n{USAGE}");
-            2
-        }
+        _ => unreachable!("every command in the table is dispatched"),
     };
     ExitCode::from(code)
+}
+
+/// The line `dandori <cmd> --help` begins its usage with, for a command given the wrong number
+/// of files.
+fn usage(name: &str) -> String {
+    let table = cli::table();
+    table.command(name).map(|c| table.usage_line(c)).unwrap_or_default()
 }
 
 /// Check one file and print its diagnostics; the model when it passes.
@@ -120,7 +155,7 @@ fn load(path: &Path, a: &Args, print_ok: bool) -> Result<Option<dandori::model::
 
 fn cmd_check(a: &Args) -> u8 {
     if a.files.is_empty() {
-        eprintln!("dandori check <file.flow>...");
+        eprintln!("{}", usage("check"));
         return 2;
     }
     let mut worst = 0;
@@ -136,7 +171,7 @@ fn cmd_build(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori build <file.flow> --target asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph [--out <dir>]");
+            eprintln!("{}", usage("build"));
             return 2;
         }
     };
@@ -179,7 +214,7 @@ fn cmd_run(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]");
+            eprintln!("{}", usage("run"));
             return 2;
         }
     };
@@ -229,7 +264,7 @@ fn cmd_scenarios(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori scenarios <file.flow> [--out <dir>]");
+            eprintln!("{}", usage("scenarios"));
             return 2;
         }
     };
@@ -263,7 +298,7 @@ fn cmd_doc(a: &Args) -> u8 {
     let file = match a.files.as_slice() {
         [f] => f.clone(),
         _ => {
-            eprintln!("dandori doc <file.flow> [--format html] [--out <dir>]");
+            eprintln!("{}", usage("doc"));
             return 2;
         }
     };

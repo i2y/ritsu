@@ -4,14 +4,18 @@
 //!
 //! The rules are read with rulec (`DANDORI_RULEC`, else `rulec` on the PATH), and the
 //! state machines are run with Node and the packages in tools/ (`npm install --prefix
-//! tools`). A test that cannot find them says so and skips; read the skip lines.
-//! `DANDORI_BLESS=1` rewrites the golden files.
+//! tools`). A test that cannot find them says so and skips; read the skip lines
+//! (`SKIP: dandori: …`). `RITSU_TEST_LEVEL` picks the level a run goes up to (ritsu's DESIGN
+//! 10.2): `tools` leaves out what needs Temporal, LocalStack, Argo on kind, Ollama or TypeSafe,
+//! and `fast` everything that needs rulec, Node, Python or Go too. `DANDORI_BLESS=1` (or
+//! `RITSU_BLESS=1`) rewrites the golden files.
 
 use dandori::diag::Lang;
 use dandori::interp::CallInfo;
 use dandori::model::{Callee, Model, Platform, Via, TK};
 use dandori::render::View;
 use serde_json::{json, Value};
+use ritsu_testkit::{need, ready, skip, Need, TempDir};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -30,8 +34,7 @@ fn node_available() -> bool {
 
 macro_rules! need_rulec {
     () => {
-        if !rulec_available() {
-            eprintln!("SKIP: rulec is not on the PATH; set DANDORI_RULEC to run this test");
+        if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
             return;
         }
     };
@@ -39,8 +42,7 @@ macro_rules! need_rulec {
 
 macro_rules! need_node {
     () => {
-        if !node_available() {
-            eprintln!("SKIP: node or tools/node_modules is missing; run `npm install --prefix tools`");
+        if !ready(Need::Node, node_available, "node or tools/node_modules is missing; run `npm install --prefix tools`") {
             return;
         }
     };
@@ -79,7 +81,7 @@ fn runnable() -> Vec<PathBuf> {
         out.retain(|f| {
             let keep = !NAMED_ENUMS.contains(&rel(f).as_str());
             if !keep {
-                eprintln!("SKIP: {}: it calls at its service a rule whose enum is a contract's, and this rulec's `rulec api` does not say what the service calls the values (`connect.enums`)", rel(f));
+                skip(&format!("{}: it calls at its service a rule whose enum is a contract's, and this rulec's `rulec api` does not say what the service calls the values (`connect.enums`)", rel(f)));
             }
             keep
         });
@@ -151,35 +153,17 @@ fn key(f: &Path) -> String {
     rel(f).trim_end_matches(".flow").replace(['/', '.'], "-")
 }
 
-/// A directory of this test process's own, in the temporary directory, which the tests leave there
-/// to be read. The first one removes those of the test processes that have ended: they came to
-/// thousands a day, and the Go runner in each is a hundred megabytes.
+/// A directory of this test process's own, in the temporary directory (ritsu-testkit's), which the
+/// tests leave there to be read: it is kept for as long as the process runs, a test that builds
+/// something once (the Go runner) leaves it for the others, and the first directory of the next
+/// test process removes it with the rest of the ended processes' (they came to thousands a day,
+/// and the Go runner in each is a hundred megabytes).
 fn scratch(name: &str) -> PathBuf {
-    static SWEPT: std::sync::Once = std::sync::Once::new();
-    SWEPT.call_once(remove_ended_scratch);
-    let d = std::env::temp_dir().join(format!("dandori-test-{}-{name}", std::process::id()));
-    std::fs::create_dir_all(&d).unwrap();
-    d
-}
-
-/// Removes the directories of `scratch` whose test process has ended (`kill -0` says there is no
-/// such process; a process that is there, or that kill may not ask about, keeps its own).
-fn remove_ended_scratch() {
-    let me = std::process::id().to_string();
-    let mut ended = std::collections::HashMap::new();
-    for e in std::fs::read_dir(std::env::temp_dir()).into_iter().flatten().flatten() {
-        let name = e.file_name().to_string_lossy().to_string();
-        let Some(pid) = name.strip_prefix("dandori-test-").and_then(|n| n.split('-').next()) else { continue };
-        if pid == me || pid.is_empty() || !pid.bytes().all(|b| b.is_ascii_digit()) {
-            continue;
-        }
-        let gone = *ended.entry(pid.to_string()).or_insert_with(|| {
-            Command::new("kill").args(["-0", pid]).output().is_ok_and(|o| !o.status.success() && String::from_utf8_lossy(&o.stderr).contains("No such process"))
-        });
-        if gone {
-            let _ = std::fs::remove_dir_all(e.path());
-        }
-    }
+    static KEPT: std::sync::Mutex<Vec<TempDir>> = std::sync::Mutex::new(Vec::new());
+    let d = TempDir::new(name);
+    let p = d.path().to_path_buf();
+    KEPT.lock().unwrap_or_else(|e| e.into_inner()).push(d);
+    p
 }
 
 /// Numbers compared as numbers: 2 and 2.0 are the same wait.
@@ -206,7 +190,6 @@ fn examples_pass_check() {
 #[test]
 fn diagnostics_match_the_golden_files() {
     need_rulec!();
-    let bless = std::env::var("DANDORI_BLESS").is_ok();
     let mut failures = Vec::new();
     for f in flows(&root().join("tests/fixtures")) {
         let (src, checked) = dandori::check::check_file(&f).unwrap();
@@ -233,13 +216,8 @@ fn diagnostics_match_the_golden_files() {
                 text.extend(diags.iter().map(|d| d.render(&rel(&f), &src, lang)));
             }
             let golden = f.with_extension(format!("{tag}.txt"));
-            if bless {
-                std::fs::write(&golden, &text).unwrap();
-                continue;
-            }
-            let want = std::fs::read_to_string(&golden).unwrap_or_default();
-            if want != text {
-                failures.push(format!("{} ({tag}) differs from {}:\n--- want\n{want}\n--- got\n{text}", rel(&f), rel(&golden)));
+            if let Err(e) = ritsu_testkit::golden::check(&golden, &text) {
+                failures.push(format!("{} ({tag}): {e}", rel(&f)));
             }
         }
     }
@@ -254,7 +232,6 @@ fn diagnostics_match_the_golden_files() {
 /// need none. `DANDORI_BLESS=1` rewrites the golden files beside it.
 #[test]
 fn a_rulec_that_does_not_name_the_enums_has_a_contracts_refused() {
-    let bless = std::env::var("DANDORI_BLESS").is_ok();
     let dir = root().join("tests/fixtures/unnamed_enums");
     let recorded: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("rulec.json")).unwrap()).unwrap();
     let bundle = std::rc::Rc::new(dandori::sources::Bundle::from_json(&recorded).unwrap());
@@ -267,13 +244,8 @@ fn a_rulec_that_does_not_name_the_enums_has_a_contracts_refused() {
         assert!(checked.model.is_none() && checked.diags.iter().all(|d| d.code == "E005"), "{path} is refused with E005 alone: {:?}", checked.diags.iter().map(|d| (&d.code, &d.en)).collect::<Vec<_>>());
         let said: String = checked.diags.iter().map(|d| d.render(path, &text, lang)).collect();
         let golden = dir.join(format!("connect_rules_contract.{tag}.txt"));
-        if bless {
-            std::fs::write(&golden, &said).unwrap();
-            continue;
-        }
-        let want = std::fs::read_to_string(&golden).unwrap_or_default();
-        if want != said {
-            failures.push(format!("{path} ({tag}) differs from {}:\n--- want\n{want}\n--- got\n{said}", rel(&golden)));
+        if let Err(e) = ritsu_testkit::golden::check(&golden, &said) {
+            failures.push(format!("{path} ({tag}): {e}"));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
@@ -319,7 +291,7 @@ fn asl_runs_as_the_reference_says() {
             let out = Command::new(&validator).arg("--json-path").arg(&def).output().unwrap();
             assert!(out.status.success(), "asl-validator rejects {}:\n{}{}", rel(&f), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
         } else {
-            eprintln!("SKIP: asl-validator is not in tools/node_modules; the definition is not validated");
+            skip("asl-validator is not in tools/node_modules; the definition is not validated");
         }
 
         // an HTTP Task reaches its API through the EventBridge connection the flow names, whichever call it is: the runners play HTTP Tasks without it
@@ -438,10 +410,13 @@ fn on_localstack(dir: &Path, name: &str, flows: &[Value]) -> Vec<Value> {
 /// wake LocalStack's threads a second late.
 #[test]
 fn localstack_runs_as_the_reference_says() {
+    if !need(Need::LocalStack) {
+        return;
+    }
     need_rulec!();
     need_node!();
     if let Err(why) = localstack_ready() {
-        eprintln!("SKIP: {why}");
+        skip(&format!("{why}"));
         return;
     }
     let mut flows = Vec::new();
@@ -616,9 +591,12 @@ fn compare(what: &str, f: &Path, references: &[(Value, Value)], got: &[Value]) {
 
 #[test]
 fn temporal_runs_as_the_reference_says() {
+    if !need(Need::Temporal) {
+        return;
+    }
     need_rulec!();
     if !temporal_available() {
-        eprintln!("SKIP: tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
+        skip("tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
         return;
     }
     temporal_all(Sdk::Ts);
@@ -632,9 +610,12 @@ fn temporal_python() -> Option<PathBuf> {
 
 #[test]
 fn temporal_python_runs_as_the_reference_says() {
+    if !need(Need::Temporal) {
+        return;
+    }
     need_rulec!();
     if temporal_python().is_none() {
-        eprintln!("SKIP: tools/temporal-python/.venv is missing; make it as tools/temporal-python/requirements.txt says");
+        skip("tools/temporal-python/.venv is missing; make it as tools/temporal-python/requirements.txt says");
         return;
     }
     temporal_all(Sdk::Py);
@@ -784,7 +765,7 @@ fn go_runner() -> Option<&'static GoRunner> {
         Some(GoRunner { bin, keys })
     });
     if got.is_none() {
-        eprintln!("SKIP: go or tools/temporal-go is missing; the Go that dandori writes for Temporal is not run");
+        skip("go or tools/temporal-go is missing; the Go that dandori writes for Temporal is not run");
     }
     got.as_ref()
 }
@@ -799,6 +780,9 @@ fn versions_texts() -> Vec<(&'static str, String)> {
 
 #[test]
 fn temporal_go_runs_as_the_reference_says() {
+    if !need(Need::Temporal) {
+        return;
+    }
     need_rulec!();
     if go_runner().is_none() {
         return;
@@ -825,9 +809,12 @@ fn temporal_all(lang: Sdk) {
 /// language.
 #[test]
 fn temporal_activities_run_in_the_other_language() {
+    if !need(Need::Temporal) {
+        return;
+    }
     need_rulec!();
     if !temporal_available() || temporal_python().is_none() {
-        eprintln!("SKIP: tools/temporal/node_modules or tools/temporal-python/.venv is missing");
+        skip("tools/temporal/node_modules or tools/temporal-python/.venv is missing");
         return;
     }
     let go = go_runner().is_some();
@@ -1000,7 +987,7 @@ fn temporal_one(f: &Path, wf: Sdk, acts: Option<Sdk>) {
     };
     eprintln!("{}: compared {} run(s) on Temporal{how} (the dev server), with the query and the search attribute, and replayed each", rel(f), references.len());
     // with DANDORI_BLESS, the history of the run with the most calls is kept for the replay test
-    if acts.is_none() && std::env::var("DANDORI_BLESS").is_ok() && RECORDED.iter().any(|r| rel(f) == *r) {
+    if acts.is_none() && ritsu_testkit::golden::bless() && RECORDED.iter().any(|r| rel(f) == *r) {
         let longest = references.iter().enumerate().max_by_key(|(_, (_, r))| r["steps"].as_array().map(|a| a.len()).unwrap_or(0)).map(|(i, _)| i).unwrap();
         let keep = recorded_dir(&m, wf);
         let _ = std::fs::remove_dir_all(&keep);
@@ -1044,9 +1031,12 @@ fn neutral(text: &str) -> String {
 /// the same for the same code, and another for B. In TypeScript, in Python and in Go.
 #[test]
 fn temporal_worker_versioning_keeps_a_run_on_its_build() {
+    if !need(Need::Temporal) {
+        return;
+    }
     need_rulec!();
     if !temporal_available() {
-        eprintln!("SKIP: tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
+        skip("tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
         return;
     }
     let _turn = heavy();
@@ -1055,7 +1045,7 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
     let go = go_runner();
     for lang in [Sdk::Ts, Sdk::Py, Sdk::Go] {
         if lang == Sdk::Py && python.is_none() {
-            eprintln!("SKIP: tools/temporal-python/.venv is missing; Worker Deployment Versioning is not tried in Python");
+            skip("tools/temporal-python/.venv is missing; Worker Deployment Versioning is not tried in Python");
             continue;
         }
         if lang == Sdk::Go && go.is_none() {
@@ -1112,10 +1102,13 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
 /// decides, from the input the parent passes it, as the answer of the parent's call.
 #[test]
 fn temporal_runs_a_flow_as_its_child() {
+    if !need(Need::Temporal) {
+        return;
+    }
     need_rulec!();
     let python = temporal_python();
     if !temporal_available() || python.is_none() {
-        eprintln!("SKIP: tools/temporal/node_modules or tools/temporal-python/.venv is missing");
+        skip("tools/temporal/node_modules or tools/temporal-python/.venv is missing");
         return;
     }
     let python = python.unwrap();
@@ -1406,7 +1399,7 @@ fn default_transports_send_what_the_calls_say() {
     let wire = root().join("tools/wire");
     let python = wire.join(".venv/bin/python");
     if !wire.join("node_modules").exists() || !python.exists() {
-        eprintln!("SKIP: tools/wire/node_modules or tools/wire/.venv is missing; see tools/wire/package.json and requirements.txt");
+        skip("tools/wire/node_modules or tools/wire/.venv is missing; see tools/wire/package.json and requirements.txt");
         return;
     }
     // moto, on a port nothing else holds
@@ -1627,7 +1620,7 @@ fn temporal_replays_the_recorded_histories() {
     need_rulec!();
     let python = temporal_python();
     if !temporal_available() || python.is_none() {
-        eprintln!("SKIP: tools/temporal/node_modules or tools/temporal-python/.venv is missing");
+        skip("tools/temporal/node_modules or tools/temporal-python/.venv is missing");
         return;
     }
     let go = go_runner();
@@ -1678,7 +1671,7 @@ fn generated_typescript_type_checks() {
     need_rulec!();
     let tsc = root().join("tools/temporal/node_modules/.bin/tsc");
     if !tsc.exists() {
-        eprintln!("SKIP: TypeScript is not in tools/temporal/node_modules; run `npm install --prefix tools/temporal`");
+        skip("TypeScript is not in tools/temporal/node_modules; run `npm install --prefix tools/temporal`");
         return;
     }
     let types = root().join("tools/temporal/node_modules/@types");
@@ -1821,7 +1814,7 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
 fn generated_go_vets() {
     need_rulec!();
     if !Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false) || !root().join("tools/temporal-go/go.mod").exists() {
-        eprintln!("SKIP: go or tools/temporal-go is missing; the Go that dandori writes is not vetted");
+        skip("go or tools/temporal-go is missing; the Go that dandori writes is not vetted");
         return;
     }
     let mut vetted = 0;
@@ -1875,7 +1868,7 @@ fn rule_glue_answers_the_rulec_vectors() {
                 let got: Vec<Value> = serde_json::from_slice(&out.stdout).unwrap();
                 assert_eq!(norm(&json!(got)), norm(&json!(expected)), "the Lambda handler of {} differs from rulec's vectors", r.name);
             } else {
-                eprintln!("SKIP: python3 is missing; the Lambda handler of {} is not run", r.name);
+                skip(&format!("python3 is missing; the Lambda handler of {} is not run", r.name));
             }
 
             if node {
@@ -1900,13 +1893,13 @@ fn rule_glue_answers_the_rulec_vectors() {
                 let got: Value = serde_json::from_slice(&out.stdout).unwrap();
                 assert_eq!(norm(&got), norm(&json!(expected)), "the Temporal activity of {} differs from rulec's vectors", r.name);
             } else {
-                eprintln!("SKIP: node is missing; rules.ts is not run");
+                skip("node is missing; rules.ts is not run");
             }
         }
     }
     // rules.go, with the Go rulec generates: every rule of every example, in a program of each module
     if !Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false) || !root().join("tools/temporal-go/go.mod").exists() {
-        eprintln!("SKIP: go or tools/temporal-go is missing; rules.go is not run");
+        skip("go or tools/temporal-go is missing; rules.go is not run");
         return;
     }
     let mut answered = 0;
@@ -1967,14 +1960,14 @@ fn a_rules_answer_is_read_alike_by_the_reference_typescript_python_go_and_jsonat
     need_rulec!();
     need_node!();
     if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
-        eprintln!("SKIP: python3 is missing; io.py's reading of a rule's answer is not run");
+        skip("python3 is missing; io.py's reading of a rule's answer is not run");
         return;
     }
     use dandori::rulec::WireKind;
     let mut models = Vec::new();
     for f in ["tests/flows/connect_rules.flow", "tests/flows/connect_rules_contract.flow"] {
         if !rulec_names_enums() && NAMED_ENUMS.contains(&f) {
-            eprintln!("SKIP: {f}: this rulec's `rulec api` does not say what the service of its rule calls the values (`connect.enums`)");
+            skip(&format!("{f}: this rulec's `rulec api` does not say what the service of its rule calls the values (`connect.enums`)"));
             continue;
         }
         let (_, checked) = dandori::check::check_file(&root().join(f)).unwrap();
@@ -2089,7 +2082,7 @@ fn pydantic_graph_runs_as_the_reference_says() {
     let python = match pydantic_graph_python() {
         Some(p) => p,
         None => {
-            eprintln!("SKIP: tools/pydantic-graph/.venv is missing; make it as tools/pydantic-graph/requirements.txt says");
+            skip("tools/pydantic-graph/.venv is missing; make it as tools/pydantic-graph/requirements.txt says");
             return;
         }
     };
@@ -2159,10 +2152,10 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
         && Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
     let python = root().join("tools/agents/.venv/bin/python");
     if !node {
-        eprintln!("SKIP: tools/agents/node_modules is missing; run `npm install --prefix tools/agents`");
+        skip("tools/agents/node_modules is missing; run `npm install --prefix tools/agents`");
     }
     if !python.exists() {
-        eprintln!("SKIP: tools/agents/.venv is missing; make it as tools/agents/requirements.txt says");
+        skip("tools/agents/.venv is missing; make it as tools/agents/requirements.txt says");
     }
     for f in runnable() {
         let (_, checked) = dandori::check::check_file(&f).unwrap();
@@ -2344,6 +2337,9 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
 /// has no model; DANDORI_OLLAMA_MODEL picks the model, else the smallest there is.
 #[test]
 fn open_responses_agents_answer_on_ollama() {
+    if !need(Need::Ollama) {
+        return;
+    }
     need_rulec!();
     let base = std::env::var("DANDORI_OLLAMA").unwrap_or_else(|_| "http://127.0.0.1:11434".into());
     let get = |path: &str| -> Option<Value> {
@@ -2351,7 +2347,7 @@ fn open_responses_agents_answer_on_ollama() {
         serde_json::from_slice(&out.stdout).ok()
     };
     let (Some(version), Some(tags)) = (get("/api/version"), get("/api/tags")) else {
-        eprintln!("SKIP: no Ollama answers at {base}; the agents on a server of Open Responses are not sent to a real one");
+        skip(&format!("no Ollama answers at {base}; the agents on a server of Open Responses are not sent to a real one"));
         return;
     };
     let mut models: Vec<(u64, String)> = tags["models"].as_array().into_iter().flatten().filter_map(|m| Some((m["size"].as_u64().unwrap_or(u64::MAX), m["name"].as_str()?.to_string()))).collect();
@@ -2359,7 +2355,7 @@ fn open_responses_agents_answer_on_ollama() {
     let model = match std::env::var("DANDORI_OLLAMA_MODEL").ok().or(models.first().map(|m| m.1.clone())) {
         Some(m) => m,
         None => {
-            eprintln!("SKIP: Ollama at {base} has no model; pull one, or name one with DANDORI_OLLAMA_MODEL");
+            skip(&format!("Ollama at {base} has no model; pull one, or name one with DANDORI_OLLAMA_MODEL"));
             return;
         }
     };
@@ -2466,9 +2462,12 @@ fn open_responses_agents_answer_on_ollama() {
 /// charges $0.042 a million input tokens, and a call here takes a few hundred.
 #[test]
 fn jev_tasks_answer_on_typesafe() {
+    if !need(Need::TypeSafe) {
+        return;
+    }
     need_rulec!();
     if std::env::var("TYPESAFE_API_KEY").map_or(true, |k| k.is_empty()) {
-        eprintln!("SKIP: TYPESAFE_API_KEY is not set; the Jev tasks are not sent to TypeSafe");
+        skip("TYPESAFE_API_KEY is not set; the Jev tasks are not sent to TypeSafe");
         return;
     }
     let python = Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success());
@@ -2555,7 +2554,7 @@ fn jev_tasks_answer_on_typesafe() {
             check("Python", &results);
             sent += cases.len();
         } else {
-            eprintln!("SKIP: python3 is missing; the Jev tasks are not sent from Python");
+            skip("python3 is missing; the Jev tasks are not sent from Python");
         }
         if let Some(go) = go_runner() {
             let results = dir.join("results-go.json");
@@ -2576,7 +2575,7 @@ fn python_rules_answer_the_rulec_vectors() {
     let python = match temporal_python() {
         Some(p) => p,
         None => {
-            eprintln!("SKIP: tools/temporal-python/.venv is missing; rules.py is not run");
+            skip("tools/temporal-python/.venv is missing; rules.py is not run");
             return;
         }
     };
@@ -2630,7 +2629,7 @@ fn durable_available() -> bool {
 fn durable_runs_as_the_reference_says() {
     need_rulec!();
     if !durable_available() {
-        eprintln!("SKIP: tools/durable/node_modules is missing; run `npm install --prefix tools/durable`");
+        skip("tools/durable/node_modules is missing; run `npm install --prefix tools/durable`");
         return;
     }
     // every flow at once, taking its turn with the other tests that start many processes
@@ -2812,9 +2811,12 @@ fn ready_on_argo(f: PathBuf) -> Option<ArgoFlow> {
 
 #[test]
 fn argo_runs_as_the_reference_says() {
+    if !need(Need::Argo) {
+        return;
+    }
     need_rulec!();
     if let Err(why) = argo_ready() {
-        eprintln!("SKIP: {why}");
+        skip(&format!("{why}"));
         return;
     }
     // every flow's runs go at the same time: the runner plays the pods (tools/argo/run.mjs), and

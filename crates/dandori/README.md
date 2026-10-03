@@ -122,9 +122,12 @@ dandori build <file.flow> --target temporal|temporal-python|temporal-go|asl|dura
 dandori scenarios <file.flow> [--out <dir>]
 dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
+dandori <command> --help
+dandori --version
 ```
 
-`--lang ja` prints the messages in Japanese. `build` refuses what its platform cannot do (E050),
+`dandori <command> --help` prints what one command takes, and what its exit codes mean. `--lang ja`
+prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`). `build` refuses what its platform cannot do (E050),
 and a workflow whose one run can outgrow the platform (E040). `doc` draws the workflow for the
 person who reviews it: Mermaid charts that GitHub draws in a pull request, with tables of every
 call and every way the workflow can end, or one HTML page on which each scenario lights up the way

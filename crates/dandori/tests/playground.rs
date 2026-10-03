@@ -5,8 +5,9 @@
 //! Two of its files are committed products: presets.json, recorded from the examples here (with
 //! rulec; `DANDORI_BLESS=1` records it anew), and dandori.wasm, built by
 //! website/tools/make_wasm.sh. Both can go stale, and these tests are what says so. Node drives
-//! the module, and Chrome the page (`DANDORI_CHROME`, else where macOS keeps it, else on the PATH).
-//! A test that cannot find what it needs prints SKIP and passes.
+//! the module, and Chrome the page (ritsu-testkit's: `RITSU_CHROME` or `DANDORI_CHROME`, else where
+//! macOS keeps it, else on the PATH). A test that cannot find what it needs prints `SKIP:
+//! dandori: …` and passes.
 
 use dandori::commands::TARGETS;
 use dandori::diag::Lang;
@@ -15,8 +16,10 @@ use dandori::sources::{self, Bundle, Recorder};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use ritsu_testkit::{need, ready, skip, Need, TempDir};
 use std::process::Command;
 use std::rc::Rc;
+use std::time::Duration;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -39,21 +42,21 @@ fn node_available() -> bool {
     Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn chrome() -> Option<String> {
-    if let Ok(c) = std::env::var("DANDORI_CHROME") {
-        return Some(c);
+/// Chrome, when the level lets the test run it and the machine has it; a SKIP line says why not.
+fn chrome() -> Option<PathBuf> {
+    if !need(Need::Chrome) {
+        return None;
     }
-    let mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-    if Path::new(mac).exists() {
-        return Some(mac.into());
+    let found = ritsu_testkit::chrome::find();
+    if found.is_none() {
+        skip("Chrome is not found; set DANDORI_CHROME to run this test");
     }
-    ["google-chrome", "chromium", "chromium-browser"].iter().find(|c| Command::new(c).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)).map(|c| c.to_string())
+    found
 }
 
 macro_rules! need_rulec {
     () => {
-        if !rulec_available() {
-            eprintln!("SKIP: rulec is not on the PATH; set DANDORI_RULEC to run this test");
+        if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
             return;
         }
     };
@@ -198,10 +201,10 @@ fn presets_are_what_the_examples_read() {
     let was = std::fs::read_to_string(&file).unwrap_or_default();
     // the presets are recorded with the rulec the site is built with; one that says less is not held to them, nor writes them
     if was != now && names_enums(&was) && !names_enums(&now) {
-        eprintln!("SKIP: website/docs/playground/presets.json was recorded with a rulec whose `rulec api` says what a rule's service calls the values of its enums (`connect.enums`), and this one does not; it is held to the presets, and records them anew, only with such a rulec");
+        skip("website/docs/playground/presets.json was recorded with a rulec whose `rulec api` says what a rule's service calls the values of its enums (`connect.enums`), and this one does not; it is held to the presets, and records them anew, only with such a rulec");
         return;
     }
-    if std::env::var("DANDORI_BLESS").is_ok() {
+    if ritsu_testkit::golden::bless() {
         std::fs::write(&file, &now).unwrap();
         return;
     }
@@ -243,11 +246,12 @@ fn written(dir: &Path) -> Vec<(String, String)> {
 fn the_bundle_answers_as_the_command_does() {
     need_rulec!();
     // presets.json is being recorded anew by the test beside this one, and this one may read it before
-    if std::env::var("DANDORI_BLESS").is_ok() {
-        eprintln!("SKIP: presets.json is being recorded anew; run this test again without DANDORI_BLESS");
+    if ritsu_testkit::golden::bless() {
+        skip("presets.json is being recorded anew; run this test again without DANDORI_BLESS");
         return;
     }
-    let scratch = std::env::temp_dir().join(format!("dandori-playground-{}", std::process::id()));
+    let scratch_dir = TempDir::new("playground");
+    let scratch = scratch_dir.path().to_path_buf();
     let jobs: Vec<(&str, PathBuf)> = presets().into_iter().flat_map(|(tag, list)| list.into_iter().map(move |f| (tag, f))).collect();
     let failures: Vec<String> = std::thread::scope(|s| {
         let handles: Vec<_> = jobs
@@ -303,7 +307,6 @@ fn the_bundle_answers_as_the_command_does() {
             .collect();
         handles.into_iter().flat_map(|h| h.join().unwrap()).collect()
     });
-    let _ = std::fs::remove_dir_all(&scratch);
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
     eprintln!("compared: {} flows, each checked, built for {} platforms, drawn and its rules shown, from the bundle and by the command", jobs.len(), TARGETS.len());
 }
@@ -370,8 +373,7 @@ fn edits() -> Vec<(String, String, &'static str)> {
 #[test]
 fn the_module_answers_as_the_library_does() {
     let wasm = site().join("dandori.wasm");
-    if !node_available() || !wasm.exists() {
-        eprintln!("SKIP: node or website/docs/playground/dandori.wasm is missing");
+    if !ready(Need::Node, || node_available() && wasm.exists(), "node or website/docs/playground/dandori.wasm is missing") {
         return;
     }
     let (v, bundle) = committed();
@@ -396,18 +398,17 @@ fn the_module_answers_as_the_library_does() {
     requests.push(("build".into(), json!({ "path": "scratch/new.flow", "source": "", "lang": "en", "target": "cobol" }).to_string()));
     requests.push(("check".into(), "not a request".into()));
 
-    let dir = std::env::temp_dir().join(format!("dandori-wasm-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let tmp = TempDir::new("wasm");
+    let dir = tmp.path();
     std::fs::write(dir.join("driver.mjs"), DRIVER).unwrap();
     std::fs::write(dir.join("requests.json"), serde_json::to_string(&requests).unwrap()).unwrap();
     let o = Command::new("node")
-        .current_dir(&dir)
+        .current_dir(dir)
         .args(["driver.mjs", wasm.to_str().unwrap(), site().join("presets.json").to_str().unwrap(), "requests.json", "answers.json"])
         .output()
         .expect("could not run node");
     assert!(o.status.success(), "the driver failed: {}", String::from_utf8_lossy(&o.stderr));
     let got: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("answers.json")).unwrap()).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
 
     assert_eq!(got["version"], env!("CARGO_PKG_VERSION"), "website/docs/playground/dandori.wasm is of another version; run website/tools/make_wasm.sh");
     assert!(got["before"].as_str().unwrap().contains("the bundle has not been handed over"), "before the bundle: {}", got["before"]);
@@ -468,13 +469,9 @@ fn respond(mut s: std::net::TcpStream, page: &str) {
     let _ = s.write_all(&body);
 }
 
-/// The DOM of a page after its scripts ran, as headless Chrome dumps it.
-fn dump_dom(chrome: &str, url: &str) -> String {
-    let out = Command::new(chrome)
-        .args(["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--virtual-time-budget=20000", "--dump-dom", url])
-        .output()
-        .expect("could not run chrome");
-    String::from_utf8_lossy(&out.stdout).into_owned()
+/// The DOM of a page after its scripts ran (up to 20 s of virtual time), as headless Chrome dumps it.
+fn dump_dom(chrome: &Path, url: &str) -> String {
+    ritsu_testkit::chrome::dump_dom(chrome, url, 20_000, Duration::from_secs(120))
 }
 
 /// The text inside the first element of a class, up to the tag that closes it, as a person reads it.
@@ -500,11 +497,10 @@ fn text_in(dom: &str, class: &str, close: &str) -> String {
 #[test]
 fn the_page_starts_in_chrome() {
     let Some(chrome) = chrome() else {
-        eprintln!("SKIP: Chrome is not found; set DANDORI_CHROME to run this test");
         return;
     };
     if !site().join("dandori.wasm").exists() {
-        eprintln!("SKIP: website/docs/playground/dandori.wasm is missing; run website/tools/make_wasm.sh");
+        skip("website/docs/playground/dandori.wasm is missing; run website/tools/make_wasm.sh");
         return;
     }
     let (_, bundle) = committed();

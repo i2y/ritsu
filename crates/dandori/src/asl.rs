@@ -11,7 +11,7 @@
 //! start, and ends with what it yields or with how it failed; a failure does not stop the
 //! other rounds. When all are done, the first failure by place in the list decides.
 
-use crate::diag::Diag;
+use crate::diag::{Diag, Text};
 use crate::model::*;
 use crate::render::{self, asl_var, jsonata_check, jsonata_expr, jsonata_list, jsonata_path, jsonata_string};
 use serde_json::{json, Map, Value};
@@ -76,8 +76,7 @@ struct Gen<'a> {
 pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let mut errs = Vec::new();
     errs.extend(m.refuse_on_cancel(
-        "Step Functions ends an execution at once when it is stopped (StopExecution) and runs nothing after, so `on cancel` cannot run there",
-        "Step Functions は実行を止めると（StopExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません",
+        tr!("Step Functions は実行を止めると（StopExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません", "Step Functions ends an execution at once when it is stopped (StopExecution) and runs nothing after, so `on cancel` cannot run there"),
     ));
     errs.extend(crate::check::history_limit(m, Platform::StepFunctions));
     errs.extend(m.refuse_events(Platform::StepFunctions));
@@ -90,29 +89,26 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("`{}` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions", t.name),
-                format!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります", t.name),
+                tr!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります", "`{}` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions", t.name),
             )),
-            Some(Via::Http { .. }) if t.connection.is_none() => errs.push(Diag::error("E050", t.line, 1, format!("`{}` needs `connection \"<EventBridge connection ARN>\"`", t.name), format!("`{}` には `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name))),
+            Some(Via::Http { .. }) if t.connection.is_none() => errs.push(Diag::error("E050", t.line, 1, tr!("`{}` には `connection \"<EventBridge の接続の ARN>\"` が要ります", "`{}` needs `connection \"<EventBridge connection ARN>\"`", t.name))),
             Some(Via::Jev(_)) if t.connection.is_none() => errs.push(Diag::error(
                 "E050",
                 t.line,
                 1,
-                format!("Step Functions calls Jev for `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds TypeSafe's API key (as the header Authorization, `Bearer <key>`)", t.name),
-                format!("Step Functions は `{}` の Jev を HTTP Task で呼ぶので、TypeSafe の API キー（ヘッダ Authorization に `Bearer <キー>`）を持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name),
+                tr!("Step Functions は `{}` の Jev を HTTP Task で呼ぶので、TypeSafe の API キー（ヘッダ Authorization に `Bearer <キー>`）を持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", "Step Functions calls Jev for `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds TypeSafe's API key (as the header Authorization, `Bearer <key>`)", t.name),
             )),
             Some(Via::Agent { provider, url, .. }) if t.connection.is_none() => {
-                let (whose_en, whose_ja) = match (provider, url) {
-                    (Provider::OpenAi, None) => ("the OpenAI API key", "OpenAI の API キー"),
-                    (Provider::OpenAi, Some(_)) => ("the key of the server (an EventBridge connection has one, even for a server that wants none)", "サーバーの鍵（EventBridge の接続はいつも鍵を持つので、鍵の要らないサーバーでも何かを入れる）"),
-                    (Provider::Claude, _) => ("the Claude API key (as the header x-api-key)", "Claude の API キー（ヘッダ x-api-key）"),
+                let Text { en: whose_en, ja: whose_ja } = match (provider, url) {
+                    (Provider::OpenAi, None) => tr!("OpenAI の API キー", "the OpenAI API key"),
+                    (Provider::OpenAi, Some(_)) => tr!("サーバーの鍵（EventBridge の接続はいつも鍵を持つので、鍵の要らないサーバーでも何かを入れる）", "the key of the server (an EventBridge connection has one, even for a server that wants none)"),
+                    (Provider::Claude, _) => tr!("Claude の API キー（ヘッダ x-api-key）", "the Claude API key (as the header x-api-key)"),
                 };
                 errs.push(Diag::error(
                     "E050",
                     t.line,
                     1,
-                    format!("Step Functions calls the agent `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds {whose_en}", t.name),
-                    format!("Step Functions はエージェント `{}` を HTTP Task で呼ぶので、{whose_ja}を持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", t.name),
+                    tr!("Step Functions はエージェント `{}` を HTTP Task で呼ぶので、{whose_ja}を持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", "Step Functions calls the agent `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds {whose_en}", t.name),
                 ))
             }
 
@@ -120,8 +116,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("Step Functions reports a nested execution's failure as States.TaskFailed, so the errors of `{}` cannot be told apart there; leave out `errors` and handle `failure`", t.name),
-                format!("Step Functions はネストした実行の失敗を States.TaskFailed として伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で処理してください", t.name),
+                tr!("Step Functions はネストした実行の失敗を States.TaskFailed として伝えるので、`{}` のエラーを見分けられません。`errors` を外し、`failure` で処理してください", "Step Functions reports a nested execution's failure as States.TaskFailed, so the errors of `{}` cannot be told apart there; leave out `errors` and handle `failure`", t.name),
             )),
             _ => {}
         }
@@ -136,8 +131,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `{}` sends to `{u}`", t.name),
-                format!("Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`{}` の送信先は `{u}` です", t.name),
+                tr!("Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`{}` の送信先は `{u}` です", "Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `{}` sends to `{u}`", t.name),
             ));
         }
         if matches!(t.via(Platform::StepFunctions), Some(Via::Http { .. }) | Some(Via::Agent { .. }) | Some(Via::Jev(_))) && t.timeout.is_some_and(|s| s > HTTP_TASK_SECONDS) {
@@ -145,8 +139,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 "E050",
                 t.line,
                 1,
-                format!("Step Functions ends an HTTP Task's request after {HTTP_TASK_SECONDS} seconds, so the `timeout` of `{}` can be at most that", t.name),
-                format!("Step Functions は HTTP Task のリクエストを {HTTP_TASK_SECONDS} 秒で打ち切るので、`{}` の `timeout` はそれより長くできません", t.name),
+                tr!("Step Functions は HTTP Task のリクエストを {HTTP_TASK_SECONDS} 秒で打ち切るので、`{}` の `timeout` はそれより長くできません", "Step Functions ends an HTTP Task's request after {HTTP_TASK_SECONDS} seconds, so the `timeout` of `{}` can be at most that", t.name),
             ));
         }
     }
@@ -161,8 +154,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                         "E050",
                         ru.line,
                         1,
-                        format!("Step Functions calls the rule `{}` by Connect through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` under `use rule`", ru.name),
-                        format!("Step Functions は規則 `{}` を Connect で HTTP Task から呼ぶので、`use rule` の下に `connection \"<EventBridge の接続の ARN>\"` が要ります", ru.name),
+                        tr!("Step Functions は規則 `{}` を Connect で HTTP Task から呼ぶので、`use rule` の下に `connection \"<EventBridge の接続の ARN>\"` が要ります", "Step Functions calls the rule `{}` by Connect through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` under `use rule`", ru.name),
                     ));
                 }
                 if !c.url.starts_with("https://") {
@@ -170,8 +162,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                         "E050",
                         ru.line,
                         1,
-                        format!("Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and the rule `{}` is served at `{}`", ru.name, c.url),
-                        format!("Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。規則 `{}` のサービスは `{}` です", ru.name, c.url),
+                        tr!("Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。規則 `{}` のサービスは `{}` です", "Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and the rule `{}` is served at `{}`", ru.name, c.url),
                     ));
                 }
             }
@@ -180,8 +171,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 "E050",
                 ru.line,
                 1,
-                format!("the rule `{}` is called, so it needs `lambda \"<function>\"` or `connect \"<url>\"` under `use rule`", ru.name),
-                format!("規則 `{}` は呼ばれているので、`use rule` の下に `lambda \"<関数>\"` か `connect \"<URL>\"` が要ります", ru.name),
+                tr!("規則 `{}` は呼ばれているので、`use rule` の下に `lambda \"<関数>\"` か `connect \"<URL>\"` が要ります", "the rule `{}` is called, so it needs `lambda \"<function>\"` or `connect \"<url>\"` under `use rule`", ru.name),
             )),
         }
     }

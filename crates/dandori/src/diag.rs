@@ -1,24 +1,13 @@
-//! Diagnostics: a code, a place, the message in English and Japanese, and, when the
+//! Diagnostics: a code, a place, the message in Japanese and English, and, when the
 //! problem only shows along some run of the workflow, the shortest such run.
+//!
+//! A message is written `tr!("日本語", "English")` (ritsu-base's [`Text`]), and the language a
+//! run prints in is ritsu-base's [`Lang`]: `--lang`, then `DANDORI_LANG`, then `RITSU_LANG`, then
+//! English (ritsu's DESIGN 4.1).
 
 use serde_json::{json, Value};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Lang {
-    En,
-    Ja,
-}
-
-impl Lang {
-    /// `--lang` wins, then `DANDORI_LANG`, then English.
-    pub fn pick(flag: Option<&str>) -> Lang {
-        let env = std::env::var("DANDORI_LANG").ok();
-        match flag.or(env.as_deref()) {
-            Some("ja") => Lang::Ja,
-            _ => Lang::En,
-        }
-    }
-}
+pub use ritsu_base::text::{Lang, Text};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Severity {
@@ -58,8 +47,8 @@ pub enum At {
 }
 
 impl Step {
-    pub fn new(line: usize, en: impl Into<String>, ja: impl Into<String>) -> Step {
-        Step { line, en: en.into(), ja: ja.into(), at: None }
+    pub fn new(line: usize, what: Text) -> Step {
+        Step { line, en: what.en, ja: what.ja, at: None }
     }
 
     pub fn at(mut self, at: At) -> Step {
@@ -76,21 +65,21 @@ pub struct Diag {
     pub col: usize,
     pub en: String,
     pub ja: String,
-    pub notes: Vec<(String, String)>,
+    pub notes: Vec<Text>,
     pub path: Vec<Step>,
 }
 
 impl Diag {
-    pub fn error(code: &'static str, line: usize, col: usize, en: impl Into<String>, ja: impl Into<String>) -> Diag {
-        Diag { code, severity: Severity::Error, line, col, en: en.into(), ja: ja.into(), notes: vec![], path: vec![] }
+    pub fn error(code: &'static str, line: usize, col: usize, message: Text) -> Diag {
+        Diag { code, severity: Severity::Error, line, col, en: message.en, ja: message.ja, notes: vec![], path: vec![] }
     }
 
-    pub fn warning(code: &'static str, line: usize, col: usize, en: impl Into<String>, ja: impl Into<String>) -> Diag {
-        Diag { code, severity: Severity::Warning, line, col, en: en.into(), ja: ja.into(), notes: vec![], path: vec![] }
+    pub fn warning(code: &'static str, line: usize, col: usize, message: Text) -> Diag {
+        Diag { code, severity: Severity::Warning, line, col, en: message.en, ja: message.ja, notes: vec![], path: vec![] }
     }
 
-    pub fn note(mut self, en: impl Into<String>, ja: impl Into<String>) -> Diag {
-        self.notes.push((en.into(), ja.into()));
+    pub fn note(mut self, note: Text) -> Diag {
+        self.notes.push(note);
         self
     }
 
@@ -120,9 +109,8 @@ impl Diag {
                 out.push_str(&format!("  {:>4} | {}\n", self.line, text));
             }
         }
-        for (en, ja) in &self.notes {
-            let n = if lang == Lang::Ja { ja } else { en };
-            out.push_str(&format!("  = {n}\n"));
+        for n in &self.notes {
+            out.push_str(&format!("  = {}\n", n.get(lang)));
         }
         if !self.path.is_empty() {
             out.push_str(if lang == Lang::Ja { "  そうなる例:\n" } else { "  the run that gets there:\n" });
@@ -145,7 +133,7 @@ impl Diag {
             "line": self.line,
             "col": self.col,
             "message": self.message(lang),
-            "notes": self.notes.iter().map(|(en, ja)| if lang == Lang::Ja { ja.clone() } else { en.clone() }).collect::<Vec<_>>(),
+            "notes": self.notes.iter().map(|n| n.get(lang)).collect::<Vec<_>>(),
             "path": self.path.iter().map(|s| json!({
                 "line": s.line,
                 "step": if lang == Lang::Ja { s.ja.clone() } else { s.en.clone() },

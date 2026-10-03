@@ -102,10 +102,9 @@ impl Flavor {
     }
 }
 
-const TS_GLOBALS: &[&str] = &[
-    "Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol",
-    "WorkflowInput", "WorkflowOutput",
-];
+/// The globals of JavaScript a type's name would hide, and the generated code's (ritsu-emit's
+/// copy of the table that was kept here).
+use ritsu_emit::copies::dandori::TS_GLOBALS;
 
 pub(crate) fn type_name(name: &str) -> String {
     let n = ident(&name.replace('.', "_"));
@@ -312,8 +311,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
     if flavor == Flavor::Durable {
         let mut errs = Vec::new();
         errs.extend(m.refuse_on_cancel(
-            "Lambda durable functions ends an execution at once when it is stopped (StopDurableExecution) and runs nothing after, so `on cancel` cannot run there",
-            "Lambda durable functions は実行を止めると（StopDurableExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません",
+            tr!("Lambda durable functions は実行を止めると（StopDurableExecution）その場で終え、あとに何も走らせないので、`on cancel` はそこでは動きません", "Lambda durable functions ends an execution at once when it is stopped (StopDurableExecution) and runs nothing after, so `on cancel` cannot run there"),
         ));
         errs.extend(crate::check::history_limit(m, Platform::Durable));
         errs.extend(m.refuse_events(Platform::Durable));
@@ -325,8 +323,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
                     "E050",
                     ru.line,
                     1,
-                    format!("the rule `{}` is called, so it needs `lambda \"<function>\"` to be invoked, or `connect \"<url>\"` under `use rule`", ru.name),
-                    format!("規則 `{}` は呼ばれているので、呼び出す先の `lambda \"<関数>\"` か `connect \"<URL>\"` を `use rule` の下に書いてください", ru.name),
+                    tr!("規則 `{}` は呼ばれているので、呼び出す先の `lambda \"<関数>\"` か `connect \"<URL>\"` を `use rule` の下に書いてください", "the rule `{}` is called, so it needs `lambda \"<function>\"` to be invoked, or `connect \"<url>\"` under `use rule`", ru.name),
                 ));
             }
         }
@@ -336,8 +333,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
                     "E050",
                     t.line,
                     1,
-                    format!("a durable function invoked by `{}` cannot be timed out by the invoke; leave out `timeout` and let the function end itself", t.name),
-                    format!("`{}` が呼ぶ durable function は、呼ぶ側からはタイムアウトさせられません。`timeout` を外し、呼ばれる関数の側で終わらせてください", t.name),
+                    tr!("`{}` が呼ぶ durable function は、呼ぶ側からはタイムアウトさせられません。`timeout` を外し、呼ばれる関数の側で終わらせてください", "a durable function invoked by `{}` cannot be timed out by the invoke; leave out `timeout` and let the function end itself", t.name),
                 ));
             }
         }

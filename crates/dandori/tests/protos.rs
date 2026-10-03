@@ -5,11 +5,13 @@
 //! The last two are about the `.proto` rulec writes for a rule (DESIGN 1.13): that the names dandori
 //! builds from `rulec api` are the ones in it, and that the service rulec writes answers what
 //! dandori sends it. They need rulec; the second also needs buf and tools/connect/.venv, and says
-//! SKIP when one is not there (read the output with `-- --nocapture`).
+//! `SKIP: dandori: …` when one is not there (read the output with `-- --nocapture`), or when
+//! `RITSU_TEST_LEVEL` leaves the tools out.
 
 use dandori::apis::{self, Api, ApiDoc, ApiKind};
 use dandori::model::{Model, Range, RecordOrigin, RuleConnect, Ty};
 use serde_json::{json, Value};
+use ritsu_testkit::{need, ready, skip, Need, TempDir};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -61,8 +63,8 @@ fn made_types_fit_their_descriptions() {
                 wrong.push(format!("{flow} was not made"));
                 continue;
             };
-            for (en, _) in apis::made_fits(&api, full, &m, &t) {
-                wrong.push(format!("{flow}: {en}"));
+            for w in apis::made_fits(&api, full, &m, &t) {
+                wrong.push(format!("{flow}: {}", w.en));
             }
         }
         assert!(wrong.is_empty(), "what a flow makes of {file} is not what a task is held to:\n{}", wrong.join("\n"));
@@ -202,7 +204,7 @@ fn a_proto_with_an_import_that_is_not_there_is_read_all_the_same() {
     };
     let note_en = "`google/api/annotations.proto`, `google/type/money.proto` and `shop/v2/cancel.proto` could not be read, so the types in them cannot be used";
     let note_ja = "`google/api/annotations.proto`・`google/type/money.proto`・`shop/v2/cancel.proto` を読めなかったので、そこにある型は使えません";
-    let told = |d: &(&str, usize, String, String, Vec<(String, String)>)| d.4.iter().any(|(en, ja)| en == note_en && ja == note_ja);
+    let told = |d: &(&str, usize, String, String, Vec<dandori::diag::Text>)| d.4.iter().any(|n| n.en == note_en && n.ja == note_ja);
 
     // what does not come to them is as it is: the options' file is not needed for a type
     let fine = "record R\n  item : catalog.Item\n\ntask get(sku: string) -> catalog.Item\n  connect catalog \"CatalogService/GetItem\"\n\nflow\n  pass\n";
@@ -284,11 +286,14 @@ fn rule_files() -> Vec<PathBuf> {
     out
 }
 
+/// A fresh directory (ritsu-testkit's), left to be read for as long as the test process runs; the
+/// next test process removes it with the rest of the ended processes'.
 fn scratch(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("dandori-protos-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+    static KEPT: std::sync::Mutex<Vec<TempDir>> = std::sync::Mutex::new(Vec::new());
+    let d = TempDir::new(&format!("protos-{name}"));
+    let p = d.path().to_path_buf();
+    KEPT.lock().unwrap_or_else(|e| e.into_inner()).push(d);
+    p
 }
 
 /// The model of a rule called at the service `base`, as a flow that does says it, read through the
@@ -308,9 +313,9 @@ fn connect_or_skip(rule: &Path, base: &str, names: bool) -> Option<(RuleConnect,
     match connect_of(rule, base) {
         Ok(c) => Some(c),
         Err(diags) => {
-            let unnamed = diags.iter().any(|d| d.code == "E005" && d.notes.iter().any(|(en, _)| en.contains("`connect.enums`")));
+            let unnamed = diags.iter().any(|d| d.code == "E005" && d.notes.iter().any(|n| n.en.contains("`connect.enums`")));
             if unnamed && !names {
-                eprintln!("SKIP: {}: its enum is a contract's, and this rulec's `rulec api` does not say what the rule's service calls the values (`connect.enums`)", rule.strip_prefix(root()).unwrap_or(rule).display());
+                skip(&format!("{}: its enum is a contract's, and this rulec's `rulec api` does not say what the rule's service calls the values (`connect.enums`)", rule.strip_prefix(root()).unwrap_or(rule).display()));
                 return None;
             }
             panic!("{}: the flow that calls it at its service does not pass check: {:?}", rule.display(), diags.iter().map(|d| (&d.code, &d.en, &d.notes)).collect::<Vec<_>>());
@@ -325,8 +330,7 @@ fn connect_or_skip(rule: &Path, base: &str, names: bool) -> Option<(RuleConnect,
 /// package), and is read from there as an import. A change of how rulec names them shows here.
 #[test]
 fn rulec_gen_writes_the_names_dandori_builds() {
-    if !rulec_available() {
-        eprintln!("SKIP: rulec is not on the PATH; set DANDORI_RULEC to run this test");
+    if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
         return;
     }
     use dandori::proto::PType;
@@ -432,23 +436,24 @@ fn at_zero(f: &dandori::rulec::WireField, v: &Value) -> bool {
 /// at: the messages are connectrpc's and protobuf's, and may change with their versions.
 #[test]
 fn rule_services_answer_as_dandori_reads_them() {
-    if !rulec_available() {
-        eprintln!("SKIP: rulec is not on the PATH; set DANDORI_RULEC to run this test");
+    if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
         return;
     }
     let venv = root().join("tools/connect/.venv/bin");
-    if !venv.join("python").exists() || !venv.join("protoc-gen-py").exists() {
-        eprintln!("SKIP: tools/connect/.venv is missing; make it as tools/connect/requirements.txt says");
+    if !ready(Need::Python, || venv.join("python").exists() && venv.join("protoc-gen-py").exists(), "tools/connect/.venv is missing; make it as tools/connect/requirements.txt says") {
+        return;
+    }
+    if !need(Need::Buf) {
         return;
     }
     let buf = ["/opt/homebrew/bin/buf", "/usr/local/bin/buf", "buf"].into_iter().find(|b| Command::new(b).arg("--version").output().map(|o| o.status.success()).unwrap_or(false));
     let Some(buf) = buf else {
-        eprintln!("SKIP: buf is not installed; it writes the stubs the service imports");
+        skip("buf is not installed; it writes the stubs the service imports");
         return;
     };
     let names = rulec_names_enums();
     if !names {
-        eprintln!("SKIP: this rulec's `rulec api` does not name the enums of a rule's service, and the services it writes take a field they do not know and an input left out; those two refusals are not asked for");
+        skip("this rulec's `rulec api` does not name the enums of a rule's service, and the services it writes take a field they do not know and an input left out; those two refusals are not asked for");
     }
     let (mut rules, mut sent, mut zeros) = (0, 0, 0);
     // the requests refused, by what is wrong with them: above a range, a name, a field, an input left out
@@ -584,8 +589,11 @@ fn imports_of(text: &str) -> Vec<String> {
 /// are (STANDARD, as `proto/buf.yaml` says), and build.
 #[test]
 fn dandori_options_pass_buf_lint() {
+    if !need(Need::Buf) {
+        return;
+    }
     let Some(buf) = tool("buf") else {
-        eprintln!("SKIP: buf is not installed; it lints proto/dandori/v1/options.proto");
+        skip("buf is not installed; it lints proto/dandori/v1/options.proto");
         return;
     };
     for what in ["lint", "build"] {
@@ -601,8 +609,11 @@ fn dandori_options_pass_buf_lint() {
 /// (Protovalidate's rules, and a file left out on purpose).
 #[test]
 fn service_protos_build_with_protoc() {
+    if !need(Need::Protoc) {
+        return;
+    }
     let Some(protoc) = tool("protoc") else {
-        eprintln!("SKIP: protoc is not installed; it builds the .proto of the services");
+        skip("protoc is not installed; it builds the .proto of the services");
         return;
     };
     let mut built = Vec::new();
@@ -659,17 +670,18 @@ fn plain(v: &Value) -> Value {
 /// them in.
 #[test]
 fn protobuf_reads_what_the_services_carry() {
-    if !rulec_available() {
-        eprintln!("SKIP: rulec is not on the PATH; set DANDORI_RULEC to run this test");
+    if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
+        return;
+    }
+    if !need(Need::Protoc) {
         return;
     }
     let Some(protoc) = tool("protoc") else {
-        eprintln!("SKIP: protoc is not installed; it writes the descriptors protobuf reads the messages with");
+        skip("protoc is not installed; it writes the descriptors protobuf reads the messages with");
         return;
     };
     let python = root().join("tools/temporal-python/.venv/bin/python");
-    if !python.exists() {
-        eprintln!("SKIP: tools/temporal-python/.venv is missing (its protobuf reads the messages); make it as tools/temporal-python/requirements.txt says");
+    if !ready(Need::Python, || python.exists(), "tools/temporal-python/.venv is missing (its protobuf reads the messages); make it as tools/temporal-python/requirements.txt says") {
         return;
     }
     use dandori::model::{Mark, TK};

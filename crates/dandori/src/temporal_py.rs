@@ -24,16 +24,9 @@ use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// What a flow's name cannot be in the generated Python, with an `_` after it when it is:
-/// the keywords, the builtins, and the names the generated code uses.
-const PY_RESERVED: &[&str] = &[
-    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from",
-    "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield", "match", "case", "type", "_",
-    "abs", "all", "any", "bool", "bytes", "callable", "dict", "enumerate", "Exception", "filter", "float", "format", "frozenset", "getattr", "hasattr", "hash", "id",
-    "input", "int", "isinstance", "iter", "len", "list", "map", "max", "min", "next", "object", "open", "print", "range", "repr", "reversed", "round", "set", "setattr",
-    "slice", "sorted", "str", "sum", "super", "tuple", "vars", "zip", "self", "T", "dd", "io", "asyncio", "timedelta", "workflow", "activity", "json", "re", "Any",
-    "Literal", "NotRequired", "Protocol", "TypedDict", "ApplicationError", "RetryPolicy", "NO_RETRY", "TIMESTAMP", "is_int", "rules", "workflows", "fail", "own",
-    "make_activities", "WorkflowInput", "WorkflowOutput", "OwnTasks",
-];
+/// the keywords, the builtins, and the names the generated code uses (ritsu-emit's copy of
+/// the table that was kept here).
+use ritsu_emit::copies::dandori::PY_RESERVED;
 
 /// A name of the flow as a Python identifier.
 pub fn py_name(name: &str) -> String {

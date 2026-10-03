@@ -5,11 +5,15 @@
 //! (a WorkflowTemplate) and to pydantic-graph (Python). The rules themselves are written in rulec and read through its CLI.
 //! Compiled to wasm32, the same library runs the playground on the site (playground, wasm).
 
+#[macro_use]
+extern crate ritsu_base;
+
 pub mod apis;
 pub mod argo;
 pub mod asl;
 pub mod aws;
 pub mod check;
+pub mod cli;
 pub mod commands;
 pub mod contract;
 pub mod diag;

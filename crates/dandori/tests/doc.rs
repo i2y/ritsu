@@ -6,10 +6,11 @@
 //! and 12 in headless Chrome; and in Chrome, a page lights up what its data says.
 //!
 //! The rules are read with rulec (`DANDORI_RULEC`, else `rulec` on the PATH); Mermaid is in
-//! tools/mermaid (`npm install --prefix tools/mermaid`); Chrome is `DANDORI_CHROME`, else Google
-//! Chrome where macOS keeps it, else `google-chrome` or `chromium` on the PATH. A test that cannot
-//! find them says so and skips; read the skip lines. `DANDORI_BLESS=1` rewrites the golden files and
-//! the site's pages.
+//! tools/mermaid (`npm install --prefix tools/mermaid`); Chrome is ritsu-testkit's (`RITSU_CHROME`
+//! or `DANDORI_CHROME`, else Google Chrome where macOS keeps it, else `google-chrome` or `chromium`
+//! on the PATH). A test that cannot find them says so and skips; read the skip lines (`SKIP:
+//! dandori: …`). `DANDORI_BLESS=1` (or `RITSU_BLESS=1`) rewrites the golden files and the site's
+//! pages.
 
 use dandori::diag::Lang;
 use dandori::doc::{self, Cond, EdgeInfo, Input};
@@ -17,8 +18,10 @@ use dandori::interp::Visit;
 use dandori::model::TK;
 use serde_json::Value;
 use std::collections::BTreeSet;
+use ritsu_testkit::{need, ready, skip, Need, TempDir};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -35,31 +38,27 @@ fn rulec_available() -> bool {
 
 macro_rules! need_rulec {
     () => {
-        if !rulec_available() {
-            eprintln!("SKIP: rulec is not on the PATH; set DANDORI_RULEC to run this test");
+        if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
             return;
         }
     };
 }
 
-fn chrome() -> Option<String> {
-    if let Ok(c) = std::env::var("DANDORI_CHROME") {
-        return Some(c);
+/// Chrome, when the level lets the test run it and the machine has it; a SKIP line says why not.
+fn chrome() -> Option<PathBuf> {
+    if !need(Need::Chrome) {
+        return None;
     }
-    let mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-    if Path::new(mac).exists() {
-        return Some(mac.into());
+    let found = ritsu_testkit::chrome::find();
+    if found.is_none() {
+        skip("Chrome is not found; set DANDORI_CHROME to run this test");
     }
-    ["google-chrome", "chromium", "chromium-browser"].iter().find(|c| Command::new(c).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)).map(|c| c.to_string())
+    found
 }
 
-/// The DOM of a page after its scripts ran, as headless Chrome dumps it.
-fn dump_dom(chrome: &str, url: &str) -> String {
-    let out = Command::new(chrome)
-        .args(["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--allow-file-access-from-files", "--virtual-time-budget=20000", "--dump-dom", url])
-        .output()
-        .expect("could not run chrome");
-    String::from_utf8_lossy(&out.stdout).into_owned()
+/// The DOM of a page after its scripts ran (up to 20 s of virtual time), as headless Chrome dumps it.
+fn dump_dom(chrome: &Path, url: &str) -> String {
+    ritsu_testkit::chrome::dump_dom(chrome, url, 20_000, Duration::from_secs(120))
 }
 
 /// The flows `doc` is held to: each example as written for Temporal and the child flow beside them,
@@ -80,7 +79,7 @@ fn flows() -> Vec<PathBuf> {
         tf.retain(|f| {
             let keep = !NAMED_ENUMS.contains(&rel(f).as_str());
             if !keep {
-                eprintln!("SKIP: {}: it calls at its service a rule whose enum is a contract's, and this rulec's `rulec api` does not say what the service calls the values (`connect.enums`)", rel(f));
+                skip(&format!("{}: it calls at its service a rule whose enum is a contract's, and this rulec's `rulec api` does not say what the service calls the values (`connect.enums`)", rel(f)));
             }
             keep
         });
@@ -122,19 +121,13 @@ fn written(f: &Path, lang: Lang, html: bool) -> String {
 #[test]
 fn markdown_matches_the_golden_files() {
     need_rulec!();
-    let bless = std::env::var("DANDORI_BLESS").is_ok();
     let mut wrong = Vec::new();
     for f in flows() {
         for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
             let text = written(&f, lang, false);
             let golden = root().join(format!("tests/doc/{}.{tag}.md", key(&f)));
-            if bless {
-                std::fs::create_dir_all(golden.parent().unwrap()).unwrap();
-                std::fs::write(&golden, &text).unwrap();
-                continue;
-            }
-            if std::fs::read_to_string(&golden).unwrap_or_default() != text {
-                wrong.push(format!("{} ({tag}) differs from {}; look at the difference, then rewrite it with DANDORI_BLESS=1", rel(&f), rel(&golden)));
+            if let Err(e) = ritsu_testkit::golden::check(&golden, &text) {
+                wrong.push(format!("{} ({tag}): {e}", rel(&f)));
             }
         }
     }
@@ -144,7 +137,6 @@ fn markdown_matches_the_golden_files() {
 #[test]
 fn the_site_shows_the_pages_doc_writes_now() {
     need_rulec!();
-    let bless = std::env::var("DANDORI_BLESS").is_ok();
     let mut wrong = Vec::new();
     for ex in ["fulfillment", "hotel", "inquiry", "order", "review"] {
         // the Japanese site draws the Japanese version of each example
@@ -152,12 +144,7 @@ fn the_site_shows_the_pages_doc_writes_now() {
             let f = root().join(format!("examples/{ex}/temporal/{ex}{version}.flow"));
             let page = written(&f, lang, true);
             let at = root().join(format!("{dir}/{ex}.html"));
-            if bless {
-                std::fs::create_dir_all(at.parent().unwrap()).unwrap();
-                std::fs::write(&at, &page).unwrap();
-                continue;
-            }
-            if std::fs::read_to_string(&at).unwrap_or_default() != page {
+            if ritsu_testkit::golden::check(&at, &page).is_err() {
                 wrong.push(format!("{} is not what `dandori doc {} --format html` writes now; rewrite it with DANDORI_BLESS=1", rel(&at), rel(&f)));
             }
         }
@@ -282,19 +269,18 @@ fn charts(text: &str) -> Vec<String> {
 
 #[test]
 fn every_mermaid_chart_draws() {
-    if std::env::var("DANDORI_BLESS").is_ok() {
-        eprintln!("SKIP: the golden files are being rewritten; run this test again without DANDORI_BLESS");
+    if ritsu_testkit::golden::bless() {
+        skip("the golden files are being rewritten; run this test again without DANDORI_BLESS");
+        return;
+    }
+    let mm = root().join("tools/mermaid/node_modules");
+    let mermaid = || mm.join("mermaid-11/dist/mermaid.min.js").exists() && mm.join("mermaid-12/dist/mermaid.min.js").exists();
+    if !ready(Need::Mermaid, mermaid, "tools/mermaid/node_modules is missing; run `npm install --prefix tools/mermaid`") {
         return;
     }
     let Some(chrome) = chrome() else {
-        eprintln!("SKIP: Chrome is not found; set DANDORI_CHROME to run this test");
         return;
     };
-    let mm = root().join("tools/mermaid/node_modules");
-    if !mm.join("mermaid-11/dist/mermaid.min.js").exists() || !mm.join("mermaid-12/dist/mermaid.min.js").exists() {
-        eprintln!("SKIP: tools/mermaid/node_modules is missing; run `npm install --prefix tools/mermaid`");
-        return;
-    }
     let mut all: Vec<(String, String)> = Vec::new();
     let mut goldens: Vec<PathBuf> = std::fs::read_dir(root().join("tests/doc")).unwrap().map(|e| e.unwrap().path()).collect();
     goldens.sort();
@@ -304,8 +290,7 @@ fn every_mermaid_chart_draws() {
         }
     }
     assert!(all.len() > 30, "only {} charts in tests/doc", all.len());
-    let scratch = std::env::temp_dir().join(format!("dandori-mermaid-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch).unwrap();
+    let scratch = TempDir::new("mermaid");
     let sources: Vec<&String> = all.iter().map(|(_, c)| c).collect();
     for major in ["11", "12"] {
         let script = mm.join(format!("mermaid-{major}/dist/mermaid.min.js"));
@@ -314,7 +299,7 @@ fn every_mermaid_chart_draws() {
             script.display(),
             serde_json::to_string(&sources).unwrap().replace("</", "<\\/")
         );
-        let at = scratch.join(format!("mermaid-{major}.html"));
+        let at = scratch.path().join(format!("mermaid-{major}.html"));
         std::fs::write(&at, page).unwrap();
         let dom = dump_dom(&chrome, &format!("file://{}", at.display()));
         let body = dom.split("<pre id=\"out\">").nth(1).and_then(|r| r.split("</pre>").next()).unwrap_or("");
@@ -324,7 +309,6 @@ fn every_mermaid_chart_draws() {
         assert!(failed.is_empty(), "Mermaid {major} could not draw:\n{}", failed.join("\n"));
         eprintln!("compared: Mermaid {major} drew all {} charts of tests/doc", all.len());
     }
-    let _ = std::fs::remove_dir_all(&scratch);
 }
 
 /// The ids of the elements a dumped page has lit up.
@@ -345,12 +329,11 @@ fn lit_in(dom: &str) -> BTreeSet<String> {
 
 #[test]
 fn a_page_lights_up_what_its_data_says() {
-    if std::env::var("DANDORI_BLESS").is_ok() {
-        eprintln!("SKIP: the site's pages are being rewritten; run this test again without DANDORI_BLESS");
+    if ritsu_testkit::golden::bless() {
+        skip("the site's pages are being rewritten; run this test again without DANDORI_BLESS");
         return;
     }
     let Some(chrome) = chrome() else {
-        eprintln!("SKIP: Chrome is not found; set DANDORI_CHROME to run this test");
         return;
     };
     let page = root().join("website/docs/doc/hotel.html");

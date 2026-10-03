@@ -7,7 +7,7 @@
 //! Where a value comes in (an input, the answer of a task or a rule) its range is checked when
 //! the workflow runs, by the code each platform is given; here, the ranges are taken as true.
 
-use crate::diag::Diag;
+use crate::diag::{Diag, Text};
 use crate::model::*;
 use std::collections::BTreeMap;
 
@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 struct Est {
     /// the numbers that come from places with a range; None when none does (`none`, `[]`)
     known: Option<Range>,
-    /// a place without a range the value can come from, named in English and in Japanese
-    unknown: Option<(String, String)>,
+    /// a place without a range the value can come from, named in Japanese and in English
+    unknown: Option<Text>,
 }
 
 impl Est {
@@ -25,14 +25,14 @@ impl Est {
         Est { known: Some(r), unknown: None }
     }
 
-    fn unknown(en: String, ja: String) -> Est {
-        Est { known: None, unknown: Some((en, ja)) }
+    fn unknown(from: Text) -> Est {
+        Est { known: None, unknown: Some(from) }
     }
 
-    fn or(r: Option<Range>, en: String, ja: String) -> Est {
+    fn or(r: Option<Range>, from: Text) -> Est {
         match r {
             Some(r) => Est::range(r),
-            None => Est::unknown(en, ja),
+            None => Est::unknown(from),
         }
     }
 
@@ -101,25 +101,23 @@ fn fit(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, want: Range, line: us
     if let Some(have) = est.known {
         if !have.within(&want) {
             return Some(match (have.lo, have.hi) {
-                _ if matches!(e, TExpr::Int(_)) => Diag::error("E014", line, 1, format!("`{x}` is outside `{w}`, the range of {place_en}"), spaced(format!("`{x}`は{place_ja}の範囲`{w}`の外です"))),
-                (Some(a), Some(b)) if a == b => Diag::error("E014", line, 1, format!("`{x}` is {a}, outside `{w}`, the range of {place_en}"), spaced(format!("`{x}`は {a} で、{place_ja}の範囲`{w}`の外です"))),
+                _ if matches!(e, TExpr::Int(_)) => Diag::error("E014", line, 1, Text::new(spaced(format!("`{x}`は{place_ja}の範囲`{w}`の外です")), format!("`{x}` is outside `{w}`, the range of {place_en}"))),
+                (Some(a), Some(b)) if a == b => Diag::error("E014", line, 1, Text::new(spaced(format!("`{x}`は {a} で、{place_ja}の範囲`{w}`の外です")), format!("`{x}` is {a}, outside `{w}`, the range of {place_en}"))),
                 _ => Diag::error(
                     "E014",
                     line,
                     1,
-                    format!("`{x}` can be outside `{w}`, the range of {place_en}: it is `{}`", have.show()),
-                    spaced(format!("`{x}`は`{}`で、{place_ja}の範囲`{w}`を外れることがあります", have.show())),
+                    Text::new(spaced(format!("`{x}`は`{}`で、{place_ja}の範囲`{w}`を外れることがあります", have.show())), format!("`{x}` can be outside `{w}`, the range of {place_en}: it is `{}`", have.show())),
                 ),
             });
         }
     }
-    let (from_en, from_ja) = est.unknown?;
+    let Text { en: from_en, ja: from_ja } = est.unknown?;
     Some(Diag::warning(
         "W104",
         line,
         1,
-        format!("nothing says what range `{x}` is in ({from_en} has no range), and {place_en} takes `{w}`"),
-        spaced(format!("`{x}`の範囲が分かりません（{from_ja}に範囲がありません）。{place_ja}が受け取るのは`{w}`です")),
+        Text::new(spaced(format!("`{x}`の範囲が分かりません（{from_ja}に範囲がありません）。{place_ja}が受け取るのは`{w}`です")), format!("nothing says what range `{x}` is in ({from_en} has no range), and {place_en} takes `{w}`")),
     ))
 }
 
@@ -150,7 +148,7 @@ fn spaced(text: String) -> String {
 fn variables(m: &Model) -> BTreeMap<String, Est> {
     let mut vars: BTreeMap<String, Est> = BTreeMap::new();
     for (n, _) in &m.inputs {
-        vars.insert(n.clone(), Est::or(m.input_ranges.get(n).copied(), format!("the input `{n}`"), format!("入力 `{n}`")));
+        vars.insert(n.clone(), Est::or(m.input_ranges.get(n).copied(), tr!("入力 `{n}`", "the input `{n}`")));
     }
     let stmts = m.all_stmts();
     for _ in 0..=m.vars.len() + 1 {
@@ -163,7 +161,7 @@ fn variables(m: &Model) -> BTreeMap<String, Est> {
             match &s.kind {
                 TK::Call { target: Some(Target::Let(x)), callee: Callee::Task(t), .. } => {
                     let t = &m.tasks[*t];
-                    put(x, Est::or(t.result_range, format!("the answer of `{}`", t.name), format!("`{}` の結果", t.name)));
+                    put(x, Est::or(t.result_range, tr!("`{}` の結果", "the answer of `{}`", t.name)));
                 }
                 TK::Assign { name, expr } => put(name, estimate(m, &vars, expr)),
                 TK::For { var, list, result, .. } => {
@@ -216,11 +214,11 @@ fn estimate(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr) -> Est {
             }
             let (r, f) = at.expect("a field was read");
             let rd = &m.records[r];
-            let (en, ja) = match &rd.origin {
-                RecordOrigin::RuleOutputs(ix) => (format!("the output `{f}` of the rule `{}`", m.rules[*ix].name), format!("規則 `{}` の出力 `{f}`", m.rules[*ix].name)),
-                RecordOrigin::Local | RecordOrigin::Proto { .. } => (format!("the field `{f}` of `{}`", rd.name), format!("`{}` のフィールド `{f}`", rd.name)),
+            let from = match &rd.origin {
+                RecordOrigin::RuleOutputs(ix) => tr!("規則 `{}` の出力 `{f}`", "the output `{f}` of the rule `{}`", m.rules[*ix].name),
+                RecordOrigin::Local | RecordOrigin::Proto { .. } => tr!("`{}` のフィールド `{f}`", "the field `{f}` of `{}`", rd.name),
             };
-            Est::or(m.field_range(r, f), en, ja)
+            Est::or(m.field_range(r, f), from)
         }
         _ => Est::default(),
     }

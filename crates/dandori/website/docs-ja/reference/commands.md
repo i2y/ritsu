@@ -6,6 +6,8 @@ dandori build <file.flow> --target asl|temporal|temporal-python|temporal-go|dura
 dandori scenarios <file.flow> [--out <dir>]
 dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
+dandori <command> --help
+dandori --version
 ```
 
 | コマンド | すること |
@@ -25,7 +27,9 @@ dandori doc <file.flow> [--format html] [--out <dir>]
 | `--scenario <file.json>` | `run` が動かすシナリオ |
 | `--format json` | `check` の診断を、ツール向けの JSON で出す |
 | `--format html` | `doc` のページを HTML で書く。無ければ Markdown |
-| `--lang ja` か `--lang en` | メッセージの言語。無ければ `DANDORI_LANG`、それも無ければ英語 |
+| `--lang ja` か `--lang en` | メッセージの言語。無ければ `DANDORI_LANG`、次に `RITSU_LANG`、どちらも無ければ英語 |
+| `--help` | そのコマンドが受け取るもの、終了コード、例を出す（`dandori help <command>` も同じページ）。`dandori --help` はコマンドの一覧を出す |
+| `--version` | `dandori --version` はバージョンを出す |
 | `DANDORI_RULEC` | rulec の実行ファイル。規則を使うワークフローのときだけ動かす。無ければ PATH の `rulec` |
 
 ## 終了コード

@@ -6,6 +6,8 @@ dandori build <file.flow> --target asl|temporal|temporal-python|temporal-go|dura
 dandori scenarios <file.flow> [--out <dir>]
 dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
+dandori <command> --help
+dandori --version
 ```
 
 | Command | What it does |
@@ -25,7 +27,9 @@ dandori doc <file.flow> [--format html] [--out <dir>]
 | `--scenario <file.json>` | the scenario `run` plays |
 | `--format json` | the diagnostics of `check` as JSON, for tools |
 | `--format html` | the page `doc` writes, as HTML; Markdown by default |
-| `--lang ja` or `--lang en` | the language of the messages; else `DANDORI_LANG`, else English |
+| `--lang ja` or `--lang en` | the language of the messages; else `DANDORI_LANG`, then `RITSU_LANG`, else English |
+| `--help` | what the command takes, its exit codes and examples (`dandori help <command>` is the same page); `dandori --help` lists the commands |
+| `--version` | `dandori --version` prints the version |
 | `DANDORI_RULEC` | the rulec binary, run only for a workflow that uses rules; else `rulec` on the PATH |
 
 ## Exit codes

@@ -24,15 +24,14 @@ fn names(dir: &Path) -> Vec<String> {
 
 #[test]
 fn the_references_are_the_pages_as_sync_copies_them() {
-    let scratch = std::env::temp_dir().join(format!("dandori-skill-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&scratch);
+    let tmp = ritsu_testkit::TempDir::new("skill");
+    let scratch = tmp.path().join("built");
     let out = Command::new("sh").arg(root().join("skills/sync.sh")).arg(&scratch).output().expect("could not run sh");
     assert!(out.status.success(), "skills/sync.sh failed: {}", String::from_utf8_lossy(&out.stderr));
     let built = names(&scratch);
     let committed: Vec<String> = names(&skill()).into_iter().filter(|n| n != "SKILL.md").collect();
     assert_eq!(committed, built, "skills/dandori holds other files than skills/sync.sh builds, besides SKILL.md");
     let stale: Vec<&String> = built.iter().filter(|n| fs::read_to_string(scratch.join(n)).unwrap() != fs::read_to_string(skill().join(n)).unwrap()).collect();
-    let _ = fs::remove_dir_all(&scratch);
     assert!(stale.is_empty(), "not what skills/sync.sh builds from website/docs; run skills/sync.sh: {stale:?}");
 }
 

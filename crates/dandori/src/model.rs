@@ -1,6 +1,7 @@
 //! The checked program: every name resolved, every value typed, every call bound to a
 //! task or a rule. The generators and the reference interpreter read only this.
 
+use crate::diag::Text;
 use crate::rulec::RuleInfo;
 use crate::syntax::Kind;
 use std::collections::BTreeMap;
@@ -735,36 +736,24 @@ pub struct Model {
 impl Model {
     /// A platform's refusal of `on cancel`, when the workflow has one: the platform stops a run
     /// at once and runs nothing after.
-    pub fn refuse_on_cancel(&self, en: &str, ja: &str) -> Option<crate::diag::Diag> {
-        self.on_cancel.as_ref().map(|_| crate::diag::Diag::error("E050", self.on_cancel_line, 1, en, ja))
+    pub fn refuse_on_cancel(&self, why: Text) -> Option<crate::diag::Diag> {
+        self.on_cancel.as_ref().map(|_| crate::diag::Diag::error("E050", self.on_cancel_line, 1, why))
     }
 
     /// A platform's refusal of each task that says `event` (E050): only a Temporal workflow can
     /// be sent a value by its id and a name.
     pub fn refuse_events(&self, p: Platform) -> Vec<crate::diag::Diag> {
-        let (en, ja) = match p {
+        let Text { en, ja } = match p {
             Platform::Temporal => return vec![],
-            Platform::StepFunctions => (
-                "Step Functions sends a value to an execution only through the token a task hands on (`callback`)",
-                "Step Functions が実行に値を送れるのは、タスクが渡すトークンを通してだけです（`callback`）",
-            ),
-            Platform::Durable => (
-                "Lambda durable functions sends a value to an execution only through the id of a callback a step hands on (`callback`)",
-                "Lambda durable functions が実行に値を送れるのは、ステップが渡すコールバックの ID を通してだけです（`callback`）",
-            ),
-            Platform::Argo => (
-                "dandori does not write it for Argo Workflows yet; there, it would be a step suspended until it is resumed by its name",
-                "Argo Workflows 向けにはまだ書けません。書くなら、名前で再開されるまで止まる suspend のステップにすることになります",
-            ),
-            Platform::Graph => (
-                "dandori does not write it for pydantic-graph yet; there, the value would come to `Deps` by the task's name",
-                "pydantic-graph 向けにはまだ書けません。書くなら、値はタスクの名前で `Deps` に届くことになります",
-            ),
+            Platform::StepFunctions => tr!("Step Functions が実行に値を送れるのは、タスクが渡すトークンを通してだけです（`callback`）", "Step Functions sends a value to an execution only through the token a task hands on (`callback`)"),
+            Platform::Durable => tr!("Lambda durable functions が実行に値を送れるのは、ステップが渡すコールバックの ID を通してだけです（`callback`）", "Lambda durable functions sends a value to an execution only through the id of a callback a step hands on (`callback`)"),
+            Platform::Argo => tr!("Argo Workflows 向けにはまだ書けません。書くなら、名前で再開されるまで止まる suspend のステップにすることになります", "dandori does not write it for Argo Workflows yet; there, it would be a step suspended until it is resumed by its name"),
+            Platform::Graph => tr!("pydantic-graph 向けにはまだ書けません。書くなら、値はタスクの名前で `Deps` に届くことになります", "dandori does not write it for pydantic-graph yet; there, the value would come to `Deps` by the task's name"),
         };
         self.tasks
             .iter()
             .filter(|t| t.event)
-            .map(|t| crate::diag::Diag::error("E050", t.line, 1, format!("`{}` waits for an event sent to the workflow by name; {en}", t.name), format!("`{}` はワークフローに名前で送られてくるイベントを待ちます。{ja}", t.name)))
+            .map(|t| crate::diag::Diag::error("E050", t.line, 1, tr!("`{}` はワークフローに名前で送られてくるイベントを待ちます。{ja}", "`{}` waits for an event sent to the workflow by name; {en}", t.name)))
             .collect()
     }
 
@@ -776,20 +765,14 @@ impl Model {
             Platform::Temporal => None,
             Platform::StepFunctions | Platform::Durable => {
                 let name = if p == Platform::StepFunctions { "Step Functions" } else { "Lambda durable functions" };
-                Some((
-                    format!("`{label}` asks a run where it is, and {name} has no way to answer it; only Temporal answers the query `dandori.status`, so leave the method out of the service the flow implements for {name}"),
-                    format!("`{label}` は実行がいまどこにいるかを聞きますが、{name} にはそれに答える手段がありません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、{name} 向けのフローが実装するサービスからは、このメソッドを外してください"),
-                ))
+                Some(tr!("`{label}` は実行がいまどこにいるかを聞きますが、{name} にはそれに答える手段がありません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、{name} 向けのフローが実装するサービスからは、このメソッドを外してください", "`{label}` asks a run where it is, and {name} has no way to answer it; only Temporal answers the query `dandori.status`, so leave the method out of the service the flow implements for {name}"))
             }
             Platform::Argo | Platform::Graph => {
                 let name = if p == Platform::Argo { "Argo Workflows" } else { "pydantic-graph" };
-                Some((
-                    format!("`{label}` asks a run where it is, and dandori does not answer it on {name} yet; only Temporal answers it, by the query `dandori.status`, so leave the method out of the service the flow implements for {name}"),
-                    format!("`{label}` は実行がいまどこにいるかを聞きますが、{name} ではまだ答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、{name} 向けのフローが実装するサービスからは、このメソッドを外してください"),
-                ))
+                Some(tr!("`{label}` は実行がいまどこにいるかを聞きますが、{name} ではまだ答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、{name} 向けのフローが実装するサービスからは、このメソッドを外してください", "`{label}` asks a run where it is, and dandori does not answer it on {name} yet; only Temporal answers it, by the query `dandori.status`, so leave the method out of the service the flow implements for {name}"))
             }
         };
-        s.methods.iter().filter(|x| x.is_status()).filter_map(|x| words(&s.label(x))).map(|(en, ja)| crate::diag::Diag::error("E050", s.line, 1, en, ja)).collect()
+        s.methods.iter().filter(|x| x.is_status()).filter_map(|x| words(&s.label(x))).map(|why| crate::diag::Diag::error("E050", s.line, 1, why)).collect()
     }
 
     /// The method of the service the workflow implements that starts a run.

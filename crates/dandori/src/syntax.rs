@@ -1,7 +1,7 @@
 //! The surface syntax: physical lines with their indentation, the tokens on each line,
 //! and the tree the parser builds. Blocks are marked by indentation alone.
 
-use crate::diag::Diag;
+use crate::diag::{Diag, Text};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct Span {
@@ -356,8 +356,8 @@ impl Expr {
 // ---------------------------------------------------------------------------
 // Lexing
 
-fn err(span: Span, en: impl Into<String>, ja: impl Into<String>) -> Diag {
-    Diag::error("E001", span.line, span.col, en, ja)
+fn err(span: Span, message: Text) -> Diag {
+    Diag::error("E001", span.line, span.col, message)
 }
 
 fn is_ident_start(c: char) -> bool {
@@ -379,8 +379,7 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
             if chars[j] == '\t' {
                 return Err(err(
                     Span { line, col: j + 1 },
-                    "indent with spaces, not tabs",
-                    "インデントにはタブではなく空白を使ってください",
+                    tr!("インデントにはタブではなく空白を使ってください", "indent with spaces, not tabs"),
                 ));
             }
             indent += 1;
@@ -422,7 +421,7 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                     j += 1;
                 }
                 if !closed {
-                    return Err(err(span, "this string is not closed", "文字列が閉じていません"));
+                    return Err(err(span, tr!("文字列が閉じていません", "this string is not closed")));
                 }
                 toks.push(Token { tok: Tok::Str(s), span });
                 continue;
@@ -450,18 +449,17 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                         let w: String = chars[j..].iter().take_while(|c| is_ident_continue(**c)).collect();
                         return Err(err(
                             span,
-                            format!("a bound of a range is a whole number in the unit of the type, written without the unit: `{n}`, not `{n}{w}`"),
-                            format!("範囲の端は、型の単位で数えた整数を、単位を付けずに書きます（`{n}{w}` ではなく `{n}`）"),
+                            tr!("範囲の端は、型の単位で数えた整数を、単位を付けずに書きます（`{n}{w}` ではなく `{n}`）", "a bound of a range is a whole number in the unit of the type, written without the unit: `{n}`, not `{n}{w}`"),
                         ));
                     }
-                    return Err(err(span, "put a space between a number and a word", "数と語のあいだに空白を入れてください"));
+                    return Err(err(span, tr!("数と語のあいだに空白を入れてください", "put a space between a number and a word")));
                 }
                 if is_float {
                     toks.push(Token { tok: Tok::Float(text.parse().unwrap_or(0.0)), span });
                 } else {
                     match text.parse::<i64>() {
                         Ok(n) => toks.push(Token { tok: Tok::Int(n), span }),
-                        Err(_) => return Err(err(span, "this number is too large", "数が大きすぎます")),
+                        Err(_) => return Err(err(span, tr!("数が大きすぎます", "this number is too large"))),
                     }
                 }
                 continue;
@@ -510,7 +508,7 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                 j += 1;
                 continue;
             }
-            return Err(err(span, format!("unexpected character `{c}`"), format!("ここに `{c}` は書けません")));
+            return Err(err(span, tr!("ここに `{c}` は書けません", "unexpected character `{c}`")));
         }
         if !toks.is_empty() {
             out.push(Line { indent, toks, line, end_col: chars.len() + 1 });
@@ -581,7 +579,7 @@ impl<'a> Cur<'a> {
         if self.eat_sym(s) {
             Ok(sp)
         } else {
-            Err(err(sp, format!("expected `{s}` here"), format!("ここには `{s}` が要ります")))
+            Err(err(sp, tr!("ここには `{s}` が要ります", "expected `{s}` here")))
         }
     }
 
@@ -590,11 +588,11 @@ impl<'a> Cur<'a> {
         if self.eat_kw(kw) {
             Ok(sp)
         } else {
-            Err(err(sp, format!("expected `{kw}` here"), format!("ここには `{kw}` が要ります")))
+            Err(err(sp, tr!("ここには `{kw}` が要ります", "expected `{kw}` here")))
         }
     }
 
-    fn ident(&mut self, what_en: &str, what_ja: &str) -> Result<Name, Diag> {
+    fn ident(&mut self, what: Text) -> Result<Name, Diag> {
         let sp = self.span();
         match self.peek() {
             Some(Tok::Ident(s)) => {
@@ -602,11 +600,11 @@ impl<'a> Cur<'a> {
                 self.i += 1;
                 Ok((s, sp))
             }
-            _ => Err(err(sp, format!("expected {what_en} here"), format!("ここには{what_ja}が要ります"))),
+            _ => Err(err(sp, tr!("ここには{}が要ります", "expected {} here", what.ja; what.en))),
         }
     }
 
-    fn string(&mut self, what_en: &str, what_ja: &str) -> Result<(String, Span), Diag> {
+    fn string(&mut self, what: Text) -> Result<(String, Span), Diag> {
         let sp = self.span();
         match self.peek() {
             Some(Tok::Str(s)) => {
@@ -614,11 +612,11 @@ impl<'a> Cur<'a> {
                 self.i += 1;
                 Ok((s, sp))
             }
-            _ => Err(err(sp, format!("expected {what_en} in double quotes here"), format!("ここには{what_ja}を二重引用符で書きます"))),
+            _ => Err(err(sp, tr!("ここには{}を二重引用符で書きます", "expected {} in double quotes here", what.ja; what.en))),
         }
     }
 
-    fn int(&mut self, what_en: &str, what_ja: &str) -> Result<(i64, Span), Diag> {
+    fn int(&mut self, what: Text) -> Result<(i64, Span), Diag> {
         let sp = self.span();
         match self.peek() {
             Some(Tok::Int(n)) => {
@@ -626,7 +624,7 @@ impl<'a> Cur<'a> {
                 self.i += 1;
                 Ok((n, sp))
             }
-            _ => Err(err(sp, format!("expected {what_en} here"), format!("ここには{what_ja}が要ります"))),
+            _ => Err(err(sp, tr!("ここには{}が要ります", "expected {} here", what.ja; what.en))),
         }
     }
 
@@ -634,22 +632,22 @@ impl<'a> Cur<'a> {
         if self.at_end() {
             Ok(())
         } else {
-            Err(err(self.span(), "unexpected text at the end of the line", "行の終わりに余計なものがあります"))
+            Err(err(self.span(), tr!("行の終わりに余計なものがあります", "unexpected text at the end of the line")))
         }
     }
 
-    fn names(&mut self, what_en: &str, what_ja: &str) -> Result<Vec<Name>, Diag> {
-        let mut v = vec![self.ident(what_en, what_ja)?];
+    fn names(&mut self, what: Text) -> Result<Vec<Name>, Diag> {
+        let mut v = vec![self.ident(what.clone())?];
         while self.eat_sym(",") {
-            v.push(self.ident(what_en, what_ja)?);
+            v.push(self.ident(what.clone())?);
         }
         Ok(v)
     }
 
     fn qualname(&mut self) -> Result<Vec<Name>, Diag> {
-        let mut v = vec![self.ident("a name", "名前")?];
+        let mut v = vec![self.ident(tr!("名前", "a name"))?];
         while self.eat_sym(".") {
-            v.push(self.ident("a name", "名前")?);
+            v.push(self.ident(tr!("名前", "a name"))?);
         }
         Ok(v)
     }
@@ -680,12 +678,12 @@ pub fn is_keyword(s: &str) -> bool {
 }
 
 fn duration(cur: &mut Cur) -> Result<u64, Diag> {
-    let (n, sp) = cur.int("a number", "数")?;
+    let (n, sp) = cur.int(tr!("数", "a number"))?;
     if n < 0 {
-        return Err(err(sp, "a duration cannot be negative", "時間は負にできません"));
+        return Err(err(sp, tr!("時間は負にできません", "a duration cannot be negative")));
     }
     let unit_sp = cur.span();
-    let (u, _) = cur.ident("a unit (seconds, minutes, hours or days)", "単位（seconds・minutes・hours・days）")?;
+    let (u, _) = cur.ident(tr!("単位（seconds・minutes・hours・days）", "a unit (seconds, minutes, hours or days)"))?;
     let mult = match u.as_str() {
         "second" | "seconds" => 1,
         "minute" | "minutes" => 60,
@@ -694,8 +692,7 @@ fn duration(cur: &mut Cur) -> Result<u64, Diag> {
         _ => {
             return Err(err(
                 unit_sp,
-                format!("`{u}` is not a unit of time; write seconds, minutes, hours or days"),
-                format!("`{u}` は時間の単位ではありません。seconds・minutes・hours・days のどれかを書きます"),
+                tr!("`{u}` は時間の単位ではありません。seconds・minutes・hours・days のどれかを書きます", "`{u}` is not a unit of time; write seconds, minutes, hours or days"),
             ))
         }
     };
@@ -708,7 +705,7 @@ fn type_expr(cur: &mut Cur) -> Result<TypeExpr, Diag> {
         let sp = cur.span();
         cur.i += 1;
         if cur.is_sym("?") {
-            return Err(err(cur.span(), "a type is made optional once; write one `?`", "`?` は一つだけ書きます"));
+            return Err(err(cur.span(), tr!("`?` は一つだけ書きます", "a type is made optional once; write one `?`")));
         }
         return Ok(TypeExpr::Opt(Box::new(base), sp));
     }
@@ -717,7 +714,7 @@ fn type_expr(cur: &mut Cur) -> Result<TypeExpr, Diag> {
 
 fn type_base(cur: &mut Cur) -> Result<TypeExpr, Diag> {
     let sp = cur.span();
-    let first = cur.ident("a type", "型")?;
+    let first = cur.ident(tr!("型", "a type"))?;
     match first.0.as_str() {
         "int" => return Ok(TypeExpr::Int(sp)),
         "string" => return Ok(TypeExpr::Str(sp)),
@@ -728,7 +725,7 @@ fn type_base(cur: &mut Cur) -> Result<TypeExpr, Diag> {
             cur.i += 1;
             let inner = type_expr(cur)?;
             if !cur.eat_sym("]") {
-                return Err(err(cur.span(), "this list type is not closed with `]`", "リストの型が `]` で閉じていません"));
+                return Err(err(cur.span(), tr!("リストの型が `]` で閉じていません", "this list type is not closed with `]`")));
             }
             return Ok(TypeExpr::List(Box::new(inner), sp));
         }
@@ -777,7 +774,7 @@ fn type_base(cur: &mut Cur) -> Result<TypeExpr, Diag> {
                     parts.push(std::mem::take(&mut part));
                     cur.i += 1;
                 }
-                _ => return Err(err(cur.span(), "this unit is not closed with `]`", "単位が `]` で閉じていません")),
+                _ => return Err(err(cur.span(), tr!("単位が `]` で閉じていません", "this unit is not closed with `]`"))),
             }
         }
         if !part.is_empty() {
@@ -787,13 +784,13 @@ fn type_base(cur: &mut Cur) -> Result<TypeExpr, Diag> {
     }
     let mut v = vec![first];
     while cur.eat_sym(".") {
-        v.push(cur.ident("a name", "名前")?);
+        v.push(cur.ident(tr!("名前", "a name"))?);
     }
     Ok(TypeExpr::Named(v))
 }
 
 fn field(cur: &mut Cur) -> Result<Field, Diag> {
-    let name = cur.ident("a field name", "フィールドの名前")?;
+    let name = cur.ident(tr!("フィールドの名前", "a field name"))?;
     cur.expect_sym(":")?;
     let ty = type_expr(cur)?;
     let range = range_decl(cur)?;
@@ -816,10 +813,10 @@ fn range_decl(cur: &mut Cur) -> Result<Option<RangeDecl>, Diag> {
             break;
         };
         cur.i += 1;
-        *end = Some(cur.int("a whole number", "整数")?.0);
+        *end = Some(cur.int(tr!("整数", "a whole number"))?.0);
     }
     if lo.is_none() && hi.is_none() {
-        return Err(err(cur.span(), "a range is written `range >=<low> <=<high>`, with one end or both", "範囲は `range >=<下限> <=<上限>` と書きます。端は片方だけでもかまいません"));
+        return Err(err(cur.span(), tr!("範囲は `range >=<下限> <=<上限>` と書きます。端は片方だけでもかまいません", "a range is written `range >=<low> <=<high>`, with one end or both")));
     }
     Ok(Some(RangeDecl { lo, hi, span }))
 }
@@ -845,7 +842,7 @@ fn expr(cur: &mut Cur) -> Result<Expr, Diag> {
             let mut fields = Vec::new();
             if !cur.eat_sym("}") {
                 loop {
-                    let n = cur.ident("a field name", "フィールドの名前")?;
+                    let n = cur.ident(tr!("フィールドの名前", "a field name"))?;
                     cur.expect_sym(":")?;
                     let e = expr(cur)?;
                     fields.push((n, e));
@@ -871,7 +868,7 @@ fn expr(cur: &mut Cur) -> Result<Expr, Diag> {
             }
             Ok(Expr::List(items, sp))
         }
-        _ => Err(err(sp, "expected a value here", "ここには値が要ります")),
+        _ => Err(err(sp, tr!("ここには値が要ります", "expected a value here"))),
     }
 }
 
@@ -896,7 +893,7 @@ fn string_expr(s: &str, sp: Span) -> Result<Expr, Diag> {
                 j += 1;
             }
             if j >= chars.len() {
-                return Err(err(sp, "a `{` in this string is not closed; write `{{` for a brace itself", "文字列の中の `{` が閉じていません。波括弧そのものは `{{` と書きます"));
+                return Err(err(sp, tr!("文字列の中の `{{` が閉じていません。波括弧そのものは `{{{{` と書きます", "a `{{` in this string is not closed; write `{{{{` for a brace itself")));
             }
             let inner: String = chars[start..j].iter().collect();
             let mut path = Vec::new();
@@ -906,8 +903,7 @@ fn string_expr(s: &str, sp: Span) -> Result<Expr, Diag> {
                 if !ok {
                     return Err(err(
                         sp,
-                        format!("`{{{inner}}}` in this string is not a variable or a field of one; write `{{{{` for a brace itself"),
-                        format!("文字列の中の `{{{inner}}}` は変数やそのフィールドではありません。波括弧そのものは `{{{{` と書きます"),
+                        tr!("文字列の中の `{{{inner}}}` は変数やそのフィールドではありません。波括弧そのものは `{{{{` と書きます", "`{{{inner}}}` in this string is not a variable or a field of one; write `{{{{` for a brace itself"),
                     ));
                 }
                 path.push((p.to_string(), sp));
@@ -926,7 +922,7 @@ fn string_expr(s: &str, sp: Span) -> Result<Expr, Diag> {
                 i += 2;
                 continue;
             }
-            return Err(err(sp, "a `}` in this string has no `{`; write `}}` for a brace itself", "文字列の中の `}` に対応する `{` がありません。波括弧そのものは `}}` と書きます"));
+            return Err(err(sp, tr!("文字列の中の `}}` に対応する `{{` がありません。波括弧そのものは `}}}}` と書きます", "a `}}` in this string has no `{{`; write `}}}}` for a brace itself")));
         }
         lit.push(c);
         i += 1;
@@ -943,23 +939,23 @@ fn string_expr(s: &str, sp: Span) -> Result<Expr, Diag> {
 /// `for x in xs at most n [in parallel[, k at a time]]`, from `for` on.
 fn for_header(cur: &mut Cur) -> Result<(Name, Expr, u32, Option<u32>), Diag> {
     cur.expect_kw("for")?;
-    let var = cur.ident("a variable name", "変数の名前")?;
+    let var = cur.ident(tr!("変数の名前", "a variable name"))?;
     cur.expect_kw("in")?;
     let list = expr(cur)?;
     cur.expect_kw("at")?;
     cur.expect_kw("most")?;
-    let (n, nsp) = cur.int("the most items the list can have", "リストの要素の数の上限")?;
+    let (n, nsp) = cur.int(tr!("リストの要素の数の上限", "the most items the list can have"))?;
     if n < 1 {
-        return Err(err(nsp, "write the most items the list can have, 1 or more", "リストの要素の数の上限を 1 以上で書いてください"));
+        return Err(err(nsp, tr!("リストの要素の数の上限を 1 以上で書いてください", "write the most items the list can have, 1 or more")));
     }
     let mut parallel = None;
     if cur.eat_kw("in") {
         cur.expect_kw("parallel")?;
         let mut k = 0;
         if cur.eat_sym(",") {
-            let (kk, ksp) = cur.int("how many rounds run at a time", "同時に回す数")?;
+            let (kk, ksp) = cur.int(tr!("同時に回す数", "how many rounds run at a time"))?;
             if kk < 1 {
-                return Err(err(ksp, "run at least one round at a time", "同時に回す数は 1 以上です"));
+                return Err(err(ksp, tr!("同時に回す数は 1 以上です", "run at least one round at a time")));
             }
             cur.expect_kw("at")?;
             cur.expect_kw("a")?;
@@ -973,12 +969,12 @@ fn for_header(cur: &mut Cur) -> Result<(Name, Expr, u32, Option<u32>), Diag> {
 }
 
 fn call(cur: &mut Cur) -> Result<Call, Diag> {
-    let callee = cur.ident("the name of a task or a rule", "タスクか規則の名前")?;
+    let callee = cur.ident(tr!("タスクか規則の名前", "the name of a task or a rule"))?;
     cur.expect_sym("(")?;
     let mut args = Vec::new();
     if !cur.eat_sym(")") {
         loop {
-            let name = cur.ident("an argument name", "引数の名前")?;
+            let name = cur.ident(tr!("引数の名前", "an argument name"))?;
             cur.expect_sym(":")?;
             let e = expr(cur)?;
             args.push((name, e));
@@ -998,14 +994,13 @@ impl Parser {
 
     /// The lines indented deeper than `parent`, parsed as one block. All of them must share
     /// the indentation of the first.
-    fn child_block(&mut self, parent: usize, what_en: &str, what_ja: &str, at: Span) -> Result<Block, Diag> {
+    fn child_block(&mut self, parent: usize, what: Text, at: Span) -> Result<Block, Diag> {
         let indent = match self.cur_line() {
             Some(l) if l.indent > parent => l.indent,
             _ => {
                 return Err(err(
                     at,
-                    format!("{what_en} needs an indented block under it"),
-                    format!("{what_ja}の下に、字下げしたブロックが要ります"),
+                    tr!("{}の下に、字下げしたブロックが要ります", "{} needs an indented block under it", what.ja; what.en),
                 ))
             }
         };
@@ -1020,7 +1015,7 @@ impl Parser {
             }
             if l.indent > indent {
                 let sp = l.toks[0].span;
-                return Err(err(sp, "this line is indented more than the lines before it", "この行は前の行より深く字下げされています"));
+                return Err(err(sp, tr!("この行は前の行より深く字下げされています", "this line is indented more than the lines before it")));
             }
             out.push(self.stmt(indent)?);
         }
@@ -1037,7 +1032,7 @@ impl Parser {
             if l.indent != child {
                 if l.indent > child {
                     let sp = l.toks[0].span;
-                    return Err(err(sp, "this line is indented more than the lines before it", "この行は前の行より深く字下げされています"));
+                    return Err(err(sp, tr!("この行は前の行より深く字下げされています", "this line is indented more than the lines before it")));
                 }
                 break;
             }
@@ -1047,15 +1042,14 @@ impl Parser {
             if !cur.eat_kw("on") {
                 return Err(err(
                     sp,
-                    "only `on <error> =>` lines can be written under a call",
-                    "呼び出しの下に書けるのは `on <エラー> =>` の行だけです",
+                    tr!("呼び出しの下に書けるのは `on <エラー> =>` の行だけです", "only `on <error> =>` lines can be written under a call"),
                 ));
             }
-            let errors = cur.names("an error name", "エラーの名前")?;
+            let errors = cur.names(tr!("エラーの名前", "an error name"))?;
             let arrow = cur.expect_sym("=>")?;
             self.pos += 1;
             let body = if cur.at_end() {
-                self.child_block(child, "`on ... =>`", "`on ... =>`", arrow)?
+                self.child_block(child, tr!("`on ... =>`", "`on ... =>`"), arrow)?
             } else {
                 let k = simple_stmt(&mut cur)?;
                 cur.expect_end()?;
@@ -1077,14 +1071,14 @@ impl Parser {
             self.pos += 1;
             let child = match self.cur_line() {
                 Some(c) if c.indent > indent => c.indent,
-                _ => return Err(err(sp, "`match` needs its arms indented under it", "`match` の下に、字下げした分岐が要ります")),
+                _ => return Err(err(sp, tr!("`match` の下に、字下げした分岐が要ります", "`match` needs its arms indented under it"))),
             };
             let mut arms = Vec::new();
             while let Some(al) = self.cur_line() {
                 if al.indent != child {
                     if al.indent > child {
                         let s = al.toks[0].span;
-                        return Err(err(s, "this line is indented more than the lines before it", "この行は前の行より深く字下げされています"));
+                        return Err(err(s, tr!("この行は前の行より深く字下げされています", "this line is indented more than the lines before it")));
                     }
                     break;
                 }
@@ -1093,14 +1087,14 @@ impl Parser {
                 let asp = ac.span();
                 let (values, some) = if ac.is_kw("some") && matches!(ac.peek_at(1), Some(Tok::Ident(_))) && matches!(ac.peek_at(2), Some(Tok::Sym("=>"))) {
                     ac.i += 1;
-                    (vec![], Some(ac.ident("a variable name", "変数の名前")?))
+                    (vec![], Some(ac.ident(tr!("変数の名前", "a variable name"))?))
                 } else {
-                    (ac.names("a value", "値")?, None)
+                    (ac.names(tr!("値", "a value"))?, None)
                 };
                 let arrow = ac.expect_sym("=>")?;
                 self.pos += 1;
                 let body = if ac.at_end() {
-                    self.child_block(child, "a match arm", "match の分岐", arrow)?
+                    self.child_block(child, tr!("match の分岐", "a match arm"), arrow)?
                 } else {
                     let k = simple_stmt(&mut ac)?;
                     ac.expect_end()?;
@@ -1113,20 +1107,20 @@ impl Parser {
         if cur.is_kw("for") {
             let (var, list, max, parallel) = for_header(&mut cur)?;
             self.pos += 1;
-            let body = self.child_block(indent, "`for`", "`for`", sp)?;
+            let body = self.child_block(indent, tr!("`for`", "`for`"), sp)?;
             return Ok(Stmt { kind: StmtKind::For { var, list, max, parallel, body, result: None }, span: sp });
         }
         if cur.is_kw("let") {
             // `let r = for …` takes a block under it
             let save = cur.i;
             cur.i += 1;
-            let name = cur.ident("a variable name", "変数の名前")?;
+            let name = cur.ident(tr!("変数の名前", "a variable name"))?;
             let ty = if cur.eat_sym(":") { Some(type_expr(&mut cur)?) } else { None };
             cur.expect_sym("=")?;
             if cur.is_kw("for") {
                 let (var, list, max, parallel) = for_header(&mut cur)?;
                 self.pos += 1;
-                let body = self.child_block(indent, "`for`", "`for`", sp)?;
+                let body = self.child_block(indent, tr!("`for`", "`for`"), sp)?;
                 return Ok(Stmt { kind: StmtKind::For { var, list, max, parallel, body, result: Some((name, ty)) }, span: sp });
             }
             cur.i = save;
@@ -1135,14 +1129,14 @@ impl Parser {
             cur.i += 1;
             cur.expect_kw("at")?;
             cur.expect_kw("most")?;
-            let (n, nsp) = cur.int("a number of times", "回数")?;
+            let (n, nsp) = cur.int(tr!("回数", "a number of times"))?;
             if n < 1 {
-                return Err(err(nsp, "a loop runs at least once; write 1 or more", "ループは一回は回ります。1 以上を書いてください"));
+                return Err(err(nsp, tr!("ループは一回は回ります。1 以上を書いてください", "a loop runs at least once; write 1 or more")));
             }
             cur.expect_kw("times")?;
             cur.expect_end()?;
             self.pos += 1;
-            let body = self.child_block(indent, "`repeat`", "`repeat`", sp)?;
+            let body = self.child_block(indent, tr!("`repeat`", "`repeat`"), sp)?;
             return Ok(Stmt { kind: StmtKind::Repeat { times: n as u32, body }, span: sp });
         }
         let kind = simple_stmt(&mut cur)?;
@@ -1156,7 +1150,7 @@ impl Parser {
                 if let Some(nl) = self.cur_line() {
                     if nl.indent > indent {
                         let s = nl.toks[0].span;
-                        return Err(err(s, "this line is indented more than the lines before it", "この行は前の行より深く字下げされています"));
+                        return Err(err(s, tr!("この行は前の行より深く字下げされています", "this line is indented more than the lines before it")));
                     }
                 }
                 other
@@ -1170,7 +1164,7 @@ impl Parser {
 fn simple_stmt(cur: &mut Cur) -> Result<StmtKind, Diag> {
     let sp = cur.span();
     if cur.eat_kw("let") {
-        let name = cur.ident("a variable name", "変数の名前")?;
+        let name = cur.ident(tr!("変数の名前", "a variable name"))?;
         let ty = if cur.eat_sym(":") { Some(type_expr(cur)?) } else { None };
         cur.expect_sym("=")?;
         if matches!(cur.peek(), Some(Tok::Ident(_))) && matches!(cur.peek_at(1), Some(Tok::Sym("("))) {
@@ -1199,7 +1193,7 @@ fn simple_stmt(cur: &mut Cur) -> Result<StmtKind, Diag> {
         let mut fields = Vec::new();
         if !cur.at_end() {
             loop {
-                let n = cur.ident("an output name", "出力の名前")?;
+                let n = cur.ident(tr!("出力の名前", "an output name"))?;
                 cur.expect_sym("=")?;
                 let e = expr(cur)?;
                 fields.push((n, e));
@@ -1211,19 +1205,19 @@ fn simple_stmt(cur: &mut Cur) -> Result<StmtKind, Diag> {
         return Ok(StmtKind::Succeed { fields });
     }
     if cur.eat_kw("fail") {
-        let error = cur.ident("an error name", "エラーの名前")?;
+        let error = cur.ident(tr!("エラーの名前", "an error name"))?;
         let mut cause = None;
         if let Some(Tok::Str(_)) = cur.peek() {
             cause = Some(expr(cur)?);
         }
         let mut leaving = Vec::new();
         if cur.eat_kw("leaving") {
-            leaving = cur.names("a case name", "案件の名前")?;
+            leaving = cur.names(tr!("案件の名前", "a case name"))?;
         }
         return Ok(StmtKind::Fail { error, cause, leaving });
     }
     if matches!(cur.peek(), Some(Tok::Ident(_))) && matches!(cur.peek_at(1), Some(Tok::Sym("<-"))) {
-        let case = cur.ident("a case name", "案件の名前")?;
+        let case = cur.ident(tr!("案件の名前", "a case name"))?;
         cur.expect_sym("<-")?;
         let c = call(cur)?;
         return Ok(StmtKind::CaseCall { case, call: c, handlers: vec![] });
@@ -1234,8 +1228,7 @@ fn simple_stmt(cur: &mut Cur) -> Result<StmtKind, Diag> {
     }
     Err(err(
         sp,
-        "expected a statement: let, <case> <-, <task>(…), match, wait, repeat, for, break, pass, succeed, fail or yield",
-        "ここには文が要ります（let・<案件> <-・<タスク>(…)・match・wait・repeat・for・break・pass・succeed・fail・yield）",
+        tr!("ここには文が要ります（let・<案件> <-・<タスク>(…)・match・wait・repeat・for・break・pass・succeed・fail・yield）", "expected a statement: let, <case> <-, <task>(…), match, wait, repeat, for, break, pass, succeed, fail or yield"),
     ))
 }
 
@@ -1265,29 +1258,29 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
         let mut cur = Cur::new(&l);
         let sp = cur.span();
         if l.indent != 0 {
-            return Err(err(sp, "this line is indented, but nothing above it takes a block", "この行は字下げされていますが、その上の行は下にブロックを書く行ではありません"));
+            return Err(err(sp, tr!("この行は字下げされていますが、その上の行は下にブロックを書く行ではありません", "this line is indented, but nothing above it takes a block")));
         }
         let kw = match cur.peek() {
             Some(Tok::Ident(s)) => s.clone(),
-            _ => return Err(err(sp, "expected a declaration", "ここには宣言が要ります")),
+            _ => return Err(err(sp, tr!("ここには宣言が要ります", "expected a declaration"))),
         };
         cur.i += 1;
         match kw.as_str() {
             "workflow" => {
-                let name = cur.ident("the workflow's name", "ワークフローの名前")?;
+                let name = cur.ident(tr!("ワークフローの名前", "the workflow's name"))?;
                 let vsp = cur.span();
-                let (v, _) = cur.ident("a version such as v1", "v1 のようなバージョン")?;
+                let (v, _) = cur.ident(tr!("v1 のようなバージョン", "a version such as v1"))?;
                 let n = v.strip_prefix('v').and_then(|s| s.parse::<u32>().ok());
                 match n {
                     Some(n) => prog.version = n,
-                    None => return Err(err(vsp, "write the version as v1, v2, ...", "バージョンは v1、v2 のように書きます")),
+                    None => return Err(err(vsp, tr!("バージョンは v1、v2 のように書きます", "write the version as v1, v2, ..."))),
                 }
                 // the service of a `.proto` the workflow implements: `<api>.<Service>`
                 if cur.eat_kw("implements") {
                     let isp = cur.span();
                     let q = cur.qualname()?;
                     if q.len() < 2 {
-                        return Err(err(isp, "write the service after the name `use proto` gave the `.proto`, as `implements shop.FulfillmentService`", "サービスは、`use proto` で付けた名前のあとに `implements shop.FulfillmentService` のように書きます"));
+                        return Err(err(isp, tr!("サービスは、`use proto` で付けた名前のあとに `implements shop.FulfillmentService` のように書きます", "write the service after the name `use proto` gave the `.proto`, as `implements shop.FulfillmentService`")));
                     }
                     prog.implements = Some(q);
                 }
@@ -1296,32 +1289,32 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 p.pos += 1;
             }
             "description" => {
-                prog.description = Some(cur.string("a description", "説明")?.0);
+                prog.description = Some(cur.string(tr!("説明", "a description"))?.0);
                 cur.expect_end()?;
                 p.pos += 1;
             }
             "kind" => {
-                let (k, ksp) = cur.ident("standard or express", "standard か express")?;
+                let (k, ksp) = cur.ident(tr!("standard か express", "standard or express"))?;
                 prog.kind = match k.as_str() {
                     "standard" => Kind::Standard,
                     "express" => Kind::Express,
-                    _ => return Err(err(ksp, "the kind is standard or express", "kind は standard か express です")),
+                    _ => return Err(err(ksp, tr!("kind は standard か express です", "the kind is standard or express"))),
                 };
                 cur.expect_end()?;
                 p.pos += 1;
             }
             "use" if !cur.is_kw("rule") => {
                 let ksp = cur.span();
-                let (k, _) = cur.ident("`rule`, `openapi`, `smithy` or `proto`", "`rule`・`openapi`・`smithy`・`proto` のどれか")?;
+                let (k, _) = cur.ident(tr!("`rule`・`openapi`・`smithy`・`proto` のどれか", "`rule`, `openapi`, `smithy` or `proto`"))?;
                 let kind = match k.as_str() {
                     "openapi" => crate::apis::ApiKind::OpenApi,
                     "smithy" => crate::apis::ApiKind::Smithy,
                     "proto" => crate::apis::ApiKind::Proto,
-                    _ => return Err(err(ksp, "write `use rule`, `use openapi`, `use smithy` or `use proto`", "`use rule`・`use openapi`・`use smithy`・`use proto` のどれかを書きます")),
+                    _ => return Err(err(ksp, tr!("`use rule`・`use openapi`・`use smithy`・`use proto` のどれかを書きます", "write `use rule`, `use openapi`, `use smithy` or `use proto`"))),
                 };
-                let name = cur.ident("the API's name", "API の名前")?;
+                let name = cur.ident(tr!("API の名前", "the API's name"))?;
                 cur.expect_kw("from")?;
-                let (path, _) = cur.string("the path of the API's description", "API の記述のパス")?;
+                let (path, _) = cur.string(tr!("API の記述のパス", "the path of the API's description"))?;
                 cur.expect_end()?;
                 p.pos += 1;
                 let mut url = None;
@@ -1332,10 +1325,10 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     let cl = cl.clone();
                     let mut cc = Cur::new(&cl);
                     if cc.eat_kw("url") {
-                        url = Some(cc.string("where the API is", "API の場所")?.0);
+                        url = Some(cc.string(tr!("API の場所", "where the API is"))?.0);
                         cc.expect_end()?;
                     } else {
-                        return Err(err(cc.span(), "only `url \"<where the API is>\"` can be written under `use openapi`, `use smithy` and `use proto`", "`use openapi`・`use smithy`・`use proto` の下に書けるのは `url \"<API の場所>\"` だけです"));
+                        return Err(err(cc.span(), tr!("`use openapi`・`use smithy`・`use proto` の下に書けるのは `url \"<API の場所>\"` だけです", "only `url \"<where the API is>\"` can be written under `use openapi`, `use smithy` and `use proto`")));
                     }
                     p.pos += 1;
                 }
@@ -1343,9 +1336,9 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
             }
             "use" => {
                 cur.expect_kw("rule")?;
-                let name = cur.ident("the rule's name", "規則の名前")?;
+                let name = cur.ident(tr!("規則の名前", "the rule's name"))?;
                 cur.expect_kw("from")?;
-                let (path, _) = cur.string("the path of the .rule file", ".rule ファイルのパス")?;
+                let (path, _) = cur.string(tr!(".rule ファイルのパス", "the path of the .rule file"))?;
                 cur.expect_end()?;
                 p.pos += 1;
                 let mut lambda = None;
@@ -1360,13 +1353,13 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     let mut cc = Cur::new(&cl);
                     let at = cc.span();
                     if cc.eat_kw("lambda") {
-                        lambda = Some((cc.string("the Lambda function", "Lambda 関数")?.0, at));
+                        lambda = Some((cc.string(tr!("Lambda 関数", "the Lambda function"))?.0, at));
                         cc.expect_end()?;
                     } else if cc.eat_kw("connect") {
-                        connect = Some((cc.string("the URL of the rule's service", "規則のサービスの URL")?.0, at));
+                        connect = Some((cc.string(tr!("規則のサービスの URL", "the URL of the rule's service"))?.0, at));
                         cc.expect_end()?;
                     } else if cc.eat_kw("connection") {
-                        connection = Some((cc.string("the EventBridge connection", "EventBridge の接続")?.0, at));
+                        connection = Some((cc.string(tr!("EventBridge の接続", "the EventBridge connection"))?.0, at));
                         cc.expect_end()?;
                     } else if cc.eat_kw("local") {
                         local = true;
@@ -1374,8 +1367,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     } else {
                         return Err(err(
                             cc.span(),
-                            "only `lambda \"<function>\"`, `connect \"<url>\"`, `connection \"<connection>\"` and `local` can be written under `use rule`",
-                            "`use rule` の下に書けるのは `lambda \"<関数>\"`・`connect \"<URL>\"`・`connection \"<接続>\"`・`local` だけです",
+                            tr!("`use rule` の下に書けるのは `lambda \"<関数>\"`・`connect \"<URL>\"`・`connection \"<接続>\"`・`local` だけです", "only `lambda \"<function>\"`, `connect \"<url>\"`, `connection \"<connection>\"` and `local` can be written under `use rule`"),
                         ));
                     }
                     p.pos += 1;
@@ -1383,18 +1375,18 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 prog.uses.push(UseRule { name, path, lambda, local, connect, connection });
             }
             "enum" => {
-                let name = cur.ident("the enum's name", "列挙の名前")?;
+                let name = cur.ident(tr!("列挙の名前", "the enum's name"))?;
                 cur.expect_sym("=")?;
-                let mut values = vec![cur.ident("a value", "値")?];
+                let mut values = vec![cur.ident(tr!("値", "a value"))?];
                 while cur.eat_sym("|") {
-                    values.push(cur.ident("a value", "値")?);
+                    values.push(cur.ident(tr!("値", "a value"))?);
                 }
                 cur.expect_end()?;
                 p.pos += 1;
                 prog.enums.push(EnumDecl { name, values });
             }
             "record" | "inputs" | "outputs" => {
-                let name = if kw == "record" { Some(cur.ident("the record's name", "レコードの名前")?) } else { None };
+                let name = if kw == "record" { Some(cur.ident(tr!("レコードの名前", "the record's name"))?) } else { None };
                 cur.expect_end()?;
                 p.pos += 1;
                 let mut fields = Vec::new();
@@ -1409,7 +1401,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     p.pos += 1;
                 }
                 if fields.is_empty() {
-                    return Err(err(sp, format!("`{kw}` needs at least one field under it"), format!("`{kw}` の下にフィールドが一つは要ります")));
+                    return Err(err(sp, tr!("`{kw}` の下にフィールドが一つは要ります", "`{kw}` needs at least one field under it")));
                 }
                 match kw.as_str() {
                     "record" => prog.records.push(RecordDecl { name: name.unwrap(), fields }),
@@ -1418,7 +1410,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 }
             }
             "task" => {
-                let name = cur.ident("the task's name", "タスクの名前")?;
+                let name = cur.ident(tr!("タスクの名前", "the task's name"))?;
                 cur.expect_sym("(")?;
                 let mut params = Vec::new();
                 if !cur.eat_sym(")") {
@@ -1482,7 +1474,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 prog.tasks.push(t);
             }
             "case" => {
-                let name = cur.ident("the case's name", "案件の名前")?;
+                let name = cur.ident(tr!("案件の名前", "the case's name"))?;
                 cur.expect_sym(":")?;
                 let record = type_expr(&mut cur)?;
                 cur.expect_kw("follows")?;
@@ -1498,7 +1490,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     let mut cc = Cur::new(&cl);
                     let csp = cc.span();
                     if cc.eat_kw("held") {
-                        let n = cc.ident("an input of the rule", "規則の入力")?;
+                        let n = cc.ident(tr!("規則の入力", "an input of the rule"))?;
                         cc.expect_sym("=")?;
                         let v = match cc.peek().cloned() {
                             Some(Tok::Ident(s)) => {
@@ -1511,24 +1503,23 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                                 cc.i += 1;
                                 (n.to_string(), s2)
                             }
-                            _ => return Err(err(cc.span(), "expected a value here", "ここには値が要ります")),
+                            _ => return Err(err(cc.span(), tr!("ここには値が要ります", "expected a value here"))),
                         };
                         c.held.push((n, v));
                     } else if cc.eat_kw("external") {
-                        c.external.extend(cc.names("an event", "イベント")?);
+                        c.external.extend(cc.names(tr!("イベント", "an event"))?);
                     } else if cc.eat_kw("state") {
-                        c.state_field = Some(cc.ident("a field", "フィールド")?);
+                        c.state_field = Some(cc.ident(tr!("フィールド", "a field"))?);
                     } else if cc.eat_kw("refused") {
                         cc.expect_kw("when")?;
-                        let o = cc.ident("an output of the rule", "規則の出力")?;
+                        let o = cc.ident(tr!("規則の出力", "an output of the rule"))?;
                         cc.expect_sym("=")?;
-                        let v = cc.ident("a value", "値")?;
+                        let v = cc.ident(tr!("値", "a value"))?;
                         c.refused_when = Some((o, v));
                     } else {
                         return Err(err(
                             csp,
-                            "under `case` write held, external, state or refused when",
-                            "`case` の下には held・external・state・refused when を書きます",
+                            tr!("`case` の下には held・external・state・refused when を書きます", "under `case` write held, external, state or refused when"),
                         ));
                     }
                     cc.expect_end()?;
@@ -1540,9 +1531,9 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 cur.expect_end()?;
                 p.pos += 1;
                 if prog.flow.is_some() {
-                    return Err(err(sp, "a workflow has one `flow`", "`flow` は一つだけ書けます"));
+                    return Err(err(sp, tr!("`flow` は一つだけ書けます", "a workflow has one `flow`")));
                 }
-                let b = p.child_block(0, "`flow`", "`flow`", sp)?;
+                let b = p.child_block(0, tr!("`flow`", "`flow`"), sp)?;
                 prog.flow = Some((b, sp));
             }
             "on" => {
@@ -1550,26 +1541,25 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     cur.expect_end()?;
                     p.pos += 1;
                     if prog.on_cancel.is_some() {
-                        return Err(err(sp, "a workflow has one `on cancel`", "`on cancel` は一つだけ書けます"));
+                        return Err(err(sp, tr!("`on cancel` は一つだけ書けます", "a workflow has one `on cancel`")));
                     }
-                    let b = p.child_block(0, "`on cancel`", "`on cancel`", sp)?;
+                    let b = p.child_block(0, tr!("`on cancel`", "`on cancel`"), sp)?;
                     prog.on_cancel = Some((b, sp));
                 } else {
                     cur.expect_kw("failure")?;
                     cur.expect_end()?;
                     p.pos += 1;
                     if prog.on_failure.is_some() {
-                        return Err(err(sp, "a workflow has one `on failure`", "`on failure` は一つだけ書けます"));
+                        return Err(err(sp, tr!("`on failure` は一つだけ書けます", "a workflow has one `on failure`")));
                     }
-                    let b = p.child_block(0, "`on failure`", "`on failure`", sp)?;
+                    let b = p.child_block(0, tr!("`on failure`", "`on failure`"), sp)?;
                     prog.on_failure = Some((b, sp));
                 }
             }
             other => {
                 return Err(err(
                     sp,
-                    format!("`{other}` does not start a declaration; expected workflow, description, kind, use, enum, record, inputs, outputs, task, case, flow, on failure or on cancel"),
-                    format!("`{other}` で始まる宣言はありません（workflow・description・kind・use・enum・record・inputs・outputs・task・case・flow・on failure・on cancel）"),
+                    tr!("`{other}` で始まる宣言はありません（workflow・description・kind・use・enum・record・inputs・outputs・task・case・flow・on failure・on cancel）", "`{other}` does not start a declaration; expected workflow, description, kind, use, enum, record, inputs, outputs, task, case, flow, on failure or on cancel"),
                 ))
             }
         }
@@ -1579,80 +1569,79 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
 
 fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
     let sp = cc.span();
-    let (kw, _) = cc.ident("a task clause", "タスクの項目")?;
+    let (kw, _) = cc.ident(tr!("タスクの項目", "a task clause"))?;
     if matches!(kw.as_str(), "lambda" | "http" | "aws" | "agent" | "connect" | "jev") {
         if let Some((_, first)) = &t.binding {
             return Err(Diag::error(
                 "E007",
                 sp.line,
                 sp.col,
-                format!("the task is already called another way (line {}); a task is called by one of lambda, http, connect, aws, agent and jev", first.line),
-                format!("このタスクの呼び出し方はもう書かれています（{} 行目）。呼び出し方は lambda・http・connect・aws・agent・jev のどれか一つです", first.line),
+                tr!("このタスクの呼び出し方はもう書かれています（{} 行目）。呼び出し方は lambda・http・connect・aws・agent・jev のどれか一つです", "the task is already called another way (line {}); a task is called by one of lambda, http, connect, aws, agent and jev", first.line),
             ));
         }
     }
     match kw.as_str() {
         "lambda" => {
-            let f = cc.string("the Lambda function", "Lambda 関数")?.0;
+            let f = cc.string(tr!("Lambda 関数", "the Lambda function"))?.0;
             t.binding = Some((Binding::Lambda(f), sp));
         }
         "aws" => {
             let (service, action) = if let Some(Tok::Str(_)) = cc.peek() {
-                let (text, tsp) = cc.string("the AWS API", "AWS の API")?;
+                let (text, tsp) = cc.string(tr!("AWS の API", "the AWS API"))?;
                 match text.split_once(':') {
                     Some((a, b)) if !a.is_empty() && !b.is_empty() => (a.to_string(), b.to_string()),
-                    _ => return Err(err(tsp, "write the AWS API as <service>:<action>, such as sns:publish", "AWS の API は sns:publish のように <サービス>:<操作> と書きます")),
+                    _ => return Err(err(tsp, tr!("AWS の API は sns:publish のように <サービス>:<操作> と書きます", "write the AWS API as <service>:<action>, such as sns:publish"))),
                 }
             } else {
-                let (a, _) = cc.ident("an AWS service, such as sns", "AWS のサービス（sns など）")?;
+                let (a, _) = cc.ident(tr!("AWS のサービス（sns など）", "an AWS service, such as sns"))?;
                 cc.expect_sym(":")?;
-                let (b, _) = cc.ident("an API action, such as publish", "API の操作（publish など）")?;
+                let (b, _) = cc.ident(tr!("API の操作（publish など）", "an API action, such as publish"))?;
                 (a, b)
             };
             t.binding = Some((Binding::Aws { service, action }, sp));
         }
-        "queue" => t.queue = Some(cc.string("the task queue", "タスクキュー")?.0),
+        "queue" => t.queue = Some(cc.string(tr!("タスクキュー", "the task queue"))?.0),
         "workflow" => {
             if cc.eat_kw("template") {
-                t.argo_template = Some((cc.string("the WorkflowTemplate", "WorkflowTemplate")?.0, sp));
+                t.argo_template = Some((cc.string(tr!("WorkflowTemplate", "the WorkflowTemplate"))?.0, sp));
             } else {
-                t.workflow = Some((cc.string("the type of the child workflow", "子ワークフローの型")?.0, sp));
+                t.workflow = Some((cc.string(tr!("子ワークフローの型", "the type of the child workflow"))?.0, sp));
             }
         }
-        "image" => t.image = Some((cc.string("the container image", "コンテナのイメージ")?.0, sp)),
+        "image" => t.image = Some((cc.string(tr!("コンテナのイメージ", "the container image"))?.0, sp)),
         "state" => {
             cc.expect_kw("machine")?;
-            t.state_machine = Some((cc.string("the state machine's ARN", "ステートマシンの ARN")?.0, sp));
+            t.state_machine = Some((cc.string(tr!("ステートマシンの ARN", "the state machine's ARN"))?.0, sp));
         }
         "durable" => {
             cc.expect_kw("function")?;
-            t.durable_function = Some((cc.string("the durable function", "durable function")?.0, sp));
+            t.durable_function = Some((cc.string(tr!("durable function", "the durable function"))?.0, sp));
         }
         "http" => {
-            let (m, msp) = cc.ident("an HTTP method", "HTTP のメソッド")?;
+            let (m, msp) = cc.ident(tr!("HTTP のメソッド", "an HTTP method"))?;
             let method = m.to_ascii_uppercase();
             if !["GET", "POST", "PUT", "PATCH", "DELETE"].contains(&method.as_str()) {
-                return Err(err(msp, "the method is GET, POST, PUT, PATCH or DELETE", "メソッドは GET・POST・PUT・PATCH・DELETE のどれかです"));
+                return Err(err(msp, tr!("メソッドは GET・POST・PUT・PATCH・DELETE のどれかです", "the method is GET, POST, PUT, PATCH or DELETE")));
             }
             let api = match cc.peek() {
-                Some(Tok::Ident(_)) => Some(cc.ident("the API", "API")?),
+                Some(Tok::Ident(_)) => Some(cc.ident(tr!("API", "the API"))?),
                 _ => None,
             };
-            let url = cc.string(if api.is_some() { "the operation's path" } else { "the URL" }, if api.is_some() { "操作のパス" } else { "URL" })?.0;
+            let url = cc.string(if api.is_some() { tr!("操作のパス", "the operation's path") } else { tr!("URL", "the URL") })?.0;
             let form = cc.eat_kw("form");
             t.binding = Some((Binding::Http { method, url, form, api }, sp));
         }
         "connect" => {
-            let api = cc.ident("the API (`use proto`)", "API（`use proto` の名前）")?;
-            let method = cc.string("the method, as `Service/Method`", "メソッド（`Service/Method`）")?.0;
+            let api = cc.ident(tr!("API（`use proto` の名前）", "the API (`use proto`)"))?;
+            let method = cc.string(tr!("メソッド（`Service/Method`）", "the method, as `Service/Method`"))?.0;
             t.binding = Some((Binding::Connect { api, method }, sp));
         }
         "agent" => {
             let provider = match cc.peek() {
-                Some(Tok::Ident(_)) => Some(cc.ident("whose agent it is, openai or claude", "どこのエージェントか（openai か claude）")?),
+                Some(Tok::Ident(_)) => Some(cc.ident(tr!("どこのエージェントか（openai か claude）", "whose agent it is, openai or claude"))?),
                 _ => None,
             };
-            let instructions = cc.string("what the agent is to do", "エージェントへの指示")?.0;
+            let instructions = cc.string(tr!("エージェントへの指示", "what the agent is to do"))?.0;
             t.binding = Some((Binding::Agent { provider, instructions }, sp));
         }
         "jev" => {
@@ -1666,10 +1655,10 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             };
             let ask = match cc.peek() {
                 Some(Tok::Str(_)) => {
-                    let (instructions, isp) = cc.string("the question Jev answers", "Jev に尋ねること")?;
+                    let (instructions, isp) = cc.string(tr!("Jev に尋ねること", "the question Jev answers"))?;
                     Some(JevAsk { instructions, score, criteria: vec![], span: isp })
                 }
-                _ if score.is_some() => return Err(err(cc.span(), "write the question after `jev score`, in double quotes", "`jev score` のあとに、尋ねることを二重引用符で書きます")),
+                _ if score.is_some() => return Err(err(cc.span(), tr!("`jev score` のあとに、尋ねることを二重引用符で書きます", "write the question after `jev score`, in double quotes"))),
                 _ => None,
             };
             t.binding = Some((Binding::Jev(JevDecl { ask, fields: vec![] }), sp));
@@ -1679,22 +1668,22 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             let v = match cc.peek().cloned() {
                 Some(Tok::Float(f)) => f,
                 Some(Tok::Int(n)) => n as f64,
-                _ => return Err(err(vsp, "expected how sure Jev must be, a number from 0 to 1 such as 0.8", "ここには Jev がどれだけ確かでなければならないかを、0.8 のような 0 から 1 の数で書きます")),
+                _ => return Err(err(vsp, tr!("ここには Jev がどれだけ確かでなければならないかを、0.8 のような 0 から 1 の数で書きます", "expected how sure Jev must be, a number from 0 to 1 such as 0.8"))),
             };
             cc.i += 1;
             if !(v > 0.0 && v <= 1.0) {
-                return Err(err(vsp, "a confidence is more than 0 and at most 1", "確信度は 0 より大きく、1 以下です"));
+                return Err(err(vsp, tr!("確信度は 0 より大きく、1 以下です", "a confidence is more than 0 and at most 1")));
             }
             cc.expect_kw("else")?;
-            let e = cc.ident("the error a less sure answer fails the call with", "確信度が足りない答えで呼び出しが失敗するときのエラー")?;
+            let e = cc.ident(tr!("確信度が足りない答えで呼び出しが失敗するときのエラー", "the error a less sure answer fails the call with"))?;
             t.confidence = Some((v, e, sp));
         }
-        "model" => t.model = Some((cc.string("the model", "モデル")?.0, sp)),
-        "url" => t.url = Some((cc.string("where the agent's server is", "エージェントのサーバーの場所")?.0, sp)),
-        "effort" => t.effort = Some((cc.ident("an effort, such as low, medium or high", "low・medium・high のようなエフォート")?.0, sp)),
-        "connection" => t.connection = Some(cc.string("the EventBridge connection", "EventBridge の接続")?.0),
+        "model" => t.model = Some((cc.string(tr!("モデル", "the model"))?.0, sp)),
+        "url" => t.url = Some((cc.string(tr!("エージェントのサーバーの場所", "where the agent's server is"))?.0, sp)),
+        "effort" => t.effort = Some((cc.ident(tr!("low・medium・high のようなエフォート", "an effort, such as low, medium or high"))?.0, sp)),
+        "connection" => t.connection = Some(cc.string(tr!("EventBridge の接続", "the EventBridge connection"))?.0),
         "errors" => loop {
-            let name = cc.ident("an error name", "エラーの名前")?;
+            let name = cc.ident(tr!("エラーの名前", "an error name"))?;
             let mut status = None;
             let mut exception = None;
             if cc.eat_sym("=") {
@@ -1703,7 +1692,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
                     Some(Tok::Int(n)) => {
                         cc.i += 1;
                         if !(400..=599).contains(&n) {
-                            return Err(err(vsp, "an error status is between 400 and 599", "エラーのステータスは 400 から 599 です"));
+                            return Err(err(vsp, tr!("エラーのステータスは 400 から 599 です", "an error status is between 400 and 599")));
                         }
                         status = Some(n as u16);
                     }
@@ -1711,7 +1700,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
                         cc.i += 1;
                         exception = Some(x);
                     }
-                    _ => return Err(err(vsp, "expected an HTTP status or the name of an AWS API's exception here", "ここには HTTP のステータスか、AWS の API の例外の名前が要ります")),
+                    _ => return Err(err(vsp, tr!("ここには HTTP のステータスか、AWS の API の例外の名前が要ります", "expected an HTTP status or the name of an AWS API's exception here"))),
                 }
             }
             t.errors.push(ErrDecl { name, status, exception });
@@ -1720,9 +1709,9 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             }
         },
         "retry" => {
-            let (n, nsp) = cc.int("a number of retries", "リトライの回数")?;
+            let (n, nsp) = cc.int(tr!("リトライの回数", "a number of retries"))?;
             if n < 1 {
-                return Err(err(nsp, "retry at least once, or leave `retry` out", "一回以上を書くか、`retry` を書かないでください"));
+                return Err(err(nsp, tr!("一回以上を書くか、`retry` を書かないでください", "retry at least once, or leave `retry` out")));
             }
             cc.expect_kw("times")?;
             let mut r = RetryDecl { times: n as u32, every: 1, backoff: 2.0, on: vec![], span: sp };
@@ -1734,14 +1723,14 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
                     r.backoff = match cc.peek().cloned() {
                         Some(Tok::Int(n)) => n as f64,
                         Some(Tok::Float(f)) => f,
-                        _ => return Err(err(bsp, "expected a number here", "ここには数が要ります")),
+                        _ => return Err(err(bsp, tr!("ここには数が要ります", "expected a number here"))),
                     };
                     cc.i += 1;
                     if r.backoff < 1.0 {
-                        return Err(err(bsp, "the backoff is 1 or more", "backoff は 1 以上です"));
+                        return Err(err(bsp, tr!("backoff は 1 以上です", "the backoff is 1 or more")));
                     }
                 } else if cc.eat_kw("on") {
-                    r.on = cc.names("an error name", "エラーの名前")?;
+                    r.on = cc.names(tr!("エラーの名前", "an error name"))?;
                 } else {
                     break;
                 }
@@ -1752,25 +1741,25 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         "key" => {
             t.key = Some(sp);
             if let Some(Tok::Ident(_)) = cc.peek() {
-                t.key_param = Some(cc.ident("the parameter that takes the key", "キーを渡す引数")?);
+                t.key_param = Some(cc.ident(tr!("キーを渡す引数", "the parameter that takes the key"))?);
             }
         }
         "idempotent" => t.idempotent = true,
         "callback" => t.callback = Some(sp),
         "event" => t.event = Some(sp),
-        "flow" => t.flow = Some((cc.string("the path of the child's .flow", "子の .flow のパス")?.0, sp)),
+        "flow" => t.flow = Some((cc.string(tr!("子の .flow のパス", "the path of the child's .flow"))?.0, sp)),
         "starts" => {
             let machine = cc.qualname()?;
             let mut then = Vec::new();
             if cc.eat_kw("then") {
-                then = cc.names("an event", "イベント")?;
+                then = cc.names(tr!("イベント", "an event"))?;
             }
             t.machine = Some((MachineUse::Starts { machine, then }, sp));
         }
         "sends" => {
-            let first = cc.ident("an event", "イベント")?;
+            let first = cc.ident(tr!("イベント", "an event"))?;
             if cc.eat_sym("=") {
-                let v = cc.ident("an event", "イベント")?;
+                let v = cc.ident(tr!("イベント", "an event"))?;
                 t.machine = Some((MachineUse::Sends { event: v, column: Some(first) }, sp));
             } else {
                 t.machine = Some((MachineUse::Sends { event: first, column: None }, sp));
@@ -1779,13 +1768,12 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         "observes" => t.machine = Some((MachineUse::Observes, sp)),
         "refused" => {
             cc.expect_kw("as")?;
-            t.refused_as = Some(cc.ident("an error name", "エラーの名前")?);
+            t.refused_as = Some(cc.ident(tr!("エラーの名前", "an error name"))?);
         }
         other => {
             return Err(err(
                 sp,
-                format!("`{other}` is not a task clause; expected lambda, http, connect, aws, agent, jev, model, effort, confidence, url, connection, flow, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes or refused as"),
-                format!("`{other}` はタスクの項目ではありません（lambda・http・connect・aws・agent・jev・model・effort・confidence・url・connection・flow・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as）"),
+                tr!("`{other}` はタスクの項目ではありません（lambda・http・connect・aws・agent・jev・model・effort・confidence・url・connection・flow・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as）", "`{other}` is not a task clause; expected lambda, http, connect, aws, agent, jev, model, effort, confidence, url, connection, flow, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes or refused as"),
             ))
         }
     }
@@ -1806,13 +1794,13 @@ fn jev_block(p: &mut Parser, indent: usize, jd: &mut JevDecl) -> Result<(), Diag
         let sp = cc.span();
         match level {
             None => level = Some(l.indent),
-            Some(lv) if l.indent < lv => return Err(err(sp, "this line is indented less than the lines before it under `jev`", "この行は、`jev` の下のそれより前の行より浅く字下げされています")),
+            Some(lv) if l.indent < lv => return Err(err(sp, tr!("この行は、`jev` の下のそれより前の行より浅く字下げされています", "this line is indented less than the lines before it under `jev`"))),
             Some(lv) if l.indent > lv => {
                 // a value's meaning, under a field's question
                 let criteria = match jd.fields.last_mut() {
                     Some((_, JevField::Ask(a))) => &mut a.criteria,
-                    Some((_, JevField::Confidence(_))) => return Err(err(sp, "a field that takes how sure Jev is asks nothing, so nothing is written under it", "確信度を受け取るフィールドは何も尋ねないので、その下には何も書きません")),
-                    None => return Err(err(sp, "this line is indented more than the lines before it", "この行は前の行より深く字下げされています")),
+                    Some((_, JevField::Confidence(_))) => return Err(err(sp, tr!("確信度を受け取るフィールドは何も尋ねないので、その下には何も書きません", "a field that takes how sure Jev is asks nothing, so nothing is written under it"))),
+                    None => return Err(err(sp, tr!("この行は前の行より深く字下げされています", "this line is indented more than the lines before it"))),
                 };
                 criteria.push(meaning(&mut cc)?);
                 cc.expect_end()?;
@@ -1828,10 +1816,10 @@ fn jev_block(p: &mut Parser, indent: usize, jd: &mut JevDecl) -> Result<(), Diag
             p.pos += 1;
             continue;
         }
-        let field = cc.ident("a field of the answer", "答えのフィールド")?;
+        let field = cc.ident(tr!("答えのフィールド", "a field of the answer"))?;
         let what = if cc.eat_kw("confidence") {
             cc.expect_kw("of")?;
-            JevField::Confidence(cc.ident("the field whose answer it is how sure of", "どのフィールドの答えの確信度か")?)
+            JevField::Confidence(cc.ident(tr!("どのフィールドの答えの確信度か", "the field whose answer it is how sure of"))?)
         } else {
             let score = if cc.is_kw("score") && matches!(cc.peek_at(1), Some(Tok::Str(_))) {
                 let ssp = cc.span();
@@ -1842,14 +1830,13 @@ fn jev_block(p: &mut Parser, indent: usize, jd: &mut JevDecl) -> Result<(), Diag
             };
             match cc.peek() {
                 Some(Tok::Str(_)) => {
-                    let (instructions, isp) = cc.string("the question Jev answers for the field", "そのフィールドについて Jev に尋ねること")?;
+                    let (instructions, isp) = cc.string(tr!("そのフィールドについて Jev に尋ねること", "the question Jev answers for the field"))?;
                     JevField::Ask(JevAsk { instructions, score, criteria: vec![], span: isp })
                 }
                 _ => {
                     return Err(err(
                         cc.span(),
-                        format!("under `jev`, write what Jev is asked for `{}`: `{} \"<question>\"`, `{} score \"<question>\"`, or `{} confidence of <field>`", field.0, field.0, field.0, field.0),
-                        format!("`jev` の下には、`{}` について尋ねることを書きます（`{} \"<質問>\"`、`{} score \"<質問>\"`、`{} confidence of <フィールド>` のどれか）", field.0, field.0, field.0, field.0),
+                        tr!("`jev` の下には、`{}` について尋ねることを書きます（`{} \"<質問>\"`、`{} score \"<質問>\"`、`{} confidence of <フィールド>` のどれか）", "under `jev`, write what Jev is asked for `{}`: `{} \"<question>\"`, `{} score \"<question>\"`, or `{} confidence of <field>`", field.0, field.0, field.0, field.0),
                     ))
                 }
             }
@@ -1863,7 +1850,7 @@ fn jev_block(p: &mut Parser, indent: usize, jd: &mut JevDecl) -> Result<(), Diag
 
 /// `returns "<what it means>"`: a value of the answer, and what it means to Jev.
 fn meaning(cc: &mut Cur) -> Result<(Name, String), Diag> {
-    let v = cc.ident("a value of the answer", "答えの値")?;
-    let (text, _) = cc.string("what the value means", "その値の意味")?;
+    let v = cc.ident(tr!("答えの値", "a value of the answer"))?;
+    let (text, _) = cc.string(tr!("その値の意味", "what the value means"))?;
     Ok((v, text))
 }

@@ -2,7 +2,7 @@
 //! retries that may repeat a change, and what an Express workflow cannot do. How long the
 //! execution history can grow on each platform is here too, for each build to check (E040).
 
-use crate::diag::Diag;
+use crate::diag::{Diag, Text};
 use crate::model::*;
 use crate::syntax::{self, Kind};
 use std::cell::RefCell;
@@ -107,14 +107,11 @@ fn whole(m: &Model) -> Vec<Diag> {
             let retries_failures = r.on.is_empty() || r.on.iter().any(|x| x == "failure" || x == "timeout");
             if repeats_change && retries_failures {
                 let starts_or_sends = matches!(t.machine, Some(TaskMachine::Starts { .. }) | Some(TaskMachine::Sends { .. }));
-                let (en, ja) = (
-                    format!("`{}` is retried after a failure or a timeout, when the first try may have gone through on the other side; give it `key` so the other side can tell a retry from a new request, or mark it `idempotent` if doing it twice is the same as once", t.name),
-                    format!("`{}` は失敗やタイムアウトのあとにリトライされますが、最初の一回が外部のサービスではもう通っていることがあります。リトライだと見分けてもらえるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください", t.name),
-                );
+                let message = tr!("`{}` は失敗やタイムアウトのあとにリトライされますが、最初の一回が外部のサービスではもう通っていることがあります。リトライだと見分けてもらえるよう `key` を付けるか、二度しても一度と同じなら `idempotent` と書いてください", "`{}` is retried after a failure or a timeout, when the first try may have gone through on the other side; give it `key` so the other side can tell a retry from a new request, or mark it `idempotent` if doing it twice is the same as once", t.name);
                 if starts_or_sends {
-                    out.push(Diag::error("E030", t.line, 1, en, ja));
+                    out.push(Diag::error("E030", t.line, 1, message.clone()));
                 } else {
-                    out.push(Diag::warning("W030", t.line, 1, en, ja));
+                    out.push(Diag::warning("W030", t.line, 1, message));
                 }
             }
         }
@@ -122,15 +119,14 @@ fn whole(m: &Model) -> Vec<Diag> {
     if m.kind == Kind::Express {
         for t in &m.tasks {
             if t.callback {
-                out.push(Diag::error("E031", t.line, 1, format!("an Express workflow cannot wait for a callback (`{}`)", t.name), format!("Express のワークフローはコールバックを待てません（`{}`）", t.name)));
+                out.push(Diag::error("E031", t.line, 1, tr!("Express のワークフローはコールバックを待てません（`{}`）", "an Express workflow cannot wait for a callback (`{}`)", t.name)));
             }
             if t.state_machine.is_some() {
                 out.push(Diag::error(
                     "E031",
                     t.line,
                     1,
-                    format!("an Express workflow cannot wait for a nested execution to end (`{}`)", t.name),
-                    format!("Express のワークフローは、ネストした実行が終わるのを待てません（`{}`）", t.name),
+                    tr!("Express のワークフローは、ネストした実行が終わるのを待てません（`{}`）", "an Express workflow cannot wait for a nested execution to end (`{}`)", t.name),
                 ));
             }
             if t.changes_things() && !t.key {
@@ -138,8 +134,7 @@ fn whole(m: &Model) -> Vec<Diag> {
                     "E031",
                     t.line,
                     1,
-                    format!("an asynchronous Express workflow may run twice, and `{}` changes things without `key`", t.name),
-                    format!("非同期の Express のワークフローは二度走ることがあり、`{}` は `key` を持たずに外部のデータを変えます", t.name),
+                    tr!("非同期の Express のワークフローは二度走ることがあり、`{}` は `key` を持たずに外部のデータを変えます", "an asynchronous Express workflow may run twice, and `{}` changes things without `key`", t.name),
                 ));
             }
         }
@@ -149,8 +144,7 @@ fn whole(m: &Model) -> Vec<Diag> {
                 "E031",
                 1,
                 1,
-                "an Express workflow runs for at most five minutes, and this one can wait longer",
-                "Express のワークフローは五分までしか動けませんが、これはそれより長く待つことがあります",
+                tr!("Express のワークフローは五分までしか動けませんが、これはそれより長く待つことがあります", "an Express workflow runs for at most five minutes, and this one can wait longer"),
             ));
         }
     }
@@ -162,52 +156,37 @@ fn whole(m: &Model) -> Vec<Diag> {
 /// durable execution. On Temporal, a loop at the top of the flow continues as new once the
 /// history is long, so a run's history is bounded by one round of it past `CONTINUE_AT`.
 pub fn history_limit(m: &Model, p: Platform) -> Option<Diag> {
-    let (en, ja) = match p {
+    let message = match p {
         Platform::StepFunctions if m.kind == Kind::Express => return None,
         Platform::StepFunctions | Platform::Temporal => {
             let (name, limit, n) = if p == Platform::StepFunctions { ("Step Functions", 25_000, bound(m, &ASL_COST)) } else { ("Temporal", TEMPORAL_LIMIT, temporal_bound(m)) };
             if n <= limit {
                 return None;
             }
-            let (more_en, more_ja) = match p {
-                Platform::Temporal if m.flow.iter().any(continues_as_new) => (
-                    "; the loops at the top of the flow go on in a new run (Continue-As-New) as the history grows, so what is too long is the rest of the flow, or one round of such a loop",
-                    "。フローの一番外のループは履歴が長くなると新しい実行で続ける（Continue-As-New）ので、長すぎるのはその外の部分か、ループのイテレーション一つです",
-                ),
-                Platform::Temporal => (
-                    "; a `repeat`, or a `for` that is not parallel, at the top of the flow would go on in a new run (Continue-As-New) as the history grows",
-                    "。フローの一番外に置いた `repeat` や並列でない `for` なら、履歴が長くなると新しい実行で続けます（Continue-As-New）",
-                ),
-                _ => ("", ""),
+            let Text { en: more_en, ja: more_ja } = match p {
+                Platform::Temporal if m.flow.iter().any(continues_as_new) => tr!("。フローの一番外のループは履歴が長くなると新しい実行で続ける（Continue-As-New）ので、長すぎるのはその外の部分か、ループのイテレーション一つです", "; the loops at the top of the flow go on in a new run (Continue-As-New) as the history grows, so what is too long is the rest of the flow, or one round of such a loop"),
+                Platform::Temporal => tr!("。フローの一番外に置いた `repeat` や並列でない `for` なら、履歴が長くなると新しい実行で続けます（Continue-As-New）", "; a `repeat`, or a `for` that is not parallel, at the top of the flow would go on in a new run (Continue-As-New) as the history grows"),
+                _ => Text::default(),
             };
-            (
-                format!("on {name}, an execution of this workflow can write up to about {n} history events, past the limit of {limit}{more_en}; lower the loop counts, or start a new execution to continue"),
-                format!("{name} では、このワークフローの一回の実行が実行履歴を最大でおよそ {n} 件書きます。上限の {limit} 件を超えます{more_ja}。ループの回数を減らすか、続きを新しい実行で始めてください"),
-            )
+            tr!("{name} では、このワークフローの一回の実行が実行履歴を最大でおよそ {n} 件書きます。上限の {limit} 件を超えます{more_ja}。ループの回数を減らすか、続きを新しい実行で始めてください", "on {name}, an execution of this workflow can write up to about {n} history events, past the limit of {limit}{more_en}; lower the loop counts, or start a new execution to continue")
         }
         Platform::Argo => {
             let n = bound(m, &ARGO_COST);
             if n <= ARGO_LIMIT {
                 return None;
             }
-            (
-                format!("on Argo Workflows, an execution of this workflow can make up to about {n} nodes, past {ARGO_LIMIT}; the Workflow keeps every node, and past 1 MiB even compressed it cannot be stored without a database for the node status; lower the loop counts, or start a new execution to continue"),
-                format!("Argo Workflows では、このワークフローの一回の実行がノードを最大でおよそ {n} 個作ります。目安の {ARGO_LIMIT} 個を超えます。Workflow はノードをすべて持ち、圧縮しても 1 MiB を超えると、ノードの状態を置くデータベースなしには保存できません。ループの回数を減らすか、続きを新しい実行で始めてください"),
-            )
+            tr!("Argo Workflows では、このワークフローの一回の実行がノードを最大でおよそ {n} 個作ります。目安の {ARGO_LIMIT} 個を超えます。Workflow はノードをすべて持ち、圧縮しても 1 MiB を超えると、ノードの状態を置くデータベースなしには保存できません。ループの回数を減らすか、続きを新しい実行で始めてください", "on Argo Workflows, an execution of this workflow can make up to about {n} nodes, past {ARGO_LIMIT}; the Workflow keeps every node, and past 1 MiB even compressed it cannot be stored without a database for the node status; lower the loop counts, or start a new execution to continue")
         }
         Platform::Durable => {
             let n = bound(m, &DURABLE_COST);
             if n <= DURABLE_LIMIT {
                 return None;
             }
-            (
-                format!("on Lambda durable functions, an execution of this workflow can take up to about {n} durable operations, past the limit of {DURABLE_LIMIT}; lower the loop counts, or start a new execution to continue"),
-                format!("Lambda durable functions では、このワークフローの一回の実行が durable の操作を最大でおよそ {n} 回使います。上限の {DURABLE_LIMIT} 回を超えます。ループの回数を減らすか、続きを新しい実行で始めてください"),
-            )
+            tr!("Lambda durable functions では、このワークフローの一回の実行が durable の操作を最大でおよそ {n} 回使います。上限の {DURABLE_LIMIT} 回を超えます。ループの回数を減らすか、続きを新しい実行で始めてください", "on Lambda durable functions, an execution of this workflow can take up to about {n} durable operations, past the limit of {DURABLE_LIMIT}; lower the loop counts, or start a new execution to continue")
         }
         Platform::Graph => return None,
     };
-    Some(Diag::error("E040", 1, 1, en, ja))
+    Some(Diag::error("E040", 1, 1, message))
 }
 
 /// Temporal's limit on a run's history.

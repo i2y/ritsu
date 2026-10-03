@@ -5,7 +5,7 @@
 //! never be taken, a variable read before it is set, an event sent where the machine
 //! refuses it, and a case left in a state that is not final when the workflow ends.
 
-use crate::diag::{At, Diag, Severity, Step};
+use crate::diag::{At, Diag, Severity, Step, Text};
 use crate::model::*;
 use crate::rulec::Outcome;
 use std::collections::{BTreeMap, BTreeSet};
@@ -256,7 +256,7 @@ pub fn analyze(m: &Model) -> FlowResult {
         let line = m.flow.last().map(|s| s.line).unwrap_or(1);
         if !m.outputs.is_empty() {
             f.push(
-                Diag::error("E009", line, 1, "the flow can reach its end without `succeed`, but the workflow has outputs", "出力があるのに、`succeed` を通らずに flow の終わりに着くことがあります")
+                Diag::error("E009", line, 1, tr!("出力があるのに、`succeed` を通らずに flow の終わりに着くことがあります", "the flow can reach its end without `succeed`, but the workflow has outputs"))
                     .with_path(end.path.clone()),
             );
         } else {
@@ -273,7 +273,7 @@ pub fn analyze(m: &Model) -> FlowResult {
             }
             if entry.live {
                 let line = block.first().map(|s| s.line).unwrap_or(1);
-                let entry = entry.step(Step::new(line, "on failure", "on failure").at(At::OnFailure));
+                let entry = entry.step(Step::new(line, tr!("on failure", "on failure")).at(At::OnFailure));
                 let end = f.stmts(block, entry);
                 if end.live {
                     let line = block.last().map(|s| s.line).unwrap_or(1);
@@ -294,7 +294,7 @@ pub fn analyze(m: &Model) -> FlowResult {
         }
         if entry.live {
             let line = block.first().map(|s| s.line).unwrap_or(1);
-            let entry = entry.step(Step::new(line, "on cancel", "on cancel").at(At::OnCancel));
+            let entry = entry.step(Step::new(line, tr!("on cancel", "on cancel")).at(At::OnCancel));
             let end = f.stmts(block, entry);
             if end.live {
                 let line = block.last().map(|s| s.line).unwrap_or(1);
@@ -386,8 +386,7 @@ impl<'a> Flow<'a> {
                     let (from, to) = (self.state_name(c, s), self.state_name(c, o.next));
                     np.push(Step::new(
                         0,
-                        format!("`{ev}` happens on the other side: {} {from} → {to}", case.name),
-                        format!("外部のサービスで `{ev}` が起きる: {} {from} → {to}", case.name),
+                        tr!("外部のサービスで `{ev}` が起きる: {} {from} → {to}", "`{ev}` happens on the other side: {} {from} → {to}", case.name),
                     ));
                     out.insert(o.next, np);
                     work.push(o.next);
@@ -419,7 +418,7 @@ impl<'a> Flow<'a> {
                     }
                     let mut np = p.clone();
                     let (from, to) = (self.state_name(c, s), self.state_name(c, o.next));
-                    np.push(Step::new(0, format!("before the workflow looks: `{ev}`, {} {from} → {to}", case.name), format!("ワークフローが見る前に `{ev}`: {} {from} → {to}", case.name)));
+                    np.push(Step::new(0, tr!("ワークフローが見る前に `{ev}`: {} {from} → {to}", "before the workflow looks: `{ev}`, {} {from} → {to}", case.name)));
                     out.insert(o.next, np);
                     work.push(o.next);
                 }
@@ -434,7 +433,7 @@ impl<'a> Flow<'a> {
             Some(col) => match mc.axis_of(col) {
                 Some(a) => Some(a),
                 None => {
-                    self.push(Diag::error("E008", line, 1, format!("the machine's table does not read `{col}`"), format!("ステートマシンの表は `{col}` を読みません")));
+                    self.push(Diag::error("E008", line, 1, tr!("ステートマシンの表は `{col}` を読みません", "the machine's table does not read `{col}`")));
                     None
                 }
             },
@@ -443,11 +442,11 @@ impl<'a> Flow<'a> {
                 match axes.len() {
                     1 => Some(axes[0]),
                     0 => {
-                        self.push(Diag::error("E008", line, 1, format!("no input of the machine `{}` has the event `{event}`", mc.name), format!("ステートマシン `{}` のどの入力にもイベント `{event}` はありません", mc.name)));
+                        self.push(Diag::error("E008", line, 1, tr!("ステートマシン `{}` のどの入力にもイベント `{event}` はありません", "no input of the machine `{}` has the event `{event}`", mc.name)));
                         None
                     }
                     _ => {
-                        self.push(Diag::error("E008", line, 1, format!("more than one input has the value `{event}`; write `sends <input> = {event}`"), format!("値 `{event}` を持つ入力が二つ以上あります。`sends <入力> = {event}` と書いてください")));
+                        self.push(Diag::error("E008", line, 1, tr!("値 `{event}` を持つ入力が二つ以上あります。`sends <入力> = {event}` と書いてください", "more than one input has the value `{event}`; write `sends <input> = {event}`")));
                         None
                     }
                 }
@@ -456,7 +455,7 @@ impl<'a> Flow<'a> {
         match mc.axes[axis].coords.iter().position(|x| x == event) {
             Some(ci) => Some((axis, ci)),
             None => {
-                self.push(Diag::error("E008", line, 1, format!("`{event}` is not a value of `{}`", mc.axes[axis].column), format!("`{event}` は `{}` の値ではありません", mc.axes[axis].column)));
+                self.push(Diag::error("E008", line, 1, tr!("`{event}` は `{}` の値ではありません", "`{event}` is not a value of `{}`", mc.axes[axis].column)));
                 None
             }
         }
@@ -475,23 +474,23 @@ impl<'a> Flow<'a> {
                 let cabs = &a.cases[ci];
                 if cabs.started != Tri::Yes {
                     let p = cabs.unstarted.clone().unwrap_or_default();
-                    let (en, ja) = if cabs.started == Tri::No {
-                        (format!("the case `{name}` has not been started here"), format!("ここでは案件 `{name}` はまだ始まっていません"))
+                    let message = if cabs.started == Tri::No {
+                        tr!("ここでは案件 `{name}` はまだ始まっていません", "the case `{name}` has not been started here")
                     } else {
-                        (format!("the case `{name}` may not have been started here"), format!("ここでは、案件 `{name}` が始まっていないことがあります"))
+                        tr!("ここでは、案件 `{name}` が始まっていないことがあります", "the case `{name}` may not have been started here")
                     };
-                    self.push(Diag::error("E013", line, 1, en, ja).with_path(p));
+                    self.push(Diag::error("E013", line, 1, message).with_path(p));
                 }
                 return;
             }
             if let Some((t, p)) = a.set.get(name) {
                 if *t != Tri::Yes {
-                    let (en, ja) = if *t == Tri::No {
-                        (format!("`{name}` has not been set here"), format!("ここでは `{name}` はまだ値を持っていません"))
+                    let message = if *t == Tri::No {
+                        tr!("ここでは `{name}` はまだ値を持っていません", "`{name}` has not been set here")
                     } else {
-                        (format!("`{name}` may not have been set here"), format!("ここでは、`{name}` が値を持っていないことがあります"))
+                        tr!("ここでは、`{name}` が値を持っていないことがあります", "`{name}` may not have been set here")
                     };
-                    self.push(Diag::error("E012", line, 1, en, ja).with_path(p.clone().unwrap_or_default()));
+                    self.push(Diag::error("E012", line, 1, message).with_path(p.clone().unwrap_or_default()));
                 }
             }
         }
@@ -526,26 +525,26 @@ impl<'a> Flow<'a> {
             TK::Call { target, callee, args, handlers } => self.call(s, target.as_ref(), callee, args, handlers, a),
             TK::Match { expr, arms } => self.matching(s, expr, arms, a),
             TK::Wait { seconds } => {
-                let a = a.step(Step::new(s.line, format!("wait {}", show_dur(*seconds)), format!("{} 待つ", show_dur_ja(*seconds))).at(here));
+                let a = a.step(Step::new(s.line, tr!("{} 待つ", "wait {}", show_dur_ja(*seconds); show_dur(*seconds))).at(here));
                 self.cancel_point(&a, s, "wait");
                 a
             }
             TK::WaitUntil { at } => {
                 self.check_reads(at, &a, s.line);
                 let shown = show(at);
-                let a = a.step(Step::new(s.line, format!("wait until {shown}"), format!("{shown} まで待つ")).at(here));
+                let a = a.step(Step::new(s.line, tr!("{shown} まで待つ", "wait until {shown}")).at(here));
                 self.cancel_point(&a, s, "wait");
                 a
             }
             TK::Assign { name, expr } => {
                 self.check_reads(expr, &a, s.line);
-                let mut a = a.step(Step::new(s.line, format!("{name} = {}", show(expr)), format!("{name} = {}", show(expr))).at(here));
+                let mut a = a.step(Step::new(s.line, tr!("{name} = {}", "{name} = {}", show(expr))).at(here));
                 Flow::assign(&mut a, name);
                 a
             }
             TK::For { var, list, max, parallel, body, result, locals } => {
                 self.check_reads(list, &a, s.line);
-                let entry = a.step(Step::new(s.line, format!("for {var} in {} (at most {max})", show(list)), format!("for {var} in {}（{max} 個まで）", show(list))).at(here));
+                let entry = a.step(Step::new(s.line, tr!("for {var} in {}（{max} 個まで）", "for {var} in {} (at most {max})", show(list))).at(here));
                 match parallel {
                     None => {
                         // like `repeat`, but the list may be empty, so the loop can also end before a round
@@ -609,7 +608,7 @@ impl<'a> Flow<'a> {
                 }
             }
             TK::Repeat { times, body } => {
-                let mut head = a.clone().step(Step::new(s.line, format!("repeat (at most {times} times)"), format!("repeat（{times} 回まで）")).at(here));
+                let mut head = a.clone().step(Step::new(s.line, tr!("repeat（{times} 回まで）", "repeat (at most {times} times)")).at(here));
                 let mut rounds = 0;
                 loop {
                     rounds += 1;
@@ -629,7 +628,7 @@ impl<'a> Flow<'a> {
             }
             TK::Pass => a,
             TK::Break => {
-                let a2 = a.step(Step::new(s.line, "break", "break").at(here));
+                let a2 = a.step(Step::new(s.line, tr!("break", "break")).at(here));
                 if let Some(l) = self.loops.last_mut() {
                     l.push(a2);
                 }
@@ -676,30 +675,21 @@ impl<'a> Flow<'a> {
             let names = self.names(c, bad.iter().map(|(s, _)| *s)).join(", ");
             let finals = self.names(c, mc.finals.iter().cloned()).join(", ");
             let cn = self.case_name(c).to_string();
-            let (en, ja) = match &how {
-                Exit::Succeed | Exit::End => (
-                    format!("the workflow can end here with the case `{cn}` in {names}, which is not final ({finals} are)"),
-                    format!("案件 `{cn}` が {names} のまま、ここでワークフローが終わることがあります（終わりの状態は {finals}）"),
-                ),
-                Exit::Fail(_) | Exit::FailEnd => (
-                    format!("the workflow can fail here with the case `{cn}` in {names}, which is not final ({finals} are); settle it first, or write `leaving {cn}` to hand it over as it is"),
-                    format!("案件 `{cn}` が {names} のまま、ここでワークフローが失敗することがあります（終わりの状態は {finals}）。先に片付けるか、そのまま引き渡すなら `leaving {cn}` と書いてください"),
-                ),
-                Exit::CancelEnd => (
-                    format!("the workflow can end cancelled here with the case `{cn}` in {names}, which is not final ({finals} are); settle it in `on cancel`, or end with `fail … leaving {cn}` to hand it over as it is"),
-                    format!("案件 `{cn}` が {names} のまま、ここでワークフローがキャンセルで終わることがあります（終わりの状態は {finals}）。`on cancel` で片付けるか、そのまま引き渡すなら `fail … leaving {cn}` で終えてください"),
-                ),
+            let message = match &how {
+                Exit::Succeed | Exit::End => tr!("案件 `{cn}` が {names} のまま、ここでワークフローが終わることがあります（終わりの状態は {finals}）", "the workflow can end here with the case `{cn}` in {names}, which is not final ({finals} are)"),
+                Exit::Fail(_) | Exit::FailEnd => tr!("案件 `{cn}` が {names} のまま、ここでワークフローが失敗することがあります（終わりの状態は {finals}）。先に片付けるか、そのまま引き渡すなら `leaving {cn}` と書いてください", "the workflow can fail here with the case `{cn}` in {names}, which is not final ({finals} are); settle it first, or write `leaving {cn}` to hand it over as it is"),
+                Exit::CancelEnd => tr!("案件 `{cn}` が {names} のまま、ここでワークフローがキャンセルで終わることがあります（終わりの状態は {finals}）。`on cancel` で片付けるか、そのまま引き渡すなら `fail … leaving {cn}` で終えてください", "the workflow can end cancelled here with the case `{cn}` in {names}, which is not final ({finals} are); settle it in `on cancel`, or end with `fail … leaving {cn}` to hand it over as it is"),
             };
             let mut p = bad[0].1.clone();
-            let (xen, xja) = match &how {
-                Exit::Succeed => ("succeed".to_string(), "succeed".to_string()),
-                Exit::End => ("the flow ends".to_string(), "flow が終わる".to_string()),
-                Exit::Fail(e) => (format!("fail {e}"), format!("fail {e}")),
-                Exit::FailEnd => ("`on failure` ends and the workflow fails".to_string(), "`on failure` が終わり、ワークフローが失敗する".to_string()),
-                Exit::CancelEnd => ("`on cancel` ends and the workflow ends cancelled".to_string(), "`on cancel` が終わり、ワークフローがキャンセルで終わる".to_string()),
+            let x = match &how {
+                Exit::Succeed => Text::same("succeed"),
+                Exit::End => tr!("flow が終わる", "the flow ends"),
+                Exit::Fail(e) => Text::same(format!("fail {e}")),
+                Exit::FailEnd => tr!("`on failure` が終わり、ワークフローが失敗する", "`on failure` ends and the workflow fails"),
+                Exit::CancelEnd => tr!("`on cancel` が終わり、ワークフローがキャンセルで終わる", "`on cancel` ends and the workflow ends cancelled"),
             };
-            p.push(Step::new(line, xen, xja).at(ending.at()));
-            self.push(Diag::error("E020", line, 1, en, ja).with_path(p));
+            p.push(Step::new(line, x).at(ending.at()));
+            self.push(Diag::error("E020", line, 1, message).with_path(p));
         }
     }
 
@@ -726,20 +716,14 @@ impl<'a> Flow<'a> {
             if let Some((line, callee, path, states)) = first {
                 let cn = self.case_name(c).to_string();
                 let st = states.join(", ");
-                let (en, ja) = match settling {
+                let message = match settling {
                     Settling::OnFailure | Settling::OnCancel => {
                         let block = if settling == Settling::OnFailure { "on failure" } else { "on cancel" };
-                        (
-                            format!("if `{callee}` fails while `{block}` is settling `{cn}`, the workflow fails with `{cn}` in {st} ({count} such call(s))"),
-                            format!("`{block}` が `{cn}` を片付けている最中に `{callee}` が失敗すると、`{cn}` が {st} のままワークフローが失敗します（そうなる呼び出しは {count} か所）"),
-                        )
+                        tr!("`{block}` が `{cn}` を片付けている最中に `{callee}` が失敗すると、`{cn}` が {st} のままワークフローが失敗します（そうなる呼び出しは {count} か所）", "if `{callee}` fails while `{block}` is settling `{cn}`, the workflow fails with `{cn}` in {st} ({count} such call(s))")
                     }
-                    Settling::No => (
-                        format!("if `{callee}` fails, the workflow fails with the case `{cn}` in {st}; {count} call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case"),
-                        format!("`{callee}` が失敗すると、案件 `{cn}` が {st} のままワークフローが失敗します。そうなる呼び出しは {count} か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください"),
-                    ),
+                    Settling::No => tr!("`{callee}` が失敗すると、案件 `{cn}` が {st} のままワークフローが失敗します。そうなる呼び出しは {count} か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください", "if `{callee}` fails, the workflow fails with the case `{cn}` in {st}; {count} call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case"),
                 };
-                self.push(Diag::warning("W101", line, 1, en, ja).with_path(path));
+                self.push(Diag::warning("W101", line, 1, message).with_path(path));
             }
         }
     }
@@ -762,7 +746,7 @@ impl<'a> Flow<'a> {
         let mut other_err = a.clone();
         match target {
             Some(Target::Let(v)) => {
-                ok = ok.step(Step::new(s.line, format!("{v} = {callee_name}(…)"), format!("{v} = {callee_name}(…)")).at(At::Stmt(s.site)));
+                ok = ok.step(Step::new(s.line, tr!("{v} = {callee_name}(…)", "{v} = {callee_name}(…)")).at(At::Stmt(s.site)));
                 Flow::assign(&mut ok, v);
             }
             Some(Target::Case(c)) => {
@@ -775,8 +759,8 @@ impl<'a> Flow<'a> {
                 match t.machine.clone() {
                     Some(TaskMachine::Starts { then, .. }) => {
                         match a.cases[c].started {
-                            Tri::Yes => self.push(Diag::error("E013", s.line, 1, format!("the case `{cn}` has been started already"), format!("案件 `{cn}` はもう始まっています")).with_path(a.path.clone())),
-                            Tri::Maybe => self.push(Diag::error("E013", s.line, 1, format!("the case `{cn}` may have been started already"), format!("案件 `{cn}` がもう始まっていることがあります")).with_path(a.path.clone())),
+                            Tri::Yes => self.push(Diag::error("E013", s.line, 1, tr!("案件 `{cn}` はもう始まっています", "the case `{cn}` has been started already")).with_path(a.path.clone())),
+                            Tri::Maybe => self.push(Diag::error("E013", s.line, 1, tr!("案件 `{cn}` がもう始まっていることがあります", "the case `{cn}` may have been started already")).with_path(a.path.clone())),
                             Tri::No => {}
                         }
                         let mc = self.m.machine(c);
@@ -794,7 +778,7 @@ impl<'a> Flow<'a> {
                                 for o in self.m.machine(c).outcomes(*st, &fixed) {
                                     if self.is_refused(c, &o) {
                                         let sn = self.state_name(c, *st).to_string();
-                                        self.push(Diag::error("E021", s.line, 1, format!("the machine refuses `{ev}` in {sn}, so `{}` cannot start the case with it", t.name), format!("ステートマシンは {sn} で `{ev}` を拒否するので、`{}` はそれで案件を始められません", t.name)));
+                                        self.push(Diag::error("E021", s.line, 1, tr!("ステートマシンは {sn} で `{ev}` を拒否するので、`{}` はそれで案件を始められません", "the machine refuses `{ev}` in {sn}, so `{}` cannot start the case with it", t.name)));
                                         continue;
                                     }
                                     next.entry(o.next).or_insert_with(|| p.clone());
@@ -805,20 +789,19 @@ impl<'a> Flow<'a> {
                         let mut st2 = BTreeMap::new();
                         for (st, p) in states {
                             let mut np = p;
-                            np.push(Step::new(s.line, format!("{}: {cn} starts in {}", t.name, self.state_name(c, st)), format!("{}: {cn} が {} で始まる", t.name, self.state_name(c, st))).at(At::Stmt(s.site)));
+                            np.push(Step::new(s.line, tr!("{}: {cn} が {} で始まる", "{}: {cn} starts in {}", t.name, self.state_name(c, st))).at(At::Stmt(s.site)));
                             st2.insert(st, np);
                         }
                         self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(st2.keys().cloned());
                         ok.cases[c] = CaseAbs { started: Tri::Yes, unstarted: None, states: st2 };
-                        ok.path.push(Step::new(s.line, format!("{}: {cn} starts", t.name), format!("{}: {cn} が始まる", t.name)).at(At::Stmt(s.site)));
+                        ok.path.push(Step::new(s.line, tr!("{}: {cn} が始まる", "{}: {cn} starts", t.name)).at(At::Stmt(s.site)));
                         Flow::assign(&mut ok, &cn);
                         if !t.key {
                             self.push(Diag::warning(
                                 "W103",
                                 s.line,
                                 1,
-                                format!("if `{}` fails after the other side made the case, the workflow has no hold on it; give the task `key`, so that a retry finds the same one", t.name),
-                                format!("外部のサービスで案件ができたあとに `{}` が失敗すると、ワークフローはその案件を見失います。リトライしたときに同じ案件が返るよう、タスクに `key` を付けてください", t.name),
+                                tr!("外部のサービスで案件ができたあとに `{}` が失敗すると、ワークフローはその案件を見失います。リトライしたときに同じ案件が返るよう、タスクに `key` を付けてください", "if `{}` fails after the other side made the case, the workflow has no hold on it; give the task `key`, so that a retry finds the same one", t.name),
                             ));
                         }
                     }
@@ -845,8 +828,7 @@ impl<'a> Flow<'a> {
                                 np.push(
                                     Step::new(
                                         s.line,
-                                        format!("{}: {cn} {} → {}", t.name, self.state_name(c, *st), self.state_name(c, o.next)),
-                                        format!("{}: {cn} が {} → {}", t.name, self.state_name(c, *st), self.state_name(c, o.next)),
+                                        tr!("{}: {cn} が {} → {}", "{}: {cn} {} → {}", t.name, self.state_name(c, *st), self.state_name(c, o.next)),
                                     )
                                     .at(At::Stmt(s.site)),
                                 );
@@ -862,12 +844,12 @@ impl<'a> Flow<'a> {
                         if next.is_empty() {
                             let names = self.names(c, now.keys().cloned()).join(", ");
                             let p = now.values().next().cloned().unwrap_or_default();
-                            self.push(Diag::error("E021", s.line, 1, format!("`{cn}` can be in {names} here, and the machine refuses `{event}` in every one of them"), format!("ここで `{cn}` は {names} のどれかで、ステートマシンはどの状態でも `{event}` を拒否します")).with_path(p));
+                            self.push(Diag::error("E021", s.line, 1, tr!("ここで `{cn}` は {names} のどれかで、ステートマシンはどの状態でも `{event}` を拒否します", "`{cn}` can be in {names} here, and the machine refuses `{event}` in every one of them")).with_path(p));
                             ok = Abs::dead();
                         } else {
                             self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(next.keys().cloned());
                             ok.cases[c].states = next.clone();
-                            ok.path.push(Step::new(s.line, format!("{}: {event}", t.name), format!("{}: {event}", t.name)).at(At::Stmt(s.site)));
+                            ok.path.push(Step::new(s.line, tr!("{}: {event}", "{}: {event}", t.name)).at(At::Stmt(s.site)));
                             Flow::assign(&mut ok, &cn);
                         }
                         if !refusing.is_empty() {
@@ -879,8 +861,7 @@ impl<'a> Flow<'a> {
                                         "E022",
                                         s.line,
                                         1,
-                                        format!("the machine may refuse `{event}` here (when `{cn}` is in {names}), but `{}` does not say how a refusal comes back; write `refused as <error>` under the task", t.name),
-                                        format!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`{}` には拒否されたときの返り方が書かれていません。タスクの下に `refused as <エラー>` を書いてください", t.name),
+                                        tr!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`{}` には拒否されたときの返り方が書かれていません。タスクの下に `refused as <エラー>` を書いてください", "the machine may refuse `{event}` here (when `{cn}` is in {names}), but `{}` does not say how a refusal comes back; write `refused as <error>` under the task", t.name),
                                     )
                                     .with_path(p),
                                 ),
@@ -891,8 +872,7 @@ impl<'a> Flow<'a> {
                                                 "E022",
                                                 s.line,
                                                 1,
-                                                format!("the machine may refuse `{event}` here, when `{cn}` is in {names}; handle it with `on {err} =>`"),
-                                                format!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`on {err} =>` で処理してください"),
+                                                tr!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`on {err} =>` で処理してください", "the machine may refuse `{event}` here, when `{cn}` is in {names}; handle it with `on {err} =>`"),
                                             )
                                             .with_path(p),
                                         );
@@ -907,14 +887,14 @@ impl<'a> Flow<'a> {
                                         .or_else(|| handlers.iter().position(|h| h.errors.contains(&named) || h.errors.contains(&HErr::Failure)))
                                         .map(|j| At::Handler(s.site, j))
                                         .unwrap_or(At::Stmt(s.site));
-                                    refused = Some(r.step(Step::new(s.line, format!("{}: {event} is refused ({err})", t.name), format!("{}: {event} が拒否される（{err}）", t.name)).at(at)));
+                                    refused = Some(r.step(Step::new(s.line, tr!("{}: {event} が拒否される（{err}）", "{}: {event} is refused ({err})", t.name)).at(at)));
                                 }
                             }
                         } else if let Some(err) = &refused_err {
                             let only_refusal = handlers.iter().any(|h| h.errors.len() == 1 && h.errors[0] == HErr::Declared(err.clone()));
                             if only_refusal {
                                 let names = self.names(c, now.keys().cloned()).join(", ");
-                                self.push(Diag::warning("W102", s.line, 1, format!("`on {err}` never runs here: `{cn}` is in {names}, where `{event}` is never refused"), format!("ここでは `on {err}` は動きません。`{cn}` は {names} のどれかで、そこでは `{event}` は拒否されません")));
+                                self.push(Diag::warning("W102", s.line, 1, tr!("ここでは `on {err}` は動きません。`{cn}` は {names} のどれかで、そこでは `{event}` は拒否されません", "`on {err}` never runs here: `{cn}` is in {names}, where `{event}` is never refused")));
                             }
                         }
                         // any other error: the event may or may not have happened on the other side
@@ -937,14 +917,14 @@ impl<'a> Flow<'a> {
                         let mut seen = BTreeMap::new();
                         for (st, p) in &now {
                             let mut np = p.clone();
-                            np.push(Step::new(s.line, format!("{}: {cn} is {}", t.name, self.state_name(c, *st)), format!("{}: {cn} は {}", t.name, self.state_name(c, *st))).at(At::Stmt(s.site)));
+                            np.push(Step::new(s.line, tr!("{}: {cn} は {}", "{}: {cn} is {}", t.name, self.state_name(c, *st))).at(At::Stmt(s.site)));
                             seen.insert(*st, np);
                         }
                         self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(seen.keys().cloned());
                         ok.cases[c].states = seen;
                         ok.cases[c].started = Tri::Yes;
                         ok.cases[c].unstarted = None;
-                        ok.path.push(Step::new(s.line, format!("{}: look at {cn}", t.name), format!("{}: {cn} を見る", t.name)).at(At::Stmt(s.site)));
+                        ok.path.push(Step::new(s.line, tr!("{}: {cn} を見る", "{}: look at {cn}", t.name)).at(At::Stmt(s.site)));
                         Flow::assign(&mut ok, &cn);
                     }
                     None => {}
@@ -972,7 +952,7 @@ impl<'a> Flow<'a> {
             .map(|(_, n)| n.clone())
             .collect();
         if !unhandled.is_empty() {
-            let fa = other_err.clone().step(Step::new(s.line, format!("{callee_name} fails ({})", unhandled.join(", ")), format!("{callee_name} が失敗する（{}）", unhandled.join("・"))).at(At::Fails(s.site)));
+            let fa = other_err.clone().step(Step::new(s.line, tr!("{callee_name} が失敗する（{}）", "{callee_name} fails ({})", unhandled.join("・"); unhandled.join(", "))).at(At::Fails(s.site)));
             self.failures.push((fa, s.line, callee_name.clone()));
         }
         // a cancellation that comes while the call is out: it may or may not have gone through
@@ -1002,7 +982,7 @@ impl<'a> Flow<'a> {
                         en = join(&en, r);
                     }
                 }
-                en.step(Step::new(h.line, format!("{callee_name} fails: on {}", names.join(", ")), format!("{callee_name} が失敗する: on {}", names.join(", "))).at(At::Handler(s.site, j)))
+                en.step(Step::new(h.line, tr!("{callee_name} が失敗する: on {}", "{callee_name} fails: on {}", names.join(", "))).at(At::Handler(s.site, j)))
             };
             let end = self.stmts(&h.body, entry);
             after = join(&after, &end);
@@ -1015,7 +995,7 @@ impl<'a> Flow<'a> {
         if self.in_on_cancel || self.m.on_cancel.is_none() {
             return;
         }
-        let at = a.clone().step(Step::new(s.line, format!("the workflow is cancelled ({what})"), format!("ワークフローがキャンセルされる（{what}）")).at(At::Cancelled(s.site)));
+        let at = a.clone().step(Step::new(s.line, tr!("ワークフローがキャンセルされる（{what}）", "the workflow is cancelled ({what})")).at(At::Cancelled(s.site)));
         self.cancels.push((at, s.line, what.to_string()));
     }
 
@@ -1025,12 +1005,12 @@ impl<'a> Flow<'a> {
             return true;
         }
         let cn = self.case_name(c).to_string();
-        let (en, ja) = if cabs.started == Tri::No {
-            (format!("the case `{cn}` has not been started here"), format!("ここでは案件 `{cn}` はまだ始まっていません"))
+        let message = if cabs.started == Tri::No {
+            tr!("ここでは案件 `{cn}` はまだ始まっていません", "the case `{cn}` has not been started here")
         } else {
-            (format!("the case `{cn}` may not have been started here"), format!("ここでは、案件 `{cn}` が始まっていないことがあります"))
+            tr!("ここでは、案件 `{cn}` が始まっていないことがあります", "the case `{cn}` may not have been started here")
         };
-        self.push(Diag::error("E013", line, 1, en, ja).with_path(cabs.unstarted.clone().unwrap_or_default()));
+        self.push(Diag::error("E013", line, 1, message).with_path(cabs.unstarted.clone().unwrap_or_default()));
         cabs.started == Tri::Maybe
     }
 
@@ -1105,13 +1085,13 @@ impl<'a> Flow<'a> {
             for v in &vals {
                 if !possible.contains_key(v) {
                     if narrowed || (v == "none" && !optional) {
-                        let (en, ja) = if v == "none" {
-                            (format!("the arm `none` can never be taken: the case `{name}` has been started on every run that gets here"), format!("分岐 `none` は通りません。ここに来るときは、いつも案件 `{name}` が始まっています"))
+                        let message = if v == "none" {
+                            tr!("分岐 `none` は通りません。ここに来るときは、いつも案件 `{name}` が始まっています", "the arm `none` can never be taken: the case `{name}` has been started on every run that gets here")
                         } else {
-                            (format!("the arm `{v}` can never be taken: `{key}` is one of {} here", listed.join(", ")), format!("分岐 `{v}` は通りません。ここで `{key}` は {} のどれかです", listed.join("・")))
+                            tr!("分岐 `{v}` は通りません。ここで `{key}` は {} のどれかです", "the arm `{v}` can never be taken: `{key}` is one of {} here", listed.join("・"); listed.join(", "))
                         };
                         let why = if v == "none" { a.path.clone() } else { possible.values().next().cloned().unwrap_or_else(|| a.path.clone()) };
-                        self.push(Diag::error("E011", arm.line, 1, en, ja).with_path(why));
+                        self.push(Diag::error("E011", arm.line, 1, message).with_path(why));
                     }
                 } else {
                     covered.insert(v.clone());
@@ -1122,9 +1102,9 @@ impl<'a> Flow<'a> {
             let here: Vec<String> = vals.iter().filter(|v| possible.contains_key(*v)).cloned().collect();
             if here.is_empty() {
                 // an arm that cannot be taken is still checked, as if it could be
-                inner = inner.step(Step::new(arm.line, format!("match {key}: {}", vals.join(", ")), format!("match {key}: {}", vals.join(", "))).at(At::Arm(s.site, i)));
+                inner = inner.step(Step::new(arm.line, tr!("match {key}: {}", "match {key}: {}", vals.join(", "))).at(At::Arm(s.site, i)));
             } else {
-                inner = inner.step(Step::new(arm.line, format!("match {key}: {}", here.join(", ")), format!("match {key}: {}", here.join(", "))).at(At::Arm(s.site, i)));
+                inner = inner.step(Step::new(arm.line, tr!("match {key}: {}", "match {key}: {}", here.join(", "))).at(At::Arm(s.site, i)));
             }
             match case_state {
                 Some(c) => {
@@ -1149,7 +1129,7 @@ impl<'a> Flow<'a> {
                     if !key.is_empty() && !here.is_empty() {
                         let vals: BTreeMap<String, Path> = here.iter().filter_map(|v| possible.get(v).map(|p| {
                             let mut p = p.clone();
-                            p.push(Step::new(arm.line, format!("match {key}: {v}"), format!("match {key}: {v}")).at(At::Arm(s.site, i)));
+                            p.push(Step::new(arm.line, tr!("match {key}: {v}", "match {key}: {v}")).at(At::Arm(s.site, i)));
                             (v.clone(), p)
                         })).collect();
                         if let Some(p) = vals.values().min_by_key(|p| p.len()) {
@@ -1165,12 +1145,9 @@ impl<'a> Flow<'a> {
         let missing: Vec<(String, Path)> = possible.iter().filter(|(v, _)| !covered.contains(*v)).map(|(v, p)| (v.clone(), p.clone())).collect();
         if !missing.is_empty() {
             let names: Vec<String> = missing.iter().map(|(v, _)| v.clone()).collect();
-            let (en, ja) = (
-                format!("`match` has no arm for {}, which `{key}` can be here", names.join(", ")),
-                format!("`match` に {} の分岐がありません。ここで `{key}` はその値を取りえます", names.join("・")),
-            );
+            let message = tr!("`match` に {} の分岐がありません。ここで `{key}` はその値を取りえます", "`match` has no arm for {}, which `{key}` can be here", names.join("・"); names.join(", "));
             let path = missing[0].1.clone();
-            self.push(Diag::error("E010", s.line, 1, en, ja).with_path(path));
+            self.push(Diag::error("E010", s.line, 1, message).with_path(path));
         }
         after
     }

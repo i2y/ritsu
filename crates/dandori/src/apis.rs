@@ -12,9 +12,10 @@ use crate::proto::{PField, PType, ProtoFile};
 use serde_json::{json, Map, Value};
 use std::path::Path;
 use std::sync::Arc;
+use crate::diag::Text;
 
 /// A difference, in English and in Japanese.
-pub type Words = (String, String);
+pub type Words = Text;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ApiKind {
@@ -218,12 +219,14 @@ pub struct Op<'a> {
     /// a field that says whether it is set is read into a type without `?` all the same: at the
     /// entry of a workflow that implements a service, the workflow says what it needs (DESIGN 1.14)
     presence_free: bool,
-    /// what the messages call the value read, in English and in Japanese: the answer of an operation
-    noun: (&'static str, &'static str),
+    /// what the messages call the value read, in Japanese and in English: the answer of an operation
+    noun: fn() -> Text,
 }
 
 /// How the messages of E016 call what an operation answers.
-const ANSWER: (&str, &str) = ("the answer", "レスポンス");
+fn an_answer() -> Text {
+    tr!("レスポンス", "the answer")
+}
 
 /// The OpenAPI operation at `method` and `path`.
 pub fn openapi_op<'a>(api: &'a Api, method: &str, path: &str) -> Result<Op<'a>, Words> {
@@ -233,8 +236,8 @@ pub fn openapi_op<'a>(api: &'a Api, method: &str, path: &str) -> Result<Op<'a>, 
     let op = &item[method.to_ascii_lowercase()];
     if !op.is_object() {
         let near: Vec<String> = doc["paths"].as_object().map(|p| p.keys().filter(|k| k.split('{').next() == path.split('{').next()).cloned().collect()).unwrap_or_default();
-        let (hint_en, hint_ja) = if near.is_empty() { (String::new(), String::new()) } else { (format!(" (it has {})", near.join(", ")), format!("（あるのは {}）", near.join("・"))) };
-        return Err((format!("`{}` has no {label}{hint_en}", api.name), format!("`{}` に {label} はありません{hint_ja}", api.name)));
+        let Text { en: hint_en, ja: hint_ja } = if near.is_empty() { Text::default() } else { tr!("（あるのは {}）", " (it has {})", near.join("・"); near.join(", ")) };
+        return Err(tr!("`{}` に {label} はありません{hint_ja}", "`{}` has no {label}{hint_en}", api.name));
     }
     let mut query = Vec::new();
     let params = item["parameters"].as_array().into_iter().flatten().chain(op["parameters"].as_array().into_iter().flatten());
@@ -263,7 +266,7 @@ pub fn openapi_op<'a>(api: &'a Api, method: &str, path: &str) -> Result<Op<'a>, 
         Some(c) => Node::Json(c["schema"].clone()),
         None => Node::Any,
     });
-    Ok(Op { api, label, input, query, output, errors: responses.keys().cloned().collect(), token: None, form, procedure: None, streams: false, presence_free: false, noun: ANSWER })
+    Ok(Op { api, label, input, query, output, errors: responses.keys().cloned().collect(), token: None, form, procedure: None, streams: false, presence_free: false, noun: an_answer })
 }
 
 /// The Smithy operation that Step Functions names `action` (`publish` for `Publish`).
@@ -272,7 +275,7 @@ pub fn smithy_op<'a>(api: &'a Api, action: &str) -> Result<Op<'a>, Words> {
     let shapes = doc["shapes"].as_object().cloned().unwrap_or_default();
     let found = shapes.iter().find(|(id, s)| s["type"] == "operation" && local(id).eq_ignore_ascii_case(action));
     let Some((id, op)) = found else {
-        return Err((format!("`{}` has no operation `{action}`", api.name), format!("`{}` に操作 `{action}` はありません", api.name)));
+        return Err(tr!("`{}` に操作 `{action}` はありません", "`{}` has no operation `{action}`", api.name));
     };
     let input = op["input"]["target"].as_str().map(|t| Node::Shape(t.to_string())).unwrap_or(Node::Any);
     let output = op["output"]["target"].as_str().map(|t| Node::Shape(t.to_string()));
@@ -281,13 +284,13 @@ pub fn smithy_op<'a>(api: &'a Api, action: &str) -> Result<Op<'a>, Words> {
     let token = op["input"]["target"].as_str().and_then(|t| shapes.get(t)).and_then(|s| s["members"].as_object()).and_then(|ms| {
         ms.iter().find(|(_, m)| m["traits"].get("smithy.api#idempotencyToken").is_some()).map(|(n, _)| n.clone())
     });
-    Ok(Op { api, label: local(id).to_string(), input, query: vec![], output, errors, token, form: false, procedure: None, streams: false, presence_free: false, noun: ANSWER })
+    Ok(Op { api, label: local(id).to_string(), input, query: vec![], output, errors, token, form: false, procedure: None, streams: false, presence_free: false, noun: an_answer })
 }
 
 /// The method of a `.proto`'s service, written `Service/Method`.
 pub fn proto_op<'a>(api: &'a Api, method: &str) -> Result<Op<'a>, Words> {
     let ApiDoc::Proto(pf) = &api.doc else { unreachable!("a .proto") };
-    let not = || (format!("`{}` has no method `{method}`; write it as `Service/Method`", api.name), format!("`{}` にメソッド `{method}` はありません。`Service/Method` と書きます", api.name));
+    let not = || tr!("`{}` にメソッド `{method}` はありません。`Service/Method` と書きます", "`{}` has no method `{method}`; write it as `Service/Method`", api.name);
     let (svc, m) = method.split_once('/').ok_or_else(not)?;
     let service = pf.services.iter().find(|s| s.name == svc || s.name.rsplit('.').next() == Some(svc)).ok_or_else(not)?;
     let found = service.methods.iter().find(|x| x.name == m).ok_or_else(not)?;
@@ -303,7 +306,7 @@ pub fn proto_op<'a>(api: &'a Api, method: &str) -> Result<Op<'a>, Words> {
         procedure: Some(format!("{}/{}", service.name, found.name)),
         streams: found.streams,
         presence_free: false,
-        noun: ANSWER,
+        noun: an_answer,
     })
 }
 
@@ -340,15 +343,12 @@ impl<'a> Op<'a> {
         let api = &self.api.name;
         let op = &self.label;
         if self.streams {
-            out.push((format!("`{api}` {op} streams; `connect` calls a method that takes one message and answers one"), format!("`{api}` の {op} はストリームです。`connect` で呼べるのは、一つ受け取って一つ返すメソッドです")));
+            out.push(tr!("`{api}` の {op} はストリームです。`connect` で呼べるのは、一つ受け取って一つ返すメソッドです", "`{api}` {op} streams; `connect` calls a method that takes one message and answers one"));
             return out;
         }
         // a message nothing read has: what the task sends or reads cannot be held to it
         if let Shape::Unread(u) = self.shape(&self.input) {
-            out.push((
-                format!("`{api}` {op} takes `{u}`, a type that is not known (a file it may be in was not read), so the parameters of `{}` cannot be held to it", task.name),
-                format!("`{api}` の {op} が受け取る `{u}` が分かりません（それがあるはずのファイルを読めませんでした）。`{}` の引数をそれに合わせて確かめられません", task.name),
-            ));
+            out.push(tr!("`{api}` の {op} が受け取る `{u}` が分かりません（それがあるはずのファイルを読めませんでした）。`{}` の引数をそれに合わせて確かめられません", "`{api}` {op} takes `{u}`, a type that is not known (a file it may be in was not read), so the parameters of `{}` cannot be held to it", task.name));
             return out;
         }
         // what goes: the path's and the query's parameters, and the body's
@@ -361,7 +361,7 @@ impl<'a> Op<'a> {
             if task.callback && p == "MessageBody" && self.label == "SendMessage" {
                 // the token goes in the message, which Step Functions writes out as JSON text
                 if !matches!(pt.inner(), Ty::Record(_) | Ty::Json | Ty::Str) {
-                    out.push(self.param_words(p, &(format!("`{}` is not a string", m.ty_name(pt)), format!("`{}` は文字列ではありません", m.ty_name(pt)))));
+                    out.push(self.param_words(p, &tr!("`{}` は文字列ではありません", "`{}` is not a string", m.ty_name(pt))));
                 }
                 continue;
             }
@@ -371,11 +371,11 @@ impl<'a> Op<'a> {
                 if !in_query && body_members.is_none() && matches!(self.input, Node::Any) {
                     continue;
                 }
-                out.push((format!("`{api}` {op} takes no `{p}`"), format!("`{api}` の {op} は `{p}` を受け取りません")));
+                out.push(tr!("`{api}` の {op} は `{p}` を受け取りません", "`{api}` {op} takes no `{p}`"));
                 continue;
             };
             if mb.required && matches!(pt, Ty::Opt(_)) {
-                out.push((format!("`{api}` {op} needs `{p}`, and the parameter may be absent"), format!("`{api}` の {op} には `{p}` が要りますが、引数は無いことがあります")));
+                out.push(tr!("`{api}` の {op} には `{p}` が要りますが、引数は無いことがあります", "`{api}` {op} needs `{p}`, and the parameter may be absent"));
                 continue;
             }
             if let Err(w) = self.sends(m, pt, task.param_ranges.get(p).copied(), &mb.node, &mut vec![]) {
@@ -386,7 +386,7 @@ impl<'a> Op<'a> {
         let wanted: Vec<Member> = self.query.iter().filter(|q| q.required).cloned().chain(body_members.iter().flatten().filter(|x| x.required).cloned()).collect();
         for w in wanted {
             if !givens.iter().any(|g| **g == w.name || w.alias.as_deref() == Some(g.as_str())) {
-                out.push((format!("`{api}` {op} needs `{}`, which `{}` does not pass", w.name, task.name), format!("`{api}` の {op} には `{}` が要りますが、`{}` はそれを渡しません", w.name, task.name)));
+                out.push(tr!("`{api}` の {op} には `{}` が要りますが、`{}` はそれを渡しません", "`{api}` {op} needs `{}`, which `{}` does not pass", w.name, task.name));
             }
         }
         // what comes back: a callback's answer comes from whoever answers it, not from the API
@@ -396,8 +396,8 @@ impl<'a> Op<'a> {
                 (Ty::Record(r), Shape::Object(ms)) => self.fields(&ms, m, *r, &mut vec![]),
                 _ => self.reads(o, m, t, task.result_range, &mut vec![]).err().into_iter().collect(),
             };
-            for (en, ja) in found {
-                out.push((format!("what `{api}` {op} answers is not `{}`: {en}", m.ty_name(t)), format!("`{api}` の {op} のレスポンスは `{}` に合いません。{ja}", m.ty_name(t))));
+            for Text { en, ja } in found {
+                out.push(tr!("`{api}` の {op} のレスポンスは `{}` に合いません。{ja}", "what `{api}` {op} answers is not `{}`: {en}", m.ty_name(t)));
             }
         }
         // the errors it answers with, and the idempotency token
@@ -408,14 +408,14 @@ impl<'a> Op<'a> {
                         let s = st.to_string();
                         let class = format!("{}XX", &s[..1]);
                         if !self.errors.iter().any(|x| *x == s || x.eq_ignore_ascii_case(&class) || x == "default") {
-                            out.push((format!("`{api}` {op} does not answer with {st} (`{}`)", e.name), format!("`{api}` の {op} は {st} を返しません（`{}`）", e.name)));
+                            out.push(tr!("`{api}` の {op} は {st} を返しません（`{}`）", "`{api}` {op} does not answer with {st} (`{}`)", e.name));
                         }
                     }
                 }
                 ApiDoc::Smithy(_) => {
                     let x = e.exception.as_deref().unwrap_or(&e.name);
                     if !self.errors.iter().any(|y| y == x) {
-                        out.push((format!("`{api}` {op} has no error `{x}` (its errors are {})", self.errors.join(", ")), format!("`{api}` の {op} にエラー `{x}` はありません（エラーは {}）", self.errors.join("・"))));
+                        out.push(tr!("`{api}` の {op} にエラー `{x}` はありません（エラーは {}）", "`{api}` {op} has no error `{x}` (its errors are {})", self.errors.join("・"); self.errors.join(", ")));
                     }
                 }
                 ApiDoc::Proto(_) => {}
@@ -423,24 +423,24 @@ impl<'a> Op<'a> {
         }
         if let (ApiDoc::Smithy(_), Some(kp)) = (&self.api.doc, &task.key_param) {
             if self.token.as_deref() != Some(kp.as_str()) {
-                let (en, ja) = match &self.token {
-                    Some(t) => (format!("it is `{t}`"), format!("それは `{t}` です")),
-                    None => ("it takes none".to_string(), "この操作は冪等トークンを受け取りません".to_string()),
+                let Text { en, ja } = match &self.token {
+                    Some(t) => tr!("それは `{t}` です", "it is `{t}`"),
+                    None => tr!("この操作は冪等トークンを受け取りません", "it takes none"),
                 };
-                out.push((format!("`{kp}` is not the idempotency token of `{api}` {op}: {en}"), format!("`{kp}` は `{api}` の {op} の冪等トークンではありません。{ja}")));
+                out.push(tr!("`{kp}` は `{api}` の {op} の冪等トークンではありません。{ja}", "`{kp}` is not the idempotency token of `{api}` {op}: {en}"));
             }
         }
         out
     }
 
-    fn param_words(&self, p: &str, (en, ja): &Words) -> Words {
-        (format!("the parameter `{p}` is not what `{}` {} takes: {en}", self.api.name, self.label), format!("引数 `{p}` は、`{}` の {} が受け取るものと合いません。{ja}", self.api.name, self.label))
+    fn param_words(&self, p: &str, Text { en, ja }: &Words) -> Words {
+        tr!("引数 `{p}` は、`{}` の {} が受け取るものと合いません。{ja}", "the parameter `{p}` is not what `{}` {} takes: {en}", self.api.name, self.label)
     }
 
     /// Whether every value of `t` (its numbers in `rg`) is one the API takes at `n`.
     fn sends(&self, m: &Model, t: &Ty, rg: Option<Range>, n: &Node, seen: &mut Vec<RecordId>) -> Result<(), Words> {
         let s = self.shape(n);
-        let differ = || (format!("`{}` is not {}", m.ty_name(t), describe(&s)), format!("`{}` は{}ではありません", m.ty_name(t), describe_ja(&s)));
+        let differ = || tr!("`{}` は{}ではありません", "`{}` is not {}", m.ty_name(t), describe_ja(&s); m.ty_name(t), describe(&s));
         match (t, &s) {
             (_, Shape::Any) => Ok(()),
             // the flow sends null for an absent value, which the APIs take as not given
@@ -457,9 +457,9 @@ impl<'a> Op<'a> {
             (Ty::Str, Shape::Str(None)) | (Ty::Str, Shape::Bytes) => Ok(()),
             // protobuf's JSON takes a 64-bit integer as a string, which is how a flow has it from an answer
             (Ty::Str, Shape::Int { text: true, .. }) => Ok(()),
-            (Ty::Str, Shape::Str(Some(vs))) => Err((format!("`{}` takes one of {}, and `string` can be anything; give it an enum", m.ty_name(t), vs.join(", ")), format!("受け取るのは {} のどれかで、`string` は何でもありえます。列挙にしてください", vs.join("・")))),
+            (Ty::Str, Shape::Str(Some(vs))) => Err(tr!("受け取るのは {} のどれかで、`string` は何でもありえます。列挙にしてください", "`{}` takes one of {}, and `string` can be anything; give it an enum", vs.join("・"); m.ty_name(t), vs.join(", "))),
             (Ty::Enum(e), Shape::Str(vs)) => match (vs, m.enums[*e].values.iter().find(|v| vs.as_ref().is_some_and(|vs| !vs.contains(v)))) {
-                (_, Some(v)) => Err((format!("`{v}` of `{}` is not one of the values it takes ({})", m.enums[*e].name, vs.as_ref().unwrap().join(", ")), format!("`{}` の `{v}` は、受け取る値（{}）にありません", m.enums[*e].name, vs.as_ref().unwrap().join("・")))),
+                (_, Some(v)) => Err(tr!("`{}` の `{v}` は、受け取る値（{}）にありません", "`{v}` of `{}` is not one of the values it takes ({})", m.enums[*e].name, vs.as_ref().unwrap().join("・"); m.enums[*e].name, vs.as_ref().unwrap().join(", "))),
                 _ => Ok(()),
             },
             (Ty::Int | Ty::Num(_), Shape::Int { min, max, .. }) => within(rg, *min, *max),
@@ -481,13 +481,13 @@ impl<'a> Op<'a> {
                 let rd = &m.records[*r];
                 for (f, ft) in &rd.fields {
                     let Some(mb) = ms.iter().find(|x| x.name == *f || x.alias.as_deref() == Some(f)) else {
-                        return Err((format!("it takes no `{f}` (a field of `{}`)", rd.name), format!("`{f}`（`{}` のフィールド）は受け取りません", rd.name)));
+                        return Err(tr!("`{f}`（`{}` のフィールド）は受け取りません", "it takes no `{f}` (a field of `{}`)", rd.name));
                     };
                     self.sends(m, ft, rd.ranges.get(f).copied(), &mb.node, seen).map_err(|w| field_words(f, w))?;
                 }
                 for mb in ms.iter().filter(|x| x.required) {
                     match rd.fields.iter().find(|(f, _)| *f == mb.name || mb.alias.as_deref() == Some(f)) {
-                        Some((_, Ty::Opt(_))) | None => return Err((format!("it needs `{}`, which `{}` may not have", mb.name, rd.name), format!("`{}` が要りますが、`{}` には無いことがあります", mb.name, rd.name))),
+                        Some((_, Ty::Opt(_))) | None => return Err(tr!("`{}` が要りますが、`{}` には無いことがあります", "it needs `{}`, which `{}` may not have", mb.name, rd.name)),
                         _ => {}
                     }
                 }
@@ -501,7 +501,7 @@ impl<'a> Op<'a> {
     /// Whether every value the API answers at `n` is one of `t` (its numbers in `rg`).
     fn reads(&self, n: &Node, m: &Model, t: &Ty, rg: Option<Range>, seen: &mut Vec<RecordId>) -> Result<(), Words> {
         let s = self.shape(n);
-        let differ = || (format!("{} is not `{}`", describe(&s), m.ty_name(t)), format!("{}は `{}` ではありません", describe_ja(&s), m.ty_name(t)));
+        let differ = || tr!("{}は `{}` ではありません", "{} is not `{}`", describe_ja(&s), m.ty_name(t); describe(&s), m.ty_name(t));
         match (&s, t) {
             (_, Ty::Json) => Ok(()),
             (_, Ty::Opt(x)) => self.reads(n, m, x, rg, seen),
@@ -511,29 +511,23 @@ impl<'a> Op<'a> {
                 }
                 Ok(())
             }
-            (Shape::Any, _) => Err((format!("it can be anything, which `{}` is not; declare it `json`", m.ty_name(t)), format!("何でもありえますが、`{}` はそうではありません。`json` にしてください", m.ty_name(t)))),
+            (Shape::Any, _) => Err(tr!("何でもありえますが、`{}` はそうではありません。`json` にしてください", "it can be anything, which `{}` is not; declare it `json`", m.ty_name(t))),
             (Shape::Unread(u), _) => Err(unknown_type(u)),
             (Shape::Str(_), Ty::Str) | (Shape::Bytes, Ty::Str) | (Shape::Int { text: true, .. }, Ty::Str) => Ok(()),
             (Shape::Str(Some(vs)), Ty::Enum(e)) => {
                 let zero = self.proto_zero(n);
                 match vs.iter().find(|v| !m.enums[*e].values.contains(v) && Some(v.as_str()) != zero.as_deref()) {
-                    Some(v) => Err((format!("it may be `{v}`, which `{}` has no value for", m.enums[*e].name), format!("`{v}` のことがありますが、`{}` にその値はありません", m.enums[*e].name))),
+                    Some(v) => Err(tr!("`{v}` のことがありますが、`{}` にその値はありません", "it may be `{v}`, which `{}` has no value for", m.enums[*e].name)),
                     None => Ok(()),
                 }
             }
-            (Shape::Str(None), Ty::Enum(e)) => Err((format!("it is any string, and `{}` takes only its values; declare it `string`", m.enums[*e].name), format!("どんな文字列でもありえますが、`{}` は自分の値しか取りません。`string` にしてください", m.enums[*e].name))),
-            (Shape::Int { text: true, .. }, Ty::Int | Ty::Num(_)) => Err((
-                "a 64-bit integer comes as a string in protobuf's JSON; declare it `string`".into(),
-                "64 ビットの整数は、protobuf の JSON では文字列で来ます。`string` にしてください".into(),
-            )),
+            (Shape::Str(None), Ty::Enum(e)) => Err(tr!("どんな文字列でもありえますが、`{}` は自分の値しか取りません。`string` にしてください", "it is any string, and `{}` takes only its values; declare it `string`", m.enums[*e].name)),
+            (Shape::Int { text: true, .. }, Ty::Int | Ty::Num(_)) => Err(tr!("64 ビットの整数は、protobuf の JSON では文字列で来ます。`string` にしてください", "a 64-bit integer comes as a string in protobuf's JSON; declare it `string`")),
             (Shape::Int { min, max, .. }, Ty::Int | Ty::Num(_)) => match rg {
-                Some(want) if (min.is_some() || max.is_some()) && !(Range { lo: *min, hi: *max }).within(&want) => Err((
-                    format!("it can be `{}`, outside `{}`", Range { lo: *min, hi: *max }.show(), want.show()),
-                    format!("`{}` の外の `{}` になりえます", want.show(), Range { lo: *min, hi: *max }.show()),
-                )),
+                Some(want) if (min.is_some() || max.is_some()) && !(Range { lo: *min, hi: *max }).within(&want) => Err(tr!("`{}` の外の `{}` になりえます", "it can be `{}`, outside `{}`", want.show(), Range { lo: *min, hi: *max }.show(); Range { lo: *min, hi: *max }.show(), want.show())),
                 _ => Ok(()),
             },
-            (Shape::Float, Ty::Int | Ty::Num(_)) => Err(("it may have a fraction, which dandori has no type for; declare it `json`".into(), "小数のことがあり、dandori にはその型がありません。`json` にしてください".into())),
+            (Shape::Float, Ty::Int | Ty::Num(_)) => Err(tr!("小数のことがあり、dandori にはその型がありません。`json` にしてください", "it may have a fraction, which dandori has no type for; declare it `json`")),
             (Shape::Bool, Ty::Bool) | (Shape::Timestamp, Ty::Timestamp) => Ok(()),
             (Shape::List(x), Ty::List(y)) => self.reads(x, m, y, rg, seen),
             (Shape::Object(ms), Ty::Record(r)) => match self.fields(ms, m, *r, seen).into_iter().next() {
@@ -557,17 +551,17 @@ impl<'a> Op<'a> {
         for (f, ft) in &rd.fields {
             let Some(mb) = ms.iter().find(|x| x.name == *f) else {
                 let other = ms.iter().find(|x| x.alias.as_deref() == Some(f));
-                let (en, ja) = self.noun;
+                let Text { en, ja } = (self.noun)();
                 out.push(match other {
-                    Some(o) => (format!("{en} names `{f}` `{}`", o.name), format!("{ja}では `{f}` は `{}` という名前です", o.name)),
-                    None => (format!("{en} has no `{f}` (a field of `{}`)", rd.name), format!("{ja}に `{f}`（`{}` のフィールド）はありません", rd.name)),
+                    Some(o) => tr!("{ja}では `{f}` は `{}` という名前です", "{en} names `{f}` `{}`", o.name),
+                    None => tr!("{ja}に `{f}`（`{}` のフィールド）はありません", "{en} has no `{f}` (a field of `{}`)", rd.name),
                 });
                 continue;
             };
             // at a workflow's entry, a field that may be left out is the workflow's to need or not
             if (mb.nullable || (mb.optional_out && !self.presence_free)) && !matches!(ft, Ty::Opt(_) | Ty::Json) {
-                let (en, ja) = if mb.nullable { ("may be null", "は null のことがあります") } else { ("may be left out", "は無いことがあります") };
-                out.push((format!("`{f}` {en}; declare it `{}?`", m.ty_name(ft)), format!("`{f}` {ja}。`{}?` にしてください", m.ty_name(ft))));
+                let Text { en, ja } = if mb.nullable { tr!("は null のことがあります", "may be null") } else { tr!("は無いことがあります", "may be left out") };
+                out.push(tr!("`{f}` {ja}。`{}?` にしてください", "`{f}` {en}; declare it `{}?`", m.ty_name(ft)));
                 continue;
             }
             if let Err(w) = self.reads(&mb.node, m, ft, rd.ranges.get(f).copied(), seen) {
@@ -734,17 +728,14 @@ pub fn omit_zeros(v: &Value, zeros: &Value) -> Value {
     Value::Object(out)
 }
 
-fn field_words(f: &str, (en, ja): Words) -> Words {
-    (format!("in `{f}`, {en}"), format!("`{f}` で、{ja}"))
+fn field_words(f: &str, Text { en, ja }: Words) -> Words {
+    tr!("`{f}` で、{ja}", "in `{f}`, {en}")
 }
 
 /// What differs where a `.proto` names a type that no file read has: nothing can be said of it
 /// but that, and `json` takes whatever it is.
 fn unknown_type(n: &str) -> Words {
-    (
-        format!("its type `{n}` is not known, since a file it may be in was not read; `json` takes it"),
-        format!("型 `{n}` が分かりません。それがあるはずのファイルを読めませんでした。`json` にすれば受け渡せます"),
-    )
+    tr!("型 `{n}` が分かりません。それがあるはずのファイルを読めませんでした。`json` にすれば受け渡せます", "its type `{n}` is not known, since a file it may be in was not read; `json` takes it")
 }
 
 /// The note for what a flow comes to of a `.proto` that imports files which were not read: which
@@ -759,10 +750,7 @@ pub fn unread_note(pf: &ProtoFile) -> Option<Words> {
             (format!("{head} and {last}"), files.join("・"), "them")
         }
     };
-    Some((
-        format!("{en_list} could not be read, so the types in {en_them} cannot be used"),
-        format!("{ja_list} を読めなかったので、そこにある型は使えません"),
-    ))
+    Some(tr!("{ja_list} を読めなかったので、そこにある型は使えません", "{en_list} could not be read, so the types in {en_them} cannot be used"))
 }
 
 fn within(rg: Option<Range>, min: Option<i64>, max: Option<i64>) -> Result<(), Words> {
@@ -772,8 +760,8 @@ fn within(rg: Option<Range>, min: Option<i64>, max: Option<i64>) -> Result<(), W
     let want = Range { lo: min, hi: max };
     match rg {
         Some(h) if h.within(&want) => Ok(()),
-        Some(h) => Err((format!("it is `{}`, and `{}` is taken", h.show(), want.show()), format!("`{}` で、受け取るのは `{}` です", h.show(), want.show()))),
-        None => Err((format!("it has no range, and `{}` is taken", want.show()), format!("範囲が書かれていませんが、受け取るのは `{}` です", want.show()))),
+        Some(h) => Err(tr!("`{}` で、受け取るのは `{}` です", "it is `{}`, and `{}` is taken", h.show(), want.show())),
+        None => Err(tr!("範囲が書かれていませんが、受け取るのは `{}` です", "it has no range, and `{}` is taken", want.show())),
     }
 }
 
@@ -1086,7 +1074,7 @@ pub fn made_enum_values(pf: &ProtoFile, en: &str) -> Vec<String> {
 pub fn made_fits(api: &Api, full: &str, m: &Model, t: &Ty) -> Vec<Words> {
     let ApiDoc::Proto(_) = &api.doc else { return vec![] };
     let node = Node::Proto(PType::Named(full.to_string()), FieldRules::default());
-    let op = Op { api, label: full.to_string(), input: node.clone(), query: vec![], output: Some(node.clone()), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free: false, noun: ANSWER };
+    let op = Op { api, label: full.to_string(), input: node.clone(), query: vec![], output: Some(node.clone()), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free: false, noun: an_answer };
     let mut out = Vec::new();
     if let Err(w) = op.sends(m, t, None, &node, &mut vec![]) {
         out.push(w);
@@ -1122,7 +1110,9 @@ pub struct FieldFacts {
 }
 
 /// How the messages of E017 call the value a message is read into.
-const MESSAGE: (&str, &str) = ("the message", "メッセージ");
+fn a_message() -> Text {
+    tr!("メッセージ", "the message")
+}
 
 impl<'a> MessageView<'a> {
     /// The message's name without its package, as a message names it: `FulfillRequest`.
@@ -1145,7 +1135,7 @@ impl<'a> MessageView<'a> {
     fn op(&self, presence_free: bool) -> Op<'a> {
         let node = Node::Proto(PType::Named(self.name.clone()), FieldRules::default());
         let label = self.simple().to_string();
-        Op { api: self.api, label, input: node.clone(), query: vec![], output: Some(node), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free, noun: MESSAGE }
+        Op { api: self.api, label, input: node.clone(), query: vec![], output: Some(node), errors: vec![], token: None, form: false, procedure: None, streams: false, presence_free, noun: a_message }
     }
 
     fn members(&self, op: &Op) -> Vec<Member> {
@@ -1175,7 +1165,7 @@ impl<'a> MessageView<'a> {
         let op = self.op(presence_free);
         let Some(mb) = self.members(&op).into_iter().find(|x| x.name == json) else { return Ok(()) };
         if mb.optional_out && !presence_free && !matches!(t, Ty::Opt(_) | Ty::Json) {
-            return Err((format!("it may be left out; declare it `{}?`", m.ty_name(t)), format!("無いことがあります。`{}?` にしてください", m.ty_name(t))));
+            return Err(tr!("無いことがあります。`{}?` にしてください", "it may be left out; declare it `{}?`", m.ty_name(t)));
         }
         op.reads(&mb.node, m, t, rg, &mut vec![])
     }
@@ -1208,17 +1198,17 @@ impl<'a> MessageView<'a> {
         let mut out = Vec::new();
         for t in &theirs {
             match mine.iter().find(|f| f.json == t.json) {
-                None => out.push((format!("it has no `{}`", t.json), format!("`{}` がありません", t.json))),
+                None => out.push(tr!("`{}` がありません", "it has no `{}`", t.json)),
                 Some(f) => {
                     let (a, b) = (field_text(self.pf(), f), field_text(other.pf(), t));
                     if a != b {
-                        out.push((format!("`{}` is `{a}`, and in `{theirs_name}` it is `{b}`", f.json), format!("`{}` は `{a}` ですが、`{theirs_name}` では `{b}` です", f.json)));
+                        out.push(tr!("`{}` は `{a}` ですが、`{theirs_name}` では `{b}` です", "`{}` is `{a}`, and in `{theirs_name}` it is `{b}`", f.json));
                     }
                 }
             }
         }
         for f in mine.iter().filter(|f| !theirs.iter().any(|t| t.json == f.json)) {
-            out.push((format!("it has `{}`, which `{theirs_name}` does not", f.json), format!("`{theirs_name}` に無い `{}` があります", f.json)));
+            out.push(tr!("`{theirs_name}` に無い `{}` があります", "it has `{}`, which `{theirs_name}` does not", f.json));
         }
         out
     }
