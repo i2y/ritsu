@@ -1,0 +1,183 @@
+name: platforms
+
+# The tests of the platforms level (DESIGN 10.2, 10.5, 10.6): the workflows dandori writes,
+# run on the platforms themselves (Temporal's dev server, Argo Workflows on a kind cluster,
+# Step Functions on LocalStack) and compared with its reference interpreter; and the tests that
+# ask a server outside: e-Gov and the eCFR for the base layer, koyomi and yuen, and the Buf
+# Schema Registry for rulec. Nightly, by hand, and on a pull request that changes dandori.
+#
+# The tests of the tools level are tools.yml's: the steps here run only the tests that need a
+# platform, one at a time, as on the machine where they were written; the runner is this job's
+# alone, so nothing else runs beside them. A test that fails is run once more, and says so in
+# the log; a second failure is a failure, not a wobble (DESIGN 10.6).
+
+on:
+  pull_request:
+    paths: ["crates/dandori/**"]
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run at a time: a second would only queue behind the first's cluster.
+concurrency:
+  group: platforms
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  BUF_VERSION: "1.54.0"
+  # The Jev tasks are sent to TypeSafe only when the repository has the key; without it the
+  # test says SKIP, which ci/skips/platforms.txt allows.
+  TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+
+jobs:
+  platforms:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-platforms-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-platforms-${{ runner.os }}-
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # dandori's tools/temporal-go/go.mod asks Go 1.26
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+
+      - name: uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+          version: ${{ env.BUF_VERSION }}
+
+      # --- dandori: the SDKs and runners under tools/, as tools.yml installs them.
+      - name: "dandori: the Node packages under tools/"
+        run: |
+          set -eu
+          for d in tools tools/temporal tools/durable tools/agents tools/wire tools/mermaid; do
+            npm ci --prefix "crates/dandori/$d"
+          done
+
+      - name: "dandori: the Python environments under tools/"
+        run: |
+          set -eu
+          for d in temporal-python pydantic-graph agents wire connect; do
+            uv venv --python 3.13 "crates/dandori/tools/$d/.venv"
+            uv pip install --python "crates/dandori/tools/$d/.venv/bin/python" -r "crates/dandori/tools/$d/requirements.txt"
+          done
+
+      - name: "dandori: the Go modules of tools/temporal-go"
+        run: cd crates/dandori/tools/temporal-go && go mod download
+
+      - name: "dandori: rulec 0.22.0"
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/rulec-0.22.0"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/rulec.tar.gz" https://github.com/i2y/rulec/releases/download/v0.22.0/rulec-v0.22.0-x86_64-unknown-linux-musl.tar.gz
+          echo "cc49d5a44f84d94ecd3bdd8e1562cd0dce4270b47013365334c29dd4a85f3f56  $d/rulec.tar.gz" | sha256sum -c -
+          tar xzf "$d/rulec.tar.gz" -C "$d"
+          echo "DANDORI_RULEC=$d/rulec" >> "$GITHUB_ENV"
+
+      # --- The platforms. Argo: kind 0.33 (for the node image tools/argo/setup.sh pins; built
+      # by Go, whose checksum database holds the module to its release), the argo CLI held to
+      # its release's checksum, and the cluster setup.sh makes. LocalStack: its image, which the
+      # runner starts per test. Temporal: the dev server, which the SDK's test kit fetches.
+      - name: kind and the argo CLI
+        run: |
+          set -eu
+          go install sigs.k8s.io/kind@v0.33.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          d="$RUNNER_TEMP/argo"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/argo.gz" https://github.com/argoproj/argo-workflows/releases/download/v4.1.4/argo-linux-amd64.gz
+          echo "2c8ef41d53593f2ee64d85fb69b631c89a0fc2c57e6ce011422caa525a97ec58  $d/argo.gz" | sha256sum -c -
+          gunzip "$d/argo.gz"
+          chmod +x "$d/argo"
+          echo "$d" >> "$GITHUB_PATH"
+
+      - name: Argo Workflows on a kind cluster
+        run: |
+          set -eu
+          kind version
+          argo version --short
+          sh crates/dandori/tools/argo/setup.sh
+
+      - name: The LocalStack image
+        run: docker pull -q localstack/localstack:4.14.0
+
+      - name: Copy in the pages the sites share
+        run: |
+          crates/rulec/website/sync.sh
+          crates/dandori/website/sync.sh
+
+      - name: Build
+        run: cargo build --workspace --locked
+
+      - name: "dandori: the platforms, one test at a time"
+        run: |
+          set -u
+          failed=0
+          for t in \
+            localstack_runs_as_the_reference_says \
+            temporal_runs_as_the_reference_says \
+            temporal_python_runs_as_the_reference_says \
+            temporal_go_runs_as_the_reference_says \
+            temporal_activities_run_in_the_other_language \
+            temporal_worker_versioning_keeps_a_run_on_its_build \
+            temporal_runs_a_flow_as_its_child \
+            argo_runs_as_the_reference_says \
+            open_responses_agents_answer_on_ollama \
+            jev_tasks_answer_on_typesafe
+          do
+            echo "::group::$t"
+            if ! cargo xtask test --level platforms -p dandori -- --exact "$t"; then
+              echo "::warning::$t failed once; it runs once more (DESIGN 10.6)"
+              if ! cargo xtask test --level platforms -p dandori -- --exact "$t"; then
+                echo "::error::$t failed twice"
+                failed=1
+              fi
+            fi
+            echo "::endgroup::"
+          done
+          if kubectl --context kind-dandori -n argo get workflows --no-headers 2>/dev/null | grep -q .; then
+            echo "::error::workflows were left on the kind cluster"
+            kubectl --context kind-dandori -n argo get workflows
+            failed=1
+          fi
+          exit $failed
+
+      # --- The servers outside. rulec's test fetches a dependency of a contract from the Buf
+      # Schema Registry and serves the rule as a Connect service with it.
+      - name: "rulec: the Connect runtime and the plugins that write its stubs"
+        run: python3 -m pip install --upgrade connectrpc protoc-gen-connectrpc protoc-gen-py uvicorn
+
+      - name: e-Gov, the eCFR and the Buf Schema Registry, asked for real
+        run: |
+          set -eu
+          cargo xtask test --level platforms -p ritsu-base -p koyomi -p yuen -- the_real_
+          cargo xtask test --level platforms -p rulec -- 依存のある契約のサービスが立つ

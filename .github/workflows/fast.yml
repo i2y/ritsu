@@ -1,0 +1,60 @@
+name: fast
+
+# The tests that need nothing but cargo, on every push and pull request (DESIGN 10.2, 10.5):
+# lexing, parsing, checking, the golden diagnostics, the mutants, the repros of `explain`,
+# naming.tsv, the JSON of `api`, the documents a test reads without running a tool. A test that
+# needs a tool says so in a SKIP line of the level and passes. `cargo xtask test` gathers the
+# SKIP lines, and one for something missing from the runner fails the job unless
+# ci/skips/fast.txt allows it: what did not run must not look as if it ran.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fast-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-fast-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-fast-${{ runner.os }}-
+
+      # rulec's and dandori's sites take some of their pages from elsewhere in the crate, and the
+      # copies are not committed; the tests that walk the pages walk the copies.
+      - name: Copy in the pages the sites share
+        run: |
+          crates/rulec/website/sync.sh
+          crates/dandori/website/sync.sh
+
+      - name: Build
+        run: cargo build --workspace --locked
+
+      # The layers of DESIGN 3.1: what each crate may depend on (DESIGN 3.4).
+      - name: The dependencies keep to the layers
+        run: cargo xtask deps
+
+      - name: The tests of the fast level
+        run: cargo xtask test --level fast

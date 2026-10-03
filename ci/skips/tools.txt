@@ -1,0 +1,12 @@
+# The SKIPs the tools job allows (DESIGN 10.3, 10.5): `<crate> <test>` a line, or `<crate>` alone
+# for every test of it; `#` starts a comment. `cargo xtask test --level tools` holds to this list
+# the SKIPs for something missing from the runner. Every tool is installed, so the list is what
+# the runner cannot have.
+
+# geas drives a greeter built with pixie (GEAS_PIXIE_GREETER). pixie is built outside this
+# repository, and the job has no way yet to build its greeter; where the greeter comes from in
+# CI is for the author to decide (PLAN C.12).
+geas typing_clicking_and_enter_hold
+geas a_check_that_fails_and_a_refused_click
+geas the_pixie_greeter_in_english
+geas the_pixie_greeter_in_japanese

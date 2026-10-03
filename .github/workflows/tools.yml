@@ -1,0 +1,366 @@
+name: tools
+
+# The tests that need the tools a machine installs (DESIGN 10.2, 10.5): the generated code
+# type-checked and run in every language it is written for, PostgreSQL, TigerBeetle, Chrome,
+# Mermaid, xmllint, Lean, sakai's four linters. Every tool is installed, and a SKIP for
+# something missing fails the job unless ci/skips/tools.txt allows it: a skipped language
+# narrows what the run proved, in a line that is easy to read past (rulec's ci.yml, where this
+# began). A test of the platforms level says so in a SKIP line of the level and passes; those
+# run in platforms.yml and kani.yml.
+#
+# The crates run in three groups side by side, each on a runner of its own with what it needs:
+# rulec (the twelve languages it writes, a PostgreSQL server, Lean), dandori (the SDKs and
+# runners under its tools/, and rulec 0.22.0, which its tests read rules with until PLAN D.3),
+# and the other five languages with the base layer, the test kit and xtask.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths-ignore: ["**.md"]
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tools-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # The compiler that builds rulec's Connect stubs, pinned as rulec's ci.yml pins it: buf
+  # decides how the plugins are called.
+  BUF_VERSION: "1.54.0"
+
+jobs:
+  tools:
+    name: tools (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: rulec
+            crates: -p rulec
+          - group: dandori
+            crates: -p dandori
+          - group: the others
+            crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p ritsu-base -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
+
+    # `rulec test` runs the generated SQL against a real PostgreSQL, because the query and the
+    # function beside it are two doors on one rule and only a server can open the second. The
+    # other crates start throwaway clusters of their own from RITSU_PG_BIN; the server runs in
+    # every group, as a job's services cannot depend on the matrix.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # rulec writes Rust for the browser and for WASI; geas reads coverage with llvm-tools
+          targets: ${{ matrix.group == 'rulec' && 'wasm32-unknown-unknown, wasm32-wasip1' || '' }}
+          components: ${{ matrix.group == 'the others' && 'llvm-tools' || '' }}
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-tools-${{ matrix.group }}-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-tools-${{ matrix.group }}-${{ runner.os }}-
+
+      # --- What every group has: Node, Python, Go, Java and uv. The versions are the ones the
+      # crates' own setups name (rulec's ci.yml; dandori's tools/temporal-go/go.mod asks Go 1.26).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.group == 'rulec' && '3.12' || '3.13' }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.group == 'dandori' && '1.26' || '1.25' }}
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: uv, for the virtual environments under the crates' tools/
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+          version: ${{ env.BUF_VERSION }}
+
+      # --- rulec: the twelve targets in the order backend.rs declares them, the checkers the
+      # generated code is held to, the rule as a Connect service, PostgreSQL, and Lean.
+      - name: "rulec: NumPy, the checkers of the generated Python, and the Connect runtime"
+        if: matrix.group == 'rulec'
+        run: python3 -m pip install --upgrade numpy mypy ruff connectrpc protoc-gen-connectrpc protoc-gen-py uvicorn
+
+      - uses: ruby/setup-ruby@v1
+        if: matrix.group == 'rulec'
+        with:
+          ruby-version: "3.4"
+
+      - name: "rulec: RBS and Steep, for the generated Ruby's signatures"
+        if: matrix.group == 'rulec'
+        run: gem install rbs steep
+
+      - uses: shivammathur/setup-php@v2
+        if: matrix.group == 'rulec'
+        with:
+          php-version: "8.4"
+
+      - uses: swift-actions/setup-swift@v2
+        if: matrix.group == 'rulec'
+        with:
+          swift-version: "6.1"
+
+      - name: "rulec: wasmtime, for the WASI pass"
+        if: matrix.group == 'rulec'
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+
+      - name: "rulec: the PostgreSQL server, through libpq's variables"
+        if: matrix.group == 'rulec'
+        run: |
+          {
+            echo "PGHOST=localhost"
+            echo "PGPORT=5432"
+            echo "PGUSER=postgres"
+            echo "PGPASSWORD=postgres"
+            echo "PGDATABASE=postgres"
+          } >> "$GITHUB_ENV"
+
+      # The toolchain is pinned by proofs/lean-toolchain, so the cache key is that file: a new
+      # Lean is a change in the repository, read as such.
+      - uses: actions/cache@v6
+        if: matrix.group == 'rulec'
+        with:
+          path: |
+            ~/.elan
+            crates/rulec/proofs/.lake
+          key: lean-${{ runner.os }}-${{ hashFiles('crates/rulec/proofs/lean-toolchain', 'crates/rulec/proofs/RulecCert/*.lean', 'crates/rulec/proofs/Main.lean') }}
+          restore-keys: lean-${{ runner.os }}-
+
+      - name: "rulec: Lean, and the re-checker the tests run"
+        if: matrix.group == 'rulec'
+        run: |
+          set -eu
+          if [ ! -x "$HOME/.elan/bin/lake" ]; then
+            curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          cd crates/rulec/proofs
+          "$HOME/.elan/bin/lake" build
+
+      # --- dandori: the SDKs and runners under tools/, and the rulec its tests read rules with.
+      - name: "dandori: the Node packages under tools/"
+        if: matrix.group == 'dandori'
+        run: |
+          set -eu
+          for d in tools tools/temporal tools/durable tools/agents tools/wire tools/mermaid; do
+            npm ci --prefix "crates/dandori/$d"
+          done
+
+      - name: "dandori: the Python environments under tools/"
+        if: matrix.group == 'dandori'
+        run: |
+          set -eu
+          for d in temporal-python pydantic-graph agents wire connect; do
+            uv venv --python 3.13 "crates/dandori/tools/$d/.venv"
+            uv pip install --python "crates/dandori/tools/$d/.venv/bin/python" -r "crates/dandori/tools/$d/requirements.txt"
+          done
+
+      - name: "dandori: the Go modules of tools/temporal-go"
+        if: matrix.group == 'dandori'
+        run: cd crates/dandori/tools/temporal-go && go mod download
+
+      # protoc builds the .proto of every service of dandori's examples with dandori's options
+      # (tests/protos.rs). The release's archive, held to the checksum it had when this was
+      # written; it carries the well-known types beside the compiler.
+      - name: "dandori: protoc 35.1"
+        if: matrix.group == 'dandori'
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/protoc"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/protoc.zip" https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip
+          echo "6930ebf62bd4ea607b98fff052596c6ee564b9835b4ce172c75a3f53ae9d91b7  $d/protoc.zip" | sha256sum -c -
+          unzip -q "$d/protoc.zip" -d "$d"
+          echo "$d/bin" >> "$GITHUB_PATH"
+
+      # dandori's golden files were taken with rulec 0.22.0 (PLAN 7.2): the release binary, held
+      # to the checksum its release published.
+      - name: "dandori: rulec 0.22.0"
+        if: matrix.group == 'dandori'
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/rulec-0.22.0"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/rulec.tar.gz" https://github.com/i2y/rulec/releases/download/v0.22.0/rulec-v0.22.0-x86_64-unknown-linux-musl.tar.gz
+          echo "cc49d5a44f84d94ecd3bdd8e1562cd0dce4270b47013365334c29dd4a85f3f56  $d/rulec.tar.gz" | sha256sum -c -
+          tar xzf "$d/rulec.tar.gz" -C "$d"
+          "$d/rulec" --version
+          echo "DANDORI_RULEC=$d/rulec" >> "$GITHUB_ENV"
+
+      # --- koyomi, chobo, geas, yuen, sakai, and the test kit's own tests.
+      - name: "PostgreSQL 18's programs, for the throwaway clusters the tests start"
+        if: matrix.group == 'the others'
+        run: |
+          set -eu
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -q postgresql-18
+          mkdir -p /tmp/rpg
+          echo "RITSU_PG_BIN=/usr/lib/postgresql/18/bin" >> "$GITHUB_ENV"
+          echo "RITSU_PG_SOCKET_DIR=/tmp/rpg" >> "$GITHUB_ENV"
+
+      - name: "xmllint, for yuen's ReqIF"
+        if: matrix.group == 'the others'
+        run: sudo apt-get install -y -q libxml2-utils
+
+      - name: "koyomi: tsc and mypy"
+        if: matrix.group == 'the others'
+        run: |
+          set -eu
+          npm ci --prefix crates/koyomi/tools
+          uv venv --python 3.13 crates/koyomi/tools/.venv
+          uv pip install --python crates/koyomi/tools/.venv/bin/python -r crates/koyomi/tools/requirements.txt
+
+      - name: "chobo: the runners, Mermaid and TigerBeetle"
+        if: matrix.group == 'the others'
+        run: |
+          set -eu
+          npm ci --prefix crates/chobo/tools/runner
+          uv venv --python 3.13 crates/chobo/tools/runner/.venv
+          uv pip install --python crates/chobo/tools/runner/.venv/bin/python --require-hashes -r crates/chobo/tools/runner/requirements.txt
+          npm ci --prefix crates/chobo/tools/mermaid
+          sh crates/chobo/tools/tigerbeetle/fetch.sh
+          echo "RITSU_TIGERBEETLE=$GITHUB_WORKSPACE/crates/chobo/tools/tigerbeetle/tigerbeetle" >> "$GITHUB_ENV"
+
+      - name: "yuen: prov and reqif, and the schemas of ReqIF"
+        if: matrix.group == 'the others'
+        run: |
+          set -eu
+          uv venv --python 3.13 crates/yuen/tools/.venv
+          uv pip install --python crates/yuen/tools/.venv/bin/python -r crates/yuen/tools/requirements.txt
+          sh crates/yuen/tools/reqif/fetch.sh
+
+      - name: "sakai: the four linters and Context Mapper"
+        if: matrix.group == 'the others'
+        run: |
+          set -eu
+          uv venv --python 3.13 crates/sakai/tools/.venv
+          uv pip install --python crates/sakai/tools/.venv/bin/python --require-hashes -r crates/sakai/tools/requirements.txt
+          npm ci --prefix crates/sakai/tools
+          sh crates/sakai/tools/java/fetch.sh
+          sh crates/sakai/tools/cml/fetch.sh
+          sh crates/sakai/tools/go/install.sh
+
+      # --- Say what is here before the suite runs, so a version that moved is readable in the
+      # log rather than only in a failure.
+      - name: The toolchains this run has
+        run: |
+          set -x
+          rustc --version && cargo --version
+          node --version && python3 --version && go version && java -version
+          uv --version && buf --version
+          if [ "${{ matrix.group }}" = rulec ]; then
+            python3 -c 'import numpy; print("numpy", numpy.__version__)'
+            ruby --version && php --version && swiftc --version
+            wasmtime --version && psql --version && lean --version
+            protoc-gen-py --version && protoc-gen-connectrpc --version
+            psql -c 'select version()'
+          fi
+          if [ "${{ matrix.group }}" = dandori ]; then "$DANDORI_RULEC" --version && protoc --version; fi
+          if [ "${{ matrix.group }}" = "the others" ]; then
+            "$RITSU_PG_BIN/postgres" --version && "$RITSU_TIGERBEETLE" version && xmllint --version
+          fi
+          google-chrome --version
+
+      - name: Copy in the pages the sites share
+        run: |
+          crates/rulec/website/sync.sh
+          crates/dandori/website/sync.sh
+
+      # sakai's tests check what its example copied from rulec, koyomi, chobo and dandori with
+      # each one's own `check`: the workspace's binaries.
+      - name: Build
+        run: |
+          cargo build --workspace --locked
+          for t in rulec koyomi chobo dandori; do
+            echo "SAKAI_$(echo "$t" | tr a-z A-Z)=$GITHUB_WORKSPACE/target/debug/$t" >> "$GITHUB_ENV"
+          done
+
+      - name: The tests of the tools level
+        run: cargo xtask test --level tools ${{ matrix.crates }}
+
+      # --- What rulec's ci.yml ran beside `cargo test`.
+      # The suite skips a language whose toolchain is missing; here that is a failure, not a
+      # note. `--require-all` counts the twelve languages. The PostgreSQL function beside the
+      # query and the rule as a Connect service are each skipped with a warning of their own
+      # when what they need is not here, and `--require-all` sees neither, so the warnings are
+      # read here as well (rulec's DESIGN §15.94). The model checker's pass (`--proofs`) is
+      # kani.yml's.
+      - name: "rulec: the generated code runs in every language, none skipped"
+        if: matrix.group == 'rulec'
+        env:
+          RULEC_LANG: ja
+        run: |
+          set -eu -o pipefail
+          out=$(mktemp -d)
+          target/debug/rulec gen crates/rulec/tests/corpus/ゆうパック運賃.rule --out "$out"
+          target/debug/rulec test "$out" --require-all --lang en | tee "$RUNNER_TEMP/run.log"
+          if grep -q "skipped" "$RUNNER_TEMP/run.log"; then
+            echo "::error::a side was skipped; every toolchain is supposed to be here"
+            grep "skipped" "$RUNNER_TEMP/run.log"
+            exit 1
+          fi
+
+      # The certificate is evidence only if something other than rulec can read it, so the
+      # re-checker reads every one, held to the text it is about (rulec's DESIGN §15.96, §15.97).
+      - name: "rulec: the certificates re-check, without rulec"
+        if: matrix.group == 'rulec'
+        env:
+          RULEC_LANG: ja
+        run: |
+          set -eu -o pipefail
+          n=0
+          for f in crates/rulec/tests/corpus/*.rule; do
+            target/debug/rulec certificate "$f" > "$RUNNER_TEMP/cert.json"
+            python3 crates/rulec/tools/recheck.py --rule "$f" "$RUNNER_TEMP/cert.json" | grep "the file says the same"
+            python3 crates/rulec/tools/recheck.py --rule "$f" "$RUNNER_TEMP/cert.json" | tail -1 | grep -E 'was proved|stated rather than proved' > /dev/null
+            n=$((n + 1))
+          done
+          echo "$n certificates re-checked, each against its own text"
+
+      - name: "rulec: fmt and the committed output are current"
+        if: matrix.group == 'rulec'
+        env:
+          RULEC_LANG: ja
+        run: |
+          set -eu
+          target/debug/rulec fmt --check crates/rulec/tests/corpus/
+          target/debug/rulec check crates/rulec/tests/corpus/

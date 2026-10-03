@@ -1,0 +1,113 @@
+name: proofs
+
+# The Lean development under crates/rulec/proofs (DESIGN 10.5, 11): the meaning of a rule, the
+# checks a certificate has to pass, and the theorems that say a `true` from each check settles
+# the matching claim. `lake build` is what makes "proved" a fact about this commit rather than
+# about a laptop, and the program it builds is the checks themselves, so running it over the
+# corpus is the proofs applied to every document there. It runs when the proofs change, or what
+# a certificate is made from and written with: rulec's sources, the base layer's (the digest and
+# the JSON), and the corpus.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/rulec/proofs/**"
+      - "crates/rulec/src/**"
+      - "crates/rulec/tests/corpus/**"
+      - "crates/rulec/tests/lean.rs"
+      - "crates/rulec/tools/recheck.py"
+      - "crates/ritsu-base/src/**"
+      - "Cargo.lock"
+      - ".github/workflows/proofs.yml"
+  pull_request:
+    paths:
+      - "crates/rulec/proofs/**"
+      - "crates/rulec/src/**"
+      - "crates/rulec/tests/corpus/**"
+      - "crates/rulec/tests/lean.rs"
+      - "crates/rulec/tools/recheck.py"
+      - "crates/ritsu-base/src/**"
+      - "Cargo.lock"
+      - ".github/workflows/proofs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: proofs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  proofs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-proofs-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-proofs-${{ runner.os }}-
+
+      # The toolchain is pinned by proofs/lean-toolchain, so the cache key is that file: a new
+      # Lean is a change in the repository, read as such.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.elan
+            crates/rulec/proofs/.lake
+          key: lean-${{ runner.os }}-${{ hashFiles('crates/rulec/proofs/lean-toolchain', 'crates/rulec/proofs/RulecCert/*.lean', 'crates/rulec/proofs/Main.lean') }}
+          restore-keys: lean-${{ runner.os }}-
+
+      - name: elan, for Lean
+        run: |
+          set -eu
+          if [ ! -x "$HOME/.elan/bin/lake" ]; then
+            curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: The proofs build
+        run: |
+          set -eu
+          cd crates/rulec/proofs
+          lake build
+          lean --version
+
+      - name: Every certificate passes the checks the theorems are about
+        run: |
+          set -eu -o pipefail
+          cargo build --release --locked -p rulec
+          for f in crates/rulec/tests/corpus/*.rule; do
+            target/release/rulec certificate "$f" > "$RUNNER_TEMP/cert.json"
+            # The closing line says whether anything was stated rather than proved, so it is the
+            # one to log, and a run that printed neither form is a run that went wrong quietly.
+            crates/rulec/proofs/.lake/build/bin/rulec-recheck --rule "$f" "$RUNNER_TEMP/cert.json" | tail -1 | grep -E '^OK'
+          done
+          echo "every certificate in the corpus was held to the proved checks"
+
+      # tests/lean.rs is of the tools level (it needs the built proofs); a SKIP line here would
+      # mean it did not run, so one fails the step.
+      - name: The corpus passes both re-checkers, and nothing is left open
+        env:
+          RITSU_TEST_LEVEL: tools
+        run: |
+          set -eu -o pipefail
+          cargo test --release --locked -p rulec --test lean -- --nocapture | tee "$RUNNER_TEMP/lean.log"
+          if grep -q "^SKIP: " "$RUNNER_TEMP/lean.log"; then
+            echo "::error::the Lean tests did not run"
+            exit 1
+          fi

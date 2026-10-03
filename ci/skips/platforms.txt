@@ -1,0 +1,9 @@
+# The SKIPs the platforms job allows (DESIGN 10.3, 10.5): `<crate> <test>` a line, or `<crate>`
+# alone for every test of it; `#` starts a comment. `cargo xtask test --level platforms` holds to
+# this list the SKIPs for something missing from the runner.
+
+# The Jev tasks are sent to TypeSafe only when the repository holds TYPESAFE_API_KEY as a secret.
+dandori jev_tasks_answer_on_typesafe
+# No Ollama on GitHub's runner: the agents on a server of Open Responses are sent to a real one
+# where Ollama answers, as on the machine the tests were written on.
+dandori open_responses_agents_answer_on_ollama

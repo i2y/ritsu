@@ -1,0 +1,121 @@
+name: kani
+
+# The second opinion on what rulec proves (DESIGN 10.5; rulec's DESIGN §15.95): every rule in
+# the corpus written as Rust, with the proof harnesses `gen` writes beside it, and proved by the
+# Kani model checker over its whole declared domain rather than over the vectors: no table falls
+# through, no W114 guard fires, nothing overflows an i64, and the rows of each `unique` table
+# cover the domain exactly once. Kani shares no code with rulec's checker, so a disagreement
+# means one of them is wrong. Nightly, and when what writes the Rust changes: rulec's generator,
+# the reserved words it reads from ritsu-emit, the corpus.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/rulec/src/codegen/**"
+      - "crates/rulec/src/codegen.rs"
+      - "crates/rulec/src/backend.rs"
+      - "crates/rulec/tests/corpus/**"
+      - "crates/ritsu-emit/src/**"
+      - ".github/workflows/kani.yml"
+  pull_request:
+    paths:
+      - "crates/rulec/src/codegen/**"
+      - "crates/rulec/src/codegen.rs"
+      - "crates/rulec/src/backend.rs"
+      - "crates/rulec/tests/corpus/**"
+      - "crates/ritsu-emit/src/**"
+      - ".github/workflows/kani.yml"
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kani-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pinned: a new version that decides differently should be a change in this file, read as
+  # such, and not something a rerun quietly brings in.
+  KANI_VERSION: "0.68.0"
+
+jobs:
+  kani:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-kani-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-kani-${{ runner.os }}-
+
+      # Kani brings its own rustc and CBMC, about 2 GB, so it is cached on the pinned version.
+      - name: Cache Kani
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/kani
+            ~/.cargo/bin/cargo-kani
+            ~/.kani
+            ~/.rustup/toolchains/nightly-*
+          key: kani-${{ runner.os }}-${{ env.KANI_VERSION }}
+
+      - name: Kani
+        run: |
+          set -eu
+          if ! kani --version >/dev/null 2>&1; then
+            cargo install --locked --version "$KANI_VERSION" kani-verifier
+            cargo kani setup
+          fi
+          kani --version
+
+      - name: Build
+        run: cargo build --workspace --locked
+
+      # `rulec test --proofs` adds the model checker's pass to a run, so the pass itself, and not
+      # only the harnesses it reads, is exercised. The test is of the platforms level (Kani), and
+      # a SKIP for Kani missing fails the step (ci/skips/platforms.txt does not allow it).
+      - name: The pass of `rulec test --proofs`
+        run: cargo xtask test --level platforms -p rulec -- フラグを付ければ証明が走る
+
+      - name: The proofs hold, for every rule in the corpus
+        run: |
+          set -eu -o pipefail
+          out=$(mktemp -d)
+          target/debug/rulec gen crates/rulec/tests/corpus/ --out "$out" > /dev/null
+          bad=0
+          rules=0
+          harnesses=0
+          for f in "$out"/rust/*_proof.rs; do
+            name=$(basename "$f" _proof.rs)
+            start=$SECONDS
+            if log=$(kani "$f" 2>&1); then
+              n=$(printf '%s\n' "$log" | grep -c '^VERIFICATION:- SUCCESSFUL' || true)
+              printf '%-24s %3ds  %s\n' "$name" "$((SECONDS - start))" \
+                "$(printf '%s\n' "$log" | grep -E '^Complete - ' | tail -1)"
+              rules=$((rules + 1))
+              harnesses=$((harnesses + n))
+            else
+              # Kani's own report is thousands of lines of checks that passed; what says what
+              # went wrong is the summary of each harness and the assertion it broke.
+              echo "::error::$name did not verify"
+              printf '%s\n' "$log" | grep -E '^ \*\* [0-9]+ of|^Failed Checks:|^ File:|^VERIFICATION:|^Verification failed for|^Complete - '
+              bad=1
+            fi
+          done
+          echo "$rules rules, $harnesses harnesses verified"
+          exit $bad

@@ -1,0 +1,7 @@
+# The SKIPs the fast job allows (DESIGN 10.3, 10.5): `<crate> <test>` a line, or `<crate>` alone
+# for every test of it; `#` starts a comment. `cargo xtask test --level fast` holds to this list
+# the SKIPs for something missing from the runner. A test of a higher level says so in a SKIP of
+# the level, which is what the level means and is not listed.
+#
+# None: at the fast level a test needs nothing but cargo, git, and curl to ask a server the test
+# itself started (DESIGN 10.2).
