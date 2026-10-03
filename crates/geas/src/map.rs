@@ -3,7 +3,8 @@
 //! never decides a verdict; `affected` reads it to say which claims a diff touches.
 
 use crate::cover::{Reader, Report, Session};
-use crate::diag::{count, t, Diag, Lang, Severity, Text};
+use crate::diag::{self, Diag, DiagExt, Severity, count};
+use ritsu_base::text::{Lang, Text};
 use crate::hash;
 use crate::json::{self, J};
 use crate::lines::{self, Lines};
@@ -114,7 +115,7 @@ impl Record {
                 continue;
             }
             let v = json::parse(line)
-                .map_err(|e| (n, t(format!("the line is not JSON: {e}"), "この行は JSON ではありません")))?;
+                .map_err(|e| (n, tr!("この行は JSON ではありません", "the line is not JSON: {e}")))?;
             let Some(r) = rec.as_mut() else {
                 rec = Some(header(&v).map_err(|why| (n, why))?);
                 continue;
@@ -122,17 +123,17 @@ impl Record {
             if get(&v, "blob").is_some() {
                 let f = file_entry(&v).map_err(|why| (n, why))?;
                 if r.file_lines.insert(f.path.clone(), n).is_some() {
-                    return Err((n, t(format!("{} is in the record twice", f.path), format!("{} が記録に二つあります", f.path))));
+                    return Err((n, tr!("{} が記録に二つあります", "{} is in the record twice", f.path)));
                 }
                 r.files.push(f);
             } else if get(&v, "claim").is_some() {
                 let x = ran_entry(&v, r).map_err(|why| (n, why))?;
                 r.ran.push(x);
             } else {
-                return Err((n, t("the line is neither a file's line nor a claim's", "この行はファイルの行でも主張の行でもありません")));
+                return Err((n, tr!("この行はファイルの行でも主張の行でもありません", "the line is neither a file's line nor a claim's")));
             }
         }
-        rec.ok_or((0, t("the file is empty", "ファイルが空です")))
+        rec.ok_or((0, tr!("ファイルが空です", "the file is empty")))
     }
 
     pub fn file(&self, path: &str) -> Option<&RecFile> {
@@ -150,33 +151,34 @@ fn get<'a>(v: &'a J, key: &str) -> Option<&'a J> {
 fn string(v: &J, key: &str) -> Result<String, Text> {
     match get(v, key) {
         Some(J::Str(s)) => Ok(s.clone()),
-        _ => Err(t(format!("the line has no `{key}` string"), format!("この行に文字列の `{key}` がありません"))),
+        _ => Err(tr!("この行に文字列の `{key}` がありません", "the line has no `{key}` string")),
     }
 }
 
 fn ranges(s: &str) -> Result<Lines, Text> {
-    lines::from_ranges(s).map_err(|why| t(format!("`{s}` is not a list of line ranges: {why}"), format!("`{s}` は行番号の範囲として読めません")))
+    lines::from_ranges(s).map_err(|why| tr!("`{s}` は行番号の範囲として読めません", "`{s}` is not a list of line ranges: {why}"))
 }
 
 fn header(v: &J) -> Result<Record, Text> {
     match get(v, "geas_map") {
         Some(J::Num(n)) if *n == f64::from(FORMAT) => {}
         Some(J::Num(n)) => {
-            return Err(t(
-                format!("the record is of format {}, and this geas reads format {FORMAT}", json::render_num(*n)),
-                format!("この記録の形式は {} で、この geas が読めるのは形式 {FORMAT} です", json::render_num(*n)),
+            return Err(tr!(
+                "この記録の形式は {} で、この geas が読めるのは形式 {FORMAT} です",
+                "the record is of format {}, and this geas reads format {FORMAT}",
+                json::render_num(*n),
             ));
         }
         _ => {
-            return Err(t(
-                "the first line is not a record's header (`geas_map`)",
+            return Err(tr!(
                 "最初の行が記録のヘッダー（`geas_map`）ではありません",
+                "the first line is not a record's header (`geas_map`)",
             ));
         }
     }
     let mut claims = Vec::new();
     let Some(J::Arr(cs)) = get(v, "claims") else {
-        return Err(t("the header has no `claims` array", "ヘッダーに `claims` の配列がありません"));
+        return Err(tr!("ヘッダーに `claims` の配列がありません", "the header has no `claims` array"));
     };
     for c in cs {
         let mut targets = Vec::new();
@@ -203,16 +205,16 @@ fn file_entry(v: &J) -> Result<RecFile, Text> {
     let path = string(v, "file")?;
     let blob = string(v, "blob")?;
     if blob.len() != 40 || !blob.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(t(format!("the blob of {path} is not 40 hex digits"), format!("{path} の blob が 16 進 40 桁ではありません")));
+        return Err(tr!("{path} の blob が 16 進 40 桁ではありません", "the blob of {path} is not 40 hex digits"));
     }
     let lang = string(v, "lang")?;
     let Some(runtime) = Runtime::parse(&lang) else {
-        return Err(t(format!("`{lang}` is not a language the record knows"), format!("`{lang}` は記録の知らない言語です")));
+        return Err(tr!("`{lang}` は記録の知らない言語です", "`{lang}` is not a language the record knows"));
     };
     let code = match get(v, "code") {
         Some(J::Null) => None,
         Some(J::Str(s)) => Some(ranges(s)?),
-        _ => return Err(t(format!("the code of {path} is neither line ranges nor null"), format!("{path} の code が行番号の範囲でも null でもありません"))),
+        _ => return Err(tr!("{path} の code が行番号の範囲でも null でもありません", "the code of {path} is neither line ranges nor null")),
     };
     Ok(RecFile { path, blob, runtime, code })
 }
@@ -220,11 +222,11 @@ fn file_entry(v: &J) -> Result<RecFile, Text> {
 fn ran_entry(v: &J, r: &Record) -> Result<RecRan, Text> {
     let name = string(v, "claim")?;
     let Some(claim) = r.claims.iter().position(|c| c.name == name) else {
-        return Err(t(format!("the claim \"{name}\" is not in the header"), format!("主張 \"{name}\" がヘッダーにありません")));
+        return Err(tr!("主張 \"{name}\" がヘッダーにありません", "the claim \"{name}\" is not in the header"));
     };
     let file = string(v, "file")?;
     if r.file(&file).is_none() {
-        return Err(t(format!("{file} has no line of its own in the record"), format!("{file} の行が記録にありません")));
+        return Err(tr!("{file} の行が記録にありません", "{file} has no line of its own in the record"));
     }
     Ok(RecRan { claim, target: string(v, "target")?, file, lines: ranges(&string(v, "ran")?)? })
 }
@@ -234,27 +236,27 @@ fn ran_entry(v: &J, r: &Record) -> Result<RecRan, Text> {
 /// relative to it.
 pub fn root_and_spec(file: &str, root_flag: Option<&str>) -> Result<(PathBuf, String), Diag> {
     let spec_abs = std::fs::canonicalize(file).map_err(|e| {
-        Diag::error("E081", 0, 0, t(format!("cannot read this file: {e}"), format!("このファイルを読めません: {e}")))
+        diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"))
     })?;
     let spec_dir = spec_abs.parent().expect("a file is in a directory");
     let root = match root_flag {
         Some(r) => {
             let p = std::fs::canonicalize(r).map_err(|e| {
-                Diag::error(
+                diag::error(
                     "E081",
                     0,
                     0,
-                    t(format!("cannot read the root `{r}`: {e}"), format!("ルート `{r}` を読めません: {e}")),
+                    tr!("ルート `{r}` を読めません: {e}", "cannot read the root `{r}`: {e}"),
                 )
             })?;
             if !p.is_dir() {
-                return Err(Diag::error(
+                return Err(diag::error(
                     "E080",
                     0,
                     0,
-                    t(
-                        format!("`--root` names `{r}`, which is not a directory"),
-                        format!("`--root` の `{r}` はディレクトリではありません"),
+                    tr!(
+                        "`--root` の `{r}` はディレクトリではありません",
+                        "`--root` names `{r}`, which is not a directory",
                     ),
                 ));
             }
@@ -264,18 +266,19 @@ pub fn root_and_spec(file: &str, root_flag: Option<&str>) -> Result<(PathBuf, St
     };
     match tree::relative(&root, &spec_abs) {
         Some(rel) => Ok((root, rel)),
-        None => Err(Diag::error(
+        None => Err(diag::error(
             "E080",
             0,
             0,
-            t(
-                format!("the spec `{file}` is not under the root `{}`", root_flag.unwrap_or(".")),
-                format!("主張のファイル `{file}` がルート `{}` の下にありません", root_flag.unwrap_or(".")),
+            tr!(
+                "主張のファイル `{file}` がルート `{}` の下にありません",
+                "the spec `{file}` is not under the root `{}`",
+                root_flag.unwrap_or("."),
             ),
         )
-        .note(t(
-            "the record's paths are relative to the root, so the spec has to be under it",
+        .note(tr!(
             "記録のパスはルートからの相対パスなので、主張のファイルはルートの下に置きます",
+            "the record's paths are relative to the root, so the spec has to be under it",
         ))),
     }
 }
@@ -319,13 +322,13 @@ impl Place<'_> {
 /// order, so that one run says what another says.
 pub fn run(spec: &Spec, place: &Place, jobs: usize, journal: &mut Vec<String>) -> Result<MapRun, Diag> {
     let session = Session::start(place.geas_dir, place.root).map_err(|e| {
-        Diag::error(
+        diag::error(
             "E081",
             0,
             0,
-            t(
-                format!("cannot write geas's coverage hooks under .geas/: {e}"),
-                format!(".geas/ の下にカバレッジのフックを書けません: {e}"),
+            tr!(
+                ".geas/ の下にカバレッジのフックを書けません: {e}",
+                "cannot write geas's coverage hooks under .geas/: {e}",
             ),
         )
     })?;
@@ -363,7 +366,7 @@ pub fn run(spec: &Spec, place: &Place, jobs: usize, journal: &mut Vec<String>) -
                 continue;
             }
             let col = r.started.iter().find(|p| p.line == prob.line).map_or(0, |p| p.col);
-            let mut d = Diag::error(prob.code, prob.line, col, prob.msg).with_path(run::run_up_to(&r, prob.line));
+            let mut d = diag::error(prob.code, prob.line, col, prob.msg).with_path(run::run_up_to(&r, prob.line));
             if prob.code.starts_with('W') {
                 d.severity = Severity::Warning;
             }
@@ -394,21 +397,22 @@ pub fn run(spec: &Spec, place: &Place, jobs: usize, journal: &mut Vec<String>) -
 /// E066: a service that outlived SIGTERM by 5 s and was killed.
 fn killed(r: &ClaimResult, p: &run::Started) -> Diag {
     let w = crate::proc::shell_words(&p.words);
-    let mut d = Diag::error(
+    let mut d = diag::error(
         "E066",
         p.line,
         p.col,
-        t(
-            format!("the service `{}` did not exit within 5 s of SIGTERM, so geas killed it, and what it ran may be missing from the record", p.target),
-            format!("サービス `{}` が SIGTERM から 5 秒のうちに終了しなかったので、geas が強制終了しました。実行した行が記録から抜けているかもしれません", p.target),
+        tr!(
+            "サービス `{}` が SIGTERM から 5 秒のうちに終了しなかったので、geas が強制終了しました。実行した行が記録から抜けているかもしれません",
+            "the service `{}` did not exit within 5 s of SIGTERM, so geas killed it, and what it ran may be missing from the record",
+            p.target,
         ),
     )
     .with_path(run::run_up_to(r, usize::MAX));
     d.notes = vec![
-        t(format!("command: {w}"), format!("コマンド: {w}")),
-        t(
-            "a service is recorded when it exits by itself on SIGTERM: Python and Node do, through geas's hooks, unless the program ignores the signal; a Go service has to return from main (signal.NotifyContext and Server.Shutdown); a Rust service needs code of its own",
+        tr!("コマンド: {w}", "command: {w}"),
+        tr!(
             "サービスが記録されるのは、SIGTERM を受けて自分で終了したときです。Python と Node は、プログラムがシグナルを無視していなければ geas のフックで終了します。Go のサービスは main から戻る必要があり（signal.NotifyContext と Server.Shutdown）、Rust のサービスには SIGTERM を受けて終了するコードが要ります",
+            "a service is recorded when it exits by itself on SIGTERM: Python and Node do, through geas's hooks, unless the program ignores the signal; a Go service has to return from main (signal.NotifyContext and Server.Shutdown); a Rust service needs code of its own",
         ),
     ];
     d
@@ -439,22 +443,23 @@ fn no_record(
             continue;
         }
         let w = crate::proc::shell_words(&p.words);
-        let mut d = Diag::error(
+        let mut d = diag::error(
             "W060",
             tg.pos.line,
             tg.pos.col,
-            t(
-                format!("the target `{}` gave no record: none of the processes it started reported a line of a file under the root", tg.name),
-                format!("ターゲット `{}` からは記録が取れませんでした。起動したプロセスのどれも、ルートの下のファイルの行を報告していません", tg.name),
+            tr!(
+                "ターゲット `{}` からは記録が取れませんでした。起動したプロセスのどれも、ルートの下のファイルの行を報告していません",
+                "the target `{}` gave no record: none of the processes it started reported a line of a file under the root",
+                tg.name,
             ),
         )
         .with_path(run::run_up_to(r, p.line));
         d.severity = Severity::Warning;
         d.notes = vec![
-            t(format!("command: {w}"), format!("コマンド: {w}")),
-            t(
-                "geas records Python 3.12 and later, Node, a Go program built with -cover and a Rust program built with -C instrument-coverage, in the files under the root; a shell script, an older Python or a program built without coverage gives nothing",
+            tr!("コマンド: {w}", "command: {w}"),
+            tr!(
                 "geas が記録できるのは、ルートの下のファイルを実行する Python 3.12 以降、Node、-cover を付けてビルドした Go のプログラム、-C instrument-coverage を付けてビルドした Rust のプログラムです。シェルスクリプト、古い Python、カバレッジなしでビルドしたプログラムからは何も取れません",
+                "geas records Python 3.12 and later, Node, a Go program built with -cover and a Rust program built with -C instrument-coverage, in the files under the root; a shell script, an older Python or a program built without coverage gives nothing",
             ),
         ];
         out.push(d);
@@ -466,7 +471,7 @@ fn no_record(
 /// lines, and every claim's lines per target and file.
 fn build(spec: &Spec, place: &Place, results: &[ClaimResult], slices: &[BTreeMap<String, Report>]) -> Result<Record, Diag> {
     let e081 = |what: String, e: std::io::Error| {
-        Diag::error("E081", 0, 0, t(format!("cannot read {what}: {e}"), format!("{what} を読めません: {e}")))
+        diag::error("E081", 0, 0, tr!("{what} を読めません: {e}", "cannot read {what}: {e}"))
     };
     let sources = tree::sources(place.root).map_err(|e| e081("the tree under the root".into(), e))?;
     let mut code: BTreeMap<&str, Lines> = BTreeMap::new();

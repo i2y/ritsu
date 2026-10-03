@@ -5,7 +5,7 @@
 //! character at a time, and the time is linear in the text whatever the pattern. A
 //! pattern always matches the whole value, so it has no anchors.
 
-use crate::diag::{t, Text};
+use ritsu_base::text::Text;
 
 /// The largest count a repetition may give: `{1000}`.
 const MAX_COUNT: u32 = 1000;
@@ -206,7 +206,7 @@ impl Threads {
 }
 
 fn bad(at: usize, en: &str, ja: &str) -> Bad {
-    Bad { at, why: t(en, ja) }
+    Bad { at, why: Text::new(ja, en) }
 }
 
 struct Parser<'a> {
@@ -254,9 +254,9 @@ impl Parser<'_> {
         if let Some(q) = self.peek().filter(|q| matches!(q, '*' | '+' | '?' | '{')) {
             return Err(Bad {
                 at: self.i,
-                why: t(
-                    format!("`{q}` follows another repetition; put the repeated part in a group, as `(a*){q}`"),
-                    format!("`{q}` が別の繰り返しの直後にあります。繰り返す部分をグループにまとめてください（`(a*){q}` のように）"),
+                why: tr!(
+                    "`{q}` が別の繰り返しの直後にあります。繰り返す部分をグループにまとめてください（`(a*){q}` のように）",
+                    "`{q}` follows another repetition; put the repeated part in a group, as `(a*){q}`",
                 ),
             });
         }
@@ -304,9 +304,9 @@ impl Parser<'_> {
         if too_many(min) || max.is_some_and(too_many) {
             return Err(Bad {
                 at: open,
-                why: t(
-                    format!("a count above {MAX_COUNT}"),
-                    format!("{MAX_COUNT} を超える回数です"),
+                why: tr!(
+                    "{MAX_COUNT} を超える回数です",
+                    "a count above {MAX_COUNT}",
                 ),
             });
         }
@@ -315,9 +315,9 @@ impl Parser<'_> {
         {
             return Err(Bad {
                 at: open,
-                why: t(
-                    format!("the count `{{{min},{m}}}` runs backwards; the smaller number comes first"),
-                    format!("回数 `{{{min},{m}}}` の大小が逆です。小さいほうを先に書きます"),
+                why: tr!(
+                    "回数 `{{{min},{m}}}` の大小が逆です。小さいほうを先に書きます",
+                    "the count `{{{min},{m}}}` runs backwards; the smaller number comes first",
                 ),
             });
         }
@@ -361,9 +361,9 @@ impl Parser<'_> {
             '\\' => self.escape(at),
             '*' | '+' | '?' => Err(Bad {
                 at,
-                why: t(
-                    format!("`{c}` repeats nothing before it; write `\\{c}` for the character"),
-                    format!("`{c}` の前に繰り返すものがありません。文字そのものは `\\{c}` と書きます"),
+                why: tr!(
+                    "`{c}` の前に繰り返すものがありません。文字そのものは `\\{c}` と書きます",
+                    "`{c}` repeats nothing before it; write `\\{c}` for the character",
                 ),
             }),
             '{' => Err(bad(
@@ -373,9 +373,9 @@ impl Parser<'_> {
             )),
             '^' | '$' => Err(Bad {
                 at,
-                why: t(
-                    format!("a pattern always matches the whole value, so it takes no `{c}`; write `\\{c}` for the character"),
-                    format!("パターンはいつも値の全体と照らし合わせるので、`{c}` は要りません。文字そのものは `\\{c}` と書きます"),
+                why: tr!(
+                    "パターンはいつも値の全体と照らし合わせるので、`{c}` は要りません。文字そのものは `\\{c}` と書きます",
+                    "a pattern always matches the whole value, so it takes no `{c}`; write `\\{c}` for the character",
                 ),
             }),
             c => Ok(Node::Char(c)),
@@ -409,9 +409,9 @@ impl Parser<'_> {
             e if e.is_alphanumeric() => {
                 return Err(Bad {
                     at,
-                    why: t(
-                        format!("`\\{e}` is not in geas's patterns; they take `\\d`, `\\w`, `\\s` and their capitals, `\\n`, `\\t`, `\\r`, and a backslash before a character that is not a letter or a digit"),
-                        format!("`\\{e}` は geas のパターンにはありません。使えるのは `\\d`、`\\w`、`\\s` とその大文字、`\\n`、`\\t`、`\\r`、それに文字でも数字でもない文字の前のバックスラッシュです"),
+                    why: tr!(
+                        "`\\{e}` は geas のパターンにはありません。使えるのは `\\d`、`\\w`、`\\s` とその大文字、`\\n`、`\\t`、`\\r`、それに文字でも数字でもない文字の前のバックスラッシュです",
+                        "`\\{e}` is not in geas's patterns; they take `\\d`, `\\w`, `\\s` and their capitals, `\\n`, `\\t`, `\\r`, and a backslash before a character that is not a letter or a digit",
                     ),
                 });
             }
@@ -478,9 +478,9 @@ impl Parser<'_> {
                 if hi < lo {
                     return Err(Bad {
                         at,
-                        why: t(
-                            format!("the range `{lo}-{hi}` runs backwards; the smaller character comes first"),
-                            format!("範囲 `{lo}-{hi}` の大小が逆です。小さいほうの文字を先に書きます"),
+                        why: tr!(
+                            "範囲 `{lo}-{hi}` の大小が逆です。小さいほうの文字を先に書きます",
+                            "the range `{lo}-{hi}` runs backwards; the smaller character comes first",
                         ),
                     });
                 }

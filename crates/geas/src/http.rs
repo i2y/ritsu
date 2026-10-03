@@ -4,7 +4,8 @@
 //! sorted) and the body, read through `Transfer-Encoding: chunked` when the answer
 //! is sent that way.
 
-use crate::diag::{self, t};
+use ritsu_base::text::Text;
+use crate::diag;
 use crate::proc::{Failure, STEP_TIMEOUT};
 use crate::run::Obs;
 use std::io::Read;
@@ -13,7 +14,7 @@ use std::net::{SocketAddr, TcpStream};
 
 /// E033 with its message.
 fn exchange_failed(en: String, ja: String) -> Failure {
-    Failure { code: "E033", msg: t(en, ja), notes: vec![] }
+    Failure { code: "E033", msg: Text::new(ja, en), notes: vec![] }
 }
 
 /// One request to a service on 127.0.0.1. `auto` says that its port came from

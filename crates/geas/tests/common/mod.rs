@@ -1,20 +1,29 @@
 //! What every integration test shares: the binary, a scratch directory that removes
 //! itself, copies of the examples, a run of geas that cannot hang the suite, golden
-//! files, and the locks and checks for the tests that start services.
+//! files, and the locks and checks for the tests that start services. The scratch
+//! directory, the run with a time limit, the golden files, finding a tool and Chrome,
+//! the SKIP line and the JSON reader are ritsu-testkit's and ritsu-base's; what is
+//! here is geas's own.
 
 // Each test binary includes this module and uses a different part of it; the rest
 // would warn as dead code in every binary that does not use it.
 #![allow(dead_code)]
 
 use std::fs;
-use std::io::Read;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+/// A fresh directory under the system's temporary directory, removed when dropped, also when
+/// the test panics (ritsu-testkit's).
+pub use ritsu_testkit::TempDir as Scratch;
+/// Says why a test did not run what it is about; the test then passes (ritsu-testkit's
+/// `SKIP: geas: <reason>`).
+pub use ritsu_testkit::skip;
+#[allow(unused_imports)]
+pub use ritsu_testkit::golden::line_diff;
 
 /// The geas binary cargo built for these tests.
 pub fn geas() -> &'static str {
@@ -24,54 +33,6 @@ pub fn geas() -> &'static str {
 /// The repository's root.
 pub fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-/// A fresh directory under `CARGO_TARGET_TMPDIR`, removed when dropped, also when
-/// the test panics.
-pub struct Scratch {
-    dir: PathBuf,
-}
-
-static SCRATCH_SEQ: AtomicUsize = AtomicUsize::new(0);
-
-impl Scratch {
-    pub fn new(name: &str) -> Scratch {
-        let n = SCRATCH_SEQ.fetch_add(1, Ordering::SeqCst);
-        let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-            .join(format!("{name}-{}-{n}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("create the scratch directory");
-        Scratch { dir }
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.dir
-    }
-
-    /// Writes a file under the scratch directory, making its directories.
-    pub fn write(&self, rel: &str, text: &str) {
-        let p = self.dir.join(rel);
-        if let Some(parent) = p.parent() {
-            fs::create_dir_all(parent).expect("create a directory in the scratch");
-        }
-        fs::write(&p, text).expect("write a file in the scratch");
-    }
-
-    /// Reads a file under the scratch directory.
-    pub fn read(&self, rel: &str) -> String {
-        let p = self.dir.join(rel);
-        fs::read_to_string(&p).unwrap_or_else(|e| panic!("cannot read {}: {e}", p.display()))
-    }
-
-    pub fn exists(&self, rel: &str) -> bool {
-        self.dir.join(rel).exists()
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.dir);
-    }
 }
 
 /// Copies `examples/<name>` to `<scratch>/examples/<name>`, leaving out what runs
@@ -109,6 +70,7 @@ fn copy_tree(from: &Path, to: &Path) {
 /// so a developer's own settings cannot change what the tests see.
 const GEAS_VARS: &[&str] = &[
     "GEAS_LANG",
+    "RITSU_LANG",
     "GEAS_JOBS",
     "GEAS_PID_LOG",
     "GEAS_CHROME",
@@ -128,127 +90,34 @@ pub fn run(cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> (String, String, 
 /// `run`, with `input` on geas's stdin (a diff for `geas affected … -`).
 pub fn run_with_input(cwd: &Path, args: &[&str], env: &[(&str, &str)], input: Option<&[u8]>) -> (String, String, i32) {
     let mut cmd = Command::new(geas());
-    cmd.args(args)
-        .current_dir(cwd)
-        .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(args).current_dir(cwd);
     for v in GEAS_VARS {
         cmd.env_remove(v);
     }
     for (k, v) in env {
         cmd.env(k, v);
     }
-    let mut child = cmd.spawn().expect("start geas");
-    if let Some(bytes) = input {
-        use std::io::Write as _;
-        let mut stdin = child.stdin.take().expect("piped stdin");
-        stdin.write_all(bytes).expect("write geas's stdin");
-    }
-    let out = drain(child.stdout.take().expect("piped stdout"));
-    let err = drain(child.stderr.take().expect("piped stderr"));
-    let deadline = Instant::now() + RUN_LIMIT;
-    let status = loop {
-        if let Some(st) = child.try_wait().expect("wait for geas") {
-            break st;
-        }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            panic!("geas {args:?} did not finish within {} s", RUN_LIMIT.as_secs());
-        }
-        thread::sleep(Duration::from_millis(10));
-    };
-    let out = String::from_utf8(out.join().expect("stdout reader")).expect("stdout is UTF-8");
-    let err = String::from_utf8(err.join().expect("stderr reader")).expect("stderr is UTF-8");
-    (out, err, status.code().unwrap_or(-1))
+    let r = ritsu_testkit::run::run_with_input(&mut cmd, input, RUN_LIMIT);
+    assert!(!r.timed_out, "geas {args:?} did not finish within {} s", RUN_LIMIT.as_secs());
+    (r.stdout, r.stderr, r.code.unwrap_or(-1))
 }
 
-fn drain(mut r: impl Read + Send + 'static) -> thread::JoinHandle<Vec<u8>> {
-    thread::spawn(move || {
-        let mut v = Vec::new();
-        let _ = r.read_to_end(&mut v);
-        v
-    })
-}
-
-/// Compares `actual` with `tests/golden/<name>`. With `GEAS_BLESS` set, writes it
-/// there instead.
+/// Compares `actual` with `tests/golden/<name>`. With `GEAS_BLESS` (or `RITSU_BLESS`) set,
+/// writes it there instead.
 pub fn golden(name: &str, actual: &str) {
-    let path = root().join("tests/golden").join(name);
-    if std::env::var_os("GEAS_BLESS").is_some() {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("create the golden directory");
-        }
-        fs::write(&path, actual).expect("write the golden file");
-        return;
-    }
-    let want = match fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => panic!(
-            "tests/golden/{name} is missing; record it with GEAS_BLESS=1, after reading what it would hold:\n{actual}"
-        ),
-    };
-    if want != actual {
-        panic!(
-            "the output differs from tests/golden/{name} (- golden, + now):\n{}",
-            line_diff(&want, actual)
-        );
-    }
-}
-
-/// A line diff, enough to read why a golden failed.
-pub fn line_diff(a: &str, b: &str) -> String {
-    let a: Vec<&str> = a.lines().collect();
-    let b: Vec<&str> = b.lines().collect();
-    let (n, m) = (a.len(), b.len());
-    let mut lcs = vec![vec![0usize; m + 1]; n + 1];
-    for i in (0..n).rev() {
-        for j in (0..m).rev() {
-            lcs[i][j] = if a[i] == b[j] {
-                lcs[i + 1][j + 1] + 1
-            } else {
-                lcs[i + 1][j].max(lcs[i][j + 1])
-            };
-        }
-    }
-    let mut out = String::new();
-    let (mut i, mut j) = (0, 0);
-    while i < n || j < m {
-        if i < n && j < m && a[i] == b[j] {
-            out.push_str(&format!("  {}\n", a[i]));
-            i += 1;
-            j += 1;
-        } else if j < m && (i == n || lcs[i][j + 1] >= lcs[i + 1][j]) {
-            out.push_str(&format!("+ {}\n", b[j]));
-            j += 1;
-        } else {
-            out.push_str(&format!("- {}\n", a[i]));
-            i += 1;
-        }
-    }
-    out
+    ritsu_testkit::golden(root().join("tests/golden").join(name), actual);
 }
 
 /// Whether `tool args…` runs and succeeds.
 pub fn have(tool: &str, args: &[&str]) -> bool {
-    Command::new(tool)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
-/// Says on stderr why a test did not run what it is about; the test then passes.
-pub fn skip(reason: &str) {
-    eprintln!("SKIP: {reason}");
+    ritsu_testkit::tools::runs(tool, args)
 }
 
 /// Whether python3 is on PATH; prints the SKIP line when it is not.
 pub fn python3(what: &str) -> bool {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Python) {
+        return false;
+    }
     if have("python3", &["--version"]) {
         true
     } else {
@@ -367,131 +236,22 @@ impl Json {
     }
 }
 
-/// Parses one JSON value; panics on anything else, which is a failed test.
+/// Parses one JSON value with ritsu-base's reader; panics on anything else, which is a
+/// failed test.
 pub fn json(text: &str) -> Json {
-    let chars: Vec<char> = text.chars().collect();
-    let mut i = 0;
-    let v = json_value(&chars, &mut i);
-    json_ws(&chars, &mut i);
-    assert_eq!(i, chars.len(), "trailing text after the JSON value in {text:?}");
-    v
-}
-
-fn json_ws(c: &[char], i: &mut usize) {
-    while *i < c.len() && c[*i].is_whitespace() {
-        *i += 1;
+    fn from(v: ritsu_base::json::Json) -> Json {
+        use ritsu_base::json::Json as B;
+        match v {
+            B::Null => Json::Null,
+            B::Bool(b) => Json::Bool(b),
+            B::Int(n) => Json::Num(n as f64),
+            B::Frac(s) => Json::Num(s.parse().unwrap_or_else(|_| panic!("not a number: {s:?}"))),
+            B::Str(s) => Json::Str(s),
+            B::Arr(a) => Json::Arr(a.into_iter().map(from).collect()),
+            B::Obj(o) => Json::Obj(o.into_iter().map(|(k, v)| (k, from(v))).collect()),
+        }
     }
-}
-
-fn json_value(c: &[char], i: &mut usize) -> Json {
-    json_ws(c, i);
-    match c.get(*i) {
-        Some('{') => {
-            *i += 1;
-            let mut pairs = Vec::new();
-            json_ws(c, i);
-            if c.get(*i) == Some(&'}') {
-                *i += 1;
-                return Json::Obj(pairs);
-            }
-            loop {
-                json_ws(c, i);
-                let Json::Str(k) = json_value(c, i) else { panic!("a key that is not a string") };
-                json_ws(c, i);
-                assert_eq!(c.get(*i), Some(&':'));
-                *i += 1;
-                pairs.push((k, json_value(c, i)));
-                json_ws(c, i);
-                match c.get(*i) {
-                    Some(',') => *i += 1,
-                    Some('}') => {
-                        *i += 1;
-                        return Json::Obj(pairs);
-                    }
-                    other => panic!("expected `,` or `}}`, found {other:?}"),
-                }
-            }
-        }
-        Some('[') => {
-            *i += 1;
-            let mut items = Vec::new();
-            json_ws(c, i);
-            if c.get(*i) == Some(&']') {
-                *i += 1;
-                return Json::Arr(items);
-            }
-            loop {
-                items.push(json_value(c, i));
-                json_ws(c, i);
-                match c.get(*i) {
-                    Some(',') => *i += 1,
-                    Some(']') => {
-                        *i += 1;
-                        return Json::Arr(items);
-                    }
-                    other => panic!("expected `,` or `]`, found {other:?}"),
-                }
-            }
-        }
-        Some('"') => {
-            *i += 1;
-            let mut s = String::new();
-            loop {
-                let ch = c[*i];
-                *i += 1;
-                match ch {
-                    '"' => return Json::Str(s),
-                    '\\' => {
-                        let e = c[*i];
-                        *i += 1;
-                        match e {
-                            'n' => s.push('\n'),
-                            't' => s.push('\t'),
-                            'r' => s.push('\r'),
-                            'b' => s.push('\u{8}'),
-                            'f' => s.push('\u{c}'),
-                            'u' => {
-                                let hex = |at: usize| -> u32 {
-                                    u32::from_str_radix(&c[at..at + 4].iter().collect::<String>(), 16).expect("four hex digits")
-                                };
-                                let mut cp = hex(*i);
-                                *i += 4;
-                                if (0xD800..0xDC00).contains(&cp) {
-                                    *i += 2; // the second half's backslash and letter
-                                    cp = 0x10000 + ((cp - 0xD800) << 10) + (hex(*i) - 0xDC00);
-                                    *i += 4;
-                                }
-                                s.push(char::from_u32(cp).expect("a character"));
-                            }
-                            other => s.push(other),
-                        }
-                    }
-                    other => s.push(other),
-                }
-            }
-        }
-        Some('t') => {
-            *i += 4;
-            Json::Bool(true)
-        }
-        Some('f') => {
-            *i += 5;
-            Json::Bool(false)
-        }
-        Some('n') => {
-            *i += 4;
-            Json::Null
-        }
-        Some(_) => {
-            let start = *i;
-            while *i < c.len() && matches!(c[*i], '0'..='9' | '-' | '+' | '.' | 'e' | 'E') {
-                *i += 1;
-            }
-            let s: String = c[start..*i].iter().collect();
-            Json::Num(s.parse().unwrap_or_else(|_| panic!("not a number: {s:?}")))
-        }
-        None => panic!("the JSON ended early"),
-    }
+    from(ritsu_base::json::parse(text).unwrap_or_else(|e| panic!("not JSON ({}): {text:?}", e.message.en)))
 }
 
 /// A fresh `GEAS_PID_LOG` in the scratch directory, as an absolute path.
@@ -499,10 +259,14 @@ pub fn pid_log(s: &Scratch) -> PathBuf {
     s.path().join("pids.log")
 }
 
-/// The Chrome geas would start, as geas finds it: `GEAS_CHROME`, the macOS
-/// application, then `google-chrome`, `chromium` or `chromium-browser` on PATH.
-/// None after printing the SKIP line.
+/// The Chrome the tests use, found by ritsu-testkit (`RITSU_CHROME` or `GEAS_CHROME`, the
+/// macOS application, then `google-chrome`, `chromium` or `chromium-browser` on PATH). The
+/// tests hand it to geas as `GEAS_CHROME`, so geas starts the same one. None after printing
+/// the SKIP line.
 pub fn chrome(what: &str) -> Option<PathBuf> {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Chrome) {
+        return None;
+    }
     let found = chrome_path();
     if found.is_none() {
         skip(&format!("Chrome is not at hand (GEAS_CHROME, the macOS application, or google-chrome, chromium or chromium-browser on PATH); {what} is not run"));
@@ -510,28 +274,17 @@ pub fn chrome(what: &str) -> Option<PathBuf> {
     found
 }
 
-/// The Chrome geas would start, without a word when there is none.
+/// The Chrome the tests use, without a word when there is none.
 pub fn chrome_path() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("GEAS_CHROME") {
-        Some(PathBuf::from(p)).filter(|p| p.is_file())
-    } else {
-        let mac = PathBuf::from("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome");
-        if mac.is_file() {
-            Some(mac)
-        } else {
-            ["google-chrome", "chromium", "chromium-browser"].iter().find_map(|name| {
-                std::env::var_os("PATH").and_then(|path| std::env::split_paths(&path).map(|d| d.join(name)).find(|p| p.is_file()))
-            })
-        }
-    }
+    ritsu_testkit::chrome::find()
 }
 
 /// After a run with Chrome: no process whose command line holds the scratch path
 /// (Chrome's profile is under it), and no profile directory left under `.geas/`.
 pub fn no_chrome_left(s: &Scratch) {
-    let out = Command::new("pgrep").args(["-f", &s.path().to_string_lossy()]).output().expect("pgrep");
-    let pids = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    assert!(pids.is_empty(), "processes still name the scratch directory: {pids}");
+    if let Err(e) = ritsu_testkit::chrome::none_left(s.path()) {
+        panic!("{e}");
+    }
     let mut stack = vec![s.path().to_path_buf()];
     while let Some(dir) = stack.pop() {
         for e in fs::read_dir(&dir).into_iter().flatten().flatten() {

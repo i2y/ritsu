@@ -5,7 +5,8 @@
 //! the claim reaches them, each answered by the screen; last `{"do":"close"}`. An
 //! answer that does not come within 5 s, or is not of that shape, is E037.
 
-use crate::diag::{self, t, Text};
+use crate::diag;
+use ritsu_base::text::Text;
 use crate::gui;
 use crate::json::{self, J};
 use crate::model::{Call, Place, Target};
@@ -100,11 +101,11 @@ impl Live {
             let name = &tg.name;
             return Err(Failure {
                 code: "E011",
-                msg: t(
-                    format!("the driver of `{name}` cannot keep the pins it was handed: {why}"),
-                    format!("`{name}` のドライバーは、渡した固定を受け付けませんでした: {why}"),
+                msg: tr!(
+                    "`{name}` のドライバーは、渡した固定を受け付けませんでした: {why}",
+                    "the driver of `{name}` cannot keep the pins it was handed: {why}",
                 ),
-                notes: vec![t(format!("the pins: {pins}"), format!("渡した固定: {pins}"))],
+                notes: vec![tr!("渡した固定: {pins}", "the pins: {pins}")],
             });
         }
         if !matches!(member(&answer, "ok"), Some(J::Bool(true))) {
@@ -128,9 +129,11 @@ impl Live {
                 let name = &self.target;
                 Err(Failure {
                     code: "E037",
-                    msg: t(
-                        format!("the driver of `{name}` did not answer {} within 5 s", o.en),
-                        format!("`{name}` のドライバーから、{}への応答が 5 秒のうちにありませんでした", o.ja),
+                    msg: tr!(
+                        "`{name}` のドライバーから、{}への応答が 5 秒のうちにありませんでした",
+                        "the driver of `{name}` did not answer {} within 5 s",
+                        o.ja;
+                        o.en,
                     ),
                     notes: proc::stderr_tail(&self.proc.stderr_so_far()),
                 })
@@ -140,13 +143,17 @@ impl Live {
                 let name = &self.target;
                 let how = match self.proc.wait_until(Instant::now() + Duration::from_secs(1)) {
                     Some(st) => proc::how_it_ended(st),
-                    None => t("its stdout closed", "標準出力が閉じました"),
+                    None => tr!("標準出力が閉じました", "its stdout closed"),
                 };
                 Err(Failure {
                     code: "E037",
-                    msg: t(
-                        format!("the driver of `{name}` exited before answering {} ({})", o.en, how.en),
-                        format!("`{name}` のドライバーが、{}に応答する前に終了しました（{}）", o.ja, how.ja),
+                    msg: tr!(
+                        "`{name}` のドライバーが、{}に応答する前に終了しました（{}）",
+                        "the driver of `{name}` exited before answering {} ({})",
+                        o.ja,
+                        how.ja;
+                        o.en,
+                        how.en,
                     ),
                     notes: proc::stderr_tail(&self.proc.stderr_so_far()),
                 })
@@ -160,21 +167,23 @@ impl Live {
         let name = &self.target;
         let l = diag::cut(line, 80);
         let shape: Text = if call.is_some() {
-            t(
-                "a driver answers each action with one line of JSON: `{\"screen\":…}`, or `{\"error\":\"…\",\"screen\":…}` when the app refused it",
-                "ドライバーは操作ごとに JSON を一行返します。`{\"screen\":…}` か、アプリが操作を拒否したときは `{\"error\":\"…\",\"screen\":…}` です",
+            tr!(
+                "ドライバーは操作ごとに JSON を一行返します。`{{\"screen\":…}}` か、アプリが操作を拒否したときは `{{\"error\":\"…\",\"screen\":…}}` です",
+                "a driver answers each action with one line of JSON: `{{\"screen\":…}}`, or `{{\"error\":\"…\",\"screen\":…}}` when the app refused it",
             )
         } else {
-            t(
-                "a driver answers the first line with `{\"ok\":true}`, or with `{\"error\":\"…\"}` for a pin it cannot keep",
-                "ドライバーは最初の行に `{\"ok\":true}` を返します。守れない固定があれば `{\"error\":\"…\"}` を返します",
+            tr!(
+                "ドライバーは最初の行に `{{\"ok\":true}}` を返します。守れない固定があれば `{{\"error\":\"…\"}}` を返します",
+                "a driver answers the first line with `{{\"ok\":true}}`, or with `{{\"error\":\"…\"}}` for a pin it cannot keep",
             )
         };
         Failure {
             code: "E037",
-            msg: t(
-                format!("the driver of `{name}` answered {} with a line geas cannot read: `{l}`", o.en),
-                format!("`{name}` のドライバーは、{}に geas の読めない行を返しました: `{l}`", o.ja),
+            msg: tr!(
+                "`{name}` のドライバーは、{}に geas の読めない行を返しました: `{l}`",
+                "the driver of `{name}` answered {} with a line geas cannot read: `{l}`",
+                o.ja;
+                o.en,
             ),
             notes: vec![shape],
         }
@@ -194,7 +203,7 @@ impl Live {
                 let shown = call.display();
                 Err(Failure {
                     code: "E035",
-                    msg: t(format!("`{name}` refused `{shown}`: {why}"), format!("`{name}` が `{shown}` を拒否しました: {why}")),
+                    msg: tr!("`{name}` が `{shown}` を拒否しました: {why}", "`{name}` refused `{shown}`: {why}"),
                     notes: gui::refused_notes(screen.as_ref(), call),
                 })
             }

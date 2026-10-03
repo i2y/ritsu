@@ -2,7 +2,8 @@
 //! the checks that failed with the run that gets there, a claim's error as a
 //! diagnostic, and the summary line. Or the same as JSON.
 
-use crate::diag::{self, count, Diag, Lang};
+use crate::diag::{self, Diag, Show, count};
+use ritsu_base::text::Lang;
 use crate::json;
 use crate::run::{ClaimResult, ClaimStatus};
 
@@ -38,12 +39,12 @@ pub fn claims(file: &str, src: &str, results: &[ClaimResult], lang: Lang, only_f
                         && last_screen == Some(&sc.lines)
                         && sc.left == 0
                     {
-                        out.push_str(lang.tr("      the screen: as above\n", "      画面: 上と同じ\n"));
+                        out.push_str(tr!("      画面: 上と同じ\n", "      the screen: as above\n").get(lang));
                     } else if let Some(sc) = &c.screen {
                         last_screen = Some(&sc.lines);
-                        out.push_str(lang.tr("      the screen:\n", "      画面:\n"));
+                        out.push_str(tr!("      画面:\n", "      the screen:\n").get(lang));
                         if sc.lines.is_empty() {
-                            out.push_str(lang.tr("        (nothing)\n", "        （何もありません）\n"));
+                            out.push_str(tr!("        （何もありません）\n", "        (nothing)\n").get(lang));
                         }
                         for l in &sc.lines {
                             out.push_str(&format!("        {l}\n"));
@@ -57,7 +58,7 @@ pub fn claims(file: &str, src: &str, results: &[ClaimResult], lang: Lang, only_f
                     }
                 }
                 if !r.run.is_empty() {
-                    out.push_str(lang.tr("      the run that gets there:\n", "      ここまでの実行:\n"));
+                    out.push_str(tr!("      ここまでの実行:\n", "      the run that gets there:\n").get(lang));
                     for s in &r.run {
                         out.push_str(&format!("        {:>4}  {}\n", s.line, s.step().text.get(lang)));
                     }
@@ -68,7 +69,7 @@ pub fn claims(file: &str, src: &str, results: &[ClaimResult], lang: Lang, only_f
                     Lang::En => format!("not ok {n} - {} (error)\n", r.name),
                     Lang::Ja => format!("not ok {n} - {}（エラー）\n", r.name),
                 });
-                out.push_str(&diag::indent(&d.render(file, src, lang), "    "));
+                out.push_str(&diag::indent(&d.shown(file, src, lang), "    "));
             }
         }
     }
@@ -104,10 +105,7 @@ pub fn snap_summary(results: &[ClaimResult], kept: usize, baseline: &str, lang: 
         ),
     };
     if f > 0 {
-        out.push_str(lang.tr(
-            "warning: baseline recorded from a run with failing claims\n",
-            "注意: 成り立たない主張がある実行からベースラインを取りました\n",
-        ));
+        out.push_str(tr!("注意: 成り立たない主張がある実行からベースラインを取りました\n", "warning: baseline recorded from a run with failing claims\n").get(lang));
     }
     out
 }
@@ -117,7 +115,7 @@ pub fn error_diagnostics(file: &str, results: &[ClaimResult], lang: Lang) -> Vec
     results
         .iter()
         .filter_map(|r| match &r.status {
-            ClaimStatus::Error(d) => Some(d.to_json(file, lang)),
+            ClaimStatus::Error(d) => Some(d.json_in(file, lang)),
             _ => None,
         })
         .collect()
@@ -145,9 +143,9 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
                     format!(
                         "{{\"code\":\"{}\",\"line\":{},\"col\":{},\"message\":{},\"notes\":[{}]}}",
                         d.code,
-                        d.line,
-                        d.col,
-                        json::quote(d.msg.get(lang)),
+                        d.line.unwrap_or(0),
+                        d.col.unwrap_or(0),
+                        json::quote(d.message.get(lang)),
                         notes.join(",")
                     )
                 }
@@ -208,6 +206,6 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
 /// A spec geas could not run at all: it does not parse, cannot be read, or has no
 /// usable baseline.
 pub fn failure_json(file: &str, diags: &[(String, Diag)], lang: Lang) -> String {
-    let ds: Vec<String> = diags.iter().map(|(f, d)| d.to_json(f, lang)).collect();
+    let ds: Vec<String> = diags.iter().map(|(f, d)| d.json_in(f, lang)).collect();
     format!("{{\"geas\":1,\"ok\":false,\"file\":{},\"diagnostics\":[{}]}}", json::quote(file), ds.join(","))
 }

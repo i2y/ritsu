@@ -1,7 +1,8 @@
 //! `geas snap` and `geas drift`: the baseline, and every change from it, claimed
 //! (a check covers the field, so `geas check` decides) or unclaimed (nothing does).
 
-use crate::diag::{count, t, Lang, Text};
+use crate::diag::count;
+use ritsu_base::text::{Lang, Text};
 use crate::json::{self, J};
 use crate::model::*;
 use crate::run::{ClaimResult, Obs};
@@ -150,27 +151,27 @@ fn jget<'a>(j: &'a J, key: &str) -> Result<&'a J, Text> {
             .iter()
             .find(|(k, _)| k == key)
             .map(|(_, v)| v)
-            .ok_or_else(|| t(format!("the line has no `{key}`"), format!("この行に `{key}` がありません"))),
-        _ => Err(t("the line is not a JSON object", "この行は JSON のオブジェクトではありません")),
+            .ok_or_else(|| tr!("この行に `{key}` がありません", "the line has no `{key}`")),
+        _ => Err(tr!("この行は JSON のオブジェクトではありません", "the line is not a JSON object")),
     }
 }
 
 fn jstr(j: &J, key: &str) -> Result<String, Text> {
     match jget(j, key)? {
         J::Str(s) => Ok(s.clone()),
-        _ => Err(t(format!("`{key}` is not a string"), format!("`{key}` が文字列ではありません"))),
+        _ => Err(tr!("`{key}` が文字列ではありません", "`{key}` is not a string")),
     }
 }
 
 fn jnum(j: &J, key: &str) -> Result<f64, Text> {
     match jget(j, key)? {
         J::Num(n) => Ok(*n),
-        _ => Err(t(format!("`{key}` is not a number"), format!("`{key}` が数ではありません"))),
+        _ => Err(tr!("`{key}` が数ではありません", "`{key}` is not a number")),
     }
 }
 
 fn base_rec(line: &str) -> Result<BaseRec, Text> {
-    let j = json::parse(line).map_err(|e| t(format!("the line is not JSON: {e}"), "この行は JSON ではありません"))?;
+    let j = json::parse(line).map_err(|e| tr!("この行は JSON ではありません", "the line is not JSON: {e}"))?;
     let claim = jstr(&j, "claim")?;
     let idx = jnum(&j, "idx")? as usize;
     let call = jstr(&j, "call")?;
@@ -194,13 +195,13 @@ fn base_rec(line: &str) -> Result<BaseRec, Text> {
         }
         "screen" => {
             let node = crate::screen::Node::from_json(jget(o, "screen")?)
-                .map_err(|e| t(format!("`screen` is not a screen: {e}"), format!("`screen` が画面になっていません: {e}")))?;
+                .map_err(|e| tr!("`screen` が画面になっていません: {e}", "`screen` is not a screen: {e}"))?;
             Obs::Screen(node)
         }
         _ => {
-            return Err(t(
-                "`kind` is none of `proc`, `http` and `screen`",
+            return Err(tr!(
                 "`kind` が `proc`・`http`・`screen` のどれでもありません",
+                "`kind` is none of `proc`, `http` and `screen`",
             ));
         }
     };
@@ -214,14 +215,14 @@ fn base_head(line: &str) -> Option<Result<Vec<(String, String)>, Text>> {
     let version = jget(&j, "geas_baseline").ok()?;
     if !matches!(version, J::Num(n) if *n == f64::from(BASELINE_FORMAT)) {
         let v = json::render(version);
-        return Some(Err(t(
-            format!("the baseline is of format {v}, and this geas reads format {BASELINE_FORMAT}"),
-            format!("このベースラインの形式は {v} で、この geas が読めるのは形式 {BASELINE_FORMAT} です"),
+        return Some(Err(tr!(
+            "このベースラインの形式は {v} で、この geas が読めるのは形式 {BASELINE_FORMAT} です",
+            "the baseline is of format {v}, and this geas reads format {BASELINE_FORMAT}",
         )));
     }
     let pins = match jget(&j, "pins") {
         Ok(J::Obj(pairs)) => pairs.iter().map(|(k, v)| (k.clone(), json::render(v))).collect(),
-        _ => return Some(Err(t("the first line has no `pins` object", "最初の行に `pins` のオブジェクトがありません"))),
+        _ => return Some(Err(tr!("最初の行に `pins` のオブジェクトがありません", "the first line has no `pins` object"))),
     };
     Some(Ok(pins))
 }
@@ -583,9 +584,9 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
         let then = baseline.pins.iter().find(|(name, _)| *name == tg.name).map_or("{}".to_string(), |(_, p)| p.clone());
         if now != then {
             let name = &tg.name;
-            r.notes.push(t(
-                format!("the pins of `{name}` differ from the baseline's: {then} → {now}"),
-                format!("ターゲット `{name}` の固定が、ベースラインと違います: {then} → {now}"),
+            r.notes.push(tr!(
+                "ターゲット `{name}` の固定が、ベースラインと違います: {then} → {now}",
+                "the pins of `{name}` differ from the baseline's: {then} → {now}",
             ));
         }
     }
@@ -594,16 +595,18 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
             let key = (res.name.clone(), o.idx);
             let (name, n) = (&res.name, o.idx + 1);
             let Some(b) = base.remove(&key) else {
-                r.notes.push(t(
-                    format!("no baseline for claim \"{name}\" when#{n} (new claim? run `geas snap`)"),
-                    format!("主張 \"{name}\" の when#{n} はベースラインにありません（新しい主張なら `geas snap` を走らせてください）"),
+                r.notes.push(tr!(
+                    "主張 \"{name}\" の when#{n} はベースラインにありません（新しい主張なら `geas snap` を走らせてください）",
+                    "no baseline for claim \"{name}\" when#{n} (new claim? run `geas snap`)",
                 ));
                 continue;
             };
             if b.call != o.call {
-                r.notes.push(t(
-                    format!("claim \"{name}\" when#{n}: the call itself changed ({} → {}); re-snap to compare", b.call, o.call),
-                    format!("主張 \"{name}\" の when#{n} は呼び出しそのものが変わりました（{} → {}）。比べるには `geas snap` をやり直してください", b.call, o.call),
+                r.notes.push(tr!(
+                    "主張 \"{name}\" の when#{n} は呼び出しそのものが変わりました（{} → {}）。比べるには `geas snap` をやり直してください",
+                    "claim \"{name}\" when#{n}: the call itself changed ({} → {}); re-snap to compare",
+                    b.call,
+                    o.call,
                 ));
                 continue;
             }
@@ -638,9 +641,9 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
     leftovers.sort();
     for (claim, idx) in leftovers {
         let n = idx + 1;
-        r.notes.push(t(
-            format!("baseline has claim \"{claim}\" when#{n} but the current run does not (claim removed or errored)"),
-            format!("ベースラインには主張 \"{claim}\" の when#{n} がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）"),
+        r.notes.push(tr!(
+            "ベースラインには主張 \"{claim}\" の when#{n} がありますが、今回の実行にはありません（主張を消したか、主張がエラーで止まったためです）",
+            "baseline has claim \"{claim}\" when#{n} but the current run does not (claim removed or errored)",
         ));
     }
     r
@@ -660,19 +663,19 @@ impl Report {
             }
             let (mark, change) = match (&c.old, &c.new) {
                 (Some(a), Some(b)) => ("~", format!("{} → {}", a.shown, b.shown)),
-                (None, Some(b)) => ("+", format!("{}: {}", lang.tr("appeared", "現れた"), b.shown)),
-                (Some(a), None) => ("-", format!("{}: {}", lang.tr("disappeared", "消えた"), a.shown)),
+                (None, Some(b)) => ("+", format!("{}: {}", tr!("現れた", "appeared").get(lang), b.shown)),
+                (Some(a), None) => ("-", format!("{}: {}", tr!("消えた", "disappeared").get(lang), a.shown)),
                 (None, None) => ("-", String::new()),
             };
             let tag = if c.claimed {
-                lang.tr("[claimed — `geas check` is the authority]", "[主張あり — 判定は geas check]")
+                tr!("[主張あり — 判定は geas check]", "[claimed — `geas check` is the authority]").get(lang).to_string()
             } else {
-                lang.tr("[unclaimed]", "[主張なし]")
+                tr!("[主張なし]", "[unclaimed]").get(lang).to_string()
             };
             out.push_str(&format!("  {} {}: {}   {}\n", mark, c.field, change, tag));
         }
         for n in &self.notes {
-            out.push_str(&format!("{} {}\n", lang.tr("note:", "注意:"), n.get(lang)));
+            out.push_str(&format!("{} {}\n", tr!("注意:", "note:").get(lang), n.get(lang)));
         }
         out.push_str(&match lang {
             Lang::En => format!(

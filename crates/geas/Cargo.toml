@@ -6,3 +6,8 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/i2y/geas"
 
 [dependencies]
+# Nothing from outside but ritsu-base, which is std only (ritsu DESIGN 3.1)
+ritsu-base = { path = "../ritsu-base" }
+
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }

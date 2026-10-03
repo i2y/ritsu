@@ -26,12 +26,12 @@ fn ready(what: &str) -> bool {
     python3(what) && chrome(what).is_some()
 }
 
-/// The variables geas runs with: the pid log, and `GEAS_CHROME` when the tests
-/// were given one.
+/// The variables geas runs with: the pid log, and `GEAS_CHROME`, the Chrome the tests
+/// found.
 fn run_logged(s: &Scratch, args: &[&str], extra: &[(&str, &str)]) -> (String, String, i32) {
     let log = pid_log(s);
     let log_s = log.to_string_lossy().into_owned();
-    let chrome = std::env::var("GEAS_CHROME").ok();
+    let chrome = chrome_path().map(|c| c.to_string_lossy().into_owned());
     let mut env: Vec<(&str, &str)> = vec![("GEAS_PID_LOG", log_s.as_str())];
     if let Some(c) = &chrome {
         env.push(("GEAS_CHROME", c.as_str()));
@@ -145,7 +145,7 @@ fn interrupted_while_a_page_loads() {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    if let Ok(c) = std::env::var("GEAS_CHROME") {
+    if let Some(c) = chrome_path() {
         cmd.env("GEAS_CHROME", c);
     }
     let mut child = cmd.spawn().expect("start geas");

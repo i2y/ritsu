@@ -11,7 +11,7 @@ pub mod node;
 pub mod python;
 pub mod rust;
 
-use crate::diag::{same, t, Text};
+use ritsu_base::text::Text;
 use crate::lines::Lines;
 use crate::proc::Env;
 use crate::run::Started;
@@ -230,15 +230,16 @@ impl Reader {
             if !unwritten.is_empty() {
                 problems.push(Problem {
                     code: "E066",
-                    msg: t(
-                        format!("the Go program that `{}` started wrote its coverage metadata but no counters: it did not exit normally", p.target),
-                        format!("`{}` が起動した Go のプログラムは、カバレッジのメタデータを書きましたが、カウンターを書いていません。正常に終了しなかったためです", p.target),
+                    msg: tr!(
+                        "`{}` が起動した Go のプログラムは、カバレッジのメタデータを書きましたが、カウンターを書いていません。正常に終了しなかったためです",
+                        "the Go program that `{}` started wrote its coverage metadata but no counters: it did not exit normally",
+                        p.target,
                     ),
                     notes: vec![
                         command_note(p),
-                        t(
-                            "a Go program writes its counters when it returns from main or calls os.Exit; a service has to do so on SIGTERM (signal.NotifyContext and Server.Shutdown)",
+                        tr!(
                             "Go のプログラムがカウンターを書くのは、main から戻ったときか os.Exit を呼んだときです。サービスは SIGTERM を受けてそうする必要があります（signal.NotifyContext と Server.Shutdown）",
+                            "a Go program writes its counters when it returns from main or calls os.Exit; a service has to do so on SIGTERM (signal.NotifyContext and Server.Shutdown)",
                         ),
                     ],
                     target: p.target.clone(),
@@ -267,18 +268,18 @@ impl Reader {
         let failed = |msg: Text, notes: Vec<Text>| Problem { code: "E065", msg, notes, target: p.target.clone(), line: p.line };
         match run {
             Err(e) if e.kind() == io::ErrorKind::NotFound => problems.push(failed(
-                t(
-                    "go is not on PATH, and geas reads a Go program's coverage with `go tool covdata`",
+                tr!(
                     "PATH に go がありません。geas は Go のプログラムのカバレッジを `go tool covdata` で読みます",
+                    "go is not on PATH, and geas reads a Go program's coverage with `go tool covdata`",
                 ),
                 vec![command_note(p)],
             )),
             Err(e) => problems.push(failed(
-                t(format!("cannot start `go tool covdata`: {e}"), format!("`go tool covdata` を起動できません: {e}")),
+                tr!("`go tool covdata` を起動できません: {e}", "cannot start `go tool covdata`: {e}"),
                 vec![],
             )),
             Ok(o) if !o.status.success() => problems.push(failed(
-                t("`go tool covdata textfmt` failed", "`go tool covdata textfmt` が失敗しました"),
+                tr!("`go tool covdata textfmt` が失敗しました", "`go tool covdata textfmt` failed"),
                 tail(&o.stderr),
             )),
             Ok(_) => match std::fs::read_to_string(&out).map_err(|e| e.to_string()).and_then(|text| go::read(&text, &self.modules)) {
@@ -344,15 +345,16 @@ impl Reader {
         for p in strays {
             problems.push(Problem {
                 code: "W061",
-                msg: t(
-                    format!("a Rust program that `{}` started wrote a profile, but geas did not start that program itself, so what it ran is left out of the record", p.target),
-                    format!("`{}` が起動した Rust のプログラムがプロファイルを書きましたが、geas が直接起動したプログラムではないので、その実行は記録に入れていません", p.target),
+                msg: tr!(
+                    "`{}` が起動した Rust のプログラムがプロファイルを書きましたが、geas が直接起動したプログラムではないので、その実行は記録に入れていません",
+                    "a Rust program that `{}` started wrote a profile, but geas did not start that program itself, so what it ran is left out of the record",
+                    p.target,
                 ),
                 notes: vec![
                     command_note(p),
-                    t(
-                        "llvm-cov needs the program a profile came from, and geas knows only the programs it starts: make the command start the program built with -C instrument-coverage itself (`run \"./tally\"`), not through `cargo run` or a script",
+                    tr!(
                         "llvm-cov には、プロファイルを書いたプログラムが要ります。geas が知っているのは自分で起動したプログラムだけです。-C instrument-coverage を付けてビルドしたプログラムを、`cargo run` やスクリプトを通さず、コマンドで直接起動してください（`run \"./tally\"`）",
+                        "llvm-cov needs the program a profile came from, and geas knows only the programs it starts: make the command start the program built with -C instrument-coverage itself (`run \"./tally\"`), not through `cargo run` or a script",
                     ),
                 ],
                 target: p.target.clone(),
@@ -367,7 +369,7 @@ impl Reader {
         let merged = dir.join("rust.profdata");
         let failed = |what: &str, stderr: &[u8]| Problem {
             code: "E065",
-            msg: t(format!("`{what}` failed"), format!("`{what}` が失敗しました")),
+            msg: tr!("`{what}` が失敗しました", "`{what}` failed"),
             notes: tail(stderr),
             target: p.target.clone(),
             line: p.line,
@@ -399,9 +401,9 @@ impl Reader {
                 Ok(r) => merge(report, r),
                 Err(why) => problems.push(Problem {
                     code: "E065",
-                    msg: t(
-                        format!("geas cannot read what `llvm-cov export` wrote: {why}"),
-                        format!("`llvm-cov export` の出力を読めません: {why}"),
+                    msg: tr!(
+                        "`llvm-cov export` の出力を読めません: {why}",
+                        "geas cannot read what `llvm-cov export` wrote: {why}",
                     ),
                     notes: vec![],
                     target: p.target.clone(),
@@ -431,13 +433,13 @@ fn look_for_llvm() -> Llvm {
         for n in names {
             if !d.join(n).is_file() {
                 return Llvm::Missing(
-                    t(
-                        format!("GEAS_LLVM_BIN is `{shown}`, and it has no `{n}`"),
-                        format!("GEAS_LLVM_BIN は `{shown}` ですが、そこに `{n}` がありません"),
+                    tr!(
+                        "GEAS_LLVM_BIN は `{shown}` ですが、そこに `{n}` がありません",
+                        "GEAS_LLVM_BIN is `{shown}`, and it has no `{n}`",
                     ),
-                    vec![t(
-                        "GEAS_LLVM_BIN names the directory holding llvm-profdata and llvm-cov; when it is set, geas looks nowhere else",
+                    vec![tr!(
                         "GEAS_LLVM_BIN には llvm-profdata と llvm-cov のあるディレクトリを書きます。これが設定されていると、geas はほかの場所を探しません",
+                        "GEAS_LLVM_BIN names the directory holding llvm-profdata and llvm-cov; when it is set, geas looks nowhere else",
                     )],
                 );
             }
@@ -453,13 +455,13 @@ fn look_for_llvm() -> Llvm {
         return Llvm::Found { profdata: p, cov: c };
     }
     Llvm::Missing(
-        t(
-            "a Rust program wrote a profile, and geas cannot find llvm-profdata and llvm-cov to read it: they are neither in the Rust toolchain's sysroot nor on PATH",
+        tr!(
             "Rust のプログラムがプロファイルを書きましたが、それを読む llvm-profdata と llvm-cov が見つかりません。Rust のツールチェーンの sysroot にも PATH にもありません",
+            "a Rust program wrote a profile, and geas cannot find llvm-profdata and llvm-cov to read it: they are neither in the Rust toolchain's sysroot nor on PATH",
         ),
-        vec![t(
-            "they come with rustup's llvm-tools component (`rustup component add llvm-tools`); or set GEAS_LLVM_BIN to a directory that holds them",
+        vec![tr!(
             "rustup の llvm-tools コンポーネントに入っています（`rustup component add llvm-tools`）。ほかの場所にあるなら、GEAS_LLVM_BIN にそのディレクトリを設定してください",
+            "they come with rustup's llvm-tools component (`rustup component add llvm-tools`); or set GEAS_LLVM_BIN to a directory that holds them",
         )],
     )
 }
@@ -548,7 +550,7 @@ fn files_named(dir: &Path, prefix: &str, suffix: &str) -> Vec<PathBuf> {
 
 fn command_note(p: &Started) -> Text {
     let w = crate::proc::shell_words(&p.words);
-    t(format!("command: {w}"), format!("コマンド: {w}"))
+    tr!("コマンド: {w}", "command: {w}")
 }
 
 /// The last lines a tool wrote on stderr, one note each.
@@ -556,16 +558,17 @@ fn tail(stderr: &[u8]) -> Vec<Text> {
     let text = String::from_utf8_lossy(stderr);
     let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     let from = lines.len().saturating_sub(5);
-    lines[from..].iter().map(|l| same(crate::diag::cut(l, 160))).collect()
+    lines[from..].iter().map(|l| Text::same(crate::diag::cut(l, 160))).collect()
 }
 
 fn unreadable(p: &Started, file: &Path, why: &str) -> Problem {
     let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     Problem {
         code: "E065",
-        msg: t(
-            format!("geas cannot read the coverage file {name} that `{}` left: {why}", p.target),
-            format!("`{}` が残したカバレッジのファイル {name} を読めません: {why}", p.target),
+        msg: tr!(
+            "`{}` が残したカバレッジのファイル {name} を読めません: {why}",
+            "geas cannot read the coverage file {name} that `{}` left: {why}",
+            p.target,
         ),
         notes: vec![command_note(p)],
         target: p.target.clone(),

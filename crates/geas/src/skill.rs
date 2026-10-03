@@ -5,7 +5,8 @@
 //! agents that read Agent Skills look (`.claude/skills/` in a project, or a user's
 //! own skills directory). `tests/skill.rs` holds the copy to the folder.
 
-use crate::diag::{t, Diag};
+use ritsu_base::text::Text;
+use crate::diag::{self, Diag};
 use std::path::{Path, PathBuf};
 
 /// The skill's files, `SKILL.md` first, as they are in `skills/geas/`.
@@ -25,7 +26,7 @@ pub fn guide() -> &'static str {
 }
 
 fn e081(en: String, ja: String) -> Diag {
-    Diag::error("E081", 0, 0, t(en, ja))
+    diag::error("E081", 0, 0, Text::new(ja, en))
 }
 
 /// Writes the skill's files to `<dir>/geas/`, making the directories it needs, and
@@ -39,9 +40,9 @@ pub fn install(dir: &Path, force: bool) -> Result<PathBuf, Diag> {
             format!("{shown} is already there; `geas skill --install` writes over it only with `--force`"),
             format!("{shown} はすでにあります。`geas skill --install` が上書きするのは、`--force` を付けたときだけです"),
         )
-        .note(t(
-            "with `--force`, the skill's files are written again and any other file in the folder is left as it is",
+        .note(tr!(
             "`--force` を付けると、スキルのファイルを書き直し、フォルダーにあるほかのファイルはそのまま残します",
+            "with `--force`, the skill's files are written again and any other file in the folder is left as it is",
         )));
     }
     if let Err(e) = std::fs::create_dir_all(&folder) {

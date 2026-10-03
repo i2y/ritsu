@@ -10,7 +10,8 @@
 //! Since a terminal's Ctrl-C reaches only geas's own group then, geas catches
 //! SIGINT, SIGTERM and SIGHUP and kills the groups it started before it exits.
 
-use crate::diag::{self, same, t, Text};
+use crate::diag;
+use ritsu_base::text::Text;
 use crate::model::Pins;
 use crate::run::Obs;
 use crate::words;
@@ -392,23 +393,23 @@ pub fn shell_words(words: &[String]) -> String {
 
 fn command_note(words: &[String]) -> Text {
     let w = shell_words(words);
-    t(format!("command: {w}"), format!("コマンド: {w}"))
+    tr!("コマンド: {w}", "command: {w}")
 }
 
 /// The last lines of a program's stderr, one note each.
 pub fn stderr_tail(stderr: &str) -> Vec<Text> {
     let lines: Vec<&str> = stderr.lines().filter(|l| !l.trim().is_empty()).collect();
     let from = lines.len().saturating_sub(STDERR_TAIL);
-    lines[from..].iter().map(|l| same(format!("stderr: {}", diag::cut(l, 120)))).collect()
+    lines[from..].iter().map(|l| Text::same(format!("stderr: {}", diag::cut(l, 120)))).collect()
 }
 
 /// How a process ended, for a message.
 fn ended(st: ExitStatus) -> Text {
     use std::os::unix::process::ExitStatusExt;
     match (st.code(), st.signal()) {
-        (Some(c), _) => t(format!("exit {c}"), format!("終了コード {c}")),
-        (None, Some(s)) => t(format!("killed by signal {s}"), format!("シグナル {s} で終了")),
-        (None, None) => t("ended", "終了"),
+        (Some(c), _) => tr!("終了コード {c}", "exit {c}"),
+        (None, Some(s)) => tr!("シグナル {s} で終了", "killed by signal {s}"),
+        (None, None) => tr!("終了", "ended"),
     }
 }
 
@@ -431,7 +432,7 @@ fn spawn_with(target: &str, words: &[String], shown: &[String], launch: &Launch,
     if signalled().is_some() {
         return Err(Failure {
             code: "E030",
-            msg: t(format!("geas is stopping, and does not start `{prog}`"), format!("geas は止まるところなので、`{prog}` を起動しません")),
+            msg: tr!("geas は止まるところなので、`{prog}` を起動しません", "geas is stopping, and does not start `{prog}`"),
             notes: vec![],
         });
     }
@@ -450,7 +451,7 @@ fn spawn_with(target: &str, words: &[String], shown: &[String], launch: &Launch,
     }
     let child = cmd.spawn().map_err(|e| Failure {
         code: "E030",
-        msg: t(format!("cannot start `{prog}`: {e}"), format!("`{prog}` を起動できません: {e}")),
+        msg: tr!("`{prog}` を起動できません: {e}", "cannot start `{prog}`: {e}"),
         notes: vec![command_note(shown)],
     })?;
     pid_log(format!("start {} {}\n", child.id(), target));
@@ -488,10 +489,10 @@ pub fn run_process(
                 let mut notes = vec![command_note(&words)];
                 notes.extend(stderr_tail(&stderr));
                 let msg = match other {
-                    Err(e) => t(format!("waiting for `{prog}` failed: {e}"), format!("`{prog}` の終了を待てませんでした: {e}")),
-                    _ => t(
-                        format!("`{prog}` did not finish within 5 s, so geas stopped it"),
-                        format!("`{prog}` が 5 秒のうちに終わらなかったので、geas が止めました"),
+                    Err(e) => tr!("`{prog}` の終了を待てませんでした: {e}", "waiting for `{prog}` failed: {e}"),
+                    _ => tr!(
+                        "`{prog}` が 5 秒のうちに終わらなかったので、geas が止めました",
+                        "`{prog}` did not finish within 5 s, so geas stopped it",
                     ),
                 };
                 return Err(Failure { code: "E031", msg, notes });
@@ -541,13 +542,13 @@ pub fn start_server(
             notes.extend(stderr_tail(&stderr));
             return Err(Failure {
                 code: "E032",
-                msg: t(
-                    format!("the service `{name}` exited before opening {pe} ({})", how.en),
+                msg: Text::new(
                     if auto {
                         format!("サービス `{name}` が、geas が渡したポートを開く前に終了しました（{}）", how.ja)
                     } else {
                         format!("サービス `{name}` がポート {port} を開く前に終了しました（{}）", how.ja)
                     },
+                    format!("the service `{name}` exited before opening {pe} ({})", how.en),
                 ),
                 notes,
             });
@@ -560,13 +561,13 @@ pub fn start_server(
             notes.extend(stderr_tail(&stderr));
             return Err(Failure {
                 code: "E032",
-                msg: t(
-                    format!("the service `{name}` did not open {pe} within 5 s, so geas stopped it"),
+                msg: Text::new(
                     if auto {
                         format!("サービス `{name}` が、geas が渡したポートを 5 秒のうちに開かなかったので、geas が止めました")
                     } else {
                         format!("サービス `{name}` が 5 秒のうちにポート {port} を開かなかったので、geas が止めました")
                     },
+                    format!("the service `{name}` did not open {pe} within 5 s, so geas stopped it"),
                 ),
                 notes,
             });

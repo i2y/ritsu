@@ -61,23 +61,12 @@ pub fn is_source(rel: &str) -> bool {
     Runtime::of(rel).is_some() && !excluded(rel)
 }
 
-/// The nearest directory at or above `start` for which `is_root` holds.
-pub fn nearest(start: &Path, is_root: impl Fn(&Path) -> bool) -> Option<PathBuf> {
-    let mut dir = Some(start);
-    while let Some(d) = dir {
-        if is_root(d) {
-            return Some(d.to_path_buf());
-        }
-        dir = d.parent();
-    }
-    None
-}
-
 /// The root of a spec in `spec_dir` (absolute): the nearest directory holding
 /// `.git`, a directory or the file a worktree has, found by looking, not by running
-/// git; else the spec's own directory.
+/// git; else the spec's own directory. It is how every language of ritsu finds the
+/// root of a project (ritsu-base's `paths::find_root`).
 pub fn root_of(spec_dir: &Path) -> PathBuf {
-    nearest(spec_dir, |d| d.join(".git").exists()).unwrap_or_else(|| spec_dir.to_path_buf())
+    ritsu_base::paths::find_root(spec_dir)
 }
 
 /// `p` relative to `root`, with `/`; None when it is not under the root. Both are
@@ -164,14 +153,18 @@ mod tests {
 
     #[test]
     fn the_root_is_the_nearest_directory_with_git() {
-        let has = |dirs: &'static [&'static str]| move |d: &Path| dirs.iter().any(|x| d == Path::new(x));
-        let start = Path::new("/w/repo/examples/greeter");
+        let base = std::env::temp_dir().join(format!("geas-root-{}", std::process::id()));
+        let start = base.join("repo/examples/greeter");
+        std::fs::create_dir_all(&start).unwrap();
+        // neither: the spec's own directory
+        assert_eq!(root_of(&start), start);
         // a `.git` above the spec
-        assert_eq!(nearest(start, has(&["/w/repo"])), Some(PathBuf::from("/w/repo")));
+        std::fs::create_dir_all(base.join("repo/.git")).unwrap();
+        assert_eq!(root_of(&start), base.join("repo"));
         // the nearest wins over one further up, and the spec's own directory counts
-        assert_eq!(nearest(start, has(&["/w/repo", "/w/repo/examples/greeter"])), Some(start.to_path_buf()));
-        // neither: the caller falls back to the spec's directory
-        assert_eq!(nearest(start, has(&[])), None);
+        std::fs::write(start.join(".git"), "gitdir: elsewhere\n").unwrap();
+        assert_eq!(root_of(&start), start);
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

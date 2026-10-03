@@ -5,7 +5,8 @@
 //! script at the first of them, and hands each `when` its screen.
 
 use crate::cdp::{Browsers, Pages};
-use crate::diag::{self, t, Text};
+use crate::diag;
+use ritsu_base::text::Text;
 use crate::driver::Live;
 use crate::model::{Call, Claim, Step, Target, TargetKind};
 use crate::pixie;
@@ -41,7 +42,7 @@ pub fn refused_notes(screen: Option<&Node>, call: &Call) -> Vec<Text> {
         return vec![];
     };
     let summary = diag::cut(&s.summary(), 200);
-    let mut notes = vec![t(format!("the screen it was on: {summary}"), format!("そのときの画面: {summary}"))];
+    let mut notes = vec![tr!("そのときの画面: {summary}", "the screen it was on: {summary}")];
     let pick = |roles: &[&str]| -> Vec<String> {
         s.walk().iter().filter(|(n, _)| roles.contains(&n.role.as_str())).map(|(n, _)| n.line()).collect()
     };
@@ -49,17 +50,17 @@ pub fn refused_notes(screen: Option<&Node>, call: &Call) -> Vec<Text> {
         Call::Click { .. } => {
             let found = pick(screen::CLICKABLE);
             notes.push(if found.is_empty() {
-                t("nothing on it can be clicked", "その画面にクリックできるものはありません")
+                tr!("その画面にクリックできるものはありません", "nothing on it can be clicked")
             } else {
-                t(format!("what it has to click: {}", found.join(", ")), format!("クリックできるもの: {}", found.join("、")))
+                tr!("クリックできるもの: {}", "what it has to click: {}", found.join("、"); found.join(", "))
             });
         }
         Call::Input { .. } | Call::Submit(_) => {
             let found = pick(screen::FIELDS);
             notes.push(if found.is_empty() {
-                t("it has no text field", "その画面にテキストフィールドはありません")
+                tr!("その画面にテキストフィールドはありません", "it has no text field")
             } else {
-                t(format!("its text fields: {}", found.join(", ")), format!("テキストフィールド: {}", found.join("、")))
+                tr!("テキストフィールド: {}", "its text fields: {}", found.join("、"); found.join(", "))
             });
         }
         _ => {}

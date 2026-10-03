@@ -13,7 +13,8 @@
 //! is E036. The screen is `Accessibility.getFullAXTree`, put through the rules of
 //! §8.4 and then §8.1's.
 
-use crate::diag::t;
+
+use ritsu_base::text::Text;
 use crate::http;
 use crate::json::{self, J};
 use crate::model::{Call, Place, Target};
@@ -35,7 +36,7 @@ const SETTLE: Duration = Duration::from_secs(10);
 const STEP_MS: u64 = 1000;
 
 fn e034(en: String, ja: String) -> Failure {
-    Failure { code: "E034", msg: t(en, ja), notes: vec![] }
+    Failure { code: "E034", msg: Text::new(ja, en), notes: vec![] }
 }
 
 /// The Chrome geas starts: `GEAS_CHROME` when it is set (and then only that), else
@@ -64,13 +65,13 @@ pub fn find_chrome() -> Result<PathBuf, Failure> {
     }
     Err(Failure {
         code: "E034",
-        msg: t(
-            "geas found no Chrome to open the page in",
+        msg: tr!(
             "ページを開く Chrome が見つかりません",
+            "geas found no Chrome to open the page in",
         ),
-        notes: vec![t(
-            "geas looks at GEAS_CHROME, then the macOS application, then google-chrome, chromium and chromium-browser on PATH",
+        notes: vec![tr!(
             "geas は GEAS_CHROME、macOS のアプリケーション、PATH の google-chrome・chromium・chromium-browser の順に探します",
+            "geas looks at GEAS_CHROME, then the macOS application, then google-chrome, chromium and chromium-browser on PATH",
         )],
     })
 }
@@ -242,9 +243,11 @@ impl Chrome {
                 gone(&profile);
                 return Err(Failure {
                     code: "E034",
-                    msg: t(
-                        format!("Chrome exited before it opened its debugging port ({})", how.en),
-                        format!("Chrome がデバッグ用のポートを開く前に終了しました（{}）", how.ja),
+                    msg: tr!(
+                        "Chrome がデバッグ用のポートを開く前に終了しました（{}）",
+                        "Chrome exited before it opened its debugging port ({})",
+                        how.ja;
+                        how.en,
                     ),
                     notes: proc::stderr_tail(&stderr),
                 });
@@ -254,9 +257,10 @@ impl Chrome {
                 gone(&profile);
                 return Err(Failure {
                     code: "E034",
-                    msg: t(
-                        format!("Chrome did not open its debugging port within {} s, so geas stopped it", START.as_secs()),
-                        format!("Chrome が {} 秒のうちにデバッグ用のポートを開かなかったので、geas が止めました", START.as_secs()),
+                    msg: tr!(
+                        "Chrome が {} 秒のうちにデバッグ用のポートを開かなかったので、geas が止めました",
+                        "Chrome did not open its debugging port within {} s, so geas stopped it",
+                        START.as_secs(),
                     ),
                     notes: proc::stderr_tail(&stderr),
                 });
@@ -473,9 +477,9 @@ impl Pages<'_> {
             Ok(_) => Ok(()),
             Err(CdpError::Failed(why)) => Err(Failure {
                 code: "E011",
-                msg: t(
-                    format!("Chrome cannot keep `{word} \"{value}\"` for the page: {why}"),
-                    format!("Chrome は、ページの `{word} \"{value}\"` を固定できません: {why}"),
+                msg: tr!(
+                    "Chrome は、ページの `{word} \"{value}\"` を固定できません: {why}",
+                    "Chrome cannot keep `{word} \"{value}\"` for the page: {why}",
                 ),
                 notes: vec![],
             }),
@@ -498,13 +502,13 @@ impl Pages<'_> {
         let secs = SETTLE.as_secs();
         Err(Failure {
             code: "E036",
-            msg: t(
-                format!("the page of `{name}` did not settle within {secs} s"),
-                format!("`{name}` のページが {secs} 秒のうちに落ち着きませんでした"),
+            msg: tr!(
+                "`{name}` のページが {secs} 秒のうちに落ち着きませんでした",
+                "the page of `{name}` did not settle within {secs} s",
             ),
-            notes: vec![t(
-                "geas lets a page's clock run after each action, and the clock waits while a fetch is pending: a request the service never answers holds it",
+            notes: vec![tr!(
                 "geas は操作のたびにページの時刻を進め、その時刻はページのリクエストが終わるまで止まります。サービスが答えないリクエストがあると、時刻は進みません",
+                "geas lets a page's clock run after each action, and the clock waits while a fetch is pending: a request the service never answers holds it",
             )],
         })
     }
@@ -535,11 +539,11 @@ impl Pages<'_> {
                 let secs = ANSWER.as_secs();
                 return Err(Failure {
                     code: "E036",
-                    msg: t(
-                        format!("the page `{path}` of `{name}` did not load within {secs} s"),
-                        format!("`{name}` のページ `{path}` が {secs} 秒のうちに読み込まれませんでした"),
+                    msg: tr!(
+                        "`{name}` のページ `{path}` が {secs} 秒のうちに読み込まれませんでした",
+                        "the page `{path}` of `{name}` did not load within {secs} s",
                     ),
-                    notes: vec![t("the service did not answer the request for the page", "サービスがページのリクエストに答えませんでした")],
+                    notes: vec![tr!("サービスがページのリクエストに答えませんでした", "the service did not answer the request for the page")],
                 });
             }
             Err(e) => return Err(unanswered("Page.navigate", &e)),
@@ -548,9 +552,9 @@ impl Pages<'_> {
         if !err.is_empty() {
             return Err(Failure {
                 code: "E036",
-                msg: t(
-                    format!("the page `{path}` of `{name}` did not load: {err}"),
-                    format!("`{name}` のページ `{path}` を読み込めませんでした: {err}"),
+                msg: tr!(
+                    "`{name}` のページ `{path}` を読み込めませんでした: {err}",
+                    "the page `{path}` of `{name}` did not load: {err}",
                 ),
                 notes: vec![],
             });
@@ -625,9 +629,11 @@ impl Pages<'_> {
             Ok(r) => r,
             Err(CdpError::Failed(_)) => {
                 let mut f = not_there(tg, call, now);
-                f.msg = t(
-                    format!("what `{}` names is on the page of `{}`, and it is not shown, so it has no place to click", call.display(), tg.name),
-                    format!("`{}` が指すものは `{}` のページにありますが、表示されていないのでクリックできません", call.display(), tg.name),
+                f.msg = tr!(
+                    "`{}` が指すものは `{}` のページにありますが、表示されていないのでクリックできません",
+                    "what `{}` names is on the page of `{}`, and it is not shown, so it has no place to click",
+                    call.display(),
+                    tg.name,
                 );
                 return Err(f);
             }
@@ -707,7 +713,7 @@ fn not_there(tg: &Target, call: &Call, now: &Node) -> Failure {
             format!("`{name}` のページに、`{}` が指すテキストフィールドがありません", call.display()),
         ),
     };
-    Failure { code: "E035", msg: t(en, ja), notes: crate::gui::refused_notes(Some(now), call) }
+    Failure { code: "E035", msg: Text::new(ja, en), notes: crate::gui::refused_notes(Some(now), call) }
 }
 
 /// Every name and value with the service's own address written `{port}`.

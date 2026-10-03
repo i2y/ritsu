@@ -4,7 +4,7 @@
 //! exist`, and a body that is not JSON fails every `body json` check, that one
 //! included: a check is about a value, and a broken answer is not one.
 
-use crate::diag::{same, t, Text};
+use ritsu_base::text::Text;
 use crate::json::{self, J};
 use crate::model::{Check, Matcher, Subject, Value};
 use crate::run::Obs;
@@ -75,7 +75,7 @@ fn got(subject: &Subject, obs: &Obs) -> Got {
         (Subject::Header(name), Obs::Http { headers, .. }) => {
             let values: Vec<&str> = headers.iter().filter(|(k, _)| k == name).map(|(_, v)| v.as_str()).collect();
             if values.is_empty() {
-                Got::Missing(t(format!("<no header \"{name}\">"), format!("<ヘッダー \"{name}\" はありません>")))
+                Got::Missing(tr!("<ヘッダー \"{name}\" はありません>", "<no header \"{name}\">"))
             } else {
                 // several of one name read as one, as RFC 9110 joins them
                 Got::Text(values.join(", "))
@@ -84,16 +84,16 @@ fn got(subject: &Subject, obs: &Obs) -> Got {
         (Subject::Body, Obs::Http { body, .. }) => Got::Text(body.clone()),
         (Subject::Screen, Obs::Screen(screen)) => Got::Screen(screen.clone()),
         (Subject::BodyJson(path), Obs::Http { body, .. }) => match json::parse(body) {
-            Err(e) => Got::Broken(t(format!("<body is not JSON: {e}>"), "<body が JSON ではありません>")),
+            Err(e) => Got::Broken(tr!("<body が JSON ではありません>", "<body is not JSON: {e}>")),
             Ok(v) => match json::path_get(&v, path) {
                 Ok(leaf) => Got::Json(leaf.clone()),
-                Err(e) => Got::Missing(t(format!("<{}>", e.en()), format!("<{}>", e.ja()))),
+                Err(e) => Got::Missing(tr!("<{}>", "<{}>", e.ja(); e.en())),
             },
         },
         (s, _) => {
             // E007 refuses this before anything runs; kept so the run never panics.
             let w = s.word();
-            Got::Broken(t(format!("<{w} is not observed by this `when`>"), format!("<この `when` の結果に {w} はありません>")))
+            Got::Broken(tr!("<この `when` の結果に {w} はありません>", "<{w} is not observed by this `when`>"))
         }
     }
 }
@@ -205,9 +205,9 @@ fn holds(m: &Matcher, g: &Got) -> bool {
 /// How many nodes of the screen a pattern matches, as a failed check says it.
 fn nodes_found(n: usize) -> Text {
     match n {
-        0 => t("no such node", "当てはまるノードがありません"),
-        1 => t("1 such node", "当てはまるノードが 1 個あります"),
-        n => t(format!("{n} such nodes"), format!("当てはまるノードが {n} 個あります")),
+        0 => tr!("当てはまるノードがありません", "no such node"),
+        1 => tr!("当てはまるノードが 1 個あります", "1 such node"),
+        n => tr!("当てはまるノードが {n} 個あります", "{n} such nodes"),
     }
 }
 
@@ -222,18 +222,18 @@ fn shown(m: &Matcher, g: &Got) -> Text {
         Got::Screen(screen) => {
             return match m {
                 Matcher::ContainsNode(p) | Matcher::NotContainsNode(p) => nodes_found(p.found(screen).len()),
-                _ => t("the screen", "画面"),
+                _ => tr!("画面", "the screen"),
             };
         }
     };
     let numeric = matches!(m, Matcher::Above(_) | Matcher::Below(_) | Matcher::AtLeast(_) | Matcher::AtMost(_) | Matcher::Between(..));
     let textual = matches!(m, Matcher::Contains(_) | Matcher::NotContains(_) | Matcher::Matches(_) | Matcher::NotMatches(_));
     if numeric && as_number(g).is_none() {
-        t(format!("{value} (not a number)"), format!("{value}（数ではありません）"))
+        tr!("{value}（数ではありません）", "{value} (not a number)")
     } else if textual && as_text(g).is_none() {
-        t(format!("{value} (not a string)"), format!("{value}（文字列ではありません）"))
+        tr!("{value}（文字列ではありません）", "{value} (not a string)")
     } else {
-        same(value)
+        Text::same(value)
     }
 }
 

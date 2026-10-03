@@ -3,7 +3,8 @@
 //! runs nothing. A record is held to the code it was made on, file by file, and a
 //! record of other code is refused (E062) rather than read.
 
-use crate::diag::{count, t, Diag, Lang, Text};
+use crate::diag::{self, Diag, Show, count};
+use ritsu_base::text::{Lang, Text};
 use crate::diff::{self, Blob, FileDiff, Mark};
 use crate::hash;
 use crate::json;
@@ -168,7 +169,7 @@ pub fn command(spec_file: &str, diff_arg: &str, o: &Opts) -> i32 {
                 println!("{}", report::failure_json(spec_file, &pairs, o.lang));
             } else {
                 for (f, d, src) in &problems {
-                    eprint!("{}", d.render(f, src, o.lang));
+                    eprint!("{}", d.shown(f, src, o.lang));
                 }
             }
             2
@@ -177,7 +178,7 @@ pub fn command(spec_file: &str, diff_arg: &str, o: &Opts) -> i32 {
 }
 
 fn e081(file: &str, e: std::io::Error) -> Problem {
-    let d = Diag::error("E081", 0, 0, t(format!("cannot read this file: {e}"), format!("このファイルを読めません: {e}")));
+    let d = diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"));
     (file.to_string(), d, String::new())
 }
 
@@ -222,12 +223,12 @@ fn answer(spec_file: &str, diff_arg: &str, o: &Opts) -> Result<Answer, Vec<Probl
     };
     let diff_text = String::from_utf8_lossy(&bytes).into_owned();
     let e064 = |line: usize, msg: Text, notes: Vec<Text>| {
-        let mut d = Diag::error("E064", line, 0, msg);
+        let mut d = diag::error("E064", line, 0, msg);
         d.notes = notes;
         vec![(diff_shown.clone(), d, diff_text.clone())]
     };
     let files = diff::parse(&bytes).map_err(|(line, why)| {
-        e064(line, t(format!("the diff cannot be read: {}", why.en), format!("差分を読めません: {}", why.ja)), vec![])
+        e064(line, tr!("差分を読めません: {}", "the diff cannot be read: {}", why.ja; why.en), vec![])
     })?;
 
     // sort the diff's files
@@ -256,9 +257,9 @@ fn answer(spec_file: &str, diff_arg: &str, o: &Opts) -> Result<Answer, Vec<Probl
                 e064(
                     f.at,
                     why,
-                    vec![t(
-                        "a diff without `index` lines, as `diff -u` writes it, is held to the file on disk, which has to be one of its two sides; a `git diff` names both",
+                    vec![tr!(
                         "`index` の行のない差分（`diff -u` が書くもの）は、ディスクのファイルと突き合わせます。ディスクのファイルは、差分の変更前か変更後のどちらかでなければなりません。`git diff` なら両方の blob が書かれています",
+                        "a diff without `index` lines, as `diff -u` writes it, is held to the file on disk, which has to be one of its two sides; a `git diff` names both",
                     )],
                 )
             })?;
@@ -306,24 +307,20 @@ fn answer(spec_file: &str, diff_arg: &str, o: &Opts) -> Result<Answer, Vec<Probl
                 continue;
             }
             let rec = before.expect("a record fits one side of every file");
-            let d = Diag::error(
+            let d = diag::error(
                 "E063",
                 first.at,
                 0,
-                t(
-                    format!("the diff adds lines to {}, and no record is of the code after the change", f.path()),
-                    format!("差分が {} に行を足していますが、変更後のコードの記録がありません", f.path()),
+                tr!(
+                    "差分が {} に行を足していますが、変更後のコードの記録がありません",
+                    "the diff adds lines to {}, and no record is of the code after the change",
+                    f.path(),
                 ),
             )
-            .note(t(
-                format!(
-                    "the record {0} is of the code before the change: record the changed code as well (`geas map {spec_file} --out <after.jsonl>`) and give both, `--map {0} --map <after.jsonl>`",
-                    rec.shown
-                ),
-                format!(
-                    "記録 {0} は変更前のコードのものです。変更後のコードでも記録を取り（`geas map {spec_file} --out <after.jsonl>`）、`--map {0} --map <after.jsonl>` の形で両方を渡してください",
-                    rec.shown
-                ),
+            .note(tr!(
+                "記録 {0} は変更前のコードのものです。変更後のコードでも記録を取り（`geas map {spec_file} --out <after.jsonl>`）、`--map {0} --map <after.jsonl>` の形で両方を渡してください",
+                "the record {0} is of the code before the change: record the changed code as well (`geas map {spec_file} --out <after.jsonl>`) and give both, `--map {0} --map <after.jsonl>`",
+                rec.shown,
             ));
             e063 = Some((d, vec![]));
             continue;
@@ -346,9 +343,9 @@ fn answer(spec_file: &str, diff_arg: &str, o: &Opts) -> Result<Answer, Vec<Probl
     if let Some((mut d, more)) = e063 {
         if !more.is_empty() {
             let (n, list) = (more.len(), more.join(", "));
-            d = d.note(t(
-                format!("it adds lines to {n} more file(s) as well: {list}"),
+            d = d.note(Text::new(
                 format!("ほかに {n} 件のファイルにも行を足しています: {}", more.join("、")),
+                format!("it adds lines to {n} more file(s) as well: {list}"),
             ));
         }
         problems.push((diff_shown.clone(), d, diff_text.clone()));
@@ -365,40 +362,41 @@ fn read_record(shown: &str, spec_file: &str, spec_rel: &str) -> Result<Rec, Prob
     let text = match std::fs::read_to_string(shown) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            let d = Diag::error("E060", 0, 0, t(format!("there is no record at {shown}"), format!("{shown} に記録がありません")))
-                .note(t(
-                    format!("run `geas map {spec_file}` first; `geas affected` reads the record it writes"),
-                    format!("先に `geas map {spec_file}` を走らせてください。`geas affected` はそれが書く記録を読みます"),
+            let d = diag::error("E060", 0, 0, tr!("{shown} に記録がありません", "there is no record at {shown}"))
+                .note(tr!(
+                    "先に `geas map {spec_file}` を走らせてください。`geas affected` はそれが書く記録を読みます",
+                    "run `geas map {spec_file}` first; `geas affected` reads the record it writes",
                 ));
             return Err((spec_file.to_string(), d, String::new()));
         }
         Err(e) => return Err(e081(shown, e)),
     };
-    let again = t(
-        format!("the record is written by `geas map`; run `geas map {spec_file}` to write it again"),
-        format!("記録は `geas map` が書きます。`geas map {spec_file}` を走らせると書き直します"),
+    let again = tr!(
+        "記録は `geas map` が書きます。`geas map {spec_file}` を走らせると書き直します",
+        "the record is written by `geas map`; run `geas map {spec_file}` to write it again",
     );
     let r = match Record::parse(&text) {
         Ok(r) => r,
         Err((line, why)) => {
-            let d = Diag::error("E061", line, 0, t(format!("the record cannot be read: {}", why.en), format!("記録を読めません: {}", why.ja)))
+            let d = diag::error("E061", line, 0, tr!("記録を読めません: {}", "the record cannot be read: {}", why.ja; why.en))
                 .note(again);
             return Err((shown.to_string(), d, text));
         }
     };
     if r.spec != spec_rel {
-        let d = Diag::error(
+        let d = diag::error(
             "E061",
             1,
             0,
-            t(
-                format!("the record is of `{}`, not of `{spec_rel}`", r.spec),
-                format!("この記録は `{}` のもので、`{spec_rel}` のものではありません", r.spec),
+            tr!(
+                "この記録は `{}` のもので、`{spec_rel}` のものではありません",
+                "the record is of `{}`, not of `{spec_rel}`",
+                r.spec,
             ),
         )
-        .note(t(
-            "a record holds its spec's path relative to the root, and a record made with another `--root` names it otherwise",
+        .note(tr!(
             "記録には、ルートから見た主張のファイルのパスが入っています。別の `--root` で取った記録では、このパスが違います",
+            "a record holds its spec's path relative to the root, and a record made with another `--root` names it otherwise",
         ))
         .note(again);
         return Err((shown.to_string(), d, text));
@@ -451,13 +449,11 @@ fn hold(rec: &Rec, sources: &[(&FileDiff, Blob, Blob)], disk: &Disk) -> (Vec<BTr
             let has = rec.blob(new).or(rec.blob(old)).map_or("-".to_string(), |h| h.chars().take(7).collect());
             stale.push(Stale {
                 path: f.path().to_string(),
-                why: t(
-                    format!(
-                        "the record has {has}, and the diff's sides are {} before the change and {} after it",
-                        before.short(),
-                        after.short()
-                    ),
-                    format!("記録では {has} ですが、差分の変更前は {}、変更後は {} です", before.short(), after.short()),
+                why: tr!(
+                    "記録では {has} ですが、差分の変更前は {}、変更後は {} です",
+                    "the record has {has}, and the diff's sides are {} before the change and {} after it",
+                    before.short(),
+                    after.short(),
                 ),
             });
         }
@@ -471,17 +467,19 @@ fn hold(rec: &Rec, sources: &[(&FileDiff, Blob, Blob)], disk: &Disk) -> (Vec<BTr
         }
         let why = match (rec.blobs.get(p), disk.files.get(p)) {
             (Some(r), Some(d)) if r == d => continue,
-            (Some(r), Some(d)) => t(
-                format!("the record has {}, the file on disk {}, and the diff does not touch it", short(r), short(d)),
-                format!("記録では {}、ディスクでは {} で、差分はこのファイルに触れていません", short(r), short(d)),
+            (Some(r), Some(d)) => tr!(
+                "記録では {}、ディスクでは {} で、差分はこのファイルに触れていません",
+                "the record has {}, the file on disk {}, and the diff does not touch it",
+                short(r),
+                short(d),
             ),
-            (Some(_), None) => t(
-                "in the record and not on disk, and the diff does not delete it",
+            (Some(_), None) => tr!(
                 "記録にあってディスクになく、差分もこのファイルを削除していません",
+                "in the record and not on disk, and the diff does not delete it",
             ),
-            (None, Some(_)) => t(
-                "on disk and not in the record, and the diff does not add it",
+            (None, Some(_)) => tr!(
                 "ディスクにあって記録になく、差分もこのファイルを足していません",
+                "on disk and not in the record, and the diff does not add it",
             ),
             (None, None) => continue,
         };
@@ -494,25 +492,25 @@ fn hold(rec: &Rec, sources: &[(&FileDiff, Blob, Blob)], disk: &Disk) -> (Vec<BTr
 fn e062(rec: &Rec, stale: &[Stale], spec_file: &str) -> Problem {
     let n = stale.len();
     let line = stale.iter().find_map(|s| rec.r.file_lines.get(&s.path).copied()).unwrap_or(0);
-    let mut d = Diag::error(
+    let mut d = diag::error(
         "E062",
         line,
         0,
-        t(
-            format!("the record is not of this code: {n} file(s) differ from the code it was made on"),
-            format!("この記録は今のコードのものではありません。記録を取ったときと違うファイルが {n} 件あります"),
+        tr!(
+            "この記録は今のコードのものではありません。記録を取ったときと違うファイルが {n} 件あります",
+            "the record is not of this code: {n} file(s) differ from the code it was made on",
         ),
     );
     const SHOWN: usize = 8;
     for s in stale.iter().take(SHOWN) {
-        d = d.note(t(format!("{}: {}", s.path, s.why.en), format!("{}: {}", s.path, s.why.ja)));
+        d = d.note(tr!("{}: {}", "{}: {}", s.path, s.why.ja; s.path, s.why.en));
     }
     if n > SHOWN {
-        d = d.note(t(format!("and {} more", n - SHOWN), format!("ほかに {} 件", n - SHOWN)));
+        d = d.note(tr!("ほかに {} 件", "and {} more", n - SHOWN));
     }
-    d = d.note(t(
-        format!("a record answers only for the code it was made on: record this code again with `geas map {spec_file}`; a file new to the change has to be in the diff (`git add -N`)"),
-        format!("記録が答えられるのは、それを取ったときのコードについてだけです。`geas map {spec_file}` で記録を取り直してください。新しく足したファイルは差分に入れておきます（`git add -N`）"),
+    d = d.note(tr!(
+        "記録が答えられるのは、それを取ったときのコードについてだけです。`geas map {spec_file}` で記録を取り直してください。新しく足したファイルは差分に入れておきます（`git add -N`）",
+        "a record answers only for the code it was made on: record this code again with `geas map {spec_file}`; a file new to the change has to be in the diff (`git add -N`)",
     ));
     (rec.shown.clone(), d, rec.text.clone())
 }
@@ -697,7 +695,7 @@ fn to_text(a: &Answer, lang: Lang) -> String {
 
     let touched: BTreeSet<usize> = a.touches.iter().map(|t| t.claim).collect();
     if !touched.is_empty() {
-        out.push_str(lang.tr("claims the change touches:\n", "この変更が関わる主張:\n"));
+        out.push_str(tr!("この変更が関わる主張:\n", "claims the change touches:\n").get(lang));
         for c in &touched {
             let own: Vec<&Touch> = a.touches.iter().filter(|t| t.claim == *c && t.startup.is_none()).collect();
             if own.is_empty() {
@@ -724,7 +722,7 @@ fn to_text(a: &Answer, lang: Lang) -> String {
         }
     }
     if !a.unclaimed.is_empty() {
-        out.push_str(lang.tr("changed code no claim runs:\n", "どの主張も通らないコードの変更:\n"));
+        out.push_str(tr!("どの主張も通らないコードの変更:\n", "changed code no claim runs:\n").get(lang));
         for why in [Why::NotRun, Why::NotReported] {
             let of = a.unclaimed.iter().filter(|u| u.why == why);
             for (file, side, _, l) in grouped(of.map(|u| (u.file.as_str(), u.side, false, u.line))) {
@@ -738,7 +736,7 @@ fn to_text(a: &Answer, lang: Lang) -> String {
         }
     }
     if !a.deleted.is_empty() {
-        out.push_str(lang.tr("deleted:\n", "削除したファイル:\n"));
+        out.push_str(tr!("削除したファイル:\n", "deleted:\n").get(lang));
         for (f, known) in &a.deleted {
             let tail = match (known, lang) {
                 (true, _) => "",
@@ -749,7 +747,7 @@ fn to_text(a: &Answer, lang: Lang) -> String {
         }
     }
     if !a.outside.is_empty() {
-        out.push_str(lang.tr("outside the record:\n", "記録の外のファイル:\n"));
+        out.push_str(tr!("記録の外のファイル:\n", "outside the record:\n").get(lang));
         for f in &a.outside {
             out.push_str(&format!("  {f}\n"));
         }

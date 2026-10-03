@@ -5,7 +5,8 @@
 //! past an unknown word to the end of its line, and once the file parses every static
 //! check runs, so one `geas check` reports them all, in line order.
 
-use crate::diag::{self, t, Diag};
+use ritsu_base::text::Text;
+use crate::diag::{self, Diag};
 use crate::lex::{self, Kind, Tok};
 use crate::model::*;
 use crate::pins;
@@ -131,18 +132,18 @@ impl P {
     /// E001 at `found`: the grammar wants `what` there.
     fn expected(&mut self, found: &Tok, en: &str, ja: &str) -> Stop {
         let msg = if found.kind == Kind::Eof {
-            t(
-                format!("expected {en}, found the end of the file"),
+            Text::new(
                 format!("{}書く前にファイルが終わっています", ja_wo(ja)),
+                format!("expected {en}, found the end of the file"),
             )
         } else {
             let (fe, fj) = found.shown();
-            t(
-                format!("expected {en}, found {fe}"),
+            Text::new(
                 format!("{}書くところに {fj} があります", ja_wo(ja)),
+                format!("expected {en}, found {fe}"),
             )
         };
-        self.diags.push(Diag::error("E001", found.line, found.col, msg));
+        self.diags.push(diag::error("E001", found.line, found.col, msg));
         Stop
     }
 
@@ -158,12 +159,12 @@ impl P {
     }
 
     fn e001(&mut self, tok: &Tok, en: String, ja: String) -> Stop {
-        self.diags.push(Diag::error("E001", tok.line, tok.col, t(en, ja)));
+        self.diags.push(diag::error("E001", tok.line, tok.col, Text::new(ja, en)));
         Stop
     }
 
     fn e002(&mut self, tok: &Tok, en: String, ja: String) {
-        self.diags.push(Diag::error("E002", tok.line, tok.col, t(en, ja)));
+        self.diags.push(diag::error("E002", tok.line, tok.col, Text::new(ja, en)));
     }
 
     /// Skips the rest of `line`, up to a `}` that may close the block on that line.
@@ -303,13 +304,13 @@ impl P {
         let port_at = s.text.find(words::PORT).map(|b| Pos { line: s.line, col: inside(s.text[..b].chars().count()) });
         let words = match words::split(&s.text) {
             Ok(w) if w.is_empty() => {
-                self.diags.push(Diag::error(
+                self.diags.push(diag::error(
                     "E010",
                     s.line,
                     s.col,
-                    t(
-                        format!("the command of `{target}` is empty: it needs at least the program to start"),
-                        format!("`{target}` のコマンドが空です。少なくとも、起動するプログラムを書きます"),
+                    tr!(
+                        "`{target}` のコマンドが空です。少なくとも、起動するプログラムを書きます",
+                        "the command of `{target}` is empty: it needs at least the program to start",
                     ),
                 ));
                 None
@@ -329,11 +330,11 @@ impl P {
                         "コマンドがバックスラッシュで終わっていて、そのあとに残す文字がありません",
                     ),
                 };
-                let mut d = Diag::error("E010", s.line, inside(i), t(en, ja)).note(split_rule());
+                let mut d = diag::error("E010", s.line, inside(i), Text::new(ja, en)).note(split_rule());
                 if matches!(u, words::Unsplit::OpenDouble(_)) {
-                    d = d.note(t(
-                        "in a claims file a double quote inside a string is written `\\\"`, so single quotes are the easy form: `run \"python3 'my calc.py'\"`",
+                    d = d.note(tr!(
                         "主張のファイルでは文字列の中のダブルクォートを `\\\"` と書くので、シングルクォートのほうが書きやすく、`run \"python3 'my calc.py'\"` のように書けます",
+                        "in a claims file a double quote inside a string is written `\\\"`, so single quotes are the easy form: `run \"python3 'my calc.py'\"`",
                     ));
                 }
                 self.diags.push(d);
@@ -461,7 +462,7 @@ impl P {
     }
 
     fn e011(&mut self, tok: &Tok, en: &str, ja: String) {
-        self.diags.push(Diag::error("E011", tok.line, tok.col, t(en, ja)));
+        self.diags.push(diag::error("E011", tok.line, tok.col, Text::new(ja, en)));
     }
 
     fn claim(&mut self) -> Result<RawClaim, Stop> {
@@ -482,13 +483,13 @@ impl P {
                 Kind::Ident if tk.text == "then" || tk.text == "and" => {
                     if !seen_when {
                         let w = &tk.text;
-                        self.diags.push(Diag::error(
+                        self.diags.push(diag::error(
                             "E005",
                             tk.line,
                             tk.col,
-                            t(
-                                format!("`{w}` comes before any `when`; a check reads what the `when` before it observed"),
-                                format!("`when` より前に `{w}` があります。チェックは直前の `when` の結果を見ます"),
+                            tr!(
+                                "`when` より前に `{w}` があります。チェックは直前の `when` の結果を見ます",
+                                "`{w}` comes before any `when`; a check reads what the `when` before it observed",
                             ),
                         ));
                     }
@@ -505,13 +506,14 @@ impl P {
             }
         }
         if steps.is_empty() {
-            self.diags.push(Diag::error(
+            self.diags.push(diag::error(
                 "E005",
                 kw.line,
                 kw.col,
-                t(
-                    format!("the claim \"{}\" has no steps; a claim starts with a `when`", name.text),
-                    format!("主張 \"{}\" にステップがありません。主張は `when` から始めます", name.text),
+                tr!(
+                    "主張 \"{}\" にステップがありません。主張は `when` から始めます",
+                    "the claim \"{}\" has no steps; a claim starts with a `when`",
+                    name.text,
                 ),
             ));
         }
@@ -1100,11 +1102,11 @@ impl P {
             Err(bad) => {
                 let col = tok.cols.get(bad.at).copied().unwrap_or(tok.col);
                 self.diags.push(
-                    Diag::error(
+                    diag::error(
                         "E009",
                         tok.line,
                         col,
-                        t(format!("the pattern does not parse: {}", bad.why.en), format!("パターンとして読めません: {}", bad.why.ja)),
+                        tr!("パターンとして読めません: {}", "the pattern does not parse: {}", bad.why.ja; bad.why.en),
                     )
                     .note(pattern_rule()),
                 );
@@ -1197,15 +1199,15 @@ impl P {
         if let Err((at, why)) = crate::json::check_path(&tok.text) {
             let col = tok.cols.get(at).copied().unwrap_or(tok.col);
             self.diags.push(
-                Diag::error(
+                diag::error(
                     "E009",
                     tok.line,
                     col,
-                    t(format!("the JSON path does not read: {}", why.en()), format!("JSON のパスとして読めません: {}", why.ja())),
+                    tr!("JSON のパスとして読めません: {}", "the JSON path does not read: {}", why.ja(); why.en()),
                 )
-                .note(t(
-                    "a path is written `.key`, `.a.b` or `.items[0].name`",
+                .note(tr!(
                     "パスは `.key`、`.a.b`、`.items[0].name` のように書きます",
+                    "a path is written `.key`, `.a.b` or `.items[0].name`",
                 )),
             );
         }
@@ -1217,19 +1219,19 @@ impl P {
         let Some((col, e)) = tok.odd else {
             return Ok(());
         };
-        let mut d = Diag::error(
+        let mut d = diag::error(
             "E001",
             tok.line,
             col,
-            t(
-                format!("`\\{e}` is not an escape; a string takes `\\n`, `\\t`, `\\\"` and `\\\\`"),
-                format!("`\\{e}` というエスケープはありません。文字列で使えるのは `\\n`、`\\t`、`\\\"`、`\\\\` です"),
+            tr!(
+                "`\\{e}` というエスケープはありません。文字列で使えるのは `\\n`、`\\t`、`\\\"`、`\\\\` です",
+                "`\\{e}` is not an escape; a string takes `\\n`, `\\t`, `\\\"` and `\\\\`",
             ),
         );
         if "dwsDWS".contains(e) {
-            d = d.note(t(
-                format!("a pattern, after `matches`, reads `\\{e}` itself; anywhere else write `\\\\{e}`"),
-                format!("`matches` の後ろのパターンなら `\\{e}` をそのまま書けます。それ以外では `\\\\{e}` と書きます"),
+            d = d.note(tr!(
+                "`matches` の後ろのパターンなら `\\{e}` をそのまま書けます。それ以外では `\\\\{e}` と書きます",
+                "a pattern, after `matches`, reads `\\{e}` itself; anywhere else write `\\\\{e}`",
             ));
         }
         self.diags.push(d);
@@ -1238,10 +1240,10 @@ impl P {
 }
 
 /// What patterns are made of, the note E009 gives.
-fn pattern_rule() -> crate::diag::Text {
-    t(
-        "a pattern takes literals, `.`, classes such as `[a-z]` and `[^0-9]`, `\\d`, `\\w`, `\\s` and their capitals, groups, `|`, `*`, `+`, `?`, `{n}`, `{n,}` and `{n,m}`, and matches the whole value",
-        "パターンに書けるのは、文字そのもの、`.`、`[a-z]` や `[^0-9]` のような文字クラス、`\\d`・`\\w`・`\\s` とその大文字、グループ、`|`、`*`・`+`・`?`、`{n}`・`{n,}`・`{n,m}` で、値の全体と照らし合わせます",
+fn pattern_rule() -> Text {
+    tr!(
+        "パターンに書けるのは、文字そのもの、`.`、`[a-z]` や `[^0-9]` のような文字クラス、`\\d`・`\\w`・`\\s` とその大文字、グループ、`|`、`*`・`+`・`?`、`{{n}}`・`{{n,}}`・`{{n,m}}` で、値の全体と照らし合わせます",
+        "a pattern takes literals, `.`, classes such as `[a-z]` and `[^0-9]`, `\\d`, `\\w`, `\\s` and their capitals, groups, `|`, `*`, `+`, `?`, `{{n}}`, `{{n,}}` and `{{n,m}}`, and matches the whole value",
     )
 }
 
@@ -1304,10 +1306,10 @@ struct RawMatcher {
 fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
     let s = subject.word();
     let f = raw.form.words();
-    let at_word = |en: String, ja: String| Some(Diag::error("E008", raw.word.line, raw.word.col, t(en, ja)));
+    let at_word = |en: String, ja: String| Some(diag::error("E008", raw.word.line, raw.word.col, Text::new(ja, en)));
     let at_value = |i: usize, en: String, ja: String| {
         let tok = &raw.values[i].1;
-        Some(Diag::error("E008", tok.line, tok.col, t(en, ja)))
+        Some(diag::error("E008", tok.line, tok.col, Text::new(ja, en)))
     };
     let first = raw.values.first().map(|v| &v.0);
     let node_form = matches!(raw.form, Form::ContainsNode | Form::NotContainsNode);
@@ -1333,7 +1335,7 @@ fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
                 format!("`{s}` は文字列で、ノードを持つのは画面です。文字列の一部を探すなら、`\"` で囲んで書きます（`{s} {f} \"…\"`）"),
             )
         };
-        return Some(Diag::error("E008", tok.line, tok.col, t(en, ja)));
+        return Some(diag::error("E008", tok.line, tok.col, Text::new(ja, en)));
     }
     if subject.is_number() {
         match raw.form {
@@ -1458,15 +1460,15 @@ pub fn parse(src: &str) -> Result<Spec, Vec<Diag>> {
 }
 
 /// The first is on line N: the note E003 and E004 give a second of something.
-fn first_on(line: usize) -> crate::diag::Text {
-    t(format!("the first is on line {line}"), format!("一つ目は {line} 行目です"))
+fn first_on(line: usize) -> Text {
+    tr!("一つ目は {line} 行目です", "the first is on line {line}")
 }
 
 /// How geas splits a command, the note E010 gives when one does not split.
-fn split_rule() -> crate::diag::Text {
-    t(
-        "geas splits a command into words itself, never through a shell: blanks separate words, `'…'` keeps what is in it as it is, `\"…\"` keeps blanks and reads `\\\"` and `\\\\`, and outside quotes a backslash keeps the next character",
+fn split_rule() -> Text {
+    tr!(
         "geas はコマンドを、シェルを通さずに自分で語に分けます。空白で区切り、`'…'` は中をそのまま残し、`\"…\"` は空白を残して中の `\\\"` と `\\\\` をエスケープとして扱い、クォートの外のバックスラッシュは次の文字をそのまま残します",
+        "geas splits a command into words itself, never through a shell: blanks separate words, `'…'` keeps what is in it as it is, `\"…\"` keeps blanks and reads `\\\"` and `\\\\`, and outside quotes a backslash keeps the next character",
     )
 }
 
@@ -1493,13 +1495,13 @@ fn target_kind(tg: &RawTarget, pins: Option<&Pins>, diags: &mut Vec<Diag>) -> Op
     ] {
         if let [first, second, ..] = places.as_slice() {
             diags.push(
-                Diag::error(
+                diag::error(
                     "E004",
                     second.line,
                     second.col,
-                    t(
-                        format!("the target `{name}` has a second `{word}` line"),
-                        format!("ターゲット `{name}` に `{word}` の行が二つあります"),
+                    tr!(
+                        "ターゲット `{name}` に `{word}` の行が二つあります",
+                        "the target `{name}` has a second `{word}` line",
                     ),
                 )
                 .note(first_on(first.line)),
@@ -1521,13 +1523,13 @@ fn target_kind(tg: &RawTarget, pins: Option<&Pins>, diags: &mut Vec<Diag>) -> Op
             if tg.unknown_line {
                 return None;
             }
-            diags.push(Diag::error(
+            diags.push(diag::error(
                 "E004",
                 tg.kw_pos.line,
                 tg.kw_pos.col,
-                t(
-                    format!("the target `{name}` has none of `run`, `serve`, `pixie` and `driver`"),
-                    format!("ターゲット `{name}` に `run`、`serve`、`pixie`、`driver` のどれもありません"),
+                tr!(
+                    "ターゲット `{name}` に `run`、`serve`、`pixie`、`driver` のどれもありません",
+                    "the target `{name}` has none of `run`, `serve`, `pixie` and `driver`",
                 ),
             ));
             return None;
@@ -1544,7 +1546,7 @@ fn target_kind(tg: &RawTarget, pins: Option<&Pins>, diags: &mut Vec<Diag>) -> Op
                     format!("ターゲット `{name}` に `{a}` と `{b}` の両方があります。ターゲットは、コマンド（`run`）、サービス（`serve`）、pixie のアプリ（`pixie`）、ドライバーで動かす GUI（`driver`）のどれか一つです"),
                 )
             };
-            diags.push(Diag::error("E004", later.pos.line, later.pos.col, t(en, ja)));
+            diags.push(diag::error("E004", later.pos.line, later.pos.col, Text::new(ja, en)));
             return None;
         }
         [(w, c)] => (*w, *c),
@@ -1553,28 +1555,28 @@ fn target_kind(tg: &RawTarget, pins: Option<&Pins>, diags: &mut Vec<Diag>) -> Op
         if let Some((_, p)) = tg.ports.first() {
             // said, and the target is still what its command makes it, so that its
             // claims are checked too
-            diags.push(Diag::error(
+            diags.push(diag::error(
                 "E004",
                 p.line,
                 p.col,
-                t(
-                    format!("the target `{name}` has `port` but no `serve`; only a service has a port"),
-                    format!("ターゲット `{name}` に `port` がありますが `serve` がありません。ポートを持つのはサービスだけです"),
+                tr!(
+                    "ターゲット `{name}` に `port` がありますが `serve` がありません。ポートを持つのはサービスだけです",
+                    "the target `{name}` has `port` but no `serve`; only a service has a port",
                 ),
             ));
         } else if let Some(p) = cmd.port_at {
             let (en, ja) = portless(word);
             diags.push(
-                Diag::error(
+                diag::error(
                     "E010",
                     p.line,
                     p.col,
-                    t(
-                        format!("`{{port}}` stands for the target's port, and `{name}` {en}, which has none"),
-                        format!("`{{port}}` はターゲットのポート番号に置き換わりますが、`{name}` は{ja}なので、ポートを持ちません"),
+                    tr!(
+                        "`{{port}}` はターゲットのポート番号に置き換わりますが、`{name}` は{ja}なので、ポートを持ちません",
+                        "`{{port}}` stands for the target's port, and `{name}` {en}, which has none",
                     ),
                 )
-                .note(t("only a service has a port: a target with `serve` and `port`", "ポートを持つのはサービス（`serve` と `port` のあるターゲット）だけです")),
+                .note(tr!("ポートを持つのはサービス（`serve` と `port` のあるターゲット）だけです", "only a service has a port: a target with `serve` and `port`")),
             );
             return None;
         }
@@ -1592,18 +1594,18 @@ fn target_kind(tg: &RawTarget, pins: Option<&Pins>, diags: &mut Vec<Diag>) -> Op
             let in_env = pins.is_some_and(|ps| ps.env.iter().any(|(_, v)| v.contains(words::PORT)));
             if s.port_at.is_none() && !in_env {
                 diags.push(
-                    Diag::error(
+                    diag::error(
                         "E004",
                         p.line,
                         p.col,
-                        t(
-                            format!("the target `{name}` has `port auto`, and neither its command nor its `env` says `{{port}}`: the service has no way to learn the port geas gives it"),
-                            format!("ターゲット `{name}` は `port auto` ですが、コマンドにも `env` にも `{{port}}` がありません。geas が渡すポート番号を、サービスが知る方法がありません"),
+                        tr!(
+                            "ターゲット `{name}` は `port auto` ですが、コマンドにも `env` にも `{{port}}` がありません。geas が渡すポート番号を、サービスが知る方法がありません",
+                            "the target `{name}` has `port auto`, and neither its command nor its `env` says `{{port}}`: the service has no way to learn the port geas gives it",
                         ),
                     )
-                    .note(t(
-                        "write `{port}` where the service reads its port: `serve \"python3 server.py {port}\"`, or `env \"PORT\" \"{port}\"`",
-                        "サービスがポート番号を読むところに `{port}` を書きます（`serve \"python3 server.py {port}\"`、または `env \"PORT\" \"{port}\"`）",
+                    .note(tr!(
+                        "サービスがポート番号を読むところに `{{port}}` を書きます（`serve \"python3 server.py {{port}}\"`、または `env \"PORT\" \"{{port}}\"`）",
+                        "write `{{port}}` where the service reads its port: `serve \"python3 server.py {{port}}\"`, or `env \"PORT\" \"{{port}}\"`",
                     )),
                 );
                 return None;
@@ -1613,13 +1615,13 @@ fn target_kind(tg: &RawTarget, pins: Option<&Pins>, diags: &mut Vec<Diag>) -> Op
         Some((port, _)) => Some(TargetKind::Serve { words: s.words.clone()?, port: *port }),
         None if tg.unknown_line => None,
         None => {
-            diags.push(Diag::error(
+            diags.push(diag::error(
                 "E004",
                 s.pos.line,
                 s.pos.col,
-                t(
-                    format!("the target `{name}` has `serve` but no `port`; geas waits for that port to open and sends its requests there"),
-                    format!("ターゲット `{name}` に `serve` はありますが `port` がありません。geas はそのポートが開くのを待ち、リクエストをそこへ送ります"),
+                tr!(
+                    "ターゲット `{name}` に `serve` はありますが `port` がありません。geas はそのポートが開くのを待ち、リクエストをそこへ送ります",
+                    "the target `{name}` has `serve` but no `port`; geas waits for that port to open and sends its requests there",
                 ),
             ));
             None
@@ -1713,11 +1715,11 @@ fn once(target: Option<&str>, pins: &[RawPin], diags: &mut Vec<Diag>) -> Vec<Raw
             };
             let gap = if what_ja.starts_with('`') { " " } else { "" };
             diags.push(
-                Diag::error(
+                diag::error(
                     "E003",
                     p.pos.line,
                     p.pos.col,
-                    t(format!("{what_en} is pinned twice {where_en}"), format!("{where_ja}{gap}{what_ja} を二回固定しています")),
+                    tr!("{where_ja}{gap}{what_ja} を二回固定しています", "{what_en} is pinned twice {where_en}"),
                 )
                 .note(first_on(first.pos.line)),
             );
@@ -1786,18 +1788,18 @@ fn pins_in_effect(raw: &RawSpec, diags: &mut Vec<Diag>) -> HashMap<String, Pins>
                     set.push((v, p));
                     continue;
                 };
-                if twice.iter().any(|d| (d.line, d.col) == (p.pos.line, p.pos.col)) {
+                if twice.iter().any(|d| (d.line.unwrap_or(0), d.col.unwrap_or(0)) == (p.pos.line, p.pos.col)) {
                     continue;
                 }
                 let (a, b, name) = (first.written(), p.written(), &tg.name);
                 twice.push(
-                    Diag::error(
+                    diag::error(
                         "E003",
                         p.pos.line,
                         p.pos.col,
-                        t(
-                            format!("the variable `{v}` is set twice for `{name}`: by {a} and by {b}"),
-                            format!("ターゲット `{name}` で、環境変数 `{v}` を二回設定しています（{a} と {b}）"),
+                        tr!(
+                            "ターゲット `{name}` で、環境変数 `{v}` を二回設定しています（{a} と {b}）",
+                            "the variable `{v}` is set twice for `{name}`: by {a} and by {b}",
                         ),
                     )
                     .note(first_on(first.pos.line)),
@@ -1835,43 +1837,43 @@ fn pins_in_effect(raw: &RawSpec, diags: &mut Vec<Diag>) -> HashMap<String, Pins>
             } else {
                 ("has none: it is not a service", "サービスではないので、ポートを持ちません")
             };
-            Diag::error(
+            diag::error(
                 "E010",
                 pos.line,
                 pos.col,
-                t(
-                    format!("`{{port}}` stands for the target's port, and {en} {what_en}"),
-                    format!("`{{port}}` はターゲットのポート番号に置き換わりますが、{ja} は{what_ja}"),
+                tr!(
+                    "`{{port}}` はターゲットのポート番号に置き換わりますが、{ja} は{what_ja}",
+                    "`{{port}}` stands for the target's port, and {en} {what_en}",
                 ),
             )
-            .note(t("only a service has a port: a target with `serve` and `port`", "ポートを持つのはサービス（`serve` と `port` のあるターゲット）だけです"))
+            .note(tr!("ポートを持つのはサービス（`serve` と `port` のあるターゲット）だけです", "only a service has a port: a target with `serve` and `port`"))
         } else if raw.pins.iter().chain(raw.targets.iter().flat_map(|t| t.pins.iter())).any(|p| p.pos == pos && matches!(p.kind, PinKind::Clock(..))) {
-            Diag::error(
+            diag::error(
                 "E011",
                 pos.line,
                 pos.col,
-                t(
-                    format!("`clock` cannot be kept for {en}: no switch sets the time of a program from outside, so geas passes it in a variable the program reads"),
-                    format!("{ja} では、`clock` で時刻を固定できません。プログラムの時刻を外から設定する方法はないので、geas はプログラムが読む環境変数で時刻を渡します"),
+                tr!(
+                    "{ja} では、`clock` で時刻を固定できません。プログラムの時刻を外から設定する方法はないので、geas はプログラムが読む環境変数で時刻を渡します",
+                    "`clock` cannot be kept for {en}: no switch sets the time of a program from outside, so geas passes it in a variable the program reads",
                 ),
             )
-            .note(t(
-                "name that variable on the same line: `clock \"2026-08-29T09:00:00+09:00\" env \"NOW\"`",
+            .note(tr!(
                 "その環境変数の名前を、同じ行に書きます（`clock \"2026-08-29T09:00:00+09:00\" env \"NOW\"`）",
+                "name that variable on the same line: `clock \"2026-08-29T09:00:00+09:00\" env \"NOW\"`",
             ))
         } else {
-            Diag::error(
+            diag::error(
                 "E011",
                 pos.line,
                 pos.col,
-                t(
-                    format!("`seed` cannot be kept for {en}: no switch seeds the random numbers of a program from outside, so geas passes the seed in a variable the program reads"),
-                    format!("{ja} では、`seed` で乱数のシードを固定できません。プログラムの乱数のシードを外から設定する方法はないので、geas はプログラムが読む環境変数でシードを渡します"),
+                tr!(
+                    "{ja} では、`seed` で乱数のシードを固定できません。プログラムの乱数のシードを外から設定する方法はないので、geas はプログラムが読む環境変数でシードを渡します",
+                    "`seed` cannot be kept for {en}: no switch seeds the random numbers of a program from outside, so geas passes the seed in a variable the program reads",
                 ),
             )
-            .note(t(
-                "name that variable on the same line: `seed 7 env \"SEED\"`",
+            .note(tr!(
                 "その環境変数の名前を、同じ行に書きます（`seed 7 env \"SEED\"`）",
+                "name that variable on the same line: `seed 7 env \"SEED\"`",
             ))
         };
         diags.push(d);
@@ -1906,13 +1908,14 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
     for tg in &raw.targets {
         if let Some(first) = first_target.get(tg.name.as_str()) {
             diags.push(
-                Diag::error(
+                diag::error(
                     "E003",
                     tg.name_pos.line,
                     tg.name_pos.col,
-                    t(
-                        format!("a second target named `{}`", tg.name),
-                        format!("`{}` という名前のターゲットが二つあります", tg.name),
+                    tr!(
+                        "`{}` という名前のターゲットが二つあります",
+                        "a second target named `{}`",
+                        tg.name,
                     ),
                 )
                 .note(first_on(first.line)),
@@ -1936,13 +1939,14 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
     for c in &raw.claims {
         if let Some(first) = first_claim.get(c.name.as_str()) {
             diags.push(
-                Diag::error(
+                diag::error(
                     "E003",
                     c.name_pos.line,
                     c.name_pos.col,
-                    t(
-                        format!("a second claim named \"{}\"", c.name),
-                        format!("\"{}\" という名前の主張が二つあります", c.name),
+                    tr!(
+                        "\"{}\" という名前の主張が二つあります",
+                        "a second claim named \"{}\"",
+                        c.name,
                     ),
                 )
                 .note(first_on(first.line)),
@@ -1960,19 +1964,21 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
                     match kinds.get(target.as_str()) {
                         None => {
                             let list = if names.is_empty() {
-                                t("this file declares no target", "このファイルにはターゲットがありません")
+                                tr!("このファイルにはターゲットがありません", "this file declares no target")
                             } else {
-                                t(
-                                    format!("the targets in this file: {}", names.join(", ")),
-                                    format!("このファイルのターゲット: {}", names.join("、")),
+                                tr!(
+                                    "このファイルのターゲット: {}",
+                                    "the targets in this file: {}",
+                                    names.join("、");
+                                    names.join(", "),
                                 )
                             };
                             diags.push(
-                                Diag::error(
+                                diag::error(
                                     "E002",
                                     target_pos.line,
                                     target_pos.col,
-                                    t(format!("there is no target `{target}`"), format!("ターゲット `{target}` はありません")),
+                                    tr!("ターゲット `{target}` はありません", "there is no target `{target}`"),
                                 )
                                 .note(list),
                             );
@@ -2037,7 +2043,7 @@ fn call_fits(target: &str, kind: &TargetKind, call: &Call, word: &str, at: Pos) 
             format!("`{target}` はドライバーで動かす GUI のターゲットなので、呼べるのは操作（open、click、input、submit、press、advance）で、`{word}` は呼べません"),
         ),
     };
-    Some(Diag::error("E006", at.line, at.col, t(en, ja)))
+    Some(diag::error("E006", at.line, at.col, Text::new(ja, en)))
 }
 
 /// E007: a check of something its `when` does not observe.
@@ -2049,18 +2055,18 @@ fn not_observed(check: &Check, call: &Call, when_line: usize) -> Diag {
         Observes::Http => ("status, header, body and body json", "status、header、body、body json"),
         Observes::Screen => ("the screen", "画面"),
     };
-    Diag::error(
+    diag::error(
         "E007",
         check.pos.line,
         check.pos.col,
-        t(
-            format!("a `{word}` observes {gives_en}, not `{s}`"),
-            format!("`{word}` の結果にあるのは {gives_ja} で、`{s}` はありません"),
+        tr!(
+            "`{word}` の結果にあるのは {gives_ja} で、`{s}` はありません",
+            "a `{word}` observes {gives_en}, not `{s}`",
         ),
     )
-    .note(t(
-        format!("the `when` it reads is on line {when_line}"),
-        format!("このチェックが見るのは {when_line} 行目の `when` です"),
+    .note(tr!(
+        "このチェックが見るのは {when_line} 行目の `when` です",
+        "the `when` it reads is on line {when_line}",
     ))
 }
 
@@ -2133,22 +2139,22 @@ fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, di
                 let after = on.iter().find(|k| **k > i).map(|k| whens[*k].pos.line).unwrap_or(0);
                 let other = w.target;
                 diags.push(
-                    Diag::error(
+                    diag::error(
                         "E012",
                         w.pos.line,
                         w.pos.col,
-                        t(
-                            format!("a `when` on `{other}` comes between two actions on `{app}`, a pixie app; pixie runs a claim's actions on an app as one script, so the app is not running between them"),
-                            format!("pixie のアプリ `{app}` に対する二つの操作のあいだに、`{other}` の `when` があります。pixie は主張の中のアプリへの操作を一つのスクリプトとしてまとめて実行するので、そのあいだアプリは動いていません"),
+                        tr!(
+                            "pixie のアプリ `{app}` に対する二つの操作のあいだに、`{other}` の `when` があります。pixie は主張の中のアプリへの操作を一つのスクリプトとしてまとめて実行するので、そのあいだアプリは動いていません",
+                            "a `when` on `{other}` comes between two actions on `{app}`, a pixie app; pixie runs a claim's actions on an app as one script, so the app is not running between them",
                         ),
                     )
-                    .note(t(
-                        format!("the actions on `{app}` before and after it are on lines {before} and {after}"),
-                        format!("その前後の `{app}` への操作は、{before} 行目と {after} 行目です"),
+                    .note(tr!(
+                        "その前後の `{app}` への操作は、{before} 行目と {after} 行目です",
+                        "the actions on `{app}` before and after it are on lines {before} and {after}",
                     ))
-                    .note(t(
-                        format!("move this `when` before the first action on `{app}` or after the last"),
-                        format!("この `when` を、`{app}` への最初の操作の前か、最後の操作のあとに移します"),
+                    .note(tr!(
+                        "この `when` を、`{app}` への最初の操作の前か、最後の操作のあとに移します",
+                        "move this `when` before the first action on `{app}` or after the last",
                     )),
                 );
             }
@@ -2161,7 +2167,7 @@ fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, di
                 continue;
             };
             let (tg, call) = (w.target, w.call);
-            let mut e013 = |pos: Pos, en: String, ja: String| diags.push(Diag::error("E013", pos.line, pos.col, t(en, ja)));
+            let mut e013 = |pos: Pos, en: String, ja: String| diags.push(diag::error("E013", pos.line, pos.col, Text::new(ja, en)));
             // counts from 1, on any target
             let zero = match call {
                 Call::Click { nth: Some(0), .. } => Some("nth"),
@@ -2247,7 +2253,7 @@ mod tests {
                         claim \"adds\" {\n  when calc.run(\"2\", \"+\", \"3\")\n  then stdout is \"5\"\n  and  exit is 0\n}\n";
 
     fn errs(src: &str) -> Vec<(&'static str, usize, usize)> {
-        parse(src).unwrap_err().iter().map(|d| (d.code, d.line, d.col)).collect()
+        parse(src).unwrap_err().iter().map(|d| (d.code, d.line.unwrap_or(0), d.col.unwrap_or(0))).collect()
     }
 
     #[test]
@@ -2358,7 +2364,7 @@ mod tests {
                 Step::Then(c) => Ok(c.clone()),
                 other => panic!("{other:?}"),
             },
-            Err(ds) => Err(ds.iter().map(|d| (d.code, d.line, d.col)).collect()),
+            Err(ds) => Err(ds.iter().map(|d| (d.code, d.line.unwrap_or(0), d.col.unwrap_or(0))).collect()),
         }
     }
 
@@ -2478,13 +2484,13 @@ mod tests {
     #[test]
     fn messages_in_both_languages() {
         let d = &parse("target calc {\n  run \"x\"\n}\nclaim \"x\" {\n  when api.get(\"/\")\n}\n").unwrap_err()[0];
-        assert_eq!(d.msg.en, "there is no target `api`");
-        assert_eq!(d.msg.ja, "ターゲット `api` はありません");
+        assert_eq!(d.message.en, "there is no target `api`");
+        assert_eq!(d.message.ja, "ターゲット `api` はありません");
         assert_eq!(d.notes[0].ja, "このファイルのターゲット: calc");
         let d = &parse("target {\n}\n").unwrap_err()[0];
-        assert_eq!(d.msg.en, "expected the target's name, found `{`");
-        assert_eq!(d.msg.ja, "ターゲットの名前を書くところに `{` があります");
+        assert_eq!(d.message.en, "expected the target's name, found `{`");
+        assert_eq!(d.message.ja, "ターゲットの名前を書くところに `{` があります");
         let d = &parse("claim \"x\"").unwrap_err()[0];
-        assert_eq!(d.msg.ja, "`{` を書く前にファイルが終わっています");
+        assert_eq!(d.message.ja, "`{` を書く前にファイルが終わっています");
     }
 }

@@ -57,8 +57,8 @@ fn every_repro_gives_its_own_code() {
         let log = pid_log(&s);
         let log_s = log.to_str().expect("a UTF-8 path");
         let mut env: Vec<(&str, &str)> = vec![("GEAS_PID_LOG", log_s)];
-        // the Chrome the tests were given, unless the repro names its own
-        let chrome = std::env::var("GEAS_CHROME").ok();
+        // the Chrome the tests found, unless the repro names its own
+        let chrome = chrome_path().map(|c| c.to_string_lossy().into_owned());
         if let Some(c) = &chrome {
             env.push(("GEAS_CHROME", c.as_str()));
         }

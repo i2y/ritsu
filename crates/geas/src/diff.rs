@@ -3,7 +3,7 @@
 //! a plain diff is held to the file on disk, which has to be one of its sides, and
 //! the other side is the disk with the hunks undone or done.
 
-use crate::diag::{t, Text};
+use ritsu_base::text::Text;
 use crate::hash;
 use std::path::Path;
 
@@ -93,7 +93,7 @@ impl FileDiff {
 pub type DiffError = (usize, Text);
 
 fn err(at: usize, en: impl Into<String>, ja: impl Into<String>) -> DiffError {
-    (at, t(en, ja))
+    (at, Text::new(ja, en))
 }
 
 /// A path as git writes it: plain, or in double quotes with C escapes, the bytes
@@ -516,9 +516,10 @@ pub fn sides(f: &FileDiff, root: &Path) -> Result<(Blob, Blob), Text> {
                 let h = Blob::Hash(hash::blob(&c.bytes()));
                 Ok((if f.added() { Blob::Absent } else { h.clone() }, if f.deleted() { Blob::Absent } else { h }))
             }
-            None => Err(t(
-                format!("{} is not on disk, and the diff names no blob for it", f.path()),
-                format!("{} がディスクになく、差分にもその blob がありません", f.path()),
+            None => Err(tr!(
+                "{} がディスクになく、差分にもその blob がありません",
+                "{} is not on disk, and the diff names no blob for it",
+                f.path(),
             )),
         };
     }
@@ -535,9 +536,10 @@ pub fn sides(f: &FileDiff, root: &Path) -> Result<(Blob, Blob), Text> {
         }
         None if f.deleted() => Ok((blob(&other_side(&empty, f, true)), Blob::Absent)),
         None if f.added() => Ok((Blob::Absent, blob(&other_side(&empty, f, false)))),
-        _ => Err(t(
-            format!("the diff of {} fits neither the file on disk nor that file before the change", f.path()),
-            format!("{} の差分が、ディスクのファイルにも、変更前のそのファイルにも合いません", f.path()),
+        _ => Err(tr!(
+            "{} の差分が、ディスクのファイルにも、変更前のそのファイルにも合いません",
+            "the diff of {} fits neither the file on disk nor that file before the change",
+            f.path(),
         )),
     }
 }

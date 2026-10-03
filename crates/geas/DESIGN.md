@@ -1201,10 +1201,12 @@ cut to one line.
 - A failed check is a verdict, not a diagnostic: `not ok <n> - <name>` as
   in v0, then the check, what it expected and what came back, and the run
   that gets there.
-- `--lang ja`, or `GEAS_LANG=ja`, prints the prose in Japanese; English is
-  the default. `--lang` takes `en` or `ja` and refuses anything else (E080);
-  `GEAS_LANG` with another value gives English, since a variable left in an
-  environment should not stop every command. `ok` and `not ok` stay as they are (they are TAP), and so
+- `--lang ja`, or `GEAS_LANG=ja`, or `RITSU_LANG=ja` (the variable every
+  language of ritsu reads, after `GEAS_LANG`), prints the prose in Japanese;
+  English is the default. `--lang` takes `en` or `ja` and refuses anything
+  else (E080); a variable with another value is passed over, since a variable
+  left in an environment should not stop every command (`ja_JP` reads as
+  Japanese, `fr` as no choice at all). `ok` and `not ok` stay as they are (they are TAP), and so
   do JSON keys. geas has two readers: an agent, which reads English and
   JSON, and the person who audits the claims, whose claims may well be
   named in Japanese. rulec and dandori make the same split.
@@ -1254,6 +1256,48 @@ cut to one line.
 | E081 | a file that cannot be read or written |
 | W060 | a target that gave no record at all in `map`, unless W061, E065 or E066 says why |
 | W061 | a Rust profile from a program geas did not start itself |
+
+### 13.1 What ritsu's base layer took over
+
+geas now lives in ritsu, one workspace for seven small languages, and the
+code it shared with the others is ritsu-base's and ritsu-testkit's (ritsu's
+PLAN, C.6): the two languages of the prose (`Text`, `tr!`, `Lang`), the part
+of a diagnostic every language has (code, severity, place, message, notes,
+the text and the JSON), and finding the root (the nearest directory with a
+`.git`). The sentences were turned from `t(en, ja)` into
+`tr!("日本語", "English")` mechanically, and not one of them changed: every
+golden file, in both languages, is what it was. What stays geas's is its
+part of a diagnostic (the run that gets there, and the excerpt of the line
+with its control characters made visible and cut to 120 characters), the
+command line and its help (a hand-written page and a table of its own, as
+rulec's), the explanations of the codes (each repro a command, files, an
+exit code, the programs it needs), SHA-1 for git's blob ids, which files a
+record covers, and the JSON reader.
+
+The JSON reader stays because of what it reads: the output of the program
+under test, whose numbers geas compares as floats and which may write them
+with an exponent (`2e3`), and whose values geas writes back into baselines
+and drift reports in its own form. ritsu-base's reader is rulec's, written
+for JSON the suite's own tools print: it refuses an exponent and a key given
+twice, and keeps integers exact. The tests read what geas prints with
+ritsu-base's reader.
+
+What a person or a program sees changed in four places:
+
+- A diagnostic with no line, such as E081 for a file that is not there,
+  now has `"line": null` and `"col": null` in its JSON, where it had `0`:
+  a line number is not the way to say there is none, and every language of
+  ritsu says it the same way. The golden file
+  `tests/golden/en/errors/E081-missing.json` was written again. The report
+  of `geas check --json`, which is geas's own format, still writes `0`.
+- A diagnostic's JSON is written by ritsu-base, as serde_json writes JSON:
+  a backspace or a form feed in a message is `\b` or `\f`, where geas
+  wrote `\u0008` and `\u000c`. Both read as the same string.
+- `RITSU_LANG` is read after `GEAS_LANG`, and a value such as `ja_JP` reads
+  as Japanese.
+- The tests' SKIP lines are ritsu-testkit's, `SKIP: geas: <reason>` on
+  standard output, and their scratch directories are under the system's
+  temporary directory, not under `target/`.
 
 ## 14. Distribution through the agent channel
 

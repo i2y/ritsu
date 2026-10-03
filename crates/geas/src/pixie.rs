@@ -10,7 +10,8 @@
 //! geas runs the script's prefixes until the first that fails, which finds the
 //! refused action and the screen just before it (E035).
 
-use crate::diag::{self, t};
+use crate::diag;
+use ritsu_base::text::Text;
 use crate::gui;
 use crate::model::{Call, Place, Target};
 use crate::proc::{self, Env, Failure, Launch};
@@ -348,9 +349,9 @@ impl App<'_> {
             let secs = limit.as_secs();
             return Err(Failure {
                 code: "E037",
-                msg: t(
-                    format!("the pixie app `{name}` did not finish its script within {secs} s, so geas stopped it"),
-                    format!("pixie のアプリ `{name}` がスクリプトを {secs} 秒のうちに終えなかったので、geas が止めました"),
+                msg: tr!(
+                    "pixie のアプリ `{name}` がスクリプトを {secs} 秒のうちに終えなかったので、geas が止めました",
+                    "the pixie app `{name}` did not finish its script within {secs} s, so geas stopped it",
                 ),
                 notes: script_notes(script, &stderr),
             });
@@ -362,9 +363,11 @@ impl App<'_> {
                 let how = proc::how_it_ended(status);
                 return Err(Failure {
                     code: "E037",
-                    msg: t(
-                        format!("the pixie app `{name}` ended its script with {}, and geas reads trees only from a script that ran (exit 0) or a refused step (exit 101)", how.en),
-                        format!("pixie のアプリ `{name}` のスクリプトが、終了コード 0 と 101 以外で終わりました（{}）。geas がツリーを読むのは、スクリプトが最後まで動いたとき（終了コード 0）か、ステップが拒否されたとき（終了コード 101）だけです", how.ja),
+                    msg: tr!(
+                        "pixie のアプリ `{name}` のスクリプトが、終了コード 0 と 101 以外で終わりました（{}）。geas がツリーを読むのは、スクリプトが最後まで動いたとき（終了コード 0）か、ステップが拒否されたとき（終了コード 101）だけです",
+                        "the pixie app `{name}` ended its script with {}, and geas reads trees only from a script that ran (exit 0) or a refused step (exit 101)",
+                        how.ja;
+                        how.en,
                     ),
                     notes: script_notes(script, &stderr),
                 });
@@ -374,24 +377,25 @@ impl App<'_> {
             Ok(found) if found.len() == actions => Ok(Ended::Trees(found)),
             Ok(found) => Err(Failure {
                 code: "E037",
-                msg: t(
-                    format!("pixie's output holds {} accessibility trees, and the script asked for {actions}", found.len()),
-                    format!("pixie の出力にあるアクセシビリティツリーは {} 個で、スクリプトが求めたのは {actions} 個です", found.len()),
+                msg: tr!(
+                    "pixie の出力にあるアクセシビリティツリーは {} 個で、スクリプトが求めたのは {actions} 個です",
+                    "pixie's output holds {} accessibility trees, and the script asked for {actions}",
+                    found.len(),
                 ),
                 notes: script_notes(script, &stderr),
             }),
             Err(line) => {
                 let l = diag::cut(&line, 100);
-                let mut notes = vec![t(
-                    "geas reads pixie's tree with its role names as anchors, since pixie prints names and values without escaping them; a name holding `\", ` or `]` can make a tree read no way at all",
+                let mut notes = vec![tr!(
                     "pixie は名前と値をエスケープせずに出力するので、geas はロールの名前を手がかりにツリーを読みます。`\", ` や `]` を含む名前があると、どう読んでもツリーにならないことがあります",
+                    "geas reads pixie's tree with its role names as anchors, since pixie prints names and values without escaping them; a name holding `\", ` or `]` can make a tree read no way at all",
                 )];
                 notes.extend(script_notes(script, &stderr));
                 Err(Failure {
                     code: "E037",
-                    msg: t(
-                        format!("an accessibility tree pixie printed does not read: `{l}`"),
-                        format!("pixie が出力したアクセシビリティツリーが読めません: `{l}`"),
+                    msg: tr!(
+                        "pixie が出力したアクセシビリティツリーが読めません: `{l}`",
+                        "an accessibility tree pixie printed does not read: `{l}`",
                     ),
                     notes,
                 })
@@ -447,9 +451,9 @@ impl App<'_> {
                 let name = &self.target.name;
                 vec![Err(Failure {
                     code: "E037",
-                    msg: t(
-                        format!("the pixie app `{name}` refused its script once (exit 101) and ran it to the end the next time: it does not do the same on every run"),
-                        format!("pixie のアプリ `{name}` は、一度はスクリプトを拒否し（終了コード 101）、次は最後まで動かしました。走らせるたびに振る舞いが変わります"),
+                    msg: tr!(
+                        "pixie のアプリ `{name}` は、一度はスクリプトを拒否し（終了コード 101）、次は最後まで動かしました。走らせるたびに振る舞いが変わります",
+                        "the pixie app `{name}` refused its script once (exit 101) and ran it to the end the next time: it does not do the same on every run",
                     ),
                     notes: vec![],
                 })]
@@ -465,9 +469,9 @@ impl App<'_> {
         let s = if s.is_empty() { "a11y".to_string() } else { s };
         Failure {
             code: "E035",
-            msg: t(
-                format!("`{name}` refused `{shown}`: pixie stopped the script at `{s}` and exited with 101"),
-                format!("`{name}` が `{shown}` を拒否しました。pixie はスクリプトを `{s}` で止め、終了コード 101 で終了しました"),
+            msg: tr!(
+                "`{name}` が `{shown}` を拒否しました。pixie はスクリプトを `{s}` で止め、終了コード 101 で終了しました",
+                "`{name}` refused `{shown}`: pixie stopped the script at `{s}` and exited with 101",
             ),
             notes: gui::refused_notes(screen, call),
         }
@@ -475,9 +479,9 @@ impl App<'_> {
 }
 
 /// The script and the last lines of stderr, as notes.
-fn script_notes(script: &str, stderr: &str) -> Vec<crate::diag::Text> {
+fn script_notes(script: &str, stderr: &str) -> Vec<Text> {
     let s = diag::cut(script, 100);
-    let mut notes = vec![t(format!("the script: {s}"), format!("スクリプト: {s}"))];
+    let mut notes = vec![tr!("スクリプト: {s}", "the script: {s}")];
     notes.extend(proc::stderr_tail(stderr));
     notes
 }

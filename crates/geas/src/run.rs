@@ -5,9 +5,10 @@
 //! coverage switches and a directory of its own (DESIGN §7.3).
 
 pub use crate::check::CheckResult;
+use ritsu_base::text::Text;
 use crate::check::{self, trim_one_newline};
 use crate::cover;
-use crate::diag::{self, same, t, Diag};
+use crate::diag::{self, Diag, DiagExt};
 use crate::drift;
 use crate::gui;
 use crate::http;
@@ -80,7 +81,7 @@ impl RunLine {
             Some(o) => format!("when {}  →  {}", self.when, o),
             None => format!("when {}", self.when),
         };
-        diag::Step { line: self.line, text: same(text) }
+        diag::Step { line: self.line, text: Text::same(text) }
     }
 }
 
@@ -171,9 +172,9 @@ fn environment(tg: &Target, port: Option<u16>, opts: Opts, claim_no: usize, k: u
         }
         Err(e) => Err(Failure {
             code: "E081",
-            msg: t(
-                format!("cannot make the directory for the coverage of this process: {e}"),
-                format!("このプロセスのカバレッジを書くディレクトリを作れません: {e}"),
+            msg: tr!(
+                "このプロセスのカバレッジを書くディレクトリを作れません: {e}",
+                "cannot make the directory for the coverage of this process: {e}",
             ),
             notes: vec![],
         }),
@@ -364,7 +365,7 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
         // every observation came before the `when` that failed
         let mut run = seen(observations.len());
         run.push(RunLine { line: pos.line, when, observed: None });
-        let mut d = Diag::error(f.code, pos.line, pos.col, f.msg).with_path(run.iter().map(RunLine::step).collect());
+        let mut d = diag::error(f.code, pos.line, pos.col, f.msg).with_path(run.iter().map(RunLine::step).collect());
         d.notes = f.notes;
         (ClaimStatus::Error(d), run)
     } else if let Some(upto) = failed_after {
@@ -384,9 +385,9 @@ fn take_port(target: &str, port: Port) -> Result<(u16, Option<AutoPort>), Failur
             Ok(a) => Ok((a.0, Some(a))),
             Err(e) => Err(Failure {
                 code: "E030",
-                msg: t(
-                    format!("cannot find a free port on 127.0.0.1 for `{target}`: {e}"),
-                    format!("`{target}` に渡す 127.0.0.1 の空きポートが見つかりません: {e}"),
+                msg: tr!(
+                    "`{target}` に渡す 127.0.0.1 の空きポートが見つかりません: {e}",
+                    "cannot find a free port on 127.0.0.1 for `{target}`: {e}",
                 ),
                 notes: vec![],
             }),

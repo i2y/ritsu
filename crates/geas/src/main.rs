@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate ritsu_base;
+
 mod affected;
 mod cdp;
 mod check;
@@ -29,7 +32,8 @@ mod tree;
 mod words;
 mod ws;
 
-use diag::{t, Diag, Lang};
+use diag::{Diag, Show};
+use ritsu_base::text::{Lang, Text};
 use run::ClaimStatus;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -166,13 +170,13 @@ enum Parsed {
 }
 
 fn e080(en: impl Into<String>, ja: impl Into<String>) -> Diag {
-    Diag::error("E080", 0, 0, t(en, ja))
+    diag::error("E080", 0, 0, Text::new(ja, en))
 }
 
-fn commands_note() -> diag::Text {
-    t(
-        "the commands: check, snap, drift, map, affected, explain, skill; `geas --help` says more",
+fn commands_note() -> Text {
+    tr!(
         "コマンドは check、snap、drift、map、affected、explain、skill です。詳しくは `geas --help` を見てください",
+        "the commands: check, snap, drift, map, affected, explain, skill; `geas --help` says more",
     )
 }
 
@@ -183,9 +187,9 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
     let mut i = 0;
     while i < raw.len() {
         if raw[i] == "--lang" {
-            let lang = Lang::pick(None);
+            let lang = diag::pick(None);
             match raw.get(i + 1) {
-                Some(v) => match Lang::parse(v) {
+                Some(v) => match diag::parse_lang(v) {
                     Some(l) => lang_flag = Some(l),
                     None => {
                         return Err((
@@ -206,7 +210,7 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
             i += 1;
         }
     }
-    let lang = Lang::pick(lang_flag);
+    let lang = diag::pick(lang_flag);
     let fail = |d: Diag| Err((d, lang));
 
     let mut word: Option<&str> = None;
@@ -265,9 +269,11 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
                     format!("`{f}` is not an option of `geas {c}`"),
                     format!("`{f}` は `geas {c}` のオプションではありません"),
                 )
-                .note(t(
-                    format!("it takes: {}", cmd.options().join(", ")),
-                    format!("使えるオプション: {}", cmd.options().join("、")),
+                .note(tr!(
+                    "使えるオプション: {}",
+                    "it takes: {}",
+                    cmd.options().join("、");
+                    cmd.options().join(", "),
                 )),
             );
         }
@@ -319,9 +325,9 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
                     format!("`geas skill` takes no file, and was given {} argument(s)", files.len()),
                     format!("`geas skill` はファイルを受け取りませんが、引数が {} 個渡されています", files.len()),
                 )
-                .note(t(
-                    "usage: geas skill [--install <dir> [--force]]",
+                .note(tr!(
                     "使い方: geas skill [--install <dir> [--force]]",
+                    "usage: geas skill [--install <dir> [--force]]",
                 )),
             );
         }
@@ -338,9 +344,9 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
                     format!("`geas affected` takes a spec and a diff, and was given {} argument(s)", files.len()),
                     format!("`geas affected` に渡すのは主張のファイルと差分の二つで、渡された引数は {} 個です", files.len()),
                 )
-                .note(t(
-                    "usage: geas affected <spec.geas> <diff|->; `-` reads the diff from stdin",
+                .note(tr!(
                     "使い方: geas affected <spec.geas> <diff|->。`-` なら差分を標準入力から読みます",
+                    "usage: geas affected <spec.geas> <diff|->; `-` reads the diff from stdin",
                 )),
             );
         }
@@ -350,7 +356,7 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
                     format!("`geas {c}` needs at least one spec"),
                     format!("`geas {c}` には主張のファイルが一つ以上要ります"),
                 )
-                .note(t(format!("usage: geas {c} <spec.geas>..."), format!("使い方: geas {c} <spec.geas>..."))),
+                .note(tr!("使い方: geas {c} <spec.geas>...", "usage: geas {c} <spec.geas>...")),
             );
         }
         Cmd::Map if files.len() > 1 && value("--out").is_some() => {
@@ -420,7 +426,7 @@ fn fail(a: &Args, file: &str, diags: &[(String, Diag)], src: &str) {
         println!("{}", report::failure_json(file, diags, a.lang));
     } else {
         for (f, d) in diags {
-            eprint!("{}", d.render(f, src, a.lang));
+            eprint!("{}", d.shown(f, src, a.lang));
         }
     }
 }
@@ -429,45 +435,45 @@ fn fail(a: &Args, file: &str, diags: &[(String, Diag)], src: &str) {
 /// and that file's text.
 fn baseline_problem(e: drift::BaselineError, file: &str, p: &Paths) -> (String, Diag, String) {
     let base = shown(&p.baseline);
-    let again = t(
-        format!("`geas snap` writes the baseline; run `geas snap {file}` to write it again"),
-        format!("ベースラインは `geas snap` が書きます。`geas snap {file}` を走らせると書き直します"),
+    let again = tr!(
+        "ベースラインは `geas snap` が書きます。`geas snap {file}` を走らせると書き直します",
+        "`geas snap` writes the baseline; run `geas snap {file}` to write it again",
     );
     match e {
         drift::BaselineError::Missing => {
-            let mut d = Diag::error(
+            let mut d = diag::error(
                 "E050",
                 0,
                 0,
-                t(format!("there is no baseline at {base}"), format!("{base} にベースラインがありません")),
+                tr!("{base} にベースラインがありません", "there is no baseline at {base}"),
             )
-            .note(t(
-                format!("run `geas snap {file}` first; drift compares a run with what snap kept"),
-                format!("先に `geas snap {file}` を走らせてください。ドリフトは今回の実行を、snap が残したものと比べます"),
+            .note(tr!(
+                "先に `geas snap {file}` を走らせてください。ドリフトは今回の実行を、snap が残したものと比べます",
+                "run `geas snap {file}` first; drift compares a run with what snap kept",
             ));
             if p.old_baseline.is_file() {
                 let old = shown(&p.old_baseline);
                 let new = p.baseline.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                d = d.note(t(
-                    format!("{old} is a baseline under its older name; rename it to {new}, or snap again"),
-                    format!("{old} は前の名前のベースラインです。{new} に名前を変えるか、snap をやり直してください"),
+                d = d.note(tr!(
+                    "{old} は前の名前のベースラインです。{new} に名前を変えるか、snap をやり直してください",
+                    "{old} is a baseline under its older name; rename it to {new}, or snap again",
                 ));
             }
             (file.to_string(), d, String::new())
         }
         drift::BaselineError::Unreadable(err) => (
             base,
-            Diag::error(
+            diag::error(
                 "E081",
                 0,
                 0,
-                t(format!("cannot read the baseline: {err}"), format!("ベースラインを読めません: {err}")),
+                tr!("ベースラインを読めません: {err}", "cannot read the baseline: {err}"),
             ),
             String::new(),
         ),
         drift::BaselineError::Bad { line, why } => {
             let text = std::fs::read_to_string(&p.baseline).unwrap_or_default();
-            (base, Diag::error("E051", line, 0, why).note(again), text)
+            (base, diag::error("E051", line, 0, why).note(again), text)
         }
     }
 }
@@ -476,18 +482,18 @@ fn write_journal(p: &Paths, journal: &[String]) -> Result<(), (String, Diag)> {
     if let Err(e) = std::fs::create_dir_all(&p.geas) {
         return Err((
             shown(&p.geas),
-            Diag::error(
+            diag::error(
                 "E081",
                 0,
                 0,
-                t(format!("cannot make this directory: {e}"), format!("このディレクトリを作れません: {e}")),
+                tr!("このディレクトリを作れません: {e}", "cannot make this directory: {e}"),
             ),
         ));
     }
     std::fs::write(&p.journal, journal.join("\n") + "\n").map_err(|e| {
         (
             shown(&p.journal),
-            Diag::error("E081", 0, 0, t(format!("cannot write the journal: {e}"), format!("ジャーナルを書けません: {e}"))),
+            diag::error("E081", 0, 0, tr!("ジャーナルを書けません: {e}", "cannot write the journal: {e}")),
         )
     })
 }
@@ -498,7 +504,7 @@ fn run_file(file: &str, a: &Args) -> i32 {
     let src = match std::fs::read_to_string(file) {
         Ok(s) => s,
         Err(e) => {
-            let d = Diag::error("E081", 0, 0, t(format!("cannot read this file: {e}"), format!("このファイルを読めません: {e}")));
+            let d = diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"));
             fail(a, file, &[(file.to_string(), d)], "");
             return 2;
         }
@@ -567,11 +573,11 @@ fn run_file(file: &str, a: &Args) -> i32 {
                 }
                 Err(e) => problems.push((
                     shown(&p.baseline),
-                    Diag::error(
+                    diag::error(
                         "E081",
                         0,
                         0,
-                        t(format!("cannot write the baseline: {e}"), format!("ベースラインを書けません: {e}")),
+                        tr!("ベースラインを書けません: {e}", "cannot write the baseline: {e}"),
                     ),
                 )),
             }
@@ -584,7 +590,7 @@ fn run_file(file: &str, a: &Args) -> i32 {
             } else {
                 for x in &results {
                     if let ClaimStatus::Error(d) = &x.status {
-                        print!("{}", d.render(file, &src, lang));
+                        print!("{}", d.shown(file, &src, lang));
                     }
                 }
                 print!("{}", r.text(lang));
@@ -600,7 +606,7 @@ fn run_file(file: &str, a: &Args) -> i32 {
         Cmd::Map | Cmd::Affected | Cmd::Explain | Cmd::Skill => unreachable!("handled apart"),
     }
     for (f, d) in &problems {
-        eprint!("{}", d.render(f, "", lang));
+        eprint!("{}", d.shown(f, "", lang));
         code = 2;
     }
     code
@@ -621,11 +627,11 @@ fn map_file(file: &str, a: &Args, src: &str, spec: &model::Spec, p: &Paths) -> i
     let cwd = match std::fs::canonicalize(&p.cwd) {
         Ok(c) => c,
         Err(e) => {
-            return early(Diag::error(
+            return early(diag::error(
                 "E081",
                 0,
                 0,
-                t(format!("cannot read the spec's directory: {e}"), format!("主張のファイルのディレクトリを読めません: {e}")),
+                tr!("主張のファイルのディレクトリを読めません: {e}", "cannot read the spec's directory: {e}"),
             ));
         }
     };
@@ -650,7 +656,7 @@ fn map_file(file: &str, a: &Args, src: &str, spec: &model::Spec, p: &Paths) -> i
             Ok(()) => written = Some(r.clone()),
             Err(e) => problems.push((
                 record_path.clone(),
-                Diag::error("E081", 0, 0, t(format!("cannot write the record: {e}"), format!("記録を書けません: {e}"))),
+                diag::error("E081", 0, 0, tr!("記録を書けません: {e}", "cannot write the record: {e}")),
             )),
         }
     }
@@ -662,8 +668,8 @@ fn map_file(file: &str, a: &Args, src: &str, spec: &model::Spec, p: &Paths) -> i
         let diags: Vec<String> = m
             .diags
             .iter()
-            .map(|d| d.to_json(file, lang))
-            .chain(problems.iter().map(|(f, d)| d.to_json(f, lang)))
+            .map(|d| d.json_in(file, lang))
+            .chain(problems.iter().map(|(f, d)| d.json_in(f, lang)))
             .collect();
         let more = format!(",\"map\":{},\"diagnostics\":[{}]", map::json_part(&written, &record_path), diags.join(","));
         println!("{}", report::claims_json_with(file, &m.results, lang, code == 0, &more));
@@ -674,10 +680,10 @@ fn map_file(file: &str, a: &Args, src: &str, spec: &model::Spec, p: &Paths) -> i
             print!("{}", map::summary(r, &record_path, lang));
         }
         for d in &m.diags {
-            eprint!("{}", d.render(file, src, lang));
+            eprint!("{}", d.shown(file, src, lang));
         }
         for (f, d) in &problems {
-            eprint!("{}", d.render(f, "", lang));
+            eprint!("{}", d.shown(f, "", lang));
         }
     }
     code
@@ -692,11 +698,11 @@ fn explain(a: &Args) -> i32 {
             match codes::find(c) {
                 Some(e) => v.push(e),
                 None => {
-                    let d = e080(format!("`{c}` is not a code geas has"), format!("`{c}` というコードはありません")).note(t(
-                        "`geas explain --all` prints every code",
+                    let d = e080(format!("`{c}` is not a code geas has"), format!("`{c}` というコードはありません")).note(tr!(
                         "`geas explain --all` で、すべてのコードが出ます",
+                        "`geas explain --all` prints every code",
                     ));
-                    eprint!("{}", d.render("", "", a.lang));
+                    eprint!("{}", d.shown("", "", a.lang));
                     return 2;
                 }
             }
@@ -726,15 +732,12 @@ fn skill_command(a: &Args) -> i32 {
             let shown = folder.display();
             println!(
                 "{}",
-                a.lang.tr(
-                    &format!("wrote the geas skill to {shown} ({n} files)"),
-                    &format!("geas のスキルを {shown} に書きました（ファイル {n} 個）"),
-                )
+                Text::new(&format!("geas のスキルを {shown} に書きました（ファイル {n} 個）"), &format!("wrote the geas skill to {shown} ({n} files)")).get(a.lang)
             );
             0
         }
         Err(d) => {
-            eprint!("{}", d.render("", "", a.lang));
+            eprint!("{}", d.shown("", "", a.lang));
             2
         }
     }
@@ -745,7 +748,7 @@ fn main() {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let code = match parse_args(&raw) {
         Ok(Parsed::Help(lang)) => {
-            print!("{}", lang.tr(HELP_EN, HELP_JA));
+            print!("{}", Text::new(HELP_JA, HELP_EN).get(lang));
             0
         }
         Ok(Parsed::Version) => {
@@ -772,7 +775,7 @@ fn main() {
             }
         },
         Err((d, lang)) => {
-            eprint!("{}", d.render("", "", lang));
+            eprint!("{}", d.shown("", "", lang));
             2
         }
     };

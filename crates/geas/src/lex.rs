@@ -1,7 +1,7 @@
 //! Tokens. A string is one line long, `#` starts a comment, and anything else
 //! outside the tokens below is E001.
 
-use crate::diag::{t, Diag};
+use crate::diag::{self, Diag};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Kind {
@@ -104,15 +104,15 @@ pub fn lex(src: &str) -> Result<Vec<Tok>, Diag> {
                 let mut odd = None;
                 loop {
                     if i >= b.len() || b[i] == '\n' {
-                        return Err(Diag::error(
+                        return Err(diag::error(
                             "E001",
                             l,
                             co,
-                            t("the string is not closed on this line", "文字列がこの行のうちに閉じていません"),
+                            tr!("文字列がこの行のうちに閉じていません", "the string is not closed on this line"),
                         )
-                        .note(t(
-                            "a string opens and closes with `\"` on one line; a line break inside it is written `\\n`",
+                        .note(tr!(
                             "文字列は一行のうちに `\"` で開いて閉じます。中の改行は `\\n` と書きます",
+                            "a string opens and closes with `\"` on one line; a line break inside it is written `\\n`",
                         )));
                     }
                     let d = b[i];
@@ -124,11 +124,11 @@ pub fn lex(src: &str) -> Result<Vec<Tok>, Diag> {
                     }
                     if d == '\\' {
                         if i + 1 >= b.len() {
-                            return Err(Diag::error(
+                            return Err(diag::error(
                                 "E001",
                                 line,
                                 col,
-                                t("the file ends in the middle of an escape", "エスケープの途中でファイルが終わっています"),
+                                tr!("エスケープの途中でファイルが終わっています", "the file ends in the middle of an escape"),
                             ));
                         }
                         let e = b[i + 1];
@@ -187,13 +187,13 @@ pub fn lex(src: &str) -> Result<Vec<Tok>, Diag> {
             }
             other => {
                 let c = shown_char(other);
-                return Err(Diag::error(
+                return Err(diag::error(
                     "E001",
                     l,
                     co,
-                    t(
-                        format!("{c} is not a character geas reads outside a string or a comment"),
-                        format!("{c} は、文字列とコメントの外には書けない文字です"),
+                    tr!(
+                        "{c} は、文字列とコメントの外には書けない文字です",
+                        "{c} is not a character geas reads outside a string or a comment",
                     ),
                 ));
             }
@@ -298,7 +298,7 @@ mod tests {
     fn err(src: &str) -> (usize, usize, String) {
         let d = lex(src).unwrap_err();
         assert_eq!(d.code, "E001");
-        (d.line, d.col, d.msg.en)
+        (d.line.unwrap_or(0), d.col.unwrap_or(0), d.message.en)
     }
 
     #[test]
