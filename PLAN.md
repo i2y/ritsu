@@ -225,13 +225,54 @@ DESIGN 10.8 のものを作る：自分を消す一時ディレクトリ（終�
 | C.7 yuen | 上の全部、`src/names.rs`（→ `naming`）、`src/sources.rs` と `src/fetch.rs` と `src/copies.rs` と `src/base64.rs`（→ `sources`） | 診断の JSON はもうルートからの相対。`root` を外側に足す |
 | C.8 sakai | 上の全部、`src/naming.rs` と `src/paths.rs`、`src/proto.rs`（→ `ritsu-proto`、C.9） | 診断の JSON の `file` を、走らせたディレクトリからルートからの相対に替え、`root` を足す（DESIGN 6.2 の 9）。変える理由を sakai の DESIGN.md に書く |
 
+C.4〜C.8 でしたこと（C の二つ目の部分）：
+
+- 五つとも、土台の `sha256`、`text`（`tr!`・`Text`・`Lang`）、`diag`（`Diag<X: Extra>`）、`ledger`、`cli` と、テストの共通部分（`ritsu-testkit` の一時ディレクトリ、ツールの探し方、時間を区切った実行、golden、SKIP、段、PostgreSQL、TigerBeetle、Chrome、Mermaid、小さな HTTP サーバー）に替えた。言語ごとに残したものと、出力が変わったところの理由は、その言語の DESIGN.md に書いた（koyomi 11.1、chobo 8.1、geas 13.1、yuen 16.1、sakai 2.4・5.1・12.1）。
+- 一つ替え終えるたびに、その言語のテストを全部回し、コマンドの出力を、例と fixture の全部について替える前と比べた（koyomi 352 回と生成したファイル 80 個、chobo 273 回とファイル 72 個、yuen と sakai は全部のコマンド、geas は `--help` と `explain`）。違ったのは、下の表の決めて変えたところだけだった。
+
+| | 言語に残したもの | 出力が変わったところ | 取り直した golden | テスト |
+|---|---|---|---|---|
+| C.4 koyomi | 計算の段（`Example`）、祝日の表、写しのうち本則の条だけを引くこと、`text_diff`、ページの中身と koyomi だけの色、台帳とコマンドの表の中身 | `--help` と `--lang` の説明（`RITSU_LANG`）、HTML の共通の役割の色の値、E001 の JSON の `line` と `col` が null、curl の `--compressed` と e-Gov の取り直し、写しの本文の表の読み方、固定の行の書き換えの `\"` | `docs/images/doc-{top,months}.{en,ja}.png`、`docs/reference.md` とスキルの写し | 99（C.10 で 100） |
+| C.5 chobo | 操作とヒント（`Ops`）、`--help` の組み立て、台帳と `explain` の形、Markdown の頭、ページの中身 | `check --format json` の診断のキーと外側の `v`、`--lang` の説明、`doc` の `generator` と配色の変数の名前 | `tests/doc/*.html`（14）、`docs/formats.md` とスキルの写し、`skills/chobo/SKILL.md` | 63 |
+| C.6 geas | コマンドの表（DESIGN 4.4 が外している）、台帳と `explain` の形、`src/json.rs`、SHA-1、歩くときに飛ばす名前 | E081 の JSON の `line` と `col` が null、診断の JSON の `\b` と `\f`、`RITSU_LANG`、SKIP の行、一時ディレクトリの場所 | `tests/golden/en/errors/E081-missing.json` | 236 |
+| C.7 yuen | `.req` の字句と構文、`Trail`、名指しの診断のコードと文（E011〜E013）、ReqIF と PROV の書き出し | 書き出しの識別子、`RITSU_LANG`、表示のパス、歩くときに飛ばす名前、curl と e-Gov の取り直し、JSON が読めないときの理由の文 | `tests/golden/export/{ecfr,payment,period}.{reqif,provn,prov.json}`（9） | 94（`#[test]` は 95 から 94。base64 の RFC 4648 の例のテストを ritsu-base に移した） |
+| C.8 sakai | `.ctx` の字句と構文、`Refs`、名指しの診断の文、地図の検査、`build`、`export cml`、`api` | `--format json` の `file` をルートからの相対にし、`root` を足した、`RITSU_LANG`、SKIP の行 | なし | 94（SHA-256 の一つと文の二つのテストは ritsu-base にある。C.9 のあと 90） |
+
+- 土台に足したもの（すでに替えた言語のテストも回し直した）：`ledger` に `Entry::beside` と `Entry::later`（koyomi と yuen の、隣に置くファイルと、まだ無い再現）。`cli` に、手で書いた使い方の行（`Cmd.usage`。chobo）、何が誤りかの種類（`Misuse` と `Table::read`。chobo が自分の文で言うため）、`Reading` の二つ（`no_inline_values`、`single_dash_args`。chobo の読み方）、`lang_flag` の説明に `RITSU_LANG`（全部の言語。7.3 のとおり）。`diag` に `fixed_line`（koyomi と sakai のテスト）、`Extra::fix_key`（geas の JSON は `fix` のキーを持たない）、ファイルの無い診断は場所を書かず、JSON の `file` を null にすること（geas のコマンドラインの診断）。`ritsu-testkit` に `TempDir::exists`（chobo）。
+- yuen の書き出しの識別子（C.7）：SHA-256 を一度だけかける形に直した（yuen の DESIGN 12 章に書いたとおり。実装はダイジェストにもう一度かけていた）。頭の `yuen/1` は変えていない。公開する前で、yurai から yuen への改名で識別子はすでに全部変わっていたので、直すのはいまがいちばん安い。golden（三つの例の三つずつ）を取り直し、識別子の値のほかは一字も変わらないこと、古い識別子と新しい識別子が一対一に対応すること（150 個）を差分で確かめた。DESIGN 12 章と 13 章の例も取り直した。
+- 決めたこと（★は作者に確かめたい）：
+  - ★ chobo の `check --format json` の外側の `v` を 1 から 2 にした。診断のキーを替えたので、読む側が形の違いを見分けられるように。
+  - ★ geas の `src/json.rs` は残した。geas は試すプログラムが出す数（小数と指数）を記録にそのまま書き、`ritsu-base` の `json` は指数を読まないので、替えると記録が読めなくなる。
+  - geas のコマンドの表は替えていない（DESIGN 4.4 が土台の表から外している）。chobo と geas の台帳と `explain` は、形がほかの言語と違うので、それぞれのまま残した（chobo は土台の `Severity` だけを使う）。
+  - koyomi と chobo の doc の印（stamp）と chobo の Markdown の頭のコメントは、いまの文のまま残した。土台の `stamp` と `markdown_head` は、まだどの言語も使っていない。
+  - 行の無い診断の JSON に `0` を書いていたのは、geas のほかに koyomi の E001（UTF-8 でないファイル）と yuen もそうだった。三つとも null にした（DESIGN 4.12 を直した）。
+  - yuen の表示のパスは、最初に渡したパスが絶対パスなら絶対パスで書く（土台の `Shown` の形）。歩くときに飛ばす名前は、どの言語も `site-packages` と `__pycache__` を含む土台の組になった。
+  - テストの SKIP の行は `SKIP: <クレート>: <理由>` で、外のツールが要るテストは `need(Need::…)` で段を見る。言語の文を読むテストは `RITSU_LANG` を消してから走らせる。yuen の本物の e-Gov と eCFR への問い合わせは、`YUEN_NET=1` のほかに `RITSU_TEST_LEVEL=platforms` でも走る。
+
 ### C.9 `ritsu-proto`
 
 sakai の `src/proto.rs`（型の名前の解決まで持つ）を元に、rulec の `src/proto.rs` の Protovalidate の読み方と `buf.yaml`・`buf.lock` の読み方、dandori の `src/proto.rs` の `json_name` とオプションの読み方を足す（DESIGN 4.10）。テストは、三つのリポジトリの `.proto` の fixture を全部読み、三つの読み手がいま出しているものを、新しい読み手が全部出すこと。この段階で替えるのは sakai だけ。rulec と dandori は D.10 で替える。
 
+C.9 でしたこと：
+
+- `crates/ritsu-proto`（std と `ritsu-base` だけ）を作った。sakai の `src/proto.rs` を元に、どの要素にもオプションを書いたまま持たせ（`Opt`：名前、値の文、protobuf のテキスト形式として読んだ値 `Value`）、次を足した。dandori の読み方：オプションを拡張の名前で引く木にすること（`value::tree`。`(a).b.c = v` は `{"a": {"b": {"c": v}}}`、同じフィールドを二度書けば並び）、import の先を何段でも読むこと（`load_from`。dandori の決まりで探し、`dandori/v1/options.proto` のように中身を渡されたファイルはその文を読む）。rulec の読み方：Protovalidate の規則（`validate`：フィールドの整数の範囲、`required`、`ignore`、並びの数、文字列の値と長さ、CEL を文字列のまま、読まなかった規則の名前。メッセージの CEL と `oneof` と `disabled`）、`buf.yaml` の `deps` と `buf.lock` の固定（`buf`）。宣言した `oneof` そのもの（名前と中のフィールドとオプション）、`syntax` を書いた行、読んだ順（`Protos::order`）も持つ。読めないときは、何が悪いか（`Problem`）を返し、文は読んだプログラムの名前を渡して作る（`ReadError::message("sakai")`。知らない `syntax` の文だけがプログラムの名前を言う）。
+- テスト（`tests/readers.rs`）：三つのリポジトリの `.proto` の全部（rulec 4、dandori 20、sakai 39）と、三つの読み手が自分のテストで使っていた例（ritsu-proto の `tests/fixtures/` に写した 22 のファイルと、rulec のテストの `buf.yaml` と `buf.lock` の五つ）を、三つの読み手の言葉に直して比べる。rulec の読み手とは rulec の型のまま等しいこと（`package`、`imports`、`enums`、`messages`、`buf_deps`、`buf_lock`）、dandori の読み手とは `load` が出すもの（全部のメッセージと列挙、型の解決、JSON の名前、`presence`、規則の木、サービスとメソッドのオプション、読めなかった import、型が無いときの誤り）が一行ずつ等しいことを確かめる。sakai の読み手とは、替える前に一時的に sakai を dev-dependency にして、ファイルごとの読み取りと、まとめて読んだときの import の行き先と型の解決が一字も違わないことを確かめ、それを `tests/golden/sakai.txt` に残した（いまはその golden と比べる）。rulec と dandori の分も golden に残す（D.10 で古い読み手を消したあとに比べるため）。
+- 食い違いは二つだけだった。どちらも新しい読み手の方が多く読む。rulec の `package` は行の頭にしか見つけないので、`syntax = "proto3"; package a.v1;` のように一行に書いたファイルでは何も返さない（テストは、rulec が何かを返したときだけ比べる）。三つのファイル（sakai の E106 の変異、dandori のテストの `.proto` でないファイル、proto2 の `group`）は、新しい読み手が読めないと言い、rulec の読み手は読めたところまでを返す（テストは、この三つが読めないことを確かめる）。
+- sakai を替えた：`src/proto.rs` は ritsu-proto の型と関数をそのまま公開するだけになり、名指しの作り方（`Naming`）と、何も設定していないことを言う列挙の値の決め方（`value_prefix`、`is_unset`）だけが sakai に残った。読み手の単体のテスト四つは ritsu-proto に移した。sakai の出力は、全部のコマンド（205 回）で替える前と一字も違わない。
+- 決めたこと：言語が読んだものから作るもの（rulec の列挙の値の別名と `upper_snake`、sakai の `value_prefix`、dandori が proto2 と edition を断ること、dandori の型の解決が読んだ全部のファイルから引くこと）は、言語に残した。ritsu-proto の型の解決は sakai の形（import したファイルと `import public` の先だけを見る）で、dandori の例では結果が同じだった。
+
+
 ### C.10 `ritsu-emit`
 
-生成先の言語ごとの予約語（rulec の `src/backend.rs` の `words`、koyomi の `src/reserved.rs`、dandori の `src/temporal_py.rs` と `src/temporal_go.rs`、chobo の `src/client/`）、識別子の作り方、リテラル、生成物の頭（DESIGN 9.2）。koyomi と chobo を替え、生成物が一バイトも変わらないことを、各クレートの突き合わせのテスト（koyomi の五つの出力先、chobo の七つの組み合わせ）と golden で確かめる。rulec と dandori は、生成物が変わらないところだけを替える。
+生成先の言語ごとの予約語（rulec の `src/backend.rs` の `words`、koyomi の `src/reserved.rs`、dandori の `src/temporal_py.rs` と `src/temporal_go.rs`、chobo の `src/client/`）、識別子の作り方、リテラル、生成物の頭（DESIGN 9.2）。koyomi と chobo を替え、生成物が一バイトも変わらないことを、各クレートの突き合わせのテスト（koyomi の五つの出力先、chobo の七つの組み合わせ）と golden で確かめる。rulec と dandori の表は、ritsu-emit に写して突き合わせるテストだけを置き、二つのコードは C.11 で替える。
+
+C.10 でしたこと：
+
+- `crates/ritsu-emit`（std と `ritsu-base` だけ）を作った。`words`：標準が並べる語を、標準ごとに一つずつ（TypeScript は ECMAScript 2025 の予約語、strict mode の予約語、strict mode で名前にできない `arguments` と `eval` と大域の値の `undefined`・`NaN`・`Infinity`、Python 3.14.6 の `keyword.kwlist` と `softkwlist`、Go 1.25 のキーワードと事前宣言の識別子、Rust 1.94 のキーワード、PostgreSQL 18.0 の `kwlist.h` と PL/pgSQL の予約語）。生成器が名前を照らし合わせる語は、いくつかの表をまとめた `Words` で表し、各言語の `NAMES` が koyomi の表と同じ語になる。`copies`：rulec の 12 の出力先ごとの三つの表と、dandori の四つの表を写した。標準の表と同じものはそれを指し、違うところだけを自分の表に持つ。`ident`（`pascal`、`go_package`、`go_exported`、`is_ascii_ident`、`aside`、`unique`）、`lit`（JSON の文字列、Python の `'…'`、Go の `"…"`、SQL の `'…'` と `"…"`）、`header`（`Code generated … DO NOT EDIT.` の一行と、それを書くコメント）。
+- koyomi を替えた：`src/reserved.rs` は ritsu-emit の表を出力先の名前と組にするだけになり、`pascal` と `go_package`、五つの生成器の文字列のリテラル、生成物の頭の一行とコメントが ritsu-emit のものになった。生成物が使う名前（`GENERATED`、`MODULES`）は koyomi に残した。
+- chobo を替えた：Python と Go のキーワード、Go の外に見せる名前、ASCII の識別子の見分け、名前を `_2` で分けること、TypeScript・Python・Go・SQL のリテラル、Go のファイルの頭の一行が ritsu-emit のものになった。生成物が自分で使う名前（`self`、`_str` など）と、TypeScript と Python のファイルの頭の文（`Written by …`）は chobo に残した。
+- 確かめたこと：例の全部の `.cal` を五つの出力先に生成したファイル（80 個）と、三つの帳簿を七つの組み合わせに生成したファイル（72 個）が、替える前と一バイトも違わない。koyomi の五つの出力先の突き合わせ、chobo の生成したクライアントを本物の PostgreSQL と TigerBeetle で走らせるテスト、golden は SKIP なしで通る。koyomi に、ritsu-emit の JSON の文字列が serde_json の書くものと同じことを確かめるテストを一つ足した。rulec の表は rulec の `backend::ALL` と、dandori の表は dandori のソースの定数と（公開していないので文字で読む）、語の組として等しいことをテストで確かめる。
+
 
 ### C.11 rulec と dandori（合うところだけ）
 
@@ -449,3 +490,17 @@ DESIGN 11 章。`crates/rulec/proofs/` を根の `proofs/` に移し、rulec の
 - `--skip argo` は `cargo` を含む名前にも当たる。根から回すテストに、その語を含む名前を付けない。
 - rulec のテストを足すときは、rulec を走らせるところで `RULEC_LANG=ja`（か `--lang`）を渡し、プロセスの中で日本語の文を読むなら、はじめに `rulec::i18n::set(Lang::Ja)` を呼ぶ。`.cargo/config.toml` はもう無い。
 - C.12 で `ci/skips/<段>.txt` を書く。段で外したテストの SKIP は理由の種類が `level` で、一覧に書かなくても `cargo xtask test` は通す。
+
+### 7.4 C の二つ目の部分から、C の残りへ（C の二つ目の部分の終わりに書いた）
+
+- 済んだもの：C.4〜C.10。koyomi・chobo・geas・yuen・sakai は土台（`ritsu-base`、`ritsu-testkit`）を使い、sakai は `ritsu-proto` で、koyomi と chobo は `ritsu-emit` で書く。残りは C.11〜C.13。
+- C.11 の手がかり：
+  - rulec と dandori の予約語の表は `ritsu-emit` の `copies` に写してあり、`crates/ritsu-emit/tests/copies.rs` が二つのいまの表と等しいことを確かめる。替えるときは `copies` から読むようにし、写しのテストを消す。rulec は語を大文字と小文字を区別せずに照らすので、`words::rust::KEYWORDS`（`Self` を含む）をそのまま使っても結果は変わらない。rulec の `GO_GLOBAL` には `complex64` と `complex128` が無く、dandori の Python の組み込みの名前は rulec のものと一部が違う。そろえるなら生成物と診断が変わるので、それぞれの DESIGN.md に理由を書く。
+  - `ritsu-emit` の `ident` と `lit` は koyomi と chobo の形である。rulec の `go_package` は小文字にもする（koyomi の別名はもともと小文字）。dandori の Go の外に見せる名前（`exported`）は、区切りで分けて頭を大文字にする形で、chobo の `go_exported` とは違う。
+  - rulec の `src/sha256.rs` と `src/json.rs` は、まだ rulec の中にある（`grep -rn 0x428a2f98 crates/*/src` は ritsu-base と rulec に当たる）。
+- D.10 の手がかり：
+  - `ritsu-proto` のテストは、rulec と dandori を dev-dependency にして古い読み手と比べている。二つが `ritsu-proto` で読むようになれば依存が輪になるので、そのとき比べるところを消し、`tests/golden/rulec.txt` と `dandori.txt` と比べる形だけを残す。
+  - 新しい読み手が rulec の読み手と違うのは、一行に書いた `package` を読むことと、壊れたファイルを途中まで読まずに誤りを言うことの二つ（C.9）。後者を rulec がどう扱うか（いまは読めたところまでで契約を突き合わせる）は D.10 で決める。
+  - dandori が `ritsu-proto` で読むときは、proto2 と edition を断ること、読めなかった import があるときに型の名前を書いたまま残すこと、型の解決を見えるファイルだけにすることを、dandori の側で書く（`tests/readers.rs` の `as_dandori` がその形で、三つのリポジトリの全部の `.proto` で古い読み手と同じ結果になる）。
+- この機械でテストを回すとき（7.3 のものに足す）：sakai のテストは、先に `cargo build --workspace` をして、`SAKAI_RULEC`・`SAKAI_KOYOMI`・`SAKAI_CHOBO`・`SAKAI_DANDORI` にワークスペースの `target/debug` のバイナリを渡す。`ritsu-proto` と `ritsu-emit` のテストは rulec（と dandori）をビルドするので、初めは時間がかかる。
+- yuen の名前の漢字は、まだどの文書にも書いていない（作者に聞いているところ）。各クレートの `repository` と yuen の PROV の名前空間の URL は F で決める。

@@ -303,6 +303,8 @@ pub trait Rules {
 
 受け取る側のクレートのテストのうち、いまバイナリを走らせて規則などを読むもの（dandori の `tests/examples.rs` など）は、D の段階で、CLI を関数として呼ぶ形（`dandori::cli::run(引数, 口, 標準出力, 標準エラー)`）に替える。すべてをつないだバイナリを走らせるテストは、`crates/ritsu/tests/` に置く。
 
+土台の層の `ritsu-proto` と `ritsu-emit` のテストは、言語の側が移るまでのあいだだけ、rulec（`ritsu-proto` は dandori も）を `[dev-dependencies]` に持ち、言語のいまの読み手と表を、土台のものと生のまま比べる（C.9、C.10）。決まり 2 の例外で、移したあとに残しておく理由は無い。言語の側が土台のものを使うようになるとき（表は C.11、読み手は D.10）に、比べる部分とその dev-dependency を消し、golden と比べるテストだけを残す。そのままにすると依存が輪になり、比べる相手も土台のものになって、比べる意味が無くなる。`cargo xtask deps` は dev-dependency を決まり 1〜3 の外に置くので、この例外はこの節で守る。
+
 ### 3.4 決まりの確かめ方
 
 - C の段階：`xtask` に、`cargo metadata` を読んで 3.1 の表と突き合わせる確かめを置き、CI の `fast` のジョブで走らせる。破れば落ちる。C.3 で `cargo xtask deps` として作った（10.9）。
@@ -398,17 +400,29 @@ serde_json を土台に入れない理由は、rulec と geas が依存の無い
 
 ### 4.12 段階 C で作った形（`ritsu-base`）
 
-段階 C の最初の部分で `ritsu-base` を作った。七つの言語は、まだどれもこれを使っていない（移すのは C.4〜C.8 と C.11）。移したときに出力が変わらないよう、重なっていたコードのうちいちばん広い形を取り、言語によって形が違っていたところは、言語が選べるようにした。koyomi・yuen・sakai の `explain`（テキストと Markdown。再現の三つの形を一つずつ）と、koyomi の `--help`、yuen の `review --help` は、土台で組み直したものが一字も違わないことをテストで確かめている（`crates/ritsu-base/tests/ledger.rs` と `cli.rs`。比べる相手は、移す前のそれぞれの出力を `tests/golden/compat/` に写したもの）。
+段階 C の最初の部分で `ritsu-base` を作り、二つ目の部分（C.4〜C.8）で koyomi・chobo・geas・yuen・sakai をこれに移した（rulec と dandori は C.11）。移したときに出力が変わらないよう、重なっていたコードのうちいちばん広い形を取り、言語によって形が違っていたところは、言語が選べるようにした。koyomi・yuen・sakai の `explain`（テキストと Markdown。再現の三つの形を一つずつ）と、koyomi の `--help`、yuen の `review --help` は、土台で組み直したものが一字も違わないことをテストで確かめている（`crates/ritsu-base/tests/ledger.rs` と `cli.rs`。比べる相手は、移す前のそれぞれの出力を `tests/golden/compat/` に写したもの）。
 
 - `text`：`Text` と `tr!`（日本語が先）。`Lang::pick` は `--lang`、`<名前>_LANG`、`RITSU_LANG`、英語の順に読む（4.1）。文の出し方は二つある。yuen は書いたとおりに出し（`as_written`）、koyomi と sakai は英語の頭を大文字にし、日本語の中の英字のまわりに空白を入れる（`spaced`）。どちらを使うかは言語が決める。chobo の `{key}` の差し込み（`Text::sub`）、件数（`count`、`plural`）、幅（W と F を 2 と数える）も置いた。
-- `diag`：`Diag<X: Extra>`。共通の部分（コード、重さ、場所、文、注、直し方）は土台が書き、言語ごとの部分（`Extra`）は、直し方の前に出す行（yuen のつながりと差分）、直し方の後に出す行（koyomi の計算の段、sakai の関わるもの、chobo の操作）、JSON のキー、文の出し方を自分で決める。テキストのファイルの場所（`file`）と、JSON に書くルートからのパス（`rel`）を別々に持つ（6.2 の 8 と 9）。行の無い診断は、JSON の `line` と `col` を `null` にする（いまは geas だけが `0` と書き、その golden が一つある。C.6 で geas を移すときに、理由を geas の DESIGN.md に書いて替える）。直した行は、テキストでは前後の空白を落とし、JSON では渡されたまま書く（koyomi は字下げを含めて JSON に出している）。
-- `ledger`：再現は三つの形のどれかにした。ファイル一つと隣に置くもの（koyomi と yuen）、一つのディレクトリに置くファイルとそこで走らせるコマンド（sakai）、まだ無いもの。`check_every` は、全部の再現を一時ディレクトリに置いて走らせ、自分のコードが出たかを確かめる。
-- `cli`：表の読み方の違いは二つあり、`Reading` で選ぶ。koyomi は `-5` を引数として読み、sakai は `--` で始まる値を受け付けない。`--lang` の説明（`lang_flag`）は、いまの文のまま `RITSU_LANG` に触れていない。言語が `Lang::pick` に替わるときに、説明の文も直す。
+- `diag`：`Diag<X: Extra>`。共通の部分（コード、重さ、場所、文、注、直し方）は土台が書き、言語ごとの部分（`Extra`）は、直し方の前に出す行（yuen のつながりと差分）、直し方の後に出す行（koyomi の計算の段、sakai の関わるもの、chobo の操作）、JSON のキー、文の出し方を自分で決める。テキストのファイルの場所（`file`）と、JSON に書くルートからのパス（`rel`）を別々に持つ（6.2 の 8 と 9）。行の無い診断は、JSON の `line` と `col` を `null` にする（移す前は、geas のほかに koyomi の E001 と yuen も `0` と書いていた。三つとも替え、geas の golden を一つ取り直した）。言語の部分は、JSON に `fix` のキーを持たないこともできる（`Extra::fix_key`。geas）。ファイルの無い診断（geas のコマンドラインの誤り）は、文に場所を書かず、JSON の `file` を `null` にする。直した行は、テキストでは前後の空白を落とし、JSON では渡されたまま書く（koyomi は字下げを含めて JSON に出している）。
+- `ledger`：再現は三つの形のどれかにした（隣に置くファイルとまだ無い再現は、`Entry::beside` と `Entry::later` で台帳の項に足す）。ファイル一つと隣に置くもの（koyomi と yuen）、一つのディレクトリに置くファイルとそこで走らせるコマンド（sakai）、まだ無いもの。`check_every` は、全部の再現を一時ディレクトリに置いて走らせ、自分のコードが出たかを確かめる。
+- `cli`：表の読み方の違いは二つあり、`Reading` で選ぶ。koyomi は `-5` を引数として読み、sakai と chobo は `--` で始まる値を受け付けない。chobo のために二つ足した。`--format=json` を一語として読むこと（`no_inline_values`）と、`--` で始まるものだけをフラグにすること（`single_dash_args`）である。使い方の行は、引数とフラグから組み立てるか、言語が手で書く（`Cmd.usage`）。何が誤りかは種類（`Misuse`）でも返し、言語が自分の文で言える（chobo）。`--lang` の説明（`lang_flag`）は、C.4 から `RITSU_LANG` を書く（`<名前>_LANG`、`RITSU_LANG`、英語の順）。
 - `sha256`：`digest`、`hex`、`short`（先頭 16 桁）、`to_hex`。
 - `naming` と `paths`：6.2 の決まりを一つの実装にした。何が悪いかは `ErrorKind` で返し（どの文字で起きたかも）、文は土台のものを一つ持つ。yuen と sakai はコードと文が違うので、移すときは種類から自分のコードと文を選べる。「含む」は二つ置いた。yuen の、自分自身を含まない `contains` と、sakai の、自分自身も含む `is_or_contains` である。ルートは、渡したパスを字の上で絶対パスにしてから `.git` を探す（sakai の形。yuen はシンボリックリンクをたどってから探していた）。歩くときに飛ばす名前は sakai の組（`.` で始まる名前、`node_modules`、`site-packages`、`__pycache__`、`target`）にした。表示のパスは、走らせたディレクトリからいちばん短い相対で書く（`Shown`）。
 - `sources`：三つの中でいちばん広い形を取った。漢数字は百と千まで読み（koyomi と yuen の形。rulec は九十九までで、`第0条` も通していた）、本文は表の行と列も読む rulec と yuen の `xml_text`、条の読み下しは yuen の `article_lines` にした。固定の行の書き換えは三つ置いた。数字だけを替える `pinned`（koyomi と yuen の `source pin`）、診断が出す直した行の `fixed_pin_line`、コメントの前を空白二つにそろえる `pinned_spaced`（rulec の `source pin`）である。base64 は、標準の形だけを読む `base64_decode`（yuen）と、URL 用の文字やパディングの無い形も読む `base64_decode_lenient`（rulec と koyomi）。curl には `--compressed` を付けた（eCFR は付けないと 406 を返す。rulec が見つけたこと）。e-Gov と eCFR はベースの URL を持つ値（`Egov`、`Ecfr`）にし、ベースの URL をどの環境変数から読むかは言語が決める（`KOYOMI_EGOV` など）。本物の e-Gov と eCFR に問い合わせるテストは `RITSU_TEST_LEVEL=platforms` のときだけ走らせ、2026-10-03 に一度走らせて、民法 142 条と 29 CFR 1910.157 の本文がテストの写しと同じことを確かめた。
 - `docpage`：色の役割（`bg`、`fg`、`dim`、`line`、`soft`、`panel`、`code`、`accent`、`ok`、`warn`、`bad`）と、その明るい配色と暗い配色の値（chobo と dandori の値）を置き、ページは自分の色を足せる。ページの頭（`html_head`）、元のファイルとハッシュとツールを書く部分（`stamp`）、Markdown の頭のコメント、外の URL を読んでいないかの確かめも置いた。
 - `json`：キーの順を保つオブジェクト、正確な整数（`i128`）、書いた桁のままの小数。書き出しは serde_json の `to_string` と `to_string_pretty` と同じバイト列になる（エスケープも同じ）。読み手は rulec のもの（指数は読まない、同じキーが二度あれば止める、入れ子は 256 段まで）。
+
+### 4.13 段階 C で作った形（`ritsu-proto`）
+
+C.9 で `ritsu-proto` を作り、sakai をこれに替えた（rulec と dandori は D.10）。sakai の読み手を元にし、4.10 の全部を読む。
+
+- 一つのファイル（`read`）：要素ごとに行を持ち、どの要素のオプションも書いたまま持つ（名前、値の文、protobuf のテキスト形式として読んだ値）。宣言した `oneof`、`syntax` を書いた行も持つ。読めないときは、何が悪いか（`Problem`）と位置を返し、文は読んだプログラムの名前を渡して作る（知らない `syntax` を言う文だけが、プログラムの名前を言う）。
+- オプションの木（`value::tree`）：dandori の読み方で、拡張の名前で引く。同じフィールドを二度書けば並びになり、整数は整数、`true` と `false` は真偽になる。小数は書いた桁のまま持つ（dandori は f64 に直す。いまのどの `.proto` にも小数のオプションは無い）。
+- Protovalidate（`validate`）：rulec の読み方のまま。比べる値に効かない規則は名前だけを `unread` に残す。
+- `buf.yaml` と `buf.lock`（`buf`）：rulec の読み方のまま。
+- 多くのファイル：sakai の形（渡したファイルだけを読み、import の行き先と型の解決を持つ `load`）と、dandori の形（入口のファイルから import の先を何段でも読む `load_from`。中身を渡されたファイルは、その文を読む）の二つ。型の名前は、どちらも見えるファイル（自分、import した先、`import public` の先）だけから引く。
+- 読んだものから言語が作るもの（rulec の列挙の値の別名、sakai の何も設定していない値、dandori の proto2 を断ること）は、言語に残した。
+- 三つの読み手と同じものを読むことは、三つのリポジトリの全部の `.proto` と、三つの読み手が自分のテストに使っていた例で確かめる（`crates/ritsu-proto/tests/readers.rs`）。違うのは、rulec の読み手が行の頭にしか `package` を見つけないことと、壊れたファイルを途中まで読むことだけで、どちらも新しい読み手の方が多く読む（PLAN の C.9）。
 
 ## 5. 単位の型
 
@@ -504,7 +518,7 @@ chobo の額は 0 から 2⁶³ − 1 までで、rulec の値は負にもなり
 6. **同じ・含む**：同じは、ツールの語と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec の `enum`）は子を全部含む。
 7. **JSON の形**：`{"text": …, "tool": …, "path": …, "items": [[種類, 名前], …]}`（キーはこの順）。`text` は、パスをルートからの相対に直し、名前を語で書けるなら引用符なしで書いた形。空白を入れない詰めた書き方で、ASCII でない文字はそのまま出す。
 8. **文の中の書き方**：診断などの文に書くファイルの場所（`<パス>:<行>:<列>`、写しのパス）は、走らせたディレクトリから、渡されたとおりに書く。文の中の名指しは、JSON と同じくルートからの相対で書く（読み直すと同じ名指しになり、`.req` や `.ctx` にそのまま貼れる）。
-9. **JSON の中のファイルの場所**：診断の `file` なども、名指しと同じくルートからの相対にし、JSON の外側に `root`（走らせたディレクトリから見たルート）を添える。いまは yuen がルートからの相対、sakai が走らせたディレクトリからの相対で食い違っていて、土台で一つにするときにそろえる（4.2）。
+9. **JSON の中のファイルの場所**：診断の `file` なども、名指しと同じくルートからの相対にし、JSON の外側に `root`（走らせたディレクトリから見たルート）を添える。取り込んだときは、yuen がルートからの相対、sakai が走らせたディレクトリからの相対で食い違っていた。土台で一つにするときにそろえる（4.2）とし、C.8 で sakai をルートからの相対にした。
 
 この決まりを、処理系のどこでも使う一つの書き方にする。yuen と sakai の `.req` と `.ctx` の中、診断の文と JSON、LSP の「定義へ移る」、`ritsu check` の JSON の中のもの、のどれも同じ形で書き、読み直すと同じものを指す。ツールの語は九つのまま。`ritsu` はツールの語にしない（ritsu は言語ではない）。
 
@@ -738,6 +752,14 @@ generated/typescript/
 
 生成物の頭のバージョンは ritsu のバージョンになる。バージョンが上がれば生成し直してコミットすることになる（rulec の docs/compatibility.md が言うとおり）。
 
+### 9.5 段階 C で作った形（`ritsu-emit`）
+
+C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生成物は一バイトも変わっていない（PLAN の C.10）。
+
+- 予約語（`words`）は、標準が並べるものを標準ごとに一つの表にした（ECMAScript 2025 の予約語と strict mode の予約語、Python 3.14.6 の `keyword.kwlist` と `softkwlist`、Go 1.25 のキーワードと事前宣言の識別子、Rust 1.94 のキーワード、PostgreSQL 18.0 の `kwlist.h` と PL/pgSQL の予約語）。生成器が照らし合わせるのは、いくつかの表をまとめた `Words` である。名前を断る（koyomi の E009）か、`_` を後ろに付けて避ける（chobo、dandori）かは、生成器が決める。
+- rulec と dandori の表は `copies` に写した。標準の表と同じところはそれを指し、違うところ（rulec は `Self` を持たず、Go の `complex64` と `complex128` を持たない。dandori は生成物が使う名前を足す）は、それぞれの表に持つ。二つが自分の表を読むのをやめるのは C.11 である。
+- 名前（`ident`）、リテラル（`lit`）、生成物の頭の一行とコメント（`header`）は、koyomi と chobo の形である。9.2 の頭（`Code generated by <名前> <ritsu のバージョン>.` と元のファイルとハッシュ）にそろえるのは、生成物が変わるので E の段階（9.3、9.4）にする。
+
 ## 10. テストの組み立て
 
 ### 10.1 いまのテストの重さ
@@ -809,6 +831,7 @@ dandori の重いテストには、原因を突き止めていない揺れがあ
 - 本物の外部のサービスに問い合わせるテストが段で外れたときは、SKIP ではなく `not asked:` の行を出す（yuen の形）。SKIP の数は、この機械に無いものの数として読めるように保つ。
 - `cargo xtask test --changed <リビジョン>` は、変わったファイルのクレートと、それに依存する（どの種類の依存でも）クレートを回す。クレートの外のファイル（根の `Cargo.toml` など）が変われば全部を回す。文書だけの変更を見分けて文書のテストだけを回すことは、まだしない（そのクレートのテストを全部回す）。
 - `cargo xtask deps` は、`cargo metadata` の宣言した依存を 3.1 の表と突き合わせ、破った依存を名指して exit 1 で終わる。表に無いクレートと、`ritsu-testkit` を `[dependencies]` に置いたクレートも名指す。
+- C の二つ目の部分で、koyomi・chobo・geas・yuen・sakai のテストの共通部分をこれに替えた。足したのは `TempDir::exists`（chobo）だけである。各クレートの `tests/common` には、そのクレートだけのもの（例や変異の並べ方、外のツールの既定の場所）が残る。ツールの変数は、`RITSU_<ツール>` のあとに、いままでの `<クレート>_<ツール>` も読む。
 - 根から `cargo test --workspace` を回すときの `--skip` は、ワークスペースのすべてのテストの名前に効く。dandori の重い段を外す `--skip argo` は `cargo` を含む名前にも当たるので、そういう名前のテストを作らない（xtask のテストの名前を一度直した）。
 
 ## 11. Lean の層
