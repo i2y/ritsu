@@ -2211,6 +2211,19 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 
 **確かめたこと**：テストを三本足した。`tests/child.rs` の二本は、包みそのものを見る。途中で戻る関数の中で立てた `sleep 30` が、戻ったときにはもう無いこと（`kill -0` で見つからない。止めても待たなければ、終わったプロセスとして見つかる）と、自分のグループで立てた `sh` が、それが立てた `sleep` ごと止まることである。包みの `Drop` を空にすると、二本とも落ちる。`tests/fold.rs` の一本は、生成した Python を壊して `rulec test` を途中で落とし、rulec を自分のプロセスグループで立てて、終わったあとにそのグループに何も残っていないことを見る。テストの一時ディレクトリを片づける前に見て、残っていれば止めてから落ちる。`src/runtest.rs` の直しを戻すと、`python3 -B freight_mcp.py --http 127.0.0.1:0` が残って落ちる。直す前のコードでは、`tests/fold.rs` の「断る入力は生成コードにも断らせる」を一度回すと、親のいないそのサーバが一つ残った。直したあとは、rulec のテストを全部（730 件が通り、ignored 1、SKIP 0）回した前と後で、親のいない MCP のサーバは 0 個と 0 個、OS の一時ディレクトリの `rulec-*` は 0 個と 0 個だった（ritsu の PLAN の 7.5 の後ろ）。
 
+### 15.164 単位の表と有理数を、ritsu の単位の型に移す（2026-10-04）
+
+**きっかけ**：ritsu では、rulec、dandori、chobo が同じ単位を扱う。単位の表（通貨、量の単位とその係数、℉ のずれ）と有理数は、rulec の `src/types.rs` と `src/num.rs` にあった。dandori は単位を文字列のまま比べ（`money[JPY, incl_tax]` と `money[円, incl_tax]` を別の単位として断る）、率の刻みを JSON Schema の説明の文から読んでいた。表を一つにして、どの言語も同じ表を読むようにする（ritsu の DESIGN 5 章）。
+
+**決定**：
+
+- 有理数 `Rat` と表（`CURRENCIES`、`money_unit`、`unit_info`、`unit_offset`）を、ritsu の単位の型のクレートに移した（`ritsu_units::Rat`、`ritsu_units::table`）。rulec の `num::Rat` はそれを指し、`types.rs` の `unit_info` と `unit_offset` は表を引くだけになった。表の中身は一つも変えていない。
+- 丸めの五つの仕方（`RoundMode`）と `round_to` は rulec に残した。§7.3 が決める、この言語の意味だからである。`round_to` は、rulec が `Rat` に足すトレイト `RoundTo` のメソッドになった。
+- 型 `Ty` は、書いたとおりの綴りを持ち続ける（`money[JPY, incl_tax]` の `JPY` も）。証明書の `types`、診断、生成物は、書いたとおりに出すからである。単位の意味（次元、係数、ずれ）は、どれも表から引く。型を ritsu の単位の型にするのは `Ty::unit`（率には、受け渡す整数が数える刻みを添える）で、ritsu の口（§15.167）はこれで入力と出力の単位を渡す。表に無い綴りには単位が無い（None）。
+- 税の語を `incl_tax` と `excl_tax` のほかに書いても（`money[円, foo]`）、rulec はいまも黙って通す。この決定では変えなかった。
+
+**確かめたこと**：コーパスの 50 本、変異の 109 本、ほかの 16 本の規則について、`check`（英語、日本語、JSON）、`certificate`、`api`、`schema`、`graph` を、コーパスの 50 本についてはさらに `fmt --check`、`vectors`、`coverage`（テキストと JSON）、`doc`（Markdown と HTML、英語と日本語、顧客向け）、`gen`（全部の出力先）、`adapter` を、移す前と後のバイナリで出した。1,782 回とも一字も違わなかった。テストを二本足した（`tests/units.rs`）。単位を挙げる文（`types::units`）が表のすべての綴りを挙げること、コーパスのどの数の型も表で書けること（206 の数）である。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。

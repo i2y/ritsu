@@ -122,12 +122,20 @@ name = "ritsu-testkit"
 version = "0.1.0"
 
 [[package]]
+name = "ritsu-units"
+version = "0.1.0"
+dependencies = [
+ "ritsu-base",
+]
+
+[[package]]
 name = "rulec"
 version = "0.22.1"
 dependencies = [
  "ritsu-base",
  "ritsu-emit",
  "ritsu-testkit",
+ "ritsu-units",
 ]
 
 [[package]]

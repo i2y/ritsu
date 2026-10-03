@@ -2,7 +2,7 @@
 
 use crate::ast::*;
 use crate::diag::{Diag, Span};
-use crate::num::{Rat, RoundMode};
+use crate::num::{Rat, RoundMode, RoundTo};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,6 +45,27 @@ impl std::fmt::Display for Ty {
 }
 
 impl Ty {
+    /// The type as ritsu's unit (ritsu's DESIGN 5.2), with the step a rate's integer counts —
+    /// the one `Checked::wire_scale` gives, as 1/scale. The spelling stays as written (`JPY`
+    /// stays `JPY`). None for a type that is not a number, and for a spelling the table of units
+    /// does not have: a unit no literal can be written in, or a tax word other than `incl_tax`
+    /// and `excl_tax`, which the type keeps as written.
+    pub fn unit(&self, step: Option<Rat>) -> Option<ritsu_units::Unit> {
+        match self {
+            Ty::Money { cur, tax } => {
+                let tax = match tax {
+                    Some(t) => Some(ritsu_units::Tax::parse(t)?),
+                    None => None,
+                };
+                ritsu_units::Unit::money(cur, tax)
+            }
+            Ty::Qty { dim, unit } => ritsu_units::Unit::quantity(dim, unit),
+            Ty::Rate => Some(ritsu_units::Unit::rate(step)),
+            Ty::Number => Some(ritsu_units::Unit::number()),
+            _ => None,
+        }
+    }
+
     pub fn is_numeric(&self) -> bool {
         matches!(self, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number)
     }
@@ -71,102 +92,27 @@ fn dim_of(t: &Ty) -> Option<String> {
     }
 }
 
-/// The currencies a literal may be written in, as ISO 4217 codes. A closed set on purpose:
-/// with any identifier allowed, `100lbs` would pass as an amount in a currency called
-/// "lbs". Each also has a hundredth, spelled by appending `c` — `USD` and `USDc` — which is
-/// the relation `円` already had to `銭`, and `mass[kg]` to `mass[g]`.
-pub const CURRENCIES: &[&str] = &[
-    "USD", "EUR", "GBP", "CHF", "CAD", "AUD", "NZD", "CNY", "HKD", "SGD", "KRW", "INR",
-    "TWD", "THB", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "TRY", "BRL", "MXN", "ZAR",
-    "AED", "SAR", "ILS", "PHP", "IDR", "MYR", "VND",
-];
+/// The currencies a literal may be written in, as ISO 4217 codes: ritsu's table of units
+/// (`ritsu_units::table`, ritsu's DESIGN 5.1), which began as this file's. A closed set on
+/// purpose: with any identifier allowed, `100lbs` would pass as an amount in a currency called
+/// "lbs". Each also has a hundredth, spelled by appending `c` — `USD` and `USDc` — which is the
+/// relation `円` already had to `銭`, and `mass[kg]` to `mass[g]`.
+pub use ritsu_units::table::CURRENCIES;
 
-/// A money unit → (the currency it belongs to, its factor to that currency's main unit).
+/// (dimension, factor to that dimension's base unit), from ritsu's table of units. A currency is
+/// its own dimension, so the name is `money/<currency>`; everything else is the dimension it
+/// belongs to.
 ///
-/// **Two currencies never convert into one another.** There is no exchange rate in this
-/// tool and there must not be one, so the currency is the dimension rather than a brand
-/// inside a single "money" dimension. Mixing them is E103, exactly like adding grams to
-/// yen.
-fn money_unit(u: &str) -> Option<(String, Rat)> {
-    match u {
-        "円" | "JPY" => Some(("円".into(), Rat::int(1))),
-        "銭" => Some(("円".into(), Rat::new(1, 100))),
-        _ if CURRENCIES.contains(&u) => Some((u.to_string(), Rat::int(1))),
-        _ => {
-            let base = u.strip_suffix('c')?;
-            CURRENCIES.contains(&base).then(|| (base.to_string(), Rat::new(1, 100)))
-        }
-    }
-}
-
-/// (dimension, factor to that dimension's base unit). A currency is its own dimension, so
-/// the name is `money/<currency>`; everything else is the dimension it belongs to.
+/// **Two currencies never convert into one another.** There is no exchange rate in this tool
+/// and there must not be one, so the currency is the dimension rather than a brand inside a
+/// single "money" dimension. Mixing them is E103, exactly like adding grams to yen.
 ///
 /// The imperial factors are exact rationals (a pound is 453.59237 g on the nose), so they
 /// cost nothing in precision. What they do cost is scale: `1lb` in a `mass[g]` column is
 /// not a whole number of grams and is refused, which is right — a pound is not writable in
 /// a column that counts grams.
 fn unit_info(u: &str) -> Option<(String, Rat)> {
-    if let Some((cur, f)) = money_unit(u) {
-        return Some((format!("{}/{cur}", crate::kw::MONEY), f));
-    }
-    let (dim, f) = match u {
-        "mg" => (crate::kw::MASS, Rat::new(1, 1000)),
-        "g" => (crate::kw::MASS, Rat::int(1)),
-        "kg" => (crate::kw::MASS, Rat::int(1000)),
-        "t" => (crate::kw::MASS, Rat::int(1_000_000)),
-        "oz" => (crate::kw::MASS, Rat::new(28_349_523_125, 1_000_000_000)),
-        "lb" => (crate::kw::MASS, Rat::new(45_359_237, 100_000)),
-        "mm" => (crate::kw::LENGTH, Rat::new(1, 10)),
-        "cm" => (crate::kw::LENGTH, Rat::int(1)),
-        "m" => (crate::kw::LENGTH, Rat::int(100)),
-        "km" => (crate::kw::LENGTH, Rat::int(100_000)),
-        "in" => (crate::kw::LENGTH, Rat::new(254, 100)),
-        "ft" => (crate::kw::LENGTH, Rat::new(3048, 100)),
-        "yd" => (crate::kw::LENGTH, Rat::new(9144, 100)),
-        "mi" => (crate::kw::LENGTH, Rat::new(1_609_344, 10)),
-        // Area, in square metres (§15.83). It is a dimension of its own: `縦 × 横` is E103,
-        // because §2.1 has no algebra to turn two lengths into one of these. 坪 is exact —
-        // 一間 is 六尺 and a 尺 is 10/33 m, so a 坪 is (20/11)² = 400/121 m².
-        "mm2" => (crate::kw::AREA, Rat::new(1, 1_000_000)),
-        "cm2" => (crate::kw::AREA, Rat::new(1, 10_000)),
-        "m2" => (crate::kw::AREA, Rat::int(1)),
-        "a" => (crate::kw::AREA, Rat::int(100)),
-        "ha" => (crate::kw::AREA, Rat::int(10_000)),
-        "km2" => (crate::kw::AREA, Rat::int(1_000_000)),
-        "坪" => (crate::kw::AREA, Rat::new(400, 121)),
-        "in2" => (crate::kw::AREA, Rat::new(64_516, 100_000_000)),
-        "ft2" => (crate::kw::AREA, Rat::new(9_290_304, 100_000_000)),
-        "yd2" => (crate::kw::AREA, Rat::new(83_612_736, 100_000_000)),
-        "mi2" => (crate::kw::AREA, Rat::new(2_589_988_110_336, 1_000_000)),
-        "ac" => (crate::kw::AREA, Rat::new(40_468_564_224, 10_000_000)),
-        // Volume, in litres. `cm3` and `mL` are the same size and so are `m3` and `kL`; both
-        // spellings are kept because a water tariff writes m³ and a fire code writes L.
-        // **No gallon.** The US one is 3.785411784 L and the imperial one 4.54609 L, and a
-        // unit that means two different sizes is the one thing this table must not hold.
-        "mm3" => (crate::kw::VOLUME, Rat::new(1, 1_000_000)),
-        "cm3" | "mL" => (crate::kw::VOLUME, Rat::new(1, 1000)),
-        "L" => (crate::kw::VOLUME, Rat::int(1)),
-        "m3" | "kL" => (crate::kw::VOLUME, Rat::int(1000)),
-        // Time, in seconds. A `date` is a calendar day and has no arithmetic; this is the
-        // span a rule compares — EC261's three hours, a month's 45 hours of overtime, the
-        // thirty minutes a car park charges by. A minute is `min` because `m` is the metre.
-        "ms" => (crate::kw::DURATION, Rat::new(1, 1000)),
-        "s" => (crate::kw::DURATION, Rat::int(1)),
-        "min" => (crate::kw::DURATION, Rat::int(60)),
-        "h" => (crate::kw::DURATION, Rat::int(3600)),
-        "d" => (crate::kw::DURATION, Rat::int(86_400)),
-        "w" => (crate::kw::DURATION, Rat::int(604_800)),
-        // Ordered, not arithmetic (§15.84). A ℃ is a scale with a displaced zero, so its
-        // conversion carries an offset as well as a factor — see `unit_offset`. A decibel is
-        // a logarithm and has one spelling, so there is nothing to convert it to.
-        "℃" => (crate::kw::TEMPERATURE, Rat::int(1)),
-        "℉" => (crate::kw::TEMPERATURE, Rat::new(5, 9)),
-        "dB" => (crate::kw::SOUND, Rat::int(1)),
-        "%" => (crate::kw::RATE, Rat::new(1, 100)),
-        _ => return None,
-    };
-    Some((dim.to_string(), f))
+    ritsu_units::table::unit(u).map(|(dim, f)| (dim.key(), f))
 }
 
 /// What a unit adds after its factor, to reach its dimension's base unit: `base = v × f + o`.
@@ -178,10 +124,7 @@ fn unit_info(u: &str) -> Option<(String, Rat)> {
 /// has no arithmetic**: the offset would be wrong on a difference (a rise of 9℉ is a rise of
 /// 5℃, not of −27.2℃), and E048 is what guarantees no difference is ever formed.
 fn unit_offset(u: &str) -> Rat {
-    match u {
-        "℉" => Rat::new(-160, 9),
-        _ => Rat::zero(),
-    }
+    ritsu_units::table::offset(u)
 }
 
 /// Dimensions that are ordered but not arithmetic (§15.84). `date` is the same shape and was
@@ -190,7 +133,7 @@ fn unit_offset(u: &str) -> Rat {
 pub fn compares_only(t: &Ty) -> bool {
     match t {
         Ty::Date => true,
-        Ty::Qty { dim, .. } => dim == crate::kw::TEMPERATURE || dim == crate::kw::SOUND,
+        Ty::Qty { dim, .. } => ritsu_units::Dim::of_word(dim).is_some_and(|d| d.compares_only()),
         _ => false,
     }
 }

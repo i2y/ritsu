@@ -9,7 +9,7 @@
 
 use crate::ast::*;
 use crate::eval::{self, Val};
-use crate::num::Rat;
+use crate::num::{Rat, RoundTo};
 use crate::types::{Checked, Ty};
 use std::collections::{BTreeMap, BTreeSet};
 

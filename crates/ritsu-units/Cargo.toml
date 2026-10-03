@@ -1,0 +1,12 @@
+[package]
+name = "ritsu-units"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "The one type of units the languages of ritsu share: exact rationals, the closed table of currencies and units with their factors, and a unit with its dimension, its tax and its step"
+publish = false
+
+# ritsu-base and std (DESIGN 3.1).
+[dependencies]
+ritsu-base = { path = "../ritsu-base" }

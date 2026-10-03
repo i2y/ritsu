@@ -215,7 +215,7 @@ pub fn check_tail(shadow: &region::Shadow, diags: &[Diag], path: &str, suppresse
 /// looked up from a table never produces a fraction, so for it the second job of the
 /// rounding declaration (checking that literals sit on the grid) is given as the reason.
 fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) {
-    use num::{Rat, RoundMode};
+    use num::{Rat, RoundMode, RoundTo};
     let Some(raw) = eval::unrounded_output(f, t) else { return };
     // The example is about this rule's own output, so it is written in that output's unit.
     // It used to be yen whatever the rule counted, which told the writer of a rule in dollars

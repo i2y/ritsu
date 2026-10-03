@@ -628,3 +628,49 @@ fn 率の出力のe104は百分率で言う() {
     // 500円 / 1997円 is 25.03…%: the example says so in percent, and rounds it as that.
     assert!(notes.contains("gives 25%") || notes.contains("なら 25%"), "{notes}");
 }
+
+/// The sentence that lists the units when a literal carries one that is not a unit names every
+/// spelling of the table, which is ritsu's (`ritsu_units::table`) since the table moved there.
+/// The currencies are named as the rule (`ISO 4217 のコード`), not code by code. Both languages
+/// spell the units the same, so the language the test runs in does not matter.
+#[test]
+fn 単位を挙げる文は表のすべての綴りを挙げる() {
+    let said = rulec::types::units();
+    let words: Vec<&str> = said.split([' ', '、', '（', '）', ',', '(', ')']).collect();
+    for s in ritsu_units::table::spellings() {
+        if ritsu_units::table::CURRENCIES.iter().any(|c| *c == s || format!("{c}c") == s) || s == "JPY" {
+            continue;
+        }
+        assert!(words.contains(&s.as_str()), "`{s}` is not named in: {said}");
+    }
+    assert!(said.contains("ISO 4217"), "{said}");
+}
+
+/// Every number a rule of the corpus declares is a unit of ritsu's table (ritsu's DESIGN 5.2),
+/// and spelled back it is the type the certificate prints; a rate carries the step its integer
+/// counts on the wire.
+#[test]
+fn コーパスのどの数の型も単位の表で書ける() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus");
+    let mut seen = 0;
+    let mut rules: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "rule")).collect();
+    rules.sort();
+    for p in rules {
+        let src = std::fs::read_to_string(&p).unwrap();
+        let path = p.to_string_lossy().to_string();
+        let Ok((_, c)) = rulec::prepare(&src, &path) else { continue };
+        for (name, sym) in &c.syms {
+            if !sym.ty.is_numeric() {
+                continue;
+            }
+            let step = matches!(sym.ty, rulec::types::Ty::Rate).then(|| rulec::num::Rat::new(1, c.wire_scale(name)));
+            let u = sym.ty.unit(step).unwrap_or_else(|| panic!("{path}: {name} : {} is not in the table", sym.ty));
+            match sym.ty {
+                rulec::types::Ty::Rate => assert_eq!(u.step, step, "{path}: {name}"),
+                _ => assert_eq!(u.to_string(), sym.ty.to_string(), "{path}: {name}"),
+            }
+            seen += 1;
+        }
+    }
+    assert!(seen > 150, "{seen} numbers");
+}

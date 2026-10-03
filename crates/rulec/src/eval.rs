@@ -7,7 +7,7 @@
 
 use crate::ast::*;
 use crate::diag::Diag;
-use crate::num::{Rat, RoundMode};
+use crate::num::{Rat, RoundMode, RoundTo};
 use crate::types::{Checked, Ty, lit_value_in_pub};
 use std::collections::HashMap;
 

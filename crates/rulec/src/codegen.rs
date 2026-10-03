@@ -6,7 +6,7 @@
 //! eye, so no clever optimization is attempted.
 
 use crate::ast::*;
-use crate::num::{Rat, RoundMode};
+use crate::num::{Rat, RoundMode, RoundTo};
 use crate::types::{Checked, Ty};
 use std::collections::BTreeMap;
 
