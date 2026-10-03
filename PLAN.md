@@ -280,9 +280,32 @@ C.10 でしたこと：
 - dandori：診断の `(en, ja)` の組を `tr!` の順に（機械的に）、CLI を土台の表に移し `--version` とコマンドごとの `--help` を足す、テストの一時ディレクトリと Chrome と golden を `ritsu-testkit` に。rulec とのつなぎ（`src/rulec.rs`、`src/sources.rs`）は D まで触らない。
 - どちらも、コーパスとテストの全部、rulec の証明書（`rulec certificate` の出力）、golden が一字も変わらない。
 
+C.11 でしたこと（C の最後の部分）：
+
+- rulec：`src/sha256.rs` を消し、`rulec::sha256` は土台の `sha256` を指す。`src/json.rs` は土台の `json` の上の薄い層になった（456 → 204 行）。残したのは、読めないときの rulec の文（土台が返す種類から選ぶ。位置の数も前と同じ）、値の種類の名前、オブジェクトをキーの順に並べて読み書きすること、`--format json` を組み立てる `Obj` である。`src/sources.rs` は、引用から要素の名前を作ること、写しの場所と本文、固定の行の書き換え、curl と e-Gov と eCFR と GitHub への問い合わせ、base64 を土台のものにした（2,142 → 1,640 行）。写しと表の突き合わせと、`source fetch | pin | outdated` を rulec の文で言う部分は残した。予約語の表（`src/backend.rs` の `words`）は `ritsu-emit` の `copies` から読む（998 → 812 行）。テストの SKIP の行は、29 のファイルで `SKIP: rulec: <理由>` になった。外のツールが要るテストは `ready(Need::…, 見つかるか, 理由)` で先に段を見る。理由の文は前のまま（日本語）。診断、コマンドの表、`tr!` は残した。rulec の DESIGN §15.162 に書いた。
+- dandori：診断の文と注、そこに至る実行の一歩、文の切れ端の `(en, ja)` の組を、スクリプトで機械的に `tr!("日本語", "English")` に替えた（613 か所。片方が文字列でも `format!` でもない 9 か所は `Text::new(ja, en)`）。診断の型（`Diag`、`Step`）は、文を土台の `Text` で持つ。CLI は `src/cli.rs` の表（土台の `cli`）に移し、`--version` とコマンドごとの `--help` を足した。テストの一時ディレクトリ、Chrome、golden、SKIP、段は `ritsu-testkit` のものにした。予約語の表（Python、Go、TypeScript）は `copies` から読む。`src/rulec.rs` と `src/sources.rs` は触っていない。dandori の DESIGN 0.3 に書き、README、サイトのコマンドのページ（英語と日本語）、スキルの写し（`skills/sync.sh`）を直した。
+- 確かめたこと：rulec は、コーパスの全部の規則の `check`（英語・日本語・JSON）、`certificate`、`api`、`schema`、`graph`、`vectors`、`coverage`、`adapter`、`fmt --check`、`doc`（Markdown と HTML、英語と日本語）、`gen` の全部の出力先と、変異の全部の `check`、壊れた JSON Lines を渡した `fixtures lint` を、替える前と後のバイナリで出して比べ、1,227 回とも一字も違わなかった。dandori は、例とテストのフローの全部の `check`（英語・日本語・JSON）、例の `build`（七つのプラットフォーム）、`scenarios`、`doc`、`run` の 695 回を比べ、違ったのは CLI を表に移して決めて変えた 7 回（`--help` と引数の誤り）だけだった。`source outdated` は、本物の e-Gov と eCFR に問い合わせて、前と後のバイナリで比べた。テストと golden と証明書は一つも変わっていない（取り直した golden は無い）。
+- 漢数字と `第0条`（7.3）：土台の `sources` に替えて、rulec は条の番号を百と千の位まで読み、`第0条` を通さなくなった。これで変わったテストや出力は、コーパスにもテストにも証明書にも無かった。どの規則も踏まない変わったこととして、rulec の DESIGN §15.162 に並べた（ほかに、JSON として読まないもの三つ、文字列の中の `\b` と `\f`、`file://` の URL を一度だけ試すこと、e-Gov の base64 を標準の形で読むこと、問い合わせが失敗したときの文）。
+- 土台に足したものと消したもの（すでに替えた五つの言語のテストも回し直した）：`json` の読み手が止まった理由の種類（`Problem`。rulec が自分の文を選ぶため）。`ritsu-emit` の `copies::rulec` を出力先ごとの定数と `BACKENDS` にしたこと（rulec の `backend.rs` が並べるため）。`ritsu-testkit` の `ready` と `Need::Rulec`（rulec と dandori）。`docpage` の `stamp` と `markdown_head` は、rulec と dandori の doc が出力を変えずに使えなかったので消した（DESIGN 4.8）。
+- `ritsu-emit` のテストから、rulec と dandori のいまの表と比べる部分と rulec への dev-dependency を消し、`tests/golden/copies.txt`（表ごとの語の並び）と比べるテストだけを残した（DESIGN 3.3）。
+- 予約語の表の違いで、dandori の生成物が rulec の生成物の名前を参照するところに食い違いが出るかを調べた。表の違いからは出なかったが、dandori が自分で書く名前と規則の別名がぶつかるところが見つかった。直していない（7.5）。
+
 ### C.12 CI のワークフロー
 
-`.github/workflows/` に DESIGN 10.5 のジョブ（`fast`、`tools`、`proofs`、`kani`、`platforms`）を書く。rulec の `ci.yml` を元にし、koyomi・chobo・geas・yuen・sakai のツールを足す。`ci/skips/fast.txt`、`tools.txt`、`platforms.txt` に、それぞれの段で許す SKIP を書く（`tools` は空）。リモートが無いので走らせられない。ワークフローの YAML が読めることと、ジョブが呼ぶコマンド（`cargo xtask test --level …` など）を手元で走らせて通ることを確かめる。
+`.github/workflows/` に DESIGN 10.5 のジョブ（`fast`、`tools`、`proofs`、`kani`、`platforms`）を書く。rulec の `ci.yml` を元にし、koyomi・chobo・geas・yuen・sakai のツールを足す。`ci/skips/fast.txt`、`tools.txt`、`platforms.txt` に、それぞれの段で許す SKIP を書く（`tools` は空の予定だったが、CI で用意できない geas の pixie の四つを許した。下の「PLAN と違えたところ」）。リモートが無いので走らせられない。ワークフローの YAML が読めることと、ジョブが呼ぶコマンド（`cargo xtask test --level …` など）を手元で走らせて通ることを確かめる。
+
+C.12 でしたこと：
+
+- 根の `.github/workflows/` に、ジョブ一つにファイル一つで `fast.yml`、`tools.yml`（三つの組の matrix）、`proofs.yml`、`kani.yml`、`platforms.yml` を書き、`ci/skips/` に三つの一覧を書いた。ジョブごとに決めたことと、クレートの中に残っている `.github/` の扱いは DESIGN 10.5 にある。
+- 五つとも YAML として読め、actionlint 1.7.12 が何も言わず、46 の `run` の中身が `bash -n` を通る（protoc を足したあとにもう一度確かめた）。
+- `fast`：作業ツリーと同じ中身を、まっさらに取り出した木に置き（gitignore したものは無い）、PATH には cargo と git と curl とシステムのコマンドだけを残して（ほかのツールは、呼ぶと記録を残して失敗するものに替えて）、ジョブのとおりに走らせた。写しを作るのに 2 秒、`cargo build --workspace --locked` に 12 秒、`cargo xtask deps` は通り、`cargo xtask test --level fast` は 1,489 件が通った（ignored 1。SKIP は段で外したもの 303 で、許していないものは 0。ツールの呼び出しは 0）。テストのビルドを含めて 3 分 30 秒、ビルド済みなら 2 分 15 秒だった。
+- 最初に `fast` を回したとき、段を聞かずにツールを呼ぶテストが geas に五か所、sakai に一か所あり、許していない SKIP が 20 出た（geas が Python・Node・Go・rustc・pixie の greeter、sakai が rulec・koyomi・chobo・dandori のバイナリ）。段を聞くようにし、`ritsu-testkit` に `Need::Suite`（sakai）と `Need::Pixie`（geas）を足した（DESIGN 10.9）。curl は、koyomi と yuen と土台の `sources` のテストが、自分の中に立てたサーバーに問い合わせるのに使っていた。これは fast の段で使ってよいものとして DESIGN 10.2 に書き足した。
+- `tools`：この機械で、三つの組の `cargo xtask test --level tools` を順に走らせた。rulec は 727 件が通り（ignored 1。SKIP は段で外した Kani と Buf Schema Registry の二つ）、399 秒。dandori は 81 件が通り（SKIP は段で外した platforms の段の十）、92 秒。残りの組は 681 件が通り（SKIP 0。この機械には pixie の greeter がある）、252 秒。rulec の組の後ろの三つも通った：`rulec test --require-all` は 36 の側が全部合い、`skipped` は無かった。証明書の再検査は 50 本、`fmt --check` と `check` は通った。
+- `proofs`：`lake build`、50 本の証明書を `rulec-recheck` で、`cargo test --release -p rulec --test lean`（12 件）が通った。
+- `kani`：`cargo xtask test --level platforms -p rulec -- フラグを付ければ証明が走る` が通り（SKIP 0）、コーパスの 50 本の規則の 118 のハーネスを Kani 0.68.0 で証明した（二つで 3 分 29 秒）。
+- `platforms`：この機械の kind のクラスタ（`tools/argo/setup.sh` で作ってあったもの）、argo CLI v4.1.4、LocalStack 4.14.0 のイメージで、dandori の platforms の段の十を `cargo xtask test --level platforms -p dandori -- --exact <名前>` で一つずつ回し、全部が一度で通った（SKIP は Jev の一つ。回し直しは無し。kind の上にワークフローは残っていない）。外のサーバーに問い合わせる四つも通った（SKIP 0）。数と時間は C.13 にある。
+- ジョブのファイルを書いたあとで、dandori のテストが buf と protoc も使うことに気づき、`tools` の dandori の組に二つを足した（protoc は 35.1 のリリースの zip。手元の確かめは Homebrew の buf と protoc 35.1 で走らせたもの）。
+- PLAN と違えたところ：★ `ci/skips/tools.txt` は空ではなく、geas の pixie の四つを許す。pixie は ritsu の外でビルドするもので、CI でその greeter を作る手段がまだ無いからである。10.5 の表に無かった外のサーバーに問い合わせるテスト四つ（土台・koyomi・yuen の本物の e-Gov と eCFR、rulec の Buf Schema Registry）は `platforms` に置いた。ほかにどのジョブも回さないからである。
 
 ### C.13 C の完了の条件
 
@@ -292,6 +315,15 @@ C.10 でしたこと：
 4. golden が、変えると決めたもの（doc の CSS、chobo と sakai の診断の JSON のキー）のほかは一字も変わらない。変えたものは、各クレートの DESIGN.md に理由がある。
 5. yuen の二つのテスト（C.0）が通り、表示のパスの回り道のテストがある。
 6. 報告に、クレートごとの行数（前と後）、テストの数と時間、変えた golden の一覧を書く。
+
+C.13 で確かめたこと（2026-10-03、この機械で）：
+
+1. 根から `cargo xtask test -- --skip localstack --skip temporal --skip pydantic_graph --skip durable --skip argo --skip ollama`（`cargo test --workspace --no-fail-fast -- --nocapture` に、dandori の重い十二を外す `--skip` と、SKIP の表を足したもの）が、10 分 34 秒で 1,477 件通った（ignored 1、rulec の一つ）。SKIP は dandori の Jev の一つだけ（`TYPESAFE_API_KEY` が空。B.8 で許したもの）。外した十二は、7.2 のとおり一つずつ、`cargo xtask test --level platforms -p dandori -- --exact <名前>` で回し、全部が一度で通った（durable 17 秒、pydantic-graph 4 秒、記録した履歴の再生 17 秒、LocalStack 72 秒、Temporal の TypeScript 75 秒・Python 67 秒・Go 71 秒・言語をまたぐ 111 秒・Worker Versioning 20 秒・子のフロー 13 秒、Argo 115 秒、Ollama 28 秒。回し直しは無し）。合わせて 1,489 件で、クレートごとには rulec 727（ignored 1）、dandori 81、koyomi 100、chobo 63、geas 236、yuen 94、sakai 90、ritsu-base 58、ritsu-testkit 15、ritsu-proto 14、ritsu-emit 5、xtask 6。コンパイラの警告は rulec のテスト関数の名前の七つだけ（元のリポジトリと同じ）。`RITSU_TEST_LEVEL=fast` は、まっさらに取り出した木で 2 分 15 秒だった（テストのビルドを含めて 3 分 30 秒。C.12）。
+2. `cargo xtask deps` が通る（12 のクレート）。`cargo tree -p ritsu-base`、`-p rulec`、`-p geas` に外のクレートは無い（ritsu-base は何にも依存せず、rulec は ritsu-base と ritsu-emit、geas は ritsu-base。dev-dependency は三つとも ritsu-testkit だけ）。
+3. `grep -rn 0x428a2f98 crates/*/src` は `crates/ritsu-base/src/sha256.rs` にしか当たらない。名指しは `ritsu-base` の `naming`、sakai が使う `.proto` の読み手は `ritsu-proto`、テストが Chrome を探すコードは `ritsu-testkit` の `chrome::find`、自分を消す一時ディレクトリは `ritsu-testkit` の `TempDir` の、それぞれ一つになった。geas の `src/cdp.rs` が Chrome を探すのは geas のコマンドそのものの機能で、テストの重なりではない。rulec のテストは一時ディレクトリの場所を自分で作るが、自分を消す仕組みは持たない（C.11 の外。7.5）。DESIGN 1.2 の表を移したあとの行数で書き直した（土台の三つは 6,087 行で、見込みの 6 千行に近い）。DESIGN 4.9 の geas の `src/json.rs` の一文も直した。
+4. C の最後の部分で取り直した golden は無い。足したのは `crates/ritsu-emit/tests/golden/copies.txt` だけである。C の全体で取り直した golden は C.4〜C.8 の表のとおりで、どれも決めて変えたもの（doc の CSS と配色、chobo の診断の JSON のキー、geas の E081 の `line` と `col`、yuen の書き出しの識別子）である。理由は各クレートの DESIGN.md にある。
+5. yuen の二つのテスト（`tests/cli.rs` の `the_json_of_check` と、`tests/design.rs` の `every_command_in_design_prints_what_design_shows`）は通り、表示のパスの回り道のテスト（`tests/cli.rs` の `a_root_above_where_yuen_runs`）もある。
+6. 報告に書いた。
 
 ## 4. 段階 D：型付きの境目
 
@@ -504,3 +536,22 @@ DESIGN 11 章。`crates/rulec/proofs/` を根の `proofs/` に移し、rulec の
   - dandori が `ritsu-proto` で読むときは、proto2 と edition を断ること、読めなかった import があるときに型の名前を書いたまま残すこと、型の解決を見えるファイルだけにすることを、dandori の側で書く（`tests/readers.rs` の `as_dandori` がその形で、三つのリポジトリの全部の `.proto` で古い読み手と同じ結果になる）。
 - この機械でテストを回すとき（7.3 のものに足す）：sakai のテストは、先に `cargo build --workspace` をして、`SAKAI_RULEC`・`SAKAI_KOYOMI`・`SAKAI_CHOBO`・`SAKAI_DANDORI` にワークスペースの `target/debug` のバイナリを渡す。`ritsu-proto` と `ritsu-emit` のテストは rulec（と dandori）をビルドするので、初めは時間がかかる。
 - yuen の名前の漢字は、まだどの文書にも書いていない（作者に聞いているところ）。各クレートの `repository` と yuen の PROV の名前空間の URL は F で決める。
+
+### 7.5 C から D へ（C の最後の部分の終わりに書いた）
+
+- 済んだもの：段階 C の全部（C.0〜C.13）。七つの言語は `ritsu-base` と `ritsu-testkit` を使う（sakai は `ritsu-proto` も、koyomi・chobo・rulec・dandori は `ritsu-emit` も）。根に CI のワークフローがある（まだ一度も走っていない）。
+- D の手がかり：
+  - D.3：dandori のテストは、まだ rulec 0.22.0 のバイナリ（`DANDORI_RULEC`）で規則を読む。`Need::Rulec` で段を見るのはこのテストである。dandori の `src/rulec.rs` が返す文の組は、英語が先の `(en, ja)` のまま（C.11 で触らなかった）。つなぎを型の付いた呼び出しにするときに `Text` にする。CI の `tools` と `platforms` も、rulec 0.22.0 をリリースから取ってきている。D.3 が済めば、その段と `Need::Rulec` を消す。
+  - D.5：rulec は `RITSU_LANG` をまだ読まない（`RULEC_LANG` と `--lang` だけ。`src/i18n.rs` のまま）。ほかの六つは `<名前>_LANG`、`RITSU_LANG` の順に読む。
+  - D.8：sakai の `what_was_copied_passes_the_suite` は、rulec・koyomi・chobo・dandori のバイナリを `SAKAI_RULEC` などで受け取る（`Need::Suite`）。同じプロセスで呼ぶようになれば、その段と環境変数が要らなくなる。
+  - D.10：`ritsu-proto` のテストは、まだ rulec と dandori を dev-dependency にして古い読み手と比べている（7.4）。
+  - 予約語の表（E で決める）：rulec と dandori は `copies` の自分の表を読む。C.11 で、表の違い（rulec の Go の表に `complex64` と `complex128` が無い、Python の組み込みの名前の一覧が二つで違う）で、dandori の生成物が rulec の生成物の名前を参照するところに食い違いが出るかを調べた。表の違いからは出なかった。dandori は rulec の名前を `rulec api` から読んで書き、二つの表はそれぞれ自分の書く名前を守っているからである（Go で `complex64` を名前にしても、パッケージの中で事前宣言の型を隠すだけで、ビルドは通る）。そのかわり、dandori が自分で書く名前と、規則の別名（rulec の生成物の関数の名前）がぶつかるところが見つかった。どちらの表も守っていない。
+    - Temporal の Python（`rules.py`）：規則を `from .rulec.python.<別名> import <別名>` で読み込み、同じモジュールに `from temporalio import activity`、各規則のアクティビティ `rule_<フローでの名前>`、終わりに `rules = [...]` を書く。別名が `activity` なら、`@activity.defn` が規則の関数を指して、読み込んだときに AttributeError で止まる。別名が `rules` なら、終わりの行が名前をリストで上書きし、アクティビティが走ったときに規則の代わりにリストを呼ぶ。別名がそのアクティビティの名前と同じ（`use rule x` で別名が `rule_x`）なら、アクティビティが自分自身を呼ぶ（rulec 0.22.0 で生成して確かめた）。
+    - Temporal の TypeScript（`rules.ts`）：別名が `rules` なら、読み込んだ `rules` と `export const rules` が同じ名前になり、コンパイルが通らない。
+    - Step Functions の Lambda（`lambda/<モジュール>_handler.py`）：`def handler(event, context)` が規則の関数を呼ぶ。別名が `handler` なら、`def handler` が読み込んだ関数を上書きして自分自身を呼び、`event` か `context` なら、引数が関数を隠す（生成するコードを読んで調べた）。
+    - Temporal の Go：ぶつかるところは無かった（dandori の名前に `dd` が付き、規則はパッケージの名前で引く）。
+    一つの表にするときは、dandori が自分で書くこれらの名前も入れるか、dandori の側で別名を避ける（`_` を足す）必要がある。いまはどの例もこれらの別名を使っていない。
+  - rulec と dandori の `website/tools/make_wasm.sh` は、B からクレートの中の `target/` を見るので動かない（根の `target/` になった）。コミットしてあるブラウザで試すページのモジュール（`rulec.wasm`、`dandori.wasm`）は C で作り直していない。テストは、いまの CLI の出力とページの出力が同じことを確かめていて、どちらも通る。F.5 で `ritsu-wasm` にするときに直す。
+  - テストが OS の一時ディレクトリに残すもの（7.2）：dandori のテストは `ritsu-testkit` の一時ディレクトリにした（`dandori-protos-*` はもうできない）。残るのは、dandori の runner（`tools/temporal/run.mjs`、`tools/temporal-python/run.py`、`tools/argo/run.mjs`）が自分で作る `dandori-temporal-*`・`dandori-temporal-python-*`・`dandori-steps-*`・`dandori-argo-*` と、rulec のテストが作る `rulec-<用途>-<pid>`（rulec のテストの一時ディレクトリは C.11 で替えていない）、rulec の Swift のテストで swiftc が作る `TemporaryDirectory.*` である。C の最後の部分で回したテストの全部で 467 個（約 118 MB）が残り、それは消した。runner が終わるときに自分の作業場所を消すか、テストが runner に作業場所を渡せば止まる。それより前からある分（`dandori-steps-*` だけで二千あまり）は消していない。
+  - CI：五つのワークフローは手元でしか確かめていない。初めて走らせたときに、runner との違い（Ubuntu 24.04 の Chrome のサンドボックス、Node 24 と手元の 23.11、PostgreSQL 18 を PGDG から入れること、kind を `go install` で作ること）が出るかもしれない。geas の pixie の greeter を CI でどう用意するかは決まっていない（`ci/skips/tools.txt`）。サイトのビルド（rulec と dandori の `docs.yml`）は、F で配布を ritsu に移すまで ritsu の CI では走らない（DESIGN 10.5）。
+- この機械でテストを回すとき（7.3 と 7.4 のものに足す）：根から `cargo xtask test`（段を付けなければ見つかったもので走れるものを全部、付ければその段まで）が SKIP の表を最後に出す。dandori の重いテストは `cargo xtask test --level platforms -p dandori -- --exact <名前>` で一つずつ回す（`platforms.yml` と同じ）。rulec の PostgreSQL は、作業場所の使い捨てのクラスタ（ソケットは `/tmp` の下）を `PGHOST`・`PGPORT`・`PGDATABASE`・`PGUSER` で渡す。

@@ -88,38 +88,31 @@ src の行数は、git が追っている `.rs` のファイルだけを数え�
 | sakai | 9,190 | 31 | 97 | 2,443 | serde_json | 2024 | 0.1.0 | 1 | なし |
 | 合計 | 163,913 | 244 | 1,305 | 42,272 | | | | | |
 
-serde_json を使う五つの `Cargo.lock` は、どれも serde_json 1.0.151 と同じ 15 のパッケージを固定している。rulec と geas の `Cargo.lock` には自分しか無い。rulec には Lean の証明（`proofs/`、5,476 行、Lean v4.34.0、mathlib なし）がある。dandori だけが edition 2021 で、`--version` と `explain` を持たない。
+serde_json を使う五つの `Cargo.lock` は、どれも serde_json 1.0.151 と同じ 15 のパッケージを固定している。rulec と geas の `Cargo.lock` には自分しか無い。rulec には Lean の証明（`proofs/`、5,476 行、Lean v4.34.0、mathlib なし）がある。dandori だけが edition 2021 で、`--version` と `explain` を持たない（`--version` とコマンドごとの `--help` は C.11 で足した）。
 
 ### 1.2 重なっているコード
 
-同じ役目のコードを、言語ごとに書いている。行数は 2026-10-03 のもの。
+同じ役目のコードを、言語ごとに書いていた。段階 C でそれを土台の層へ移した。「移す前」は取り込んだとき（2026-10-03）の行数、「土台」と「言語に残るもの」は段階 C の終わり（同じ日）の行数である。土台の行数は、そのモジュールのファイル全体（単体テストを含む）を数えた。
 
-| 重なり | ファイルと行数 | 合計 | 土台に移したあと、言語に残るもの |
+| 重なり | 移す前 | 土台 | 言語に残るもの |
 |---|---|---|---|
-| SHA-256 | rulec `src/sha256.rs` 87、koyomi `src/sha256.rs` 75、yuen `src/sha256.rs` 75、sakai `src/sha256.rs` 84、chobo `src/ids.rs` の 12〜79 行（68） | 389 | なし。chobo の ID の決め方は chobo に残る |
-| 診断 | `src/diag.rs`：rulec 549、dandori 159、koyomi 335、chobo 184、geas 260、yuen 223、sakai 214 | 1,924 | そこに至る例の部分（rulec の枠と入力の例、dandori の実行、koyomi の計算の段、chobo の操作、yuen の差分とつながり、sakai の関わるもの） |
-| 二つの言語の文 | `src/i18n.rs`：rulec 76、koyomi 155、yuen 167、sakai 183。ほかに chobo の `src/lib.rs` の `tr!` と `src/diag.rs` の `Text`、geas の `src/diag.rs` の `Lang` と `Text`、dandori の `src/diag.rs` の `Lang` | 581（`i18n.rs` だけ） | なし |
-| 診断の台帳の枠 | `src/codes.rs` の `find` と書き出し：rulec 2064〜2198 行（135）、chobo 767〜854（88）、geas 1075〜1182（108）、koyomi 467〜539（73）、yuen 413〜500（88）、sakai 703〜776（74） | 566 | 台帳の中身（コードごとの文と再現。`codes.rs` の全体は rulec 2,198、koyomi 539、chobo 854、geas 1,182、yuen 500、sakai 776） |
-| CLI の表 | koyomi `src/cli.rs` 412、yuen `src/cli.rs` 412、sakai `src/cli.rs` 330、chobo `src/main.rs` の 20〜346 行。表を読む仕組みの部分は、それぞれ 190〜240 行ほど | 約 875（仕組みの部分） | コマンドとフラグの一覧。rulec の `src/main.rs`（2,214）と geas の `src/main.rs`（782）は別の形の表を持ち、dandori の `src/main.rs`（305）は表を持たない |
-| 出典の写しと固定、改正の検知 | rulec `src/sources.rs` の 20〜313 行と 1047〜2142 行（1,390）、koyomi `src/fetch.rs` 581 と `src/sources.rs` の 199〜524 行（326）、yuen `src/fetch.rs` 762・`src/copies.rs` 323・`src/base64.rs` 74・`src/sources.rs` 305 | 約 3,760 | rulec の写しと表の突き合わせ（`src/sources.rs` の 534〜1009 行）、koyomi の祝日の表、yuen の借りた出典 |
-| 名指し | yuen `src/names.rs` 422、sakai `src/naming.rs` 367。ほかにルートとパスの扱いが sakai `src/paths.rs` 268 と yuen `src/project.rs` の一部、geas `src/tree.rs` の一部 | 789（+268） | なし |
-| `.proto` の読み手 | rulec `src/proto.rs` 1,358、dandori `src/proto.rs` 1,153、sakai `src/proto.rs` 1,080。yuen は段階 C で四つめを書く予定だった | 3,591 | 読んだものの使い方（rulec の契約の突き合わせ、dandori の `connect` と `implements`、sakai の境界を越える参照） |
-| JSON（依存の無い二つ） | rulec `src/json.rs` 456、geas `src/json.rs` 513。geas は `tests/common/mod.rs` にも読み手（336〜497 行） | 969 | なし |
-| doc のページの CSS | rulec `src/doc.rs` 2369〜2402 行、dandori `src/doc.rs` 2039〜2166、koyomi `src/doc/html.rs` 298〜404、chobo `src/draw.rs` 528〜600。どれも明るい配色と暗い配色を持ち、色の変数の名前と値がそれぞれ違う | 約 340 | ページの中身 |
-| 生成物の予約語 | rulec `src/backend.rs` の `words`（18〜206 行、12 言語）、koyomi `src/reserved.rs` 76、dandori `src/temporal_py.rs` と `src/temporal_go.rs`、chobo `src/client/python.rs` と `src/client/go.rs` | 約 300 | なし |
-| wasm の境目 | rulec `src/wasm.rs` 194、dandori `src/wasm.rs` 142。どちらも「バッファの頭に長さを書く」同じ決まり | — | 呼び出しの中身 |
-| テストの共通部分 | `tests/common`：koyomi 247、chobo 1,040（`mod.rs` 116、`runners.rs` 730、`servers.rs` 194）、geas 546、yuen 185、sakai 337 | 2,355 | 言語ごとのランナー（chobo の `runners.rs` など） |
+| SHA-256 | rulec `src/sha256.rs` 87、koyomi `src/sha256.rs` 75、yuen `src/sha256.rs` 75、sakai `src/sha256.rs` 84、chobo `src/ids.rs` の 12〜79 行（68）。計 389 | `ritsu-base` の `sha256` 82 | なし（`grep -rn 0x428a2f98 crates/*/src` は土台にしか当たらない）。chobo の ID の決め方は chobo に残る |
+| 診断 | `src/diag.rs`：rulec 549、dandori 159、koyomi 335、chobo 184、geas 260、yuen 223、sakai 214。計 1,924 | `diag` 296 | そこに至る例の部分（`src/diag.rs`：koyomi 207、chobo 144、geas 210、yuen 138、sakai 138）。rulec（549）と dandori（147）は自分の診断の型を残した（4.2。dandori の文は土台の `Text`） |
+| 二つの言語の文 | `src/i18n.rs`：rulec 76、koyomi 155、yuen 167、sakai 183。計 581。ほかに chobo、geas、dandori の `Text` や `Lang` | `text` 248 | rulec の `src/i18n.rs` 76（プロセスで一つの言語を持つ `tr!`。D.5 まで） |
+| 診断の台帳の枠 | `src/codes.rs` の `find` と書き出し：rulec 135、chobo 88、geas 108、koyomi 73、yuen 88、sakai 74。計 566 | `ledger` 284 | rulec の 135（rulec の台帳は自分の形のまま）。台帳の中身（`codes.rs`：rulec 2,198、koyomi 458、chobo 850、geas 1,175、yuen 398、sakai 711） |
+| CLI の表 | 表を読む仕組み：koyomi、yuen、sakai、chobo にそれぞれ 190〜240 行ほど。計約 875 | `cli` 316 | コマンドとフラグの表（koyomi `src/cli.rs` 242、yuen `src/cli.rs` 232、sakai `src/cli.rs` 161、chobo `src/main.rs` 637 の一部、dandori `src/cli.rs` 145）。rulec の `src/main.rs`（2,214）と geas の `src/main.rs`（785）は自分の形の表を残した |
+| 出典の写しと固定、改正の検知 | rulec `src/sources.rs` の 1,390 行、koyomi `src/fetch.rs` 581 と `src/sources.rs` の 326 行、yuen `src/fetch.rs` 762・`src/copies.rs` 323・`src/base64.rs` 74・`src/sources.rs` 305。計約 3,760 | `sources` 938 | rulec `src/sources.rs` 1,640（写しと表の突き合わせ、`source fetch`・`pin`・`outdated` を rulec の文で言う部分、単体テスト。移す前は全体で 2,142）、koyomi `src/fetch.rs` 455 と `src/sources.rs` 370（祝日の表を含む全体）、yuen `src/fetch.rs` 567・`src/copies.rs` 54・`src/sources.rs` 296（借りた出典を含む） |
+| 名指し | yuen `src/names.rs` 422、sakai `src/naming.rs` 367。計 789。ほかにルートとパスの扱い（sakai `src/paths.rs` 268 など） | `naming` 496、`paths` 247 | 診断のコードと文（yuen `src/names.rs` 146、sakai `src/naming.rs` 142、sakai `src/paths.rs` 75） |
+| `.proto` の読み手 | rulec `src/proto.rs` 1,358、dandori `src/proto.rs` 1,153、sakai `src/proto.rs` 1,080。計 3,591 | `ritsu-proto` 1,846 | sakai `src/proto.rs` 76。rulec と dandori の読み手（1,358 と 1,153）は D.10 まで残る |
+| JSON（依存の無い二つ） | rulec `src/json.rs` 456、geas `src/json.rs` 513。計 969 | `json` 577 | rulec `src/json.rs` 204（誤りの文、値の種類の名前、キーを並べて書き戻すこと、`--format json` の書き手）。geas `src/json.rs` 513 は残した（4.9） |
+| doc のページの CSS | rulec、dandori、koyomi、chobo の四つ。計約 340 | `docpage` 139（ページの頭、配色、外の URL の確かめ） | koyomi と chobo は土台の配色を使う。rulec と dandori は、doc の出力を変えないために自分の CSS を残した（4.8） |
+| 生成物の予約語 | rulec `src/backend.rs` の `words`（189 行）、koyomi `src/reserved.rs` 76、dandori と chobo の表。計約 300 | `ritsu-emit` の `words` 139、`copies` 276（ほかに `ident`・`lit`・`header` 155） | koyomi `src/reserved.rs` 23（出力先と表の組）。rulec と dandori は、`copies` に写した自分の表を読む（9.5） |
+| wasm の境目 | rulec `src/wasm.rs` 194、dandori `src/wasm.rs` 142。どちらも「バッファの頭に長さを書く」同じ決まり | — | そのまま（F.5 で `ritsu-wasm` に一つにする。2.2） |
+| テストの共通部分 | `tests/common`：koyomi 247、chobo 1,040（`mod.rs` 116、`runners.rs` 730、`servers.rs` 194）、geas 546、yuen 185、sakai 337。計 2,355。ほかに dandori と rulec のテストの中 | `ritsu-testkit` 1,169 | 言語ごとのもの（`tests/common`：koyomi 25、chobo 823、geas 299、yuen 142、sakai 209） |
 
-テストの共通部分の中で重なっているのは次のもの。
+テストの共通部分の中で重なっていたのは、自分を消す一時ディレクトリ（koyomi、chobo、geas、yuen、sakai と、dandori の `tests/examples.rs`）、時間を区切って子プロセスを走らせること（macOS に `timeout` が無いため。koyomi、geas、sakai）、golden と取り直し（chobo、geas、yuen、sakai と、koyomi、dandori、rulec のテストの中）、使い捨ての PostgreSQL のクラスタ（koyomi、chobo）、Chrome を探すこと（dandori、koyomi、chobo、geas。順は五つとも同じ）、Mermaid で図を描けるかを確かめること（dandori と chobo）である。どれも `ritsu-testkit` の一つになった（10.8、10.9）。rulec のテストは PostgreSQL を `PG*` の環境変数で受け取る形のまま、SKIP と段だけを `ritsu-testkit` にした。
 
-- 自分を消す一時ディレクトリ（終わったテストのプロセスの分も消す）：koyomi 23 行、chobo 51、geas 49、yuen 36、sakai 51。dandori は `tests/examples.rs` の中に持つ。
-- 時間を区切って子プロセスを走らせる（macOS に `timeout` が無いため）：koyomi 87 行、geas 58、sakai 39。
-- golden と取り直し（`<名前>_BLESS=1`）：chobo 26 行、geas 57、yuen 14、sakai 11。koyomi、dandori、rulec はテストの中に書いている。
-- 使い捨ての PostgreSQL のクラスタ：koyomi 66 行、chobo 107。rulec は `PG*` の環境変数で受け取る（CI はサービスで立てる）。
-- Chrome を探す：dandori の `tests/doc.rs` と `tests/playground.rs`、koyomi と chobo の `tests/doc.rs`、geas の `tests/common/mod.rs`。順は五つとも同じ（環境変数、macOS の既定の場所、PATH）。
-- Mermaid で図を描けるかを確かめる：dandori と chobo の `tests/doc.rs`。`tools/mermaid` も二つある。
-
-表の合計を足すと、テストの共通部分を除いて約 1 万 4 千行になる（診断のうち言語に残る部分も含む）。土台に移せば、これが 6 千行ほど（`.proto` の読み手 1,600 行と出典 1,500 行ほどを含む）になる見込みである。この 6 千行は見込みで、測ったものではない。
+移す前の表の合計は、テストの共通部分を除いて約 1 万 4 千行だった（診断のうち言語に残る部分も含む）。土台に移せば 6 千行ほどになると見込んでいた。段階 C の終わりの土台の三つは 6,087 行（`ritsu-base` 3,654、`ritsu-proto` 1,846、`ritsu-emit` 587）で、見込みに近い。七つの言語の src は 163,913 行から 158,157 行になった（rulec 68,571、dandori 30,763、koyomi 15,764、chobo 11,070、geas 16,380、yuen 8,414、sakai 7,195）。土台が言語ごとの形のいちばん広いものを取り、単体テストも持つので、全体の行数はほとんど減っていない。減ったのは、同じ役目の実装の数である。rulec と dandori の `.proto` の読み手（D.10）、rulec の診断と台帳と `tr!`（D.5 と E）、二つの doc の CSS が、まだ言語の側に残っている。
 
 キーワードの表（各言語の `kw.rs` や `syntax.rs`）、字句と構文、検査、参照インタプリタは重なりに数えない。言語ごとの語彙と意味そのものだからである。
 
@@ -131,6 +124,8 @@ serde_json を使う五つの `Cargo.lock` は、どれも serde_json 1.0.151 �
 - **ルートの決め方**：geas（`src/tree.rs`）、yuen（`src/project.rs`）、sakai（`src/paths.rs`）が、それぞれ「いちばん近い `.git` のあるディレクトリ」を探す。
 - **言語と取り直しの環境変数**：`RULEC_LANG`、`DANDORI_LANG`、`KOYOMI_LANG`、`CHOBO_LANG`、`GEAS_LANG`、`YUEN_LANG`、`SAKAI_LANG`。取り直しは `<名前>_BLESS`。
 - **名前の正規化**：rulec の DESIGN §1.1 は「識別子は NFC に正規化する」と書くが、src には無い。chobo は結合文字を含む名前を E001 で断る。
+
+段階 C で、このうち二つの言語の文の書き方（七つとも `tr!("日本語", "English")`）、SKIP の書き方（七つとも `SKIP: <クレート>: <理由>`）、ルートの決め方（土台の `paths`）、`RITSU_LANG`（rulec のほかの六つ）、`RITSU_BLESS`（`ritsu-testkit` の golden を使う六つ。rulec のテストは自分の取り直しのまま）、chobo と sakai の診断の JSON のキーを、土台の形にそろえた（4.12、10.9）。rulec の `tr!` がプロセスの言語で `String` を返すこと、rulec と dandori の診断の JSON の形、名前の正規化は、まだそれぞれのままである。
 
 ### 1.4 境目で切れているもの
 
@@ -208,9 +203,10 @@ ritsu/
   proofs/                Lean の層（F で rulec の proofs/ をここへ移し、モデルを足す。11 章）
   skills/ritsu/          エージェント向けのスキル（F）
   .github/workflows/     CI（10.5）
+  ci/skips/              CI のジョブが許す SKIP の一覧（10.3、10.5）
 ```
 
-言語のクレートの中は、元のリポジトリの木をそのまま残す（README、DESIGN.md、PLAN.md、`tests/`、`examples/`、`tools/`、`docs/`、`skills/`、rulec と dandori の `website/`、rulec の `proofs/` と `experiments/`）。元の `.github/workflows/` も `crates/rulec/.github/` と `crates/dandori/.github/` に来るが、GitHub はそこにあるワークフローを走らせない。ritsu の CI は根の `.github/workflows/` に新しく書く（C）。
+言語のクレートの中は、元のリポジトリの木をそのまま残す（README、DESIGN.md、PLAN.md、`tests/`、`examples/`、`tools/`、`docs/`、`skills/`、rulec と dandori の `website/`、rulec の `proofs/` と `experiments/`）。元の `.github/workflows/` も `crates/rulec/.github/` と `crates/dandori/.github/` に来るが、GitHub はそこにあるワークフローを走らせない。ritsu の CI は根の `.github/workflows/` に新しく書く（C.12 で書いた。クレートの中のものの扱いは 10.5）。
 
 ### 2.2 クレートと名前
 
@@ -305,6 +301,8 @@ pub trait Rules {
 
 土台の層の `ritsu-proto` と `ritsu-emit` のテストは、言語の側が移るまでのあいだだけ、rulec（`ritsu-proto` は dandori も）を `[dev-dependencies]` に持ち、言語のいまの読み手と表を、土台のものと生のまま比べる（C.9、C.10）。決まり 2 の例外で、移したあとに残しておく理由は無い。言語の側が土台のものを使うようになるとき（表は C.11、読み手は D.10）に、比べる部分とその dev-dependency を消し、golden と比べるテストだけを残す。そのままにすると依存が輪になり、比べる相手も土台のものになって、比べる意味が無くなる。`cargo xtask deps` は dev-dependency を決まり 1〜3 の外に置くので、この例外はこの節で守る。
 
+C.11 で rulec と dandori が `copies` の表を読むようになったので、`ritsu-emit` の比べる部分と rulec への dev-dependency を消した。`crates/ritsu-emit/tests/copies.rs` は、表を語の並びにしたものを `tests/golden/copies.txt` と比べるだけになった。`ritsu-proto` の比べる部分と、rulec と dandori への dev-dependency は D.10 まで残る。
+
 ### 3.4 決まりの確かめ方
 
 - C の段階：`xtask` に、`cargo metadata` を読んで 3.1 の表と突き合わせる確かめを置き、CI の `fast` のジョブで走らせる。破れば落ちる。C.3 で `cargo xtask deps` として作った（10.9）。
@@ -382,9 +380,11 @@ rulec、koyomi、yuen の三つは、法令の写しを同じ場所と同じ名�
 
 ページの中身（rulec の表とカード、dandori の図とシナリオ、koyomi の月の表、chobo の残高）は言語に残す。色の値をそろえると見た目が少し変わるので、C の段階で golden とスクリーンショットを取り直し、変わったページを報告に並べる。
 
+段階 C で土台の枠に移したのは、koyomi と chobo のページである（C.4、C.5）。rulec と dandori の `doc` は、C.11 で出力を一字も変えない決まりなので、自分の CSS と頭のまま残した。元のファイルとハッシュとツールを頭に書くこと（HTML の頭と Markdown のコメント）は、四つとも言語ごとのいまの書き方のままである。一つの書き方にすると全部のページが変わるので、生成物の頭（9.5）と同じく E でそろえる。土台に置いていたその部品（`stamp` と `markdown_head`）は、使う言語が無いので C.11 で消した。
+
 ### 4.9 JSON
 
-土台は外のクレートに依存しない（P9）ので、診断や名指しの JSON は、std だけで書いた小さな JSON の値の型で書く。キーの順を保ち、整数を正確に持つ。元は rulec の `src/json.rs`（456 行。geas の `src/json.rs` も同じ役目）。serde_json を使う五つは、土台の JSON を文字列にして読み直すか、そのまま埋め込む。
+土台は外のクレートに依存しない（P9）ので、診断や名指しの JSON は、std だけで書いた小さな JSON の値の型で書く。キーの順を保ち、整数を正確に持つ。元は rulec の `src/json.rs`（456 行）で、C.11 で rulec もこれに替えた。geas も依存の無い JSON の読み手（`src/json.rs`、513 行）を持つが、それは残した。geas が読むのは試す相手のプログラムの出力で、数を浮動小数点として比べ、指数（`2e3`）も読み、読んだ値を自分の形で書き戻す。土台の読み手は ritsu のツールが出す JSON のためのもので、指数と二度出るキーを断り、整数を正確に持つ（geas の DESIGN 13.1）。serde_json を使う五つは、土台の JSON を文字列にして読み直すか、そのまま埋め込む。
 
 serde_json を土台に入れない理由は、rulec と geas が依存の無いことを保っているからである。rulec の README は、依存が無いので `cargo install --path .` が何も取ってこないと書き、rulec の DESIGN §12.1 は引数のパーサを入れない理由に、依存を足さない方針を挙げている。ritsu 全体のバイナリには、いまと同じく serde_json が入る。
 
@@ -400,7 +400,7 @@ serde_json を土台に入れない理由は、rulec と geas が依存の無い
 
 ### 4.12 段階 C で作った形（`ritsu-base`）
 
-段階 C の最初の部分で `ritsu-base` を作り、二つ目の部分（C.4〜C.8）で koyomi・chobo・geas・yuen・sakai をこれに移した（rulec と dandori は C.11）。移したときに出力が変わらないよう、重なっていたコードのうちいちばん広い形を取り、言語によって形が違っていたところは、言語が選べるようにした。koyomi・yuen・sakai の `explain`（テキストと Markdown。再現の三つの形を一つずつ）と、koyomi の `--help`、yuen の `review --help` は、土台で組み直したものが一字も違わないことをテストで確かめている（`crates/ritsu-base/tests/ledger.rs` と `cli.rs`。比べる相手は、移す前のそれぞれの出力を `tests/golden/compat/` に写したもの）。
+段階 C の最初の部分で `ritsu-base` を作り、二つ目の部分（C.4〜C.8）で koyomi・chobo・geas・yuen・sakai を、最後の部分（C.11）で rulec と dandori の合うところをこれに移した。移したときに出力が変わらないよう、重なっていたコードのうちいちばん広い形を取り、言語によって形が違っていたところは、言語が選べるようにした。koyomi・yuen・sakai の `explain`（テキストと Markdown。再現の三つの形を一つずつ）と、koyomi の `--help`、yuen の `review --help` は、土台で組み直したものが一字も違わないことをテストで確かめている（`crates/ritsu-base/tests/ledger.rs` と `cli.rs`。比べる相手は、移す前のそれぞれの出力を `tests/golden/compat/` に写したもの）。
 
 - `text`：`Text` と `tr!`（日本語が先）。`Lang::pick` は `--lang`、`<名前>_LANG`、`RITSU_LANG`、英語の順に読む（4.1）。文の出し方は二つある。yuen は書いたとおりに出し（`as_written`）、koyomi と sakai は英語の頭を大文字にし、日本語の中の英字のまわりに空白を入れる（`spaced`）。どちらを使うかは言語が決める。chobo の `{key}` の差し込み（`Text::sub`）、件数（`count`、`plural`）、幅（W と F を 2 と数える）も置いた。
 - `diag`：`Diag<X: Extra>`。共通の部分（コード、重さ、場所、文、注、直し方）は土台が書き、言語ごとの部分（`Extra`）は、直し方の前に出す行（yuen のつながりと差分）、直し方の後に出す行（koyomi の計算の段、sakai の関わるもの、chobo の操作）、JSON のキー、文の出し方を自分で決める。テキストのファイルの場所（`file`）と、JSON に書くルートからのパス（`rel`）を別々に持つ（6.2 の 8 と 9）。行の無い診断は、JSON の `line` と `col` を `null` にする（移す前は、geas のほかに koyomi の E001 と yuen も `0` と書いていた。三つとも替え、geas の golden を一つ取り直した）。言語の部分は、JSON に `fix` のキーを持たないこともできる（`Extra::fix_key`。geas）。ファイルの無い診断（geas のコマンドラインの誤り）は、文に場所を書かず、JSON の `file` を `null` にする。直した行は、テキストでは前後の空白を落とし、JSON では渡されたまま書く（koyomi は字下げを含めて JSON に出している）。
@@ -409,8 +409,8 @@ serde_json を土台に入れない理由は、rulec と geas が依存の無い
 - `sha256`：`digest`、`hex`、`short`（先頭 16 桁）、`to_hex`。
 - `naming` と `paths`：6.2 の決まりを一つの実装にした。何が悪いかは `ErrorKind` で返し（どの文字で起きたかも）、文は土台のものを一つ持つ。yuen と sakai はコードと文が違うので、移すときは種類から自分のコードと文を選べる。「含む」は二つ置いた。yuen の、自分自身を含まない `contains` と、sakai の、自分自身も含む `is_or_contains` である。ルートは、渡したパスを字の上で絶対パスにしてから `.git` を探す（sakai の形。yuen はシンボリックリンクをたどってから探していた）。歩くときに飛ばす名前は sakai の組（`.` で始まる名前、`node_modules`、`site-packages`、`__pycache__`、`target`）にした。表示のパスは、走らせたディレクトリからいちばん短い相対で書く（`Shown`）。
 - `sources`：三つの中でいちばん広い形を取った。漢数字は百と千まで読み（koyomi と yuen の形。rulec は九十九までで、`第0条` も通していた）、本文は表の行と列も読む rulec と yuen の `xml_text`、条の読み下しは yuen の `article_lines` にした。固定の行の書き換えは三つ置いた。数字だけを替える `pinned`（koyomi と yuen の `source pin`）、診断が出す直した行の `fixed_pin_line`、コメントの前を空白二つにそろえる `pinned_spaced`（rulec の `source pin`）である。base64 は、標準の形だけを読む `base64_decode`（yuen）と、URL 用の文字やパディングの無い形も読む `base64_decode_lenient`（rulec と koyomi）。curl には `--compressed` を付けた（eCFR は付けないと 406 を返す。rulec が見つけたこと）。e-Gov と eCFR はベースの URL を持つ値（`Egov`、`Ecfr`）にし、ベースの URL をどの環境変数から読むかは言語が決める（`KOYOMI_EGOV` など）。本物の e-Gov と eCFR に問い合わせるテストは `RITSU_TEST_LEVEL=platforms` のときだけ走らせ、2026-10-03 に一度走らせて、民法 142 条と 29 CFR 1910.157 の本文がテストの写しと同じことを確かめた。
-- `docpage`：色の役割（`bg`、`fg`、`dim`、`line`、`soft`、`panel`、`code`、`accent`、`ok`、`warn`、`bad`）と、その明るい配色と暗い配色の値（chobo と dandori の値）を置き、ページは自分の色を足せる。ページの頭（`html_head`）、元のファイルとハッシュとツールを書く部分（`stamp`）、Markdown の頭のコメント、外の URL を読んでいないかの確かめも置いた。
-- `json`：キーの順を保つオブジェクト、正確な整数（`i128`）、書いた桁のままの小数。書き出しは serde_json の `to_string` と `to_string_pretty` と同じバイト列になる（エスケープも同じ）。読み手は rulec のもの（指数は読まない、同じキーが二度あれば止める、入れ子は 256 段まで）。
+- `docpage`：色の役割（`bg`、`fg`、`dim`、`line`、`soft`、`panel`、`code`、`accent`、`ok`、`warn`、`bad`）と、その明るい配色と暗い配色の値（chobo と dandori の値）を置き、ページは自分の色を足せる。ページの頭（`html_head`）と、外の URL を読んでいないかの確かめも置いた。元のファイルとハッシュとツールを書く部分（`stamp`）と Markdown の頭のコメント（`markdown_head`）も置いていたが、rulec と dandori の `doc` は出力を変えずにはこれを使えず（どちらも頭をそれぞれの形で書いていて、golden が変わる）、ほかに使う言語も無いので、C.11 で消した（4.8）。
+- `json`：キーの順を保つオブジェクト、正確な整数（`i128`）、書いた桁のままの小数。書き出しは serde_json の `to_string` と `to_string_pretty` と同じバイト列になる（エスケープも同じ）。読み手は rulec のもの（指数は読まない、同じキーが二度あれば止める、入れ子は 256 段まで）。止まったときは、位置と何が悪いか（`Problem`）と土台の文を返す。rulec は C.11 で、種類から自分の文を選ぶ形にして、誤りの文を前のまま保った。
 
 ### 4.13 段階 C で作った形（`ritsu-proto`）
 
@@ -757,7 +757,7 @@ generated/typescript/
 C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生成物は一バイトも変わっていない（PLAN の C.10）。
 
 - 予約語（`words`）は、標準が並べるものを標準ごとに一つの表にした（ECMAScript 2025 の予約語と strict mode の予約語、Python 3.14.6 の `keyword.kwlist` と `softkwlist`、Go 1.25 のキーワードと事前宣言の識別子、Rust 1.94 のキーワード、PostgreSQL 18.0 の `kwlist.h` と PL/pgSQL の予約語）。生成器が照らし合わせるのは、いくつかの表をまとめた `Words` である。名前を断る（koyomi の E009）か、`_` を後ろに付けて避ける（chobo、dandori）かは、生成器が決める。
-- rulec と dandori の表は `copies` に写した。標準の表と同じところはそれを指し、違うところ（rulec は `Self` を持たず、Go の `complex64` と `complex128` を持たない。dandori は生成物が使う名前を足す）は、それぞれの表に持つ。二つが自分の表を読むのをやめるのは C.11 である。
+- rulec と dandori の表は `copies` に写した。標準の表と同じところはそれを指し、違うところ（rulec は `Self` を持たず、Go の `complex64` と `complex128` を持たない。dandori は生成物が使う名前を足す）は、それぞれの表に持つ。C.11 で、二つは自分の表をやめて `copies` を読むようにした。rulec は出力先ごとの定数（`copies::rulec::PYTHON` など）と、`backend.rs` の並びの `BACKENDS` を、dandori は Python・Go・TypeScript の表を読む。中身は写したときのままで、生成物も診断も変わらない。標準の表にそろえるかは、一つの生成パッケージ（9.3）を作る E で決める。表の違いが、dandori の生成物が rulec の生成物の名前を参照するところで食い違いを起こすかを C.11 で調べた結果は、PLAN の 7.5 にある。
 - 名前（`ident`）、リテラル（`lit`）、生成物の頭の一行とコメント（`header`）は、koyomi と chobo の形である。9.2 の頭（`Code generated by <名前> <ritsu のバージョン>.` と元のファイルとハッシュ）にそろえるのは、生成物が変わるので E の段階（9.3、9.4）にする。
 
 ## 10. テストの組み立て
@@ -782,7 +782,7 @@ C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生�
 
 | 段 | 走らせるもの | 目安 |
 |---|---|---|
-| `fast` | cargo のほかに何も要らないテスト。字句、構文、検査、診断の golden、変異、`explain` の再現、`naming.tsv`、api の JSON、外のツールを走らせない文書のテスト。git は使ってよい | ワークスペース全体で数分 |
+| `fast` | cargo のほかに何も要らないテスト。字句、構文、検査、診断の golden、変異、`explain` の再現、`naming.tsv`、api の JSON、外のツールを走らせない文書のテスト。git は使ってよい。curl も、テストが自分の中に立てたサーバー（e-Gov と eCFR の代わり）に問い合わせるためなら使ってよい（土台の `sources` が curl で問い合わせるため） | ワークスペース全体で数分（2026-10-03、この機械で 2 分 15 秒） |
 | `tools` | 手元に入れるツールが要るテスト。生成したコードの型の検査と突き合わせ（Node、Python、Go、rustc、Ruby、PHP、Swift、Java、protoc と buf）、PostgreSQL、TigerBeetle、Chrome、Mermaid、xmllint、Lean、sakai の四つのリンター | 数十分 |
 | `platforms` | サービスやクラスタを立てるか、外と通信するテスト。dandori の Temporal の dev server、kind の上の Argo、LocalStack、Ollama、TypeSafe、e-Gov と eCFR に本当に問い合わせるもの、Kani | 長い。揺れがある |
 
@@ -806,11 +806,25 @@ ritsu のリモートを作るまで（作者が決める）、CI は走らな�
 | ジョブ | いつ | すること |
 |---|---|---|
 | `fast` | push と pull request のたび | `cargo build --workspace --locked`、`RITSU_TEST_LEVEL=fast cargo test --workspace --locked`、依存の決まりの確かめ（3.4） |
-| `tools` | main への push、コードを変えた pull request、毎晩 | ツールを入れ（rulec の `ci.yml` の一覧に、koyomi、chobo、geas、yuen、sakai のものを足す。PostgreSQL はサービスで）、クレートの組ごとに並べて `RITSU_TEST_LEVEL=tools` で回す。許す SKIP は無し |
+| `tools` | main への push、コードを変えた pull request、毎晩 | ツールを入れ（rulec の `ci.yml` の一覧に、koyomi、chobo、geas、yuen、sakai、dandori のものを足す。PostgreSQL は、rulec にはサービスで、ほかには使い捨てのクラスタで）、クレートの組ごとに並べて `RITSU_TEST_LEVEL=tools` で回す。許す SKIP は、CI で用意できない pixie の greeter の四つだけ（下） |
 | `proofs` | `proofs/` か、証明書とモデルにかかわるコードを変えたとき | `lake build`、コーパスの証明書の再検査、Lean のモデルとの突き合わせ（11 章） |
 | `kani` | 毎晩と、rulec の生成器を変えたとき | rulec の CI の Kani の段（生成した Rust のハーネス） |
-| `platforms` | 毎晩、手で始めたとき、`crates/dandori/` を変えた pull request | kind の上の Argo、LocalStack、Temporal の dev server を立てて、dandori の `platforms` の段を回す。ほかのジョブと並べない |
+| `platforms` | 毎晩、手で始めたとき、`crates/dandori/` を変えた pull request | kind の上の Argo、LocalStack、Temporal の dev server を立てて、dandori の `platforms` の段を回す。外のサーバー（e-Gov、eCFR、Buf Schema Registry）に問い合わせるテストもここで回す（下）。ほかのジョブと並べない |
 | `release` | タグ（F） | 13.2 |
+
+C.12 で、`release` のほかの五つを根の `.github/workflows/` に書いた（ジョブ一つにファイル一つ。`fast.yml`、`tools.yml`、`proofs.yml`、`kani.yml`、`platforms.yml`）。許す SKIP の一覧は `ci/skips/fast.txt`、`tools.txt`、`platforms.txt` にある。リモートが無いので、どれもまだ走らせていない。手元で確かめたのは、YAML として読めること、actionlint（v1.7.12）が何も言わないこと、`run` の中身が `bash -n` を通ること、ジョブが呼ぶコマンドがこの機械で通ることである（PLAN の C.12）。書いたときに決めたことは次のとおり。
+
+- `fast`：新しく取り出した木で走らせることを考え、`crates/rulec/website/sync.sh` と `crates/dandori/website/sync.sh` で、サイトが共有するページの写し（gitignore してある）を先に作る。テストは `cargo xtask test --level fast` で回し、`ci/skips/fast.txt` は空である。
+- `tools`：クレートを三つの組（rulec、dandori、それ以外の五つの言語と `ritsu-base`・`ritsu-testkit`・`ritsu-proto`・`ritsu-emit`・xtask）に分け、matrix で並べて走らせる。組ごとに要るものだけを入れる。PostgreSQL は、rulec の組がサービスのサーバーを libpq の環境変数で使い、ほかの組は PGDG の PostgreSQL 18 のプログラムで使い捨てのクラスタを立てる（`RITSU_PG_BIN`）。dandori の組は、rulec 0.22.0 のリリースのバイナリをチェックサムで確かめて `DANDORI_RULEC` に渡し（D.3 まで）、protoc 35.1 のリリースの zip を、書いたときに取ったチェックサムで確かめて入れる。rulec の `ci.yml` が `cargo test` のあとに走らせていたもの（`rulec test --require-all` で飛ばした側が無いこと、証明書の再検査、`fmt --check` と `check`）は、rulec の組の最後に残した。`--proofs` の付いた回は `kani` に移した。`ci/skips/tools.txt` は、PLAN の C.12 が空としていたのと違い、geas の pixie の四つを許す。pixie は ritsu の外でビルドするもので、CI にはまだその greeter を作る手段が無い。
+- `proofs`：rulec の `ci.yml` の `proofs` のジョブを、パスを `crates/rulec/` の下に直して写した。走るのは、`proofs/`、rulec の src、コーパス、`tests/lean.rs`、`tools/recheck.py`、土台の src（証明書のダイジェストと JSON）、`Cargo.lock` のどれかが変わったときである。
+- `kani`：rulec の `ci.yml` の Kani の段（コーパスの全部の規則を Rust にして Kani で証明する）と、`rulec test --proofs` の回（`フラグを付ければ証明が走る` を platforms の段で）。毎晩と、rulec の生成器、`ritsu-emit` の src、コーパスが変わったとき。
+- `platforms`：kind の上の Argo（kind 0.33 は Go の `go install` で、argo CLI v4.1.4 はチェックサムで確かめて入れ、`crates/dandori/tools/argo/setup.sh` でクラスタを作る）、LocalStack 4.14.0 のイメージ、Temporal の dev server（TypeScript の SDK の `@temporalio/testing` が取ってくる）を用意し、dandori の platforms の段のテストを一つずつ回す（10.6 のとおり、落ちたら一度だけ回し直し、そのことを出力に書く）。最後に kind の上にワークフローが残っていないことを確かめる。そのあと、外のサーバーに問い合わせるテスト（土台、koyomi、yuen の本物の e-Gov と eCFR、rulec の Buf Schema Registry）を platforms の段で回す。10.5 の表に無かったこの四つは、ほかにどのジョブも回さないので、ここに置いた。`TYPESAFE_API_KEY` はリポジトリの secret から読み、無ければ Jev のテストは SKIP になる。それと Ollama の無い runner での SKIP を、`ci/skips/platforms.txt` で許す。
+
+クレートの中に残っている `.github/workflows/` は、GitHub が走らせない（2.1）。それぞれ次のように扱う。
+
+- rulec の `ci.yml`：中身は根の `tools`・`proofs`・`kani` に移した。`packages` のジョブ（`cargo package` と、`.deb` と `.rpm` を入れて消すこと）だけは、配るものの確かめなので、F.7 の `release` と一緒に根へ移す。それまでは、元のリポジトリの CI の記録として消さずに残す。
+- rulec の `docs.yml` と `release.yml`、dandori の `docs.yml`：元のリポジトリから出しているサイトとリリースのワークフローである。サイトとリリースは F の最後に ritsu へ移す（12.3、13.2）ので、そのときに根のワークフローに書き直し、クレートの中のものを消す。
+- rulec の `experiments/library/.github/workflows/`：規則のライブラリのリポジトリが使う CI の見本で、実験の中身である。ritsu の CI ではないので、そのまま残す。
 
 ### 10.6 揺れるテスト
 
@@ -832,6 +846,8 @@ dandori の重いテストには、原因を突き止めていない揺れがあ
 - `cargo xtask test --changed <リビジョン>` は、変わったファイルのクレートと、それに依存する（どの種類の依存でも）クレートを回す。クレートの外のファイル（根の `Cargo.toml` など）が変われば全部を回す。文書だけの変更を見分けて文書のテストだけを回すことは、まだしない（そのクレートのテストを全部回す）。
 - `cargo xtask deps` は、`cargo metadata` の宣言した依存を 3.1 の表と突き合わせ、破った依存を名指して exit 1 で終わる。表に無いクレートと、`ritsu-testkit` を `[dependencies]` に置いたクレートも名指す。
 - C の二つ目の部分で、koyomi・chobo・geas・yuen・sakai のテストの共通部分をこれに替えた。足したのは `TempDir::exists`（chobo）だけである。各クレートの `tests/common` には、そのクレートだけのもの（例や変異の並べ方、外のツールの既定の場所）が残る。ツールの変数は、`RITSU_<ツール>` のあとに、いままでの `<クレート>_<ツール>` も読む。
+- C.11 で rulec と dandori のテストもこれに替えた。足したのは、段を聞いてから機械を聞く `ready(要るもの, 見つかるか, 理由)`（rulec と dandori のテストは、ツールが無いかだけを聞いていた）と、`Need::Rulec`（dandori のテストが規則を読む rulec 0.22.0。D.3 まで）である。C.12 で、`Need::Suite`（sakai のテストが例の写しを確かめる rulec・koyomi・chobo・dandori のバイナリ。D.8 まで）と `Need::Pixie`（geas のテストが動かす pixie の greeter）を足した（下）。三つとも tools の段である。rulec のテストは、PostgreSQL を `PG*` の環境変数で受け取る形と、自分の一時ディレクトリの作り方のまま、SKIP と段だけを替えた（PLAN の C.11）。
+- C.12 で、まっさらに取り出した木を、外のツールを呼ぶと記録を残して失敗するコマンドを PATH の先頭に置いて `cargo xtask test --level fast` で回し、段を聞かずにツールを呼ぶテストを探した。geas の五か所（例を Python・Node・Go・rustc で走らせるもの、Go のサービスを SIGTERM で止めるもの、`explain` の再現、W061、pixie の greeter）と sakai の一か所（`what_was_copied_passes_the_suite`）が見つかり、段を聞くようにした。いまは、fast の段で呼ぶのは cargo と git と、テストが立てたサーバーへの curl だけである。
 - 根から `cargo test --workspace` を回すときの `--skip` は、ワークスペースのすべてのテストの名前に効く。dandori の重い段を外す `--skip argo` は `cargo` を含む名前にも当たるので、そういう名前のテストを作らない（xtask のテストの名前を一度直した）。
 
 ## 11. Lean の層
