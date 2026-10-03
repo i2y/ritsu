@@ -1,0 +1,7 @@
+error[E204]: proto/billing/report/v1/report.proto:5:1: The file proto/billing/report/v1/report.proto refers to 受注's published language shop.ordering.v1 from outside the anticorruption layer
+     5 | import "shop/ordering/v1/order.proto";
+  = 請求 writes a `layer`, so only the layer (dir "proto/billing/acl") may refer to the upstream's published language.
+  involved:
+      請求  proto/billing/report/v1/report.proto:5      import "shop/ordering/v1/order.proto"
+      受注  proto "proto/shop/ordering/v1/order.proto"  a file of the published language shop.ordering.v1
+      請求  ctx/請求.ctx:14                             upstream 受注 anticorruption layer

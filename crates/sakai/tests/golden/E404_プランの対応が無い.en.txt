@@ -1,0 +1,7 @@
+error[E404]: ctx/契約.ctx:15:1: 契約 refers to 料金's enum pricing.v1.Plan, and its anticorruption layer has no mapping for it
+    15 | upstream 料金 customer, anticorruption layer
+  = Downstream of an anticorruption layer, every upstream enum referred to is mapped, value by value, to the downstream's values or refuse.
+  = The line, fixed: enum Plan -> <…>
+  involved:
+      契約  proto/contracts/acl/v1/plan_view.proto:5        import "pricing/v1/price.proto"
+      料金  proto "proto/pricing/v1/price.proto" enum Plan

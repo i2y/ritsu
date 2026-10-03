@@ -1,0 +1,9 @@
+context 在庫(inventory) v1
+description "棚の数を持つ"
+
+owns
+  dir "../proto/warehouse", "../py/warehouse", "../ts/warehouse", "../java/src/main/java/warehouse", "../go/warehouse"
+
+published language warehouse.v1
+  proto "../proto/warehouse/v1/stock.proto"
+  generated dir "../py/warehouse/v1", "../ts/warehouse/v1", "../java/src/main/java/warehouse/v1", "../go/warehouse/v1"

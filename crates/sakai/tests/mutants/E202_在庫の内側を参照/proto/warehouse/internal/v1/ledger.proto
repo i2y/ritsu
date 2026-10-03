@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package warehouse.internal.v1;
+
+// 在庫の内側。公表された言語ではない。
+message Shelf {
+  string sku = 1;
+  int32 count = 2;
+}

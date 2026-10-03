@@ -1,0 +1,4 @@
+基本.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)
+warning[W103]: ctx/出荷.ctx:1:1: No map reads ctx/出荷.ctx
+     1 | context 出荷(shipping) v1
+  = Add it to a map's `use context`, or delete the file; a context no map reads is not checked.

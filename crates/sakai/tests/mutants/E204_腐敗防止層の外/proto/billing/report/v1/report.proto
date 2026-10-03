@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package billing.report.v1;
+
+import "shop/ordering/v1/order.proto";
+
+// 請求の内側で、腐敗防止層の外。
+message MonthlyRow {
+  shop.ordering.v1.OrderStatus status = 1;
+}

@@ -1,0 +1,11 @@
+error[E406]: contexts/受注.ctx:22:3: 在庫's 引当 crosses into 受注, where 引当 means something else, unmapped
+    22 |   引当 "客の注文の一行に、届ける日を割り当てること"
+  = 在庫's 引当 is "注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと", and means proto "proto/warehouse/v1/stock.proto" message ReserveResponse.
+  = 受注's 引当 is "客の注文の一行に、届ける日を割り当てること".
+  = 受注 is a conformist of 在庫, so it has no mapping to map it with.
+  = To fix it: rename 受注's term; if it means the same, write `引当 as 在庫.引当`; to map it, make `upstream 在庫` an anticorruption layer and write `term 引当 -> <a term of 受注>`.
+  involved:
+      受注  proto/shop/ordering/v1/fulfillment.proto:15                     import "warehouse/v1/stock.proto"
+      在庫  proto "proto/warehouse/v1/stock.proto" message ReserveResponse  what 在庫's term 引当 means
+      在庫  contexts/在庫.ctx:19                                            引当 "注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと"
+      受注  contexts/受注.ctx:22                                            引当 "客の注文の一行に、届ける日を割り当てること"

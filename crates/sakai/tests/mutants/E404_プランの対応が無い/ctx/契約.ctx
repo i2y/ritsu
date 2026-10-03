@@ -1,0 +1,20 @@
+context 契約(contracts) v1
+description "客と契約を結び、契約の区分を持つ"
+owner "契約チーム"
+
+owns
+  dir "../proto/contracts"
+
+published language contracts.v1
+  proto "../proto/contracts/v1/contract.proto"
+
+terms
+  契約の区分 "契約ごとに決まる、料金の扱い"
+    means enum ContractClass
+
+upstream 料金 customer, anticorruption layer
+  through pricing.v1
+  layer dir "../proto/contracts/acl"
+
+shared kernel with 見積
+  proto "../proto/contracts/kernel/units.proto"

@@ -1,0 +1,2 @@
+error[E311]: ctx/在庫.ctx:18:18: A context has no relationship with itself
+    18 | partnership with 在庫

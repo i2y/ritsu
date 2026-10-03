@@ -1,0 +1,4 @@
+警告[W402]: ctx/請求.ctx:18:5: 値が無いことを表す 0 番の値 ORDER_STATUS_UNSPECIFIED に、対応は要りません
+    18 |     ORDER_STATUS_UNSPECIFIED -> BILLING_STATUS_WAIT
+  = 0 番の値で、名前から列挙の接頭辞を外すと unspecified になるものは、値が設定されていないことを表す印です。rulec の `import proto` と dandori の proto から作る型も、同じ値を外します。
+基本.ctx: ok — コンテキスト 3、関係 3。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 3 件を確かめた（proto 3）

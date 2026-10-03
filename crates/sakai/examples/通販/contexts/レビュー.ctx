@@ -1,0 +1,8 @@
+context レビュー(reviews) v1
+description "買った人の感想を集めて見せる。請求とは何もやりとりしない"
+owner "受注チーム"
+
+owns
+  dir "../py/reviews", "../ts/reviews", "../java/src/main/java/reviews", "../go/reviews"
+
+separate ways from 請求

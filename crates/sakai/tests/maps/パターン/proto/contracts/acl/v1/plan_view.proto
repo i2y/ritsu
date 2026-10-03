@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package contracts.acl.v1;
+
+import "pricing/v1/price.proto";
+
+// 契約の腐敗防止層の中で、料金のプランを受け取る。
+message PlanView {
+  pricing.v1.Plan plan = 1;
+}

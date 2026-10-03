@@ -1,0 +1,44 @@
+context 配送(delivery) v1
+description "出荷の日を決め、運び方を選び、荷物を届ける手配をする"
+owner "配送チーム"
+
+owns
+  dir "../delivery", "../proto/shop/delivery"
+  dir "../py/delivery", "../py/shop/delivery", "../ts/delivery", "../ts/shop/delivery"
+  dir "../java/src/main/java/delivery", "../java/src/main/java/shop/delivery"
+  dir "../go/delivery", "../go/shop/delivery"
+
+published language shop.delivery.v1
+  proto "../proto/shop/delivery/v1/shipment.proto"
+  open host service DeliveryService
+  generated dir "../py/shop/delivery/v1", "../ts/shop/delivery/v1"
+  generated dir "../java/src/main/java/shop/delivery/v1", "../go/shop/delivery/v1"
+
+published language rulec.urgency.v1
+  rulec "../delivery/rules/出荷の急ぎ.rule"
+  open host service UrgencyService
+
+terms
+  出荷 "荷物を倉庫から運送会社に渡すこと"
+    means message CreateShipmentRequest
+  割れ物 "運ぶときに上に物を載せない荷物"
+    means enum Handling value HANDLING_FRAGILE
+  急ぎ "翌日便で運ぶかどうか"
+    means rulec "../delivery/rules/出荷の急ぎ.rule" output 急ぎ
+
+upstream 在庫 anticorruption layer
+  through warehouse.v1
+  layer dir "../py/delivery/acl/inventory", "../ts/delivery/acl/inventory"
+  layer dir "../java/src/main/java/delivery/acl/inventory", "../go/delivery/acl/inventory"
+  enum PackingStatus -> 出荷の可否
+    PACKING_STATUS_WAITING -> 待つ
+    PACKING_STATUS_PACKED  -> 出荷する
+    PACKING_STATUS_SHORT   -> refuse "欠品のある箱は出荷しない。受注に戻す"
+
+downstream 請求 supplier
+
+shared kernel with 請求
+  koyomi "../calendars/東京の営業日.cal"
+  dir "../py/calendars", "../ts/calendars", "../java/src/main/java/calendars", "../go/calendars"
+
+partnership with 受注

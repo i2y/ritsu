@@ -1,0 +1,6 @@
+エラー[E201]: proto/shop/billing/v1/billing.proto:5:1: 「請求」の proto/shop/billing/v1/billing.proto が、関係の無い「在庫」の proto/warehouse/v1/stock.proto を import しています
+     5 | import "warehouse/v1/stock.proto";
+  = 境界を越えて参照するには、上流と下流（下流が `upstream` を書く）、パートナーシップ、共有カーネルのどれかの関係が要ります。
+  関わるもの:
+      請求  proto/shop/billing/v1/billing.proto:5   import "warehouse/v1/stock.proto"
+      在庫  proto "proto/warehouse/v1/stock.proto"  公表された言語 warehouse.v1 のファイル

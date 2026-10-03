@@ -1,0 +1,1424 @@
+# sakai 設計文書
+
+境界づけられたコンテキストと、そのあいだの関係を書く小さな言語。ファイルは `.ctx`、コマンドは `sakai`。どの成果物がどのコンテキストに属するか、境界を越える参照が宣言した関係と公表された言語を通っているか、腐敗防止層が上流の列挙のどの値も読み替えているか、同じ語が違う意味のまま境界を越えていないかを、一式の成果物（rulec・dandori・koyomi・chobo・geas）、proto、コードの import に照らして確かめる。コードの import は、各言語の既存のツール（Python は import-linter、JavaScript と TypeScript は dependency-cruiser、Java は ArchUnit、Go は go-arch-lint）の設定にして、そのツールで確かめる。Context Mapper の CML にも書き出す。
+
+名前は境（さかい）から取った。
+
+この文書は設計の段階（A）で書き、言語の芯と地図の検査を作った段階（B）と、例とコードの import の検査の設定と CML を作った段階（C の一部）で、作ったものに合わせて直した。作ったもの（`.ctx` の構文、`check`、`api`、`explain`、`build`、`export cml`、診断）について貼った sakai の出力と、7 章のツールの出力は、どれも実際に出したもので、`tests/design.rs` が実物と同じかを確かめる。C の段階のうち、一式のツールの JSON を読むところ（PLAN の C.1〜C.5）は、一式の言語を一つの処理系にまとめるかが決まるまで止めてある。その部分（rulec と koyomi から読む参照、dandori の扱い、E104・E105・N101・E405）と、D の段階の doc の形は、まだ案である。一方、一式のツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1、dandori 0.1.0）と外のツール（import-linter 2.15、dependency-cruiser 16.10.4、ArchUnit 1.5.1、go-arch-lint v1.19.0、depguard v2.2.1、Spring Modulith 2.1.1、Context Mapper CLI 6.12.0、buf 1.54.0）の振る舞いとして書いたことは、2026-10-03 にこの機械（macOS arm64）で実際に走らせて確かめたもので、出力を貼るときは版を添える。外のツールの出力からは、この機械の場所を示すパスと、端末の色の制御文字と、行頭の字下げを省いた。
+
+## 0. 全体像
+
+```
+.ctx（map と context）── 字句・構文 ── 名前の解決 ── 地図（コンテキスト、属し方、公表された言語、関係、用語集、対応）
+   │
+   ├── 範囲のファイルを歩く ──────── 属し方：どの成果物も、ちょうど一つのコンテキストに属する
+   ├── proto を直接読む ─────────── 公表された言語の中身、列挙の値、proto どうしの import
+   ├── 一式の CLI の JSON を読む ─── rulec api、koyomi api、chobo api（dandori は 4.7）
+   │
+   ├── check：属し方、境界を越える参照、パターンどうしの整合、対応の網羅、同じ語
+   ├── build --target import-linter | dependency-cruiser | archunit | go-arch-lint：コードの import を確かめる設定
+   ├── export cml：Context Mapper の CML
+   ├── api：地図、属し方、境界を越える参照（JSON）
+   └── doc：コンテキストマップの図、コンテキストごとの用語集、関係と対応の表（Markdown と HTML）
+```
+
+### 0.1 芯：コンテキストマップのうち、確かめられる部分だけを書く
+
+コンテキストマップは、たいてい図か文章で書かれ、書いた日から実物とずれていく。図の矢印は、どのファイルのどの import のことなのかを言わない。だから、地図に無い参照が増えても誰も気づかないし、図を直しても実物は変わらない。
+
+sakai は、コンテキストマップのうち、実物と突き合わせられる部分だけを書く言語にする。確かめるのは次の三つで、ほかのことは確かめない。
+
+1. **依存**：どの成果物がどのコンテキストに属するか。境界を越える参照が、宣言した関係に沿い、公表された言語を通っているか。
+2. **境界を越える語**：二つのコンテキストで同じ名前の語が違う意味を持つとき、その語が対応を書かないまま境界を越えていないか。
+3. **対応の網羅**：腐敗防止層が、上流の列挙のどの値にも、下流の値か「断る」を書いているか。上流が値を足すと、検査がその値を名指しする。
+
+**決定**：`.ctx` に書けるのは、この三つのどれかの検査に使うものだけにする。例外は、コンテキストの説明と持ち主のチームで、これは doc と api のために持つ（持ち主を CODEOWNERS と突き合わせることは 14 章に残した）。
+
+理由は、書いても確かめられないものを書かせると、それがまた実物からずれるからである。Bounded Context Canvas が並べる戦略上の分類、ドメインでの役割、ビジネス上の決定、仮定、指標は、どれもコンテキストを設計するうえで大事だが、`.ctx` には入れない（13 章）。用語集も、境界を越える語に絞る。コンテキストの中だけで使う語まで載せさせると、用語集が名前の一覧になり、境界の語が埋もれる。公表された言語のすべての名前に語を付けることも求めない。
+
+看板の言い方は、次を候補にする（★作者が決めること）。rulec と koyomi の看板と同じ三つの句にした。
+
+- **Write the map. Check every crossing. Hand the imports to your linters.**
+- **地図を書く。境界を越えるところを全部確かめる。import は各言語のリンターに渡す。**
+
+### 0.2 前提
+
+- **P1**：成果物は、ファイルの単位でコンテキストに属する。属し方はディレクトリとファイルで書き、いちばん深く書いたコンテキストに属する（1.3）。
+- **P2**：一式の成果物の中身は、それぞれの CLI の出力（JSON）だけから読む。dandori が rulec を読むときの決まり（dandori の DESIGN の P2）と同じである。proto は標準の形式なので、ファイルを直接読む。sakai は一式のどの木にも書かず、どのツールも sakai を知らない。
+- **P3**：境界を越えて参照してよいのは、公表された言語（proto の package と、rulec が規則ごとに書く Connect のサービス）の要素と、共有カーネルに並べた成果物だけである。
+- **P4**：上流と下流の関係は、下流のファイルに書く。下流が、上流のモデルをどう扱うか（そのまま使う順応者か、読み替える腐敗防止層か、要望を出せる顧客か）を決めるのは下流だからである。二つのコンテキストが合意して成り立つパターン（顧客／供給者、共有カーネル、パートナーシップ）は、両方のファイルに書き、検査が食い違いを言う。
+- **P5**：語の意味は確かめない。二つの語が同じ意味かは、書いた人の宣言（`as` で上流の語を取り入れる）だけで決め、定義の文を比べない。
+- **P6**：コードの import は sakai が読まない。各言語の既存のツールの設定を書き、そのツールで確かめる。書いた設定が地図に合っているかは、`sakai build --check` が言う。
+- **P7**：確かめていないことは、確かめていないと言う。dandori の参照（4.7）、実行時にしか見えない呼び出し（URL を文字列で持つ HTTP、キュー、データベースの共有）は、`check` の要約と doc に「確かめていない」と出す。黙って通さない。
+
+### 0.3 なぜ別の言語にするか
+
+コンテキストの境界は、一つの成果物の性質ではなく、成果物のあいだの関係である。規則（rulec）、ワークフロー（dandori）、帳簿（chobo）、カレンダー（koyomi）、proto、コードが、それぞれ別のツールで書かれていて、境界はそれらをまたぐ。各ツールに「このファイルはどのコンテキストか」を書く場所を足せば、地図が何十のファイルに散らばり、関係（どこからどこへ、どの言語を通って）を書く場所がどこにもない。各ツールを変えることにもなる。
+
+**決定**：一式のどのツールも変えずに、それらの出力を読む別の言語にする。
+
+**費用**：構文、検査、診断、文書を、もう一揃い作ることになる。書き方は一式にそろえる（キーワードは英語、名前は日本語で書ける、`(別名)`、字下げのブロック、`v1`、診断の形、CLI の表）。
+
+### 0.4 似たもの
+
+**Context Mapper**（CML。Context Mapper CLI 6.12.0、2024-08-30）。境界づけられたコンテキストと関係のパターンを書く Xtext の DSL で、図、PlantUML、MDSL を出す。関係の書き方は `Ordering [D,ACL]<-[U,OHS,PL] Inventory` で、上流の役割（OHS、PL）と下流の役割（ACL、CF）、顧客／供給者（`[C]<-[S]`）、対称な共有カーネル（`[SK]<->[SK]`）とパートナーシップ（`[P]<->[P]`）がある。別々の道を書く構文は無い。文書は意味の規則を十挙げている（OHS と PL は上流だけ、ACL と CF は下流だけ、ACL と CF は一緒に使わない、対称な関係にはどの役割も付けない、顧客／供給者に CF と OHS は付けない、など）。
+
+手元で確かめたことが三つある。一つ、CLI の `cm validate` は構文の誤りしか言わない。中身を逆アセンブルすると、`CMLResource.getErrors()`（構文解析の誤り）を出すだけで、意味の規則を走らせていない。宣言していないコンテキストへの関係、顧客／供給者に付けた CF、自分自身との関係を書いても「validated without errors」と言い、exit code はいつも 0 だった。二つ、同じ jar の Xtext の検査器（`IResourceValidator` を `CheckMode.ALL` で）を呼ぶ小さな Java のプログラムを書くと、意味の規則が走った。
+
+```
+ERROR t.cml:4:10: The CONFORMIST pattern is not applicable for a Customer-Supplier relationship.
+ERROR t.cml:4:17: The OPEN-HOST SERVICE pattern is not applicable for a Customer-Supplier relationship.
+ERROR t.cml:4:3: Bounded context relationships must be declared between two different bounded contexts.
+ERROR t2.cml:3:14: The Bounded Context 'B' is not part of the Context Map.
+ERROR t5.cml:4:25: The aggregate 'Orders' is not part of the upstream context 'B'.
+ERROR t6.cml:3:14: Couldn't resolve reference to BoundedContext 'Zed'.
+```
+
+ただし、文書が挙げる規則のうち「ACL と CF を一緒に使わない」（`[D,ACL,CF]`）と「ORGANIZATIONAL の地図には TEAM だけ」は、6.12.0 の検査器では何も言われなかった。三つ、名前（コンテキスト、地図）は ASCII の識別子に限られる。`BoundedContext 受注` は `mismatched input '受' expecting RULE_ID` になる。文字列（`domainVisionStatement` など）とコメントには日本語を書ける。
+
+Context Mapper には、Spring Boot のコードと Docker Compose から CML を起こす discovery と、CML に照らして Java のコードを確かめる ArchUnit の拡張（context-mapper-archunit-extension 1.2.0、2023-04）がある。後者が確かめるのは、一つのコンテキストの中の集約、エンティティ、値オブジェクトが CML の定義と合っているかで、コンテキストのあいだの依存を関係と照らすことはしない。書いた地図に照らして、境界を越える依存を実物で確かめるツールは見当たらなかった。sakai はそこを受け持ち、CML へは書き出す（8 章）。
+
+**Contextive**。用語集をエディタで見せる（ホバーと補完）。`*.glossary.yml` を置いたディレクトリの下で、その用語集が効く。語には定義、例、別名を書ける。何も確かめない。sakai の用語集は、境界を越える語だけで、検査に使う（1.6）。sakai のコンテキストのファイルをそのコンテキストのディレクトリに置く形は、Contextive が勧める置き方と同じになる。用語集を Contextive の形で書き出すことは 14 章に残した。
+
+**Bounded Context Canvas**（DDD-Crew）。一つのコンテキストについて、名前、目的、戦略上の分類、ドメインでの役割、入ってくるやりとりと出ていくやりとり、ユビキタス言語、ビジネス上の決定、仮定、指標、未解決の問いを一枚に書く。sakai のコンテキストのファイルは、そのうち確かめられる部分（目的、入ってくるやりとり＝公表された言語と公開ホストサービス、出ていくやりとり＝上流との関係、境界を越えるユビキタス言語）だけを持つ。
+
+**Java のツール**。ArchUnit（1.5.1）は、クラスファイルを読み、パッケージやクラスのあいだの依存の規則を JUnit のテストとして書く。jMolecules（jmolecules-ddd 2.0.1）は `@BoundedContext` や `@Module` の注釈をコードに書けるようにし、jmolecules-archunit（0.33.0）は集約の参照、値オブジェクト、レイヤー、オニオン、ヘキサゴナルの規則を持つ。コンテキストのあいだの関係の規則は無い。Spring Modulith（2.1.1）は、アプリケーションのパッケージの直下をモジュールとし、`@NamedInterface` で外に見せるパッケージを、`@ApplicationModule(allowedDependencies = "inventory::api")` で使ってよい相手を、コードの注釈に書く。手元で走らせると、見せていないパッケージへの依存を次のように言った（spring-boot の jar が無いと `ApplicationModules.of` が動かなかった）。
+
+```
+- Module 'ordering' depends on non-exposed type shop.inventory.internal.Stock within module 'inventory'!
+Method <shop.ordering.domain.Order.place(shop.inventory.api.Reservations)> calls method <shop.inventory.internal.Stock.count(java.lang.String)> in (Order.java:5)
+```
+
+モジュールが境界づけられたコンテキストに、見せるパッケージが公表された言語に、使ってよい相手が関係にあたる。sakai に一番近い形だが、Java と Spring に限られ、宣言はコードの注釈に散らばり、順応者と腐敗防止層の区別も、語と値の対応も、proto やほかの成果物も持たない。sakai の Java の出力は ArchUnit にした（7.4）。Spring Modulith も内側で ArchUnit を使っている。
+
+**言語ごとの import の規則**。import-linter（Python）、dependency-cruiser（JavaScript と TypeScript）、go-arch-lint と depguard（Go）。どれも、どのモジュールがどのモジュールを import してよいかを設定に書き、違反を行番号つきで言う。sakai は、地図からこれらの設定を書き、コードの import の検査をそのまま任せる（7 章）。
+
+## 1. 言語
+
+### 1.1 二種類のファイル
+
+**決定**：`.ctx` のファイルは二種類ある。一行目の語で分かれる。
+
+- `map`：コンテキストマップ。どのコンテキストのファイルを集めるか、地図がどの範囲のファイルを覆うか、コードの言語ごとの置き場所。
+- `context`：一つの境界づけられたコンテキスト。説明、持ち主、属する成果物とディレクトリ、公表された言語、用語集、ほかのコンテキストとの関係、腐敗防止層での対応。
+
+11 章の例から、地図と在庫と配送のファイルを抜き出す（どれも A の段階の案。B で構文を作ったら、`tests/design.rs` がこの文書の `.ctx` の塊を構文に通す）。
+
+```ctx
+map 通販(shop) v1
+description "注文を受け、在庫を押さえ、届け、請求する小さな通販"
+
+use context "contexts/受注.ctx"
+use context "contexts/在庫.ctx"
+use context "contexts/配送.ctx"
+use context "contexts/請求.ctx"
+use context "contexts/レビュー.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"
+code typescript "ts"
+code java "java/src/main/java"
+  test "java/src/test/java"
+code go "go"
+```
+
+```ctx
+context 在庫(inventory) v1
+description "倉庫の棚にある数を持ち、注文の一行ごとに押さえ、梱包の進みを答える"
+owner "倉庫チーム"
+also "在庫管理"
+
+owns
+  dir "../inventory", "../proto/warehouse"
+  dir "../py/inventory", "../py/warehouse", "../ts/inventory", "../ts/warehouse"
+  dir "../java/src/main/java/inventory", "../java/src/main/java/warehouse"
+  dir "../go/inventory", "../go/warehouse"
+
+published language warehouse.v1
+  proto "../proto/warehouse/v1/stock.proto"
+  open host service StockService, PackingService
+  generated dir "../py/warehouse/v1", "../ts/warehouse/v1"
+  generated dir "../java/src/main/java/warehouse/v1", "../go/warehouse/v1"
+
+terms
+  引当 "注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと"
+    means message ReserveResponse
+  在庫切れ "押さえようとした数が棚に無いこと"
+    means enum Stock value STOCK_SHORT
+  梱包の状態 "注文の品を箱に詰め終えたか。詰める途中で欠品が分かることがある"
+    means enum PackingStatus
+```
+
+```ctx
+context 配送(delivery) v1
+description "出荷の日を決め、運び方を選び、荷物を届ける手配をする"
+owner "配送チーム"
+
+owns
+  dir "../delivery", "../proto/shop/delivery"
+  dir "../py/delivery", "../py/shop/delivery", "../ts/delivery", "../ts/shop/delivery"
+  dir "../java/src/main/java/delivery", "../java/src/main/java/shop/delivery"
+  dir "../go/delivery", "../go/shop/delivery"
+
+published language shop.delivery.v1
+  proto "../proto/shop/delivery/v1/shipment.proto"
+  open host service DeliveryService
+  generated dir "../py/shop/delivery/v1", "../ts/shop/delivery/v1"
+  generated dir "../java/src/main/java/shop/delivery/v1", "../go/shop/delivery/v1"
+
+published language rulec.urgency.v1
+  rulec "../delivery/rules/出荷の急ぎ.rule"
+  open host service UrgencyService
+
+terms
+  出荷 "荷物を倉庫から運送会社に渡すこと"
+    means message CreateShipmentRequest
+  割れ物 "運ぶときに上に物を載せない荷物"
+    means enum Handling value HANDLING_FRAGILE
+  急ぎ "翌日便で運ぶかどうか"
+    means rulec "../delivery/rules/出荷の急ぎ.rule" output 急ぎ
+
+upstream 在庫 anticorruption layer
+  through warehouse.v1
+  layer dir "../py/delivery/acl/inventory", "../ts/delivery/acl/inventory"
+  layer dir "../java/src/main/java/delivery/acl/inventory", "../go/delivery/acl/inventory"
+  enum PackingStatus -> 出荷の可否
+    PACKING_STATUS_WAITING -> 待つ
+    PACKING_STATUS_PACKED  -> 出荷する
+    PACKING_STATUS_SHORT   -> refuse "欠品のある箱は出荷しない。受注に戻す"
+
+downstream 請求 supplier
+
+shared kernel with 請求
+  koyomi "../calendars/東京の営業日.cal"
+  dir "../py/calendars", "../ts/calendars", "../java/src/main/java/calendars", "../go/calendars"
+
+partnership with 受注
+```
+
+節の順序は決まっている。map のファイルは、見出し、`description`、`use context`、`covers`、`except`、`proto root`、`code` の順。context のファイルは、見出し、`description`、`owner`、`also`、`owns`、`published language`（いくつでも）、`terms`、関係（`upstream`、`downstream`、`shared kernel with`、`partnership with`、`separate ways from`。いくつでも、どの順でも）の順（違えば E004）。`use context`、`owns`、`covers` は省けない。パスは、そのパスを書いたファイルのディレクトリから読む（koyomi の `use calendar`、rulec の `import proto`、dandori の `use` と同じ）。字下げはスペースで書き、タブは使えない（E005）。`#` から行末まではコメント。見出しの `v1` は人のための目印で、api と生成物の頭に写すだけに使う（一式と同じ）。
+
+**理由**：コンテキストのファイルは、そのコンテキストのチームが持つ。用語集と腐敗防止層の対応は、そのチームが書き、そのチームがレビューする。地図のファイルは、範囲とコードの置き場所という、どのコンテキストのものでもないことだけを持つ。コンテキストのファイルは `contexts/` に集めても、それぞれのコンテキストのディレクトリに置いてもよい（後者は Contextive が勧める置き方と同じ）。
+
+**捨てたもの**：
+
+- 地図を一つのファイルに全部書くこと（CML の形）。小さな地図では読みやすいが、用語集と対応がコンテキストの数だけ一つのファイルに並び、どのチームのものかがファイルで分からない。両側が書くことで合意を表す P4 の形も書けない。
+- 関係を地図のファイルにまとめて書くこと。腐敗防止層の対応は下流のチームのもので、関係と対応が別のファイルに分かれる。
+- 一つのファイルに複数のコンテキストを書けること。書ける場所が二つになり、一式の「一つのファイルに一つ」（規則、ワークフロー、帳簿、カレンダー）ともずれる。
+
+### 1.2 キーワードと名前
+
+キーワードは英語の一種類だけで、名前（地図、コンテキスト、語、下流の値）は日本語で書ける。rulec、dandori、koyomi、chobo と同じ線引きで、ツールの語（英語）と業務の語（日本語）が見ただけで分かれる。パターンの語は、DDD の英語の名前をそのまま使い、doc と `--lang ja` の診断では、エヴァンスの本の日本語訳で定着した語で書く。
+
+| キーワード | 日本語で書くとき |
+|---|---|
+| `map` | コンテキストマップ |
+| `context` | 境界づけられたコンテキスト |
+| `published language` | 公表された言語 |
+| `open host service` | 公開ホストサービス |
+| `upstream`、`downstream` | 上流、下流 |
+| `conformist` | 順応者 |
+| `anticorruption layer` | 腐敗防止層 |
+| `customer`、`supplier` | 顧客、供給者 |
+| `shared kernel` | 共有カーネル |
+| `partnership` | パートナーシップ |
+| `separate ways` | 別々の道 |
+| `terms` | 用語集 |
+| `refuse` | 断る |
+
+ほかのキーワードは、`description`、`owner`、`also`、`use`、`covers`、`except`、`proto root`、`code`、`python`、`typescript`、`java`、`go`、`test`、`owns`、`dir`、`generated`、`through`、`layer`、`means`、`as`、`enum`、`term`、`with`、`from`、成果物のツールの語（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`）と要素の種類の語（2 章）。表は B の段階の `src/kw.rs` に一枚で置く。
+
+**決定**：地図とコンテキストには ASCII の別名を必ず書く（`受注(ordering)`。無ければ E008）。形は `[A-Za-z_][A-Za-z0-9_]*`。
+
+理由は二つ。一つ、別名は CML の名前（ASCII の識別子に限られる。0.4）と、各ツールの設定の名前（import-linter の契約の ID、go-arch-lint のコンポーネントの名前）になる。二つ、別名があれば、日本語の名前を読めない人も、CML と設定から地図を読める。語には別名を要らない。語の名前はどの設定にも出ないからである。
+
+名前の重なり：一つの地図の中で、コンテキストの名前と別名はどれも違うこと。一つのコンテキストの中で、語の名前と `also` の名前はどれも違うこと（E006）。
+
+### 1.3 成果物とディレクトリの属し方
+
+```ctx
+owns
+  dir "../ordering", "../proto/shop/ordering"
+  dandori "../flows/受注.flow"
+```
+
+**決定**：成果物はファイルの単位でコンテキストに属する（P1）。`owns` には、ディレクトリ（`dir`）とファイル（2 章の名指し方。`rulec "…"` など）を並べる。成果物のファイルは、それを含むいちばん深い項を書いたコンテキストに属する。ファイルを名指した項は、どのディレクトリの項よりも深いものとして扱う。同じ深さの項を二つのコンテキストが書いていれば E102、どのコンテキストの項にも含まれなければ E101。
+
+決まりは「いちばん深い項が勝つ」で、CODEOWNERS の「後の行が勝つ」と似た、切り出しを書ける形にした。リポジトリの大部分を一つのコンテキストに、その中の一つのディレクトリを別のコンテキストに、と書ける。
+
+成果物とみなすファイルは、次のものだけである。
+
+- 一式の成果物：`.rule`、`.flow`、`.cal`、`.book`、`.geas`
+- `.proto`
+- 地図の `code` で宣言した言語のコードで、その言語の置き場所の下にあるもの：Python は `.py`、TypeScript は `.ts`・`.tsx`・`.mts`・`.cts`・`.js`・`.jsx`・`.mjs`・`.cjs`、Java は `.java`、Go は `.go`
+
+`.ctx` は成果物にしない。祝日の表（koyomi の `data/`）、法令の写し（rulec と koyomi の `sources/`）、OpenAPI や Smithy の記述（dandori の `specs/`）も、それを読む成果物の一部として扱い、属し方を問わない。
+
+範囲は地図の `covers` で決め、`except` で除く。どちらも地図のファイルのディレクトリから読む。さらに、パスのどこかに `.` で始まる名前（`.git`、`.venv`、`.geas`）、`node_modules`、`site-packages`、`__pycache__`、`target` があるファイルは、いつも範囲の外にする。ツールの状態、入れた依存、生成物の置き場所で、geas の `map` が外すものとそろえた（`.` で始まる名前を全部外すのは、`.venv` のような仮想環境を拾わないため）。
+
+proto の import が指す、ほかで配られているファイル（`google/protobuf/…`、`buf/validate/…`、dandori の `dandori/v1/options.proto`）は、リポジトリに写してあっても成果物にしない。どのコンテキストのものでもなく、dandori もファイルが無くても知っているものとして扱っている。
+
+`owns` の項が成果物を一つも含まなければ W101（パスの書き誤りのことが多い）。項のパスが無ければ E009。
+
+**理由**：属し方をファイルとディレクトリで決めるのは、それが CODEOWNERS とも各言語のツールとも同じ単位だからである。要素（規則の出力、proto のメッセージ）の単位で属し方を決めると、一つのファイルが二つのコンテキストにまたがり、コードの import の検査に写せない。
+
+**捨てたもの**：
+
+- 重なりを全部エラーにすること。切り出しが書けず、リポジトリの根を持つコンテキストが書けない。
+- `owns` に glob（`../*/inventory`）を書けること。どのファイルがどの項に当たったかの説明が難しくなり、いちばん深い項という決まりと組み合わせにくい。言語ごとにディレクトリを並べれば足りる。
+- 属さないファイルをエラーにせず、警告にすること。地図が覆うと言った範囲に持ち主の無い成果物があれば、境界の検査がその成果物を素通りする。
+
+### 1.4 公表された言語と公開ホストサービス
+
+```ctx
+published language warehouse.v1
+  proto "../proto/warehouse/v1/stock.proto"
+  open host service StockService, PackingService
+  generated dir "../py/warehouse/v1", "../ts/warehouse/v1"
+
+published language rulec.urgency.v1
+  rulec "../delivery/rules/出荷の急ぎ.rule"
+  open host service UrgencyService
+```
+
+**決定**：公表された言語は proto の package を単位にし、`published language <package>` の塊で書く。塊には、その package を宣言する proto のファイルか、rulec の規則を並べる。
+
+- `proto "…"`：そのファイルの `package` が見出しの package と同じであること（E302）。ファイルはそのコンテキストに属すること（E302）。
+- `rulec "…"`：`rulec gen` がその規則のために書く Connect のサービス（rulec の DESIGN 15.112）を、公表された言語にする。package は `rulec api` の `connect.package`（`rulec.urgency.v1`）で、見出しと同じであること（E302）。規則はそのコンテキストに属すること。
+- `open host service <サービス>`：公開ホストサービスにするサービスを、package の中の名前で並べる。そのサービスが塊の proto にあること（rulec なら `connect.service` と同じこと）。無ければ E301。
+- `generated dir "…"`：その package の proto から生成したコードの置き場所。コードの import の検査で、ほかのコンテキストが import してよいところになる（7 章）。そのコンテキストに属するディレクトリであること（E302）。
+
+公表された言語の要素は、塊の proto で定義されたもの全部（メッセージ、そのフィールド、列挙、その値、サービス、そのメソッド）である。rulec の塊なら、`rulec api` が名前を言うもの（規則の入力、出力、列挙と値）である。
+
+**理由**：package を単位にしたのは、proto の世界で、package が言語の名前とバージョンを兼ねているからである（`warehouse.v1`、`rulec.urgency.v1`）。互換が崩れたときは package のバージョンが上がり（buf の `breaking` がそれを止める）、地図では、下流がどのバージョンを通るかが `through` に書いてある。rulec の Connect のサービスを公表された言語に入れたのは、規則を一か所のサービスに置いて、ほかのコンテキストから Connect で呼ぶ形が、一式の中にもうあるからである（dandori の DESIGN 1.13）。
+
+公開ホストサービスと公表された言語を分けたのは、DDD での意味が違うからである。公表された言語は、やりとりする型の言語で、イベントやメッセージとして型だけを公表することもある。公開ホストサービスは、だれでも呼べるように開いたサービスで、公表された言語を使う。sakai では、サービスを呼ぶ参照には公開ホストサービスが要り、型を使うだけの参照には公表された言語が要る（3.3）。公開ホストサービスを `published language` の塊の中に書くので、公表された言語の無い公開ホストサービスは書けない。塊の proto に無いサービスを並べたときに E301 になる。
+
+**捨てたもの**：
+
+- 公表された言語を、名前を付けた成果物の集まりにすること（`published language 在庫API`）。proto がすでに package という名前を持っていて、名前が二つになる。
+- OpenAPI の記述や JSON Schema を公表された言語に入れること。対応の網羅に使う列挙を proto から読むと決めてある。rulec は JSON Schema の列挙も取り込める（rulec の DESIGN 15.60）ので、要れば同じ形で足せる（14 章）。
+- chobo の帳簿や koyomi のカレンダーを、そのまま公表された言語にすること。どちらも生成したコードを呼ぶ側に同梱する形で、境界の向こうから呼ぶ口（サービスと型の契約）を持たない。ほかのコンテキストに見せたければ、proto のサービスの後ろに置く（在庫の例の `StockService` は、chobo の帳簿の後ろに立つ）。二つのコンテキストで同じカレンダーを使うなら、共有カーネルに並べる（1.5）。
+
+### 1.5 関係とパターン
+
+```ctx
+upstream 在庫 anticorruption layer        # 配送は在庫の下流で、在庫のモデルを読み替える
+  through warehouse.v1
+  layer dir "../py/delivery/acl/inventory"
+
+downstream 請求 supplier                  # 請求は配送の顧客で、配送はそれを引き受ける
+
+shared kernel with 請求
+  koyomi "../calendars/東京の営業日.cal"
+
+partnership with 受注
+
+separate ways from 請求                   # レビューのファイルに書く
+```
+
+**決定**：
+
+- **上流と下流**は、下流のファイルに `upstream <上流> <役割>` と書く。役割は、`conformist`（順応者）、`anticorruption layer`（腐敗防止層）、`customer`（顧客）のどれかで、`customer` には `anticorruption layer` を添えてよい（`customer, anticorruption layer`）。役割の無い `upstream` は書けない（E002）。塊の中に、通る公表された言語の package を `through` で並べる（省けない）。腐敗防止層なら、層の置き場所（`layer`）と対応（1.7）を書ける。
+- **顧客／供給者**は、顧客の側の `upstream <供給者> customer` と、供給者の側の `downstream <顧客> supplier` の両方で成り立つ。片側だけなら E303（顧客の側だけでも、下流が書いた `upstream` として参照は通す。3.3）。
+- **共有カーネル**は、両方のファイルに `shared kernel with <相手>` を書き、共有する成果物とディレクトリを並べる。両側の並びが違えば E307。
+- **パートナーシップ**は、両方のファイルに `partnership with <相手>` を書く。片側だけなら E309。
+- **別々の道**は、どちらかのファイルに `separate ways from <相手>` を書けば成り立つ。二つのあいだに参照があれば E206、ほかの関係があれば E310。
+
+関係ごとに、境界を越える参照で許すものは次のとおり（3.3）。
+
+| 関係 | 許す参照 |
+|---|---|
+| 順応者 | 下流から、上流が公表した `through` の package の要素へ。下流の公表された言語が、上流の型をそのまま使ってもよい |
+| 腐敗防止層 | 下流から、上流が公表した `through` の package の要素へ。`layer` を書いたなら、参照する成果物が層の中にあるときだけ。下流の公表された言語に、上流の型を出してはいけない（E205） |
+| 顧客 | 順応者と同じ。供給者がそれを引き受けていること（`downstream … supplier`） |
+| 共有カーネル | 両側から、並べた成果物とディレクトリへ（公表された言語でなくてよい） |
+| パートナーシップ | 両側から、相手が公表した package の要素へ（`through` は要らない） |
+| 別々の道 | 何も許さない |
+
+サービスを呼ぶ参照（dandori の `connect` のタスク、規則を Connect で呼ぶ `use rule … connect`）には、そのサービスが上流の `open host service` に並んでいることも求める。サービスを呼ぶ参照は、いまは dandori のワークフローにしか無く、sakai はそれをまだ読めない（4.7）。この検査は、dandori の参照を読めるようになってから働く。
+
+パターンどうしの整合として、次を確かめる（3.4）。公開ホストサービスのサービスが公表された言語の proto にあること（E301）。順応者は対応も層も持たない（E304）。対応や層を書くなら腐敗防止層であること（E305）。順応者と顧客、順応者と腐敗防止層は一緒に書けない（E306）。腐敗防止層の `layer` は下流のものであること（E313）。上流が `through` の package を公表していること（E312）。自分自身との関係は書けない（E311）。二つのコンテキストが互いに上流なら W301。
+
+**理由**：関係を下流が書くのは、DDD で、順応するか読み替えるかを決めるのが下流だからである（P4）。上流が自分の下流を全部並べる形だと、公開ホストサービスを開いた上流は、知らないうちに増える下流を書き続けることになる。顧客／供給者、共有カーネル、パートナーシップは、二つのチームの合意そのものなので、片側の宣言だけでは成り立たせない。
+
+役割を必ず書かせるのは、役割で検査が変わるからである（対応が要るか、上流の型を自分の公表された言語に出してよいか）。CML の `[D]<-[U]` のような、役割の無い上流と下流は書けない。
+
+顧客と順応者を一緒に書けないのは、Context Mapper の規則（顧客／供給者に CF は付けない）と同じ考えで、要望を出して上流を動かせる顧客は、上流にただ合わせる順応者ではないからである。顧客に腐敗防止層を添えることは、Context Mapper が警告にとどめているのと同じく許す。
+
+別々の道を書けるようにしたのは、関係が無いことと、関係を持たないと決めたことを分けるためである。関係が無いだけなら、だれかが `upstream` を足せば参照が通る。別々の道は、その足し方自体を E310 で止める。
+
+**捨てたもの**：
+
+- 上流が下流を並べる形（上流のファイルに `downstream 受注 conformist`）。上に書いた理由。
+- 上流と下流の関係に `through` を省けること。どの公表された言語を通ってよいかが、関係の中身である。
+- 互いに上流であることをエラーにすること。二つのコンテキストが、別々の公表された言語で互いに呼ぶことは実際にある。DDD では自律を損なう形なので、警告にとどめる。
+
+### 1.6 用語集
+
+```ctx
+terms
+  注文 "客が確定させた購入の申し込み。取り消されても消えない"
+    means message Order
+  キャンセル "出荷の前に、客の申し出で注文を取り消すこと"
+    means enum OrderStatus value ORDER_STATUS_CANCELLED
+```
+
+```ctx
+terms
+  キャンセル "請求を確定したあとに請求を取り消し、返金すること"
+  注文 as 受注.注文
+```
+
+**決定**：
+
+- 語は、名前と定義の文を持つ。`also` で同じものの別の呼び方を並べられる。
+- `means` は、その語が指す、自分の公表された言語の要素を名指す（2 章。proto の要素は、自分の公表された言語の package の中の名前で短く書ける）。自分の公表された言語に無い要素なら E408。`means` を持つ語は、その要素とともに境界を越えていく。
+- `as <上流>.<語>` は、関係のある相手の語を、同じ意味のまま取り入れる（定義の文は書かない）。相手の用語集にその語が無いか、相手との関係が無ければ E410。
+- 境界を越えない語は W401。地図が名指す要素を一つでも引けなかった地図では、何が越えるかが分からないので出さない。sakai がまだ参照を読まない成果物（規則と、dandori のワークフロー）を地図が含むあいだも、同じ理由で出さない（P7。規則の参照は PLAN の C.2 で読むようになり、そのとき規則はこの条件から外れる）。11 章の例の請求の「キャンセル」は、規則の `import proto` を通って受注の「キャンセル」とぶつかる語で、それを読まないうちに W401 を出すと、越える語を越えないと言うことになる。語が境界を越えるのは、次のどれかに当てはまるときである。
+  - `means` を持つ（自分の公表された言語の要素とともに外へ出ていく）。
+  - 腐敗防止層の対応の先の語である（1.7）。
+  - `as` で上流の語を取り入れている。
+  - 上流から越えてくる同じ名前の語とぶつかっている（下の「同じ語の検査」）。
+
+**同じ語の検査**（3.6）：上流の語 t が `means` の要素とともに下流 D に越えてくる（D の成果物がその要素を参照している）とき、D の用語集に t と同じ名前（`also` を含む）の語があり、それが `as` で t を取り入れたものでなければ、二つは違う意味の同じ語である。このとき、D の腐敗防止層の対応が、越えてくる要素を読み替えていなければ E406 になる。読み替えた先の値や語が、D の同じ名前の語と同じ名前なら E407（違う意味の語を、同じ名前で受けていることになる）。D が腐敗防止層でなければ（順応者、顧客、パートナー）、対応は書けないので E406 で、直し方は「名前を変える」「`as` で取り入れて同じ意味にする」「腐敗防止層にして読み替える」のどれかである。
+
+**理由**：二つの語が同じ意味かは、ツールには分からない（P5）。定義の文が一字違えば違う意味、と決めることもできるが、言い回しの違いで対応を書かされ、同じ文をたまたま書いた二つの語が同じ意味になる。だから、同じ意味だと言うのは書いた人の `as` だけにした。
+
+検査の対象を「越えてくる要素にぶつかる語」に絞ったのは、境界づけられたコンテキストの考えそのものによる。二つのコンテキストが同じ語を違う意味で使うのは正しいことで、それが問題になるのは、境界を越えたときだけである。
+
+**捨てたもの**：
+
+- 公表された言語のすべての要素に語を付けさせること。用語集が名前の一覧になる（0.1）。
+- 語の名前の英字の別名。どの設定にも出ないので、検査に使わない。
+- 共有カーネルの語を検査すること。共有カーネルは二つのチームが一緒に持つモデルで、語の食い違いは合意の問題である。共有カーネルの成果物を通る参照は、同じ語の検査の対象にしない。
+
+### 1.7 腐敗防止層での対応
+
+```ctx
+upstream 在庫 anticorruption layer
+  through warehouse.v1
+  enum PackingStatus -> 出荷の可否
+    PACKING_STATUS_WAITING -> 待つ
+    PACKING_STATUS_PACKED  -> 出荷する
+    PACKING_STATUS_SHORT   -> refuse "欠品のある箱は出荷しない。受注に戻す"
+  term 引当 -> 押さえ
+```
+
+（`term` の行は、配送の用語集に「押さえ」という語があるときの書き方の例で、11 章の例には無い）
+
+```ctx
+upstream 受注 anticorruption layer
+  through shop.ordering.v1
+  layer rulec "../billing/rules/請求の要否.rule"
+  enum OrderStatus -> rulec "../billing/rules/請求の要否.rule" enum 注文の状態
+```
+
+**決定**：
+
+- `enum <上流の列挙> -> <下流の先>` の下に、上流の列挙の値ごとに、下流の値か `refuse`（断る。理由の文を添えられる）を書く。上流の列挙は `through` の package の中の名前で短く書ける（2 章）。
+- 上流の列挙の値は proto から読む。対応に無い値があれば E401 で、無い値を全部名指す。上流が値を足したときに出るのがこれである。上流の列挙に無い値を書けば E402。
+- 0 番の値で、名前から列挙の名前の接頭辞（`PackingStatus` なら `PACKING_STATUS_`）を外すと `unspecified`（大文字と小文字は問わない）になるものは、値が無いことを表す印なので、対応に要らない（書けば W402）。ほかの名前の 0 番の値（rulec の corpus の契約にある `HANDLING_STANDARD = 0`）は、本当の値として対応を求める。rulec が `import proto` で列挙を突き合わせるとき（rulec の DESIGN 15.59）と、dandori が proto から型を作るとき（dandori の DESIGN 1.12）の決まりと同じである。
+- 下流の先は三つの形のどれかである。
+  - rulec の列挙（`rulec "…" enum 注文の状態`）：その規則が `import proto` で上流の列挙を取り込んでいるなら、値の対応は rulec が決めている（`rulec api` の `connect.enums[].values` が、規則の値の名前と proto の値の名前と番号を並べる）。sakai はそれを対応として読み、値の行を書かなくてよい。書いたなら、rulec の対応と同じであること（E405）。網羅は rulec が E032 と E033 で守る。規則が取り込んでいない列挙なら、値の行が要り、右辺は規則の列挙の値であること（E403）。
+  - 下流の proto の列挙（`proto "…" enum ShippingDecision`、または自分の公表された言語の中の短い名前）：右辺はその列挙の値であること（E403）。
+  - 名前だけ（`出荷の可否`）：下流の値は、書いたとおりに受け取り、確かめない（doc にそう出す）。下流の値がコードの中の列挙にしか無いとき、この形になる。
+- `term <上流の語> -> <下流の語>` は、上流の語を下流のどの語として受けるかを書く。どちらの用語集にもその語があること（E409）。
+- 腐敗防止層で、下流の成果物が参照している上流の列挙に対応が無ければ E404。参照は 3.3 で読めるもの（proto の import、rulec の `import proto` と `shape`）に限る。コードの import はモジュールの単位でしか分からないので、どの列挙を使っているかは分からず、E404 の対象にならない。
+- 対応を書けるのは腐敗防止層だけである（E304、E305）。
+
+**理由**：網羅を「上流の値ごとに、下流の値か断る」と決めたのは、dandori の `match` の網羅と同じで、上流が値を足したときに、その値をどう扱うかをだれかが決めるまで止めるためである。上流が proto に値を足すのはワイヤの上では互換な変更で、buf の `breaking` は止めない。止めなければ、下流のコードの `default` の分岐が、だれも決めていない扱いを新しい値に与える（rulec の DESIGN 15.59 が規則について書いたのと同じ事故）。
+
+rulec の規則を対応の先にできるようにしたのは、規則の `import proto` が、すでに対応そのもので、網羅も rulec が確かめているからである。同じ対応を `.ctx` に二度書かせると、二つが食い違う。sakai は rulec の対応を読み、doc の対応の表に出す。
+
+「断る」を書けるようにしたのは、下流がその値を受け取らないと決めることも、扱いの一つだからである。腐敗防止層は、その値が来たら呼び出しを失敗させる。それがコードで実際にそうなっているかは、sakai には分からない（3.7）。
+
+**捨てたもの**：
+
+- 腐敗防止層の対応から、翻訳のコードを生成すること。対応の網羅を確かめるのと、コードを生成するのは別の決定で、生成すれば各言語の出力と突き合わせのテストが要る。14 章に残した。
+- 対応を書かなかった値を「そのまま」とみなすこと。新しい値がだれも決めないまま通る。
+
+## 2. 成果物の名指し方
+
+yurai（要件の来歴の言語）と sakai は、成果物を同じ形で名指す。この章の決まりは、A の段階の終わりに二つの設計を突き合わせて決めたもので、二つの言語は同じ形を一字も違えずに使う。決まりの試しの表 `tests/fixtures/naming.tsv` を二つのリポジトリが同じものとして持ち、`tests/naming.rs` が全行を確かめる。
+
+### 2.1 形
+
+`<ツール> "<パス>" [<種類> <名前>]…`
+
+```
+rulec "rules/送料.rule"
+rulec "rules/送料.rule" output 送料
+rulec "billing/rules/請求の要否.rule" enum 注文の状態 value 受注で取消
+dandori "order.flow"
+koyomi "支払条件.cal" date 支払日
+koyomi "支払条件.cal" claim 受領から60日以内
+chobo "在庫.book" transfer 引当
+geas "greeter.geas" claim "rejects an empty name"
+proto "shop/v1/order.proto" service OrderService method Create
+proto "warehouse/v1/stock.proto" enum PackingStatus value PACKING_STATUS_SHORT
+proto "shop/v1/order.proto" message Order.Line field quantity
+file "src/app.py"
+yurai "民法の期間.req" requirement 満了日_142条
+sakai "contexts/受注.ctx" term キャンセル
+```
+
+ツールの語のあとに、パスを `"…"` で書き、そのあとに種類と名前の組をゼロ個以上続ける。組がゼロ個ならファイルそのものを指す。
+
+組は、ツールの中の構造どおりに入れ子にできる。入れ子にできるのは次だけで、ほかのツールの組は一つまでである。
+
+- proto：`service S [method M]`、`message M [field f]`、`enum E [value V]`。入れ子のメッセージは名前を `.` でつなぐ（`message Order.Line`）。
+- rulec：`enum E [value V]`。
+
+子の種類（`method`、`field`、`value`）は、親の種類のすぐあとにしか書けない。子の組は一つまでである。
+
+sakai が列挙の値（対応の網羅）とフィールド（語の `means`）を名指すので、入れ子が要る。yurai もこの形をそのまま受け付ける。
+
+### 2.2 ツールの語と種類の語
+
+ツールの語は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`、`yurai`、`sakai` の九つである。
+
+種類の語は、それぞれのツールが JSON で出す名前の種類から取り、二つの言語で使う種類を合わせた。
+
+| ツール | ファイル | 種類の語 | 名前を読むところ |
+|---|---|---|---|
+| `rulec` | `.rule` | `input`、`output`、`enum`（下に `value`）、`table`、`clause`、`define`、`derive`、`machine`、`source` | `rulec api` の `python.params`、`python.outputs`、`python.enums` と `values`、`machine.name`、`sources`。`rulec graph` の `nodes`（`input`、`output`、`table`、`clause`、`define`、`derive`）。`rulec certificate` の `tables` |
+| `koyomi` | `.cal` | `input`、`date`、`claim`、`source` | `koyomi api` の `inputs`、`dates`、`claims`、`sources`（カレンダーのファイルでは `calendar.sources`） |
+| `chobo` | `.book` | `unit`、`account`、`transfer` | `chobo api` の `units`、`accounts`、`transfers` |
+| `geas` | `.geas` | `claim` | `geas map` の記録の一行め（`.geas/<stem>.map.jsonl` の主張の並び）。geas は主張を、走らせずに並べるコマンドを持たない（4.6） |
+| `dandori` | `.flow` | なし（ファイルでだけ名指す） | dandori は名前を JSON で出さない（4.7）。dandori が api を持てば、そこから決める |
+| `proto` | `.proto` | `service`（下に `method`）、`message`（下に `field`）、`enum`（下に `value`） | proto のファイルの中の名前 |
+| `file` | 何でも | なし | |
+| `yurai` | `.req` | `requirement`、`source` | `yurai api` |
+| `sakai` | `.ctx` | `context`、`term` | sakai の地図とコンテキストのファイル |
+
+どちらの言語も、自分が使わない種類も名指しとして受け付け、JSON に出せる。sakai が名前まで確かめるのは、自分が読むもの（proto の要素。一式の読み込みを作ってからは rulec の `input`、`output`、`enum`、`value` も。PLAN の C.2）だけで、ほかの種類（koyomi の `date`、yurai の `requirement` など）は形だけを確かめる。同じ種類の名前を二つの JSON から読めるとき（rulec の `input` は `rulec api` からも `rulec graph` からも読める）に名前が一致することは、一式の読み込み（PLAN の C.2）のテストで確かめる。
+
+ディレクトリは成果物ではないので、ツールの語にしない。sakai の `.ctx` は、属し方、腐敗防止層の置き場所、生成したコードの置き場所、共有カーネルにディレクトリを書くので、`dir "<パス>"` を `.ctx` の構文の語として持つ（名指しの形ではない）。JSON では、ディレクトリはパスの文字列で出す。
+
+### 2.3 名前
+
+名前は、ツールの JSON の `name` で書き、別名（`alias`）では書かない。語か `"…"` で書く。語は、空白、`"`、`#` を含まない一続きの文字で、頭が数字でもよい（`40営業日以内`）。そのほか（空白を含む主張の名前など）は `"…"` で書き、その中のエスケープは `\"` と `\\` だけである（ほかのエスケープは誤り）。名前は書いたとおりの文字列で比べ、Unicode の正規化はせず、大文字と小文字も区別する。proto の名前は、そのファイルの package から見た名前で書く（`OrderService`、入れ子は `Order.Line`）。
+
+文字列の外に全角の空白があれば誤りである。全角の空白は半角の空白と見分けにくく、名前の区切りなのか名前の一部なのかが、読む人に分からないからで、`.ctx` の字句も全角の空白を E001 で断っている。文字列の中の全角の空白は名前の一部で、`text` ではその名前を引用符で囲む（`claim "受領から　60日"`）。ツールの語と種類の語は `"…"` で書けず、種類のあとに名前が無いのも誤りである。
+
+### 2.4 パス
+
+`.ctx` の中では、パスを書いたファイルのディレクトリからの相対で書く（koyomi の `use calendar`、rulec の `import proto`、dandori の `use` と同じ）。区切りは `/` で、`.` と `..` は字の上で畳む（シンボリックリンクはたどらない）。末尾の `/` も畳んで取り除く（`"src/"` は `"src"`。ディレクトリかどうかはファイルを見て決める）。書いたファイルのディレクトリそのものは `"."` と書く。絶対パスと空のパス（`""`）は書けない（E012）。
+
+JSON（`api` と、名指しの JSON の形）では、パスをルートからの相対にする。ルートは、`sakai` に最初に渡したパスの上で `.git` を持つ一番近いディレクトリで、git は走らせずにディレクトリを見て探す。無ければ、渡したディレクトリ（ファイルなら、それがあるディレクトリ）がルートになる。`--root` で替えられる。ルートそのものは `"."` と書く。ルートの外に出るパスは E012 である。geas の `map` の記録も git の差分も、このルートからの相対でパスを書くので、そのまま突き合わせられる。
+
+診断の文面では、ファイルの場所を、一式のツール（koyomi、chobo、dandori、geas）と同じく、sakai を走らせたディレクトリから、渡したパスと同じ書き方で書く。相対パスを渡したなら走らせたディレクトリからの相対、絶対パスを渡したなら絶対パスになる。ファイルの場所とは、位置の `<パス>:<行>:<列>`、関わるものの `<パス>:<行>`、文と注の中のファイルのパス（「「在庫」の proto/warehouse/v1/stock.proto が…」）、通ったときの要約の行の地図である。一方、名指しを文字にして出すときは（関わるものの `proto "…" enum OrderStatus`、文と注の中の名指し、`.ctx` の項を写した `dir "…"`）、JSON と同じくルートからの相対の形のままにする。`--format json` では、ファイルの場所である `file` と `references[].file` を文面と同じに書き、`references[].name` はルートからの相対である。ルートで走らせれば、二つの書き方は同じになる（`tests/golden/` の変異の診断は、変異のディレクトリをルートにして、そこで `sakai check .` を走らせた形である）。`tests/cli.rs` が、ルートの上のディレクトリ、ルートの下のディレクトリ、絶対パスの三つで走らせて、この書き方を確かめる。
+
+**理由**：ファイルの場所は、読む人がそのまま開くためのものなので、走らせた場所から書く。名指しは、読み直すと同じ名指しになり、ほかのツール（yurai、git の差分、geas の記録）や api の JSON と突き合わせられることが大事なので、どこで走らせても同じ形にする。
+
+**捨てたもの**：
+
+- 診断のパスを全部ルートからの相対にすること（B の段階の形）。リポジトリの下のディレクトリで走らせると、診断に出るファイルの場所がそこからは開けないパスになり、一式のツールの診断と並べたときに書き方がそろわない。
+- 名指しの中のパスも走らせたディレクトリから書くこと。同じ名指しが、走らせた場所によって違う文字になり、読み直しても api の名指しと一致しない。
+
+### 2.5 同じ・含む
+
+二つの名指しは、ツールの語と、ルートからのパスと、組の並びが同じときに同じものを指す。ファイルは、中のものを全部含む。親の組（proto の `service`・`message`・`enum`、rulec の `enum`）は、その子を全部含む。sakai は「含む」を、境界を越えてくる要素を数えるとき（列挙が越えてくれば、その値も越えてくる）と、語の `means` の要素が越えてきたかを決めるときに使う。
+
+### 2.6 JSON の形
+
+```json
+{"text":"proto \"warehouse/v1/stock.proto\" enum PackingStatus value PACKING_STATUS_SHORT","tool":"proto","path":"warehouse/v1/stock.proto","items":[["enum","PackingStatus"],["value","PACKING_STATUS_SHORT"]]}
+```
+
+キーはこの順に出す。`items` は種類と名前の組の並び、`text` は、パスをルートからの相対に直し、名前を語で書けるなら引用符なしで、書けなければ `"…"` で書いた形である。serde_json の詰めた書き方（空白なし、ASCII でない文字はそのまま）で出す。
+
+### 2.7 `.ctx` の中だけの短い書き方
+
+`means` の右辺では、自分の公表された言語の proto の要素を、パスを省いて書ける（`message Order`、`enum Stock value STOCK_SHORT`）。`enum` の対応の左辺では、`through` の package の列挙を名前だけで書ける（`enum PackingStatus`）。対応の先でも、自分の公表された言語の列挙を `enum <名前>` と書ける。sakai はどのファイルの要素かを決め、api と診断には長い形で書く。名前が二つの package に当たるときは E007 で、package から書く（`message warehouse.v1.ReserveResponse`）。
+
+### 2.8 試しの表と、決着した食い違い
+
+`tests/fixtures/naming.tsv` は、この章の決まりの試しの表である。一行が一つの名指しで、タブの左が名指し（書いたファイルがルートにあるとする）、右が JSON か `ERROR: <理由>` である。`tests/naming.rs` は、全行で右と同じ JSON を出すことと、`ERROR` の行をどれも誤りにすることを確かめる。表を直すときは、yurai の同じ表も同じに直す。
+
+`tests/naming.rs` は、誤りの行が、表の理由のとおりの理由で断られることも確かめる（理由ごとに、sakai の英語の文面に出る語句を表にしてある）。別の理由でたまたま断られた行を、通ったことにしないためである。
+
+`.ctx` に書いた名指しの誤りは、形の誤り（知らないツールの語、そのツールに無い種類の語、親のすぐあとでない子、二つめの子、dandori の種類、文字列の外の全角の空白、使えないエスケープ）が E011、絶対パス、ルートの外に出るパス、空のパスが E012 である。
+
+A の段階の終わりに、yurai の DESIGN 2 章（2.8 の七項目）と並べると、五つが食い違っていた。それぞれ次のように決めた。
+
+| 項目 | 決めたこと |
+|---|---|
+| 組の数 | ツールの構造どおりに入れ子にする（proto の `service … method …`、`message … field …`、`enum … value …` と、rulec の `enum … value …`）。ほかのツールは一つまで |
+| ツールの語 | `dir` はツールの語にしない。sakai の `.ctx` の構文の語にとどめる（yurai の `scope` の書き方は yurai の構文の中で決める） |
+| パスの基点 | JSON はルート（`.git` を持つ一番近いディレクトリ。`--root` で替える）からの相対。ルートの外はエラー。診断の文面のファイルの場所は、走らせたディレクトリから書く（名指しはルートからの相対のまま。B の段階のあとで決めた。2.4） |
+| 種類の語 | 二つの言語の和（2.2 の表） |
+| 同じ・含む | yurai の「含む」に、proto の `message`・`enum` と rulec の `enum` が子を含むことを足した |
+| JSON の形 | `{"text", "tool", "path", "items"}` |
+
+名前の決まり（2.3）は、A の段階のうちに yurai の 2.4 に合わせてあった。
+
+B の段階のあとで、二つの言語の細かい形をもう一度そろえた。試しの表に 9 行を足して 36 行にし（全角の空白、エスケープ、`"…"` で書いた種類とツールの語、名前の無い種類、空のパス、`"."`、末尾の `/`。2.3、2.4）、診断の文面のファイルの場所を走らせたディレクトリから書くことにした（名指しはルートからの相対のまま。2.4）。
+
+## 3. 検査
+
+### 3.1 何を確かめるか
+
+`sakai check` は、次の順に確かめる。段 1 と段 2 にエラーがあれば、後の段は走らせない（構文や名前が読めなければ属し方は決められず、属し方が決まらなければ参照を確かめる相手が無い）。
+
+| 段 | 確かめること | コード |
+|---|---|---|
+| 1 | 字句、構文、節の順序、名前、別名、パスがあるか | E001〜E012 |
+| 2 | 属し方：範囲の成果物がどれもちょうど一つのコンテキストに属するか | E101、E102、E103、W101、W103 |
+| 3 | 成果物を読む：proto、rulec・koyomi の api。そのあとで、地図が名指す要素（`means`、対応の列挙）を読んだ proto で引く | E104、E105、E106、W102、N101、E103（範囲の外の import）、E007・E011（要素） |
+| 4 | パターンどうしの整合 | E301〜E313、W301 |
+| 5 | 境界を越える参照 | E201〜E206 |
+| 6 | 対応の網羅と同じ語 | E401〜E410、W401、W402 |
+
+段 3 から後は、前の段にエラーがあっても、どの段も走らせる。読めない成果物があっても、読めた成果物の参照だけを確かめ、読めなかったものは E105（proto なら E106）として言う（読めない規則が一つあるだけで、地図の検査が全部止まると、直す順序が分からない）。パターンの誤りも後の段を止めない。5.3 の二つめの例のように、片側だけの共有カーネル（E307）と、それで許されなくなった参照（E201）は、一緒に言う。
+
+通ったときは、一行で要約を言う。コンテキストと関係の数、成果物の数（どれもちょうど一つのコンテキストに属すること）、確かめた境界を越える参照の数と、それを何から読んだかを並べる。B の段階の地図（`tests/maps/基本/`）では次のとおり。
+
+```
+$ sakai check tests/maps/基本/基本.ctx --root tests/maps/基本
+tests/maps/基本/基本.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)
+$ sakai check tests/maps/基本/基本.ctx --root tests/maps/基本 --lang ja
+tests/maps/基本/基本.ctx: ok — コンテキスト 3、関係 3。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 3 件を確かめた（proto 3）
+```
+
+関係は、上流と下流の関係を一つ（顧客／供給者は、両側の宣言で一つ）、共有カーネル、パートナーシップ、別々の道を、二つのコンテキストの組ごとに一つと数える。警告があっても、エラーが無ければこの行を出す。
+
+11 章の例の地図では次のとおり。成果物の 79 件は、proto 4、規則 4、カレンダー 3、帳簿 1、ワークフロー 2 と、四つの言語のコード 65 である。境界を越える参照は、いまは proto の import の一つ（受注の `fulfillment.proto` から在庫の `stock.proto` へ）だけである。
+
+```
+$ sakai check examples/通販/通販.ctx
+examples/通販/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 1 crossing checked (proto 1)
+```
+
+一式のツールの JSON を読むようになれば（PLAN の C.2〜C.4）、rulec と koyomi から読んだ参照の数が括弧の中に並び（例では rulec 2、koyomi 1）、確かめていない dandori のファイル（N101）が加わる。
+
+### 3.2 属し方
+
+1.3 の決まりで、範囲の成果物ごとに属するコンテキストを決める。E101 は、属さないファイルを一つずつ言うと、初めて地図を書いたときに何百にもなる。そこで、属さないファイルしか含まないディレクトリは、いちばん上のディレクトリにまとめて一つの診断にする（`py/scripts/: この下のファイル 12 件は、どのコンテキストにも属しません`）。
+
+公表された言語の proto、`generated dir`、`layer`、共有カーネルに並べたものも、属し方と食い違ってはいけない（E302、E313、E307）。
+
+### 3.3 境界を越える参照
+
+参照は、成果物から別の成果物（かその要素）への依存で、sakai が読めるのは次のものである。
+
+| 参照のもと | 何を読むか | 参照の先 |
+|---|---|---|
+| proto | `import` の行（行番号つき）、フィールドとメソッドの型 | 別の proto のファイルと、使っている要素 |
+| rulec の規則 | `rulec api` の `connect.enums[].contract.file` と `alias` と `values`（`import proto`）、`projection.shapes[].file` と `at`（`shape`） | proto のファイルと、列挙と値、メッセージ |
+| koyomi の dates とカレンダー | `koyomi api` の `calendar.file` と `calendar.uses[].file` | koyomi のカレンダー |
+| dandori のワークフロー | dandori が JSON を出さないので、いまは読めない（4.7） | |
+| chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
+| コード | sakai は読まない。7 章の設定で各ツールが確かめる | |
+
+参照のもとと先が別のコンテキストに属するとき、境界を越える参照になる。そのとき、次のどれかでなければ診断を出す。
+
+1. 先が、二つのあいだの共有カーネルに並べた成果物（の中）にある。
+2. 先が、相手の公表された言語の要素で、関係がそれを許す（1.5 の表）。
+
+診断は、関係が無ければ E201、相手の内側（公表された言語でない proto、規則そのもの、カレンダー）を参照していれば E202、関係はあるが `through` に無い package なら E203、腐敗防止層の `layer` の外からの参照なら E204、腐敗防止層の公表された言語に上流の型が出ていれば E205、別々の道の相手なら E206。
+
+一つの参照に出す診断は一つで、次の順に決める。
+
+1. 二つが別々の道なら E206。
+2. 先が、両側が書いた共有カーネルの中にあれば通す。
+3. 参照する側から相手への `upstream` も、両側が書いたパートナーシップも無ければ E201。相手の側に参照する側への `upstream` がある（向きが逆）ときと、片側だけのパートナーシップや共有カーネルがあるときは、そう注に書く。
+4. 先が相手の公表された言語に無ければ E202。
+5. パートナーシップなら通す（相手のどの公表された言語でもよい）。
+6. 先の package が `through` に無ければ E203。
+7. 腐敗防止層で、参照のもとが下流の公表された言語のファイルなら E205（上流の公表された言語を import すること自体を、上流の型を出すこととみなす）。`layer` があり、もとが層の外なら E204。
+8. ほかは通す。
+
+関係が成り立つのは、下流が書いた `upstream` は、それだけで成り立ち（P4。顧客が片側だけでも、E303 を出したうえで参照は通す）、パートナーシップと共有カーネルは、両側が書いたときだけである。片側だけのパートナーシップや共有カーネルは参照を許さず、E309 や E307 と一緒に、許されなくなった参照を言う。
+
+proto のフィールドやメソッドが使うメッセージと、rulec の `shape` が読むメッセージは、そこからフィールドでたどれる型も全部参照したものとして数える（下流は、メッセージの中の列挙の値も受け取るからである）。`rulec api` の `projection.inputs[].from` は rulec の構文の文字列（`any 出荷.parcels where handling = HANDLING_FRAGILE`）で、それを読み解くと rulec の構文に依ることになるので、読まない。多めに数えるので、同じ語の検査（3.6）で、規則が実際には読まないフィールドの語までぶつかることがある。読むフィールドだけを数えることは 14 章に残した。
+
+### 3.4 パターンどうしの整合
+
+1.4〜1.7 に書いたもの（E301〜E313、W301）。多くは `.ctx` だけから決まる。E301 と E302 は proto と `rulec api` を、E308 は共有カーネルの写しの中身を読む。
+
+### 3.5 対応の網羅
+
+1.7 のとおり。上流の列挙の値は proto から読み、rulec の規則が先なら `rulec api` を読む。
+
+### 3.6 同じ語
+
+1.6 のとおり。越えてくる要素は、3.3 で読んだ参照のうち、要素まで分かるもの（proto が使う型とそこからたどれる型、rulec の `import proto` の列挙と値、`shape` のメッセージとたどれる型）から決める。コードの import と dandori の参照は、要素まで分からないので対象にならない。
+
+### 3.7 確かめないこと
+
+- 腐敗防止層のコードが、書いた対応どおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を覆っているかと、対応の先が下流の列挙にあるかまでである（rulec の規則が先のときは、rulec が規則の表を確かめる）。
+- 実行時にしか見えない呼び出し：URL を文字列で持つ HTTP、メッセージのキュー、データベースの共有、リフレクションと動的な import。どれも成果物にも import にも現れない。
+- dandori の参照（4.7）。
+- 公表された言語から生成したコード（`generated dir`）が、本当にその proto から生成したものか。
+- 語の定義の文の中身（P5）。
+
+## 4. 一式とのつなぎ方
+
+### 4.1 読むもの
+
+| ツール | 呼ぶもの | 読むもの | パスの基点 |
+|---|---|---|---|
+| rulec（0.22.0 以降） | `rulec api <規則>` | `rule`、`alias`、`version`、`source_sha256`、`connect`（`package`、`service`、`path`、`enums`）、`projection.shapes`、`python.params`・`outputs`・`enums`（名前） | 規則のファイルのディレクトリ |
+| koyomi（0.1.0） | `koyomi api <ファイル>` | `kind`、`name`、`alias`、`calendar.file`、`calendar.uses[].file`、`dates`・`claims`・`inputs`（名前） | api に渡したファイルのディレクトリ |
+| chobo（0.1.0） | `chobo api <帳簿>` | `book`、`accounts`、`transfers`、`units`（名前。doc にだけ使う） | |
+| geas | 呼ばない | 属し方だけ | |
+| dandori | いまは呼ばない（4.7） | 属し方だけ | |
+| proto | ファイルを直接読む | `package`、`import`、メッセージ、フィールド、列挙と値、サービスとメソッド、サービスのオプション | proto のルート（4.2） |
+
+ツールの実行ファイルは、環境変数（`SAKAI_RULEC`、`SAKAI_KOYOMI`、`SAKAI_CHOBO`、`SAKAI_DANDORI`）か PATH で探す。地図がそのツールの成果物を含むのにツールが無ければ E104（確かめていないことを、黙って通さない。P7）。ツールの api が失敗したら（成果物がそのツールの検査を通らないと、どのツールも api を出さない）E105 で、ツールの診断の最初の数行を添える。ツールは成果物のディレクトリで、ファイルの名前だけを渡して呼ぶ（dandori が `rulec doc` を呼ぶのと同じ。ツールのメッセージに、この機械の場所が入らないように）。子プロセスには時間の上限を付ける。
+
+rulec は 0.22.0 から、`connect.enums` に、取り込んだ契約のファイル（`contract.file`）と、規則の値ごとの proto での名前（`alias`）と番号を出す（rulec の DESIGN 15.160）。sakai はそれより古い rulec を E104 で断る。
+
+`rulec api` の出力の例（11 章の例の `請求の要否.rule`。2026-10-03、rulec 0.22.1。`connect.enums` の一つめだけ）：
+
+```json
+{
+  "name": "注文の状態",
+  "alias": "shop.ordering.v1.OrderStatus",
+  "contract": {
+    "file": "../../proto/shop/ordering/v1/order.proto",
+    "proto": "proto/shop/ordering/v1/order.proto"
+  },
+  "unset": "ORDER_STATUS_UNSPECIFIED",
+  "values": [
+    {"name": "受付", "alias": "ORDER_STATUS_RECEIVED", "number": 1},
+    {"name": "支払済", "alias": "ORDER_STATUS_PAID", "number": 2},
+    {"name": "出荷済", "alias": "ORDER_STATUS_SHIPPED", "number": 3},
+    {"name": "受注で取消", "alias": "ORDER_STATUS_CANCELLED", "number": 4}
+  ]
+}
+```
+
+`shape` を持つ規則（`出荷の送料.rule`）の `projection.shapes`：
+
+```json
+[{"name": "出荷", "alias": "shipment", "kind": "proto", "file": "../../proto/shop/delivery/v1/shipment.proto", "at": "shop.delivery.v1.CreateShipmentRequest"}]
+```
+
+`rulec certificate` の `contracts` は、`import proto` しか持たない規則では空だった（dandori の DESIGN 1.13 に書いてあるのと同じ）ので、読まない。
+
+koyomi の api のパスは、api に渡したファイルのディレクトリから書かれる。dates のファイルを渡すと、`calendar.file` も、カレンダーが読むカレンダー（`calendar.uses[].file`）も、祝日の表（`calendar.sources[].file`）も、dates のファイルからのパスになる。カレンダーのファイルを渡すと、`calendar.file` はそのファイルの名前になる（2026-10-03、koyomi 0.1.0 で確かめた）。
+
+### 4.2 proto
+
+proto は sakai が直接読む（P2）。読み手は自分で書く（依存を足さない。rulec と dandori もそうしている）。読むのは `syntax`、`package`、`import`（`public` と `weak` も）、メッセージ（入れ子）、フィールド（型、番号、`json_name`、`optional`、`repeated`、`map`、`oneof`）、列挙と値、サービスとメソッド（ストリームかどうか）、サービスとメソッドのオプションの名前と値（dandori の `(dandori.v1.workflow)` を doc に出すため）である。拡張（`extend`）と、ほかのオプションは読み飛ばす。
+
+`import` は、地図の `proto root` のディレクトリから順に探し、無ければ、dandori と同じ決まり（ファイルのディレクトリが自分の package の形で終わっていればその上から、次にファイルのディレクトリから）で探す。Google の well-known types、`buf/validate/validate.proto`、`dandori/v1/options.proto` は、ファイルが無くても知っているものとして扱う（中は読まない）。それ以外で見つからない import は W102 で、そのファイルの型は分からないものとして、参照の検査からも外す（buf の依存のように、リポジトリの外にある契約は地図の範囲の外である）。
+
+11 章の例の `shipment.proto` は、rulec の corpus の契約を写したもので、`buf/validate/validate.proto` を import する。buf 1.54.0 は、BSR の依存を書かないとこのファイルを組めない（`import "buf/validate/validate.proto": file does not exist`）。rulec 0.22.1 はこのファイルを読み、規則の範囲を Protovalidate の注釈と突き合わせる（注釈を外すと E122 になった）。sakai も、ファイルが無くても読める。
+
+### 4.3 rulec
+
+規則は、属し方（ファイル）、公表された言語（`published language rulec.<別名>.v<版>` の塊）、参照のもと（`import proto` と `shape`）、対応の先（1.7）、語の `means` の先（規則の入力、出力、列挙）として現れる。
+
+### 4.4 koyomi
+
+dates のファイルとカレンダーは、属し方と、参照のもと（`use calendar`）として現れる。カレンダーは公表された言語にできない（1.4）ので、カレンダーを境界の向こうから読めるのは、共有カーネルに並べたときだけである。11 章の例では、請求の支払条件と配送の出荷日が同じ `東京の営業日.cal` を読み、二つのコンテキストがそれを共有カーネルに並べる。
+
+### 4.5 chobo
+
+帳簿はほかの成果物を読まないので、参照のもとにならない。帳簿をほかのコンテキストから使うのは、帳簿の後ろに立つサービス（proto）を通すときで、そのときの参照はサービスへの参照になる。`chobo api` は、doc のコンテキストのページに勘定と振替を並べるのに使う。
+
+### 4.6 geas
+
+geas の主張は、プログラムを外から叩き、成果物の名前を持たない（geas の DESIGN の 0 章）。属し方だけを決め、中は読まない。geas は主張の一覧を、走らせずに JSON で出すコマンドを持たない（`check` と `map` はプログラムを走らせる）。主張を名指すこと（2 章の `geas "…" claim "…"`）が要るのは yurai の側である。
+
+### 4.7 dandori：足りないものと選択肢
+
+dandori のワークフローは、境界を越える参照をいちばん多く持つ成果物である。規則を同梱するか Connect で呼ぶか（`use rule … [connect "<URL>"]`）、どの proto を読むか（`use proto`）、どのサービスのどのメソッドを呼ぶか（`connect <API> "<サービス>/<メソッド>"`）、どのサービスを実装するか（`implements`）、どの `.flow` を子として走らせるか（`flow "…"`）。
+
+いまの dandori が出すものを調べた（dandori 0.1.0、2026-10-03）。
+
+| コマンド | 出すもの | 参照が読めるか |
+|---|---|---|
+| `dandori check --format json` | `{"file", "diagnostics"}` だけ | 読めない |
+| `dandori scenarios` | シナリオの入力、タスクの応答、通る分岐 | 読めない |
+| `dandori doc` | 人が読む Markdown と HTML（規則を Connect で呼ぶことは表に出る） | 人のための出力で、dandori 自身も rulec の doc を読み解かずに埋め込む決まりにしている。読まない |
+| `dandori build` | 生成したコード | コードは JSON ではない。読まない |
+
+dandori の DESIGN の 7 章も「`build` の JSON 出力」をまだやっていないことに挙げている。
+
+選択肢は次のとおり。
+
+- **A：dandori に `dandori api <file.flow>` を足す**。rulec、koyomi、chobo の `api` と同じく、ワークフローの呼び方と参照を JSON で出す。sakai が要るのは、ワークフローの名前とバージョン、`implements`（proto のファイルとサービスの完全な名前）、`use` ごとの種類（規則、proto、OpenAPI、Smithy）とファイルと呼び方（同梱、Lambda、Connect の URL、ローカル）、タスクごとの呼び方（`connect` のサービスとメソッド、子の `.flow` のファイル、HTTP、AWS、コールバック、エージェント）、proto から作った型（`warehouse.ReserveResponse` がどのファイルのどのメッセージか）、それぞれの行番号。yurai も、タスクや案件を名指すのに同じものが要る。dandori の検査はこれを全部もう持っている。
+- **B：sakai は `.flow` をファイルの単位でだけ名指す**。属し方と doc には出すが、参照は確かめず、`check` の要約と note（N101）で「dandori の参照は確かめていない」と毎回言う。dandori が生成したコードをリポジトリに置き、地図の `code` の置き場所の下にあれば、そのコードの import（たとえば Temporal の TypeScript のアクティビティが、同梱した規則のモジュールを import する）は、7 章のツールが確かめる。
+- **C：sakai が `.flow` を読む**。P2 に反し、dandori の構文を二か所で持つことになる。取らない。
+- **D：sakai が dandori の doc や生成したコードを読み解く**。同じ理由で取らない。
+
+**決定**：A を勧める（★作者が決めること。dandori を変えるかどうか）。決まるまで、sakai は B の形で動く。A が入ったときに sakai がすることは、C の段階の計画に書いた（PLAN の C.4）。そのとき足す検査は、規則の同梱が境界を越える（E202）、`connect` で呼ぶサービスが上流の公開ホストサービスでない、`implements` するサービスが自分の公表された言語に無い、子の `.flow` が境界の向こうのもの、の四つで、コードの番号はそのときに台帳に足す。
+
+四つめは、そのときにもう一つ決めることがある。子の `.flow` を境界の向こうから走らせてよいのは、その子が相手の公開ホストサービスを実装しているとき、と決めるのが素直だが、日本語の値の列挙を受け取るワークフローは proto のサービスを実装できない（proto の値は ASCII の識別子に限られる。dandori の DESIGN 1.14）。11 章の例の `配送の手配.flow` がそうで、便（`通常便 | 翌日便`）を受け取る。子の `.flow` の入力と出力そのものを、rulec の Connect のサービスと同じく公表された言語に入れる書き方（`published language` の塊に `dandori "…"` を並べる）も考えられる。どちらにするかは、dandori の api の形が決まってから決める。
+
+A の段階で、11 章の例の二つのワークフローの下書き（dandori の例の引当と発送と配送の手配の日本語の版を写し、proto と規則のパスを例の置き場所に直し、`出荷の急ぎ` を Connect で呼ぶようにしたもの）を dandori 0.1.0 に通し、どちらも `ok` だった（2026-10-03）。dandori の api が入れば、この二つがそのまま検査の対象になる。
+
+## 5. 診断
+
+### 5.1 形
+
+koyomi と chobo にそろえる。
+
+```
+error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
+  <行> | <原文の行>
+  = <注>
+  = The line, fixed: <.ctx にそのまま貼れる行>
+  involved:
+      <コンテキスト>  <ファイル:行、または名指し>  <それが何か>
+```
+
+日本語では、重さの語が `エラー`、`警告`、`備考`（GCC の日本語の訳語と同じ）、直した行が `= 直した行:`、最後の見出しが `関わるもの:` になる。
+
+一行目は地図の言葉で完結させる（どのコンテキストの、どの成果物が、どのコンテキストの何を）。「関わるもの」には、診断の根拠を一行ずつ並べる。参照のもとの成果物とその行、参照の先の成果物、許すはずだった関係の `.ctx` の行、語とそれが指す要素である。ファイルの行が分かるものは `<パス>:<行>`、要素は 2 章の名指しで書き、コンテキストに属するものは、そのコンテキストの名前を頭に置く。ファイルの場所は走らせたディレクトリから、名指しはルートからの相対で書く（2.4）。直せる行が一つに決まるときは、書き換え後の `.ctx` の行を「直した行」に書く。
+
+位置は、参照のもとの成果物の行が分かるときはそこにする（proto の import）。一式のツールの api は行を言わないので（rulec の `import proto` と `shape`、koyomi の `use calendar`）、そのときはファイルまでを位置にし（`billing/rules/出荷の送料.rule: …`。行と列を書かない）、注に「rulec の api は行を言わないので、ファイルまでを示します」と添え、api のどのフィールドから読んだかを書く。パターンと対応と語の診断は、`.ctx` の行を位置にする。
+
+文面は英語が既定で、`--lang ja` か `SAKAI_LANG=ja` で日本語にする。システムのロケールは見ない。日本語と英語は `tr!` で隣に書き、文は描くときに言語を渡す（koyomi と同じ。テストが英語と日本語の golden を同じプロセスで並行して描けるように）。日本語の文で、ASCII の名前と日本語のあいだには空白を入れる（koyomi と同じ）。コンテキストと語の名前は「」で囲む。
+
+`--format json` は、地図ごとに一行で `{"file", "ok", "summary", "diagnostics": [{"code", "severity", "file", "line", "col", "message", "notes", "references", "fix"}]}` を出す。`references` は「関わるもの」の並びで、要素ごとに `{"context", "name", "file", "line", "what", "via"}` を持つ。`name` は 2 章の JSON の形の名指し（ファイルの行なら null。パスはルートからの相対）、`file` と `line` はファイルの行（名指しなら null。パスは文面と同じく、走らせたディレクトリから書く。2.4）、`via` は読んだところ（proto の import なら `proto import`。一式の読み込みを作れば、一式のツールの api のフィールド）である。`fix` は `.ctx` にそのまま貼れる書き換え後の行（無ければ null）。`line` と `col` は分からなければ null。キーは `--lang` に依らず英語。
+
+`severity` は `error`、`warning`、`note` の三つ。exit code は 0（エラーなし。警告と note はあってよい）、1（エラーあり）、2（引数の誤り、読めないファイル、sakai 自身の不具合）。
+
+### 5.2 台帳
+
+番号と意味はこの表で決め、`src/codes.rs` の台帳と一致させる（`tests/codes.rs` が表と台帳を突き合わせる）。各コードは、いつ出るか、どう直すか、最小の再現を持ち、`sakai explain <コード>` が引く。再現は複数のファイルになるので、台帳は、二つのコンテキスト（甲と乙）の検査を通る地図を土台に持ち、各コードはその上に置き換えるファイルを持つ（rulec の DESIGN 15.59 が、隣に置くファイルを台帳に持たせたのと同じ考え）。テストは全コードの再現を一時ディレクトリに書き、そこで走らせて、そのコードが出ることを確かめる。走らせるのはたいてい `check .` で、`build` が出す E501 と E502 は、再現に `sakai build …` のコマンドを持つ（`sakai explain` もそのコマンドを言う）。sakai がまだ出さないコード（一式のツールに関わる E104、E105、N101、E405）は、見出しと説明と直し方だけを持ち、再現は一式の読み込み（PLAN の C.1〜C.5）を作るときに足す。
+
+| コード | いつ出るか |
+|---|---|
+| E001 | 読めない字句（知らない文字、閉じていない文字列） |
+| E002 | この位置に書けない語（役割の無い `upstream` など） |
+| E003 | ファイルが `map` か `context` の行で始まらない |
+| E004 | 節の順序や数が違う（同じ節が二度、map に `owns`、context に `covers`、省けない節が無い） |
+| E005 | 字下げが合わない（タブ、揃っていない） |
+| E006 | 同じ名前を二度宣言している（コンテキスト、別名、語、`published language` の package、同じ相手への同じ関係） |
+| E007 | 宣言されていない名前（コンテキスト、語、package、要素。名指した proto にその要素が無いときも）。短い書き方の名前が二つの package に当たるときも |
+| E008 | 地図かコンテキストに ASCII の別名が無い、または形が違う |
+| E009 | 書いたパスが無い（`use context`、`owns`、`proto`、`generated dir`、`layer`、`covers`、`code`） |
+| E010 | `use context` の先が context のファイルでない、同じファイルを二度読む |
+| E011 | 成果物の名指しの形が違う（ツールの語と拡張子が合わない、`dir` の先がファイル、知らないツールや種類の語、親のすぐあとでない子、dandori の種類、列挙でない対応の先） |
+| E012 | 絶対パス、ルートの外に出るパス、空のパス（2.4） |
+| E101 | どのコンテキストにも属さない成果物 |
+| E102 | 二つのコンテキストが同じ深さで持つ成果物 |
+| E103 | 範囲の外のものを、持っている、または参照している |
+| E104 | 地図が含む成果物のツールが無い、または古い |
+| E105 | ツールが成果物を読めない（ツールの api が失敗した） |
+| E106 | proto が読めない |
+| W101 | `owns` の項が成果物を一つも含まない |
+| W102 | 見つからない proto の import（範囲の外のものとして扱う） |
+| W103 | どの地図にも読まれない context のファイル（`check` にディレクトリを渡したときだけ） |
+| N101 | dandori の参照を確かめていない（dandori が参照を JSON で出さないため） |
+| E201 | 関係の無いコンテキストへの参照（関係が逆向き、つまり参照の先が下流のときも） |
+| E202 | 相手の内側への参照（公表された言語でない proto、規則やカレンダーそのもの） |
+| E203 | `through` に無い package を通る参照 |
+| E204 | 腐敗防止層の `layer` の外からの、上流の公表された言語への参照 |
+| E205 | 腐敗防止層の下流の公表された言語に、上流の型が出ている |
+| E206 | 別々の道の相手への参照 |
+| E301 | 公開ホストサービスのサービスが、公表された言語に無い |
+| E302 | 公表された言語の proto や規則や生成したコードの置き場所が、そのコンテキストのものでない、または package が見出しと違う |
+| E303 | 顧客／供給者が片側だけ |
+| E304 | 順応者に対応か `layer` がある |
+| E305 | 腐敗防止層でないのに、対応か `layer` がある |
+| E306 | 一緒に書けない役割（順応者と顧客、順応者と腐敗防止層） |
+| E307 | 共有カーネルが片側だけ、または両側の並びが違う |
+| E308 | 共有カーネルに並べた二つの写しの中身が違う |
+| E309 | パートナーシップが片側だけ |
+| E310 | 同じ二つのあいだの関係が両立しない（別々の道とほかの関係） |
+| E311 | 自分自身との関係 |
+| E312 | 上流が `through` の package を公表していない |
+| E313 | 腐敗防止層の `layer` が、下流のものでない |
+| W301 | 二つのコンテキストが互いに上流（循環） |
+| E401 | 対応に、上流の列挙の値が抜けている（抜けた値を全部名指す） |
+| E402 | 対応に、上流の列挙に無い値がある |
+| E403 | 対応の先の値が、下流の列挙に無い |
+| E404 | 腐敗防止層なのに、下流の成果物が参照している上流の列挙に対応が無い |
+| E405 | rulec の規則の取り込みと、`.ctx` に書いた対応が食い違う |
+| E406 | 同じ名前で違う意味の語が、対応の無いまま境界を越える |
+| E407 | 違う意味の語を、同じ名前の値や語に読み替えている |
+| E408 | `means` の要素が、そのコンテキストの公表された言語に無い |
+| E409 | `term` の対応の語が、どちらかの用語集に無い |
+| E410 | `as` で取り入れる語が相手の用語集に無い、または相手との関係が無い |
+| W401 | 境界を越えない語 |
+| W402 | 値が無いことを表す 0 番の値に対応を書いている |
+| E501 | ツールの設定に書けない（言語のモジュールにならないディレクトリの名前、`code` の無い言語へのビルド、コードを持つコンテキストが無い） |
+| E502 | `build --check`：書いてある設定が、いまの地図から書くものと違う |
+
+番台は、構文と名前（E0xx）、属し方と成果物を読むこと（E1xx）、境界を越える参照（E2xx）、パターン（E3xx）、語と対応（E4xx）、出力（E5xx）で分けた。増やすときは番台の末尾に足し、番台をまたがない。
+
+### 5.3 診断の例
+
+B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ変えた変異（`tests/mutants/`）に、sakai が出したもの。英語と日本語の全文は `tests/golden/` にある。例の地図で、カレンダーを境界の向こうから読むとき（E202）の診断は、koyomi の参照を読むようになってから（PLAN の C.3）ここに足す。
+
+受注が注文の状態に値を足したとき（`order.proto` に `ORDER_STATUS_RETURNED = 5;`）：
+
+```
+エラー[E401]: ctx/請求.ctx:17:3: 「請求」の腐敗防止層の対応に、「受注」の列挙 shop.ordering.v1.OrderStatus の値 ORDER_STATUS_RETURNED がありません
+    17 |   enum OrderStatus -> enum BillingStatus
+  = ORDER_STATUS_RETURNED は proto/shop/ordering/v1/order.proto:16 の値です。
+  = 上流の列挙の値ごとに、下流の値か refuse（断る）を書きます。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
+  = 直した行: ORDER_STATUS_RETURNED -> refuse "…"
+  関わるもの:
+      請求  ctx/請求.ctx:14                                              upstream 受注 anticorruption layer
+      受注  proto "proto/shop/ordering/v1/order.proto" enum OrderStatus  値は 5 個で、対応が無いのは 1 個
+```
+
+在庫の側の `shared kernel with 受注` を消したとき（在庫の `stock.proto` が、共有カーネルの `money.proto` を import している）：
+
+```
+エラー[E307]: ctx/受注.ctx:21:1: 共有カーネルが「受注」の側にしか書かれていません
+    21 | shared kernel with 在庫
+  = 共有カーネルは二つのチームが一緒に持つものなので、「在庫」のファイルにも `shared kernel with 受注` を書き、同じものを並べます。
+  関わるもの:
+      受注  ctx/受注.ctx:21  shared kernel with 在庫
+エラー[E201]: proto/warehouse/v1/stock.proto:5:1: 「在庫」の proto/warehouse/v1/stock.proto が、関係の無い「受注」の proto/shop/common/v1/money.proto を import しています
+     5 | import "shop/common/v1/money.proto";
+  = 「受注」が「在庫」の下流で、参照の向きが逆です。上流と下流の関係が許すのは、下流から上流への参照です。
+  = 二つのあいだの共有カーネルは、「受注」の側にしか書かれていません（E307 も出ています）。
+  = 境界を越えて参照するには、上流と下流（下流が `upstream` を書く）、パートナーシップ、共有カーネルのどれかの関係が要ります。
+  関わるもの:
+      在庫  proto/warehouse/v1/stock.proto:5          import "shop/common/v1/money.proto"
+      受注  proto "proto/shop/common/v1/money.proto"  「受注」の内側のファイル
+```
+
+受注が在庫に順応しているのに、在庫と違う意味の「引当」を持つとき：
+
+```
+エラー[E406]: ctx/受注.ctx:17:3: 「在庫」の「引当」が、「受注」の違う意味の「引当」とぶつかったまま、境界を越えています
+    17 |   引当 "客の注文の一行に、届ける日を割り当てること"
+  = 「在庫」の「引当」は「注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと」で、proto "proto/warehouse/v1/stock.proto" message ReserveResponse を指します。
+  = 「受注」の「引当」は「客の注文の一行に、届ける日を割り当てること」です。
+  = 「受注」は「在庫」の順応者なので、対応を書いて読み替えることはできません。
+  = 直し方: 「受注」の語の名前を変える。同じ意味なら `引当 as 在庫.引当` にする。読み替えるなら、`upstream 在庫` を anticorruption layer にして `term 引当 -> <「受注」の語>` を書く。
+  関わるもの:
+      受注  proto/shop/ordering/v1/fulfillment_lite.proto:5                 import "warehouse/v1/stock.proto"
+      在庫  proto "proto/warehouse/v1/stock.proto" message ReserveResponse  「在庫」の語「引当」が指すもの
+      在庫  ctx/在庫.ctx:13                                                 引当 "注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと"
+      受注  ctx/受注.ctx:17                                                 引当 "客の注文の一行に、届ける日を割り当てること"
+```
+
+例で、在庫が梱包の状態に値を足したとき（`stock.proto` に `PACKING_STATUS_DAMAGED = 4;`）。配送の腐敗防止層は、新しい値をどう扱うかを決めるまで通らない：
+
+```
+エラー[E401]: contexts/配送.ctx:33:3: 「配送」の腐敗防止層の対応に、「在庫」の列挙 warehouse.v1.PackingStatus の値 PACKING_STATUS_DAMAGED がありません
+    33 |   enum PackingStatus -> 出荷の可否
+  = PACKING_STATUS_DAMAGED は proto/warehouse/v1/stock.proto:43 の値です。
+  = 上流の列挙の値ごとに、下流の値か refuse（断る）を書きます。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
+  = 直した行: PACKING_STATUS_DAMAGED -> refuse "…"
+  関わるもの:
+      配送  contexts/配送.ctx:29                                       upstream 在庫 anticorruption layer
+      在庫  proto "proto/warehouse/v1/stock.proto" enum PackingStatus  値は 4 個で、対応が無いのは 1 個
+```
+
+例で、受注の用語集に、在庫と違う意味の「引当」を足したとき（受注は在庫の順応者で、受注の生成したコードが在庫の `ReserveResponse` をそのまま使う）：
+
+```
+エラー[E406]: contexts/受注.ctx:22:3: 「在庫」の「引当」が、「受注」の違う意味の「引当」とぶつかったまま、境界を越えています
+    22 |   引当 "客の注文の一行に、届ける日を割り当てること"
+  = 「在庫」の「引当」は「注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと」で、proto "proto/warehouse/v1/stock.proto" message ReserveResponse を指します。
+  = 「受注」の「引当」は「客の注文の一行に、届ける日を割り当てること」です。
+  = 「受注」は「在庫」の順応者なので、対応を書いて読み替えることはできません。
+  = 直し方: 「受注」の語の名前を変える。同じ意味なら `引当 as 在庫.引当` にする。読み替えるなら、`upstream 在庫` を anticorruption layer にして `term 引当 -> <「受注」の語>` を書く。
+  関わるもの:
+      受注  proto/shop/ordering/v1/fulfillment.proto:15                     import "warehouse/v1/stock.proto"
+      在庫  proto "proto/warehouse/v1/stock.proto" message ReserveResponse  「在庫」の語「引当」が指すもの
+      在庫  contexts/在庫.ctx:19                                            引当 "注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと"
+      受注  contexts/受注.ctx:22                                            引当 "客の注文の一行に、届ける日を割り当てること"
+```
+
+## 6. コマンド
+
+| コマンド | すること |
+|---|---|
+| `sakai check <map.ctx \| dir>... [--format json] [--root <dir>]` | 検査（3 章）。ディレクトリを渡すと、その下の map のファイルを全部（パスの順に）。どの地図にも読まれない context のファイルがあれば、ディレクトリを渡したときだけ W103 を出す |
+| `sakai build <map.ctx> --target import-linter\|dependency-cruiser\|archunit\|go-arch-lint [--out <dir>] [--check] [--root <dir>]` | コードの import の検査の設定を書く（7 章）。検査を通らない地図からは書かない（診断を出して exit 1）。`--out` の既定は、その言語の `code` の置き場所（ArchUnit は `test` の置き場所）。書けば `examples/通販/py/.importlinter: Written (11 contracts)` のように一行で言う。`--check` は、書く代わりに、いまの設定が地図から書くものと同じかを確かめる（同じなら `Up to date (11 contracts)`、違えば E502）。書けない地図は E501 |
+| `sakai export cml <map.ctx> [--out <file>] [--root <dir>]` | Context Mapper の CML を書く（8 章）。既定は標準出力。検査を通らない地図からは書かない（診断は標準エラーに出して exit 1） |
+| `sakai doc <map.ctx> [--format markdown\|html] [--out <dir>]` | コンテキストマップの図、コンテキストごとの用語集、関係と対応の表（10 章）。既定は Markdown を標準出力に |
+| `sakai api <map.ctx> [--root <dir>]` | 地図、属し方、境界を越える参照を JSON で（9 章） |
+| `sakai explain <コード>`、`sakai explain --all [--format markdown]` | 診断のコードを引く |
+
+`--lang ja|en` はどのコマンドにも付けられる（無ければ `SAKAI_LANG`、それも無ければ英語）。`--root` は、パスを数えるルートを替える（2.4。無ければ、最初に渡したパスの上で `.git` を持つ一番近いディレクトリ）。`sakai --help`、`sakai <コマンド> --help`、`sakai --version`。
+
+**決定**：コマンドとフラグの定義を `src/cli.rs` の一枚の表に置き、`--help` の表示と引数の読み取りが同じ表を引く（rulec の 12.1、koyomi、chobo と同じ）。知らないフラグ、閉じた集合の外の値（`--target depguard`）、値の無いフラグ、二度書いたフラグは exit 2 で止める。黙って無視すると、エージェントはフラグが効いたと信じて次に進むからである。
+
+`check`、`api`、`doc`、`export` は、一式のツールの api を呼ぶほかは通信も子プロセスもしない。`build` も、設定を書くだけで、import の検査のツールは走らせない。ツールを走らせるのは利用者の CI で、sakai のテストはツールを本当に走らせて設定を確かめる（7.6）。
+
+## 7. コードの import の検査（build）
+
+### 7.1 import を許す単位と向き
+
+**決定**：コードの import は、四つの種類のディレクトリのまとまりで決める。
+
+- **内側**：コンテキストに属するディレクトリのうち、下の三つでないもの。
+- **公表された言語から生成したコード**：`published language` の塊の `generated dir`。
+- **共有カーネル**：`shared kernel with` に並べたディレクトリ。
+- **腐敗防止層**：`upstream … anticorruption layer` の `layer` に並べたディレクトリ（下流の内側の中にある）。
+
+許す import は次のとおりで、ほかは全部許さない。表の「X」は、X の内側、X の生成したコード、X の層のまとまりのことである。
+
+| import のもと | 先 |
+|---|---|
+| コンテキスト X のどこでも | X のどこでも（内側、X の生成したコード、X の層） |
+| X | X が持つ共有カーネル（両側から） |
+| X（腐敗防止層に `layer` を書いたなら、その上流に向けた層だけ） | 上流 Y の、`through` に並べた package の生成したコード |
+| X | パートナー Y の生成したコード |
+| X の生成したコード | Y の生成したコード（X の proto が Y の proto を import していて、それを地図が許すとき） |
+
+C の段階で作ったときに、表だけでは決まらないことが三つあった。
+
+- 共有カーネルのまとまりは、両側のどのまとまりからも import してよいが、共有カーネルの中から import してよいのは共有カーネルの中だけにした。共有カーネルが片方の内側に依れば、もう片方のチームがそれに引きずられるからである。
+- 腐敗防止層の `layer` に並べたのが規則のファイルだけで、その言語の層のディレクトリが無ければ、その言語のどのコードも上流の生成したコードを import できない。`layer` を書いたなら層の中だけ、という決まりを、そのまま当てはめた。
+- 生成したコードどうしの行は、proto の import のうち、3.3 の検査が許したものから作る。例では、受注の `fulfillment.proto` が在庫の `stock.proto` を import しているので、受注の生成したコードは在庫の生成したコードを import してよい。
+
+7.2〜7.5 の四つの設定は、どれもこの表を、それぞれのツールの言葉に写したものである。ディレクトリは、地図の `code` の置き場所から見たパスで、Python と Java ではモジュール（パッケージ）の名前に、TypeScript と Go ではパスのまま使う。コードのファイルは、それを含むいちばん深いディレクトリのまとまりに属する（1.3 と同じ決まり）。同じ深さなら、生成したコード、層、共有カーネルのほうが内側より先に来る。例では `../py/calendars` が請求の `owns` と共有カーネルの両方にあり、共有カーネルのまとまりになる。コードのファイルを一つも含まないまとまりは作らない。設定に写せないもの（コードのファイルを一つだけ名指した `owns` の項、モジュールの名前にならないディレクトリ。Go と Java ではパッケージがディレクトリなので、ファイルの単位では書けない）は E501 で、書かずに止める。
+
+例の地図の Python のまとまりは次の 11 個で、TypeScript、Java、Go も同じ形になる（`tests/build.rs` が確かめる）。
+
+| まとまり | ディレクトリ | import してよいもの（自分のほか） |
+|---|---|---|
+| `sakai-ordering` | `ordering` | 受注の生成したコード |
+| `sakai-ordering-pl-shop.ordering.v1` | `shop/ordering/v1` | 受注、配送の内側と層（パートナー）、請求の層 |
+| `sakai-inventory` | `inventory` | 在庫の生成したコード |
+| `sakai-inventory-pl-warehouse.v1` | `warehouse/v1` | 在庫、受注（順応者）、受注の生成したコード、配送の層 |
+| `sakai-delivery` | `delivery` | 配送の生成したコードと層 |
+| `sakai-delivery-pl-shop.delivery.v1` | `shop/delivery/v1` | 配送、受注の内側（パートナー）、請求の内側と層（顧客） |
+| `sakai-delivery-layer-inventory` | `delivery/acl/inventory` | 配送 |
+| `sakai-billing` | `billing` | 請求の層 |
+| `sakai-billing-layer-ordering` | `billing/acl/ordering` | 請求 |
+| `sakai-billing-kernel-delivery` | `calendars` | 請求、配送 |
+| `sakai-reviews` | `reviews` | 無し |
+
+設定は四つとも、どのツールでも同じ扱いにする。地図から書く、頭に元の地図と書いたコマンドを書く、`--check` で古くなったかを言う、テストで本物のツールを走らせ、地図に無い import を捕まえ、地図どおりの import を通すことを確かめる（7.6）。頭の地図は、設定のファイルのディレクトリから見たパスで書く（`../通販.ctx`）。ルートに依らないので、どこで書いても同じ文字になる。設定の説明の文（契約の名前、規則の説明）は `--lang` の言語で書き、頭のコマンドにも `--lang ja` を書き残す。違う `--lang` で `--check` すると説明の文が違って E502 になるので、そのときは注で、ファイルがどの言語で書かれているかを言う。
+
+**捨てたもの**：設定の頭に `.ctx` のファイルの SHA-256 を書くこと（A の段階の案）。`.ctx` をどこか一字でも直すと（コメントでも）ハッシュが変わり、`--check` が、中身の変わらない設定を全部書き直させることになる。古くなったかは、ツールが読む中身を一行ずつ比べて言う。
+
+### 7.2 Python：import-linter
+
+**決定**：まとまりごとに、import-linter の `protected` の契約を一つ書く。`protected_modules` がそのまとまりのモジュールで、`allowed_importers` が 7.1 の表でそこを import してよいモジュールである。設定は `.importlinter`（INI）で、`code python` の置き場所に書く。
+
+`root_packages` は、置き場所の直下のディレクトリのうち `__init__.py` のあるものの名前と、`__init__.py` の無いディレクトリ（protoc が書く名前空間のパッケージ）を、`__init__.py` かモジュールのあるディレクトリまで降りた名前（`warehouse.v1`、`shop.ordering.v1`）である。grimp 3.17 は、パッケージの下にある `__init__.py` の無いディレクトリに入らない。`warehouse/__init__.py` があり、その下に protoc の `warehouse/v1/` があると、grimp は `warehouse.v1` のモジュールも、それへの import も読まなかった（`tests/maps/入れ子` で確かめた）。そこで、そういうディレクトリも `root_packages` に足す。置き場所の直下にあるモジュール（`py/top.py`）は、grimp が根に受け付けない（`NotATopLevelModule`）ので E501 にする。
+
+import-linter は、守るモジュールをパッケージとして扱い、その下を全部含める。まとまりのディレクトリが別のまとまりを含むとき（配送の内側 `delivery` の中の、在庫に向けた層 `delivery/acl/inventory`）は、別のまとまりを含まないいちばん大きいモジュールを並べる。ただ、別のまとまりを含むパッケージが自分の `__init__.py` を持つと、それをパッケージとして並べれば下のまとまりまで含めてしまう。そのときは、その契約だけ `as_packages = False` にして、モジュールを一つずつ並べる。また import-linter は、守るモジュールを import してよいのは、そのモジュール自身とその下だけとみなすので、まとまりの中のモジュールどうしの import を止めないよう、まとまり自身のモジュールも `allowed_importers` に並べる。例の `.importlinter` から、在庫の公表された言語の契約と、配送の内側の契約を抜き出す（`…` は省いたところ）。
+
+```ini
+[importlinter:contract:sakai-inventory-pl-warehouse.v1]
+name = 「在庫」の公表された言語 warehouse.v1 から生成したコードは、「受注」、「在庫」、「配送」の「在庫」に向けた腐敗防止層だけが import する
+type = protected
+protected_modules =
+    warehouse.v1
+allowed_importers =
+    delivery.acl.inventory
+    inventory
+    ordering
+    shop.ordering.v1
+    warehouse.v1
+…
+[importlinter:contract:sakai-delivery]
+name = 「配送」(delivery) の内側は、「配送」だけが import する
+type = protected
+as_packages = False
+protected_modules =
+    delivery
+    delivery.acl
+    delivery.ship
+allowed_importers =
+    delivery
+    delivery.acl
+    delivery.acl.inventory
+    delivery.acl.inventory.packing
+    delivery.ship
+    shop.delivery.v1.shipment_pb2
+```
+
+例のままでは、11 の契約がどれも KEPT で exit 0 になる。受注の内側に在庫の内側を import するファイルを足すと、import-linter 2.15 は次を出して exit 1 になった。
+
+```text
+Illegal imports of protected package inventory:
+- ordering.bad_internals -> inventory.ledger (l.2)
+```
+
+確かめたことがほかに三つある。契約の名前には日本語を書ける。`protected_modules` に、グラフに無いモジュールを書くと `"shop.nothing.here" not present in the graph.` で exit 1 になる（sakai は、`.py` のあるまとまりだけを書く）。何も付けずに走らせると、作業ディレクトリに `.import_linter_cache` を書く（テストは `--no-cache` を付ける）。
+
+**捨てたもの**：`forbidden` の契約（もとと先の組ごとに書くので、コンテキストの数の二乗になり、新しいコンテキストを足したときに書き漏らすと素通りする）。`independence` の契約（共有カーネルや公表された言語のような、許す import を書けない）。
+
+### 7.3 JavaScript と TypeScript：dependency-cruiser
+
+**決定**：まとまりごとに、`forbidden` の規則を一つ書く。`to.path` がそのまとまりのファイルに当たる正規表現、`from.pathNot` が 7.1 の表でそこを import してよいまとまりのファイルに当たる正規表現である。設定は `.dependency-cruiser.cjs`（`module.exports = { … };` の CommonJS）で、`code typescript` の置き場所に書き、パスもそこから見たものにする。`options.tsPreCompilationDeps` を true にし、型だけの import も数える。
+
+まとまりのディレクトリが別のまとまりを含むときは、否定先読み（`(?!…)`）で外す（`^(?:delivery/(?!(?:acl/inventory)/))`）。A の段階の案は `to.pathNot` で外す形だったが、外したいのは `to` の側だけではない。import してよい側のディレクトリが、import してはいけないまとまりを含むこともある（`from.pathNot` には例外を書けない）。否定先読みなら、どちらの側でも、まとまりのファイルにちょうど当たる式を書ける。
+
+JSON の設定にしないのは、頭に元の地図を書けないからである。dependency-cruiser 16.10.4 は、知らないキー（`"$comment"`）を一番上にも `options` の中にも置かせず、`The supplied configuration is not valid: data must NOT have additional properties.` で止まった。`.cjs` なら先頭の行にコメントを書ける。例の `.dependency-cruiser.cjs` から、配送の内側の規則を抜き出す。
+
+```js
+    {
+      name: "sakai-delivery",
+      comment: "「配送」(delivery) の内側は、「配送」だけが import する",
+      severity: "error",
+      from: { pathNot: "^(?:delivery/|shop/delivery/v1/|delivery/acl/inventory/)" },
+      to: { path: "^(?:delivery/(?!(?:acl/inventory)/))" },
+    },
+```
+
+dependency-cruiser 16.10.4 と TypeScript 5.9.3 で、例のままでは違反が無く、受注の内側に在庫の内側を import するファイルを足すと、次を出した。
+
+```text
+error sakai-inventory: ordering/bad_internals.ts → inventory/ledger.ts
+```
+
+`--output-type err` は、この行を出して、エラーの数を exit code にする（一つなら 1）。`--output-type json` は、違反があっても exit 0 で、違反は JSON の `summary.violations` に入る。CI では `err` で走らせる。sakai のテストは JSON を読み、違反の有無を JSON から決める。
+
+**気をつけること**：dependency-cruiser 16.10.4 が読める TypeScript は 2 以上 6 未満で、TypeScript 7.0.2 を入れたまま走らせると、`.ts` のファイルを黙って読み飛ばし、`✔ no dependency violations found (0 modules, 0 dependencies cruised)` で exit 0 になった（`depcruise --info` で `x typescript >=2.0.0 <6.0.0` と分かる）。地図に無い import があっても通ってしまう。sakai のテストは、`depcruise --info` で TypeScript が読まれる（`✔ typescript`）ことと、`summary.totalCruised` が `.ts` のファイルの数より少なくないことを確かめ、どちらかが崩れたら SKIP ではなく失敗にする。README にもこれを書く。
+
+版は、dependency-cruiser 16.10.4 と TypeScript 5.9.3 に固定する（`tools/package.json` と `tools/package-lock.json`）。dependency-cruiser の 17 と 18 は node 23 を対象にしていない（17 は `^20.12||^22||>=24`、18 は `^22||^24||>=26`）ので、この機械の node v23.11.0 で `npm install` すると 16.10.4 が入る。
+
+**捨てたもの**：`allowed` の規則（許すものだけを並べる形）。地図の外のモジュール（node の組み込みや npm のパッケージ）も並べることになる。
+
+### 7.4 Java：ArchUnit
+
+**決定**：まとまりごとに、ArchUnit の規則を一つ持つ JUnit 5 のテストのクラス `SakaiContextsTest.java` を書く（`code java` の `test` の置き場所に。無ければ E501）。デフォルトパッケージのクラスは、規則がパッケージで名指せないので E501 にする。まとまりはクラスの述語にし（そのパッケージで、中の別のまとまりのパッケージでないもの）、規則は「import してよいまとまりの外のクラスは、まとまりのクラスに依らない」と書く。`as(…)` に地図の言葉の説明を付ける。例の `SakaiContextsTest.java` から、配送の内側の述語と規則を抜き出す。
+
+```java
+  // 「配送」(delivery) の内側
+  private static final DescribedPredicate<JavaClass> SAKAI_DELIVERY = resideInAnyPackage("delivery..").and(resideOutsideOfPackages("delivery.acl.inventory.."));
+…
+  @ArchTest
+  static final ArchRule sakai_delivery =
+      noClasses().that(DescribedPredicate.not(SAKAI_DELIVERY.or(SAKAI_DELIVERY_PL_SHOP_DELIVERY_V1).or(SAKAI_DELIVERY_LAYER_INVENTORY)))
+          .should().dependOnClassesThat(SAKAI_DELIVERY)
+          .as("「配送」(delivery) の内側は、「配送」だけが使う");
+```
+
+ArchUnit 1.5.1（archunit-junit5 1.5.1、JUnit Platform Console 6.1.3、OpenJDK 27 で `--release 21` に組んだ）で、例のままでは 11 の規則がどれも通る。レビューのクラスに請求のクラスを使わせると、次を言った。
+
+```text
+Rule '「請求」(billing) の内側は、「請求」だけが使う' was violated (2 times):
+Method <reviews.BadSeparate.billed(java.lang.String)> calls constructor <billing.Invoice.<init>()> in (BadSeparate.java:6)
+```
+
+テストの Java の変異は、import の文を書かず、完全な名前でクラスを使っている。ArchUnit はクラスファイルの依存を読むので、import の文が無くても見つける。import-linter、dependency-cruiser、go-arch-lint は import の文を読むので、四つのツールで捕まえるものが少し違う（import の文だけがあって使っていない依存は、ArchUnit には見えない）。README と docs に書く。
+
+ArchUnit は、`that()` に当たるクラスが一つも無い規則を、既定で失敗させる（`failed to check any classes`。`archRule.failOnEmptyShould`）。パッケージの名前を書き誤った設定が黙って通らないのはよいことだが、どのクラスも使ってよいまとまり（`tests/maps/入れ子` の在庫の公表された言語）では、`that()` に当たるクラスが無い。sakai はその規則を書かず、代わりに理由をコメントに書く。
+
+**捨てたもの**：Spring Modulith の `package-info.java` の注釈を書くこと（0.4。Spring の jar が要り、宣言がコードに散らばる）。ArchUnit の PlantUML の図に照らす規則（`adhereToPlantUmlDiagram`）。図の構文で書けるのはコンポーネントのあいだの矢印で、腐敗防止層だけが import してよい、のような向きを書きにくい。
+
+### 7.5 Go：go-arch-lint（depguard と比べて）
+
+**決定**：go-arch-lint にする。まとまりごとにコンポーネント（`in:` にディレクトリの `**`）を書き、`deps` の `mayDependOn` に 7.1 の表で import してよいコンポーネントを並べる。設定は `.go-arch-lint.yml`（version 3）で、`code go` の置き場所（`go.mod` のあるディレクトリ。無ければ E501）に書く。`except` で外したファイルは `excludeFiles` に入れる。
+
+go-arch-lint v1.19.0（2026-09-07）は、同じコンポーネントの中のパッケージどうしの import（在庫の `inventory` から `inventory/ledger` へ）も、`mayDependOn` に自分を並べないと止めた。中身の無い `mayDependOn` の項も受け付けない。そこで、どのコンポーネントも自分を並べる。例の `.go-arch-lint.yml` から、配送の層のコンポーネントを抜き出す。
+
+```yaml
+  sakai-delivery-layer-inventory:
+    mayDependOn:
+      - sakai-ordering-pl-shop.ordering.v1
+      - sakai-inventory-pl-warehouse.v1
+      - sakai-delivery
+      - sakai-delivery-pl-shop.delivery.v1
+      - sakai-delivery-layer-inventory
+      - sakai-billing-kernel-delivery
+```
+
+例のままでは `OK - No warnings found` で exit 0 になり、受注の内側に在庫の内側を import するファイルを足すと exit 1 になった。`--json` の結果を、文字の出力と同じ形に並べると次のとおり（文字の出力は、ファイルを絶対パスで書く）。
+
+```text
+Component sakai-ordering shouldn't depend on example.com/shop/inventory/ledger in ordering/bad_internals.go:4
+```
+
+入れ子のコンポーネント（`delivery/**` の中の `delivery/acl/inventory/**`）は、深いほうに属するものとして読まれた。どのコンポーネントにも当たらないファイルがあると `File /cmd/shop/main.go not attached to any component in archfile` で失敗した（A の段階）。コンポーネントの名前には `.` と `-` を使える。
+
+depguard（v2.2.1 の単独の CLI。`.depguard.yaml` の一番上に、名前ごとの `files` の glob と `deny` の package を書く）も、A の段階に手で書いた設定で走らせた。
+
+```
+ordering/domain/bad.go:4:2: import 'example.com/shop/inventory' is not allowed from list 'ordering': 在庫(inventory) の中は、在庫 だけが使う
+ordering/domain/bad.go:5:2: import 'example.com/shop/gen/shop/inventory/v1' is not allowed from list 'ordering-outside-acl': 在庫 の公表された言語は、受注 の腐敗防止層だけが使う
+```
+
+go-arch-lint にした理由は、許すものを並べる形だからである。go-arch-lint は、コンポーネントが import してよいものを並べ、並べていない import と、どのコンポーネントにも属さないファイルを全部止める。地図に新しいコンテキストを足して設定を書き直し忘れても、新しいディレクトリが「どのコンポーネントにも属さない」で止まる。depguard は、ファイルの glob ごとに許さない package を並べる形で、sakai はコンテキストの組ごとに許さないものを書き出すことになり、書き漏らした import は通る。go-arch-lint の形は、地図の形（まとまりと、許す向き）とそのまま重なる。
+
+depguard の利点は、golangci-lint に入っていて、多くのチームがもう走らせていることと、許さない理由の文を出力に出せることである。14 章に、depguard への出力を足すことを残した。
+
+### 7.6 突き合わせ
+
+`tests/imports.rs` は、ツールごとに、地図を一時ディレクトリに写し、`sakai build --target <ツール> --lang ja` で設定を書き、本物のツールを走らせる。地図は 11 章の例と、生成したコードが内側のディレクトリの中にある `tests/maps/入れ子` の二つである。
+
+- 例のままでは、どのツールも違反を言わない。
+- 次の四つの import を一つずつ足した写しでは、どのツールもその import を、足したファイルで言う（`tests/code/<言語>/`）。(1) 受注の内側が在庫の内側を import する、(2) 請求の腐敗防止層の外が、受注の公表された言語から生成したコードを import する、(3) 受注が、請求と配送の共有カーネルのコードを import する、(4) レビューが請求を import する。`tests/maps/入れ子` では、受注が、在庫の生成したコードを囲む内側を import する一つ。
+- 黙って通っていないことを、ツールごとに確かめる。import-linter は `Analyzed N files` の N が `.py` の数より少なくないこと、dependency-cruiser は TypeScript を読むことと `summary.totalCruised`、ArchUnit は見つかったテストの数が書いた規則の数と同じこと、go-arch-lint は「どのコンポーネントにも属さない」ファイルが無いこと。
+- ツールが捕まえた import について言うことを、ツールごとの golden（`tests/golden/imports/<ツール>.txt`）に固定する。この章に貼ったツールの出力は、そこから抜き出したものである（`tests/design.rs` が確かめる）。
+
+ツールごとに、例の五つと入れ子の地図の二つの写しを並べて走らせる。四つのツールで合わせて 28 の写しになり、この機械で 6 秒ほどかかる。
+
+`tests/build.rs` は、例の地図のまとまりと、それぞれを import してよいまとまり（7.1 の表）、例に置いた四つの設定がいまの地図から書くものと一字も違わないこと（`SAKAI_BLESS=1` で書き直す。この章に貼った設定は、そのファイルから抜き出した）、地図を変えると `--check` が E502 を言うこと、E501 の場合を確かめる。
+
+ツールの置き場所は sakai の `tools/` の下で、git に入れない（版を書いたファイルと取ってくるスクリプトだけを入れる。入れ方は `tools/README.md`）。環境変数でほかの場所のものも使える。ツールが無ければ、そのテストは `SKIP: <理由>` の一行を出して通す（PLAN の 0 章）。
+
+## 8. CML への出力
+
+**決定**：`sakai export cml` は、地図を Context Mapper の CML にする。
+
+| sakai | CML |
+|---|---|
+| 地図 | `ContextMap <別名>`、`type = SYSTEM_LANDSCAPE`、`state = AS_IS`、`contains` に全部のコンテキスト |
+| コンテキスト | `BoundedContext <別名>`。`domainVisionStatement` に説明、`responsibilities` に用語集の語の名前（`as` で取り入れた語は除く）。日本語の名前と持ち主はコメント |
+| 順応者 | `<下流> [D,CF]<-[U,<上流の役割>] <上流>` |
+| 腐敗防止層 | `<下流> [D,ACL]<-[U,<上流の役割>] <上流>` |
+| 顧客／供給者 | `<下流> [D,C]<-[U,S,PL] <上流>`（腐敗防止層を添えたら `[D,C,ACL]`） |
+| 共有カーネル | `<一方> [SK]<->[SK] <他方>` |
+| パートナーシップ | `<一方> [P]<->[P] <他方>` |
+| 別々の道 | CML に書く形が無いので、コメント |
+| 上流の役割 | `through` の package に公開ホストサービスがあれば `OHS,PL`、無ければ `PL` |
+| `through` の package と公開ホストサービス | 関係の `implementationTechnology`（`"Connect: warehouse.v1.StockService, warehouse.v1.PackingService"`。サービスの無い package は名前だけ） |
+
+名前は別名で書く（CML の名前は ASCII の識別子に限られる。0.4）。顧客／供給者には OHS を付けない。Context Mapper の規則（顧客／供給者に OHS は付けない）に合わせたもので、sakai の公開ホストサービスは「境界の向こうから呼べるサービス」の意味なので、顧客も同じサービスを呼ぶ。そのことは `implementationTechnology` に残る。持ち主を CML のチーム（`type = TEAM` のコンテキスト）にしないのは、`SYSTEM_LANDSCAPE` の地図にチームを入れられないからである。`state` を `AS_IS` にしたのは、sakai の地図が実物と突き合わせたものだからである。関係は地図に書いた順（`use context` の順のコンテキストの、ファイルの中の順）に出し、両側に書く関係は先に出てきたほうで一度だけ出す。コメントは `--lang` の言語で書く。頭のコメントに元の地図の名前と書いたコマンドを書き、`.ctx` のハッシュは書かない（7.1 と同じ理由）。
+
+例の地図から sakai が書いた CML（`--lang ja`。全文は `tests/golden/cml/通販.ja.cml`）の頭の部分を抜き出す。
+
+```cml
+/* `sakai export cml --lang ja` が 通販.ctx から書いた。直すときは .ctx を直して書き直す。 */
+ContextMap shop {
+  type = SYSTEM_LANDSCAPE
+  state = AS_IS
+  contains ordering, inventory, delivery, billing, reviews
+
+  // 「受注」は「在庫」に順応する
+  ordering [D,CF]<-[U,OHS,PL] inventory {
+    implementationTechnology = "Connect: warehouse.v1.StockService, warehouse.v1.PackingService"
+  }
+…
+  // 「請求」は「配送」の顧客で、「配送」はそれを供給者として引き受ける
+  billing [D,C]<-[U,S,PL] delivery {
+    implementationTechnology = "Connect: shop.delivery.v1.DeliveryService"
+  }
+
+  // 「レビュー」(reviews) と「請求」(billing) は別々の道（CML には書く形が無い）
+}
+
+// 「受注」(ordering)。持ち主: 受注チーム
+BoundedContext ordering {
+  domainVisionStatement = "注文を受け付け、在庫を押さえ、配送に渡し、届くまでを見届ける"
+  responsibilities = "注文", "キャンセル"
+}
+```
+
+この CML と英語の CML を、Context Mapper 6.12.0 の Xtext の検査器（0.4 の小さなプログラム、`tools/cml/Validate.java`）に通すと、どちらも何も言われず exit 0 だった。テストは毎回これを確かめ、顧客／供給者に CF を付けた CML を同じ検査器に通して、`The CONFORMIST pattern is not applicable for a Customer-Supplier relationship.` が出ることも確かめる（検査器が働いていることの確かめ）。CLI の `cm validate` は構文しか見ず、誤りがあっても exit 0 なので使わない（0.4）。検査器は、Context Mapper CLI の配布物（Maven Central の `context-mapper-cli-6.12.0.zip`、SHA-256 `96579d57a5afa110…`）の `lib/` の jar で動かす。Java か jar が無ければ SKIP。
+
+**捨てたもの**：CML から `.ctx` を起こすこと（読み込み）。CML は境界を越える参照の根拠（どの成果物か）を持たないので、起こしても属し方と `through` を人が書くことになる。
+
+## 9. api
+
+**決定**：`sakai api <map.ctx>` は、地図と属し方と境界を越える参照を JSON で出す。読むのは yurai（成果物がどのコンテキストに属し、持ち主はだれか）と、将来の dandori（自分の参照が地図に沿うか）で、検査を通らない地図には出さない（exit 1。診断は標準エラーに出す）。形は一式の api にそろえ、キーを決まった順に出す（serde_json の `preserve_order`）。名前は 2 章の JSON の形、パスはルートからの相対で書く。
+
+キーは `sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings`、`not_checked` の順。`tests/maps/基本/` の api（全文は `tests/golden/api/基本.json`）から、頭と、関係と成果物と境界を越える参照の一つめずつを抜き出す（`…` は省いたところ）。
+
+```json
+{
+  "sakai": "0.1.0",
+  "map": {
+    "name": "基本",
+    "alias": "basic",
+    "version": "1",
+    "file": "基本.ctx",
+    "source_sha256": "0a5af23692d634805c9b0291804b16fe1969a029f72d98374aa31f82baece8c9",
+    "description": "注文を受け、在庫を押さえ、請求するかを決める"
+  },
+  "covers": [
+    "."
+  ],
+  "except": [],
+…
+  "relationships": [
+    {
+      "kind": "upstream_downstream",
+      "upstream": "在庫",
+      "downstream": "受注",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "conformist"
+        ]
+      },
+      "through": [
+        "warehouse.v1"
+      ],
+      "layer": [],
+      "enums": [],
+      "terms": [],
+      "declared": [
+        "ctx/受注.ctx:18"
+      ]
+    },
+…
+  "artifacts": [
+    {
+      "name": {
+        "text": "proto \"proto/billing/acl/v1/order_view.proto\"",
+        "tool": "proto",
+        "path": "proto/billing/acl/v1/order_view.proto",
+        "items": []
+      },
+      "context": "請求",
+      "by": "ctx/請求.ctx:6",
+      "sha256": "39e90d262543c1ec"
+…
+  "crossings": [
+    {
+      "from": {
+        "text": "proto \"proto/billing/acl/v1/order_view.proto\"",
+        "tool": "proto",
+        "path": "proto/billing/acl/v1/order_view.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/shop/ordering/v1/order.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/ordering/v1/order.proto",
+        "items": []
+      },
+      "from_context": "請求",
+      "to_context": "受注",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus",
+          "tool": "proto",
+          "path": "proto/shop/ordering/v1/order.proto",
+          "items": [
+            [
+              "enum",
+              "OrderStatus"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "anticorruption_layer"
+        ],
+        "declared": "ctx/請求.ctx:14"
+      }
+    },
+```
+
+- `contexts[]`：名前、別名、版、ファイル、ファイルの SHA-256、説明、持ち主、`also`、`owns`（ディレクトリは `{"dir": "<パス>"}`、ファイルは `{"name": <名指し>}`）、`published`（package、`from` に proto か規則の名指し、`services`、`generated`）、`terms`（名前、定義、`also`、`means` の名指し、`as`）。
+- `relationships[]`：`kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。上流と下流の関係は、`roles` の `upstream`（`supplier`、`open_host_service`、`published_language`）と `downstream`（`conformist`、`anticorruption_layer`、`customer`）、`through`、`layer`、`enums`（上流の列挙の名指し、先、`checked`、値の対応）、`terms`、`declared`（宣言した `.ctx` の行）を持つ。対応の先が名前だけなら `"to": {"name": "出荷の可否"}` で、`checked` は false になる。共有カーネルは `sides` に両側の並びを持つ。
+- `artifacts[]`：範囲の成果物の全部。名指しと、属するコンテキストと、それを決めた `owns` の行と、ファイルの SHA-256（先頭 16 桁）。yurai が、成果物の定義が変わったかを知るのに使える。
+- `crossings[]`：境界を越える参照の全部。もとと先の名指し、行、二つのコンテキスト、読んだところ（`via`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3）、許した関係（`allowed_by`）。
+- `not_checked[]`：確かめていない成果物。いまは空で、dandori の扱い（PLAN の C.4）を作ると dandori のファイルが並ぶ。
+
+## 10. doc
+
+**決定**：`sakai doc` は、設計する人とドメインの専門家が読むページを出す。Markdown（GitHub がそのまま描く Mermaid の図を入れる）と、一枚の HTML（sakai が描く SVG の図）の二つ。中身は同じで、次の順に並べる。
+
+1. 地図の説明と、コンテキストマップの図。コンテキストを四角に、関係を線にし、線にパターンの名前（`公開ホストサービス・公表された言語 warehouse.v1 → 腐敗防止層` のように、上流の役割と下流の役割）を書く。共有カーネルとパートナーシップは両向きの線、別々の道は点線。
+2. コンテキストの一覧（名前、別名、説明、持ち主、成果物の数）。
+3. コンテキストごとのページ：説明、持ち主、別名、属する成果物（ツールごとに、api から読んだ名前を添えて。規則なら入力と出力、帳簿なら勘定と振替、カレンダーなら名前とデータの範囲）、公表された言語（proto、公開ホストサービスとメソッド、dandori のワークフローが実装するサービスはその名前）、用語集（語、定義、指す要素、どのコンテキストに越えていくか、越えた先でどう読み替えられるか）、上流と下流との関係と、その関係を通る参照。
+4. 用語集の索引：全部のコンテキストの語を名前の順に並べ、同じ名前の語が二つ以上のコンテキストにあれば並べて、境界を越えるときにどう読み替えられるかを書く。
+5. 対応の表：腐敗防止層ごとに、上流の値、下流の値（断るなら理由）。rulec の規則から読んだ対応にはそう書く。名前だけの先には「下流の値は確かめていない」と書く。
+6. 確かめていないこと（dandori の参照、実行時の呼び出し）。
+
+`--lang ja` で日本語のページになる。HTML は外のものを読み込まない一枚にし、図のコンテキストを押すとそのコンテキストのページに移る。ページの文面は golden に固定し、Mermaid の図はテストで Mermaid に描かせて確かめ、HTML は Chrome で開いて画面を撮って確かめる（chobo と koyomi と同じ）。
+
+## 11. 例
+
+**決定**：一式の例を写して、五つのコンテキストからなる小さな通販を `examples/通販/` に作る。地図は日本語の名前の `通販.ctx` と、同じ成果物を英語の名前で書いた `shop.ctx` の二つを置く（英語の README には英語の地図を載せる）。
+
+| コンテキスト | 成果物（写した元） |
+|---|---|
+| 受注（ordering） | dandori の `受注.flow`（dandori の例の引当と発送の日本語の版を写して直す）、`proto/shop/ordering/v1/`（`order.proto` は例のために書く。`fulfillment.proto` は dandori の例を写して直す） |
+| 在庫（inventory） | chobo の `在庫の引当.book`（chobo の例の `inventory.ja.book`）、`proto/warehouse/v1/stock.proto`（dandori の例の `warehouse.proto` に梱包のサービスを足す） |
+| 配送（delivery） | dandori の `配送の手配.flow`（dandori の例を写して直す）、rulec の `出荷の急ぎ.rule`（dandori の例）、koyomi の `出荷日.cal`（例のために書く）、`proto/shop/delivery/v1/shipment.proto`（rulec の corpus の契約を写し、package とサービスを足す） |
+| 請求（billing） | rulec の `決済手数料.rule`（rulec の corpus）、`出荷の送料.rule`（rulec の corpus を写して `shape` の先を直す）、`請求の要否.rule`（例のために書く）、koyomi の `支払条件.cal`（koyomi の例）と `calendars/東京の営業日.cal`（koyomi の例。祝日の表の写しも） |
+| レビュー（reviews） | コードだけ |
+
+関係は七つで、六つのパターンがどれも現れる（腐敗防止層は、rulec の規則が先の対応と、値ごとに書く対応の二つ）。
+
+| 関係 | パターン | 境界を越える参照（sakai が読めるもの） |
+|---|---|---|
+| 受注 → 在庫 | 順応者、`through warehouse.v1` | `fulfillment.proto` が `stock.proto` を import する（受注の公表された言語が在庫の型をそのまま使う。順応者なので許す） |
+| 請求 → 受注 | 腐敗防止層、`through shop.ordering.v1`、層は `請求の要否.rule` と各言語の `billing/acl/ordering` | `請求の要否.rule` が `import proto` で `OrderStatus` を取り込む。対応の先はその規則の列挙で、値の対応は rulec が決める。受注の「キャンセル」（`ORDER_STATUS_CANCELLED`）は、請求の違う意味の「キャンセル」とぶつかるが、規則の値「受注で取消」に読み替えられている |
+| 配送 → 在庫 | 腐敗防止層、`through warehouse.v1`、層は各言語の `delivery/acl/inventory` | 対応は `.ctx` に値ごとに書く（`PACKING_STATUS_SHORT` は断る） |
+| 請求 → 配送 | 顧客／供給者、`through shop.delivery.v1` | `出荷の送料.rule` の `shape` が `CreateShipmentRequest` を読む |
+| 請求 ＝ 配送 | 共有カーネル（`東京の営業日.cal` と、koyomi がそれから書くコードの置き場所） | `支払条件.cal` と `出荷日.cal` が同じカレンダーを読む |
+| 受注 ＝ 配送 | パートナーシップ | dandori のワークフローの参照（規則 `出荷の急ぎ` を Connect で呼ぶ、子の `配送の手配.flow`）。いまは確かめられない（4.7） |
+| レビュー ／ 請求 | 別々の道 | 何も無いことを確かめる |
+
+A の段階で、例のために書く規則とカレンダーと proto の下書きを、一式のツールに通した（2026-10-03）。`請求の要否.rule` は rulec 0.22.1 で `ok`。`order.proto` に `ORDER_STATUS_RETURNED = 5;` を足すと、rulec が次を出して止めた（上流が値を足すと、規則の側で止まる。sakai の E105 は、この診断の最初の数行を添える）。
+
+```
+error[E032]: Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
+  --> 請求の要否.rule:5
+  |
+5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
+  |      ^^^^^^^^^^
+  |
+ In ../../proto/shop/ordering/v1/order.proto but not in this enum: returned
+```
+
+`出荷の送料.rule`（`shape` の先を `shop.delivery.v1.CreateShipmentRequest` にしたもの）は `ok`。`出荷日.cal` は koyomi 0.1.0 で「2 claims hold on all 719 days of 受注日 (2026-01-01..2027-12-20)」、`支払条件.cal`（`use calendar` を直したもの）は「3 claims hold on all 689 days of 受領日」。`order.proto` と `stock.proto` は buf 1.54.0 の lint を通った。
+
+コードは、Python（`py/`）、TypeScript（`ts/`）、Java（`java/`）、Go（`go/`）の四つに、同じ形の小さなものを置く。公表された言語から生成したコードと、chobo と koyomi と rulec が書くコードは、本物の代わりに数行の手書きのものにする（頭のコメントに、どのコマンドが本物を書くかを書く）。import の検査で見るのは境界で、中身ではないからである。本物の protobuf のコードは、各言語の protobuf のライブラリが無いと組めず、テストに外の依存が増える。
+
+C の段階で、この例を作った（`通販.ctx` と五つのコンテキストのファイル。英語の地図 `shop.ctx` と例の README は D の段階）。写したファイルには、頭のコメントに写した元と直したところを書いた（祝日の表と dandori の `options.proto` は、写した元のまま）。PLAN の C.0 の直し方のほかに、`受注.flow` のコメントと説明の中の、在庫の値の名前と子の `.flow` のファイルの名前を、直したあとのものに合わせた。写したものと例のために書いたものは、どれもそれぞれのツールの検査を通る（rulec 0.22.1 で規則 4 本、koyomi 0.1.0 でカレンダー 3 本、chobo 0.1.0 で帳簿 1 本、dandori 0.1.0 でワークフロー 2 本。`tests/examples.rs` が確かめる）。
+
+四つの言語のコードの置き場所には、sakai が書いた設定（`py/.importlinter`、`ts/.dependency-cruiser.cjs`、`java/src/test/java/SakaiContextsTest.java`、`go/.go-arch-lint.yml`。`--lang ja`）も置く。CI で `sakai build --check` を走らせる使い方そのままの形で、`tests/build.rs` が、いまの地図から書くものと一字も違わないことを確かめる。四つのツールは、例のままでは何も言わず、7.6 の四つの import のどれも捕まえる。
+
+一式のツールの JSON を読むまで（PLAN の C.1〜C.5）、`check` は例の規則とカレンダーを属し方でだけ扱う。上の表のうち sakai が読むのは、受注から在庫への proto の import だけで、規則の `import proto` と `shape`、カレンダーの `use calendar` は、まだ確かめていない。
+
+## 12. 実装
+
+- Rust（edition 2024、手元の stable 1.94.1 で通ること）。依存は serde_json だけ（`preserve_order` の機能を使う）。
+- SHA-256 は自分で書く（rulec、koyomi と同じ。FIPS 180-4 の既知の値でテストする）。地図とコンテキストのファイルのハッシュ（api）と、共有カーネルの写しの比べ合わせ（E308）に使う。
+- proto の読み手は自分で書く（4.2）。テストは、buf があれば、例と fixture の proto を `buf build -o -#format=json` の結果と比べる（package、import、メッセージ、列挙と値、サービスとメソッド）。`buf/validate` を import する proto は、buf が BSR の依存なしに組めないので比べない。
+- 一式のツールは子プロセスで呼ぶ（`src/suite/`。PLAN の C.1〜C.5 で作る。一式の言語を一つの処理系にまとめるかが決まるまで止めてある）。時間の上限は Rust の側で `Child::try_wait` を回して決める（macOS に `timeout` が無い）。
+- 診断の文面は `tr!` で英語と日本語を隣に書く。台帳は `src/codes.rs`。
+- コードの import の検査の設定は `src/build/`（`areas.rs` が 7.1 の表を作り、`import_linter.rs`、`depcruise.rs`、`archunit.rs`、`go_arch_lint.rs` がツールごとの言葉に写し、`mod.rs` が頭と書き出しと `--check` を受け持つ）。CML は `src/cml.rs`。doc は `src/doc/`（D の段階）。
+- 外のツールは、版を固定して `tools/` に置く。import-linter は `tools/requirements.txt`（2.15。`uv venv --python 3.13 tools/.venv`）、dependency-cruiser と TypeScript は `tools/package.json` と `tools/package-lock.json`（16.10.4 と 5.9.3）、ArchUnit と JUnit は `tools/java/fetch.sh`（Maven Central から取って SHA-256 を確かめる）、go-arch-lint は `tools/go/install.sh`（`go install …@v1.19.0`、`-trimpath`）、Context Mapper は `tools/cml/fetch.sh` と `tools/cml/Validate.java`、Mermaid は `tools/mermaid/`。どれも、取ってきたものは git に入れない。
+
+モジュールの分け方と、各段階の作業は PLAN.md にある。
+
+## 13. 捨てたもの
+
+ここまでの節に書いたもののほかに、次を捨てた。
+
+- **書いても確かめられない項目**（Bounded Context Canvas の戦略上の分類、ドメインでの役割、ビジネス上の決定、仮定、指標）：0.1。
+- **sakai がコードの import を読むこと**：四つの言語の import の読み手を書くことになる。どの言語にも成熟したツールがあり、チームはそれをもう CI で走らせている。sakai は地図からその設定を書くほうに回る（P6）。
+- **`.flow` を sakai が読むこと**：4.7。
+- **定義の文が同じなら同じ意味とすること**：1.6。
+- **共有カーネルを、どのコンテキストにも属さない第三のものにすること**：「どの成果物も、ちょうど一つのコンテキストに属する」が崩れる。共有カーネルの成果物は、どちらかのコンテキストに属し、両側が並べる。写しを両側に置くなら、写しはそれぞれの側に属し、中身が同じであること（E308）を確かめる。
+- **関係が無いことを、別々の道とみなすこと**：1.5。
+- **地図の状態（AS_IS と TO_BE）を書けること**：書いても確かめるのは今の実物で、TO_BE の地図は実物と突き合わせられない。
+
+## 14. まだやらないこと
+
+どれも、作る理由が見えたら作る。ここに書くのは、黙って消えたように見せないためである。
+
+一式とのつなぎ：
+
+- dandori の参照（4.7）。dandori が `api` を出すかどうかは作者が決める。
+- rulec の `import proto` と `shape` の行番号。rulec の api が行を言わないので、診断はファイルまでを示す。
+- rulec の `shape` の `from` のパスを読んで、規則が実際に読むフィールドだけを越える要素に数えること（3.3）。rulec がパスを構造で出すようになれば、そちらを読む。
+- geas の `map` の記録から、主張ごとにどのコンテキストのコードを走らせたかを doc に出すこと。
+
+言語：
+
+- 持ち主を CODEOWNERS と突き合わせること。CODEOWNERS の照合の決まりを正しく写す必要がある。
+- OpenAPI と JSON Schema の列挙を、対応の網羅に使うこと（rulec の `import jsonschema` と同じ形で）。外のシステム（Stripe、AWS）を、OpenAPI や Smithy の記述を公表された言語に持つコンテキストとして書くこと。
+- 腐敗防止層の対応から、翻訳のコードを生成すること（1.7）。
+- 実行時の呼び出し（HTTP の URL、キュー、データベース）を成果物として書くこと。
+
+出力：
+
+- depguard（golangci-lint の設定として）と Spring Modulith の注釈への出力（7.4、7.5）。
+- 用語集を Contextive の `*.glossary.yml` として、コンテキストのディレクトリに書くこと。
+- CML の読み込み（8 章）。Context Mapper のほかの生成器（MDSL など）につなぐこと。
+- `sakai diff`（二つの版の地図で、何が変わったか）、MCP のサーバー、ブラウザで試すページ、ドキュメントのサイト。
+
+公開：
+
+- リリースとバイナリ、crates.io。今の入れ方は、リポジトリを取ってきて `cargo install --path .` である。

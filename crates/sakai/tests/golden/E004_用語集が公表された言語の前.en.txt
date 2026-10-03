@@ -1,0 +1,3 @@
+error[E004]: ctx/請求.ctx:11:1: `published language` is out of its place
+    11 | published language shop.billing.v1
+  = A context file goes: the heading, `description`, `owner`, `also`, `owns`, `published language`, `terms`, then the relationships (`upstream`, `downstream`, `shared kernel with`, `partnership with`, `separate ways from`).

@@ -1,0 +1,23 @@
+context 受注(ordering) v1
+description "注文を受け付け、在庫を押さえ、届くまでを見届ける"
+owner "受注チーム"
+
+owns
+  dir "../proto/shop/ordering", "../proto/shop/common", "../py/ordering"
+
+published language shop.ordering.v1
+  proto "../proto/shop/ordering/v1/order.proto", "../proto/shop/ordering/v1/fulfillment_lite.proto"
+  open host service OrderService
+
+terms
+  注文 "客が確定させた購入の申し込み。取り消されても消えない"
+    means message Order
+  キャンセル "出荷の前に、客の申し出で注文を取り消すこと"
+    means enum OrderStatus value ORDER_STATUS_CANCELLED
+  引当 "客の注文の一行に、届ける日を割り当てること"
+
+upstream 在庫 conformist
+  through warehouse.v1
+
+shared kernel with 在庫
+  proto "../proto/shop/common/v1/money.proto"

@@ -1,0 +1,3 @@
+error[E008]: ctx/在庫.ctx:1:9: The context 在庫 has no ASCII alias
+     1 | context 在庫 v1
+  = Write it in parentheses right after the name: `在庫(<alias>)`. An alias is of the form `[A-Za-z_][A-Za-z0-9_]*`, and names it in Context Mapper's CML and in the settings of the import linters.

@@ -1,0 +1,13 @@
+# 受注・在庫・請求の三つのコンテキストからなる、proto と Python のコードだけの地図。
+map 基本(basic) v1
+description "注文を受け、在庫を押さえ、請求するかを決める"
+
+use context "ctx/受注.ctx"
+use context "ctx/在庫.ctx"
+use context "ctx/請求.ctx"
+use context "ctx/受注.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"

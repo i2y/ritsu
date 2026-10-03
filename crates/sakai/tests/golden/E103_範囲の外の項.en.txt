@@ -1,0 +1,3 @@
+error[E103]: ctx/請求.ctx:6:52: The entry dir "py/billing" is outside the map's scope
+     6 |   dir "../proto/shop/billing", "../proto/billing", "../py/billing"
+  = The scope is the map's `covers` ("."), without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it.

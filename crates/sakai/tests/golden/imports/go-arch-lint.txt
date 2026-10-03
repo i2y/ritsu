@@ -1,0 +1,10 @@
+== examples/通販 1_在庫の内側
+Component sakai-ordering shouldn't depend on example.com/shop/inventory/ledger in ordering/bad_internals.go:4
+== examples/通販 2_層の外から受注の公表された言語
+Component sakai-billing shouldn't depend on example.com/shop/shop/ordering/v1 in billing/bad_outside_layer.go:4
+== examples/通販 3_共有カーネルを外から
+Component sakai-ordering shouldn't depend on example.com/shop/calendars in ordering/bad_kernel.go:4
+== examples/通販 4_別々の道の相手
+Component sakai-reviews shouldn't depend on example.com/shop/billing in reviews/bad_separate.go:4
+== tests/maps/入れ子 1_生成したコードを囲む内側
+Component sakai-ordering shouldn't depend on example.com/nested/warehouse in ordering/bad.go:4

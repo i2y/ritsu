@@ -1,0 +1,19 @@
+context 在庫(inventory) v1
+description "倉庫の棚にある数を持ち、注文の一行ごとに押さえ、梱包の進みを答える"
+owner "倉庫チーム"
+
+owns
+  dir "../proto/warehouse", "../py/inventory"
+
+published language warehouse.v1
+  proto "../proto/warehouse/v1/stock.proto"
+  open host service StockService, PackingService
+
+terms
+  引当 "注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと"
+    means message ReserveResponse
+  梱包の状態 "注文の品を箱に詰め終えたか。詰める途中で欠品が分かることがある"
+    means enum PackingStatus
+
+shared kernel with 受注
+  proto "../proto/shop/common/v1/money.proto"

@@ -1,0 +1,20 @@
+rule 請求の要否(billing_need) v1
+description "受注の注文の状態から、請求するか、待つか、請求しないかを決める"
+
+import proto "../../proto/shop/ordering/v1/order.proto" OrderStatus -> 注文の状態
+enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
+enum 請求の扱い(handling) = 待つ(wait) | 請求する(bill) | 請求しない(skip)
+
+inputs
+  状態(status) : 注文の状態
+
+outputs
+  扱い(handling) : 請求の扱い
+
+table 扱い表(handling_table)
+policy unique
+| 状態       | -> 扱い(handling) : 請求の扱い |
+| 受付       | 待つ                           |
+| 支払済     | 請求する                       |
+| 出荷済     | 請求する                       |
+| 受注で取消 | 請求しない                     |

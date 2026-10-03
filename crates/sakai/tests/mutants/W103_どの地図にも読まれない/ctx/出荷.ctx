@@ -1,0 +1,5 @@
+context 出荷(shipping) v1
+description "荷物を運送会社に渡す"
+
+owns
+  dir "../py/shipping"

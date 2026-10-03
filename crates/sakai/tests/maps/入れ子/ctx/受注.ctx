@@ -1,0 +1,8 @@
+context 受注(ordering) v1
+description "注文を受ける"
+
+owns
+  dir "../py/ordering", "../ts/ordering", "../java/src/main/java/ordering", "../go/ordering"
+
+upstream 在庫 conformist
+  through warehouse.v1

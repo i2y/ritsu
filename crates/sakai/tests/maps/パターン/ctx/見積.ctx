@@ -1,0 +1,22 @@
+context 見積(quotes) v1
+description "客に、期限つきの見積を出す"
+owner "営業チーム"
+
+owns
+  dir "../proto/quotes"
+
+published language quotes.v1
+  proto "../proto/quotes/v1/estimate.proto"
+
+terms
+  見積書 "客に出す、期限つきの料金の見込み"
+    means message Estimate
+
+upstream 料金 customer
+  through pricing.v1
+
+partnership with 通知
+
+# 日数の単位の写しを、契約もそれぞれ持つ。
+shared kernel with 契約
+  proto "../proto/quotes/kernel/units.proto"

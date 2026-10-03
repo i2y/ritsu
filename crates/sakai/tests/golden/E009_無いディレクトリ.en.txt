@@ -1,0 +1,3 @@
+error[E009]: ctx/在庫.ctx:6:29: The path "../py/inventry" is not there
+     6 |   dir "../proto/warehouse", "../py/inventry"
+  = A path counts from the directory of this .ctx; as written, it points at py/inventry.

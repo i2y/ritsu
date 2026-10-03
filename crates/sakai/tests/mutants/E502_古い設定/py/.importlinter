@@ -1,0 +1,33 @@
+# Written by `sakai build --target import-linter` from ../基本.ctx.
+# Edit the .ctx files and write it again; `sakai build --check` says whether it is up to date.
+
+[importlinter]
+root_packages =
+    billing
+    inventory
+    ordering
+
+[importlinter:contract:sakai-ordering]
+name = The inside of 受注 (ordering) is imported only by 受注 and 請求
+type = protected
+protected_modules =
+    ordering
+allowed_importers =
+    billing
+    ordering
+
+[importlinter:contract:sakai-inventory]
+name = The inside of 在庫 (inventory) is imported only by 在庫
+type = protected
+protected_modules =
+    inventory
+allowed_importers =
+    inventory
+
+[importlinter:contract:sakai-billing]
+name = The inside of 請求 (billing) is imported only by 請求
+type = protected
+protected_modules =
+    billing
+allowed_importers =
+    billing

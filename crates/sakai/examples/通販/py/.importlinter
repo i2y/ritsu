@@ -1,0 +1,133 @@
+# `sakai build --target import-linter --lang ja` が ../通販.ctx から書いた設定。
+# 直すときは .ctx を直して書き直す。古くなっていないかは `sakai build --check` が言う。
+
+[importlinter]
+root_packages =
+    billing
+    calendars
+    delivery
+    inventory
+    ordering
+    reviews
+    shop.delivery.v1
+    shop.ordering.v1
+    warehouse.v1
+
+[importlinter:contract:sakai-ordering]
+name = 「受注」(ordering) の内側は、「受注」だけが import する
+type = protected
+protected_modules =
+    ordering
+allowed_importers =
+    ordering
+    shop.ordering.v1
+
+[importlinter:contract:sakai-ordering-pl-shop.ordering.v1]
+name = 「受注」の公表された言語 shop.ordering.v1 から生成したコードは、「受注」、「配送」(delivery) の内側、「配送」の「在庫」に向けた腐敗防止層、「請求」の「受注」に向けた腐敗防止層だけが import する
+type = protected
+protected_modules =
+    shop.ordering.v1
+allowed_importers =
+    billing.acl.ordering
+    delivery
+    ordering
+    shop.ordering.v1
+
+[importlinter:contract:sakai-inventory]
+name = 「在庫」(inventory) の内側は、「在庫」だけが import する
+type = protected
+protected_modules =
+    inventory
+allowed_importers =
+    inventory
+    warehouse.v1
+
+[importlinter:contract:sakai-inventory-pl-warehouse.v1]
+name = 「在庫」の公表された言語 warehouse.v1 から生成したコードは、「受注」、「在庫」、「配送」の「在庫」に向けた腐敗防止層だけが import する
+type = protected
+protected_modules =
+    warehouse.v1
+allowed_importers =
+    delivery.acl.inventory
+    inventory
+    ordering
+    shop.ordering.v1
+    warehouse.v1
+
+[importlinter:contract:sakai-delivery]
+name = 「配送」(delivery) の内側は、「配送」だけが import する
+type = protected
+as_packages = False
+protected_modules =
+    delivery
+    delivery.acl
+    delivery.ship
+allowed_importers =
+    delivery
+    delivery.acl
+    delivery.acl.inventory
+    delivery.acl.inventory.packing
+    delivery.ship
+    shop.delivery.v1.shipment_pb2
+
+[importlinter:contract:sakai-delivery-pl-shop.delivery.v1]
+name = 「配送」の公表された言語 shop.delivery.v1 から生成したコードは、「受注」(ordering) の内側、「配送」、「請求」だけが import する
+type = protected
+protected_modules =
+    shop.delivery.v1
+allowed_importers =
+    billing
+    delivery
+    ordering
+    shop.delivery.v1
+
+[importlinter:contract:sakai-delivery-layer-inventory]
+name = 「配送」の「在庫」に向けた腐敗防止層は、「配送」だけが import する
+type = protected
+protected_modules =
+    delivery.acl.inventory
+allowed_importers =
+    delivery
+    shop.delivery.v1
+
+[importlinter:contract:sakai-billing]
+name = 「請求」(billing) の内側は、「請求」だけが import する
+type = protected
+as_packages = False
+protected_modules =
+    billing
+    billing.acl
+    billing.invoice
+allowed_importers =
+    billing
+    billing.acl
+    billing.acl.ordering
+    billing.acl.ordering.status
+    billing.invoice
+
+[importlinter:contract:sakai-billing-layer-ordering]
+name = 「請求」の「受注」に向けた腐敗防止層は、「請求」だけが import する
+type = protected
+protected_modules =
+    billing.acl.ordering
+allowed_importers =
+    billing
+
+[importlinter:contract:sakai-billing-kernel-delivery]
+name = 「請求」と「配送」の共有カーネルは、「配送」、「請求」だけが import する
+type = protected
+protected_modules =
+    calendars
+allowed_importers =
+    billing
+    calendars
+    delivery
+    shop.delivery.v1
+
+[importlinter:contract:sakai-reviews]
+name = 「レビュー」(reviews) の内側は、「レビュー」だけが import する
+type = protected
+protected_modules =
+    reviews
+allowed_importers =
+    reviews

@@ -1,0 +1,3 @@
+error[E002]: ctx/受注.ctx:18:12: `upstream 在庫` has no role
+    18 | upstream 在庫
+  = The role is conformist, anticorruption layer or customer; customer may take anticorruption layer beside it, after a `,`.

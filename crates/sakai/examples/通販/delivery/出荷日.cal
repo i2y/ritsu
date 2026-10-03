@@ -1,0 +1,13 @@
+dates 出荷日(ship_date) v1
+description "注文を受けた日の次の営業日に出荷する"
+use calendar "../calendars/東京の営業日.cal"
+
+inputs
+  受注日(ordered) : date  range >=2026-01-01 <=2027-12-20
+
+date 出荷日(ship) = 受注日
+  + 1 business day
+
+claims
+  営業日に出す : 出荷日 is open
+  遅い注文は遅い出荷 : 出荷日 is monotonic
