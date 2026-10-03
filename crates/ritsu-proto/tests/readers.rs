@@ -1,11 +1,10 @@
-//! ritsu-proto reads everything the three readers it takes the place of read (PLAN C.9): sakai's
-//! (replaced in C.9), rulec's and dandori's (replaced in D.10). Each reader reads every `.proto`
-//! of the three crates and the examples their own tests used (`tests/fixtures/`), and
-//! ritsu-proto's reading of the same file, put in that reader's terms, is what the reader gives.
-//!
-//! rulec's and dandori's readers are run here, beside ritsu-proto. sakai's was, until sakai
-//! read with ritsu-proto; what it gave then is `tests/golden/sakai.txt`, and ritsu-proto is held
-//! to it. The other two goldens keep what rulec and dandori get, for D.10, when their readers go.
+//! ritsu-proto reads everything the three readers it took the place of read (PLAN C.9, D.10):
+//! sakai's, rulec's and dandori's. Every `.proto` of the three crates and the examples their own
+//! tests used (`tests/fixtures/`) is read, put in each language's terms, and held to what that
+//! language's own reader gave for it before it read with ritsu-proto: `tests/golden/sakai.txt`,
+//! `rulec.txt` and `dandori.txt`. The three readers were compared here, live, until each language
+//! read with ritsu-proto (sakai in C.9, rulec and dandori in D.10); the goldens are what is left
+//! of that comparison (DESIGN 3.3). A change to what ritsu-proto reads shows in them.
 
 use ritsu_base::text::{Lang, Text};
 use ritsu_proto::validate::Rules;
@@ -13,14 +12,12 @@ use ritsu_proto::{Issue, Label, Protos, Resolved, Type, WELL_KNOWN};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use rulec::proto as rp;
-
 /// The three crates, and this crate's copies of the examples the readers' own tests used.
 const ROOTS: [&str; 4] = ["../rulec", "../dandori", "../sakai", "tests/fixtures"];
 
 /// The files no reader reads whole: a statement left open (sakai's E106 mutant, and dandori's
-/// file that is not a `.proto`), and a proto2 `group`. rulec's reader passes over what it does
-/// not understand and gives what it found in them; ritsu-proto says where the file is wrong.
+/// file that is not a `.proto`), and a proto2 `group`. ritsu-proto says where the file is wrong
+/// (rulec's reader passed over what it did not understand and gave what it found in them).
 const REFUSED: [&str; 3] = ["../sakai/tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto", "tests/fixtures/dandori/bad/specs/money.proto", "tests/fixtures/sakai/group.proto"];
 
 /// Every `.proto` under a root, as paths from it, in path order; the tools a crate installs
@@ -155,86 +152,44 @@ fn sakai_reads_what_it_read_before() {
 
 // ── rulec ───────────────────────────────────────────────────────────────
 
-fn rulec_rules(r: &Rules) -> rp::Rules {
-    rp::Rules {
-        required: r.required,
-        ignore: r.ignore.clone(),
-        int: rp::IntRules { konst: r.int.konst, gt: r.int.gt, gte: r.int.gte, lt: r.int.lt, lte: r.int.lte, in_: r.int.in_.clone(), not_in: r.int.not_in.clone() },
-        min_items: r.min_items,
-        max_items: r.max_items,
-        str_const: r.str_const.clone(),
-        str_in: r.str_in.clone(),
-        str_not_in: r.str_not_in.clone(),
-        str_min_len: r.str_min_len,
-        cel: r.cel.clone(),
-        unread: r.unread.clone(),
-    }
-}
-
-/// What rulec's reader takes from a file, from what ritsu-proto read of it: the package, the
-/// imports, every enum and message by its own short name, and of a message the fields a path
-/// can follow (not a `map`; not a proto2 `required`, which rulec's reader does not take for a
-/// field), a member of a `oneof` having presence of its own.
-fn as_rulec(f: &ritsu_proto::ProtoFile) -> (Option<String>, Vec<String>, Vec<rp::Enum>, Vec<rp::Message>) {
+/// What rulec takes from a file (its `proto::read`), a line an element: the package, the imports,
+/// every enum and message by its own short name, and of a message the fields a path can follow —
+/// not a `map`, not a proto2 `required`, a member of a `oneof` having presence of its own, its
+/// `json_name` the first one written; of the rules, what is set.
+fn rulec_lines(f: &ritsu_proto::ProtoFile) -> String {
     let short = |n: &str| n.rsplit('.').next().unwrap_or(n).to_string();
     let package = (!f.package.is_empty()).then(|| f.package.clone());
-    let imports = f.imports.iter().map(|i| i.path.clone()).collect();
-    let enums = f.enums.iter().map(|e| rp::Enum { name: short(&e.name), values: e.values.iter().map(|v| rp::Value { name: v.name.clone(), number: v.number }).collect() }).collect();
-    let messages = f
-        .messages
-        .iter()
-        .map(|m| rp::Message {
-            name: short(&m.name),
-            fields: m
-                .fields
-                .iter()
-                .filter(|x| !matches!(x.ty, Type::Map(..)) && x.label != Label::Required)
-                .map(|x| rp::Field {
-                    name: x.name.clone(),
-                    ty: match &x.ty {
-                        Type::Scalar(s) | Type::Named(s) => s.clone(),
-                        Type::Map(..) => unreachable!(),
-                    },
-                    repeated: x.label == Label::Repeated,
-                    optional: x.label == Label::Optional || x.oneof.is_some(),
-                    rules: rulec_rules(&x.rules),
-                    json_name: x.options.iter().find_map(|o| match &o.value {
-                        Some(ritsu_proto::Value::Str(s)) if o.name.split_whitespace().collect::<String>() == "json_name" => Some(s.clone()),
-                        _ => None,
-                    }),
-                    oneof: x.oneof.clone(),
-                })
-                .collect(),
-            rules: rp::MsgRules { cel: m.rules.cel.clone(), oneofs: m.rules.oneofs.iter().map(|o| rp::Oneof { fields: o.fields.clone(), required: o.required }).collect(), disabled: m.rules.disabled },
-        })
-        .collect();
-    (package, imports, enums, messages)
-}
-
-/// What rulec takes from a file, a line an element; of the rules, what is set.
-fn rulec_lines(package: &Option<String>, imports: &[String], enums: &[rp::Enum], messages: &[rp::Message]) -> String {
+    let imports: Vec<String> = f.imports.iter().map(|i| i.path.clone()).collect();
     let mut out = format!("package {package:?} imports {imports:?}\n");
-    for e in enums {
+    for e in &f.enums {
         let vs: Vec<String> = e.values.iter().map(|v| format!("{}={}", v.name, v.number)).collect();
-        out.push_str(&format!("enum {} {}\n", e.name, vs.join(" ")));
+        out.push_str(&format!("enum {} {}\n", short(&e.name), vs.join(" ")));
     }
-    for m in messages {
-        out.push_str(&format!("message {}\n", m.name));
-        for f in &m.fields {
-            let mut w = vec![format!("  {} {}", f.name, f.ty)];
-            if f.repeated {
+    for m in &f.messages {
+        out.push_str(&format!("message {}\n", short(&m.name)));
+        for x in m.fields.iter().filter(|x| !matches!(x.ty, Type::Map(..)) && x.label != Label::Required) {
+            let ty = match &x.ty {
+                Type::Scalar(t) | Type::Named(t) => t.clone(),
+                Type::Map(..) => unreachable!(),
+            };
+            let mut w = vec![format!("  {} {ty}", x.name)];
+            if x.label == Label::Repeated {
                 w.push("repeated".into());
             }
-            if f.optional {
+            if x.label == Label::Optional || x.oneof.is_some() {
                 w.push("optional".into());
             }
-            if let Some(j) = &f.json_name {
+            let json_name = x.options.iter().find_map(|o| match &o.value {
+                Some(ritsu_proto::Value::Str(s)) if o.name.split_whitespace().collect::<String>() == "json_name" => Some(s.clone()),
+                _ => None,
+            });
+            if let Some(j) = &json_name {
                 w.push(format!("json_name={j:?}"));
             }
-            if let Some(o) = &f.oneof {
+            if let Some(o) = &x.oneof {
                 w.push(format!("oneof={o}"));
             }
-            w.extend(rules_set(&f.rules));
+            w.extend(rules_set(&x.rules));
             out.push_str(&format!("{}\n", w.join(" ")));
         }
         let r = &m.rules;
@@ -245,7 +200,7 @@ fn rulec_lines(package: &Option<String>, imports: &[String], enums: &[rp::Enum],
     out
 }
 
-fn rules_set(r: &rp::Rules) -> Vec<String> {
+fn rules_set(r: &Rules) -> Vec<String> {
     let mut w = Vec::new();
     let mut opt = |name: &str, v: Option<String>| {
         if let Some(v) = v {
@@ -275,8 +230,7 @@ fn rules_set(r: &rp::Rules) -> Vec<String> {
 }
 
 #[test]
-fn rulec_reads_nothing_ritsu_proto_does_not() {
-    let mut failures = Vec::new();
+fn rulec_reads_what_it_read_before() {
     let mut refused = Vec::new();
     let mut golden = String::new();
     let mut n = 0;
@@ -288,22 +242,7 @@ fn rulec_reads_nothing_ritsu_proto_does_not() {
                 refused.push(at);
                 continue;
             };
-            let (package, imports, enums, messages) = as_rulec(&f);
-            // rulec's reader finds `package` only at the start of a line; ritsu-proto finds it
-            // wherever the statement is (`syntax = "proto3"; package a.v1;`).
-            if rp::package(&src).is_some_and(|p| Some(p) != package) {
-                failures.push(format!("{at}: package {:?}, ritsu-proto {package:?}", rp::package(&src)));
-            }
-            if rp::imports(&src) != imports {
-                failures.push(format!("{at}: imports {:?}, ritsu-proto {imports:?}", rp::imports(&src)));
-            }
-            if rp::enums(&src) != enums {
-                failures.push(format!("{at}: enums\n{:#?}\nritsu-proto\n{enums:#?}", rp::enums(&src)));
-            }
-            if rp::messages(&src) != messages {
-                failures.push(format!("{at}: messages\n{:#?}\nritsu-proto\n{messages:#?}", rp::messages(&src)));
-            }
-            golden.push_str(&format!("== {at}\n{}", rulec_lines(&package, &imports, &enums, &messages)));
+            golden.push_str(&format!("== {at}\n{}", rulec_lines(&f)));
             n += 1;
         }
     }
@@ -317,23 +256,14 @@ fn rulec_reads_nothing_ritsu_proto_does_not() {
         let at = format!("{root}/{file}");
         if file.ends_with(".lock") {
             let (v, pins) = ritsu_proto::buf::lock(&y);
-            let pins: Vec<rp::Pin> = pins.into_iter().map(|p| rp::Pin { name: p.name, commit: p.commit, digest: p.digest }).collect();
-            if rp::buf_lock(&y) != (v.clone(), pins.clone()) {
-                failures.push(format!("{at}: {:?}, ritsu-proto {:?}", rp::buf_lock(&y), (v.clone(), pins.clone())));
-            }
             golden.push_str(&format!("== {at}\nversion {v:?}\n"));
             for p in &pins {
                 golden.push_str(&format!("pin {} {} {}\n", p.name, p.commit, p.digest));
             }
         } else {
-            let deps = ritsu_proto::buf::deps(&y);
-            if rp::buf_deps(&y) != deps {
-                failures.push(format!("{at}: {:?}, ritsu-proto {deps:?}", rp::buf_deps(&y)));
-            }
-            golden.push_str(&format!("== {at}\ndeps {deps:?}\n"));
+            golden.push_str(&format!("== {at}\ndeps {:?}\n", ritsu_proto::buf::deps(&y)));
         }
     }
-    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
     assert_eq!(refused, REFUSED);
     assert!(n >= 80 && bufs.len() == 6, "{n} files, {} buf files", bufs.len());
     ritsu_testkit::golden("tests/golden/rulec.txt", &golden);
@@ -341,40 +271,12 @@ fn rulec_reads_nothing_ritsu_proto_does_not() {
 
 // ── dandori ─────────────────────────────────────────────────────────────
 
-/// What dandori's reader gives, a line a fact: the messages and the enums by their full names,
-/// each field with its JSON name, its type resolved, whether it is a list, whether it says it is
-/// set, and its Protovalidate rules as written; the services with their options; the imports
-/// that were not on the disk.
-fn dandori_facts(f: &dandori::proto::ProtoFile) -> String {
-    let mut out = format!("package {}\n", f.package);
-    for (name, fields) in &f.messages {
-        out.push_str(&format!("message {name}\n"));
-        for x in fields {
-            out.push_str(&format!("  field {} json={} ty={:?} repeated={} presence={} rules={}\n", x.name, x.json, x.ty, x.repeated, x.presence, x.rules));
-        }
-    }
-    for (name, values) in &f.enums {
-        out.push_str(&format!("enum {name} = {}\n", values.join(" ")));
-    }
-    for s in &f.services {
-        out.push_str(&format!("service {} imports_options={}\n", s.name, s.imports_options));
-        for (k, v) in &s.options {
-            out.push_str(&format!("  option {k} = {v}\n"));
-        }
-        for m in &s.methods {
-            out.push_str(&format!("  method {} in={} out={} streams={}\n", m.name, m.input, m.output, m.streams));
-            for (k, v) in &m.options {
-                out.push_str(&format!("    option {k} = {v}\n"));
-            }
-        }
-    }
-    out.push_str(&format!("unread {}\n", f.unread.join(" ")));
-    out
-}
-
-/// The same facts from what ritsu-proto read of a file and everything it imports: what dandori
-/// takes from the reader when it reads with it (D.10). dandori reads proto3 only; a type that
-/// resolves to nothing is the trouble, unless an import was not read, when it stays as written.
+/// What dandori takes from a file and everything it imports (its `proto::load`), a line a fact:
+/// the messages and the enums by their full names, each field with its JSON name, its type
+/// resolved over the files the file can see, whether it is a list, whether it says it is set,
+/// and its Protovalidate rules as written; the services with their options; the imports that
+/// were not on the disk. dandori reads proto3 only; a type that resolves to nothing is the
+/// trouble, unless an import was not read, when it stays as written.
 fn as_dandori(ps: &Protos, issues: &[Issue]) -> Result<String, String> {
     for f in &ps.order {
         let pf = &ps.files[f];
@@ -468,32 +370,30 @@ fn as_dandori(ps: &Protos, issues: &[Issue]) -> Result<String, String> {
 }
 
 #[test]
-fn dandori_reads_nothing_ritsu_proto_does_not() {
-    let mut failures = Vec::new();
+fn dandori_reads_what_it_read_before() {
     let mut golden = String::new();
     let (mut read, mut refused) = (0, 0);
     for root in ROOTS {
         for file in protos(root) {
             let at = format!("{root}/{file}");
-            let theirs = dandori::proto::load(&Path::new(root).join(&file)).map(|f| dandori_facts(&f));
-            let ours = match ritsu_proto::load_from(Path::new(root), &file, &[], &[(ritsu_proto::DANDORI_OPTIONS, dandori::proto::DANDORI_OPTIONS)]) {
+            let ours = match ritsu_proto::load_from(Path::new(root), &file, &[], &[(ritsu_proto::DANDORI_OPTIONS, DANDORI_OPTIONS)]) {
                 Ok((ps, issues)) => as_dandori(&ps, &issues),
                 Err((f, e)) => Err(format!("{f}:{}:{}: {}", e.line, e.col, e.message("dandori").get(Lang::En))),
             };
-            match (&theirs, &ours) {
-                (Ok(a), Ok(b)) if a == b => read += 1,
-                // Both refuse it. A type that is nowhere is said the same way; the rest each
-                // reader says in its own words.
-                (Err(a), Err(b)) if !a.contains("there is no type") || a == b => refused += 1,
-                _ => failures.push(format!("{at}:\n--- dandori\n{}\n--- ritsu-proto\n{}", show(&theirs), show(&ours))),
+            match &ours {
+                Ok(_) => read += 1,
+                Err(_) => refused += 1,
             }
             golden.push_str(&format!("== {at}\n{}\n", show(&ours)));
         }
     }
-    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
     assert!(read >= 70, "{read} read, {refused} refused");
     ritsu_testkit::golden("tests/golden/dandori.txt", &golden);
 }
+
+/// dandori's options, which a `.proto` imports without the file (dandori's
+/// `proto/dandori/v1/options.proto`).
+const DANDORI_OPTIONS: &str = include_str!("../../dandori/proto/dandori/v1/options.proto");
 
 fn show(r: &Result<String, String>) -> String {
     match r {

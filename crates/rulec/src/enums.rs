@@ -52,7 +52,11 @@ fn wanted(im: &EnumImport, text: &str, at: &str) -> Result<Vec<String>, Diag> {
     let err = |title: String| Diag::error("E013", title).at(at.to_string()).mark(im.span.clone(), "");
     match im.kind {
         EnumSource::Proto => {
-            let found = crate::proto::enums(text);
+            // A contract that does not read is named, not read in part (§15.166).
+            let found = match crate::proto::read(&im.file, text) {
+                Ok(f) => f.enums,
+                Err(e) => return Err(err(tr!("`{}` を読めません", "Cannot read `{}`", im.file)).note(crate::proto::unreadable(&e))),
+            };
             match found.iter().find(|e| e.name == im.source) {
                 Some(e) => Ok(e.aliases()),
                 None => Err(err(tr!(

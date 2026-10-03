@@ -1399,7 +1399,7 @@ tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/orde
 tests/mutants/W102_見つからない_import/proto/shop/billing/v1/billing.proto sees 
 #### tests/fixtures
 == dandori/bad/specs/money.proto
-error 1:9 a name is expected where `{` is | a name が要るところに `{` があります
+error 1:9 a name is expected where `{` is | 名前が要るところに `{` があります
 == dandori/bad/specs/order.proto
 syntax proto3
 package shop.v1

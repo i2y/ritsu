@@ -185,6 +185,29 @@ fn 契約のフィールドが変われば止まる() {
     assert_eq!(o.status.code(), Some(1), "E121 は error です");
 }
 
+/// A `.proto` contract that does not read is named as a file that cannot be read, with where it
+/// stops (§15.166), not as a contract that has nothing where the shape points.
+#[test]
+fn 読めない_proto_の契約は読めないと言う() {
+    let tmp = TempDir::new("projection-unread");
+    let dir = tmp.path().to_path_buf();
+    std::fs::create_dir_all(dir.join("contracts")).unwrap();
+    let rule = std::fs::read_to_string(root().join("tests/corpus/出荷の送料.rule")).unwrap();
+    let proto = std::fs::read_to_string(root().join("tests/corpus/contracts/shipment.proto")).unwrap();
+    std::fs::write(dir.join("r.rule"), &rule).unwrap();
+    std::fs::write(dir.join("contracts/shipment.proto"), proto.trim_end().trim_end_matches('}')).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "en")
+        .args(["check", &dir.join("r.rule").to_string_lossy()])
+        .output()
+        .expect("rulec を起動できない");
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert_eq!(o.status.code(), Some(1), "{out}");
+    assert!(out.contains("error[E013]: Cannot read `contracts/shipment.proto`"), "{out}");
+    assert!(out.contains("It does not read as a `.proto` (line ") && out.contains("`}` is expected where the end of the file is"), "{out}");
+    assert!(!out.contains("has nothing at"), "{out}");
+}
+
 /// A rule that projects nothing gets no projection function and no `_Obj` type: the five
 /// emitters ask before writing anything.
 #[test]

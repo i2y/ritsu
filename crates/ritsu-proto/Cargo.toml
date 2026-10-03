@@ -11,9 +11,5 @@ publish = false
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
 
-# The tests hold the reader to the readers it takes the place of: rulec's and dandori's, which
-# stay in their crates until D.10 (DESIGN 3.3: a dev-dependency makes no loop).
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
-rulec = { path = "../rulec" }
-dandori = { path = "../dandori" }

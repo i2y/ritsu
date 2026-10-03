@@ -92,7 +92,7 @@ message Order {
   string note = 2;  // \"enum Fake { F = 0; }\" inside a string is text
 }
 ";
-    let es = rulec::proto::enums(src);
+    let es = rulec::proto::read("order.proto", src).expect("the file reads").enums;
     assert_eq!(es.len(), 1, "読めた列挙: {:?}", es.iter().map(|e| &e.name).collect::<Vec<_>>());
     assert_eq!(es[0].name, "Status");
     let names: Vec<&str> = es[0].values.iter().map(|v| v.name.as_str()).collect();
@@ -106,7 +106,7 @@ message Order {
 fn ゼロ値が_unspecified_でなければ落とさない() {
     // A file that puts a real value at 0 is unusual. Deciding on its behalf that it means
     // nothing is exactly the silence this tool exists to remove.
-    let es = rulec::proto::enums("enum Tier { TIER_NONE = 0; TIER_ONE = 1; }");
+    let es = rulec::proto::read("tier.proto", "enum Tier { TIER_NONE = 0; TIER_ONE = 1; }").expect("the file reads").enums;
     assert_eq!(es[0].aliases(), ["none", "one"]);
 }
 
@@ -196,6 +196,33 @@ fn 読めないファイルと_無い列挙と_形の違う行を断る() {
     let (code, out) = run(&["check", &shape]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("E013") && out.contains("import proto"), "{out}");
+}
+
+/// A contract that does not read as a `.proto` is named with where it stops (§15.166), and the
+/// rule is not held to what was found before the break. The reader rulec had before read up to
+/// what it did not understand and passed over it: a file cut off before its last `}` passed the
+/// check with every value it held, and a value written without `=` was skipped, so the check said
+/// the contract had lost that value (E032) and sent the reader to the rule.
+#[test]
+fn 読めない契約は途中まで読まずに場所を言う() {
+    let whole = rule("一般(basic) | ゴールド(gold) default", "| 一般 | 800円 |\n| - | 400円 |\n");
+    let (_tmp, p) = pair("whole", PROTO, &whole);
+    let (code, out) = run(&["check", &p]);
+    assert_eq!(code, 0, "the rule passes against the whole contract: {out}");
+
+    let cut = PROTO.trim_end().trim_end_matches('}');
+    let (_tmp, p) = pair("cut", cut, &whole);
+    let (code, out) = run(&["check", &p]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("error[E013]: `order.proto` を読めません"), "{out}");
+    assert!(out.contains("`.proto` として読めません（14 行目の 21 文字目）: `}` が要るところにファイルの終わりがあります"), "{out}");
+
+    let stray = PROTO.replace("MEMBER_TIER_GOLD = 2;", "MEMBER_TIER_GOLD 2;");
+    let (_tmp, p) = pair("stray", &stray, &whole);
+    let (code, out) = run(&["check", &p]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("error[E013]: `order.proto` を読めません") && !out.contains("E032"), "{out}");
+    assert!(out.contains("`.proto` として読めません（9 行目の 20 文字目）: `=` が要るところに `2` があります"), "{out}");
 }
 
 #[test]

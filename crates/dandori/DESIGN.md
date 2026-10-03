@@ -66,6 +66,7 @@ dandori は ritsu（七つの言語を一つにまとめる処理系）に取り
   - 引数の誤りを言う文は ritsu-base のもので、英語と日本語がある（前は英語だけ）。ファイルが一つも無いときは、そのコマンドの使い方の一行を出す。
 - **生成するコードが名前に使えない語の表**（Python・Go・TypeScript）を、ritsu-emit の `copies` から読む。表の中身は前と同じで、生成物は一バイトも変わらない。Python 3.14 の `keyword` や Go 1.25 の事前宣言の識別子といった標準の表にそろえるかは、ritsu の段階 E で一つの生成パッケージを作るときに決める。
 - **テスト**：一時ディレクトリ、Chrome を探して走らせること、golden の取り直しを、ritsu-testkit のものに替えた。SKIP の行は `SKIP: dandori: <理由>` の形になり、`RITSU_TEST_LEVEL` で段を選べる（`fast` なら、rulec・Node・Python・Go・Chrome や、Temporal・Argo・LocalStack が要るテストは、段で外れたと言って通る）。golden は `DANDORI_BLESS=1` のほかに `RITSU_BLESS=1` でも取り直せる。
+- **`.proto` の読み手**（ritsu の PLAN の D.10）：`use proto` のファイルとそれが import するファイルを、ritsu の一つの読み手（`ritsu_proto`）で一つずつ読み、型の名前を、そのファイルから見えるファイル（自分、import した先、`import public` で渡された先）だけから引く。前は自分で書いた読み手で読み、読んだ全部のファイルから引いていた。どこに import を探すか（buf の置き方ならモジュールの根から、ほかはファイルのディレクトリから）、そのファイルを dandori の読み方（ディスク、またはブラウザで試すページが持つファイル）で読むこと、proto3 だけを読むこと（proto2 と edition は断る）、読めなかった import があるときに解けない型の名前を書いたまま残すことは、dandori の側に残した。例とテストのフローの全部（`check` を英語と日本語と JSON で、例の `build` を七つのプラットフォームで、`scenarios`、`doc`、テストのフローの Temporal の `build`、701 回）の出力は、替える前と一字も違わない。ritsu の読み手のテストは、dandori の古い読み手と三つのリポジトリの全部の `.proto` で同じ結果になることを確かめたうえで、dandori が取るものを書いた golden と比べる形だけを残した。変わったのは、`.proto` として読めないファイルの言い方だけである。前は「line 5: expected `;`」と行と期待したものだけを言い、いまは「specs/order.proto:5:1: `;` is expected where `}` is」とファイルと列と、そこにあったものも言う（`use proto` の E016 の注。どちらも英語だけ）。
 
 ## 1. 言語
 

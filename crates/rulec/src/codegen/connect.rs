@@ -353,9 +353,10 @@ impl<'a> Gen<'a> {
             .enum_imports
             .iter()
             .find(|p| p.kind == EnumSource::Proto && p.target.text == ty)?;
-        let text = std::fs::read_to_string(self.dir().join(&im.file)).ok();
-        let pkg = text.as_deref().and_then(crate::proto::package);
-        let decl = text.as_deref().and_then(|s| crate::proto::enums(s).into_iter().find(|e| e.name == im.source));
+        // `check` has read the contract whole before anything is generated from the rule
+        let read = std::fs::read_to_string(self.dir().join(&im.file)).ok().and_then(|s| crate::proto::read(&im.file, &s).ok());
+        let pkg = read.as_ref().and_then(|f| f.package.clone());
+        let decl = read.and_then(|f| f.enums.into_iter().find(|e| e.name == im.source));
         Some(Foreign { file: im.file.clone(), sel: im.source.clone(), import: import_path(&im.file, pkg.as_deref()), pkg, decl })
     }
 
@@ -427,7 +428,9 @@ impl<'a> Gen<'a> {
             }
             let Ok(text) = std::fs::read_to_string(&disk) else { continue };
             let root = module_root(&disk, &at);
-            for imp in crate::proto::imports(&text) {
+            // a file it imports that does not read brings nothing with it; buf names it
+            let imports = crate::proto::read(&at, &text).map(|f| f.imports).unwrap_or_default();
+            for imp in imports {
                 let p = root.join(&imp);
                 if imp.starts_with("google/protobuf/") {
                     continue;

@@ -18,6 +18,7 @@ version = "0.1.0"
 dependencies = [
  "ritsu-base",
  "ritsu-emit",
+ "ritsu-proto",
  "ritsu-testkit",
  "serde_json",
 ]
@@ -111,10 +112,8 @@ dependencies = [
 name = "ritsu-proto"
 version = "0.1.0"
 dependencies = [
- "dandori",
  "ritsu-base",
  "ritsu-testkit",
- "rulec",
 ]
 
 [[package]]
@@ -134,6 +133,7 @@ version = "0.22.1"
 dependencies = [
  "ritsu-base",
  "ritsu-emit",
+ "ritsu-proto",
  "ritsu-testkit",
  "ritsu-units",
 ]

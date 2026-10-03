@@ -102,18 +102,28 @@ pub struct Contract {
     siblings: bool,
 }
 
+/// Why the contract a `shape` names gives nothing to hold the rule to: the note that says so.
+pub enum Unread {
+    /// The file does not read: a `.proto` ritsu's reader cannot read (§15.166).
+    File(String),
+    /// Nothing stands where the shape points — or a JSON Schema does not read as JSON, which
+    /// has always been said this way.
+    Nothing(String),
+}
+
 /// Read the contract a `shape` names, or say why it cannot be read.
-pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, String> {
+pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, Unread> {
     match d.source {
         EnumSource::JsonSchema => {
-            let doc = crate::jsonschema::read(text, &d.file)?;
+            let doc = crate::jsonschema::read(text, &d.file).map_err(Unread::Nothing)?;
             let siblings = siblings_apply(&doc);
             Ok(Contract { kind: d.source, doc: Some(doc), msgs: Vec::new(), enums: Vec::new(), at: d.at.clone(), siblings })
         }
         EnumSource::Proto => {
-            let msgs = crate::proto::messages(text);
+            let file = crate::proto::read(&d.file, text).map_err(|e| Unread::File(crate::proto::unreadable(&e)))?;
+            let msgs = file.messages;
             if !msgs.iter().any(|m| crate::proto::same_message(&m.name, &d.at)) {
-                return Err(if msgs.is_empty() {
+                return Err(Unread::Nothing(if msgs.is_empty() {
                     tr!("そのファイルにメッセージは一つもありません。", "That file declares no message at all.")
                 } else {
                     tr!(
@@ -121,9 +131,9 @@ pub fn read(d: &ShapeDecl, text: &str) -> Result<Contract, String> {
                         "The messages in that file: {}",
                         msgs.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(", ")
                     )
-                });
+                }));
             }
-            Ok(Contract { kind: d.source, doc: None, msgs, enums: crate::proto::enums(text), at: d.at.clone(), siblings: false })
+            Ok(Contract { kind: d.source, doc: None, msgs, enums: file.enums, at: d.at.clone(), siblings: false })
         }
     }
 }
@@ -410,11 +420,14 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
         match std::fs::read_to_string(&p) {
             Ok(text) => match read(d, &text) {
                 Ok(con) => read_ok.push((d, con)),
-                Err(why) => out.push(
+                Err(Unread::Nothing(why)) => out.push(
                     Diag::error("E013", tr!("`{}` の中に `{}` はありません", "`{}` has nothing at `{}`", d.file, d.at))
                         .at(at)
                         .mark(d.span.clone(), "")
                         .note(why),
+                ),
+                Err(Unread::File(why)) => out.push(
+                    Diag::error("E013", tr!("`{}` を読めません", "Cannot read `{}`", d.file)).at(at).mark(d.span.clone(), "").note(why),
                 ),
             },
             Err(_) => out.push(

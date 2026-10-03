@@ -8,9 +8,10 @@ repository = "https://github.com/i2y/dandori"
 
 [dependencies]
 # ritsu's base layer (ritsu's DESIGN 3.1): the two languages of the text, the command-line
-# table, and the words the generated code will not take as names.
+# table, the words the generated code will not take as names, and the reader of `.proto` files.
 ritsu-base = { path = "../ritsu-base" }
 ritsu-emit = { path = "../ritsu-emit" }
+ritsu-proto = { path = "../ritsu-proto" }
 # float_roundtrip: a number another language wrote reads back as the same double
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 

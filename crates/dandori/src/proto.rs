@@ -1,14 +1,22 @@
-//! A reader of `.proto` files (proto3): the package, the messages and enums with their fields,
-//! and the services' methods, which a `connect` task is held to. Of the options it reads what
-//! dandori uses: a field's `json_name` and its Protovalidate rules (`buf.validate.field`), and the
-//! options of services and methods (dandori's own marks, `dandori.v1.workflow` and the rest);
-//! the others are passed over. Google's well-known types, `buf/validate/validate.proto` and
-//! dandori's `dandori/v1/options.proto` are known without their files; any other import is read
-//! from the root of the importing file's module when the file sits where its package says (buf's
-//! layout), else from the file's directory. An import that is on the disk in neither place is
-//! passed over and told in `ProtoFile::unread` (a `.proto` imports `google/api/annotations.proto`
-//! for options, and the types a flow uses are often not in it): what such a file holds is not
-//! known, and a type of it that a message or a method names stays a name no message or enum has.
+//! The `.proto` files a flow reads (proto3): the package, the messages and enums with their
+//! fields, and the services' methods, which a `connect` task is held to. Of the options it keeps
+//! what dandori uses: a field's `json_name` and its Protovalidate rules (`buf.validate.field`), and
+//! the options of services and methods (dandori's own marks, `dandori.v1.workflow` and the rest).
+//!
+//! Each file is read by ritsu's one reader of `.proto` files (`ritsu_proto`, ritsu's DESIGN 4.10),
+//! and the names of types are resolved by protobuf's rule over the files a file can see: itself,
+//! what it imports, and what those pass on with `import public` (`ritsu_proto::Protos`). What is
+//! dandori's own is what it makes of that: it reads proto3 only, it finds a file through its
+//! sources (the disk, or the playground's bundle), and with an import that was not read it keeps
+//! a name it cannot resolve as written.
+//!
+//! Google's well-known types, `buf/validate/validate.proto` and dandori's
+//! `dandori/v1/options.proto` are known without their files; any other import is read from the
+//! root of the importing file's module when the file sits where its package says (buf's layout),
+//! else from the file's directory. An import that is on the disk in neither place is passed over
+//! and told in `ProtoFile::unread` (a `.proto` imports `google/api/annotations.proto` for options,
+//! and the types a flow uses are often not in it): what such a file holds is not known, and a type
+//! of it that a message or a method names stays a name no message or enum has.
 
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
@@ -102,544 +110,87 @@ impl ProtoFile {
 }
 
 /// Google's well-known types, which a `.proto` imports from `google/protobuf/…`.
-pub const WELL_KNOWN: &[&str] = &[
-    "google.protobuf.Timestamp",
-    "google.protobuf.Duration",
-    "google.protobuf.Struct",
-    "google.protobuf.Value",
-    "google.protobuf.ListValue",
-    "google.protobuf.Any",
-    "google.protobuf.Empty",
-    "google.protobuf.FieldMask",
-    "google.protobuf.DoubleValue",
-    "google.protobuf.FloatValue",
-    "google.protobuf.Int64Value",
-    "google.protobuf.UInt64Value",
-    "google.protobuf.Int32Value",
-    "google.protobuf.UInt32Value",
-    "google.protobuf.BoolValue",
-    "google.protobuf.StringValue",
-    "google.protobuf.BytesValue",
-    "google.protobuf.NullValue",
-];
-
-const SCALARS: &[&str] = &["double", "float", "int32", "int64", "uint32", "uint64", "sint32", "sint64", "fixed32", "fixed64", "sfixed32", "sfixed64", "bool", "string", "bytes"];
+pub use ritsu_proto::WELL_KNOWN;
 
 /// The key protobuf's JSON gives a field: its name in lowerCamelCase.
-pub fn json_name(name: &str) -> String {
-    let mut out = String::new();
-    let mut up = false;
-    for c in name.chars() {
-        if c == '_' {
-            up = true;
-        } else if up {
-            out.extend(c.to_uppercase());
-            up = false;
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
+pub use ritsu_proto::json_name;
 
-#[derive(Clone, Debug, PartialEq)]
-enum T {
-    Word(String),
-    Str(String),
-    Num(String),
-    Sym(char),
-}
-
-fn tokens(src: &str) -> Result<Vec<(T, usize)>, String> {
-    let c: Vec<char> = src.chars().collect();
-    let mut out = Vec::new();
-    let (mut i, mut line) = (0, 1);
-    while i < c.len() {
-        let ch = c[i];
-        if ch == '\n' {
-            line += 1;
-            i += 1;
-        } else if ch.is_whitespace() {
-            i += 1;
-        } else if ch == '/' && c.get(i + 1) == Some(&'/') {
-            while i < c.len() && c[i] != '\n' {
-                i += 1;
-            }
-        } else if ch == '/' && c.get(i + 1) == Some(&'*') {
-            i += 2;
-            while i + 1 < c.len() && !(c[i] == '*' && c[i + 1] == '/') {
-                if c[i] == '\n' {
-                    line += 1;
-                }
-                i += 1;
-            }
-            i += 2;
-        } else if ch == '"' || ch == '\'' {
-            let q = ch;
-            let mut s = String::new();
-            i += 1;
-            while i < c.len() && c[i] != q {
-                if c[i] == '\\' && i + 1 < c.len() {
-                    i += 1;
-                }
-                s.push(c[i]);
-                i += 1;
-            }
-            i += 1;
-            out.push((T::Str(s), line));
-        } else if ch.is_ascii_alphabetic() || ch == '_' || (ch == '.' && c.get(i + 1).is_some_and(|d| d.is_ascii_alphabetic())) {
-            let start = i;
-            i += 1;
-            while i < c.len() && (c[i].is_ascii_alphanumeric() || c[i] == '_' || c[i] == '.') {
-                i += 1;
-            }
-            out.push((T::Word(c[start..i].iter().collect()), line));
-        } else if ch.is_ascii_digit() || ch == '-' || ch == '+' {
-            let start = i;
-            i += 1;
-            while i < c.len() && (c[i].is_ascii_alphanumeric() || c[i] == '.' || c[i] == '+' || c[i] == '-') {
-                i += 1;
-            }
-            out.push((T::Num(c[start..i].iter().collect()), line));
-        } else {
-            out.push((T::Sym(ch), line));
-            i += 1;
-        }
-    }
-    Ok(out)
-}
-
-struct P {
-    t: Vec<(T, usize)>,
-    i: usize,
-}
-
-impl P {
-    fn peek(&self) -> Option<&T> {
-        self.t.get(self.i).map(|x| &x.0)
-    }
-    fn line(&self) -> usize {
-        self.t.get(self.i).or(self.t.last()).map(|x| x.1).unwrap_or(1)
-    }
-    fn err(&self, what: &str) -> String {
-        format!("line {}: expected {what}", self.line())
-    }
-    fn word(&mut self) -> Result<String, String> {
-        match self.peek().cloned() {
-            Some(T::Word(w)) => {
-                self.i += 1;
-                Ok(w)
-            }
-            _ => Err(self.err("a name")),
-        }
-    }
-    fn is_word(&self, w: &str) -> bool {
-        matches!(self.peek(), Some(T::Word(x)) if x == w)
-    }
-    fn is_sym(&self, s: char) -> bool {
-        matches!(self.peek(), Some(T::Sym(x)) if *x == s)
-    }
-    fn sym(&mut self, s: char) -> Result<(), String> {
-        if self.is_sym(s) {
-            self.i += 1;
-            Ok(())
-        } else {
-            Err(self.err(&format!("`{s}`")))
-        }
-    }
-    /// Pass over everything to the `;` that ends a statement, or over a `{…}` block.
-    fn skip_statement(&mut self) {
-        let mut depth = 0;
-        while let Some(t) = self.peek().cloned() {
-            self.i += 1;
-            match t {
-                T::Sym('{') => depth += 1,
-                T::Sym('}') => {
-                    depth -= 1;
-                    if depth <= 0 {
-                        return;
-                    }
-                }
-                T::Sym(';') if depth == 0 => return,
-                _ => {}
-            }
-        }
-    }
-
-    /// An option's name: `json_name`, or an extension's, `(buf.validate.field).int32.gte`: the name
-    /// that sets it, and the path below it.
-    fn option_name(&mut self) -> Result<(String, Vec<String>), String> {
-        if !self.is_sym('(') {
-            return Ok((self.word()?, vec![]));
-        }
-        self.i += 1;
-        // `(.dandori.v1.start)` names the extension from the root; the name is the same
-        let ext = self.word()?.trim_start_matches('.').to_string();
-        self.sym(')')?;
-        let mut path = Vec::new();
-        // `.int32.gte` is one word, which begins with a dot
-        if let Some(T::Word(w)) = self.peek().cloned() {
-            if let Some(rest) = w.strip_prefix('.') {
-                self.i += 1;
-                path = rest.split('.').map(String::from).collect();
-            }
-        }
-        Ok((ext, path))
-    }
-
-    /// An option's value, as protobuf's text format writes it: a scalar, a `{ … }` message, a `[ … ]` list.
-    fn option_value(&mut self) -> Result<Value, String> {
-        match self.peek().cloned() {
-            Some(T::Sym(open @ ('{' | '<'))) => {
-                self.i += 1;
-                self.option_fields(if open == '{' { '}' } else { '>' })
-            }
-            Some(T::Sym('[')) => {
-                self.i += 1;
-                let mut items = Vec::new();
-                loop {
-                    if self.is_sym(']') {
-                        self.i += 1;
-                        return Ok(Value::Array(items));
-                    }
-                    if self.is_sym(',') {
-                        self.i += 1;
-                        continue;
-                    }
-                    if self.peek().is_none() {
-                        return Err(self.err("`]`"));
-                    }
-                    items.push(self.option_value()?);
-                }
-            }
-            // strings written side by side are one
-            Some(T::Str(s)) => {
-                self.i += 1;
-                let mut text = s;
-                while let Some(T::Str(more)) = self.peek().cloned() {
-                    self.i += 1;
-                    text.push_str(&more);
-                }
-                Ok(Value::String(text))
-            }
-            Some(T::Num(n)) => {
-                self.i += 1;
-                Ok(number(&n))
-            }
-            Some(T::Word(w)) => {
-                self.i += 1;
-                Ok(match w.as_str() {
-                    "true" | "True" => Value::Bool(true),
-                    "false" | "False" => Value::Bool(false),
-                    // the name of an enum's value: `IGNORE_IF_ZERO_VALUE`, `NO_SIDE_EFFECTS`
-                    _ => Value::String(w),
-                })
-            }
-            _ => Err(self.err("a value")),
-        }
-    }
-
-    /// The fields of a message value, up to `close`: `name: value`, `name { … }`, `name: [ … ]`,
-    /// the fields apart by `,` or `;` or by nothing. A field written again becomes a list.
-    fn option_fields(&mut self, close: char) -> Result<Value, String> {
-        let mut out = Map::new();
-        loop {
-            match self.peek().cloned() {
-                None => return Err(self.err(&format!("`{close}`"))),
-                Some(T::Sym(c)) if c == close => {
-                    self.i += 1;
-                    return Ok(Value::Object(out));
-                }
-                Some(T::Sym(',' | ';')) => self.i += 1,
-                Some(T::Word(name)) => {
-                    self.i += 1;
-                    self.option_field(&mut out, name)?;
-                }
-                // an extension, or the type of an `Any`, in brackets: `[type.example.com/a.B] { … }`
-                Some(T::Sym('[')) => {
-                    self.i += 1;
-                    let mut name = String::new();
-                    loop {
-                        match self.peek().cloned() {
-                            None => return Err(self.err("`]`")),
-                            Some(T::Sym(']')) => {
-                                self.i += 1;
-                                break;
-                            }
-                            Some(T::Word(w)) => name.push_str(&w),
-                            Some(T::Sym(c)) => name.push(c),
-                            Some(_) => {}
-                        }
-                        self.i += 1;
-                    }
-                    self.option_field(&mut out, name)?;
-                }
-                _ => return Err(self.err("a field's name")),
-            }
-        }
-    }
-
-    fn option_field(&mut self, out: &mut Map<String, Value>, name: String) -> Result<(), String> {
-        if self.is_sym(':') {
-            self.i += 1;
-        }
-        let v = self.option_value()?;
-        match out.get_mut(&name) {
-            None => {
-                out.insert(name, v);
-            }
-            Some(Value::Array(a)) => match v {
-                Value::Array(more) => a.extend(more),
-                one => a.push(one),
-            },
-            Some(old) => {
-                let first = old.take();
-                let mut a = vec![first];
-                match v {
-                    Value::Array(more) => a.extend(more),
-                    one => a.push(one),
-                }
-                *old = Value::Array(a);
-            }
-        }
-        Ok(())
-    }
-
-    /// `name = value`, the inside of `[ … ]` on a field and of an `option` statement.
-    fn one_option(&mut self) -> Result<((String, Vec<String>), Value), String> {
-        let name = self.option_name()?;
-        self.sym('=')?;
-        Ok((name, self.option_value()?))
-    }
-
-    /// Pass over an option this reader cannot read, to the `,` that ends it or the `]` that ends the list.
-    fn skip_option(&mut self) {
-        let mut depth = 0;
-        while let Some(t) = self.peek().cloned() {
-            match t {
-                T::Sym('(' | '[' | '{') => depth += 1,
-                T::Sym(')' | '}') => depth -= 1,
-                T::Sym(']') if depth == 0 => return,
-                T::Sym(']') => depth -= 1,
-                T::Sym(',') if depth == 0 => return,
-                _ => {}
-            }
-            self.i += 1;
-        }
-    }
-
-    /// `[a = 1, (buf.validate.field).int32.gte = 1, json_name = "x"]`: the options, as a tree keyed
-    /// by the name of the option or of its extension. An option it cannot read is passed over.
-    fn options_list(&mut self) -> Result<Map<String, Value>, String> {
-        let mut tree = Map::new();
-        if !self.is_sym('[') {
-            return Ok(tree);
-        }
-        self.i += 1;
-        loop {
-            if self.is_sym(']') {
-                self.i += 1;
-                return Ok(tree);
-            }
-            if self.is_sym(',') {
-                self.i += 1;
-                continue;
-            }
-            if self.peek().is_none() {
-                return Err(self.err("`]`"));
-            }
-            let at = self.i;
-            match self.one_option() {
-                Ok((name, v)) => put_option(&mut tree, name, v),
-                Err(_) => {
-                    self.i = at;
-                    self.skip_option();
-                }
-            }
-        }
-    }
-
-    /// An `option … ;` statement, after the word `option`; one it cannot read is passed over.
-    fn option_statement(&mut self, into: &mut Map<String, Value>) {
-        let at = self.i;
-        match self.one_option() {
-            Ok((name, v)) if self.is_sym(';') => {
-                self.i += 1;
-                put_option(into, name, v);
-            }
-            _ => {
-                self.i = at;
-                self.skip_statement();
-            }
-        }
-    }
-}
-
-/// A number as an option writes it: a whole number as one, a fraction as a double; anything else is text.
-fn number(text: &str) -> Value {
-    let t = text.strip_prefix('+').unwrap_or(text);
-    if let Ok(n) = t.parse::<i64>() {
-        return Value::from(n);
-    }
-    if let Some(h) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
-        if let Ok(n) = i64::from_str_radix(h, 16) {
-            return Value::from(n);
-        }
-    }
-    if let Ok(n) = t.parse::<u64>() {
-        return Value::from(n);
-    }
-    match t.parse::<f64>().ok().and_then(serde_json::Number::from_f64) {
-        Some(f) => Value::Number(f),
-        None => Value::String(text.to_string()),
-    }
-}
-
-/// Put `v` in the tree where an option's name and path say: `(a).b.c = v` is `{"a": {"b": {"c": v}}}`,
-/// laid over what the other options of the same extension wrote.
-fn put_option(tree: &mut Map<String, Value>, (name, path): (String, Vec<String>), v: Value) {
-    fn put(slot: &mut Value, path: &[String], v: Value) {
-        match path.split_first() {
-            None => lay(slot, v),
-            Some((k, rest)) => {
-                if !slot.is_object() {
-                    *slot = Value::Object(Map::new());
-                }
-                let child = slot.as_object_mut().expect("an object").entry(k.clone()).or_insert(Value::Null);
-                put(child, rest, v);
-            }
-        }
-    }
-    fn lay(slot: &mut Value, v: Value) {
-        match (slot.as_object_mut(), v) {
-            (Some(a), Value::Object(b)) => {
-                for (k, x) in b {
-                    match a.get_mut(&k) {
-                        Some(s) => lay(s, x),
-                        None => {
-                            a.insert(k, x);
-                        }
-                    }
-                }
-            }
-            (_, v) => *slot = v,
-        }
-    }
-    put(tree.entry(name).or_insert(Value::Null), &path, v);
-}
-
-/// A message or an enum as declared, before the names of its fields' types are resolved.
-struct Raw {
-    fields: Vec<(PField, String)>,
-}
-
-struct RawMethod {
-    name: String,
-    input: String,
-    output: String,
-    streams: bool,
-    options: Map<String, Value>,
-}
-
-struct RawService {
-    name: String,
-    methods: Vec<RawMethod>,
-    options: Map<String, Value>,
-    imports_options: bool,
-}
-
-/// What the files read so far have: messages not yet resolved, services, the files seen.
+/// The files read so far, by the name `ritsu_proto::Protos` knows each by, and the imports that
+/// were not read.
 #[derive(Default)]
 struct Reading {
-    raws: BTreeMap<String, Raw>,
-    services: Vec<RawService>,
-    seen: Vec<PathBuf>,
+    ps: ritsu_proto::Protos,
+    /// the file each name stands for, by its canonical path, so that a file is read once
+    seen: Vec<(PathBuf, String)>,
+    unread: Vec<String>,
 }
 
 pub fn load(path: &Path) -> Result<ProtoFile, String> {
-    let mut f = ProtoFile::default();
     let mut rd = Reading::default();
-    read(path, &mut f, &mut rd, true)?;
-    resolve_all(f, rd)
+    let first = read(path, None, &mut rd)?;
+    resolve_all(&first, rd)
 }
 
 /// A `.proto` given as text, read as if its file were `name`, in the current directory: for what
 /// is tried without a file. The imports other than the well-known ones are read from the disk.
 pub fn load_text(name: &str, text: &str) -> Result<ProtoFile, String> {
-    let mut f = ProtoFile::default();
     let mut rd = Reading::default();
-    read_text(Path::new(name), text, &mut f, &mut rd, true)?;
-    resolve_all(f, rd)
+    let first = read(Path::new(name), Some(text), &mut rd)?;
+    resolve_all(&first, rd)
 }
 
-fn resolve_all(mut f: ProtoFile, rd: Reading) -> Result<ProtoFile, String> {
-    let Reading { raws, services, .. } = rd;
-    // resolve every type name from the scope it is written in, the innermost first
-    let known: Vec<String> = raws.keys().cloned().chain(f.enums.keys().cloned()).chain(WELL_KNOWN.iter().map(|s| s.to_string())).collect();
-    // with an import that was not read, a name nothing has may be in it: it stays as written, a
-    // type that is not known, and is told where a flow comes to it
-    let lenient = !f.unread.is_empty();
-    let resolve = |scope: &str, name: &str| -> Result<String, String> {
-        let said = |e: String| if lenient { Ok(name.trim_start_matches('.').to_string()) } else { Err(e) };
-        if let Some(abs) = name.strip_prefix('.') {
-            return match known.iter().find(|k| *k == abs).cloned() {
-                Some(k) => Ok(k),
-                None => said(format!("there is no type `{name}`")),
-            };
-        }
-        let mut s = scope.to_string();
-        loop {
-            let full = if s.is_empty() { name.to_string() } else { format!("{s}.{name}") };
-            if known.contains(&full) {
-                return Ok(full);
-            }
-            if s.is_empty() {
-                return said(format!("there is no type `{name}` (in `{scope}`)"));
-            }
-            s = s.rsplit_once('.').map(|(a, _)| a.to_string()).unwrap_or_default();
-        }
+/// Read one file (from its text when it is given) and every file it imports, each before the
+/// files it imports and those in the order written: the name the file is known by.
+fn read(path: &Path, text: Option<&str>, rd: &mut Reading) -> Result<String, String> {
+    let canon = if text.is_some() { path.to_path_buf() } else { crate::sources::canonical(path) };
+    if let Some((_, name)) = rd.seen.iter().find(|(c, _)| *c == canon) {
+        return Ok(name.clone());
+    }
+    let name = canon.to_string_lossy().to_string();
+    rd.seen.push((canon, name.clone()));
+    let src = match text {
+        Some(t) => t.to_string(),
+        None => crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?,
     };
-    fn fix(t: &PType, scope: &str, resolve: &dyn Fn(&str, &str) -> Result<String, String>) -> Result<PType, String> {
-        Ok(match t {
-            PType::Scalar(s) => PType::Scalar(s.clone()),
-            PType::Named(n) => PType::Named(resolve(scope, n)?),
-            PType::Map(k, v) => PType::Map(Box::new(fix(k, scope, resolve)?), Box::new(fix(v, scope, resolve)?)),
-        })
+    let f = ritsu_proto::read(&name, &src).map_err(|e| format!("{}:{}:{}: {}", path.display(), e.line, e.col, e.message("dandori").en))?;
+    // dandori reads proto3; a file that says nothing of its syntax is read as such
+    if f.syntax_line.is_some() && f.syntax != "proto3" {
+        return Err(if f.syntax.starts_with("edition") {
+            format!("{}: editions are not read; dandori reads proto3", path.display())
+        } else {
+            format!("{}: `{}` is not read; dandori reads proto3", path.display(), f.syntax)
+        });
     }
-    for (name, raw) in &raws {
-        let mut fields = Vec::new();
-        for (fl, scope) in &raw.fields {
-            let mut fl = fl.clone();
-            fl.ty = fix(&fl.ty, scope, &resolve)?;
-            // a singular message field says whether it is set
-            if let PType::Named(n) = &fl.ty {
-                if !fl.repeated && !f.enums.contains_key(n) && n != "google.protobuf.NullValue" {
-                    fl.presence = true;
+    let imports = f.imports.clone();
+    let package = f.package.clone();
+    rd.ps.add(f);
+    let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
+    let mut at = Vec::new();
+    for imp in &imports {
+        let imp = &imp.path;
+        if imp.starts_with("google/protobuf/") || imp == "buf/validate/validate.proto" {
+            at.push(None);
+            continue;
+        }
+        if imp == OPTIONS_IMPORT {
+            at.push(Some(read(Path::new(OPTIONS_IMPORT), Some(DANDORI_OPTIONS), rd)?));
+            continue;
+        }
+        // the file is where an import is looked for, or it is passed over; a file that is there and
+        // cannot be read as a `.proto` is the trouble
+        match import_dirs(&dir, &package).iter().map(|d| d.join(imp)).find(|p| crate::sources::read(p).is_ok()) {
+            Some(p) => at.push(Some(read(&p, None, rd)?)),
+            None => {
+                if !rd.unread.contains(imp) {
+                    rd.unread.push(imp.clone());
                 }
+                rd.ps.unread.insert(name.clone());
+                at.push(None);
             }
-            fields.push(fl);
         }
-        f.messages.insert(name.clone(), fields);
     }
-    for svc in services {
-        let scope = svc.name.rsplit_once('.').map(|(a, _)| a.to_string()).unwrap_or_default();
-        let mut ms = Vec::new();
-        for m in svc.methods {
-            ms.push(Method { name: m.name, input: resolve(&scope, &m.input)?, output: resolve(&scope, &m.output)?, streams: m.streams, options: m.options.into_iter().collect() });
-        }
-        f.services.push(Service { name: svc.name, methods: ms, options: svc.options.into_iter().collect(), imports_options: svc.imports_options });
-    }
-    Ok(f)
-}
-
-fn read(path: &Path, f: &mut ProtoFile, rd: &mut Reading, first: bool) -> Result<(), String> {
-    let canon = crate::sources::canonical(path);
-    if rd.seen.contains(&canon) {
-        return Ok(());
-    }
-    rd.seen.push(canon);
-    let src = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    read_text(path, &src, f, rd, first)
+    rd.ps.imports.insert(name.clone(), at);
+    Ok(name)
 }
 
 /// The directories an import is looked for in, in order. A file that sits where its package says
@@ -659,251 +210,106 @@ fn import_dirs(dir: &Path, package: &str) -> Vec<PathBuf> {
     out
 }
 
-/// Read one file's text; `path` says where it is, for the messages and for the imports.
-fn read_text(path: &Path, src: &str, f: &mut ProtoFile, rd: &mut Reading, first: bool) -> Result<(), String> {
-    let mut p = P { t: tokens(src)?, i: 0 };
-    let mut package = String::new();
-    let mut imports = Vec::new();
-    let first_service = rd.services.len();
-    while let Some(t) = p.peek().cloned() {
-        match t {
-            T::Word(w) if w == "syntax" => {
-                p.i += 1;
-                p.sym('=')?;
-                match p.peek().cloned() {
-                    Some(T::Str(s)) if s == "proto3" => {}
-                    Some(T::Str(s)) => return Err(format!("{}: `{s}` is not read; dandori reads proto3", path.display())),
-                    _ => return Err(p.err("the syntax")),
-                }
-                p.skip_statement();
-            }
-            T::Word(w) if w == "edition" => return Err(format!("{}: editions are not read; dandori reads proto3", path.display())),
-            T::Word(w) if w == "package" => {
-                p.i += 1;
-                package = p.word()?;
-                p.sym(';')?;
-            }
-            T::Word(w) if w == "import" => {
-                p.i += 1;
-                if p.is_word("public") || p.is_word("weak") {
-                    p.i += 1;
-                }
-                match p.peek().cloned() {
-                    Some(T::Str(s)) => imports.push(s),
-                    _ => return Err(p.err("the file imported")),
-                }
-                p.skip_statement();
-            }
-            T::Word(w) if w == "message" => {
-                p.i += 1;
-                message(&mut p, &package, f, &mut rd.raws)?;
-            }
-            T::Word(w) if w == "enum" => {
-                p.i += 1;
-                enumeration(&mut p, &package, f)?;
-            }
-            T::Word(w) if w == "service" => {
-                p.i += 1;
-                let name = p.word()?;
-                let full = if package.is_empty() { name } else { format!("{package}.{name}") };
-                p.sym('{')?;
-                let mut svc = RawService { name: full, methods: Vec::new(), options: Map::new(), imports_options: false };
-                while !p.is_sym('}') {
-                    if p.is_word("rpc") {
-                        p.i += 1;
-                        let m = p.word()?;
-                        p.sym('(')?;
-                        let mut streams = false;
-                        if p.is_word("stream") {
-                            p.i += 1;
-                            streams = true;
-                        }
-                        let input = p.word()?;
-                        p.sym(')')?;
-                        if !p.is_word("returns") {
-                            return Err(p.err("`returns`"));
-                        }
-                        p.i += 1;
-                        p.sym('(')?;
-                        if p.is_word("stream") {
-                            p.i += 1;
-                            streams = true;
-                        }
-                        let output = p.word()?;
-                        p.sym(')')?;
-                        let mut options = Map::new();
-                        if p.is_sym('{') {
-                            p.i += 1;
-                            loop {
-                                if p.is_sym('}') {
-                                    p.i += 1;
-                                    break;
-                                }
-                                if p.is_word("option") {
-                                    p.i += 1;
-                                    p.option_statement(&mut options);
-                                } else if p.peek().is_none() {
-                                    return Err(p.err("`}`"));
-                                } else {
-                                    p.skip_statement();
-                                }
-                            }
-                        } else {
-                            p.sym(';')?;
-                        }
-                        svc.methods.push(RawMethod { name: m, input, output, streams, options });
-                    } else if p.is_word("option") {
-                        p.i += 1;
-                        p.option_statement(&mut svc.options);
-                    } else if p.peek().is_none() {
-                        return Err(p.err("`}`"));
-                    } else {
-                        p.skip_statement();
-                    }
-                }
-                p.i += 1;
-                rd.services.push(svc);
-            }
-            T::Sym(';') => p.i += 1,
-            _ => p.skip_statement(),
-        }
+/// The options of an element as dandori reads them: a tree under each option's name.
+fn options(opts: &[ritsu_proto::Opt]) -> BTreeMap<String, Value> {
+    match ritsu_proto::value::tree(opts) {
+        ritsu_base::json::Json::Obj(kv) => kv.iter().map(|(k, v)| (k.clone(), json(v))).collect(),
+        _ => BTreeMap::new(),
     }
-    if first {
-        f.package = package.clone();
-    }
-    // the services this file wrote know whether it imports what a service's options need
-    let uses_options = imports.iter().any(|i| i == OPTIONS_IMPORT);
-    for svc in &mut rd.services[first_service..] {
-        svc.imports_options = uses_options;
-    }
-    let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-    for imp in imports {
-        if imp.starts_with("google/protobuf/") || imp == "buf/validate/validate.proto" {
-            continue;
-        }
-        if imp == OPTIONS_IMPORT {
-            let at = PathBuf::from(OPTIONS_IMPORT);
-            if !rd.seen.contains(&at) {
-                rd.seen.push(at.clone());
-                read_text(&at, DANDORI_OPTIONS, f, rd, false)?;
-            }
-            continue;
-        }
-        // the file is where an import is looked for, or it is passed over; a file that is there and
-        // cannot be read as a `.proto` is the trouble
-        let dirs = import_dirs(&dir, &package);
-        match dirs.iter().map(|d| d.join(&imp)).find(|at| crate::sources::read(at).is_ok()) {
-            Some(at) => read(&at, f, rd, false)?,
-            None => {
-                if !f.unread.contains(&imp) {
-                    f.unread.push(imp);
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
-fn message(p: &mut P, scope: &str, f: &mut ProtoFile, raws: &mut BTreeMap<String, Raw>) -> Result<(), String> {
-    let name = p.word()?;
-    let full = if scope.is_empty() { name } else { format!("{scope}.{name}") };
-    p.sym('{')?;
-    let mut fields = Vec::new();
-    let mut oneof_depth = 0;
-    loop {
-        match p.peek().cloned() {
-            None => return Err(p.err("`}`")),
-            Some(T::Sym('}')) => {
-                p.i += 1;
-                if oneof_depth > 0 {
-                    oneof_depth -= 1;
-                    continue;
-                }
-                break;
-            }
-            Some(T::Sym(';')) => p.i += 1,
-            Some(T::Word(w)) if w == "message" => {
-                p.i += 1;
-                message(p, &full, f, raws)?;
-            }
-            Some(T::Word(w)) if w == "enum" => {
-                p.i += 1;
-                enumeration(p, &full, f)?;
-            }
-            Some(T::Word(w)) if w == "oneof" => {
-                p.i += 1;
-                p.word()?;
-                p.sym('{')?;
-                oneof_depth += 1;
-            }
-            Some(T::Word(w)) if ["option", "reserved", "extensions", "extend"].contains(&w.as_str()) => p.skip_statement(),
-            Some(T::Word(w)) => {
-                p.i += 1;
-                let (repeated, optional, ty) = match w.as_str() {
-                    "repeated" => (true, false, p.word()?),
-                    "optional" => (false, true, p.word()?),
-                    "required" => (false, false, p.word()?),
-                    _ => (false, false, w),
-                };
-                let ty = if ty == "map" {
-                    p.sym('<')?;
-                    let k = p.word()?;
-                    p.sym(',')?;
-                    let v = p.word()?;
-                    p.sym('>')?;
-                    PType::Map(Box::new(PType::Scalar(k)), Box::new(if SCALARS.contains(&v.as_str()) { PType::Scalar(v) } else { PType::Named(v) }))
-                } else if SCALARS.contains(&ty.as_str()) {
-                    PType::Scalar(ty)
-                } else {
-                    PType::Named(ty)
-                };
-                let fname = p.word()?;
-                p.sym('=')?;
-                match p.peek() {
-                    Some(T::Num(_)) => p.i += 1,
-                    _ => return Err(p.err("the field's number")),
-                }
-                let options = p.options_list()?;
-                p.sym(';')?;
-                let json = options.get("json_name").and_then(|v| v.as_str()).map(String::from).unwrap_or_else(|| json_name(&fname));
-                let rules = options.get("buf.validate.field").cloned().unwrap_or(Value::Null);
-                let is_map = matches!(ty, PType::Map(..));
-                fields.push((PField { name: fname, json, ty, repeated: repeated && !is_map, presence: optional || oneof_depth > 0, rules }, full.clone()));
-            }
-            Some(_) => p.skip_statement(),
-        }
+/// JSON as serde_json holds it: a whole number as one, a fraction as a double.
+fn json(j: &ritsu_base::json::Json) -> Value {
+    use ritsu_base::json::Json;
+    match j {
+        Json::Null => Value::Null,
+        Json::Bool(b) => Value::Bool(*b),
+        Json::Int(n) => match (i64::try_from(*n), u64::try_from(*n)) {
+            (Ok(i), _) => Value::from(i),
+            (_, Ok(u)) => Value::from(u),
+            _ => Value::String(n.to_string()),
+        },
+        Json::Frac(t) => t.parse::<f64>().ok().and_then(serde_json::Number::from_f64).map(Value::Number).unwrap_or_else(|| Value::String(t.clone())),
+        Json::Str(s) => Value::String(s.clone()),
+        Json::Arr(a) => Value::Array(a.iter().map(json).collect()),
+        Json::Obj(kv) => Value::Object(kv.iter().map(|(k, v)| (k.clone(), json(v))).collect::<Map<String, Value>>()),
     }
-    raws.insert(full, Raw { fields });
-    Ok(())
 }
 
-fn enumeration(p: &mut P, scope: &str, f: &mut ProtoFile) -> Result<(), String> {
-    let name = p.word()?;
-    let full = if scope.is_empty() { name } else { format!("{scope}.{name}") };
-    p.sym('{')?;
-    let mut values = Vec::new();
-    loop {
-        match p.peek().cloned() {
-            None => return Err(p.err("`}`")),
-            Some(T::Sym('}')) => {
-                p.i += 1;
-                break;
-            }
-            Some(T::Sym(';')) => p.i += 1,
-            Some(T::Word(w)) if w == "option" || w == "reserved" => p.skip_statement(),
-            Some(T::Word(w)) => {
-                p.i += 1;
-                p.sym('=')?;
-                p.i += 1;
-                p.options_list()?;
-                p.sym(';')?;
-                values.push(w);
-            }
-            Some(_) => p.skip_statement(),
+/// Every message, enum and service of the files read, with the names of their types resolved
+/// from the file that writes them. With an import that was not read, a name nothing has may be in
+/// it: it stays as written, a type that is not known, and is told where a flow comes to it.
+fn resolve_all(first: &str, rd: Reading) -> Result<ProtoFile, String> {
+    use ritsu_proto::{Label, Resolved, Type};
+    let Reading { ps, unread, .. } = rd;
+    let lenient = !unread.is_empty();
+    let resolve = |file: &str, scope: &str, name: &str| -> Result<String, String> {
+        match ps.resolve(file, scope, name) {
+            Resolved::Found(s) => Ok(s.full),
+            Resolved::Known(k) if WELL_KNOWN.contains(&k.as_str()) => Ok(k),
+            _ if lenient => Ok(name.trim_start_matches('.').to_string()),
+            _ if name.starts_with('.') => Err(format!("there is no type `{name}`")),
+            _ => Err(format!("there is no type `{name}` (in `{scope}`)")),
+        }
+    };
+    let mut f = ProtoFile { package: ps.files[first].package.clone(), unread, ..ProtoFile::default() };
+    for file in &ps.order {
+        let pf = &ps.files[file];
+        for e in &pf.enums {
+            f.enums.insert(pf.full(&e.name), e.values.iter().map(|v| v.name.clone()).collect());
         }
     }
-    f.enums.insert(full, values);
-    Ok(())
+    // every message by its full name; a name two files declare is the one read last
+    let mut messages: BTreeMap<String, (&str, &ritsu_proto::Message)> = BTreeMap::new();
+    for file in &ps.order {
+        let pf = &ps.files[file];
+        for m in &pf.messages {
+            messages.insert(pf.full(&m.name), (file.as_str(), m));
+        }
+    }
+    for (scope, (file, m)) in messages {
+        {
+            let mut fields = Vec::new();
+            for x in &m.fields {
+                let named = |n: &str| resolve(file, &scope, n);
+                let ty = match &x.ty {
+                    Type::Scalar(s) => PType::Scalar(s.clone()),
+                    Type::Named(n) => PType::Named(named(n)?),
+                    Type::Map(k, v) => PType::Map(
+                        Box::new(PType::Scalar(k.clone())),
+                        Box::new(match v.as_ref() {
+                            Type::Named(n) => PType::Named(named(n)?),
+                            Type::Scalar(s) | Type::Map(s, _) => PType::Scalar(s.clone()),
+                        }),
+                    ),
+                };
+                let repeated = x.label == Label::Repeated && !matches!(x.ty, Type::Map(..));
+                // a singular message field says whether it is set
+                let message = matches!(&ty, PType::Named(n) if !repeated && !f.enums.contains_key(n) && n != "google.protobuf.NullValue");
+                let rules = options(&x.options).remove("buf.validate.field").unwrap_or(Value::Null);
+                fields.push(PField { name: x.name.clone(), json: x.json(), ty, repeated, presence: x.label == Label::Optional || x.oneof.is_some() || message, rules });
+            }
+            f.messages.insert(scope, fields);
+        }
+    }
+    for file in &ps.order {
+        let pf = &ps.files[file];
+        let imports_options = pf.imports.iter().any(|i| i.path == OPTIONS_IMPORT);
+        for s in &pf.services {
+            let mut methods = Vec::new();
+            for m in &s.methods {
+                methods.push(Method {
+                    name: m.name.clone(),
+                    input: resolve(file, &pf.package, &m.input)?,
+                    output: resolve(file, &pf.package, &m.output)?,
+                    streams: m.client_streaming || m.server_streaming,
+                    options: options(&m.options),
+                });
+            }
+            f.services.push(Service { name: pf.full(&s.name), methods, options: options(&s.options), imports_options });
+        }
+    }
+    Ok(f)
 }
 
 #[cfg(test)]

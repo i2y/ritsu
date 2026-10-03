@@ -98,7 +98,8 @@ fn 出た場所と_api_が言う場所が同じ() {
 fn 書いた列挙を自分で読み返せる() {
     let (_tmp, dir) = generate("roundtrip", &[RULE]);
     let body = std::fs::read_to_string(dir.join("proto/rulec/shipping_fee/v4/shipping_fee.proto")).unwrap();
-    let es = rulec::proto::enums(&body);
+    let read = rulec::proto::read("shipping_fee.proto", &body).expect("the file rulec wrote reads");
+    let es = read.enums;
     let member = es.iter().find(|e| e.name == "MemberKind").expect("MemberKind が無い");
     assert_eq!(member.aliases(), ["basic", "gold", "platinum"]);
     let pref = es.iter().find(|e| e.name == "Prefecture").expect("Prefecture が無い");
@@ -106,7 +107,7 @@ fn 書いた列挙を自分で読み返せる() {
     assert_eq!(pref.aliases()[0], "hokkaido");
     // The zero value is proto3's "not set" and is not one of the rule's values.
     assert!(body.contains("PREFECTURE_UNSPECIFIED = 0;"), "{body}");
-    assert_eq!(rulec::proto::package(&body).as_deref(), Some("rulec.shipping_fee.v4"));
+    assert_eq!(read.package.as_deref(), Some("rulec.shipping_fee.v4"));
 }
 
 /// An enum whose values belong to a contract outside the rule is imported, not copied: the
@@ -444,7 +445,7 @@ fn connect_の目録は生成した_proto_と一致する() {
         let a = api(rule);
         let c = a.get("connect").expect("connect の項が無い");
         let body = std::fs::read_to_string(dir.join(format!("proto/rulec/{alias}/{version}/{alias}.proto"))).unwrap();
-        let declared = rulec::proto::enums(&body);
+        let declared = rulec::proto::read(&format!("{alias}.proto"), &body).expect("the file rulec wrote reads").enums;
         let enums = c.get("enums").map(items).expect("enums が無い");
         assert!(!enums.is_empty(), "{rule}: 列挙が一つも無い");
         for e in enums {

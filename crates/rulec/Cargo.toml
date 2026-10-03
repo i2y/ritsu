@@ -30,6 +30,7 @@ include = [
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
 ritsu-emit = { path = "../ritsu-emit" }
+ritsu-proto = { path = "../ritsu-proto" }
 ritsu-units = { path = "../ritsu-units" }
 
 [dev-dependencies]

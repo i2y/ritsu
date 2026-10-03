@@ -22,14 +22,15 @@
 //! read the set; holding the two together is `enums.rs`, which does it the same way for
 //! every format.
 //!
-//! What is read is one production of the grammar for that: `enum <Name> { <VALUE> = <n>; … }`,
-//! wherever it sits, nested in a message or not. Two readers were added beside it later, each
-//! for one question a rule asks of the contract: the messages and their fields, as far as a
-//! `from` path needs them (§15.125), and on a field, the Protovalidate rules that bound which
-//! values pass (§15.132). The rules that relate fields to each other — CEL on a message or a
-//! field, a `oneof` — are read as text here and made into a condition by `cel` and
-//! `projection` (§15.140). Services, imports and every other option are skipped. The file is a
-//! contract, not a program.
+//! The file is read by ritsu's one reader of `.proto` files (`ritsu_proto`, ritsu's DESIGN
+//! 4.10), the same one dandori and sakai read with. This module takes from what it reads what a
+//! rule asks of a contract: the enums and their values (§15.59), the messages and their fields,
+//! as far as a `from` path needs them (§15.125), and on a field, the Protovalidate rules that
+//! bound which values pass (§15.132). The rules that relate fields to each other — CEL on a
+//! message or a field, a `oneof` — are kept as text here and made into a condition by `cel` and
+//! `projection` (§15.140). Services and every other option are passed over. The file is a
+//! contract, not a program. A file the reader cannot read is not read in part: what a rule is
+//! held to is not taken from half a contract (§15.166).
 
 
 /// One value of an enum in a `.proto`.
@@ -122,21 +123,7 @@ impl Field {
 
 /// protobuf's own rule for a field's JSON name: an underscore is dropped and the letter after
 /// it is capitalised, so `weight_g` is `weightG` and `order_lines` is `orderLines`.
-pub fn json_name(field: &str) -> String {
-    let mut out = String::new();
-    let mut up = false;
-    for c in field.chars() {
-        if c == '_' {
-            up = true;
-        } else if up {
-            out.extend(c.to_uppercase());
-            up = false;
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
+pub use ritsu_proto::json_name;
 
 /// The Protovalidate rules on one field that decide which values pass: `(buf.validate.field)`
 /// in the field's options, in either spelling — `.int64.gte = 1` or `.int64 = {gte: 1}`
@@ -149,42 +136,10 @@ pub fn json_name(field: &str) -> String {
 /// interpreted. Reading it as not there makes the field
 /// look wider than it is, never narrower: the check that uses this may then speak where it
 /// did not need to, and never stays quiet where it should have spoken.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Rules {
-    pub required: bool,
-    /// `IGNORE_IF_ZERO_VALUE` and its older names, or `IGNORE_ALWAYS`.
-    pub ignore: Option<String>,
-    pub int: IntRules,
-    pub min_items: Option<i128>,
-    pub max_items: Option<i128>,
-    pub str_const: Option<String>,
-    pub str_in: Vec<String>,
-    pub str_not_in: Vec<String>,
-    /// The least length the string rules ask for (`min_len`, `len`, and the two in bytes):
-    /// what a date needs to know of them, which is whether "" passes (§15.133).
-    pub str_min_len: Option<i128>,
-    /// The CEL expressions on the field, from `cel` and `cel_expression`, `this` being the
-    /// field. They are read by `cel` where the rule is compared (§15.140).
-    pub cel: Vec<String>,
-    pub unread: Vec<String>,
-}
-
-/// The integer rules, whichever of the ten integer kinds they were written under.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct IntRules {
-    pub konst: Option<i128>,
-    pub gt: Option<i128>,
-    pub gte: Option<i128>,
-    pub lt: Option<i128>,
-    pub lte: Option<i128>,
-    pub in_: Vec<i128>,
-    pub not_in: Vec<i128>,
-}
-
-/// The ten integer kinds of a `.proto`, which are also the names Protovalidate files their
-/// rules under.
-const INT_KINDS: &[&str] =
-    &["int32", "int64", "uint32", "uint64", "sint32", "sint64", "fixed32", "fixed64", "sfixed32", "sfixed64"];
+///
+/// The reader reads them (`ritsu_proto::validate`); this is its type, under the names rulec has
+/// always used.
+pub use ritsu_proto::validate::{IntRules, Rules};
 
 /// The values an integer kind can hold on the wire.
 pub fn int_bounds(ty: &str) -> Option<(i128, i128)> {
@@ -209,25 +164,7 @@ pub struct Message {
 
 /// The rules on a message rather than on one field: `(buf.validate.message)` in its options,
 /// and the `oneof`s it declares.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct MsgRules {
-    /// The CEL expressions on the message, from `cel` and `cel_expression`, `this` being the
-    /// message.
-    pub cel: Vec<String>,
-    /// The groups of fields of which at most one may be set: every `oneof` the message
-    /// declares, and every `(buf.validate.message).oneof`. `required` asks for exactly one.
-    pub oneofs: Vec<Oneof>,
-    /// `(buf.validate.message).disabled`. Protovalidate has since removed it; where a release
-    /// that still reads it validates the message, it validates nothing, so every rule of the
-    /// message is dropped rather than trusted.
-    pub disabled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Oneof {
-    pub fields: Vec<String>,
-    pub required: bool,
-}
+pub use ritsu_proto::validate::{MsgRules, OneofRule as Oneof};
 
 /// The kinds a proto scalar travels as. A rule's numbers are whole in their declared unit
 /// (§2.1), so the floating kinds are named apart rather than folded in with the integers.
@@ -263,543 +200,75 @@ pub fn same_message(declared: &str, wanted: &str) -> bool {
     declared == wanted || last(declared) == last(wanted)
 }
 
-/// Every message in the file, in the order they appear, nested ones included.
+/// What rulec reads of one `.proto`: the package, the imports as written, every enum, and every
+/// message with the fields a path can follow. A nested enum or message is listed under its own
+/// short name, which is how a rule names it; the order is the file's.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct File {
+    pub package: Option<String>,
+    pub imports: Vec<String>,
+    pub enums: Vec<Enum>,
+    pub messages: Vec<Message>,
+}
+
+/// Read a `.proto` with ritsu's reader and take what a rule asks of it, or say where the file
+/// does not read (§15.166). `path` names the file in what the reader says.
 ///
-/// Read far enough for a path and no further: a field is `[repeated] <type> <name> = <n>;`,
-/// the members of a `oneof` are fields of the message it is in, and `map`, `reserved` and
-/// `extend` are skipped. A `map` field is skipped rather than guessed at, so a path into one
-/// gets stuck instead of being waved through. Of the options on a message, only Protovalidate's
-/// are read.
-pub fn messages(src: &str) -> Vec<Message> {
-    let (text, strs) = lex_strings(src);
-    let b: Vec<char> = text.chars().collect();
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < b.len() {
-        if !word_starts_at(&b, i, "message") {
-            i += 1;
-            continue;
-        }
-        let j = skip_ws(&b, i + 7);
-        let (name, k) = ident(&b, j);
-        let j = skip_ws(&b, k);
-        if name.is_empty() || b.get(j) != Some(&'{') {
-            i += 1;
-            continue;
-        }
-        let (fields, rules) = body_of(&b, j + 1, &strs);
-        out.push(Message { name, fields, rules });
-        // A nested message is found by the same walk, so the cursor only steps past `{`.
-        i = j + 1;
-    }
-    out
-}
-
-/// The fields between `{` and its `}` and the rules on the message, the bodies of anything
-/// nested skipped over — except a `oneof`, whose members are fields of this message.
-fn body_of(b: &[char], from: usize, strs: &[String]) -> (Vec<Field>, MsgRules) {
-    let mut out: Vec<Field> = Vec::new();
-    let mut rules = MsgRules::default();
-    let mut stmt = String::new();
-    let mut opts = String::new();
-    let mut i = from;
-    let mut depth = 0usize;
-    // The `oneof` the walk is inside, with the members found so far.
-    let mut oneof: Option<(String, Oneof)> = None;
-    while i < b.len() {
-        let here = depth == 0 || (depth == 1 && oneof.is_some());
-        // `option … ;` on the message or on a oneof: read whole, braces and all.
-        if here && stmt.trim().is_empty() && word_starts_at(b, i, "option") {
-            let (text, next) = statement(b, i + 6);
-            option_of(&text, strs, &mut rules, oneof.as_mut().map(|(_, o)| o));
-            stmt.clear();
-            opts.clear();
-            i = next;
-            continue;
-        }
-        match b[i] {
-            '{' => {
-                // A nested message or enum, whose fields are its own; or a oneof, whose are not.
-                let w: Vec<&str> = stmt.split_whitespace().collect();
-                if depth == 0 && w.len() == 2 && w[0] == "oneof" {
-                    oneof = Some((w[1].to_string(), Oneof { fields: Vec::new(), required: false }));
-                }
-                depth += 1;
-                stmt.clear();
-                opts.clear();
-                i += 1;
-            }
-            '}' => {
-                if depth == 0 {
-                    break;
-                }
-                depth -= 1;
-                if depth == 0 {
-                    if let Some((_, o)) = oneof.take() {
-                        rules.oneofs.push(o);
-                    }
-                }
-                stmt.clear();
-                i += 1;
-            }
-            '[' => {
-                // The field's options, which may hold lists of their own (`in: [1, 2]`): the
-                // `]` that closes them is the one that brings the nesting back to zero.
-                let (inner, next) = bracketed(b, i);
-                if here {
-                    opts = inner;
-                }
-                i = next;
-            }
-            ';' => {
-                if here {
-                    if let Some(mut f) = field_of(&stmt) {
-                        f.rules = rules_of(&opts, strs);
-                        f.json_name = option_list(&opts, strs).into_iter().find_map(|(n, v)| match v {
-                            Tv::Str(s) if n == "json_name" => Some(s),
+/// Of a message, a `map` field is passed over rather than guessed at, so a path into one gets
+/// stuck instead of being waved through; so is a proto2 `required` field, which is not a field a
+/// rule's path names. A member of a `oneof` has presence of its own, as an `optional` field has.
+pub fn read(path: &str, src: &str) -> Result<File, ritsu_proto::ReadError> {
+    use ritsu_proto::{Label, Type};
+    let f = ritsu_proto::read(path, src)?;
+    let short = |n: &str| n.rsplit('.').next().unwrap_or(n).to_string();
+    Ok(File {
+        package: (!f.package.is_empty()).then(|| f.package.clone()),
+        imports: f.imports.iter().map(|i| i.path.clone()).collect(),
+        enums: f.enums.iter().map(|e| Enum { name: short(&e.name), values: e.values.iter().map(|v| Value { name: v.name.clone(), number: v.number }).collect() }).collect(),
+        messages: f
+            .messages
+            .iter()
+            .map(|m| Message {
+                name: short(&m.name),
+                fields: m
+                    .fields
+                    .iter()
+                    .filter(|x| !matches!(x.ty, Type::Map(..)) && x.label != Label::Required)
+                    .map(|x| Field {
+                        name: x.name.clone(),
+                        ty: match &x.ty {
+                            Type::Scalar(s) | Type::Named(s) => s.clone(),
+                            Type::Map(..) => unreachable!("a map is passed over"),
+                        },
+                        repeated: x.label == Label::Repeated,
+                        optional: x.label == Label::Optional || x.oneof.is_some(),
+                        rules: x.rules.clone(),
+                        json_name: x.options.iter().find_map(|o| match &o.value {
+                            Some(ritsu_proto::Value::Str(s)) if o.name.split_whitespace().collect::<String>() == "json_name" => Some(s.clone()),
                             _ => None,
-                        });
-                        if let Some((name, o)) = oneof.as_mut() {
-                            f.optional = true;
-                            f.oneof = Some(name.clone());
-                            o.fields.push(f.name.clone());
-                        }
-                        out.push(f);
-                    }
-                }
-                stmt.clear();
-                opts.clear();
-                i += 1;
-            }
-            c => {
-                stmt.push(c);
-                i += 1;
-            }
-        }
-    }
-    if rules.disabled {
-        for f in &mut out {
-            f.rules = Rules { unread: vec!["(buf.validate.message).disabled".into()], ..Rules::default() };
-        }
-        rules.cel.clear();
-        // A `oneof` of the file is the wire format's, and holds whatever validation says.
-        rules.oneofs.retain(|o| o.fields.iter().all(|n| out.iter().any(|f| f.name == *n && f.oneof.is_some())));
-        for o in &mut rules.oneofs {
-            o.required = false;
-        }
-    }
-    (out, rules)
+                        }),
+                        oneof: x.oneof.clone(),
+                    })
+                    .collect(),
+                rules: m.rules.clone(),
+            })
+            .collect(),
+    })
 }
 
-/// The text of a statement from `from` to its `;`, braces and brackets inside it skipped
-/// over, and the position after the `;`.
-fn statement(b: &[char], from: usize) -> (String, usize) {
-    let mut depth = 0i32;
-    let mut i = from;
-    while i < b.len() {
-        match b[i] {
-            '{' | '[' | '(' => depth += 1,
-            '}' | ']' | ')' => depth -= 1,
-            ';' if depth <= 0 => return (b[from..i].iter().collect(), i + 1),
-            _ => {}
-        }
-        i += 1;
-    }
-    (b[from.min(b.len())..].iter().collect(), b.len())
+/// Why a file did not read, as the note of the diagnostic that names it: where, and what the
+/// reader found there.
+pub fn unreadable(e: &ritsu_proto::ReadError) -> String {
+    let said = e.message("rulec");
+    let what = if crate::i18n::ja() { said.ja } else { said.en };
+    tr!(
+        "`.proto` として読めません（{} 行目の {} 文字目）: {what}",
+        "It does not read as a `.proto` (line {}, column {}): {what}",
+        e.line,
+        e.col
+    )
 }
 
-/// One `option` of a message or a oneof: what Protovalidate asks of it, the rest skipped.
-fn option_of(text: &str, strs: &[String], rules: &mut MsgRules, oneof: Option<&mut Oneof>) {
-    const MSG: &str = "(buf.validate.message)";
-    const ONEOF: &str = "(buf.validate.oneof)";
-    let mut oneof = oneof;
-    for (name, v) in option_list(text, strs) {
-        if let Some(rest) = name.strip_prefix(MSG) {
-            let path: Vec<&str> = rest.split('.').filter(|s| !s.is_empty()).collect();
-            message_rule(&path, &v, rules);
-        } else if let Some(rest) = name.strip_prefix(ONEOF) {
-            let required = match (rest.trim_start_matches('.'), &v) {
-                ("required", Tv::Id(t)) => t == "true",
-                ("", Tv::Msg(kv)) => kv.iter().any(|(k, v)| k == "required" && matches!(v, Tv::Id(t) if t == "true")),
-                _ => false,
-            };
-            if let Some(o) = oneof.as_deref_mut() {
-                o.required |= required;
-            }
-        }
-    }
-}
-
-/// One part of `(buf.validate.message)`, in any of the ways text format lets it be written.
-fn message_rule(path: &[&str], v: &Tv, rules: &mut MsgRules) {
-    let expression = |kv: &[(String, Tv)]| {
-        kv.iter().find_map(|(k, v)| match v {
-            Tv::Str(s) if k == "expression" => Some(s.clone()),
-            _ => None,
-        })
-    };
-    match (path, v) {
-        ([], Tv::Msg(kv)) => {
-            for (k, v) in kv {
-                message_rule(&[k.as_str()], v, rules);
-            }
-        }
-        (["cel"], Tv::Msg(kv)) => rules.cel.extend(expression(kv)),
-        (["cel", "expression"], Tv::Str(s)) => rules.cel.push(s.clone()),
-        (["cel_expression"], Tv::Str(s)) => rules.cel.push(s.clone()),
-        (["cel" | "cel_expression" | "oneof"], Tv::List(xs)) => {
-            for x in xs {
-                message_rule(path, x, rules);
-            }
-        }
-        (["oneof"], Tv::Msg(kv)) => {
-            let fields = kv.iter().filter(|(k, _)| k == "fields").flat_map(|(_, v)| strs_of(v)).collect();
-            let required = kv.iter().any(|(k, v)| k == "required" && matches!(v, Tv::Id(t) if t == "true"));
-            rules.oneofs.push(Oneof { fields, required });
-        }
-        (["disabled"], Tv::Id(t)) => rules.disabled |= t == "true",
-        _ => {}
-    }
-}
-
-/// The text between the `[` at `open` and the `]` that matches it, and the position after
-/// that `]`. Strings are placeholders by now (`lex_strings`), so a bracket inside one is not seen.
-fn bracketed(b: &[char], open: usize) -> (String, usize) {
-    let mut depth = 0usize;
-    let mut i = open;
-    while i < b.len() {
-        match b[i] {
-            '[' => depth += 1,
-            ']' => {
-                depth -= 1;
-                if depth == 0 {
-                    return (b[open + 1..i].iter().collect(), i + 1);
-                }
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-    (b[(open + 1).min(b.len())..].iter().collect(), b.len())
-}
-
-/// `repeated Line lines = 3` → a field. Anything that is not three words and a number is
-/// not one.
-fn field_of(stmt: &str) -> Option<Field> {
-    let s = stmt.trim();
-    let mut w: Vec<&str> = s.split_whitespace().collect();
-    let repeated = w.first() == Some(&"repeated");
-    let optional = w.first() == Some(&"optional");
-    if repeated || optional {
-        w.remove(0);
-    }
-    // `map<string, Line> by_id = 1` is not read: its shape is not a path's to guess.
-    if w.len() < 4 || w[2] != "=" || w[0].starts_with("map<") {
-        return None;
-    }
-    if matches!(w[0], "option" | "reserved" | "extensions" | "import" | "package" | "syntax") {
-        return None;
-    }
-    w[3].trim_end_matches(';').parse::<i64>().ok()?;
-    Some(Field { name: w[1].to_string(), ty: w[0].to_string(), repeated, optional, rules: Rules::default(), json_name: None, oneof: None })
-}
-
-// --- Protovalidate, as far as a value's bounds go (§15.132) -------------------------------
-
-/// A value in the text format an option is written in: `1`, `"a"`, `IGNORE_ALWAYS`,
-/// `[1, 2]`, `{gte: 1, lte: 5}`.
-#[derive(Debug, Clone)]
-enum Tv {
-    Num(String),
-    Str(String),
-    Id(String),
-    List(Vec<Tv>),
-    Msg(Vec<(String, Tv)>),
-}
-
-struct Cur<'a> {
-    b: &'a [char],
-    i: usize,
-    strs: &'a [String],
-}
-
-impl Cur<'_> {
-    fn ws(&mut self) {
-        while self.i < self.b.len() && self.b[self.i].is_whitespace() {
-            self.i += 1;
-        }
-    }
-
-    fn peek(&self) -> Option<char> {
-        self.b.get(self.i).copied()
-    }
-
-    fn word(&mut self) -> String {
-        let mut s = String::new();
-        while let Some(c) = self.peek() {
-            if c.is_alphanumeric() || matches!(c, '_' | '.' | '-' | '+') {
-                s.push(c);
-                self.i += 1;
-            } else {
-                break;
-            }
-        }
-        s
-    }
-
-    /// A key of a message value: a field name, or `[an.extension]`.
-    fn key(&mut self) -> Option<String> {
-        self.ws();
-        if self.peek() == Some('[') {
-            let (inner, next) = bracketed(self.b, self.i);
-            self.i = next;
-            return Some(format!("[{inner}]"));
-        }
-        let w = self.word();
-        (!w.is_empty()).then_some(w)
-    }
-
-    fn value(&mut self) -> Option<Tv> {
-        self.ws();
-        match self.peek()? {
-            '{' => {
-                self.i += 1;
-                let mut kv = Vec::new();
-                loop {
-                    self.ws();
-                    match self.peek()? {
-                        '}' => {
-                            self.i += 1;
-                            break;
-                        }
-                        ',' | ';' => {
-                            self.i += 1;
-                            continue;
-                        }
-                        _ => {}
-                    }
-                    let k = self.key()?;
-                    self.ws();
-                    if self.peek() == Some(':') {
-                        self.i += 1;
-                    }
-                    kv.push((k, self.value()?));
-                }
-                Some(Tv::Msg(kv))
-            }
-            '[' => {
-                self.i += 1;
-                let mut vs = Vec::new();
-                loop {
-                    self.ws();
-                    match self.peek()? {
-                        ']' => {
-                            self.i += 1;
-                            break;
-                        }
-                        ',' => {
-                            self.i += 1;
-                            continue;
-                        }
-                        _ => {}
-                    }
-                    vs.push(self.value()?);
-                }
-                Some(Tv::List(vs))
-            }
-            q @ ('"' | '\'') => {
-                self.i += 1;
-                let mut n = String::new();
-                while let Some(c) = self.peek() {
-                    self.i += 1;
-                    if c == q {
-                        break;
-                    }
-                    n.push(c);
-                }
-                Some(Tv::Str(self.strs.get(n.parse::<usize>().ok()?)?.clone()))
-            }
-            _ => {
-                let w = self.word();
-                if w.is_empty() {
-                    None
-                } else if w.starts_with(|c: char| c.is_ascii_digit() || matches!(c, '-' | '+' | '.')) {
-                    Some(Tv::Num(w))
-                } else {
-                    Some(Tv::Id(w))
-                }
-            }
-        }
-    }
-}
-
-/// The options of one field as `(name, value)` pairs, in the order written. A pair that
-/// does not read is skipped to the next comma rather than taking the rest down with it.
-fn option_list(text: &str, strs: &[String]) -> Vec<(String, Tv)> {
-    let b: Vec<char> = text.chars().collect();
-    let mut c = Cur { b: &b, i: 0, strs };
-    let mut out = Vec::new();
-    let skip_to_comma = |c: &mut Cur| {
-        let mut depth = 0i32;
-        while let Some(ch) = c.peek() {
-            c.i += 1;
-            match ch {
-                '{' | '[' | '(' => depth += 1,
-                '}' | ']' | ')' => depth -= 1,
-                ',' if depth <= 0 => break,
-                _ => {}
-            }
-        }
-    };
-    loop {
-        c.ws();
-        if c.i >= b.len() {
-            break;
-        }
-        let start = c.i;
-        let mut depth = 0i32;
-        while let Some(ch) = c.peek() {
-            match ch {
-                '(' => depth += 1,
-                ')' => depth -= 1,
-                '=' | ',' if depth == 0 => break,
-                _ => {}
-            }
-            c.i += 1;
-        }
-        let name: String = b[start..c.i].iter().filter(|ch| !ch.is_whitespace()).collect();
-        if c.peek() != Some('=') {
-            skip_to_comma(&mut c);
-            continue;
-        }
-        c.i += 1;
-        match c.value() {
-            Some(v) => {
-                out.push((name, v));
-                c.ws();
-                if c.peek() == Some(',') {
-                    c.i += 1;
-                }
-            }
-            None => skip_to_comma(&mut c),
-        }
-    }
-    out
-}
-
-fn flatten(path: Vec<String>, v: Tv, out: &mut Vec<(Vec<String>, Tv)>) {
-    match v {
-        Tv::Msg(kv) => {
-            for (k, v) in kv {
-                let mut p = path.clone();
-                p.push(k);
-                flatten(p, v, out);
-            }
-        }
-        other => out.push((path, other)),
-    }
-}
-
-fn int_of(v: &Tv) -> Option<i128> {
-    let Tv::Num(s) = v else { return None };
-    let (neg, digits) = match s.strip_prefix('-') {
-        Some(d) => (true, d),
-        None => (false, s.strip_prefix('+').unwrap_or(s)),
-    };
-    let n = match digits.strip_prefix("0x").or_else(|| digits.strip_prefix("0X")) {
-        Some(h) => i128::from_str_radix(h, 16).ok()?,
-        // `1.0` is an integer written as a float; `1.5` bounds nothing an integer can be.
-        None => match digits.split_once('.') {
-            Some((w, f)) if f.chars().all(|c| c == '0') => w.parse().ok()?,
-            Some(_) => return None,
-            None => digits.parse().ok()?,
-        },
-    };
-    Some(if neg { -n } else { n })
-}
-
-fn ints_of(v: &Tv) -> Vec<i128> {
-    match v {
-        Tv::List(vs) => vs.iter().filter_map(int_of).collect(),
-        one => int_of(one).into_iter().collect(),
-    }
-}
-
-fn strs_of(v: &Tv) -> Vec<String> {
-    match v {
-        Tv::List(vs) => vs.iter().filter_map(|x| if let Tv::Str(s) = x { Some(s.clone()) } else { None }).collect(),
-        Tv::Str(s) => vec![s.clone()],
-        _ => Vec::new(),
-    }
-}
-
-/// What `(buf.validate.field)` says about one field. The text is the inside of the field's
-/// `[...]`, with its strings replaced by the placeholders `lex_strings` leaves; `strs` holds them.
-fn rules_of(text: &str, strs: &[String]) -> Rules {
-    const FIELD: &str = "(buf.validate.field)";
-    let mut r = Rules::default();
-    if text.trim().is_empty() {
-        return r;
-    }
-    let mut leaves = Vec::new();
-    for (name, v) in option_list(text, strs) {
-        let Some(rest) = name.strip_prefix(FIELD) else { continue };
-        if rest.contains('(') {
-            // `(buf.validate.field).int64.(my.rule) = …`: a predefined rule.
-            r.unread.push(rest.trim_start_matches('.').to_string());
-            continue;
-        }
-        let base: Vec<String> = rest.split('.').filter(|s| !s.is_empty()).map(String::from).collect();
-        flatten(base, v, &mut leaves);
-    }
-    for (path, v) in leaves {
-        let p: Vec<&str> = path.iter().map(String::as_str).collect();
-        match p.as_slice() {
-            ["required"] => r.required = matches!(&v, Tv::Id(t) if t == "true"),
-            ["ignore"] => r.ignore = if let Tv::Id(t) = &v { Some(t.clone()) } else { None },
-            [k, rule] if INT_KINDS.contains(k) => match *rule {
-                "const" => r.int.konst = int_of(&v),
-                "gt" => r.int.gt = int_of(&v),
-                "gte" => r.int.gte = int_of(&v),
-                "lt" => r.int.lt = int_of(&v),
-                "lte" => r.int.lte = int_of(&v),
-                "in" => r.int.in_.extend(ints_of(&v)),
-                "not_in" => r.int.not_in.extend(ints_of(&v)),
-                "example" => {}
-                _ => r.unread.push(path.join(".")),
-            },
-            ["repeated", "min_items"] => r.min_items = int_of(&v),
-            ["repeated", "max_items"] => r.max_items = int_of(&v),
-            // `unique` and the rules on each element say nothing about how many there are.
-            ["repeated", ..] => {}
-            ["string", "const"] => r.str_const = strs_of(&v).into_iter().next(),
-            ["string", "in"] => r.str_in.extend(strs_of(&v)),
-            ["string", "not_in"] => r.str_not_in.extend(strs_of(&v)),
-            ["string", "example"] => {}
-            ["string", "min_len" | "len" | "min_bytes" | "len_bytes"] => {
-                r.str_min_len = r.str_min_len.max(int_of(&v));
-                r.unread.push(path.join("."));
-            }
-            ["string", ..] => r.unread.push(path.join(".")),
-            ["cel", "expression"] | ["cel_expression"] => r.cel.extend(strs_of(&v)),
-            ["cel"] => {
-                if let Tv::List(xs) = &v {
-                    for x in xs {
-                        if let Tv::Msg(kv) = x {
-                            r.cel.extend(kv.iter().filter(|(k, _)| k == "expression").flat_map(|(_, v)| strs_of(v)));
-                        }
-                    }
-                }
-            }
-            ["cel", ..] => {}
-            _ if p.iter().any(|s| s.starts_with('[')) => r.unread.push(path.join(".")),
-            // The rules of the other kinds (`double`, `timestamp`, `map`, `enum`, …) bound
-            // nothing this reader compares.
-            _ => {}
-        }
-    }
-    r
-}
 
 /// `MemberTier` → `MEMBER_TIER`: an enum's name as the prefix its values carry.
 ///
@@ -837,289 +306,19 @@ pub fn upper_snake(camel: &str) -> String {
 /// The block form and the flow form (`deps: [a, b]`) are both read; `version: v1` and `v2`
 /// put `deps` at the top in the same way (§15.161).
 pub fn buf_deps(yaml: &str) -> Vec<String> {
-    let name = |s: &str| -> Option<String> {
-        let s = s.trim().trim_matches(|c| c == '"' || c == '\'');
-        let s = s.split(':').next().unwrap_or("").trim();
-        (!s.is_empty()).then(|| s.to_string())
-    };
-    let mut out = Vec::new();
-    let mut inside = false;
-    for line in yaml.lines() {
-        let line = line.split(" #").next().unwrap_or("");
-        if line.trim().is_empty() || line.trim_start().starts_with('#') {
-            continue;
-        }
-        if !line.starts_with([' ', '\t', '-']) {
-            inside = false;
-            if let Some(rest) = line.strip_prefix("deps:") {
-                match rest.trim().strip_prefix('[') {
-                    Some(flow) => out.extend(flow.trim_end_matches(']').split(',').filter_map(name)),
-                    None => inside = true,
-                }
-            }
-            continue;
-        }
-        if let Some(item) = line.trim_start().strip_prefix('-').filter(|_| inside) {
-            out.extend(name(item));
-        }
-    }
-    out
+    ritsu_proto::buf::deps(yaml)
 }
 
 /// One module a `buf.lock` pins: its name, and the commit and digest it was resolved to.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Pin {
-    pub name: String,
-    pub commit: String,
-    pub digest: String,
-}
+pub use ritsu_proto::buf::Pin;
 
 /// What a `buf.lock` pins, and the version of its shape. A `version: v1` lock names a module
 /// by `remote`, `owner` and `repository` and digests it with shake256; a v2 module takes only
 /// v2 pins (b5), so the version is what says whether these can be carried over (§15.161).
 pub fn buf_lock(yaml: &str) -> (String, Vec<Pin>) {
-    let mut version = String::new();
-    let mut pins: Vec<Pin> = Vec::new();
-    let mut fields: Vec<(String, String)> = Vec::new();
-    let flush = |fields: &mut Vec<(String, String)>, pins: &mut Vec<Pin>| {
-        let get = |k: &str| fields.iter().find(|(f, _)| f == k).map(|(_, v)| v.clone()).unwrap_or_default();
-        let name = match get("name") {
-            n if !n.is_empty() => n,
-            _ => [get("remote"), get("owner"), get("repository")].join("/"),
-        };
-        if !fields.is_empty() && !name.trim_matches('/').is_empty() {
-            pins.push(Pin { name, commit: get("commit"), digest: get("digest") });
-        }
-        fields.clear();
-    };
-    for line in yaml.lines() {
-        let line = line.split(" #").next().unwrap_or("");
-        if line.trim().is_empty() || line.trim_start().starts_with('#') {
-            continue;
-        }
-        if let Some(v) = line.strip_prefix("version:") {
-            version = v.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
-            continue;
-        }
-        let t = line.trim_start();
-        let t = match t.strip_prefix('-') {
-            Some(rest) => {
-                flush(&mut fields, &mut pins);
-                rest.trim_start()
-            }
-            None => t,
-        };
-        if let Some((k, v)) = t.split_once(':').filter(|_| line.starts_with([' ', '\t', '-'])) {
-            fields.push((k.trim().to_string(), v.trim().trim_matches(|c| c == '"' || c == '\'').to_string()));
-        }
-    }
-    flush(&mut fields, &mut pins);
-    (version, pins)
+    ritsu_proto::buf::lock(yaml)
 }
 
-/// The files a `.proto` imports, as written: `import "a/b.proto";`, and the `public` and
-/// `weak` forms alike.
-pub fn imports(src: &str) -> Vec<String> {
-    let (text, strs) = lex_strings(src);
-    let mut out = Vec::new();
-    for stmt in text.split([';', '{', '}']) {
-        let Some(rest) = stmt.trim().strip_prefix("import") else { continue };
-        if !rest.starts_with(|c: char| c.is_whitespace() || c == '"' || c == '\'') {
-            continue;
-        }
-        let rest = rest.trim_start();
-        let rest = ["public", "weak"].iter().find_map(|w| rest.strip_prefix(w)).map(str::trim_start).unwrap_or(rest);
-        let n = rest.trim_matches(|c| c == '"' || c == '\'');
-        if let Some(s) = n.parse::<usize>().ok().and_then(|k| strs.get(k)) {
-            out.push(s.clone());
-        }
-    }
-    out
-}
-
-/// The `package` the file declares, when it declares one.
-///
-/// The value set is all a rule needs, but a `.proto` written **from** a rule needs one thing
-/// more: an imported enum is named by its package there (§15.112), and a file with no package
-/// names its enum bare.
-pub fn package(src: &str) -> Option<String> {
-    for line in strip_comments(src).lines() {
-        let t = line.trim();
-        if let Some(rest) = t.strip_prefix("package ") {
-            let name = rest.trim().trim_end_matches(';').trim();
-            if !name.is_empty() {
-                return Some(name.to_string());
-            }
-        }
-    }
-    None
-}
-
-/// Every enum in the file, in the order they appear.
-pub fn enums(src: &str) -> Vec<Enum> {
-    let b: Vec<char> = strip_comments(src).chars().collect();
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < b.len() {
-        if !word_starts_at(&b, i, "enum") {
-            i += 1;
-            continue;
-        }
-        let mut j = skip_ws(&b, i + 4);
-        let (name, k) = ident(&b, j);
-        if name.is_empty() {
-            i += 1;
-            continue;
-        }
-        j = skip_ws(&b, k);
-        if b.get(j) != Some(&'{') {
-            i += 1;
-            continue;
-        }
-        let (values, end) = body(&b, j + 1);
-        out.push(Enum { name, values });
-        i = end;
-    }
-    out
-}
-
-/// The values between `{` and its `}`. Statements are separated by `;`; `option` and
-/// `reserved` are not values, and a `[deprecated = true]` suffix is not part of one.
-fn body(b: &[char], from: usize) -> (Vec<Value>, usize) {
-    let mut values = Vec::new();
-    let mut stmt = String::new();
-    let mut i = from;
-    while i < b.len() {
-        match b[i] {
-            '}' => {
-                i += 1;
-                break;
-            }
-            ';' => {
-                if let Some(v) = value_of(&stmt) {
-                    values.push(v);
-                }
-                stmt.clear();
-                i += 1;
-            }
-            '[' => {
-                // Field options belong to the value but say nothing about its number.
-                i = bracketed(b, i).1;
-            }
-            c => {
-                stmt.push(c);
-                i += 1;
-            }
-        }
-    }
-    (values, i)
-}
-
-fn value_of(stmt: &str) -> Option<Value> {
-    let s = stmt.trim();
-    if s.is_empty() {
-        return None;
-    }
-    let (name, rest) = s.split_once('=')?;
-    let name = name.trim();
-    if name.is_empty() || name.contains(char::is_whitespace) || name == "option" {
-        return None;
-    }
-    Some(Value { name: name.to_string(), number: rest.trim().parse().ok()? })
-}
-
-/// Comments out. A `//` inside a string literal is not a comment, and an unterminated block
-/// comment eats the rest of the file the way protoc reads it.
-fn strip_comments(src: &str) -> String {
-    lex_strings(src).0
-}
-
-/// Comments out, and every string literal replaced by its number in the list returned beside
-/// the text: `"honshu"` becomes `"0"`. The statements are split on `;`, `{` and `[`, and none of
-/// those may be taken from inside a string; the options that list values (`in: ["a", "b"]`)
-/// read the strings back from the list (§15.132).
-fn lex_strings(src: &str) -> (String, Vec<String>) {
-    let b: Vec<char> = src.chars().collect();
-    let mut out = String::new();
-    let mut strs = Vec::new();
-    let mut i = 0;
-    while i < b.len() {
-        match (b[i], b.get(i + 1)) {
-            ('/', Some('/')) => {
-                while i < b.len() && b[i] != '\n' {
-                    i += 1;
-                }
-            }
-            ('/', Some('*')) => {
-                i += 2;
-                while i < b.len() && !(b[i] == '*' && b.get(i + 1) == Some(&'/')) {
-                    i += 1;
-                }
-                i = (i + 2).min(b.len());
-            }
-            ('"', _) | ('\'', _) => {
-                let q = b[i];
-                i += 1;
-                let mut s = String::new();
-                while i < b.len() && b[i] != q {
-                    if b[i] == '\\' && i + 1 < b.len() {
-                        i += 1;
-                        s.push(match b[i] {
-                            'n' => '\n',
-                            't' => '\t',
-                            c => c,
-                        });
-                    } else {
-                        s.push(b[i]);
-                    }
-                    i += 1;
-                }
-                i += 1;
-                out.push(q);
-                out.push_str(&strs.len().to_string());
-                out.push(q);
-                strs.push(s);
-            }
-            (c, _) => {
-                out.push(c);
-                i += 1;
-            }
-        }
-    }
-    (out, strs)
-}
-
-fn word_starts_at(b: &[char], i: usize, w: &str) -> bool {
-    let ws: Vec<char> = w.chars().collect();
-    if i + ws.len() > b.len() || b[i..i + ws.len()] != ws[..] {
-        return false;
-    }
-    let before = i == 0 || !is_ident(b[i - 1]);
-    let after = b.get(i + ws.len()).is_none_or(|c| !is_ident(*c));
-    before && after
-}
-
-fn is_ident(c: char) -> bool {
-    c.is_alphanumeric() || c == '_' || c == '.'
-}
-
-fn ident(b: &[char], from: usize) -> (String, usize) {
-    let mut i = from;
-    let mut s = String::new();
-    while i < b.len() && is_ident(b[i]) {
-        s.push(b[i]);
-        i += 1;
-    }
-    (s, i)
-}
-
-fn skip_ws(b: &[char], from: usize) -> usize {
-    let mut i = from;
-    while i < b.len() && b[i].is_whitespace() {
-        i += 1;
-    }
-    i
-}
 
 #[cfg(test)]
 mod tests {
@@ -1150,6 +349,18 @@ message Line {
   int64 amount = 1 [(buf.validate.field).int64 = {in: [100, 200]}];
 }
 "#;
+
+    fn messages(src: &str) -> Vec<Message> {
+        read("t.proto", src).expect("the file reads").messages
+    }
+
+    fn enums(src: &str) -> Vec<Enum> {
+        read("t.proto", src).expect("the file reads").enums
+    }
+
+    fn imports(src: &str) -> Vec<String> {
+        read("t.proto", src).expect("the file reads").imports
+    }
 
     fn field<'a>(ms: &'a [Message], m: &str, f: &str) -> &'a Field {
         ms.iter().find(|x| x.name == m).and_then(|x| x.fields.iter().find(|y| y.name == f)).unwrap()

@@ -21,9 +21,9 @@ pub struct ReadError {
 pub enum Problem {
     UnclosedComment,
     UnclosedString,
-    /// `what` was expected (`a name`, `` `;` ``) where `got` is: a token as it reads in the
+    /// `what` was expected (a name, `` `;` ``) where `got` is: a token as it reads in the
     /// message (`` `}` ``, `"a"`), or None at the end of the file.
-    Expected { what: String, got: Option<String> },
+    Expected { what: Text, got: Option<String> },
     MissingBrace,
     /// A `syntax` neither `proto2` nor `proto3`.
     UnknownSyntax(String),
@@ -39,11 +39,15 @@ impl ReadError {
             Problem::UnclosedComment => tr!("閉じていないコメントがあります", "a comment is not closed"),
             Problem::UnclosedString => tr!("閉じていない文字列があります", "a string is not closed"),
             Problem::Expected { what, got } => {
-                let (ja, en) = match got {
-                    Some(g) => (g.clone(), g.clone()),
+                // in the Japanese, a space between a token and the words around it, and none
+                // between two words: `;` が要るところに `}` があります, 名前が要るところに…
+                let code = |s: &str| s.starts_with(['`', '"']);
+                let ja_what = if code(&what.ja) && !what.ja.ends_with(|c: char| !c.is_ascii()) { format!("{} ", what.ja) } else { what.ja.clone() };
+                let (ja_got, en_got) = match got {
+                    Some(g) => (format!(" {g} "), g.clone()),
                     None => ("ファイルの終わり".to_string(), "the end of the file".to_string()),
                 };
-                tr!("{what} が要るところに {} があります", "{what} is expected where {} is", ja; en)
+                tr!("{}が要るところに{}があります", "{} is expected where {} is", ja_what, ja_got; what.en, en_got)
             }
             Problem::MissingBrace => tr!("`}}` が足りません", "a `}}` is missing"),
             Problem::UnknownSyntax(s) => tr!("syntax \"{s}\" は知りません", "syntax \"{s}\" is not one {tool} knows"),
@@ -197,14 +201,14 @@ impl P<'_> {
         Err(ReadError { line, col, what })
     }
 
-    fn expected<X>(&self, what: &str) -> Result<X, ReadError> {
+    fn expected<X>(&self, what: Text) -> Result<X, ReadError> {
         let got = match self.peek() {
             Some(T::Word(w)) | Some(T::Num(w)) => Some(format!("`{w}`")),
             Some(T::Str(s)) => Some(format!("\"{s}\"")),
             Some(T::Sym(c)) => Some(format!("`{c}`")),
             None => None,
         };
-        self.fail(Problem::Expected { what: what.to_string(), got })
+        self.fail(Problem::Expected { what, got })
     }
 
     fn word(&mut self) -> Result<String, ReadError> {
@@ -213,7 +217,7 @@ impl P<'_> {
                 self.i += 1;
                 Ok(w)
             }
-            _ => self.expected("a name"),
+            _ => self.expected(tr!("名前", "a name")),
         }
     }
 
@@ -230,7 +234,7 @@ impl P<'_> {
             self.i += 1;
             Ok(())
         } else {
-            self.expected(&format!("`{s}`"))
+            self.expected(Text::same(format!("`{s}`")))
         }
     }
 
@@ -273,7 +277,7 @@ impl P<'_> {
         let a = self.i;
         while !self.is_sym('=') {
             if self.peek().is_none() || self.is_sym(';') {
-                return self.expected("`=`");
+                return self.expected(Text::same("`=`"));
             }
             self.i += 1;
         }
@@ -283,7 +287,7 @@ impl P<'_> {
         let mut depth = 0i32;
         loop {
             match self.peek() {
-                None => return self.expected("`;`"),
+                None => return self.expected(Text::same("`;`")),
                 Some(T::Sym('{')) | Some(T::Sym('[')) => depth += 1,
                 Some(T::Sym('}')) | Some(T::Sym(']')) => depth -= 1,
                 Some(T::Sym(';')) if depth == 0 => break,
@@ -313,7 +317,7 @@ impl P<'_> {
                         out.push(Opt { name: self.text(a, a + 1), text: self.text(self.i, self.i + 1), value: Some(Value::Str(s)) });
                         self.i += 1;
                     }
-                    _ => return self.expected("a string"),
+                    _ => return self.expected(tr!("文字列", "a string")),
                 }
             } else {
                 // One option: to the `,` or `]` at its own depth, its name before its first `=`.
@@ -322,7 +326,7 @@ impl P<'_> {
                 let mut depth = 0i32;
                 loop {
                     match self.peek() {
-                        None => return self.expected("`]`"),
+                        None => return self.expected(Text::same("`]`")),
                         Some(T::Sym('{')) | Some(T::Sym('[')) | Some(T::Sym('(')) => depth += 1,
                         Some(T::Sym('}')) | Some(T::Sym(')')) => depth -= 1,
                         Some(T::Sym(']')) if depth > 0 => depth -= 1,
@@ -453,7 +457,7 @@ pub fn read(path: &str, src: &str) -> Result<ProtoFile, ReadError> {
                         p.i += 1;
                     }
                     Some(T::Str(s)) => return p.fail(Problem::UnknownSyntax(s)),
-                    _ => return p.expected("a string"),
+                    _ => return p.expected(tr!("文字列", "a string")),
                 }
                 p.sym(';')?;
             }
@@ -467,7 +471,7 @@ pub fn read(path: &str, src: &str) -> Result<ProtoFile, ReadError> {
                         f.syntax = format!("edition {s}");
                         p.i += 1;
                     }
-                    _ => return p.expected("a string"),
+                    _ => return p.expected(tr!("文字列", "a string")),
                 }
                 p.sym(';')?;
             }
@@ -492,7 +496,7 @@ pub fn read(path: &str, src: &str) -> Result<ProtoFile, ReadError> {
                         f.imports.push(Import { path: s, line, col, public, weak });
                         p.i += 1;
                     }
-                    _ => return p.expected("the file imported"),
+                    _ => return p.expected(tr!("import するファイル", "the file imported")),
                 }
                 p.sym(';')?;
             }
@@ -515,7 +519,7 @@ pub fn read(path: &str, src: &str) -> Result<ProtoFile, ReadError> {
             }
             T::Word(w) if w == "extend" => p.skip_statement()?,
             T::Sym(';') => p.i += 1,
-            _ => return p.expected("`message`, `enum`, `service`, `import` or `option`"),
+            _ => return p.expected(tr!("`message`・`enum`・`service`・`import`・`option` のどれか", "`message`, `enum`, `service`, `import` or `option`")),
         }
     }
     Ok(f)
@@ -536,7 +540,7 @@ fn message(p: &mut P, outer: &str, f: &mut ProtoFile) -> Result<(), ReadError> {
     let mut oneof: Option<(String, OneofRule)> = None;
     loop {
         match p.peek().cloned() {
-            None => return p.expected("`}`"),
+            None => return p.expected(Text::same("`}`")),
             Some(T::Sym('}')) => {
                 p.i += 1;
                 if let Some((_, rule)) = oneof.take() {
@@ -607,9 +611,9 @@ fn message(p: &mut P, outer: &str, f: &mut ProtoFile) -> Result<(), ReadError> {
                 let number = match p.peek().cloned() {
                     Some(T::Num(n)) => {
                         p.i += 1;
-                        number(&n).ok_or(()).or_else(|_| p.expected("the field's number"))?
+                        number(&n).ok_or(()).or_else(|_| p.expected(tr!("フィールドの番号", "the field's number")))?
                     }
-                    _ => return p.expected("the field's number"),
+                    _ => return p.expected(tr!("フィールドの番号", "the field's number")),
                 };
                 let opts = p.field_options()?;
                 p.sym(';')?;
@@ -622,7 +626,7 @@ fn message(p: &mut P, outer: &str, f: &mut ProtoFile) -> Result<(), ReadError> {
                 let rules = validate::field_rules(&opts);
                 fields.push(Field { name: fname, number, label, ty, json_name, oneof: member, line: fline, options: opts, rules });
             }
-            Some(_) => return p.expected("a field"),
+            Some(_) => return p.expected(tr!("フィールド", "a field")),
         }
     }
     if rules.disabled {
@@ -645,7 +649,7 @@ fn enumeration(p: &mut P, outer: &str, f: &mut ProtoFile) -> Result<(), ReadErro
     let mut options = Vec::new();
     loop {
         match p.peek().cloned() {
-            None => return p.expected("`}`"),
+            None => return p.expected(Text::same("`}`")),
             Some(T::Sym('}')) => {
                 p.i += 1;
                 break;
@@ -663,15 +667,15 @@ fn enumeration(p: &mut P, outer: &str, f: &mut ProtoFile) -> Result<(), ReadErro
                 let n = match p.peek().cloned() {
                     Some(T::Num(n)) => {
                         p.i += 1;
-                        number(&n).ok_or(()).or_else(|_| p.expected("the value's number"))?
+                        number(&n).ok_or(()).or_else(|_| p.expected(tr!("値の番号", "the value's number")))?
                     }
-                    _ => return p.expected("the value's number"),
+                    _ => return p.expected(tr!("値の番号", "the value's number")),
                 };
                 let opts = p.field_options()?;
                 p.sym(';')?;
                 values.push(EnumValue { name: w, number: n, line: vline, options: opts });
             }
-            Some(_) => return p.expected("a value"),
+            Some(_) => return p.expected(tr!("値", "a value")),
         }
     }
     f.enums.push(Enum { name, line, values, options });
@@ -685,7 +689,7 @@ fn service(p: &mut P, f: &mut ProtoFile) -> Result<(), ReadError> {
     let mut s = Service { name, line, methods: vec![], options: vec![] };
     loop {
         match p.peek().cloned() {
-            None => return p.expected("`}`"),
+            None => return p.expected(Text::same("`}`")),
             Some(T::Sym('}')) => {
                 p.i += 1;
                 break;
@@ -707,7 +711,7 @@ fn service(p: &mut P, f: &mut ProtoFile) -> Result<(), ReadError> {
                 let input = p.word()?;
                 p.sym(')')?;
                 if !p.is_word("returns") {
-                    return p.expected("`returns`");
+                    return p.expected(Text::same("`returns`"));
                 }
                 p.i += 1;
                 p.sym('(')?;
@@ -733,7 +737,7 @@ fn service(p: &mut P, f: &mut ProtoFile) -> Result<(), ReadError> {
                             p.i += 1;
                             options.push(p.option()?);
                         } else {
-                            return p.expected("`option` or `}`");
+                            return p.expected(tr!("`option` か `}}`", "`option` or `}}`"));
                         }
                     }
                 } else {
@@ -741,7 +745,7 @@ fn service(p: &mut P, f: &mut ProtoFile) -> Result<(), ReadError> {
                 }
                 s.methods.push(Method { name: m, input, output, client_streaming: cs, server_streaming: ss, line: mline, options });
             }
-            Some(_) => return p.expected("`rpc` or `option`"),
+            Some(_) => return p.expected(tr!("`rpc` か `option`", "`rpc` or `option`")),
         }
     }
     f.services.push(s);
