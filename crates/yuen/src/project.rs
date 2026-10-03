@@ -57,6 +57,8 @@ pub struct Project {
     pub root: PathBuf,
     /// The root as seen from where yuen runs: `.` when it runs there.
     pub root_shown: String,
+    /// Where yuen runs, absolute: what `shown` writes a path from.
+    pub cwd: PathBuf,
     /// The paths the command line gave, for the line that says what was checked.
     pub label: String,
     /// The same paths, one by one, for the commands a diagnostic suggests.
@@ -188,7 +190,7 @@ pub fn load(args: &[String], root_flag: Option<&str>) -> Result<(Option<Project>
         return Ok((None, diags));
     }
     let label = args.join(", ");
-    Ok((Some(Project { root, root_shown, label, args: args.to_vec(), root_flag: root_flag.map(|r| r.to_string()), files, reqs: vec![], by_name: BTreeMap::new(), aliases: BTreeMap::new(), names: Names::default() }), diags))
+    Ok((Some(Project { root, root_shown, cwd, label, args: args.to_vec(), root_flag: root_flag.map(|r| r.to_string()), files, reqs: vec![], by_name: BTreeMap::new(), aliases: BTreeMap::new(), names: Names::default() }), diags))
 }
 
 impl Project {
@@ -204,12 +206,16 @@ impl Project {
     /// A path from the root as the directory yuen runs in sees it (DESIGN 2.2): what the
     /// text of a diagnostic, `trace` and the `source` commands write, so that a person can open
     /// it from where they ran yuen. The JSON keeps the path from the root.
+    ///
+    /// The shortest way there: when yuen runs below the root, a path under where it runs is
+    /// written from there (`tests/x.req`), not up to the root and down again
+    /// (`../../crates/yuen/tests/x.req`).
     pub fn shown(&self, rel: &str) -> String {
-        match (self.root_shown.as_str(), rel) {
-            (".", r) => r.to_string(),
-            (root, ".") => root.to_string(),
-            (root, r) => format!("{root}/{r}"),
+        if self.root_shown == "." {
+            return rel.to_string();
         }
+        let target = if rel == "." { self.root.clone() } else { self.root.join(rel) };
+        relative(&self.cwd, &target)
     }
 
     pub fn err(&self, fi: usize, code: &'static str, s: Span, msg: Text) -> Diag {

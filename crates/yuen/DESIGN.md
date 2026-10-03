@@ -405,7 +405,7 @@ sakai "contexts/受注.ctx" term キャンセル
 - 畳んで何も残らないパス（`"."`）は、書いたファイルのディレクトリそのものを指す。ディレクトリを書けるのは `scope` だけである（2.5）。ルートそのものは、文字にするときも JSON でも `"."` と書く。
 - **ルート**：最初に渡したパスの上で、`.git` を持つ一番近いディレクトリ。git を走らせず、ディレクトリを見て探す。無ければ、渡したディレクトリ（ファイルなら、それがあるディレクトリ）。`--root` で替えられる。geas の `map` の記録のルート（geas の DESIGN 7.4）と同じ決まりにした。git の差分のパスも、geas の記録のパスも、このルートからの相対なので、そのまま突き合わせられる。
 - JSON で出すとき（`api`、`--format json`、書き出し）は、パスをルートからの相対にする。ルートそのものは、yuen を走らせたディレクトリから見た相対で `root` に書く（そこで走らせれば `"."`）。手元の絶対パスを出力に入れないためである。
-- 人が読む文面（診断、`trace`、`review`、`source` のコマンド）でファイルの場所を言うときは、一式（koyomi・chobo・dandori・geas）と同じく、走らせたディレクトリからの相対で書く。`.req` は渡したとおりのパス（ディレクトリを渡したなら、そのパスに見つけたファイルをつないだもの）で、写しや成果物のファイルは、走らせたディレクトリから見たルートに、ルートからのパスをつないだもので書く。どれも、走らせた場所からそのまま開ける。名指しを文字にしたもの（2.4）だけは、どこに出してもルートからの相対のままにする。読み直すと同じ名指しになり、ルートにある `.req` にそのまま貼れる形だからである。
+- 人が読む文面（診断、`trace`、`review`、`source` のコマンド）でファイルの場所を言うときは、一式（koyomi・chobo・dandori・geas）と同じく、走らせたディレクトリからの相対で書く。`.req` は渡したとおりのパス（ディレクトリを渡したなら、そのパスに見つけたファイルをつないだもの）で、写しや成果物のファイルは、走らせたディレクトリからいちばん短い相対で書く（ritsu の段階 C で直した。ルートが走らせたディレクトリより上にあるとき、前はルートまで上ってから下りる `../../crates/yuen/…` の形で書いていた）。どれも、走らせた場所からそのまま開ける。名指しを文字にしたもの（2.4）だけは、どこに出してもルートからの相対のままにする。読み直すと同じ名指しになり、ルートにある `.req` にそのまま貼れる形だからである。
 
 ### 2.3 ツールと種類
 
@@ -722,7 +722,7 @@ in force 2026-10-01..
 借りた出典と koyomi の成果物を読むのは C の段階なので、ここには B の段階のテストの材料で同じ変更をしたときの、実際の出力を載せる。`tests/mutants/E302_条が変わった` は、`tests/fixtures/period`（出典を自分で写し、`.cal` をファイルとして名指し、確かめる側を見送りにしたもの）の 142 条の写しを一文字変え、固定を書き直したものである。`.cal` は変わっていないので印は三本で、条の変わった `from` が先に、その条から来る要件の `satisfied by` と見送りが後に、一つのまとまりとして並ぶ。
 
 ```
-$ yuen check tests/mutants/E302_条が変わった --root .
+$ yuen check tests/mutants/E302_条が変わった
 error[E302]: tests/mutants/E302_条が変わった/民法の期間.req:41:3: 民法 第142条 changed after 法務 looked at this link on 2026-10-03
     41 |   from @民法 第142条
   = 民法 第142条 is now sha256:54a319e4148c24c7; it was sha256:fc8c35a0769d3b35 when it was looked at.
@@ -731,16 +731,16 @@ error[E302]: tests/mutants/E302_条が変わった/民法の期間.req:41:3: 民
         第百四十二条
       - 期間の末日が日曜日、国民の祝日に関する法律（昭和二十三年法律第百七十八号）に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する。
       + 期間の末日が日曜日、国民の祝日に関する法律（昭和二十三年法律第百七十八号）に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌々日に満了する。
-  = Once a person has looked: yuen review tests/mutants/E302_条が変わった --root . --at tests/mutants/E302_条が変わった/民法の期間.req:41 --by <role>
+  = Once a person has looked: yuen review tests/mutants/E302_条が変わった --at tests/mutants/E302_条が変わった/民法の期間.req:41 --by <role>
 error[E302]: tests/mutants/E302_条が変わった/民法の期間.req:44:3: 満了日_142条 comes from something that changed (民法 第142条), so this link needs a look again
     44 |   satisfied by file "民法の期間.cal"
   = 開発 looked at this link on 2026-10-03.
   = Look at what changed first, where its own diagnostic shows it.
-  = Once a person has looked: yuen review tests/mutants/E302_条が変わった --root . --at tests/mutants/E302_条が変わった/民法の期間.req:44 --by <role>
+  = Once a person has looked: yuen review tests/mutants/E302_条が変わった --at tests/mutants/E302_条が変わった/民法の期間.req:44 --by <role>
 error[E304]: tests/mutants/E302_条が変わった/民法の期間.req:46:3: 満了日_142条 changed, so this waiver needs approving again (the same change as at tests/mutants/E302_条が変わった/民法の期間.req:44)
     46 |   not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない"
   = 法務 approved this waiver on 2026-10-03.
-  = Once a person has looked: yuen review tests/mutants/E302_条が変わった --root . --at tests/mutants/E302_条が変わった/民法の期間.req:46 --by <role>
+  = Once a person has looked: yuen review tests/mutants/E302_条が変わった --at tests/mutants/E302_条が変わった/民法の期間.req:46 --by <role>
 tests/mutants/E302_条が変わった: 3 errors
 ```
 

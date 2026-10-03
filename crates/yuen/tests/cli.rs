@@ -92,6 +92,36 @@ fn the_json_of_check() {
     assert_eq!(r.stdout.lines().count(), 1, "one line for the project");
 }
 
+/// A root above the directory yuen runs in, as for a crate of a workspace whose `.git` is two
+/// levels up: the text writes a path the shortest way from where yuen runs, not up to the root
+/// and down again (`../../crates/a/period/…`); the JSON keeps the path from the root and says
+/// where the root is. From above the root, a path goes down into it as before.
+#[test]
+fn a_root_above_where_yuen_runs() {
+    let t = common::TempDir::new("above");
+    std::fs::create_dir_all(t.path().join(".git")).unwrap();
+    let here = t.path().join("crates/a");
+    common::copy_dir(Path::new("tests/fixtures/period"), &here.join("period"));
+    common::change_142(&here.join("period"));
+    let copy = "period/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml";
+
+    let r = common::yuen(&here, &["check", "period"]);
+    assert_eq!(r.code, 1, "{}", r.stdout);
+    assert!(r.stdout.contains(&format!("(the copy {copy})")), "{}", r.stdout);
+    assert!(r.stdout.contains("yuen review period --at period/民法の期間.req:41 --by <role>"), "{}", r.stdout);
+    assert!(!r.stdout.contains("../"), "no path goes up to the root and down again:\n{}", r.stdout);
+
+    let r = common::yuen(&here, &["check", "period", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
+    assert_eq!(v["root"], "../..");
+    assert_eq!(v["diagnostics"][0]["file"], "crates/a/period/民法の期間.req");
+
+    let r = common::yuen(t.path(), &["check", "crates/a/period"]);
+    assert!(r.stdout.contains(&format!("(the copy crates/a/{copy})")), "{}", r.stdout);
+    let r = common::yuen(&here.join("period"), &["check", "."]);
+    assert!(r.stdout.contains("(the copy sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml)"), "{}", r.stdout);
+}
+
 #[test]
 fn a_tool_this_yuen_does_not_read_yet_is_refused_not_passed() {
     let t = common::TempDir::new("notyet");
