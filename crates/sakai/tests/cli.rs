@@ -103,11 +103,25 @@ fn check_exit_codes_and_formats() {
     let o = sakai(&["check", MAP, "--root", ROOT]);
     assert_eq!(code(&o), 0, "{}", err(&o));
     assert_eq!(out(&o), "tests/maps/基本/基本.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)\n");
-    // Without --root the root is the repository's, the nearest directory with .git.
-    if std::path::Path::new(".git").exists() {
-        let o = sakai(&["check", MAP]);
-        assert!(out(&o).starts_with("tests/maps/基本/基本.ctx: ok"), "{}", out(&o));
-    }
+    // Without --root the root is the nearest directory above with a .git: here a copy of the map
+    // two levels below one. The text writes the map as it was given; `api` writes it from the
+    // root, which shows the root that was taken.
+    let dir = common::TempDir::new();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let here = dir.path().join("a/b");
+    common::copy_dir(std::path::Path::new(ROOT), &here.join("基本"));
+    let o = common::sakai_in(&here, &["check", "基本/基本.ctx"]);
+    assert_eq!(code(&o), 0, "{}", err(&o));
+    assert_eq!(out(&o), "基本/基本.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)\n");
+    let o = common::sakai_in(&here, &["api", "基本/基本.ctx"]);
+    assert_eq!(code(&o), 0, "{}", err(&o));
+    let v: serde_json::Value = serde_json::from_str(&out(&o)).unwrap();
+    assert_eq!(v["map"]["file"], "a/b/基本/基本.ctx");
+    // With no .git above, the root is the directory of the map given.
+    std::fs::remove_dir(dir.path().join(".git")).unwrap();
+    let o = common::sakai_in(&here, &["api", "基本/基本.ctx"]);
+    let v: serde_json::Value = serde_json::from_str(&out(&o)).unwrap();
+    assert_eq!(v["map"]["file"], "基本.ctx");
     // One JSON object a map; a directory stands for every map under it.
     let o = sakai(&["check", "tests/maps", "--format", "json", "--root", "tests/maps"]);
     assert_eq!(code(&o), 0, "{}", err(&o));
