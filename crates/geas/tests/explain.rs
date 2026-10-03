@@ -36,6 +36,18 @@ fn every_repro_gives_its_own_code() {
         let code = e.get("code").str().to_string();
         let repro = e.get("repro");
         let needs: Vec<&str> = repro.get("needs").arr().iter().map(Json::str).collect();
+        // what each tool is to the levels (`RITSU_TEST_LEVEL`): a repro the level leaves out
+        // says so in a SKIP line of the level, and its tools are not looked for
+        let level = |tool: &&str| match *tool {
+            "python3" => ritsu_testkit::Need::Python,
+            "node" => ritsu_testkit::Need::Node,
+            "go" => ritsu_testkit::Need::Go,
+            "chrome" => ritsu_testkit::Need::Chrome,
+            _ => ritsu_testkit::Need::Rustc,
+        };
+        if !needs.iter().all(|tool| ritsu_testkit::need(level(tool))) {
+            continue;
+        }
         let present = |tool: &&str| match *tool {
             "llvm-tools" => llvm_bin().is_some(),
             "chrome" => chrome_path().is_some(),

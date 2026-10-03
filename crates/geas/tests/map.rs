@@ -227,6 +227,9 @@ fn e066_a_service_that_ignores_sigterm() {
 /// without the program, and says so. Needs rustc and the LLVM tools.
 #[test]
 fn w061_a_rust_program_geas_did_not_start() {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Rustc) {
+        return;
+    }
     if !have("rustc", &["--version"]) {
         skip("rustc is not on PATH; W061 is not run");
         return;

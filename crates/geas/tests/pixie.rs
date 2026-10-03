@@ -12,6 +12,9 @@ use std::path::PathBuf;
 
 /// The greeter to run, or None after printing why the test does not run.
 fn greeter() -> Option<PathBuf> {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Pixie) {
+        return None;
+    }
     match std::env::var_os("GEAS_PIXIE_GREETER").map(PathBuf::from) {
         Some(p) if p.is_file() => Some(p),
         Some(p) => {

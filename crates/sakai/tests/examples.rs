@@ -43,6 +43,9 @@ fn suite_check(tool: &str, file: &str, envs: &[(&str, &str)]) -> common::Ran {
 
 #[test]
 fn what_was_copied_passes_the_suite() {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Suite) {
+        return;
+    }
     let mut failures = Vec::new();
     let mut ran = 0;
     let rulec = common::suite("rulec");

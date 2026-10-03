@@ -190,6 +190,9 @@ fn the_web_greeter_in_japanese() {
 
 /// pixie's greeter, when a built one is at hand (`GEAS_PIXIE_GREETER`).
 fn pixie_story(lang: &str, flag: &str) {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Pixie) {
+        return;
+    }
     let app = match std::env::var_os("GEAS_PIXIE_GREETER").map(PathBuf::from) {
         Some(p) if p.is_file() => p,
         _ => {

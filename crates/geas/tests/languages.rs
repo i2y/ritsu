@@ -54,8 +54,18 @@ fn build(e: &Example, s: &Scratch) {
     assert!(out.status.success(), "the build of {} failed:\n{}", e.name, String::from_utf8_lossy(&out.stderr));
 }
 
-/// Whether the example's toolchain is here; prints the SKIP line when it is not.
+/// Whether the example's toolchain is here; prints the SKIP line when it is not, or when the
+/// level leaves the toolchain out (`RITSU_TEST_LEVEL`).
 fn at_hand(e: &Example) -> bool {
+    let toolchain = match e.name {
+        "calc" | "greeter" => ritsu_testkit::Need::Python,
+        "tally-node" => ritsu_testkit::Need::Node,
+        "tally-go" => ritsu_testkit::Need::Go,
+        _ => ritsu_testkit::Need::Rustc,
+    };
+    if !ritsu_testkit::need(toolchain) {
+        return false;
+    }
     let (ok, what) = match e.name {
         "calc" | "greeter" => (have("python3", &["--version"]), "python3 is not on PATH"),
         "tally-node" => (have("node", &["--version"]), "node is not on PATH"),
@@ -216,6 +226,9 @@ fn rust_command() {
 /// without writing its counters, and leaves only its coverage metadata.
 #[test]
 fn a_go_service_killed_by_sigterm_writes_no_counters() {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Go) {
+        return;
+    }
     if !have("go", &["version"]) {
         skip("go is not on PATH; a Go service killed by SIGTERM is not run");
         return;
