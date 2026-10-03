@@ -1,0 +1,23 @@
+rule 部屋の扱い(rule) v1
+description "生成するコードの名前を試す規則（tests/flows/names.flow）。別名 rule は、dandori が規則のまわりに書く名前（rules、rule_<規則>）に近い。客室の列挙は、hold_amount.rule の列挙と、生成するコードで同じ名前（Room）になる。書き下ろしの例"
+
+enum 客室(room) = standard | deluxe | suite
+enum 扱い(handling) = 自動(auto) | 確認(review)
+
+inputs
+  客室(room) : 客室
+
+outputs
+  扱い(handling) : 扱い
+
+table 客室ごとの扱い(decide)
+policy unique
+| 客室     | -> 扱い |
+| standard | 自動    |
+| deluxe   | 自動    |
+| suite    | 確認    |
+
+examples
+| 客室     | -> 扱い |
+| standard | 自動    |
+| suite    | 確認    |

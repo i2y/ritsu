@@ -127,6 +127,20 @@ pub fn commands() -> Vec<Cmd> {
             examples: vec!["dandori doc examples/hotel/temporal/hotel.flow --format html --out site"],
             codes: vec![],
         },
+        Cmd {
+            usage: Some("dandori explain <CODE> | --all [--format markdown|json]"),
+            name: "explain",
+            args: "<CODE>",
+            purpose: tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look a diagnostic code up: when it comes, how to fix it, the smallest example"),
+            params: vec![("<CODE>", tr!("`E014` のような診断のコード。`--all` なら要らない", "a diagnostic code such as `E014`; not needed with `--all`"))],
+            flags: vec![
+                flag("--all", None, tr!("全部のコードを出す", "print every code")),
+                flag("--format", Some("markdown|json"), tr!("Markdown か、ツール向けの JSON で出す", "print Markdown, or the machine-facing JSON")).choices(&["markdown", "json"]),
+            ],
+            exits: vec![(0, tr!("引けた", "found")), (2, tr!("そのコードが無いか、引数の誤り", "no such code, or bad arguments"))],
+            examples: vec!["dandori explain E014", "dandori explain --all --format markdown --lang ja"],
+            codes: vec![],
+        },
     ]
 }
 
@@ -269,7 +283,56 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         "run" => cmd_run(&a, out, err),
         "scenarios" => cmd_scenarios(&a, out, err),
         "doc" => cmd_doc(&a, out, err),
+        "explain" => cmd_explain(&parsed, lang, out, err),
         _ => unreachable!("every command in the table is dispatched"),
+    }
+}
+
+/// `dandori explain`: one code of the ledger (crate::codes), or every one, as text, Markdown or JSON.
+fn cmd_explain(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let ledger = crate::codes::ledger();
+    let format = a.get("--format");
+    if a.has("--all") {
+        if !a.pos.is_empty() {
+            return refuse(tr!("`--all` とコードは一緒に書けません", "`--all` takes no code"), lang, err);
+        }
+        match format {
+            Some("markdown") => {
+                let _ = write!(out, "{}", ledger.render_markdown(lang));
+            }
+            Some(_) => {
+                let _ = writeln!(out, "{}", ritsu_base::json::Json::arr(ledger.entries.iter().map(|e| ledger.to_json(e, lang))).pretty());
+            }
+            None => {
+                for (i, e) in ledger.entries.iter().enumerate() {
+                    if i > 0 {
+                        let _ = writeln!(out);
+                    }
+                    let _ = write!(out, "{}", ledger.render_text(e, lang));
+                }
+            }
+        }
+        return 0;
+    }
+    let [code] = a.pos.as_slice() else {
+        return refuse(tr!("`dandori explain <CODE>` か `dandori explain --all` です", "it is `dandori explain <CODE>` or `dandori explain --all`"), lang, err);
+    };
+    match ledger.find(code) {
+        Some(e) => {
+            match format {
+                Some("markdown") => {
+                    let _ = write!(out, "{}", ledger.render_markdown_one(e, lang));
+                }
+                Some(_) => {
+                    let _ = writeln!(out, "{}", ledger.to_json(e, lang).pretty());
+                }
+                None => {
+                    let _ = write!(out, "{}", ledger.render_text(e, lang));
+                }
+            }
+            0
+        }
+        None => refuse(tr!("診断のコード `{code}` はありません。`dandori explain --all` で一覧が出ます", "there is no diagnostic code `{code}`; `dandori explain --all` lists them"), lang, err),
     }
 }
 

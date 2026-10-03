@@ -14,6 +14,7 @@ pub mod argo;
 pub mod asl;
 pub mod aws;
 pub mod check;
+pub mod codes;
 pub mod cli;
 pub mod commands;
 pub mod contract;

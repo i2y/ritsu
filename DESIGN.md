@@ -88,7 +88,7 @@ src の行数は、git が追っている `.rs` のファイルだけを数え�
 | sakai | 9,190 | 31 | 97 | 2,443 | serde_json | 2024 | 0.1.0 | 1 | なし |
 | 合計 | 163,913 | 244 | 1,305 | 42,272 | | | | | |
 
-serde_json を使う五つの `Cargo.lock` は、どれも serde_json 1.0.151 と同じ 15 のパッケージを固定している。rulec と geas の `Cargo.lock` には自分しか無い。rulec には Lean の証明（`proofs/`、5,476 行、Lean v4.34.0、mathlib なし）がある。dandori だけが edition 2021 で、`--version` と `explain` を持たない（`--version` とコマンドごとの `--help` は C.11 で足した）。
+serde_json を使う五つの `Cargo.lock` は、どれも serde_json 1.0.151 と同じ 15 のパッケージを固定している。rulec と geas の `Cargo.lock` には自分しか無い。rulec には Lean の証明（`proofs/`、5,476 行、Lean v4.34.0、mathlib なし）がある。dandori だけが edition 2021 で、`--version` と `explain` を持たない（`--version` とコマンドごとの `--help` は C.11 で、`explain` と診断の台帳は D の二つ目の部分で足した）。
 
 ### 1.2 重なっているコード
 
@@ -114,7 +114,7 @@ serde_json を使う五つの `Cargo.lock` は、どれも serde_json 1.0.151 �
 
 単位の表と有理数（rulec の `src/types.rs` の `CURRENCIES`、`money_unit`、`unit_info`、`unit_offset` と、`src/num.rs` の有理数）は、D.1 で `ritsu-units`（628 行。表と有理数と単位の型。テストは別のファイル）に移した。rulec の `src/num.rs` は 282 行から 165 行になり、丸めの五つの仕方だけが残った。口の型とトレイトは D.2 で `ritsu-ports`（706 行）に置き、各言語の `src/ports.rs`（rulec 493、koyomi 267、chobo 266、sakai 211、yuen 128、geas 93）が答える。
 
-移す前の表の合計は、テストの共通部分を除いて約 1 万 4 千行だった（診断のうち言語に残る部分も含む）。土台に移せば 6 千行ほどになると見込んでいた。段階 C の終わりの土台の三つは 6,087 行（`ritsu-base` 3,654、`ritsu-proto` 1,846、`ritsu-emit` 587）で、見込みに近い。七つの言語の src は 163,913 行から 158,157 行になった（rulec 68,571、dandori 30,763、koyomi 15,764、chobo 11,070、geas 16,380、yuen 8,414、sakai 7,195）。土台が言語ごとの形のいちばん広いものを取り、単体テストも持つので、全体の行数はほとんど減っていない。減ったのは、同じ役目の実装の数である。段階 D の最初の部分のあとは、七つの言語の src が 158,439 行になった（D の前のコミットでは 158,226 行。rulec 68,648 から 68,447、dandori 30,755 から 30,161、koyomi 15,764 から 16,033、chobo 11,070 から 11,364、geas 16,380 から 16,482、yuen 8,414 から 8,544、sakai 7,195 から 7,408）。口に答える `src/ports.rs` の 1,458 行が増え、rulec と dandori の `.proto` の読み手が 1,383 行減った。rulec の診断と台帳と `tr!`（E）、二つの doc の CSS が、まだ言語の側に残っている。
+移す前の表の合計は、テストの共通部分を除いて約 1 万 4 千行だった（診断のうち言語に残る部分も含む）。土台に移せば 6 千行ほどになると見込んでいた。段階 C の終わりの土台の三つは 6,087 行（`ritsu-base` 3,654、`ritsu-proto` 1,846、`ritsu-emit` 587）で、見込みに近い。七つの言語の src は 163,913 行から 158,157 行になった（rulec 68,571、dandori 30,763、koyomi 15,764、chobo 11,070、geas 16,380、yuen 8,414、sakai 7,195）。土台が言語ごとの形のいちばん広いものを取り、単体テストも持つので、全体の行数はほとんど減っていない。減ったのは、同じ役目の実装の数である。段階 D の最初の部分のあとは、七つの言語の src が 158,439 行になった（D の前のコミットでは 158,226 行。rulec 68,648 から 68,447、dandori 30,755 から 30,161、koyomi 15,764 から 16,033、chobo 11,070 から 11,364、geas 16,380 から 16,482、yuen 8,414 から 8,544、sakai 7,195 から 7,408）。口に答える `src/ports.rs` の 1,458 行が増え、rulec と dandori の `.proto` の読み手が 1,383 行減った。rulec の診断と台帳と `tr!`（E）、二つの doc の CSS が、まだ言語の側に残っている。段階 D の二つ目の部分のあとは、七つの言語の src が 159,716 行になった（rulec 68,447 から 68,493、dandori 30,161 から 31,400、yuen 8,544 から 8,540、sakai 7,408 から 7,404。koyomi、chobo、geas は変わらない）。dandori では、rulec の JSON の読み手と子プロセスが消え（`src/rulec.rs` 678 から 542）、記録から答える口（`src/record.rs` 334）、`Items` と `References`（`src/ports.rs` 190）、診断の台帳（`src/codes.rs` 315）が増えた。コマンドの本体は `src/main.rs`（340 から 12）から `src/cli.rs`（145 から 559。`explain` を含む）に移った。入口の最小の形の `crates/ritsu` は 90 行である。
 
 キーワードの表（各言語の `kw.rs` や `syntax.rs`）、字句と構文、検査、参照インタプリタは重なりに数えない。言語ごとの語彙と意味そのものだからである。
 
@@ -369,7 +369,7 @@ JSON は、キーを英語で固定し、`code`、`severity`、`file`、`line`�
 
 ### 4.3 診断の台帳と explain
 
-`Entry`（コード、重さ、一行の題、いつ出るか、直し方、最小の再現、隣に置くファイル、関連するコード）と、`find`、テキストと Markdown（コードごとのアンカーつき）と JSON の書き出し、そしてどの再現も自分のコードを出すことを確かめるテストの共通部分を置く。台帳の中身は言語ごとに残す。`docs/codes.md` と `docs/codes.ja.md` は、どの言語も `explain --all --format markdown` の出力そのものにする（いまもそうしている五つの形）。
+`Entry`（コード、重さ、一行の題、いつ出るか、直し方、最小の再現、隣に置くファイル、関連するコード）と、`find`、テキストと Markdown（コードごとのアンカーつき）と JSON の書き出し、そしてどの再現も自分のコードを出すことを確かめるテストの共通部分を置く。台帳の中身は言語ごとに残す。`docs/codes.md` と `docs/codes.ja.md` は、どの言語も `explain --all --format markdown` の出力そのものにする（いまもそうしている五つの形）。dandori の台帳と `explain` は D の二つ目の部分で足した（dandori の `src/codes.rs`）。dandori の診断コードの一覧は、サイトの一行ずつの表（`website/docs/reference/codes.md`）のままで、`explain` の Markdown にはまだしていない（サイトを ritsu に移す F で決める）。
 
 ### 4.4 CLI の表
 

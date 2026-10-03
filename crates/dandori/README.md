@@ -122,12 +122,14 @@ dandori build <file.flow> --target temporal|temporal-python|temporal-go|asl|dura
 dandori scenarios <file.flow> [--out <dir>]
 dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
+dandori explain <CODE> | --all [--format markdown|json]
 dandori <command> --help
 dandori --version
 ```
 
 For a workflow that uses rules, run each as `ritsu dandori <command>`. `dandori <command> --help`
-prints what one command takes, and what its exit codes mean. `--lang ja`
+prints what one command takes, and what its exit codes mean; `dandori explain E014` says when a
+diagnostic comes, how to fix it, and the smallest `.flow` that gets it. `--lang ja`
 prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`). `build` refuses what its platform cannot do (E050),
 and a workflow whose one run can outgrow the platform (E040). `doc` draws the workflow for the
 person who reviews it: Mermaid charts that GitHub draws in a pull request, with tables of every

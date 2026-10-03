@@ -959,6 +959,55 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     files
 }
 
+/// The names rules.ts declares, or reads from outside it, where it imports what the code rulec
+/// generates for a rule calls itself: a rule whose function (the rule's alias) is one of them
+/// would clash with it or hide it, and the checker refuses such a rule (lower, E006; DESIGN 1.15).
+/// tests/names.rs holds this list to what rules.ts writes.
+pub const AROUND_RULES: &[&str] = &["rules", "args", "out", "Boolean", "String", "BigInt", "Number"];
+
+/// The names each module's imports go by in a file that imports from several (rules.ts, rules.py):
+/// a name already taken by an earlier module is imported under another, `<name>_<module>`, so that
+/// two rules with an enum of one name (or one taking an enum another is called) do not clash. With
+/// `same`, a name that stands for one thing in every module (a brand of a unit) is imported once.
+/// Each module's line lists what it imports, in its order; nothing is renamed when nothing clashes.
+pub(crate) fn import_names(imports: &BTreeMap<String, BTreeSet<String>>, same: impl Fn(&str) -> Option<&str>) -> (Vec<(String, Vec<String>)>, BTreeMap<(String, String), String>) {
+    // each name taken, and whether it is one that stands for one thing in every module
+    let mut taken: BTreeMap<String, bool> = BTreeMap::new();
+    let mut local: BTreeMap<(String, String), String> = BTreeMap::new();
+    let mut lines = Vec::new();
+    for (module, names) in imports {
+        let mut parts = Vec::new();
+        for name in names {
+            let (once, id) = match same(name) {
+                Some(id) => (true, id),
+                None => (false, name.as_str()),
+            };
+            match taken.get(id) {
+                None => {
+                    taken.insert(id.to_string(), once);
+                    local.insert((module.clone(), id.to_string()), id.to_string());
+                    parts.push(name.clone());
+                }
+                Some(true) if once => {
+                    local.insert((module.clone(), id.to_string()), id.to_string());
+                }
+                Some(_) => {
+                    let mut alias = format!("{id}_{}", ident(module));
+                    while taken.contains_key(&alias) {
+                        alias.push('_');
+                    }
+                    taken.insert(alias.clone(), false);
+                    local.insert((module.clone(), id.to_string()), alias.clone());
+                    // a brand is imported as a type, under its other name too
+                    parts.push(if once { format!("type {id} as {alias}") } else { format!("{id} as {alias}") });
+                }
+            }
+        }
+        lines.push((module.clone(), parts));
+    }
+    (lines, local)
+}
+
 fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     let mut rules_ts = header.to_string();
     rules_ts.push_str("// The rules the workflow calls, as activities around the TypeScript rulec generates.\n");
@@ -984,13 +1033,19 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
             }
         }
     }
-    for (module, names) in imports {
-        rules_ts.push_str(&format!("import {{ {} }} from \"./rulec/typescript/{module}\";\n", names.into_iter().collect::<Vec<_>>().join(", ")));
+    // a brand of a unit is one type in every module rulec writes (`bigint & { __rulec: "YenInclTax" }`)
+    let (lines, local) = import_names(&imports, |n| n.strip_prefix("type "));
+    for (module, names) in lines {
+        if !names.is_empty() {
+            rules_ts.push_str(&format!("import {{ {} }} from \"./rulec/typescript/{module}\";\n", names.join(", ")));
+        }
     }
     rules_ts.push_str("\nexport const rules = {\n");
     for r in called {
         let ru = &m.rules[*r];
         let ts = &ru.info.typescript;
+        let module = ts.module.trim_end_matches(".ts").to_string();
+        let name_of = |n: &str| local.get(&(module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
         let enum_aliases: Vec<&str> = ts.enums.iter().map(|e| e.alias.as_str()).collect();
         let mut args = Vec::new();
         let mut arg_types = Vec::new();
@@ -998,7 +1053,7 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
             let (name, ty) = (p.name.as_str(), p.ty.as_str());
             let get = format!("args[{}]", q(name));
             if enum_aliases.contains(&ty) {
-                args.push(format!("parse{ty}(String({get}))"));
+                args.push(format!("{}(String({get}))", name_of(&format!("parse{ty}"))));
                 arg_types.push(format!("{}: string", q(name)));
             } else if ty == "boolean" {
                 args.push(format!("Boolean({get})"));
@@ -1010,7 +1065,7 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
                 args.push(format!("BigInt({get})"));
                 arg_types.push(format!("{}: number", q(name)));
             } else {
-                args.push(format!("BigInt({get}) as {ty}"));
+                args.push(format!("BigInt({get}) as {}", name_of(ty)));
                 arg_types.push(format!("{}: number", q(name)));
             }
         }
@@ -1027,7 +1082,7 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
             "  async {}(args: {{ {} }}): Promise<Record<string, unknown>> {{\n    const out = {}({});\n    return {{ {} }};\n  }},\n",
             render::rule_activity(&ru.name),
             arg_types.join("; "),
-            ts.function,
+            name_of(&ts.function),
             args.join(", "),
             outs.join(", ")
         ));

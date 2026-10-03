@@ -2312,6 +2312,13 @@ fn activities_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
     a
 }
 
+/// The names rules.go declares, or reads from outside it, where it imports the package rulec
+/// generates for a rule (the rule's alias, in lower case, without `_`): a rule whose package is one
+/// of them would clash with it or be hidden, and the checker refuses such a rule (lower, E006;
+/// DESIGN 1.15). `ok` as well, for a rule that takes an enum: rules.go reads the enum's value into
+/// it before it calls the rule. tests/names.rs holds this list to what rules.go writes.
+pub const AROUND_RULES: &[&str] = &["context", "ctx", "args", "int64", "any", "string", "error", "nil", "true"];
+
 /// rules.go: every rule the flow calls whose code goes with the workflow, around the Go rulec
 /// generates, as activities.
 fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> String {

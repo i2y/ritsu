@@ -97,7 +97,7 @@ $ DANDORI_BLESS=1 cargo test --test playground         # after a change to an ex
 ```
 
 `make_wasm.sh` adds the `wasm32-unknown-unknown` target to rustup when it is missing. The module is
-1.7 MB (559 KB gzipped), and `presets.json` 1.4 MB (299 KB gzipped). What `rulec doc` renders names
+2.2 MB (729 KB gzipped), and `presets.json` 1.1 MB (261 KB gzipped). What `rulec doc` renders names
 the version of rulec, so a new rulec means recording `presets.json` anew, and `docs/doc` and
 `docs-ja/doc` too (`DANDORI_BLESS=1 cargo test --test doc`).
 

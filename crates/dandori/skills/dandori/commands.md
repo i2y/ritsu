@@ -6,6 +6,7 @@ dandori build <file.flow> --target asl|temporal|temporal-python|temporal-go|dura
 dandori scenarios <file.flow> [--out <dir>]
 dandori run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph]
 dandori doc <file.flow> [--format html] [--out <dir>]
+dandori explain <CODE> | --all [--format markdown|json]
 dandori <command> --help
 dandori --version
 ```
@@ -20,6 +21,7 @@ process ([Install](https://i2y.github.io/dandori/install/)); the `dandori` comma
 | `scenarios` | Writes scenarios (an input and the answers the calls get) that together take every arm, every handler and every way a case can move: one file each into `--out`, or all of them as JSON on standard output. |
 | `run` | Plays one scenario through the reference interpreter, and prints every call as the target would make it, every wait, and how the run ends. |
 | `doc` | Draws the workflow for the person who reviews it: the flow, what each call does and where its errors go, and every way the workflow can end. Markdown with Mermaid charts, or one HTML page (`--format html`) where each scenario lights up the way its run goes; into `<name>.md` or `<name>.html` in `--out`, else on standard output. The rules the workflow calls are put in as `rulec doc` renders them. It draws a workflow whose check finds errors too, and exits with 1. [Draw a workflow](diagrams.md) |
+| `explain` | Looks a diagnostic code up: when it comes, how to fix it, and the smallest `.flow` that gets it, with what goes beside it. `--all` prints every code; `--format markdown` prints Markdown, `--format json` the machine-facing JSON. [Diagnostics](codes.md) |
 
 ## Flags and environment
 
@@ -30,6 +32,7 @@ process ([Install](https://i2y.github.io/dandori/install/)); the `dandori` comma
 | `--scenario <file.json>` | the scenario `run` plays |
 | `--format json` | the diagnostics of `check` as JSON, for tools |
 | `--format html` | the page `doc` writes, as HTML; Markdown by default |
+| `--all`, `--format markdown` or `--format json` | every code, for `explain`; as Markdown, or as JSON |
 | `--lang ja` or `--lang en` | the language of the messages; else `DANDORI_LANG`, then `RITSU_LANG`, else English |
 | `--help` | what the command takes, its exit codes and examples (`dandori help <command>` is the same page); `dandori --help` lists the commands |
 | `--version` | `dandori --version` prints the version |

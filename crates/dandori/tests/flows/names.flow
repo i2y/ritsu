@@ -1,0 +1,40 @@
+workflow 名前 v1
+description "生成するコードの名前を試す：rulec が規則のために生成するコードの名前を、dandori がまわりに書くコードと一つのファイルに並べても、ぶつからないもの。単位の型が同じ規則が二つ（urgency と記録の要否が money[JPY, incl_tax] を受け取る）、同じ名前の列挙を受け取る規則が二つ（hold_amount と部屋の扱いが客室の列挙 Room を受け取る）、dandori の名前に近い別名の規則が二つ（rule と activities）。どれも E006 にならず、どのプラットフォームでも動く"
+
+use rule 急ぎ from "../../examples/order/rules/urgency.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
+
+use rule 与信 from "../../examples/hotel/rules/hold_amount.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:hold-amount"
+
+use rule 扱い from "rules/部屋の扱い.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:room-handling"
+
+use rule 要否 from "rules/記録の要否.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:log-needed"
+
+record 注文
+  id     : string
+  会員   : bool
+  金額   : money[円, incl_tax]  range >=0 <=1000000
+  客室   : 与信.room
+  部屋   : 扱い.客室
+  泊数   : int  range >=1 <=30
+
+inputs
+  注文 : 注文
+
+outputs
+  残す : bool
+
+task 知らせる(注文ID: string, 便: 急ぎ.carrier, 与信の扱い: 与信.handling, 部屋の扱い: 扱い.扱い)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:notify"
+  idempotent
+
+flow
+  let 判定 = 急ぎ(member: 注文.会員, amount: 注文.金額)
+  let 見積 = 与信(room: 注文.客室, nights: 注文.泊数)
+  let 部屋 = 扱い(客室: 注文.部屋)
+  知らせる(注文ID: 注文.id, 便: 判定.carrier, 与信の扱い: 見積.handling, 部屋の扱い: 部屋.扱い)
+  let 記録 = 要否(急ぎ: 判定.urgent, 返金: 注文.金額)
+  succeed 残す = 記録.記録

@@ -164,6 +164,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     lw.recursive_records();
     lw.unread_types();
     lw.same_generated_names();
+    lw.names_around_rules();
     lw.made_enums_named_none();
     lw.parallel_scopes();
     lw.m.vars = lw.var_ty.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -766,6 +767,121 @@ impl<'a> Lowerer<'a> {
                 at,
                 tr!("`{a}` と `{b}` は、生成するコードで同じ名前（`{generated}`）になります。`{rename}` の名前を変えてください", "`{a}` and `{b}` would have one name in the code dandori writes, `{generated}`; rename `{rename}`"),
             ));
+        }
+    }
+
+    /// E006 for the names of the rules a flow calls that would clash in the code dandori writes
+    /// (DESIGN 1.15). The code rulec generates for a rule goes by the rule's alias (its function and
+    /// module, or its Go package) and its enums' aliases, and the files dandori writes around it
+    /// import those names beside their own: each file's own are its `AROUND_RULES`. Two rules of one
+    /// module would be written over each other. And every task and every rule called is an
+    /// activity, by its name and `rule_<rule>`. Only the rules whose code goes with the workflow
+    /// (called, and not at a Connect service) have their names imported.
+    fn names_around_rules(&mut self) {
+        let m = &self.m;
+        let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| if let TK::Call { callee: Callee::Rule(r), .. } = &s.kind { Some(*r) } else { None }).collect();
+        let bundled: Vec<usize> = called.iter().copied().filter(|r| m.rules[*r].connect.is_none()).collect();
+        let at = |n: &str| self.use_spans.get(n).copied().unwrap_or(Span { line: 1, col: 1 });
+        let mut out: Vec<Diag> = Vec::new();
+        let activities: BTreeMap<String, &str> = bundled.iter().map(|r| (crate::render::rule_activity(&m.rules[*r].name), m.rules[*r].name.as_str())).collect();
+        let fix_rule = tr!("規則のファイルで規則の別名を変えてください（`rule <名前>(<別名>) v1`。名前はそのままで構いません）", "Change the rule's alias in its file (`rule <name>(<alias>) v1`); its name can stay as it is.");
+        let fix_enum = tr!("規則のファイルで列挙の別名を変えてください（`enum <名前>(<別名>) = …`）", "Change the enum's alias in the rule's file (`enum <name>(<alias>) = …`).");
+        for r in &bundled {
+            let ru = &m.rules[*r];
+            let (n, info) = (ru.name.as_str(), &ru.info);
+            // each name of the rule's generated code, with the places it would clash and what it is
+            let mut clash: Vec<(String, Option<String>, Vec<Text>)> = Vec::new();
+            let mut add = |name: &str, en: Option<&str>, place: Text| match clash.iter_mut().find(|(x, e, _)| x == name && e.as_deref() == en) {
+                Some((_, _, ps)) => ps.push(place),
+                None => clash.push((name.to_string(), en.map(String::from), vec![place])),
+            };
+            if crate::temporal::AROUND_RULES.contains(&info.typescript.function.as_str()) {
+                add(&info.typescript.function, None, tr!("Temporal の TypeScript と Argo の rules.ts", "rules.ts (Temporal's TypeScript, Argo)"));
+            }
+            // what the Python of rules.py and of the Lambda function imports: the function, and the enums it takes
+            let py = &info.python;
+            let mut py_names: Vec<(&str, Option<&str>)> = vec![(py.function.as_str(), None)];
+            for p in &py.params {
+                if let Some(e) = py.enums.iter().find(|e| e.alias == p.ty) {
+                    if !py_names.iter().any(|(x, _)| *x == p.ty) {
+                        py_names.push((p.ty.as_str(), Some(e.name.as_str())));
+                    }
+                }
+            }
+            for (name, en) in &py_names {
+                if crate::temporal_py::AROUND_RULES.contains(name) {
+                    add(name, *en, tr!("Temporal の Python と pydantic-graph の rules.py", "rules.py (Temporal's Python, pydantic-graph)"));
+                }
+                if crate::asl::AROUND_RULE.contains(name) {
+                    add(name, *en, tr!("Step Functions と Lambda durable functions の Lambda の関数", "the Lambda function (Step Functions, Lambda durable functions)"));
+                }
+                if let Some(owner) = activities.get(*name) {
+                    // an activity of rules.py would take the place of what it imports: the one to rename is the rule `use rule` named so
+                    let act = name.to_string();
+                    out.push(
+                        e("E006", at(owner), tr!("規則 `{owner}` のアクティビティ `{act}` は、rulec が規則 `{n}` のために生成するコードの名前でもあり、rules.py で二つがぶつかります", "`{act}`, the activity of the rule `{owner}`, is also a name of the code rulec generates for the rule `{n}`, and the two clash in rules.py"))
+                            .note(tr!("`use rule` で付けた名前 `{owner}` を変えてください", "Give the rule another name than `{owner}` in `use rule`.")),
+                    );
+                }
+            }
+            let go = &info.go;
+            let takes_enum = go.params.iter().any(|p| go.enums.iter().any(|e| e.alias == p.ty));
+            if crate::temporal_go::AROUND_RULES.contains(&go.module.as_str()) || (takes_enum && go.module == "ok") {
+                add(&go.module, None, tr!("Temporal の Go の rules.go（Go のパッケージとして）", "rules.go (Temporal's Go), as a Go package"));
+            }
+            for (name, en, places) in clash {
+                let ja: Vec<String> = places.iter().map(|p| p.ja.clone()).collect();
+                let en_places: Vec<String> = places.iter().map(|p| p.en.clone()).collect();
+                let (message, fix) = match en.as_deref() {
+                    None => (tr!("規則 `{n}` は、rulec が生成するコードで `{name}` という名前になり、dandori がそのまわりに書くコードの名前とぶつかります", "the rule `{n}` is `{name}` in the code rulec generates, a name the code dandori writes around it uses already"), fix_rule.clone()),
+                    Some(en) => (tr!("規則 `{n}` の列挙 `{en}` は、rulec が生成するコードで `{name}` という名前になり、dandori がそのまわりに書くコードの名前とぶつかります", "the enum `{en}` of the rule `{n}` is `{name}` in the code rulec generates, a name the code dandori writes around it uses already"), fix_enum.clone()),
+                };
+                out.push(e("E006", at(n), message).note(tr!("ぶつかるところ：{}", "Where: {}", ja.join("、"); en_places.join("; "))).note(fix));
+            }
+        }
+        // two rules of one module: `rulec gen` writes them over each other
+        for (i, a) in bundled.iter().enumerate() {
+            for b in &bundled[..i] {
+                let (ra, rb) = (&m.rules[*a], &m.rules[*b]);
+                if ra.info.sha256 == rb.info.sha256 {
+                    continue;
+                }
+                let ts = |x: &RuleUse| x.info.typescript.module.trim_end_matches(".ts").to_string();
+                let module = [(ts(ra), ts(rb)), (ra.info.python.module.clone(), rb.info.python.module.clone()), (ra.info.go.module.clone(), rb.info.go.module.clone())].into_iter().find(|(x, y)| x == y).map(|(x, _)| x);
+                if let Some(module) = module {
+                    let (an, bn) = (ra.name.as_str(), rb.name.as_str());
+                    out.push(
+                        e("E006", at(an), tr!("規則 `{bn}` と `{an}` は別の規則ですが、rulec が生成するコードでは同じモジュール `{module}` になり、片方がもう片方を上書きします", "the rules `{bn}` and `{an}` are two rules, but one module, `{module}`, in the code rulec generates: one would be written over the other"))
+                            .note(tr!("どちらかの規則の別名を変えてください", "Change the alias of one of them.")),
+                    );
+                }
+            }
+        }
+        // every task, and every rule called, is an activity
+        let mut acts: BTreeMap<String, &str> = BTreeMap::new();
+        for r in &called {
+            let n = m.rules[*r].name.as_str();
+            let act = crate::render::rule_activity(n);
+            match acts.get(&act) {
+                Some(first) => out.push(e("E006", at(n), tr!("規則 `{first}` と `{n}` は、dandori が書くコードで同じアクティビティ `{act}` になります。どちらかの名前を変えてください", "the rules `{first}` and `{n}` would be one activity, `{act}`, in the code dandori writes; rename one"))),
+                None => {
+                    acts.insert(act, n);
+                }
+            }
+        }
+        for t in &self.prog.tasks {
+            let (tn, sp) = (&t.name.0, t.name.1);
+            let owner = acts.get(tn.as_str()).or_else(|| acts.get(&crate::render::ident(tn)));
+            if let Some(n) = owner {
+                let act = crate::render::rule_activity(n);
+                out.push(
+                    e("E006", sp, tr!("タスク `{tn}` と規則 `{n}` は、dandori が書くコードで同じアクティビティ `{act}` になります", "the task `{tn}` and the rule `{n}` would be one activity, `{act}`, in the code dandori writes"))
+                        .note(tr!("タスクの名前を変えてください。`rule_` で始まる名前は、規則のアクティビティのものです", "Rename the task: a name that starts with `rule_` is a rule's activity.")),
+                );
+            }
+        }
+        for d in out {
+            self.push(d);
         }
     }
 

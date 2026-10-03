@@ -376,6 +376,15 @@ D.3 でしたこと（2026-10-04、D の二つ目の部分）：
 - 確かめたこと：例とテストのフローの全部の `check`（英語・日本語・JSON）、例と `tests/flows` の `build`（七つのプラットフォーム）・`scenarios`・`doc`（Markdown と HTML、二つの言語）・`run` の 969 回を、替える前（HEAD の dandori に HEAD の rulec 0.22.1 を `DANDORI_RULEC` で渡したもの）と `ritsu dandori` で比べ、一字も違わなかった。rulec の出力の 1,725 回も、`gen` を移す前と一字も違わない。`cargo xtask deps` は 15 のクレートで通る。
 - 決めたこと：★ 入口の最小の形を D で作った（DESIGN 8.6）。★ `T?` を持つ規則を E005 で断る。★ 突き合わせのテストは JSON の読み手と一緒に消した（JSON の読み手を残す理由が無いため。写しは報告に添えた）。状態の軸の None を、表が状態を読まないステートマシンとして読む。
 
+D の二つ目の部分で、あわせてしたこと（作者が D で直すと決めたもの。7.5 の申し送り）：dandori の名前のぶつかり。
+
+- 規則の別名（rulec の生成したコードの関数、モジュール、Go のパッケージ）と、受け取る列挙の別名が、dandori が規則のまわりに書くコードの名前とぶつかる規則を、`check` が E006 で断る（dandori の DESIGN 1.15）。どの名前を断るかは、生成するコードを読んで、四つのファイル（`rules.ts`、`rules.py`、Lambda の関数、`rules.go`）ごとに、そのファイルが宣言するか外から読む名前として決め、生成器の表（`AROUND_RULES`）に置いた。7.5 で見つかった五つ（`activity`、`rules`、`rule_<規則>`、`handler`・`event`・`context`）のほか、`args`、`out`、TypeScript の `Boolean`・`String`・`BigInt`・`Number`、Python の `Any`・`bool`・`str`・`int`・`dict`、Go の `context`・`ctx`・`args`・`int64`・`any`・`string`・`error`・`nil`・`true` と列挙を受け取る規則の `ok` である。7.5 の「Go ではぶつからない」は、dandori の名前（`dd` が付く）については正しかったが、規則のパッケージの名前は、`rules.go` が読み込む `context` と、関数の引数と、組み込みの名前に当たりうる。別名が同じ二つの規則（`rulec gen` の書くファイルが重なる）と、タスクと規則のアクティビティ（`rule_<規則>`）が同じ名前になるものも断る。コードは新しく作らず、名前のぶつかりの E006 に入れた（★）。
+- 読んでいて見つけたもの：二つの規則のあいだで名前が重なると、生成物が壊れていた。`money[JPY, incl_tax]` を受け取る二つの規則を呼ぶフローでは `rules.ts` が同じ型の名前を二度読み込んでコンパイルが通らず、同じ名前の列挙を受け取る二つの規則では `rules.py` が後のクラスで前の規則を呼んでいた。断るとふつうのフローを断ることになるので、生成するコードの側で、重なる名前だけを別の名前で読み込むようにした（★。単位の型は一度だけ読み込む）。重なりの無いフローの生成物は変わらない。
+- 断る範囲の外：rulec の生成したコードと出力先の言語そのもの（予約語、組み込みの名前、標準ライブラリ）のぶつかりは、rulec の W121（警告）が言うので、dandori は断らない（dandori の DESIGN 1.15）。
+- `dandori explain` と台帳：E006 の文を `explain` で読めるように、dandori に診断の台帳（`src/codes.rs`、30 のコードの全部）と `explain` を足した（★。台帳が無かったので、一つのコードだけを載せる形にはしなかった）。どのコードにも最小の再現があり、`tests/codes.rs` が、どの再現も自分のコードを出すこと（E040 と E050 は `build` で）を確かめる。
+- テスト：`tests/names.rs`（六本）が、四つの表のどの名前にも E006 が出ること、列挙の別名、Go の `ok`、`rule_<規則>`、別名の同じ二つの規則、タスクと規則のアクティビティ、Connect で呼ぶ規則は断らないこと、表の名前がどれもそのファイルに書かれることを確かめる。断らない名前で全部の出力先の生成物が通ることは、`tests/flows/names.flow`（規則二つを `tests/flows/rules/` に足した）を、ほかのテストのフローと同じに全部のプラットフォームで走らせて確かめる。rulec の例を規則のまわりのコードに答えさせる二本（`rule_glue_answers_the_rulec_vectors`、`python_rules_answer_the_rulec_vectors`）は、例のフローだけでなく `tests/flows` のフローの規則も見るようにした。
+- 見つけた rulec のこと：order_state.rule の TypeScript（rulec の生成したもの）は `tsc --strict`（TypeScript 7）を通らない（列挙の値の絞り込み）。どのフローも order_state を関数として呼んでいなかったので、これまで表に出なかった。`names.flow` では別の規則にした（7.7）。
+
 ### D.4 dandori の単位
 
 DESIGN 5.3。`Ty::Num(Unit)`、`UNIT_KINDS` を `ritsu-units` から、`rate_unit` と `rate_per` を単位の型の刻みに、範囲の端に単位を付けて書けるようにする。DESIGN 1.4 の `hold.flow`（`money[JPY, incl_tax]` を `money[円, incl_tax]` に渡す）が通るテストと、`mass[kg]` を `mass[g]` に渡すと E003 になるテストを足す。生成物はどのプラットフォームでも変わらない（突き合わせのテストで確かめる）。
@@ -384,7 +393,7 @@ D.4 でしたこと（2026-10-04、D の二つ目の部分）：
 
 - dandori の `Ty::Num` は `ritsu_units::Unit` を持つ。二つの数の型が同じかは `Unit::same` で決める（`Ty` の等しさを手で書いた。`contract.rs` の突き合わせも同じ）。型の綴りは `Unit::parse` で読み、`Display` で書いたとおりに出すので、診断と生成物の型の名前は変わらない。`src/syntax.rs` の `UNIT_KINDS` は消した（次元の語は ritsu-units が知っている）。表に無い単位（`mass[foo]`）、税区分の誤り（`money[円, foo]`）、次元の誤り（`length[kg]`）は E002 で、ritsu-units が言う理由を注にする。前は、種類の語だけを確かめていた。
 - `src/model.rs` の `rate_unit` と `rate_per`（刻みを文字列で作って読む）は、単位の型の刻みを読む `rate_per(&Unit)` 一つにした。規則の型も、口が渡す単位の型のまま持つ（D.3 では綴りの文字列にしていた）。
-- 範囲の端に単位を付けて書ける（`range >=1kg <=40kg`、`<=100万円`、率の `<=50%`）。字句の段で、`>=` と `<=` のあとの、単位の付いた数を一つの語として読み（`万` と `億` も rulec と同じに掛ける）、lower が型の単位で数えた整数にする（ritsu-units の `Unit::convert`。率は百分率を刻みで割る）。整数にならない端、型の次元に無い単位、`int` に付けた単位は E003。前は、単位を付けた端を E001 で断っていた。温度の単位（`℃`、`℉`）を名前の文字として読むようにした（前は `temperature[℃]` が E001 だった）。
+- 範囲の端に単位を付けて書ける（`range >=1kg <=40kg`、`<=100万円`、率の `<=50%`）。字句の段で、`>=` と `<=` のあとの、単位の付いた数を一つの語として読み（`万` と `億` も rulec と同じに掛ける）、lower が型の単位で数えた整数にする（ritsu-units の `Unit::convert`。率は百分率を刻みで割る）。整数にならない端、型の次元に無い単位、`int` に付けた単位は E003。前は、単位を付けた端を E001 で断っていた。温度の単位（`℃`、`℉`）を、型の `[` のすぐあとと範囲の端の単位としてだけ読むようにした（前は `temperature[℃]` が E001 だった。名前の一部にはならず、ほかのところではこれまでどおり E001）。
 - テスト：dandori の `tests/units.rs` に四本足した。DESIGN 1.4 の流れ（規則の `money[JPY, incl_tax]` をタスクの `money[円, incl_tax]` に渡す）が検査を通ること、`mass[kg]` を `mass[g]` に渡すと E003（税込を税抜に渡すのも E003）、単位を付けた端が型の単位で数えられること（`>=1kg` は 1000、`<=50%` は 500 刻み、`>=100銭` は 1、`>=41℉` は 5）、表に無い単位が理由つきの E002 になること。`tests/fixtures/range_syntax.flow` を、単位を付けた端を試すように書き直し、golden を取り直した（前は E001 の一行、いまは E003 の三つ）。
 - 確かめたこと：例とテストのフローの出力の 969 回は、書き直した `range_syntax.flow` の `check` の三つのほかは、D.3 のあとと一字も違わない。どのプラットフォームの生成物も変わらない。
 
@@ -648,3 +657,23 @@ DESIGN 11 章。`crates/rulec/proofs/` を根の `proofs/` に移し、rulec の
 - geas は、口に答えるためにライブラリとコマンドに分けた。`src/lib.rs` は全部のモジュールを公開している。口に要るものだけに絞るかは、F で ritsu の CLI にまとめるときに決める。
 - D.1 で見つけたこと：rulec は、税の語の場所に `incl_tax` と `excl_tax` のほかを書いた型（`money[円, foo]`）を黙って通す。その型には単位が無い（`Ty::unit` が None）。直すなら rulec の検査に診断を足すことになり、その規則の出力が変わる。作者の判断を待つ。
 - テストの回し方：7.5 と同じ。根から `cargo xtask test -- --skip localstack --skip temporal --skip pydantic_graph --skip durable --skip argo --skip ollama` を回し、dandori の重いテストは `cargo xtask test --level platforms -p dandori -- --exact <名前>` で一つずつ回す。
+
+### 7.7 D の二つ目の部分から、D の残りへ（D の二つ目の部分の終わりに書いた）
+
+- 済んだもの：D.3、D.4、D.6、D.5 の残り（dandori が `Rules::doc` に言語を渡す）と、作者が D で直すと決めた三つ（rulec が `RITSU_LANG` を読む（D.5 に書いた）、rulec が税の語の誤りを E103 で断る（D.1 に書いた）、dandori の名前のぶつかりを E006 で断る（D.3 に書いた））。入口の最小の形として `crates/ritsu` に `ritsu dandori` を作った（DESIGN 8.6）。dandori のクレートは rulec に `[dependencies]` で依存せず、規則は渡された口で読む。
+- D.7 の手がかり：
+  - dandori の中のものは `dandori::ports::Engine` の `Items` が渡す（種類は `task`・`case`・`record`／`field`・`enum`／`value`・`input`・`output`）。構文まで読むだけなので、規則を読めないフローでも答える。定義の文は dandori の DESIGN 0.3 の形（コメントと空白の幅と字下げの幅に左右されない）で、yuen の端のハッシュはこれから取る。
+  - yuen は、dandori の名指しを、ファイルで書いても種類つきで書いても「まだ読めない」と言う（`Unread::NotYet`）。D.7 で、ファイルなら `dandori check` の結果、種類つきなら `Items` の定義の文を端にする。
+  - yuen の変異 `E012_dandoriの種類` は、dandori に無い種類（`table`）を試すものになった。
+- D.8 の手がかり：
+  - dandori の参照は `References` が渡す。参照の仕方は `use rule`（下に書いた呼び方を `use rule … lambda, connect, local` の形で添える）、`use proto`・`use openapi`・`use smithy`、`implements`、`connect`、`flow` である。sakai の DESIGN の「サービスを呼ぶ参照」（`connect` のタスクと `use rule … connect`）は、この `how` で見分けられる。型の中の参照（`<API>.<名前>`、`<規則>.<列挙>`、`follows`）と `http` の操作は渡していない（PLAN D.6 の★）。sakai が要素まで要るなら、dandori の口に足す。
+  - sakai は、dandori の種類の語（`task`、`case`、`record`）を予約語に加えた。N101（dandori の参照を確かめていない）を外すのは D.8 である。
+- D.11 の手がかり：D.3 の突き合わせは、JSON の読み手を消す前に全部の規則（rulec のコーパスの 50 本と dandori の 14 本、1,939 の項目）で通した（違った 7 か所はどれも JSON の側の読み違え）。DESIGN 1.4 の二つの例は直った（`hold.flow` が通る、dandori は率の刻みを型から読む）。dandori が rulec を子プロセスで呼ぶところは無くなった。残るのは yuen と sakai がツールを呼ぶところ（D.7、D.8）である。
+- E の手がかり：
+  - `ritsu` の入口は `ritsu dandori` と `--help`、`--version` だけ。ほかの言語の名前には、まだ無いと言って 2 で終わる。E で残りを作るときは、`crates/ritsu/tests/dandori.rs` の確かめ（`ritsu dandori` が規則を同じプロセスで読んで検査し、規則のページを入れて図にすること、無いものは無いと言うこと）を全部の言語に広げる。
+  - 生成するコードの予約語の表を一つにするとき（7.5）は、dandori の生成器の `AROUND_RULES`（四つのファイルで、規則の名前と並べて読み込む dandori の名前）も入れるか、dandori の側の名前を替える。替えると、どの出力先の生成物も変わる。
+  - rulec の W121（別名が出力先の言語の予約語や標準ライブラリとぶつかる）を、dandori は断らない。`ritsu check` で規則の警告をフローの側にも見せるかを決める。
+  - ブラウザで試すページは、記録から答える口（dandori の `src/record.rs` と `sources::Recorded`）で規則を読む。F.5 で rulec と一つの wasm にすれば要らなくなる。
+- 見つけたこと（直していない）：rulec が order_state.rule のために生成する TypeScript は、`tsc --strict`（TypeScript 7）を通らない（`Event` を、絞り込んだ値の型に渡しているところが三つ）。dandori のフローで order_state を関数として呼ぶものが無かったので、表に出ていなかった。rulec の生成器の問題である。
+- 片づけ：`env-full.sh` が `DANDORI_RULEC` を書いているが、dandori はもう読まない（害は無い）。テストのあとの OS の一時ディレクトリは、この部分の報告に前と後の数を書いた。
+- テストの回し方：7.5 と同じ。dandori のテストは rulec のバイナリを要らない（ライブラリの口で読む）。`cargo xtask test --level platforms -p dandori -- --exact <名前>` で重いテストを一つずつ回す。sakai の `what_was_copied_passes_the_suite` は、dandori のワークフローを `ritsu dandori check` で確かめるようになった（dandori のクレートのバイナリは規則を読まないため。D.3 のあとで落ちていたのを、この部分の終わりに直した）。`SAKAI_DANDORI` の代わりに `SAKAI_RITSU` を読み、無ければワークスペースの `target/debug/ritsu` を使う。CI の `tools` も `SAKAI_RITSU` を渡す。

@@ -1124,6 +1124,13 @@ fn url_value(url: &str, args: &[(String, TExpr)]) -> Value {
     json!(format!("{{% {} %}}", parts.join(" & ")))
 }
 
+/// The names the handler of a rule's Lambda function declares, or reads from outside it, where
+/// it imports what the code rulec generates for the rule calls itself (the rule's function, which is
+/// its alias, and the enums it takes): a rule with one of them would hide it or be hidden, and the
+/// checker refuses such a rule (lower, E006; DESIGN 1.15). Lambda durable functions invokes the same
+/// handler. tests/names.rs holds this list to what the handler writes.
+pub const AROUND_RULE: &[&str] = &["handler", "event", "context", "out", "bool", "str", "int"];
+
 /// The handler of the Lambda function that answers for a rule: JSON in, the call of the
 /// Python rulec generated, JSON out.
 pub fn lambda_handler(m: &Model, r: usize) -> (String, String) {

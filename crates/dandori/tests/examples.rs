@@ -1782,7 +1782,8 @@ fn generated_go_vets() {
 
 /// The code between a platform and a rule — the Lambda handler for Step Functions and the
 /// activity for Temporal, in TypeScript and in Go — answers every vector rulec generates for the
-/// rule as rulec says.
+/// rule as rulec says: every rule the examples call, and the ones of tests/flows (names.flow
+/// calls four together, two of which take enums of one name, DESIGN 1.15).
 #[test]
 fn rule_glue_answers_the_rulec_vectors() {
     if !need(Need::Python) {
@@ -1790,21 +1791,25 @@ fn rule_glue_answers_the_rulec_vectors() {
     }
     let python = Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
     let node = Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
-    for f in flows(&root().join("examples")) {
+    for f in runnable() {
         let (_, checked) = check_file(&f).unwrap();
-        let m = checked.model.expect("the examples pass check");
-        let ts_files = dandori::temporal::build(&m).unwrap();
+        let m = checked.model.expect("the flows pass check");
+        let Ok(ts_files) = dandori::temporal::build(&m) else { continue };
         // every rule the flow calls, whether or not Step Functions can run the flow; a rule that is
         // only read for its machine has no glue
         let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+        let bundled: Vec<usize> = called.iter().copied().filter(|r| m.rules[*r].connect.is_none()).collect();
         for (ri, r) in m.rules.iter().enumerate() {
             // a rule called at its service has no code that goes with the workflow
             if !called.contains(&ri) || r.connect.is_some() {
                 continue;
             }
             let (hname, htext) = &dandori::asl::lambda_handler(&m, ri);
-            let dir = scratch(&format!("glue-{}", dandori::render::ident(&r.name)));
-            rulec_gen(&r.info.path, &dir.join("rulec"));
+            let dir = scratch(&format!("glue-{}-{}", key(&f), dandori::render::ident(&r.name)));
+            // rules.ts imports every rule whose code goes with the workflow
+            for other in &bundled {
+                rulec_gen(&m.rules[*other].info.path, &dir.join("rulec"));
+            }
             let vectors = rulec_vectors(&r.info.path);
             std::fs::write(dir.join("vectors.jsonl"), &vectors).unwrap();
             let expected: Vec<Value> = vectors.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect();
@@ -1856,7 +1861,7 @@ fn rule_glue_answers_the_rulec_vectors() {
         return;
     }
     let mut answered = 0;
-    for module in go_modules("glue", &flows(&root().join("examples"))) {
+    for module in go_modules("glue", &runnable()) {
         let mut imports = Vec::new();
         let mut calls = Vec::new();
         let mut expected = serde_json::Map::new();
@@ -1897,7 +1902,7 @@ fn rule_glue_answers_the_rulec_vectors() {
             answered += want.as_array().map(|a| a.len()).unwrap_or(0);
         }
     }
-    eprintln!("rules.go answered {answered} vector(s) of the examples' rules as rulec says");
+    eprintln!("rules.go answered {answered} vector(s) of the rules of the examples and tests/flows as rulec says");
 }
 
 /// What a rule's service answers is read as the rule's own record the same way on every platform,
@@ -2518,7 +2523,8 @@ fn jev_tasks_answer_on_typesafe() {
 }
 
 /// rules.py of the Python builds — the activities for Temporal and the functions for
-/// pydantic-graph — answers every vector rulec generates for each rule the flow calls.
+/// pydantic-graph — answers every vector rulec generates for each rule the flow calls, for the
+/// examples and the flows of tests/flows.
 #[test]
 fn python_rules_answer_the_rulec_vectors() {
     if !need(Need::Python) {
@@ -2531,9 +2537,9 @@ fn python_rules_answer_the_rulec_vectors() {
             return;
         }
     };
-    for f in flows(&root().join("examples")) {
+    for f in runnable() {
         let (_, checked) = check_file(&f).unwrap();
-        let m = checked.model.expect("the examples pass check");
+        let m = checked.model.expect("the flows pass check");
         // a version of an example written for one platform may not build for the other
         for (label, built) in [("Temporal", dandori::temporal_py::build(&m)), ("pydantic-graph", dandori::pydantic_graph::build(&m))] {
             let Ok(files) = built else { continue };

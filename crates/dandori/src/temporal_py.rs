@@ -675,6 +675,15 @@ pub(crate) fn rule_doc(m: &Model, r: usize) -> String {
     format!("The rule {} v{}, called at its Connect service. args: {{{}}}. Answers the record of its outputs.", ru.info.rule, ru.info.version, params.join(", "))
 }
 
+/// The names rules.py declares, or reads from outside it, where it imports what the code rulec
+/// generates for a rule calls itself (the rule's function, which is its alias, and the enums it
+/// takes): a rule with one of them would hide it or be hidden, and the checker refuses such a rule
+/// (lower, E006; DESIGN 1.15). Besides these, each activity, `rule_<rule>`. `activity` is Temporal's
+/// alone, and `Any` and `dict` are read by Temporal, which reads the activities' annotations;
+/// pydantic-graph's rules.py takes the same list. tests/names.rs holds this list to what rules.py
+/// writes.
+pub const AROUND_RULES: &[&str] = &["Any", "activity", "rules", "args", "out", "bool", "str", "int", "dict"];
+
 /// rules.py: every rule the flow calls, around the Python rulec generates; as Temporal
 /// activities, or as plain functions.
 pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, activities: bool) -> String {
@@ -701,20 +710,23 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
             }
         }
     }
-    for (module, names) in imports {
-        t.push_str(&format!("from .rulec.python.{module} import {}\n", names.into_iter().collect::<Vec<_>>().join(", ")));
+    // two rules' enums of one name are two classes, so the second goes by another name
+    let (lines, local) = crate::temporal::import_names(&imports, |_| None);
+    for (module, names) in lines {
+        t.push_str(&format!("from .rulec.python.{module} import {}\n", names.join(", ")));
     }
     let mut acts = Vec::new();
     for r in called {
         let ru = &m.rules[*r];
         let py = &ru.info.python;
+        let name_of = |n: &str| local.get(&(py.module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
         let is_enum = |ty: &str| py.enums.iter().any(|e| e.alias == ty);
         let mut args = Vec::new();
         for p in &py.params {
             let (name, ty) = (p.name.as_str(), p.ty.as_str());
             let get = format!("args[{}]", q(name));
             if is_enum(ty) {
-                args.push(format!("{ty}({get})"));
+                args.push(format!("{}({get})", name_of(ty)));
             } else if ty == "bool" {
                 args.push(format!("bool({get})"));
             } else if ty == "str" {
@@ -744,7 +756,7 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
             "\n\n{decorator}async def {act}(args: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"The rule {} v{}.\"\"\"\n    out = {}({})\n    return {{\n{}\n    }}\n",
             ru.info.rule,
             ru.info.version,
-            py.function,
+            name_of(&py.function),
             args.join(", "),
             outs.join("\n")
         ));

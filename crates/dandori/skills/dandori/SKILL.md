@@ -368,7 +368,14 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | W102 | an `on <refusal>` that cannot happen | remove it |
 | W103 | a task that starts a case without `key` | add `key` |
 
-[codes.md](codes.md) has the whole list, and [checks.md](checks.md) what the checker looks at.
+E006 also refuses a rule whose alias (the `urgency` of `rule 出荷の急ぎ(urgency) v1`) is a name the
+code dandori writes around the rule uses already (`rules`, `args`, `out`, `activity`, `handler`,
+`ctx`, …), two rules of one alias, and a task named `rule_<rule>`: change the alias in the rule's
+file, or rename the task.
+
+`dandori explain <CODE>` prints one code's page: when it comes, how to fix it, and the smallest
+`.flow` that gets it. [codes.md](codes.md) has the whole list, and [checks.md](checks.md) what the
+checker looks at.
 
 ## 5. For a machine
 
@@ -378,6 +385,8 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 - The exit code is 0 when there is no error (warnings may be), 1 when there is, and 2 for bad
   arguments or a file that cannot be read.
 - `--lang ja`, or `DANDORI_LANG=ja`, gives the messages in Japanese.
+- `dandori explain --all --format json` prints every code as `[{"code", "severity", "title",
+  "when", "fix", "repro", "related"}]`, where `repro` holds the files of the smallest example.
 - A workflow that uses rules runs as `ritsu dandori <command>`, which reads the rules in the same
   process; the `dandori` binary alone reads no rule.
 
