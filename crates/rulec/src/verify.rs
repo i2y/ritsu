@@ -48,11 +48,9 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     let (cmd, args) = adapter
         .split_first()
         .ok_or_else(|| tr!("アダプタのコマンドがありません", "No adapter command was given"))?;
-    let mut child = Command::new(cmd)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
+    // An adapter that broke the protocol is stopped when this returns, rather than left to run
+    // on after rulec (§15.163).
+    let mut child = crate::child::Owned::spawn(Command::new(cmd).args(args).stdin(Stdio::piped()).stdout(Stdio::piped()))
         .map_err(|e| tr!("アダプタを起動できません: {e}", "Cannot start the adapter: {e}"))?;
     let mut si = child
         .stdin

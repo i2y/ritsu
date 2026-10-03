@@ -7,7 +7,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use ritsu_testkit::{Need, ready};
+use ritsu_testkit::{Need, TempDir, ready};
 
 const RULE: &str = "tests/corpus/厚生年金保険料.rule";
 
@@ -19,9 +19,9 @@ fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn generate(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rulec-tool-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn generate(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("tool-{tag}"));
+    let dir = t.path().to_path_buf();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
@@ -29,7 +29,7 @@ fn generate(tag: &str) -> PathBuf {
         .output()
         .expect("rulec を起動できない");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-    dir
+    (t, dir)
 }
 
 /// Send the requests one line at a time and collect one answer per request that has an id.
@@ -151,9 +151,8 @@ fn pythonのサーバは規則を一つのツールとして出す() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let dir = generate("py");
+    let (_tmp, dir) = generate("py");
     contract(&dir, "python", "python3", &["-B", "pension_premium_mcp.py"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -161,17 +160,16 @@ fn nodeのサーバは規則を一つのツールとして出す() {
     if !ready(Need::Node, || have("node"), "node が無いので飛ばした") {
         return;
     }
-    let dir = generate("js");
+    let (_tmp, dir) = generate("js");
     contract(&dir, "javascript", "node", &["pension_premium_mcp.mjs"]);
     contract(&dir, "typescript", "node", &["--no-warnings", "pension_premium_mcp.ts"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The server is generated code like the module: `gen --check` sees it go stale, and
 /// `rulec api` names it.
 #[test]
 fn サーバは生成物の一つとして数えられる() {
-    let dir = generate("api");
+    let (_tmp, dir) = generate("api");
     for f in ["python/pension_premium_mcp.py", "typescript/pension_premium_mcp.ts", "javascript/pension_premium_mcp.mjs"] {
         assert!(dir.join(f).exists(), "{f} が無い");
     }
@@ -180,7 +178,6 @@ fn サーバは生成物の一つとして数えられる() {
     for (lang, want) in [("python", "pension_premium_mcp.py"), ("typescript", "pension_premium_mcp.ts"), ("javascript", "pension_premium_mcp.mjs")] {
         assert_eq!(j.get(lang).and_then(|l| l.get("mcp")).and_then(|m| m.as_str()), Some(want), "{lang}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The HTTP side of the same server (§15.51). `rulec test` already holds its answers to the
@@ -188,14 +185,12 @@ fn サーバは生成物の一つとして数えられる() {
 /// the transport itself has to do — the session, the codes, and the origin check that keeps
 /// a page open in a browser from reaching a server on the reader's own machine.
 fn http_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
-    let mut child = Command::new(cmd)
-        .current_dir(dir.join(cwd))
-        .args(args)
-        .args(["--http", "127.0.0.1:0"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("サーバを起動できない");
+    // Stopped however this ends, a failed assertion too: the server listens until it is told to
+    // stop (§15.163).
+    let mut child = rulec::child::Owned::spawn(
+        Command::new(cmd).current_dir(dir.join(cwd)).args(args).args(["--http", "127.0.0.1:0"]).stdout(Stdio::piped()).stderr(Stdio::piped()),
+    )
+    .expect("サーバを起動できない");
     let mut so = BufReader::new(child.stdout.take().unwrap());
     let mut line = String::new();
     assert!(so.read_line(&mut line).unwrap() > 0, "待ち受けを言わずに終わった");
@@ -267,9 +262,8 @@ fn pythonのサーバはhttpでも同じ約束を守る() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let dir = generate("pyhttp");
+    let (_tmp, dir) = generate("pyhttp");
     http_contract(&dir, "python", "python3", &["-B", "pension_premium_mcp.py"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -277,10 +271,9 @@ fn nodeのサーバはhttpでも同じ約束を守る() {
     if !ready(Need::Node, || have("node"), "node が無いので飛ばした") {
         return;
     }
-    let dir = generate("jshttp");
+    let (_tmp, dir) = generate("jshttp");
     http_contract(&dir, "javascript", "node", &["pension_premium_mcp.mjs"]);
     http_contract(&dir, "typescript", "node", &["--no-warnings", "pension_premium_mcp.ts"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The tool's view (SEP-1865, §15.52): the page an approver reads, served as a `ui://`
@@ -338,9 +331,8 @@ fn pythonのサーバはページをviewとして出す() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let dir = generate("pyui");
+    let (_tmp, dir) = generate("pyui");
     ui_contract(&dir, "python", "python3", &["-B", "pension_premium_mcp.py"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -348,8 +340,7 @@ fn nodeのサーバはページをviewとして出す() {
     if !ready(Need::Node, || have("node"), "node が無いので飛ばした") {
         return;
     }
-    let dir = generate("jsui");
+    let (_tmp, dir) = generate("jsui");
     ui_contract(&dir, "javascript", "node", &["pension_premium_mcp.mjs"]);
     ui_contract(&dir, "typescript", "node", &["--no-warnings", "pension_premium_mcp.ts"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }

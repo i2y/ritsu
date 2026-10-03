@@ -754,11 +754,9 @@ fn digits_len(s: &str) -> usize {
 pub fn via(cmd: &[String], doc: &Path) -> Result<(String, Vec<(Option<i64>, Vec<Vec<String>>)>), String> {
     use std::io::BufRead;
     let (bin, args) = cmd.split_first().ok_or_else(|| tr!("抽出器のコマンドがありません", "No extractor command was given"))?;
-    let mut child = std::process::Command::new(bin)
-        .args(args)
-        .arg(doc)
-        .stdout(std::process::Stdio::piped())
-        .spawn()
+    // Stopped when a line that cannot be read ends this early (§15.163); the other ways out wait
+    // for it to end.
+    let mut child = crate::child::Owned::spawn(std::process::Command::new(bin).args(args).arg(doc).stdout(std::process::Stdio::piped()))
         .map_err(|e| tr!("抽出器を起動できません: {e}", "Cannot start the extractor: {e}"))?;
     let so = child.stdout.take().ok_or_else(|| tr!("stdout を掴めません", "Cannot open the extractor's stdout"))?;
 

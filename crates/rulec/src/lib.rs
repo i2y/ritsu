@@ -28,6 +28,7 @@ pub mod apply;
 pub mod backend;
 pub mod cel;
 pub mod cert;
+pub mod child;
 pub mod defset;
 pub mod diag;
 pub mod doc;

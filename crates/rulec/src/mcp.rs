@@ -326,45 +326,47 @@ struct Ran {
 /// The output goes to two files rather than pipes. `rulec test` starts compilers of its own,
 /// and one still running after its parent was killed would hold a pipe open, and a read of it
 /// would wait for that compiler instead.
-fn run_limited(mut cmd: std::process::Command, limit: std::time::Duration) -> std::io::Result<Ran> {
+fn run_limited(cmd: std::process::Command, limit: std::time::Duration) -> std::io::Result<Ran> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static SEQ: AtomicUsize = AtomicUsize::new(0);
     let n = SEQ.fetch_add(1, Ordering::Relaxed);
     let base = std::env::temp_dir().join(format!("rulec-mcp-{}-{n}", std::process::id()));
     let (out_path, err_path) = (base.with_extension("out"), base.with_extension("err"));
-    let out = std::fs::File::create(&out_path)?;
-    let err = std::fs::File::create(&err_path)?;
+    // The two files go however the run went, a command that would not start included (§15.163).
+    let ran = run_into(cmd, limit, &out_path, &err_path);
+    let _ = std::fs::remove_file(&out_path);
+    let _ = std::fs::remove_file(&err_path);
+    ran
+}
+
+/// `run_limited`, writing the output to the two files and reading it back.
+fn run_into(
+    mut cmd: std::process::Command,
+    limit: std::time::Duration,
+    out_path: &std::path::Path,
+    err_path: &std::path::Path,
+) -> std::io::Result<Ran> {
+    let out = std::fs::File::create(out_path)?;
+    let err = std::fs::File::create(err_path)?;
     // A group of its own, so that what it started — an adapter `verify` stood up, a compiler
-    // `test` ran — is stopped with it, not left running on its own.
-    #[cfg(unix)]
-    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
-    let mut child = cmd
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::from(out))
-        .stderr(std::process::Stdio::from(err))
-        .spawn()?;
+    // `test` ran — is stopped with it, not left running on its own: at the limit, and when this
+    // returns early (§15.163).
+    let mut child = rulec::child::Owned::spawn_group(
+        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::from(out)).stderr(std::process::Stdio::from(err)),
+    )?;
     let start = std::time::Instant::now();
     let (code, timed_out) = loop {
         if let Some(s) = child.try_wait()? {
             break (s.code(), false);
         }
         if start.elapsed() >= limit {
-            #[cfg(unix)]
-            let _ = std::process::Command::new("kill")
-                .args(["-KILL", "--", &format!("-{}", child.id())])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status();
-            let _ = child.kill();
-            let _ = child.wait();
+            child.stop();
             break (None, true);
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     };
-    let stdout = std::fs::read(&out_path).unwrap_or_default();
-    let stderr = std::fs::read(&err_path).unwrap_or_default();
-    let _ = std::fs::remove_file(&out_path);
-    let _ = std::fs::remove_file(&err_path);
+    let stdout = std::fs::read(out_path).unwrap_or_default();
+    let stderr = std::fs::read(err_path).unwrap_or_default();
     Ok(Ran { code, timed_out, stdout, stderr })
 }
 

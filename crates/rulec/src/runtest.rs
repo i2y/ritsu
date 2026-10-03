@@ -516,7 +516,10 @@ fn via_mcp(
         // Port 0: the server takes a free one and says which.
         cmd.arg("--http").arg("127.0.0.1:0");
     }
-    let mut child = cmd.spawn().map_err(|e| broken(tr!("起動できません: {e}", "cannot start: {e}")))?;
+    // Stopped and waited for on every return below, the early ones too: the HTTP server listens
+    // until it is told to stop, and a run that disagreed half way left it listening (§15.163).
+    let mut child =
+        crate::child::Owned::spawn(&mut cmd).map_err(|e| broken(tr!("起動できません: {e}", "cannot start: {e}")))?;
     let si = child.stdin.take().ok_or_else(|| broken("stdin".into()))?;
     let mut so = BufReader::new(child.stdout.take().ok_or_else(|| broken("stdout".into()))?);
 

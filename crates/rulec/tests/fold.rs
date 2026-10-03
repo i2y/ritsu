@@ -5,19 +5,19 @@
 //! alphabet. What is tested here is the four holes that string can have — and that the
 //! table's own proof is untouched by any of it.
 
-use std::path::PathBuf;
-use std::process::Command;
-use ritsu_testkit::{Need, ready};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rulec-fold-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+/// A directory of the test's own, removed with the `TempDir` when the test ends, failing or not.
+fn dir(tag: &str) -> (TempDir, PathBuf) {
+    let t = TempDir::new(&format!("fold-{tag}"));
+    let d = t.path().to_path_buf();
+    (t, d)
 }
 
 fn run(args: &[&str]) -> (i32, String, String) {
@@ -103,7 +103,7 @@ fn codes(out: &str) -> Vec<String> {
 
 #[test]
 fn 要素ごとの表はいままでどおり検査される() {
-    let d = dir("ok");
+    let (_tmp, d) = dir("ok");
     let p = write(&d, "r.rule", RULE);
     let (code, out, e) = run(&["check", &p]);
     assert_eq!(code, 0, "{out}{e}");
@@ -115,12 +115,11 @@ fn 要素ごとの表はいままでどおり検査される() {
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1, "{out}");
     assert!(codes(&out).contains(&"E101".to_string()), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn 空と終端の答えは宣言が要る() {
-    let d = dir("answers");
+    let (_tmp, d) = dir("answers");
     for (name, cut, want) in [
         ("empty", "  empty     -> 0円\n", "E022"),
         ("exhausted", "  exhausted -> held\n", "E023"),
@@ -130,12 +129,11 @@ fn 空と終端の答えは宣言が要る() {
         assert_eq!(code, 1, "{name}: {out}");
         assert!(codes(&out).contains(&want.to_string()), "{name}: {out}");
     }
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn 行き先の無い判定は穴で_届かない行き先は注意() {
-    let d = dir("arms");
+    let (_tmp, d) = dir("arms");
     // A verdict the table produces, with nothing to do about it.
     let p = write(&d, "hole.rule", &RULE.replace("  持ち越し  -> keep_max 行運賃 by 閾値\n", ""));
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
@@ -149,14 +147,13 @@ fn 行き先の無い判定は穴で_届かない行き先は注意() {
     let p = write(&d, "unreachable.rule", &unreachable);
     let (_, out, _) = run(&["check", &p, "--format", "json"]);
     assert!(codes(&out).contains(&"W115".to_string()), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The one the proposal called the biggest: a bare `take` cannot be written, so the author
 /// chooses between "only one may match" and "the first wins" when the line is first typed.
 #[test]
 fn takeは一意か先頭かを書かせる() {
-    let d = dir("take");
+    let (_tmp, d) = dir("take");
     let p = write(&d, "bare.rule", &RULE.replace("take_unique 行運賃", "take 行運賃"));
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1, "{out}");
@@ -169,7 +166,6 @@ fn takeは一意か先頭かを書かせる() {
         let (code, out, e) = run(&["check", &p]);
         assert_eq!(code, 0, "{arm}: {out}{e}");
     }
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A walk is written where it can be written, and the rest are named rather than left to
@@ -177,7 +173,7 @@ fn takeは一意か先頭かを書かせる() {
 /// nowhere to carry a value from row to row and stop early.
 #[test]
 fn 十言語に生成し_SQLは名指しで断る() {
-    let d = dir("gen");
+    let (_tmp, d) = dir("gen");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
@@ -196,7 +192,6 @@ fn 十言語に生成し_SQLは名指しで断る() {
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1, "{out}");
     assert!(codes(&out).contains(&"E025".to_string()), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The inventory has to say the sequence is there, and say it the way the generated file
@@ -204,7 +199,7 @@ fn 十言語に生成し_SQLは名指しで断る() {
 /// call with one argument missing.
 #[test]
 fn 一覧は並びをフィールドとして載せる() {
-    let d = dir("api");
+    let (_tmp, d) = dir("api");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
@@ -237,7 +232,6 @@ fn 一覧は並びをフィールドとして載せる() {
         let th = fs.iter().find(|f| f.get("name").and_then(|v| v.as_str()) == Some("閾値")).unwrap();
         assert!(th.get("range").is_some(), "{lang}: 要素のフィールドに範囲が無い");
     }
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A DOM small enough to run the panel the page carries: elements, the five ids the script
@@ -312,7 +306,7 @@ fn ページの試用欄は並びを編集して走る() {
     if !ready(Need::Node, || have("node"), "node が無いので飛ばした") {
         return;
     }
-    let d = dir("page");
+    let (_tmp, d) = dir("page");
     // With the examples, so the panel's example button has a sequence to rebuild.
     let p = write(&d, "r.rule", &format!("{RULE}{EXAMPLES}"));
     let out = d.join("out");
@@ -345,14 +339,13 @@ fn ページの試用欄は並びを編集して走る() {
     let ex = rulec::json::parse(lines.next().expect("例の行が無い")).unwrap();
     assert_eq!(ex.get("rows").and_then(|v| v.as_int()), Some(2), "例が行を組み直していない: {said}");
     assert!(ex.get("result").and_then(|v| v.as_str()).unwrap().contains("800"), "{said}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// An example of a walk: the sequence is written once under a name, and the cell names it.
 /// It is checked by the reference evaluator like any other example, and joins the vectors.
 #[test]
 fn 例は並びに名前を付けて書く() {
-    let d = dir("examples");
+    let (_tmp, d) = dir("examples");
     let body = format!("{RULE}{EXAMPLES}");
     let p = write(&d, "r.rule", &body);
     let (code, out, e) = run(&["check", &p]);
@@ -390,13 +383,12 @@ fn 例は並びに名前を付けて書く() {
     }
     assert!(near && none, "例の入力がベクタに入っていない");
     assert!(out.contains("example row") || out.contains("例 "), "例から来たベクタが名指しされていない: {out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// Each way of getting it wrong is named, and none of them is left to the first run.
 #[test]
 fn 並びの書き方の間違いは名指しされる() {
-    let d = dir("exbad");
+    let (_tmp, d) = dir("exbad");
     let body = format!("{RULE}{EXAMPLES}");
     for (tag, src, want) in [
         // No column for the sequence: the case does not say what it walks.
@@ -418,7 +410,6 @@ fn 並びの書き方の間違いは名指しされる() {
     let (_, out, _) = run(&["check", &p, "--format", "json"]);
     assert!(codes(&out).contains(&"W116".to_string()), "{out}");
     assert!(out.contains("余り"), "どの並びか言っていない: {out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// An input the reference evaluator **refuses** is part of the suite too: it has no expected
@@ -430,7 +421,7 @@ fn 断る入力は生成コードにも断らせる() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let d = dir("refused");
+    let (_tmp, d) = dir("refused");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
@@ -461,6 +452,17 @@ fn 断る入力は生成コードにも断らせる() {
     assert!(checked >= 1, "どの言語も走らなかった: {said}");
 
     // And a language that answers instead of raising is caught, by name.
+    answer_instead_of_raising(&out);
+    let (code, said, _) = run(&["test", out.to_str().unwrap()]);
+    assert_eq!(code, 1, "断らなくなったのに緑のまま: {said}");
+    assert!(
+        said.contains("answered an input") || said.contains("答えました"),
+        "何が起きたか言っていない: {said}"
+    );
+}
+
+/// Break the generated Python so that it answers the input the reference evaluator refuses.
+fn answer_instead_of_raising(out: &Path) {
     let module = out.join("python/freight.py");
     let py = std::fs::read_to_string(&module).unwrap();
     let broken: Vec<String> = py
@@ -475,13 +477,63 @@ fn 断る入力は生成コードにも断らせる() {
         .collect();
     assert!(broken.join("\n") != py, "壊すところが見つからない");
     std::fs::write(&module, broken.join("\n") + "\n").unwrap();
-    let (code, said, _) = run(&["test", out.to_str().unwrap()]);
-    assert_eq!(code, 1, "断らなくなったのに緑のまま: {said}");
-    assert!(
-        said.contains("answered an input") || said.contains("答えました"),
-        "何が起きたか言っていない: {said}"
-    );
-    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// The processes in a process group, as `ps` lists them: `<pid> <group> <command>`.
+fn in_group(group: u32) -> Vec<String> {
+    let o = Command::new("ps").args(["-A", "-o", "pid=,pgid=,command="]).output().expect("ps を起動できない");
+    String::from_utf8_lossy(&o.stdout)
+        .lines()
+        .filter(|l| l.split_whitespace().nth(1).and_then(|g| g.parse::<u32>().ok()) == Some(group))
+        .map(|l| l.trim().to_string())
+        .collect()
+}
+
+/// A `rulec test` that fails half way leaves nothing running (§15.163). The generated MCP
+/// server over HTTP listens until it is told to stop, and `rulec test` used to return on the
+/// first answer that disagreed without stopping it: every run of the test above left one
+/// behind, with no parent, for good.
+#[test]
+fn 途中で落ちたrulec_testは立てたプロセスを残さない() {
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
+        return;
+    }
+    let (_tmp, d) = dir("left");
+    let p = write(&d, "r.rule", RULE);
+    let out = d.join("out");
+    let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
+    assert_eq!(code, 0, "{said}{e}");
+    // Only the Python side: its MCP server is what this is about, and `rulec test` runs what
+    // it finds.
+    for e in std::fs::read_dir(&out).unwrap().flatten() {
+        let n = e.file_name().to_string_lossy().into_owned();
+        if !["python", "vectors"].contains(&n.as_str()) {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+    answer_instead_of_raising(&out);
+
+    // rulec in a process group of its own: what it starts is in the group too, and stays in it
+    // after rulec has ended.
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_rulec"));
+    cmd.env("RULEC_LANG", "ja").current_dir(root()).args(["test", out.to_str().unwrap()]).stdout(Stdio::piped()).stderr(Stdio::piped());
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    let child = cmd.spawn().expect("rulec を起動できない");
+    let group = child.id();
+    let o = child.wait_with_output().unwrap();
+    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
+    // Asked now, while the test still holds its directory: nothing here stops a process on its
+    // own, and a check made after a clean-up could only find less.
+    let left = in_group(group);
+    for l in &left {
+        if let Some(pid) = l.split_whitespace().next() {
+            let _ = Command::new("kill").args(["-9", pid]).status();
+        }
+    }
+    assert_eq!(o.status.code(), Some(1), "{said}");
+    // Both MCP passes, and the HTTP one in particular, stopped half way.
+    assert!(said.contains("(Python, MCP/HTTP) 参照評価器と食い違います"), "HTTP の MCP サーバの段が途中で落ちていない: {said}");
+    assert!(left.is_empty(), "rulec test が終わったあとに残ったプロセス:\n{}", left.join("\n"));
 }
 
 /// The seven generated walks answer what the reference evaluator answered, over the whole
@@ -491,7 +543,7 @@ fn 生成されたたどり方は参照評価器と一致する() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
-    let d = dir("agree");
+    let (_tmp, d) = dir("agree");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
@@ -509,23 +561,21 @@ fn 生成されたたどり方は参照評価器と一致する() {
         assert_eq!(r.get("ok"), Some(&rulec::json::Json::Bool(true)), "{said}");
     }
     assert!(ran >= 1, "どの言語も走らなかった: {said}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[test]
 fn 並びは一つで_二本目は断る() {
-    let d = dir("two");
+    let (_tmp, d) = dir("two");
     let p = write(&d, "two.rule", &RULE.replace("outputs\n", "elements 別の列(others)\n  m(m) : number  range >=0 <=9\n\noutputs\n"));
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1, "{out}");
     assert!(codes(&out).contains(&"E020".to_string()), "{out}");
-    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// The walk itself: the evaluator's answers, and the suite that covers them (§15.56).
 #[test]
 fn たどり方はベクタで覆われる() {
-    let d = dir("vectors");
+    let (_tmp, d) = dir("vectors");
     let p = write(&d, "r.rule", RULE);
     let (code, out, e) = run(&["vectors", &p]);
     assert_eq!(code, 0, "{e}");
@@ -564,5 +614,4 @@ fn たどり方はベクタで覆われる() {
     assert_eq!(total, 21, "義務は ゼロ件 + 判定4 + 対16");
     assert_eq!(met, 21, "断る入力も義務を果たす");
     assert_eq!(j.get("refused").and_then(|v| v.as_int()), Some(1), "断る入力が数えられていない: {cov}");
-    let _ = std::fs::remove_dir_all(&d);
 }
