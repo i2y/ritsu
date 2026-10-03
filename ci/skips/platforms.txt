@@ -2,7 +2,7 @@
 # alone for every test of it; `#` starts a comment. `cargo xtask test --level platforms` holds to
 # this list the SKIPs for something missing from the runner.
 
-# The Jev tasks are sent to TypeSafe only when the repository holds TYPESAFE_API_KEY as a secret.
+# The Jev tasks are never sent to TypeSafe from CI (every call is paid for); the key is empty there.
 dandori jev_tasks_answer_on_typesafe
 # No Ollama on GitHub's runner: the agents on a server of Open Responses are sent to a real one
 # where Ollama answers, as on the machine the tests were written on.

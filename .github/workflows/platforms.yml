@@ -29,9 +29,10 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   BUF_VERSION: "1.54.0"
-  # The Jev tasks are sent to TypeSafe only when the repository has the key; without it the
-  # test says SKIP, which ci/skips/platforms.txt allows.
-  TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+  # The Jev tasks are never sent to TypeSafe from CI: every call is paid for, and how often CI
+  # runs cannot be foreseen, so the key is not kept here, not even as a secret. Empty, the test
+  # says SKIP, which ci/skips/platforms.txt allows (DESIGN 10.5).
+  TYPESAFE_API_KEY: ""
 
 jobs:
   platforms:
