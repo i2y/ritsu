@@ -21,6 +21,7 @@ pub mod ids;
 pub mod interp;
 pub mod model;
 pub mod parse;
+pub mod ports;
 pub mod postgres;
 pub mod render;
 pub mod scenario;

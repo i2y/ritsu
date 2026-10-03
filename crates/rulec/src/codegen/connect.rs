@@ -1423,6 +1423,53 @@ if __name__ == "__main__":
 "#;
 
 impl<'a> Gen<'a> {
+    /// The rule's Connect service as ritsu's port of rules has it (`crate::ports`): the path,
+    /// the fields of the request, of one element and of the response, and every enum on the
+    /// wire — what `api_connect` writes, from the same helpers.
+    pub fn connect_facts(&self) -> ritsu_ports::Connect {
+        let pkg = self.proto_package();
+        let svc = self.proto_service();
+        let field = |name: &str, n: &crate::ast::Name, ty: &Ty| -> ritsu_ports::WireField {
+            let inner = if let Ty::Opt(t) = ty { t.as_ref() } else { ty };
+            ritsu_ports::WireField {
+                name: name.to_string(),
+                field: pub_name(n),
+                ty: self.proto_ty(name, ty),
+                optional: matches!(ty, Ty::Opt(_)),
+                enumeration: if let Ty::Enum(e) = inner { Some(e.clone()) } else { None },
+            }
+        };
+        let mut request: Vec<ritsu_ports::WireField> = self.f.inputs.iter().map(|i| field(&i.name.text, &i.name, &self.ty_of(&i.name.text))).collect();
+        if let Some(el) = &self.f.elements {
+            request.push(ritsu_ports::WireField { name: el.name.text.clone(), field: pub_name(&el.name), ty: "repeated Element".into(), optional: false, enumeration: None });
+        }
+        let elements = self.f.elements.as_ref().map(|el| el.fields.iter().map(|fd| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text))).collect());
+        let response = self.f.outputs.iter().map(|o| field(&o.name.text, &o.name, &self.ty_of(&o.name.text))).collect();
+        let enums = self
+            .wire_enums()
+            .iter()
+            .map(|ty| {
+                let we = self.wire_enum(ty);
+                ritsu_ports::WireEnum {
+                    name: ty.clone(),
+                    alias: we.ty.clone(),
+                    contract: we.contract.as_ref().map(|(file, import)| (file.clone(), format!("proto/{import}"))),
+                    unset: we.unset.clone(),
+                    values: we.values.clone(),
+                }
+            })
+            .collect();
+        ritsu_ports::Connect {
+            path: format!("/{pkg}.{svc}/Decide"),
+            json_names: "lowerCamelCase".into(),
+            json_int64: "string".into(),
+            request,
+            response,
+            elements,
+            enums,
+        }
+    }
+
     /// The `connect` entry of `rulec api`: the wire a caller needs, without reading the
     /// `.proto` — the endpoint's path, the two message names, and what each field is called
     /// there.

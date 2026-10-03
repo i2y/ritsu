@@ -23,6 +23,8 @@ pub mod lex;
 pub mod naming;
 pub mod paraphrase;
 pub mod parse;
+/// ritsu's ports, as koyomi answers them (ritsu's DESIGN 3.2).
+pub mod ports;
 pub mod reserved;
 pub mod resolve;
 pub mod sjis;

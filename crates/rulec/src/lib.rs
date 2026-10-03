@@ -54,6 +54,8 @@ pub mod machine;
 pub mod num;
 pub mod ooxml;
 pub mod parse;
+/// ritsu's ports, as rulec answers them (ritsu's DESIGN 3.2).
+pub mod ports;
 pub mod prelude;
 pub mod proto;
 pub mod region;

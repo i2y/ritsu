@@ -18,6 +18,8 @@ pub mod mapping;
 pub mod model;
 pub mod owners;
 pub mod patterns;
+/// ritsu's ports, as sakai answers them (ritsu's DESIGN 3.2).
+pub mod ports;
 pub mod refs;
 pub mod resolve;
 pub mod terms;

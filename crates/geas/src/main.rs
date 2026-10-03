@@ -1,36 +1,7 @@
 #[macro_use]
 extern crate ritsu_base;
 
-mod affected;
-mod cdp;
-mod check;
-mod codes;
-mod cover;
-mod diag;
-mod diff;
-mod drift;
-mod driver;
-mod gui;
-mod hash;
-mod http;
-mod json;
-mod lex;
-mod lines;
-mod map;
-mod model;
-mod parse;
-mod pins;
-mod pixie;
-mod proc;
-mod regex;
-mod screen;
-mod report;
-mod run;
-mod sched;
-mod skill;
-mod tree;
-mod words;
-mod ws;
+use geas::{affected, codes, diag, drift, map, model, parse, proc, report, run, sched, skill};
 
 use diag::{Diag, Show};
 use ritsu_base::text::{Lang, Text};

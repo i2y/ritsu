@@ -6320,9 +6320,11 @@ impl Gen<'_> {
         Some(format!("{},\"elements\":{}}}", head.trim_end_matches('}'), crate::json::arr(&fields)))
     }
 
-    /// The enums, under the spelling each language gives their members.
-    fn enums_json(&self, member: impl Fn(&str, &str) -> String) -> String {
-        let mut out: Vec<String> = Vec::new();
+    /// The enums, under the spelling each language gives their members: each enum's name and
+    /// class, and each value's name and member. An enum two names share a class with is listed
+    /// once.
+    fn enum_list(&self, member: impl Fn(&str, &str) -> String) -> Vec<ritsu_ports::CallEnum> {
+        let mut out = Vec::new();
         let mut done: Vec<String> = Vec::new();
         for (jp, ascii) in &self.enum_names {
             if done.contains(ascii) {
@@ -6330,25 +6332,97 @@ impl Gen<'_> {
             }
             done.push(ascii.clone());
             let Some(vals) = self.c.enums.get(jp) else { continue };
-            let members: Vec<String> = vals
+            let values = vals
                 .iter()
                 .map(|v| {
                     let a = self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone());
-                    crate::json::Obj::new()
-                        .str("name", v)
-                        .str("alias", member(ascii, &a))
-                        .finish()
+                    (v.clone(), member(ascii, &a))
                 })
                 .collect();
-            out.push(
-                crate::json::Obj::new()
-                    .str("name", jp)
-                    .str("alias", ascii)
-                    .raw("values", crate::json::arr(&members))
-                    .finish(),
-            );
+            out.push(ritsu_ports::CallEnum { name: jp.clone(), alias: ascii.clone(), values });
         }
+        out
+    }
+
+    /// The enums, under the spelling each language gives their members.
+    fn enums_json(&self, member: impl Fn(&str, &str) -> String) -> String {
+        let out: Vec<String> = self
+            .enum_list(member)
+            .iter()
+            .map(|e| {
+                let members: Vec<String> = e.values.iter().map(|(v, a)| crate::json::Obj::new().str("name", v).str("alias", a).finish()).collect();
+                crate::json::Obj::new().str("name", &e.name).str("alias", &e.alias).raw("values", crate::json::arr(&members)).finish()
+            })
+            .collect();
         crate::json::arr(&out)
+    }
+
+    /// Every enum the rule knows, by name: its class in the generated code, and each value with
+    /// the alias the generated code builds the member's name from (`Gold`, which TypeScript and
+    /// Python write `GOLD`). For ritsu's port of rules (`crate::ports`).
+    pub fn rule_enums(&self) -> Vec<ritsu_ports::RuleEnum> {
+        let mut names: Vec<&String> = self.c.enums.keys().collect();
+        names.sort();
+        names
+            .into_iter()
+            .map(|jp| ritsu_ports::RuleEnum {
+                name: jp.clone(),
+                alias: self.enum_names.get(jp).cloned().unwrap_or_else(|| pascal(jp)),
+                values: self.c.enums[jp]
+                    .iter()
+                    .map(|v| ritsu_ports::EnumValue { name: v.clone(), alias: self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone()) })
+                    .collect(),
+            })
+            .collect()
+    }
+
+    /// The parameters and outputs of the generated code in one language, as `api` lists them:
+    /// each name, its alias there, its type there, and whether it may be absent; the list a rule
+    /// walks comes last among the parameters, typed `elements`.
+    fn param_list(&self, alias: impl Fn(&crate::ast::Name) -> String, ty_name: impl Fn(&Ty) -> String, elements: &str) -> (Vec<ritsu_ports::Param>, Vec<ritsu_ports::Param>) {
+        let param = |n: &crate::ast::Name| {
+            let ty = self.ty_of(&n.text);
+            ritsu_ports::Param { name: n.text.clone(), alias: alias(n), ty: ty_name(&ty), optional: matches!(ty, Ty::Opt(_)) }
+        };
+        let mut params: Vec<ritsu_ports::Param> = self.f.inputs.iter().map(|i| param(&i.name)).collect();
+        if let Some(el) = &self.f.elements {
+            params.push(ritsu_ports::Param { name: el.name.text.clone(), alias: alias(&el.name), ty: elements.to_string(), optional: false });
+        }
+        (params, self.f.outputs.iter().map(|o| param(&o.name)).collect())
+    }
+
+    /// How the generated code is called in TypeScript, Python and Go: the same names `api`
+    /// lists, from the same helpers (for ritsu's port of rules, `crate::ports`).
+    pub fn calls(&self) -> (ritsu_ports::Call, ritsu_ports::Call, ritsu_ports::Call) {
+        let alias = pub_name(&self.f.name);
+        let (ts_params, ts_outputs) = self.param_list(|n| pub_name(n), |t| self.ts_ty(t), "readonly Element[]");
+        let typescript = ritsu_ports::Call {
+            module: format!("{alias}.ts"),
+            function: alias.clone(),
+            input_type: String::new(),
+            params: ts_params,
+            outputs: ts_outputs,
+            enums: self.enum_list(|_, a| a.to_uppercase()),
+        };
+        let (py_params, py_outputs) = self.param_list(|n| pub_name(n), |t| self.py_ty(t), "list[Element]");
+        let python = ritsu_ports::Call {
+            module: alias.clone(),
+            function: alias.clone(),
+            input_type: String::new(),
+            params: py_params,
+            outputs: py_outputs,
+            enums: self.enum_list(|_, a| a.to_uppercase()),
+        };
+        let (go_params, go_outputs) = self.param_list(|n| pascal(&pub_name(n)), |t| self.go_ty(t), "[]Element");
+        let go = ritsu_ports::Call {
+            module: crate::backend::go_package(&alias),
+            function: pascal(&alias),
+            input_type: "Input".into(),
+            params: go_params,
+            outputs: go_outputs,
+            enums: self.enum_list(|t, a| format!("{t}{a}")),
+        };
+        (typescript, python, go)
     }
 
     /// `rulec api <file.rule> --format json`. Language independent throughout: every field is

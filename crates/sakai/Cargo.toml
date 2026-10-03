@@ -8,6 +8,7 @@ repository = "https://github.com/i2y/sakai"
 
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
+ritsu-ports = { path = "../ritsu-ports" }
 ritsu-proto = { path = "../ritsu-proto" }
 # preserve_order: `sakai api` and `--format json` print their keys in the order DESIGN.md writes them
 serde_json = { version = "1", features = ["preserve_order"] }

@@ -36,14 +36,29 @@ fn bound_json(b: &Option<Bound>) -> Value {
     }
 }
 
-/// The life of the holds of `t` as a state machine, in the shape dandori reads (PLAN B11).
-pub fn machine(t: &TransferKind) -> Value {
+/// The states of a hold, in order.
+pub const HOLD_STATES: [&str; 4] = ["held", "posted", "voided", "expired"];
+
+/// One row of the table a hold's life is: its number, the events and the states it takes, the
+/// state it goes to (None: it stays), and whether the call is refused, and why.
+pub struct HoldRow {
+    pub row: usize,
+    pub events: Vec<usize>,
+    pub states: Vec<usize>,
+    pub next: Option<&'static str>,
+    pub refused: &'static str,
+    pub reason: &'static str,
+}
+
+/// The events of the holds of `t`, and DESIGN 2.4's table as rows (the rows of an event the
+/// transfer does not have left out): what `machine` writes as JSON, and ritsu's port of books
+/// hands over (`crate::ports`).
+pub fn hold_table(t: &TransferKind) -> (Vec<&'static str>, Vec<HoldRow>) {
     let expires = matches!(t.pending, Some(Expiry::After(_)));
-    let states = ["held", "posted", "voided", "expired"];
-    let events: Vec<&str> = if expires { vec!["post", "void", "expire"] } else { vec!["post", "void"] };
+    let events: Vec<&'static str> = if expires { vec!["post", "void", "expire"] } else { vec!["post", "void"] };
     let ev = |e: &str| events.iter().position(|x| *x == e);
     // (event, states, next, refused, reason): DESIGN 2.4's table, row by row
-    let table: [(&str, &[usize], Option<&str>, &str, &str); 9] = [
+    let table: [(&str, &[usize], Option<&'static str>, &'static str, &'static str); 9] = [
         ("post", &[0], Some("posted"), "false", "none"),
         ("void", &[0], Some("voided"), "false", "none"),
         ("expire", &[0], Some("expired"), "false", "none"),
@@ -55,15 +70,27 @@ pub fn machine(t: &TransferKind) -> Value {
         ("expire", &[1, 2, 3], None, "false", "none"),
     ];
     let mut rows = Vec::new();
-    let mut moves = Vec::new();
     for (event, st, next, refused, reason) in table {
         let evs: Vec<usize> = event.split('|').filter_map(ev).collect();
         if evs.is_empty() {
             continue;
         }
-        let n = rows.len() + 1;
-        rows.push(json!({"row": n, "accepts": [evs, st], "produces": [next, refused, reason]}));
-        moves.push(match next {
+        rows.push(HoldRow { row: rows.len() + 1, events: evs, states: st.to_vec(), next, refused, reason });
+    }
+    (events, rows)
+}
+
+/// The life of the holds of `t` as a state machine, in the shape dandori reads (PLAN B11).
+pub fn machine(t: &TransferKind) -> Value {
+    let expires = matches!(t.pending, Some(Expiry::After(_)));
+    let states = HOLD_STATES;
+    let (events, table) = hold_table(t);
+    let mut rows = Vec::new();
+    let mut moves = Vec::new();
+    for r in table {
+        let n = r.row;
+        rows.push(json!({"row": n, "accepts": [r.events, r.states], "produces": [r.next, r.refused, r.reason]}));
+        moves.push(match r.next {
             Some(s) => json!({"row": n, "to": states.iter().position(|x| *x == s).unwrap()}),
             None => json!({"row": n, "stay": true}),
         });

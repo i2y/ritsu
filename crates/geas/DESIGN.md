@@ -1299,6 +1299,18 @@ What a person or a program sees changed in four places:
   standard output, and their scratch directories are under the system's
   temporary directory, not under `target/`.
 
+In the first part of ritsu's stage D, geas became a library and a command:
+`src/lib.rs` holds every module, and `src/main.rs` is the command line over
+it. A program that holds geas as a library reads a spec through ritsu's
+ports (`src/ports.rs`; ritsu's DESIGN 3.2): the claims, each with the line
+it starts on and its steps as written; the record `geas map` keeps, read
+where `geas map` writes it when no `--out` says otherwise
+(`.geas/<stem>.map.jsonl` beside the spec); and the claims as items, each
+defined by its block (the `claim` line and its steps, each line without the
+spaces around it, the blank lines and the comments left out). Nothing is
+run. The command line, its exit codes, its output and its JSON did not
+change.
+
 ## 14. Distribution through the agent channel
 
 The skill is the other half of §0's division of labor: the person reads

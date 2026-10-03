@@ -9,6 +9,7 @@ repository = "https://github.com/i2y/koyomi"
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
 ritsu-emit = { path = "../ritsu-emit" }
+ritsu-ports = { path = "../ritsu-ports" }
 # preserve_order: `koyomi api` and `--format json` print their keys in the order DESIGN.md writes them
 serde_json = { version = "1", features = ["preserve_order"] }
 

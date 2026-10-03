@@ -241,6 +241,78 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         .finish()
 }
 
+/// The machine the rule is one step of, as ritsu's port of rules has it (`crate::ports`): its
+/// states, where a case starts and ends, the inputs it holds, and the table that decides the next
+/// state — its axes, and each row's coordinates, move and answers. The moves are read off the
+/// rows as the certificate's `machine` reads them; where they cannot be, Err says why, in the
+/// words the certificate gives. None for a rule that is no step of a machine.
+pub fn machine_facts(f: &RuleFile, c: &Checked) -> Option<Result<ritsu_ports::Machine, String>> {
+    use crate::ast::OutCell;
+    let m = f.machine.as_ref()?;
+    let (cin, cout) = m.carried()?;
+    let Some(crate::types::Ty::Enum(en)) = c.ty_of(cin) else { return None };
+    let states: Vec<String> = c.enums.get(&en).cloned().unwrap_or_default();
+    let idx = |v: &str| states.iter().position(|x| x == v);
+    let init = m.initial.as_ref()?.0.text.clone();
+    let Some(set) = c.sets.iter().find(|s| s.table.outputs.iter().any(|o| o.name.text == cout)) else {
+        return Some(Err(tr!("持ち越す出力を決める表がありません", "no table decides the carried output")));
+    };
+    if set.merged() {
+        return Some(Err(tr!(
+            "持ち越す出力を二つ以上の表が決めているので、行き先を一つの表の行から読めません",
+            "several tables decide the carried output, so the transitions cannot be read off one table's rows"
+        )));
+    }
+    let (Some(ct), Some(_)) = (certificate_of(set, c, f), crate::region::region_of(set, c, f)) else {
+        return Some(Err(tr!("遷移を決める表に証明書がありません", "the table that decides the transitions has no certificate")));
+    };
+    let t = &set.table;
+    let axis = ct.axes.iter().position(|a| a.name == cin);
+    if let Some(k) = axis {
+        if ct.axes[k].coords != states {
+            return Some(Err(tr!("状態の軸が列挙の値の並びと違います", "the state's axis is not the enum's values in order")));
+        }
+    }
+    let jout = t.outputs.iter().position(|o| o.name.text == cout).unwrap_or(0);
+    let mut moves: std::collections::BTreeMap<usize, Option<usize>> = std::collections::BTreeMap::new();
+    for r in &t.rows {
+        let word = match r.outs.get(jout) {
+            Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) => Some(w.as_str()),
+            _ => None,
+        };
+        let mv = match word {
+            Some(w) if w == cin => None,
+            Some(w) if idx(w).is_some() => idx(w),
+            _ => {
+                return Some(Err(tr!(
+                    "表 {} 行{} は次の状態を計算で決めているので、行から行き先を読めません",
+                    "table {} row {} computes the next state, so its move cannot be read off the row",
+                    t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
+                    r.index
+                )))
+            }
+        };
+        moves.insert(r.index, mv);
+    }
+    // where a case ends, in the order the enum declares the states (as `api` lists them)
+    let finals = states.iter().enumerate().filter(|(_, v)| m.finals.iter().any(|x| &x.text == *v)).map(|(i, _)| i).collect();
+    Some(Ok(ritsu_ports::Machine {
+        name: m.name.text.clone(),
+        carry_in: cin.to_string(),
+        carry_out: cout.to_string(),
+        state_enum: en.clone(),
+        initial: idx(&init).unwrap_or(0),
+        finals,
+        held: m.held.iter().map(|x| x.text.clone()).collect(),
+        policy: ct.policy.to_string(),
+        axes: ct.axes.iter().map(|a| ritsu_ports::Axis { column: a.name.clone(), coords: a.coords.clone() }).collect(),
+        state_axis: axis,
+        decides: ct.decides.clone(),
+        rows: ct.rows.iter().map(|r| ritsu_ports::MachineRow { row: r.row, accepts: r.accepts.clone(), to: moves.get(&r.row).copied().flatten(), produces: r.produces.clone() }).collect(),
+        states,
+    }))
+}
+
 /// A machine's section (§15.148): the claims about every sequence of calls, laid on the
 /// certificate of the table that decides the carried state.
 ///

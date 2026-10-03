@@ -1395,6 +1395,8 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 続く C.9 で、proto の読み手を ritsu-proto に移した。ritsu-proto は sakai の読み手を元にし、rulec と dandori の読み手が読むもの（Protovalidate の規則、`buf.yaml` と `buf.lock`、オプションの木、import の先を何段でも読むこと）を足したものである。移す前と後で、三つのリポジトリの `.proto` の全部について sakai の読み手が出すもの（要素と行、読めないときの位置と文、import の行き先、型の名前の解決）が一字も違わないことを確かめ、それを ritsu-proto の `tests/golden/sakai.txt` に残した。読み手の単体のテスト（入れ子、`group`、名前の解決、import を探す場所）も ritsu-proto に移した。sakai の出力は変わらない。
 
+段階 D の最初の部分で、ritsu の口（ritsu の DESIGN 3.2）に答える `src/ports.rs` を足した。コンテキストのファイルが持つもの（コンテキストと語）を渡す。定義の文は、コンテキストならファイルの行、語ならその塊の行（語、定義、`means`）で、どの行もコメントと前後の空白を除く。外を名指すものは、`owns`、公表された言語（proto、規則、公開ホストサービス、生成したコード）、関係の共有カーネルとレイヤー、レイヤーが写す列挙、語の `means`、地図の `use context`・`covers`・`except`・`proto root`・`code` である。公表された言語の短い書き方（`means message Order`）は、`sakai api` と同じく、それを宣言した `.proto` から完全に名指す（`tests/ports.rs`）。
+
 同じとき（ritsu の PLAN の D.10）、ritsu-proto が読めない `.proto` を言う文の日本語を直した。期待したものが語のとき、英語のまま日本語に混ぜていた（「a name が要るところに `{` があります」）のを、日本語の語にした（「名前が要るところに `{` があります」）。E106 の文に出る。英語の文と、記号を期待するときの文（「`;` が要るところに `}` があります」）は変わらない。sakai の golden は変わらず、ritsu-proto の `tests/golden/sakai.txt` の一行が変わった。コマンドの振る舞いは、ほかに変えていない（205 回の出力が一字も違わない）。
 
 ## 13. 捨てたもの

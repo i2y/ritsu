@@ -1,0 +1,13 @@
+[package]
+name = "ritsu-ports"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "The ports of ritsu: the types the languages hand each other across a border, and the questions one language asks another, each answered by the language that knows"
+publish = false
+
+# ritsu-base and ritsu-units, and std (DESIGN 3.1).
+[dependencies]
+ritsu-base = { path = "../ritsu-base" }
+ritsu-units = { path = "../ritsu-units" }
