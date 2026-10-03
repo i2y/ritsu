@@ -87,6 +87,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ritsu-emit"
+version = "0.1.0"
+dependencies = [
+ "ritsu-base",
+ "ritsu-testkit",
+ "rulec",
+]
+
+[[package]]
 name = "ritsu-proto"
 version = "0.1.0"
 dependencies = [

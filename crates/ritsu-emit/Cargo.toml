@@ -1,0 +1,18 @@
+[package]
+name = "ritsu-emit"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "What the generators of ritsu share about the languages they write: the words each will not take as a name, how a name is made, how a string is written, and the line that says a file is generated"
+publish = false
+
+# ritsu-base and std (DESIGN 3.1).
+[dependencies]
+ritsu-base = { path = "../ritsu-base" }
+
+# rulec and dandori keep their own tables until C.11; the tests hold the copies here to them
+# (DESIGN 3.3: a dev-dependency makes no loop).
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }
+rulec = { path = "../rulec" }
