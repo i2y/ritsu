@@ -53,11 +53,11 @@
 // at the executions.
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { play, wire, wrap } from "../asl-run.mjs";
+import { workDir } from "../work.mjs";
 
 const exec = promisify(execFile);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -295,7 +295,7 @@ async function main() {
     });
     config.StateMachines[flow.name] = { TestCases: cases };
   }
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-localstack-"));
+  const work = workDir("dandori-localstack-");
   fs.writeFileSync(path.join(work, "mocks.json"), JSON.stringify(config));
   await docker(["cp", path.join(work, "mocks.json"), `${container}:${MOCKS}`]);
   say(`created ${flows.length} state machine(s) and copied the mock file in`);

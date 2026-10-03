@@ -19,10 +19,10 @@
 
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ScriptedModel, assistantMessage } from "@openai/agents/testing";
+import { workDir } from "../work.mjs";
 
 /** The Messages API's answer: the text, and how the turn ended; a refusal has no content, as the API reference shows it. */
 function message(model, text, stop) {
@@ -127,7 +127,7 @@ const [ioFile, casesFile, outFile] = process.argv.slice(2);
 const cases = JSON.parse(fs.readFileSync(casesFile, "utf8"));
 
 // io.ts imports the SDK when an agent is called; let it find this directory's copy
-const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-agents-"));
+const work = workDir("dandori-agents-");
 fs.copyFileSync(ioFile, path.join(work, "io.ts"));
 fs.symlinkSync(path.join(here, "node_modules"), path.join(work, "node_modules"));
 const io = await import(path.join(work, "io.ts"));

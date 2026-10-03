@@ -19,17 +19,17 @@
 // order the reference interpreter makes them.
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { makeTransport } from "../transport.mjs";
+import { workDir } from "../work.mjs";
 
 const [dir, runsFile, outFile] = process.argv.slice(2);
 const spec = JSON.parse(fs.readFileSync(runsFile, "utf8"));
 
 // Node runs TypeScript by stripping the types, and wants the extension on a relative import.
-const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-durable-"));
+const work = workDir("dandori-durable-");
 for (const f of fs.readdirSync(dir)) {
   if (!f.endsWith(".ts")) continue;
   let text = fs.readFileSync(path.join(dir, f), "utf8").replace(/from "(\.\/[^"]+)"/g, (_, p) => `from "${p}.ts"`);

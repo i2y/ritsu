@@ -85,16 +85,26 @@ func children(parent, child Flow, runsFile, outFile string) error {
 	ctx := context.Background()
 	var elsewhere *exec.Cmd
 	var elsewhereIn io.WriteCloser
+	// where the other language's runner makes its temporary files (TMPDIR): a directory of this
+	// runner's, removed however that runner ended, killed too
+	var elsewhereTmp string
 	defer func() {
 		if elsewhere != nil && elsewhere.ProcessState == nil {
 			_ = elsewhere.Process.Kill()
 			_ = elsewhere.Wait()
 		}
+		if elsewhereTmp != "" {
+			_ = os.RemoveAll(elsewhereTmp)
+		}
 	}()
 	if childBy != nil {
+		if elsewhereTmp, err = os.MkdirTemp("", "dandori-children-"); err != nil {
+			return err
+		}
 		// the other language's runner serves the child; its workers poll before the first run starts
 		elsewhere = exec.Command(childBy[0], append(slices.Clone(childBy[1:]), server.FrontendHostPort())...)
 		elsewhere.Stderr = os.Stderr
+		elsewhere.Env = append(os.Environ(), "TMPDIR="+elsewhereTmp)
 		if elsewhereIn, err = elsewhere.StdinPipe(); err != nil {
 			return err
 		}

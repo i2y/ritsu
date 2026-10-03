@@ -1076,14 +1076,11 @@ mod tests {
         assert_eq!(s.options["some.api.default_host"], json!("orders.example.com"));
     }
 
-    /// A directory of files for a test, named for it.
-    fn scratch(name: &str, files: &[(&str, &str)]) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("dandori-proto-{}-{name}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+    /// A directory of files for a test, named for it, removed when the test is done with it.
+    fn scratch(name: &str, files: &[(&str, &str)]) -> ritsu_testkit::TempDir {
+        let dir = ritsu_testkit::TempDir::new(&format!("proto-{name}"));
         for (path, text) in files {
-            let p = dir.join(path);
-            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-            std::fs::write(p, text).unwrap();
+            dir.write(path, text);
         }
         dir
     }
@@ -1097,10 +1094,9 @@ mod tests {
                 ("common/v1/money.proto", r#"syntax = "proto3"; package common.v1; message Money { string currency = 1; int64 units = 2; }"#),
             ],
         );
-        let f = load(&dir.join("shop/v1/order.proto")).unwrap_or_else(|e| panic!("{e}"));
+        let f = load(&dir.path().join("shop/v1/order.proto")).unwrap_or_else(|e| panic!("{e}"));
         assert!(f.messages.contains_key("common.v1.Money"));
         assert_eq!(f.messages["shop.v1.Order"][0].ty, PType::Named("common.v1.Money".into()));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1112,9 +1108,8 @@ mod tests {
                 ("specs/money.proto", r#"syntax = "proto3"; package shop.v1; message Money { string currency = 1; }"#),
             ],
         );
-        let f = load(&dir.join("specs/order.proto")).unwrap_or_else(|e| panic!("{e}"));
+        let f = load(&dir.path().join("specs/order.proto")).unwrap_or_else(|e| panic!("{e}"));
         assert!(f.messages.contains_key("shop.v1.Money"));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1131,7 +1126,7 @@ message Order { string id = 1; google.type.Money total = 2; repeated google.type
 service OrderService { rpc Place(Order) returns (Order) { option (google.api.http) = {post: "/v1/orders" body: "*"}; } }"#,
             )],
         );
-        let f = load(&dir.join("specs/order.proto")).unwrap_or_else(|e| panic!("{e}"));
+        let f = load(&dir.path().join("specs/order.proto")).unwrap_or_else(|e| panic!("{e}"));
         // in the order they were met; the well-known file is known without its file, so it is not among them
         assert_eq!(f.unread, ["google/api/annotations.proto", "google/type/money.proto"]);
         // what is read stays as it is; a type of an import that was not read stays a name nothing has
@@ -1141,13 +1136,10 @@ service OrderService { rpc Place(Order) returns (Order) { option (google.api.htt
         assert_eq!(f.services[0].methods[0].input, "shop.v1.Order");
         // a name nothing has, with every import read, is still the trouble
         let all = scratch("typo", &[("specs/order.proto", r#"syntax = "proto3"; package shop.v1; message Order { Moneyy total = 1; }"#)]);
-        let e = load(&all.join("specs/order.proto")).unwrap_err();
+        let e = load(&all.path().join("specs/order.proto")).unwrap_err();
         assert!(e.contains("there is no type `Moneyy`"), "{e}");
         // a file that is there and is not a `.proto` is the trouble too
         let bad = scratch("bad", &[("specs/order.proto", r#"syntax = "proto3"; package shop.v1; import "money.proto"; message Order {}"#), ("specs/money.proto", "message {")]);
-        assert!(load(&bad.join("specs/order.proto")).is_err());
-        let _ = std::fs::remove_dir_all(&dir);
-        let _ = std::fs::remove_dir_all(&all);
-        let _ = std::fs::remove_dir_all(&bad);
+        assert!(load(&bad.path().join("specs/order.proto")).is_err());
     }
 }

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import importlib
 import json
 import logging
@@ -123,6 +124,8 @@ if __name__ == "__main__":
     dir_a, dir_b, out_file = sys.argv[1:4]
     # the two builds are two packages of their own, where every history is long enough to go on in a new run
     work = tempfile.mkdtemp(prefix="dandori-versions-")
+    # removed however the runner ends: an assertion below that finds a build changed, too
+    atexit.register(shutil.rmtree, work, ignore_errors=True)
     names = []
     for i, d in enumerate([dir_a, dir_b]):
         name = f"build_{'ab'[i]}"

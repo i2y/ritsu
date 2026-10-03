@@ -18,11 +18,11 @@
 
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SNS } from "@aws-sdk/client-sns";
 import { SQS } from "@aws-sdk/client-sqs";
+import { workDir } from "../work.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const [dir, casesFile, outFile, moto] = process.argv.slice(2);
@@ -32,7 +32,7 @@ const ACCOUNT = "123456789012";
 const credentials = { accessKeyId: "wire", secretAccessKey: "wire" };
 
 // io.ts beside the AWS SDK's clients, which it loads when a call first needs one
-const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-wire-"));
+const work = workDir("dandori-wire-");
 fs.copyFileSync(path.join(dir, "io.ts"), path.join(work, "io.ts"));
 fs.symlinkSync(path.join(here, "node_modules"), path.join(work, "node_modules"));
 const io = await import(path.join(work, "io.ts"));

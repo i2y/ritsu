@@ -837,15 +837,21 @@ func activitiesBy(by []string, address string) (done func() (map[string][]any, e
 	stepsFile := filepath.Join(dir, "steps.json")
 	cmd := exec.Command(by[0], append(slices.Clone(by[1:]), stepsFile, address)...)
 	cmd.Stderr = os.Stderr
+	// its own temporary files are made in the same directory, which stop removes however that
+	// runner ended, killed too
+	cmd.Env = append(os.Environ(), "TMPDIR="+dir)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		_ = os.RemoveAll(dir)
 		return nil, nil, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		_ = os.RemoveAll(dir)
 		return nil, nil, err
 	}
 	if err := cmd.Start(); err != nil {
+		_ = os.RemoveAll(dir)
 		return nil, nil, fmt.Errorf("starting the activities' runner: %w", err)
 	}
 	stop = func() {

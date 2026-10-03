@@ -53,6 +53,7 @@ import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { mock as makeMock } from "./mock.mjs";
+import { workDir } from "../work.mjs";
 
 const run = promisify(execFile);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -179,7 +180,7 @@ const DEADLINE_ROOM = 120;
 // how long a pod the runner played may stay un-noticed by the controller before its run is played again
 const STUCK_MS = Number(process.env.DANDORI_ARGO_STUCK_SECONDS ?? 90) * 1000;
 const suffix = Math.random().toString(36).slice(2, 7);
-const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-argo-"));
+const work = workDir("dandori-argo-");
 
 // The code the real pods run: the generated caller with the test transport, and the stand-ins.
 const code = path.join(work, "code");

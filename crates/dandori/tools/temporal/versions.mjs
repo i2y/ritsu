@@ -12,12 +12,12 @@
 //                 "runs": { "<run>": how many runs it took } }
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { DefaultLogger, Runtime, Worker } from "@temporalio/worker";
 import { Context } from "@temporalio/activity";
+import { workDir } from "../work.mjs";
 
 Runtime.install({ logger: new DefaultLogger("WARN", (entry) => process.stderr.write(`${entry.level} ${entry.message}\n`)) });
 
@@ -27,7 +27,7 @@ const DEPLOYMENT = "dandori-versions";
 
 /** A copy of a build that Node can load, with its modules' extensions written out, and every history long enough to go on in a new run. */
 function copy(dir) {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-versions-"));
+  const work = workDir("dandori-versions-");
   for (const f of fs.readdirSync(dir)) {
     if (!f.endsWith(".ts")) continue;
     let text = fs.readFileSync(path.join(dir, f), "utf8").replace(/from "(\.\/[^"]+)"/g, (_, p) => `from "${p}.ts"`);

@@ -60,6 +60,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import contextlib
 import importlib
 import json
@@ -416,16 +417,22 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
             await asyncio.sleep(attempt)
     results = []
     other: asyncio.subprocess.Process | None = None
+    steps_dir: str | None = None
     try:
         base = worker.worker_options(own, transport=make_transport(spec, Run()))
         base["workflows"] = [*base["workflows"], *children]
         base["activities"] = [*base["activities"], *activities]
         queues = [client.TASK_QUEUE, *sorted({q for q in spec.get("queues", []) if q != client.TASK_QUEUE})]
         by = json.loads(os.environ.get("DANDORI_ACTIVITIES_BY", "null"))
-        steps_file = os.path.join(tempfile.mkdtemp(prefix="dandori-steps-"), "steps.json")
         if by is not None:
-            # the other language's runner serves the activities; a worker here serves the workflow and the child workflows' stand-ins only
-            other = await asyncio.create_subprocess_exec(*by, steps_file, env.client.service_client.config.target_host, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
+            # the other language's runner serves the activities; a worker here serves the workflow and the child workflows' stand-ins only.
+            # It writes the calls of each run in a directory of this runner's, and makes its own temporary files there too (TMPDIR),
+            # so that they go with the directory when the runs are over, however that runner ended.
+            steps_dir = tempfile.mkdtemp(prefix="dandori-steps-")
+            steps_file = os.path.join(steps_dir, "steps.json")
+            other = await asyncio.create_subprocess_exec(
+                *by, steps_file, env.client.service_client.config.target_host, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, env={**os.environ, "TMPDIR": steps_dir}
+            )
             assert other.stdout is not None
             while b"serving" not in await other.stdout.readline():
                 if other.stdout.at_eof():
@@ -527,7 +534,10 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
     finally:
         if other is not None and other.returncode is None:
             other.kill()
+            await other.wait()
         await env.shutdown()
+        if steps_dir is not None:
+            shutil.rmtree(steps_dir, ignore_errors=True)
     return results
 
 
@@ -552,6 +562,8 @@ def main() -> None:
     # short, so are the activities' and the child workflows' timeouts, every history is long
     # enough to go on in a new run, and the child workflows' stand-ins sit beside the workflow
     work = tempfile.mkdtemp(prefix="dandori-temporal-python-")
+    # removed however the runner ends: an assertion below that finds the package changed, too
+    atexit.register(shutil.rmtree, work, ignore_errors=True)
     package = os.path.basename(os.path.normpath(package_dir))
     copy = os.path.join(work, package)
     shutil.copytree(package_dir, copy)

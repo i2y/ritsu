@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import importlib
 import json
 import os
@@ -152,6 +153,8 @@ def main() -> None:
         spec = json.load(f)
     # a copy of the package, whose rounds of a parallel loop run one at a time
     work = tempfile.mkdtemp(prefix="dandori-pydantic-graph-")
+    # removed however the runner ends, a failure in copying the package included
+    atexit.register(shutil.rmtree, work, ignore_errors=True)
     package = os.path.basename(os.path.normpath(package_dir))
     copy = os.path.join(work, package)
     shutil.copytree(package_dir, copy)

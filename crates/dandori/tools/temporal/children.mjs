@@ -14,13 +14,13 @@
 // results.json: [ { "end": { "succeed": the outputs } | { "fail": { "error", "cause" } } } ]
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { WorkflowFailedError } from "@temporalio/client";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { DefaultLogger, NativeConnection, Runtime, Worker } from "@temporalio/worker";
+import { workDir } from "../work.mjs";
 
 Runtime.install({ logger: new DefaultLogger("WARN", (entry) => process.stderr.write(`${entry.level} ${entry.message}\n`)) });
 
@@ -28,7 +28,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 /** A copy of a build that Node can load, with its modules' extensions written out. */
 function copy(dir) {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-children-"));
+  const work = workDir("dandori-children-");
   for (const f of fs.readdirSync(dir)) {
     if (!f.endsWith(".ts")) continue;
     fs.writeFileSync(path.join(work, f), fs.readFileSync(path.join(dir, f), "utf8").replace(/from "(\.\/[^"]+)"/g, (_, p) => `from "${p}.ts"`));

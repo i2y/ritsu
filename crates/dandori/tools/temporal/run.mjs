@@ -58,7 +58,6 @@
 // run, since the history counts as long from one event on here (dd.CONTINUE_AT).
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
@@ -69,6 +68,7 @@ import { historyFromJSON, historyToJSON } from "@temporalio/common/lib/proto-uti
 import { Client, Connection, WorkflowFailedError, WorkflowNotFoundError, WorkflowUpdateFailedError } from "@temporalio/client";
 import { spawn } from "node:child_process";
 import { makeTransport } from "../transport.mjs";
+import { workDir } from "../work.mjs";
 
 // the worker's log goes to stderr; the results go to a file
 Runtime.install({ logger: new DefaultLogger("WARN", (entry) => process.stderr.write(`${entry.level} ${entry.message}\n`)) });
@@ -102,7 +102,7 @@ const LATE_MS = (TIMEOUT_SECONDS + 5) * 1000;
 // wants the extension on a relative import; the rounds of a parallel loop run one at a time; the
 // timers are short, and so are the activities' and the child workflows' timeouts; every history
 // is long enough to go on in a new run.
-const work = fs.mkdtempSync(path.join(os.tmpdir(), "dandori-temporal-"));
+const work = workDir("dandori-temporal-");
 for (const f of fs.readdirSync(dir)) {
   if (!f.endsWith(".ts")) continue;
   let text = fs.readFileSync(path.join(dir, f), "utf8").replace(/from "(\.\/[^"]+)"/g, (_, p) => `from "${p}.ts"`);
