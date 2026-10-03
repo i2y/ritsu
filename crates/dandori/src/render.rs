@@ -470,7 +470,7 @@ pub fn json_schema(m: &Model, t: &Ty, rg: Option<Range>, p: Provider) -> Option<
     fn go(m: &Model, t: &Ty, rg: Option<Range>, p: Provider, within: &mut Vec<RecordId>) -> Option<Value> {
         Some(match t {
             Ty::Int => number(None, rg, p),
-            Ty::Num(unit) => number(Some(unit), rg, p),
+            Ty::Num(unit) => number(Some(&unit.to_string()), rg, p),
             Ty::Str => json!({ "type": "string" }),
             Ty::Bool => json!({ "type": "boolean" }),
             Ty::Timestamp => json!({ "type": "string", "pattern": TIMESTAMP_RE }),
@@ -1276,7 +1276,7 @@ mod tests {
         let body = jsonata_rule_request(&c, &[("会員".into(), TExpr::Bool(true)), ("金額".into(), TExpr::Int(5000))]);
         assert_eq!(body, json!({ "member": true, "amount": "5000" }));
         let var = |n: &str, ty: Ty| TExpr::Var { name: "受注".into(), fields: vec![n.into()], ty };
-        let body = jsonata_rule_request(&c, &[("会員".into(), var("会員", Ty::Bool)), ("金額".into(), var("金額", Ty::Num("円".into())))]);
+        let body = jsonata_rule_request(&c, &[("会員".into(), var("会員", Ty::Bool)), ("金額".into(), var("金額", Ty::Num(ritsu_units::Unit::parse("money[円]").unwrap())))]);
         assert_eq!(body["member"], json!("{% $受注.`会員` %}"));
         assert_eq!(body["amount"], json!("{% $string($受注.`金額`) %}"));
         let read = jsonata_rule_read(&c, "$states.result.ResponseBody");

@@ -82,7 +82,7 @@ fn fits(am: &Model, a: &Ty, arg: Option<Range>, bm: &Model, b: &Ty, brg: Option<
         (x, Ty::Opt(y)) => fits(am, x, arg, bm, y, brg, seen),
         (Ty::List(x), Ty::List(y)) => fits(am, x, arg, bm, y, brg, seen),
         (Ty::Int, Ty::Int) => within(arg, brg),
-        (Ty::Num(u), Ty::Num(v)) if u == v => within(arg, brg),
+        (Ty::Num(u), Ty::Num(v)) if u.same(v) => within(arg, brg),
         (Ty::Str, Ty::Str) | (Ty::Bool, Ty::Bool) | (Ty::Timestamp, Ty::Timestamp) => Ok(()),
         (Ty::Enum(x), Ty::Enum(y)) => match am.enums[*x].values.iter().find(|v| !bm.enums[*y].values.contains(v)) {
             Some(v) => Err(tr!("`{an}` の `{v}` は `{bn}` の値にありません", "`{v}` of `{an}` is not a value of `{bn}`")),

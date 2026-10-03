@@ -161,7 +161,7 @@ error[E003]: hold.flow:17:21: expected `money[円, incl_tax]` here, but this is 
     17 |   authorize(amount: quote.amount)
 ```
 
-rulec の中では `JPY` は `円` の別の綴りで（rulec の DESIGN §15.18、`src/types.rs` の `money_unit`）、dandori は単位を文字列のまま比べる（dandori の `src/model.rs` の `Ty::Num(String)` と `src/rulec.rs` の `normalize_unit`）。
+rulec の中では `JPY` は `円` の別の綴りで（rulec の DESIGN §15.18、`src/types.rs` の `money_unit`）、dandori は単位を文字列のまま比べる（dandori の `src/model.rs` の `Ty::Num(String)` と `src/rulec.rs` の `normalize_unit`）。D の二つ目の部分で、dandori も単位の型で比べるようにし、この例は通る（5.3）。
 
 **率の刻みが、説明の文にしか無い。** `off : rate[step 0.1%]` を入力に持つ規則で：
 
@@ -174,7 +174,7 @@ $ rulec certificate rate.rule
 … "types": {"off": "rate", "pay": "money[円, incl_tax]", "price": "money[円, incl_tax]"}
 ```
 
-証明書の型は `rate` だけで、刻みは説明の文の中にしか無い。dandori は `src/rulec.rs` の `rate_scale` で、その文から `100% is ` か `100% なら ` のあとの数を読んでいる（dandori の DESIGN 7 章にも残してある）。
+証明書の型は `rate` だけで、刻みは説明の文の中にしか無い。dandori は `src/rulec.rs` の `rate_scale` で、その文から `100% is ` か `100% なら ` のあとの数を読んでいる（dandori の DESIGN 7 章にも残してある）。D の二つ目の部分で、dandori は刻みを口の単位の型から読むようにした（3.2）。
 
 **バージョンの文字列で、二つのツールが食い違う。** dandori は、`rulec doc` が描いたものを読み解かずに埋め込む。そのため dandori の `tests/` と `website/` の 57 のファイルに `rulec 0.22.0` という文字列があり、rulec を 0.22.1 にすると、テストは中身が同じでもバージョンの文字列で落ちる（dandori の README は「tested with rulec 0.22.0」と書く）。一つの処理系なら、二つは同じバージョンでしかありえない。
 
@@ -503,6 +503,8 @@ rulec の `Ty::Money`・`Ty::Qty`・`Ty::Rate`・`Ty::Number` は、中に `rits
 - `src/model.rs` の `rate_unit` と `rate_per`（刻みを文字列で作って読む）は、単位の型の `step` に替える。
 - 範囲の端に単位を付けて書けるようにする（dandori の DESIGN 7 章に残っていたもの）。`range >=1kg` は `mass[g]` の場所では 1000 で、整数にならない換算は rulec と同じく断る。
 - 値はいまと同じく、宣言した単位で数えた JSON の整数として運ぶ。どのプラットフォームの生成物も変わらない。`int` は単位の無い数（rulec の `number`）のまま。
+
+**D.4 で作った形**（D の二つ目の部分）。`Ty::Num` は `ritsu_units::Unit` を持ち、二つの数の型が同じかは `Unit::same` で決める（`Ty` の等しさを手で書いた）。型の綴りは `Unit::parse` で読み、`Display` で書いたとおりに出す。`UNIT_KINDS` は、ritsu-units が次元の語を知っているので、表ごと消した（次元でない語は前と同じ E002 と注、表に無い単位と税区分の誤りは、ritsu-units の言う理由を注にした E002）。率の `rate_unit` と `rate_per` は、単位の型の刻みを読む `rate_per(&Unit)` 一つにした。規則の型も、口が渡す単位の型のまま持つ。範囲の端は、単位を付けて書けば ritsu-units の換算（`Unit::convert`）で型の単位に数え、率は百分率を刻みで割る。整数にならない端と、型の次元に無い単位は E003 である。温度の単位（`℃`、`℉`）を字句で読めるようにした（型の `[` のすぐあとと範囲の端の単位としてだけ。名前の一部にはならない）。生成物は、例とテストのフローのどのプラットフォームでも一字も変わらない（PLAN の D.4）。
 
 ### 5.4 chobo
 

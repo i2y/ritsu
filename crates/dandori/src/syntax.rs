@@ -16,6 +16,9 @@ pub enum Tok {
     Int(i64),
     Float(f64),
     Sym(&'static str),
+    /// A bound of a range with its unit, as rulec writes one: `1kg`, `1.5%`, `100万円`. The value
+    /// is exact, `万` and `億` multiplied in.
+    Quantity { value: ritsu_units::Rat, unit: String, raw: String },
 }
 
 #[derive(Clone, Debug)]
@@ -108,13 +111,23 @@ pub struct Field {
     pub range: Option<RangeDecl>,
 }
 
-/// `range >=1 <=30`: the whole numbers a value may be, both ends included, in the unit of its
-/// type. Either end can be left out.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// `range >=1 <=30`, `range >=1kg`: the whole numbers a value may be, both ends included, in the
+/// unit of its type. Either end can be left out.
+#[derive(Clone, Debug, PartialEq)]
 pub struct RangeDecl {
-    pub lo: Option<i64>,
-    pub hi: Option<i64>,
+    pub lo: Option<Bound>,
+    pub hi: Option<Bound>,
     pub span: Span,
+}
+
+/// One end of a range, as written.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Bound {
+    /// A whole number in the unit of the type: `30`.
+    Int(i64),
+    /// A number with a unit, as rulec writes a bound: `1kg`, `1.5%`, `100万円`. lower counts it in
+    /// the unit of the type, and refuses one that does not come to a whole number of it.
+    Quantity { value: ritsu_units::Rat, unit: String, raw: String, span: Span },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -360,12 +373,35 @@ fn err(span: Span, message: Text) -> Diag {
     Diag::error("E001", span.line, span.col, message)
 }
 
+/// The exact value of a number as written (`-1.5`, digits only after `_` are taken out), times
+/// `mult`; None when it does not fit 64 bits before the multiplier, or has more than nine places.
+fn quantity(text: &str, mult: i128) -> Option<ritsu_units::Rat> {
+    let (neg, digits) = match text.strip_prefix('-') {
+        Some(d) => (true, d),
+        None => (false, text),
+    };
+    let (whole, frac) = digits.split_once('.').unwrap_or((digits, ""));
+    if frac.len() > 9 {
+        return None;
+    }
+    let n: i64 = format!("{whole}{frac}").parse().ok()?;
+    let n = i128::from(n).checked_mul(mult)?;
+    ritsu_units::Rat::checked_new(if neg { -n } else { n }, 10i128.pow(frac.len() as u32))
+}
+
 fn is_ident_start(c: char) -> bool {
     c.is_alphabetic() || c == '_'
 }
 
 fn is_ident_continue(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
+}
+
+/// The two units of temperature, which are no letters: a word of their own right after `[`
+/// (`temperature[℃]`), and the unit of a bound (`range >=41℉`), but never part of a name, which
+/// the code dandori writes could not spell.
+fn is_temperature(c: char) -> bool {
+    c == '℃' || c == '℉'
 }
 
 fn lex(src: &str) -> Result<Vec<Line>, Diag> {
@@ -443,15 +479,35 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                     }
                 }
                 let text: String = chars[start..j].iter().filter(|c| **c != '_').collect();
-                if j < chars.len() && is_ident_start(chars[j]) {
-                    if bound {
-                        let n: String = chars[start..j].iter().collect();
-                        let w: String = chars[j..].iter().take_while(|c| is_ident_continue(**c)).collect();
-                        return Err(err(
-                            span,
-                            tr!("範囲の端は、型の単位で数えた整数を、単位を付けずに書きます（`{n}{w}` ではなく `{n}`）", "a bound of a range is a whole number in the unit of the type, written without the unit: `{n}`, not `{n}{w}`"),
-                        ));
+                // a bound with its unit, as rulec writes one: `>=1kg`, `<=100万円`, `<=50%`
+                if bound && j < chars.len() && (is_ident_start(chars[j]) || is_temperature(chars[j]) || chars[j] == '%') {
+                    let mut k = j;
+                    let mult: i128 = match chars[k] {
+                        '万' => 10_000,
+                        '億' => 100_000_000,
+                        _ => 1,
+                    };
+                    if mult > 1 {
+                        k += 1;
                     }
+                    let unit: String = match chars.get(k) {
+                        Some('%') => "%".to_string(),
+                        Some(c) if is_temperature(*c) => c.to_string(),
+                        _ => chars[k..].iter().take_while(|c| is_ident_continue(**c)).collect(),
+                    };
+                    let end = k + unit.chars().count();
+                    let raw: String = chars[start..end].iter().collect();
+                    if unit.is_empty() {
+                        return Err(err(span, tr!("`{raw}` のあとに単位を書きます", "a unit is expected after `{raw}`")));
+                    }
+                    let Some(value) = quantity(&text, mult) else {
+                        return Err(err(span, tr!("数が大きすぎます", "this number is too large")));
+                    };
+                    toks.push(Token { tok: Tok::Quantity { value, unit, raw }, span });
+                    j = end;
+                    continue;
+                }
+                if j < chars.len() && is_ident_start(chars[j]) {
                     return Err(err(span, tr!("数と語のあいだに空白を入れてください", "put a space between a number and a word")));
                 }
                 if is_float {
@@ -470,6 +526,11 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                     j += 1;
                 }
                 toks.push(Token { tok: Tok::Ident(chars[start..j].iter().collect()), span });
+                continue;
+            }
+            if is_temperature(c) && matches!(toks.last(), Some(Token { tok: Tok::Sym("["), .. })) {
+                toks.push(Token { tok: Tok::Ident(c.to_string()), span });
+                j += 1;
                 continue;
             }
             let two: String = chars[j..(j + 2).min(chars.len())].iter().collect();
@@ -670,9 +731,6 @@ const KEYWORDS: &[&str] = &[
     "openapi", "smithy", "proto", "connect", "url",
 ];
 
-/// The kinds of number with a unit that rulec has: `money[円, incl_tax]`, `mass[kg]`, …
-pub const UNIT_KINDS: &[&str] = &["mass", "length", "area", "volume", "duration", "temperature", "sound", "money", "rate"];
-
 pub fn is_keyword(s: &str) -> bool {
     KEYWORDS.contains(&s)
 }
@@ -797,7 +855,7 @@ fn field(cur: &mut Cur) -> Result<Field, Diag> {
     Ok(Field { name, ty, range })
 }
 
-/// `range >=1 <=30`, `range >=0`, `range <=100`, after a type.
+/// `range >=1 <=30`, `range >=0`, `range <=100`, `range >=1kg`, after a type.
 fn range_decl(cur: &mut Cur) -> Result<Option<RangeDecl>, Diag> {
     let span = cur.span();
     if !cur.eat_kw("range") {
@@ -813,7 +871,15 @@ fn range_decl(cur: &mut Cur) -> Result<Option<RangeDecl>, Diag> {
             break;
         };
         cur.i += 1;
-        *end = Some(cur.int(tr!("整数", "a whole number"))?.0);
+        let at = cur.span();
+        *end = Some(match cur.peek() {
+            Some(Tok::Quantity { value, unit, raw }) => {
+                let b = Bound::Quantity { value: *value, unit: unit.clone(), raw: raw.clone(), span: at };
+                cur.i += 1;
+                b
+            }
+            _ => Bound::Int(cur.int(tr!("整数", "a whole number"))?.0),
+        });
     }
     if lo.is_none() && hi.is_none() {
         return Err(err(cur.span(), tr!("範囲は `range >=<下限> <=<上限>` と書きます。端は片方だけでもかまいません", "a range is written `range >=<low> <=<high>`, with one end or both")));

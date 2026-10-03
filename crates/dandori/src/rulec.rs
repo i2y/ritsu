@@ -12,6 +12,7 @@
 
 use crate::diag::Text;
 use ritsu_ports::{Call, ColumnType, Precondition, RuleFacts, Said};
+use ritsu_units::Unit;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -20,8 +21,9 @@ pub enum RType {
     Bool,
     Str,
     Enum(String),
-    /// A number with its unit as dandori spells it (`money[円, incl_tax]`, `rate[step 1%]`)
-    Num { unit: String, min: Option<i64>, max: Option<i64> },
+    /// A number, with its unit as rulec has it (`money[JPY, incl_tax]`, a rate with its step), and
+    /// its range as the integers that go on the wire
+    Num { unit: Unit, min: Option<i64>, max: Option<i64> },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -149,12 +151,10 @@ fn rtype(t: &ColumnType) -> RType {
         ColumnType::Enum(e) => RType::Enum(e.clone()),
         ColumnType::Opt(inner) => rtype(inner),
         ColumnType::Num { written, unit, min, max } => {
-            // a rate by how many of its steps make the whole, as a `.flow` spells it; another unit as rulec writes it
-            let spelled = match unit.as_ref().and_then(|u| u.step.filter(|_| written == "rate")) {
-                Some(step) if step.num == 1 && step.den > 0 => crate::model::rate_unit(step.den as u64),
-                _ => normalize_unit(written),
-            };
-            RType::Num { unit: spelled, min: min.and_then(|v| i64::try_from(v).ok()), max: max.and_then(|v| i64::try_from(v).ok()) }
+            // a spelling the table of units does not have (rulec lets none through a check now) is a
+            // name that is the same only as itself, as the spellings were compared before
+            let unit = unit.clone().unwrap_or_else(|| Unit::parse(written).unwrap_or_else(|_| Unit::count(written)));
+            RType::Num { unit, min: min.and_then(|v| i64::try_from(v).ok()), max: max.and_then(|v| i64::try_from(v).ok()) }
         }
     }
 }
@@ -301,18 +301,6 @@ pub fn connect_shape(info: &RuleInfo) -> Result<ConnectShape, Text> {
     };
     let fields = |list: &[ritsu_ports::WireField]| -> Result<Vec<WireField>, Text> { list.iter().map(field).collect() };
     Ok(ConnectShape { path: c.path.clone(), request: fields(&c.request)?, response: fields(&c.response)? })
-}
-
-pub fn normalize_unit(t: &str) -> String {
-    // `money[円,incl_tax]` and `money[円, incl_tax]` are the same unit
-    let mut out = String::new();
-    for part in t.split(',') {
-        if !out.is_empty() {
-            out.push_str(", ");
-        }
-        out.push_str(part.trim());
-    }
-    out
 }
 
 impl Machine {

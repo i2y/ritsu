@@ -7,8 +7,8 @@ gets there, and `--lang ja` gives the same in Japanese.
 | Code | What it finds |
 |---|---|
 | E001 | a syntax error |
-| E002 | a name that is not there: a type (a message or an enum the `.proto` does not have, or a message that has a field of a type from a file the `.proto` imports and that could not be read, too), a variable, a field, a rule or a task (a unit of the wrong kind, too) |
-| E003 | types that do not match: a value that may be absent used as it is, `none` where it cannot go, a list of lists, a `{…}` or `[]` whose type cannot be told, a range on what is not a number, a range no number is in, a record that contains itself, written in the `.flow` or made of a message of a `.proto` |
+| E002 | a name that is not there: a type (a message or an enum the `.proto` does not have, or a message that has a field of a type from a file the `.proto` imports and that could not be read, too), a variable, a field, a rule or a task (a unit the table of units does not have, or a tax that is neither incl_tax nor excl_tax, too) |
+| E003 | types that do not match: a value that may be absent used as it is, `none` where it cannot go, a list of lists, a `{…}` or `[]` whose type cannot be told, a range on what is not a number, a range no number is in, a bound of a range whose unit is not of its type or that does not come to a whole number of it, a record that contains itself, written in the `.flow` or made of a message of a `.proto` |
 | E004 | too many or too few arguments or outputs, a field left out of a `{…}` record |
 | E005 | a rule that could not be read: one that does not pass rulec's check, one the `dandori` binary alone is asked to read (run the flow with `ritsu dandori`), one that walks a list of elements (`elements`), which dandori does not pass a rule, or one with an input or an output that may be none (`T?`); for `connect`, one whose Connect service rulec says nothing of, or does not say what the service calls the values of an enum |
 | E006 | a name declared twice; types that come to one name in the code dandori writes (`warehouse.Stock` and `warehouse_Stock`); one name for a rule and an API |

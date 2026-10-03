@@ -334,7 +334,7 @@ impl<'a> Lowerer<'a> {
             RType::Str => Ty::Str,
             RType::Enum(n) => Ty::Enum(*self.enum_ix.get(&format!("{rule}.{n}")).expect("rule enums are registered first")),
             // rulec's `number` has no unit: it is an integer like dandori's `int`
-            RType::Num { unit, .. } if unit == "number" => Ty::Int,
+            RType::Num { unit, .. } if unit.dim == ritsu_units::Dim::Number => Ty::Int,
             RType::Num { unit, .. } => Ty::Num(unit.clone()),
         }
     }
@@ -409,16 +409,19 @@ impl<'a> Lowerer<'a> {
                 Some(Ty::List(Box::new(t)))
             }
             TypeExpr::Opt(inner, _) => Some(Ty::Opt(Box::new(self.ty(inner)?))),
-            TypeExpr::Unit(u, sp) => {
-                let kind = u.split('[').next().unwrap_or("");
-                if !syntax::UNIT_KINDS.contains(&kind) {
+            // a unit as rulec spells it, read by the one table of units (ritsu-units): `money[JPY,
+            // incl_tax]`, `mass[kg]`, `rate[step 0.1%]`
+            TypeExpr::Unit(u, sp) => match ritsu_units::Unit::parse(u) {
+                Ok(unit) if !matches!(unit.dim, ritsu_units::Dim::Number | ritsu_units::Dim::Count(_)) => Some(Ty::Num(unit)),
+                Ok(_) | Err(ritsu_units::Problem::Shape(_)) | Err(ritsu_units::Problem::Dimension(_)) => {
                     self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).note(type_hint()));
-                    return None;
+                    None
                 }
-                // a rate by how many of its steps make the whole, as the rules' rates are spelled
-                let unit = rulec::normalize_unit(u);
-                Some(Ty::Num(rate_per(&unit).map(rate_unit).unwrap_or(unit)))
-            }
+                Err(why) => {
+                    self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).note(why.text()));
+                    None
+                }
+            },
             TypeExpr::Named(parts) => {
                 let text = parts.iter().map(|p| p.0.as_str()).collect::<Vec<_>>().join(".");
                 if let Some(i) = self.enum_ix.get(&text) {
@@ -804,7 +807,15 @@ impl<'a> Lowerer<'a> {
             self.push(e("E003", r.span, tr!("範囲を書けるのは数（`int` か単位の付いた数）で、これは `{n}` です", "a range is for a number (`int` or a unit), and this is `{n}`")));
             return None;
         }
-        let rg = Range { lo: r.lo, hi: r.hi };
+        let lo = match &r.lo {
+            Some(b) => Some(self.bound(inner, b)?),
+            None => None,
+        };
+        let hi = match &r.hi {
+            Some(b) => Some(self.bound(inner, b)?),
+            None => None,
+        };
+        let rg = Range { lo, hi };
         if let (Some(lo), Some(hi)) = (rg.lo, rg.hi) {
             if lo > hi {
                 self.push(e("E003", r.span, tr!("`{}` に入る数はありません", "no number is in `{}`", rg.show())));
@@ -812,6 +823,46 @@ impl<'a> Lowerer<'a> {
             }
         }
         Some(rg)
+    }
+
+    /// One end of a range, counted in the unit of the number `ty`: a whole number as it is; a number
+    /// with a unit, as rulec counts one (ritsu-units: `1kg` is 1000 in `mass[g]`, `5%` is 50 steps of
+    /// `rate[step 0.1%]`, an amount in yen is the same in `money[円, incl_tax]` and in
+    /// `money[JPY, excl_tax]`). E003 for a unit of another dimension, a unit on `int`, and an end that
+    /// does not come to a whole number in the type's unit, which is what goes on the wire.
+    fn bound(&mut self, ty: &Ty, b: &syntax::Bound) -> Option<i64> {
+        let (value, unit, raw, sp) = match b {
+            syntax::Bound::Int(n) => return Some(*n),
+            syntax::Bound::Quantity { value, unit, raw, span } => (*value, unit.as_str(), raw.as_str(), *span),
+        };
+        let tn = self.m.ty_name(ty);
+        let not_of = tr!("範囲の端 `{raw}` は `{tn}` の値ではありません", "the bound `{raw}` is not a value of `{tn}`");
+        let Ty::Num(to) = ty else {
+            self.push(e("E003", sp, not_of).note(tr!("`int` の端は、単位を付けずに書きます", "a bound of `int` is written without a unit")));
+            return None;
+        };
+        let counted = match &to.dim {
+            // a rate's end in percent, counted in its steps
+            ritsu_units::Dim::Rate if unit == "%" => to.step.and_then(|step| value.checked_div(ritsu_units::Rat::int(100))?.checked_div(step)),
+            ritsu_units::Dim::Money(_) => ritsu_units::Unit::money(unit, to.tax).and_then(|from| from.convert(value, to)),
+            d => ritsu_units::Unit::quantity(d.word(), unit).and_then(|from| from.convert(value, to)),
+        };
+        let Some(counted) = counted else {
+            self.push(e("E003", sp, not_of));
+            return None;
+        };
+        match Some(counted).filter(|r| r.is_int()).and_then(|r| i64::try_from(r.num).ok()) {
+            Some(n) => Some(n),
+            None => {
+                self.push(
+                    e("E003", sp, tr!("範囲の端 `{raw}` を `{tn}` で数えると、整数になりません", "the bound `{raw}`, counted in `{tn}`, is not a whole number")).note(tr!(
+                        "値は型の単位で数えた整数で運ぶので、端も換算して整数にならなければなりません",
+                        "a value travels as a whole number in the unit of its type, so a bound must come to one too"
+                    )),
+                );
+                None
+            }
+        }
     }
 
     fn io(&mut self) {

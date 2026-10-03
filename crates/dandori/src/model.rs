@@ -3,21 +3,23 @@
 
 use crate::diag::Text;
 use crate::rulec::RuleInfo;
+use ritsu_units::{Dim, Unit};
 use crate::syntax::Kind;
 use std::collections::BTreeMap;
 
 pub type EnumId = usize;
 pub type RecordId = usize;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum Ty {
     Int,
     Str,
     Bool,
     /// an RFC 3339 moment in UTC, `2026-10-01T10:00:00Z`, as Step Functions' Wait takes it
     Timestamp,
-    /// a number with a unit, as rulec spells it
-    Num(String),
+    /// a number with a unit, spelled as rulec spells it and written (`money[JPY, incl_tax]`), and
+    /// counted on the wire in that unit (a rate, in its step)
+    Num(Unit),
     Enum(EnumId),
     Record(RecordId),
     List(Box<Ty>),
@@ -26,6 +28,24 @@ pub enum Ty {
     /// any JSON value, carried along without being looked into
     Json,
 }
+
+/// Two types are the same when they are the same type, and two units the same when they are the
+/// same unit (ritsu-units' `Unit::same`): `money[JPY, incl_tax]` is `money[円, incl_tax]`, and
+/// `mass[kg]` is not `mass[g]`, which dandori does not convert (its expressions compute nothing, P1).
+impl PartialEq for Ty {
+    fn eq(&self, o: &Ty) -> bool {
+        match (self, o) {
+            (Ty::Num(a), Ty::Num(b)) => a.same(b),
+            (Ty::Enum(a), Ty::Enum(b)) => a == b,
+            (Ty::Record(a), Ty::Record(b)) => a == b,
+            (Ty::List(a), Ty::List(b)) | (Ty::Opt(a), Ty::Opt(b)) => a == b,
+            (Ty::Int, Ty::Int) | (Ty::Str, Ty::Str) | (Ty::Bool, Ty::Bool) | (Ty::Timestamp, Ty::Timestamp) | (Ty::Json, Ty::Json) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Ty {}
 
 impl Ty {
     /// The type without its `?`.
@@ -244,41 +264,14 @@ impl Jev {
     }
 }
 
-/// A rate's type as dandori spells it, from how many of its steps make the whole: `rate[step 1%]`
-/// for 100, `rate[step 0.01%]` for 10000, so that a `.flow` and a rule spell one step alike.
-pub fn rate_unit(per: u64) -> String {
-    // 100 / per percent, written as a decimal: the fewest places that hold it exactly
-    let mut places = 0u32;
-    while places < 12 && (100 * 10u64.pow(places)) % per != 0 {
-        places += 1;
-    }
-    let n = 100 * 10u64.pow(places) / per;
-    let text = if places == 0 {
-        n.to_string()
-    } else {
-        let digits = format!("{n:0>width$}", width = places as usize + 1);
-        let (whole, frac) = digits.split_at(digits.len() - places as usize);
-        format!("{whole}.{frac}")
-    };
-    format!("rate[step {text}%]")
-}
-
-/// How many steps of `rate[step <n>%]` make the whole (100%): 100 for `rate[step 1%]`, 10000
-/// for `rate[step 0.01%]`. None for another unit, or a step that does not go into 100% a whole
+/// How many steps of a rate make the whole (100%): 100 for `rate[step 1%]`, 10000 for
+/// `rate[step 0.01%]`. None for another unit, and for a step that does not go into 100% a whole
 /// number of times.
-pub fn rate_per(unit: &str) -> Option<u64> {
-    let step = unit.strip_prefix("rate[")?.strip_suffix(']')?.trim().strip_prefix("step")?.trim().strip_suffix('%')?.trim();
-    let (whole, frac) = step.split_once('.').unwrap_or((step, ""));
-    if whole.is_empty() && frac.is_empty() || !whole.chars().chain(frac.chars()).all(|c| c.is_ascii_digit()) || frac.len() > 6 {
-        return None;
+pub fn rate_per(unit: &Unit) -> Option<u64> {
+    match (&unit.dim, unit.step) {
+        (Dim::Rate, Some(step)) if step.num == 1 && step.den > 0 => u64::try_from(step.den).ok(),
+        _ => None,
     }
-    // step% = n / 10^d percent, and the whole is 100% = 100 * 10^d / n steps
-    let n: u64 = format!("{whole}{frac}").parse().ok()?;
-    let scale = 10u64.pow(frac.len() as u32);
-    if n == 0 || (100 * scale) % n != 0 {
-        return None;
-    }
-    Some(100 * scale / n)
 }
 
 /// Whose models an agent runs on.
@@ -791,7 +784,7 @@ impl Model {
             Ty::Str => "string".into(),
             Ty::Bool => "bool".into(),
             Ty::Timestamp => "timestamp".into(),
-            Ty::Num(u) => u.clone(),
+            Ty::Num(u) => u.to_string(),
             Ty::Enum(e) => self.enums[*e].name.clone(),
             Ty::Record(r) => self.records[*r].name.clone(),
             Ty::List(t) => format!("list[{}]", self.ty_name(t)),

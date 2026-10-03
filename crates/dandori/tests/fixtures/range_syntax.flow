@@ -2,6 +2,12 @@ workflow range_syntax v1
 
 record 請求
   額 : money[円, incl_tax]  range >=0円 <=100万円
+  重さ : mass[g]  range >=1kg <=40kg
+  割引 : rate[step 0.1%]  range <=50%
+  税抜 : money[JPY, excl_tax]  range >=100銭
+  端数 : mass[g]  range >=1.5g
+  件数 : int  range >=1kg
+  別の次元 : money[円, incl_tax]  range <=1kg
 
 flow
   pass

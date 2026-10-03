@@ -1,2 +1,8 @@
-error[E001]: tests/fixtures/range_syntax.flow:4:35: a bound of a range is a whole number in the unit of the type, written without the unit: `0`, not `0円`
-     4 |   額 : money[円, incl_tax]  range >=0円 <=100万円
+error[E003]: tests/fixtures/range_syntax.flow:8:25: the bound `1.5g`, counted in `mass[g]`, is not a whole number
+     8 |   端数 : mass[g]  range >=1.5g
+  = a value travels as a whole number in the unit of its type, so a bound must come to one too
+error[E003]: tests/fixtures/range_syntax.flow:9:21: the bound `1kg` is not a value of `int`
+     9 |   件数 : int  range >=1kg
+  = a bound of `int` is written without a unit
+error[E003]: tests/fixtures/range_syntax.flow:10:38: the bound `1kg` is not a value of `money[円, incl_tax]`
+    10 |   別の次元 : money[円, incl_tax]  range <=1kg

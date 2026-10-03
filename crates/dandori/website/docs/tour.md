@@ -196,7 +196,8 @@ cancellation can stop, and wants the cases settled there too.
 A number can say what it may be, as a rulec rule's inputs do: `nights : int  range >=1 <=30`. A
 range goes on an input, an output, a field of a record, and a task's parameter or answer
 (`-> int  range >=0 <=10`); either end may be left out. The ends are whole numbers in the type's own
-unit, written without it (`>=0`, not `>=0JPY`), as the values travel in JSON.
+unit (`>=0`), as the values travel in JSON, or written with a unit, as in a rule (`>=1kg`, `<=100万円`),
+and counted in the type's unit: `>=1kg` is 1000 of `mass[g]`.
 
 - What comes in is checked when the workflow runs. An input, or a task's or a rule's answer, with a
   number outside its range fails the run with `Dandori.BadInput` or `Dandori.BadResponse`, on every
