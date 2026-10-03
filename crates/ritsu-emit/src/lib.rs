@@ -7,7 +7,8 @@
 //! - [`lit`]: a string of the source as a literal of the target.
 //! - [`header`]: the line that says a file is generated, and the comments it is written in.
 //!
-//! koyomi and chobo write with these; rulec and dandori keep their own until C.11.
+//! koyomi and chobo write with all of these; rulec and dandori read their tables of words from
+//! [`copies`] (C.11), and keep their own ways of making names and literals.
 
 pub mod copies;
 pub mod header;

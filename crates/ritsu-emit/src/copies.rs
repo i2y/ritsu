@@ -1,17 +1,28 @@
 //! The tables rulec and dandori hold the names of their generated code to, copied from
 //! rulec's `src/backend.rs` and dandori's `src/temporal_py.rs`, `src/temporal_go.rs` and
 //! `src/temporal.rs` (PLAN C.10), made of the standards' lists ([`crate::words`]) where they
-//! are those lists and of what each tool adds where they are not. `tests/copies.rs` holds them
-//! to the tools' own; C.11 has the tools read them from here.
+//! are those lists and of what each tool adds where they are not. Since C.11 the two tools read
+//! them from here; `tests/copies.rs` holds them to the golden file that was written while they
+//! were still compared with the tools' own, word for word. They are not the standards' lists
+//! made whole (rulec has no `Self` and no `complex64`), because a word added changes what the
+//! tools generate and refuse; whether to make them so is a question for the one package of
+//! stage E.
 
 use crate::words::{Words, go, python, typescript};
 
 /// rulec's: for each target, its keywords (no name may be one; rulec matches them in any case),
 /// the names already taken at the top of a file (the rule's function and an enum's type may
-/// not be one), and the modules the rule's module may not be named after.
+/// not be one), and the modules the rule's module may not be named after (rulec's §15.103,
+/// §15.149).
+///
+/// Two kinds of word, because the risk is not the same. A **keyword** cannot be an identifier at
+/// all, so an alias that is one stops the compiler wherever the generated code writes it. A
+/// **global** is a name the language already uses at the top of a file, so only the aliases that
+/// become top-level identifiers — the rule's function and an enum's type — can hide one.
 pub mod rulec {
     use super::*;
 
+    #[derive(Clone, Copy, Debug)]
     pub struct Backend {
         pub id: &'static str,
         pub reserved: Words,
@@ -19,6 +30,10 @@ pub mod rulec {
         pub modules: Words,
     }
 
+    /// SQL is the one target with nothing to list. The query quotes every identifier it writes —
+    /// `"on"`, `"select"`, the function's own name and each argument it is called by name with —
+    /// so a reserved word costs a reader of the relation a pair of quotes and costs the generated
+    /// code nothing (rulec's §15.103).
     const NONE: &[&str] = &[];
 
     /// The reserved words of ECMAScript, and `let` and `static` of strict mode's.
@@ -39,7 +54,8 @@ pub mod rulec {
         "interface", "namespace", "declare", "any", "unknown", "never", "readonly",
     ];
 
-    /// Rust's keywords as rulec lists them: without `Self`, which `self` covers when the case is not looked at.
+    /// Rust's keywords as rulec lists them: without `Self`, which `self` covers when the case is
+    /// not looked at.
     pub const RS_KW: &[&str] = &[
         "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
         "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
@@ -48,6 +64,8 @@ pub mod rulec {
         "gen", "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
     ];
 
+    /// The prelude types the generated Rust names itself. A variant is written qualified
+    /// (`判定::Ok`), so the prelude's values are not here.
     pub const RS_GLOBAL: &[&str] = &[
         "Option", "Result", "String", "Vec",
     ];
@@ -64,6 +82,9 @@ pub mod rulec {
         "object_id", "print", "proc", "puts", "raise", "require", "send", "tap", "to_s",
     ];
 
+    /// The classes and modules Ruby defines at the top level, with the two libraries the
+    /// generated code requires (`date` and `json`). The rule's module is its alias in PascalCase,
+    /// and `module Time` stops with "Time is not a module".
     pub const RB_CORE: &[&str] = &[
         "ArgumentError", "Array", "BasicObject", "Binding", "Class", "ClosedQueueError",
         "Comparable", "Complex", "ConditionVariable", "Data", "Date", "DateTime", "DidYouMean",
@@ -127,6 +148,9 @@ pub mod rulec {
         "null",
     ];
 
+    /// The classes of `java.lang` the generated code names, and the ones its files import: the
+    /// rule's class is its alias in PascalCase, and a class `List` beside `import java.util.List`
+    /// does not compile.
     pub const JAVA_GLOBAL: &[&str] = &[
         "ArrayList", "Boolean", "BufferedReader", "Character", "Double", "Error", "Exception",
         "IOException", "IllegalArgumentException", "InputStreamReader", "Integer", "LinkedHashMap",
@@ -135,6 +159,9 @@ pub mod rulec {
         "Thread",
     ];
 
+    /// Python's standard library, as `sys.stdlib_module_names` lists it (3.14, without the
+    /// private modules), and the modules 3.12 and 3.13 removed. The rule's module is a file named
+    /// after its alias, so `time.py` is what `import time` finds from beside it.
     pub const PY_STDLIB: &[&str] = &[
         "abc", "aifc", "annotationlib", "antigravity", "argparse", "array", "ast", "asynchat",
         "asyncio", "asyncore", "atexit", "audioop", "base64", "bdb", "binascii", "bisect",
@@ -165,6 +192,9 @@ pub mod rulec {
         "xml", "xmlrpc", "zipapp", "zipfile", "zipimport", "zlib", "zoneinfo",
     ];
 
+    /// The first element of every standard package's import path (`go list std`). The rule's
+    /// module is named after its alias, and a module `time` makes every `import "time"` — the
+    /// standard library's own included — ambiguous.
     pub const GO_STD: &[&str] = &[
         "archive", "bufio", "builtin", "bytes", "cmp", "compress", "container", "context",
         "crypto", "database", "debug", "embed", "encoding", "errors", "expvar", "flag", "fmt",
@@ -174,22 +204,26 @@ pub mod rulec {
         "unique", "unsafe", "weak",
     ];
 
+    /// PHP writes a variable with a `$`, so a keyword is only a problem where a bare name goes:
+    /// the function this rule becomes, which [`PHP_GLOBAL`] holds.
     pub const PHP_KW: &[&str] = &[];
 
-    pub const BACKENDS: &[Backend] = &[
-        Backend { id: "python", reserved: Words(&[python::KEYWORDS]), globals: Words(&[PY_GLOBAL]), modules: Words(&[PY_STDLIB]) },
-        Backend { id: "numpy", reserved: Words(&[NONE]), globals: Words(&[NONE]), modules: Words(&[NONE]) },
-        Backend { id: "typescript", reserved: Words(&[typescript::RESERVED, JS_KW_MORE]), globals: Words(&[JS_GLOBAL]), modules: Words(&[NONE]) },
-        Backend { id: "javascript", reserved: Words(&[typescript::RESERVED, JS_KW_MORE]), globals: Words(&[JS_GLOBAL]), modules: Words(&[NONE]) },
-        Backend { id: "rust", reserved: Words(&[RS_KW]), globals: Words(&[RS_GLOBAL]), modules: Words(&[NONE]) },
-        Backend { id: "ruby", reserved: Words(&[RB_KW]), globals: Words(&[RB_GLOBAL]), modules: Words(&[RB_CORE]) },
-        Backend { id: "php", reserved: Words(&[PHP_KW]), globals: Words(&[PHP_GLOBAL]), modules: Words(&[NONE]) },
-        Backend { id: "go", reserved: Words(&[go::KEYWORDS]), globals: Words(&[GO_GLOBAL]), modules: Words(&[GO_STD]) },
-        Backend { id: "swift", reserved: Words(&[SWIFT_KW]), globals: Words(&[SWIFT_GLOBAL]), modules: Words(&[NONE]) },
-        Backend { id: "java", reserved: Words(&[JAVA_KW]), globals: Words(&[JAVA_GLOBAL]), modules: Words(&[NONE]) },
-        Backend { id: "sql", reserved: Words(&[NONE]), globals: Words(&[NONE]), modules: Words(&[NONE]) },
-        Backend { id: "wasm", reserved: Words(&[RS_KW]), globals: Words(&[RS_GLOBAL]), modules: Words(&[NONE]) },
-    ];
+    pub const PYTHON: Backend = Backend { id: "python", reserved: Words(&[python::KEYWORDS]), globals: Words(&[PY_GLOBAL]), modules: Words(&[PY_STDLIB]) };
+    pub const NUMPY: Backend = Backend { id: "numpy", reserved: Words(&[NONE]), globals: Words(&[NONE]), modules: Words(&[NONE]) };
+    pub const TYPESCRIPT: Backend = Backend { id: "typescript", reserved: Words(&[typescript::RESERVED, JS_KW_MORE]), globals: Words(&[JS_GLOBAL]), modules: Words(&[NONE]) };
+    pub const JAVASCRIPT: Backend = Backend { id: "javascript", reserved: Words(&[typescript::RESERVED, JS_KW_MORE]), globals: Words(&[JS_GLOBAL]), modules: Words(&[NONE]) };
+    pub const RUST: Backend = Backend { id: "rust", reserved: Words(&[RS_KW]), globals: Words(&[RS_GLOBAL]), modules: Words(&[NONE]) };
+    pub const RUBY: Backend = Backend { id: "ruby", reserved: Words(&[RB_KW]), globals: Words(&[RB_GLOBAL]), modules: Words(&[RB_CORE]) };
+    pub const PHP: Backend = Backend { id: "php", reserved: Words(&[PHP_KW]), globals: Words(&[PHP_GLOBAL]), modules: Words(&[NONE]) };
+    pub const GO: Backend = Backend { id: "go", reserved: Words(&[go::KEYWORDS]), globals: Words(&[GO_GLOBAL]), modules: Words(&[GO_STD]) };
+    pub const SWIFT: Backend = Backend { id: "swift", reserved: Words(&[SWIFT_KW]), globals: Words(&[SWIFT_GLOBAL]), modules: Words(&[NONE]) };
+    pub const JAVA: Backend = Backend { id: "java", reserved: Words(&[JAVA_KW]), globals: Words(&[JAVA_GLOBAL]), modules: Words(&[NONE]) };
+    pub const SQL: Backend = Backend { id: "sql", reserved: Words(&[NONE]), globals: Words(&[NONE]), modules: Words(&[NONE]) };
+    /// The module a host calls is written in Rust, so its words are Rust's.
+    pub const WASM: Backend = Backend { id: "wasm", reserved: Words(&[RS_KW]), globals: Words(&[RS_GLOBAL]), modules: Words(&[NONE]) };
+
+    /// The twelve, in the order of rulec's `backend::ALL`.
+    pub const BACKENDS: &[Backend] = &[PYTHON, NUMPY, TYPESCRIPT, JAVASCRIPT, RUST, RUBY, PHP, GO, SWIFT, JAVA, SQL, WASM];
 }
 
 /// dandori's: the names a flow's name gives way to in the generated Python, Go and TypeScript,

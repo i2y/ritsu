@@ -1,41 +1,36 @@
-//! The tables copied from rulec and dandori (PLAN C.10) are theirs, word for word: rulec's
-//! through its registry of backends, dandori's read from its source, where they are private.
+//! The tables rulec and dandori hold the names of their generated code to (`copies`), held to
+//! `tests/golden/copies.txt`. The golden file was written while the tables were still compared,
+//! word for word, with rulec's registry of backends and with the constants of dandori's source
+//! (PLAN C.10, C.11). The two tools read the tables from here since, so a comparison with them
+//! would compare the tables with themselves; a word added or taken away changes what they
+//! generate and refuse, and shows here as a change of the golden first.
 
 use ritsu_emit::copies;
-use ritsu_emit::words::Words;
 use std::collections::BTreeSet;
 
-fn set(ws: impl IntoIterator<Item = &'static str>) -> BTreeSet<&'static str> {
-    ws.into_iter().collect()
-}
-
-#[test]
-fn rulecs_tables_are_rulecs() {
-    let ours = copies::rulec::BACKENDS;
-    let theirs = rulec::backend::ALL;
-    assert_eq!(ours.iter().map(|b| b.id).collect::<Vec<_>>(), theirs.iter().map(|b| b.id).collect::<Vec<_>>());
-    for (o, t) in ours.iter().zip(theirs) {
-        assert_eq!(set(o.reserved.iter()), set(t.reserved.iter().copied()), "{}: reserved", o.id);
-        assert_eq!(set(o.globals.iter()), set(t.globals.iter().copied()), "{}: globals", o.id);
-        assert_eq!(set(o.modules.iter()), set(t.modules.iter().copied()), "{}: modules", o.id);
+/// Every table, a line each: the tool, the table, how many words, and the words in order.
+fn rendered() -> String {
+    let mut o = String::new();
+    let mut line = |tool: &str, table: &str, ws: Vec<&'static str>| {
+        let s: BTreeSet<&str> = ws.into_iter().collect();
+        o.push_str(&format!("{tool} {table} ({}): {}\n", s.len(), s.into_iter().collect::<Vec<_>>().join(" ")));
+    };
+    for b in copies::rulec::BACKENDS {
+        line("rulec", &format!("{} reserved", b.id), b.reserved.iter().collect());
+        line("rulec", &format!("{} globals", b.id), b.globals.iter().collect());
+        line("rulec", &format!("{} modules", b.id), b.modules.iter().collect());
     }
+    line("dandori", "PY_RESERVED", copies::dandori::PY_RESERVED.iter().collect());
+    line("dandori", "GO_RESERVED", copies::dandori::GO_RESERVED.iter().collect());
+    line("dandori", "GO_EXPORTED", copies::dandori::GO_EXPORTED.to_vec());
+    line("dandori", "TS_GLOBALS", copies::dandori::TS_GLOBALS.to_vec());
+    o
 }
 
-/// The words of `const <name>: &[&str] = &[…];` in a file of dandori's source.
-fn dandori_const(file: &str, name: &str) -> BTreeSet<String> {
-    let src = std::fs::read_to_string(format!("../dandori/src/{file}")).unwrap();
-    let start = src.find(&format!("const {name}: &[&str] = &[")).unwrap_or_else(|| panic!("{file} has no {name}"));
-    let body = &src[start..];
-    let body = &body[body.find("= &[").unwrap() + 4..body.find("];").unwrap()];
-    body.split(',').map(|w| w.trim()).filter(|w| !w.is_empty()).map(|w| w.trim_matches('"').to_string()).collect()
-}
-
+/// The tables as the golden file has them: a word added or taken away changes what rulec and
+/// dandori generate and refuse, so it is read here first.
 #[test]
-fn dandoris_tables_are_dandoris() {
-    let words = |w: Words| w.iter().map(String::from).collect::<BTreeSet<String>>();
-    let list = |w: &[&str]| w.iter().map(|s| s.to_string()).collect::<BTreeSet<String>>();
-    assert_eq!(words(copies::dandori::PY_RESERVED), dandori_const("temporal_py.rs", "PY_RESERVED"));
-    assert_eq!(words(copies::dandori::GO_RESERVED), dandori_const("temporal_go.rs", "GO_RESERVED"));
-    assert_eq!(list(copies::dandori::GO_EXPORTED), dandori_const("temporal_go.rs", "GO_EXPORTED"));
-    assert_eq!(list(copies::dandori::TS_GLOBALS), dandori_const("temporal.rs", "TS_GLOBALS"));
+fn the_tables_are_the_golden() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    ritsu_testkit::golden(root.join("tests/golden/copies.txt"), &rendered());
 }

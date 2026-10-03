@@ -5,8 +5,7 @@
 //!
 //! The lists are the standards' own, in their order. What a generator holds a name to is a
 //! [`Words`]: the lists it reads together. The tables rulec and dandori hold their names to are
-//! copied in [`rulec`] and [`dandori`], with what each adds to the standards; C.11 has them read
-//! the tables from here.
+//! in [`crate::copies`], with what each adds to the standards; the two read them from there.
 
 /// Words made of lists, read as one set.
 #[derive(Clone, Copy, Debug)]

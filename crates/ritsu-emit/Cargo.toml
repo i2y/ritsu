@@ -11,8 +11,5 @@ publish = false
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
 
-# rulec and dandori keep their own tables until C.11; the tests hold the copies here to them
-# (DESIGN 3.3: a dev-dependency makes no loop).
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
-rulec = { path = "../rulec" }
