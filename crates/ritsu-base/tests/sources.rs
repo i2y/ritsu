@@ -188,6 +188,19 @@ fn a_pin_written_into_a_line() {
     assert_eq!(sources::pinned_spaced("  第91条", "bbbb"), "  第91条 sha256:bbbb");
 }
 
+/// The examples of RFC 4648 (yuen's test, moved here with yuen's base64).
+#[test]
+fn base64_the_rfc_4648_examples() {
+    for (plain, coded) in [("", ""), ("f", "Zg=="), ("fo", "Zm8="), ("foo", "Zm9v"), ("foob", "Zm9vYg=="), ("fooba", "Zm9vYmE="), ("foobar", "Zm9vYmFy")] {
+        assert_eq!(sources::base64_encode(plain.as_bytes()), coded);
+        assert_eq!(sources::base64_decode(coded).unwrap(), plain.as_bytes());
+    }
+    assert_eq!(sources::base64_decode("Zm9v\nYmFy").unwrap(), b"foobar");
+    assert!(sources::base64_decode("Zm9").is_none());
+    assert!(sources::base64_decode("Zm=v").is_none());
+    assert!(sources::base64_decode("Z*9v").is_none());
+}
+
 #[test]
 fn base64_both_ways() {
     let bytes: Vec<u8> = (0..=255u8).collect();

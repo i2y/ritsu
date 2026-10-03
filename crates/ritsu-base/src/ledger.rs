@@ -44,6 +44,21 @@ impl Entry {
     pub fn new(code: &'static str, title: Text, when: Text, fix: Text, repro: Repro, related: &'static [&'static str]) -> Entry {
         Entry { code, severity: Severity::of(code), title, when, fix, repro, related }
     }
+
+    /// The same entry with what has to be beside its file (koyomi's and yuen's `with`). An entry
+    /// whose reproduction is not a file is left as it is.
+    pub fn beside(mut self, files: &'static [(&'static str, &'static [u8])]) -> Entry {
+        if let Repro::File { beside, .. } = &mut self.repro {
+            *beside = files;
+        }
+        self
+    }
+
+    /// The same entry with no reproduction yet ([`Repro::Later`]).
+    pub fn later(mut self) -> Entry {
+        self.repro = Repro::Later;
+        self
+    }
 }
 
 /// A language's ledger and how it is written out.

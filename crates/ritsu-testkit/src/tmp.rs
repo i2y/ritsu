@@ -50,6 +50,11 @@ impl TempDir {
         p
     }
 
+    /// Whether a file or a directory is there under the directory.
+    pub fn exists(&self, rel: &str) -> bool {
+        self.0.join(rel).exists()
+    }
+
     /// A file under the directory.
     pub fn read(&self, rel: &str) -> String {
         let p = self.0.join(rel);

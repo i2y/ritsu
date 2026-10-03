@@ -80,6 +80,11 @@ pub trait Extra: Clone + std::fmt::Debug {
     fn say(&self, t: &Text, lang: Lang) -> String {
         as_written(t, lang)
     }
+    /// Whether the JSON has a `fix` key. geas's diagnostics never carry a fixed line, and their
+    /// JSON has never had the key, so geas leaves it out.
+    fn fix_key(&self) -> bool {
+        true
+    }
 }
 
 /// A diagnostic with nothing of a language's own.
@@ -192,6 +197,14 @@ impl<X: Extra> Diag<X> {
         self.severity == Severity::Error
     }
 
+    /// The line to write instead, when the fix is a line.
+    pub fn fixed_line(&self) -> Option<&str> {
+        match &self.fix {
+            Some(Fix::Line(l)) => Some(l),
+            _ => None,
+        }
+    }
+
     /// `file:line:col`, `file:line`, or the file.
     pub fn place(&self) -> String {
         match (self.line, self.col) {
@@ -201,9 +214,12 @@ impl<X: Extra> Diag<X> {
         }
     }
 
-    /// What a person reads.
+    /// What a person reads. A diagnostic with no file (geas's about its command line) has no
+    /// place before its message.
     pub fn render(&self, lang: Lang) -> String {
-        let mut out = format!("{}[{}]: {}: {}\n", self.severity.word(lang), self.code, self.place(), self.extra.say(&self.message, lang));
+        let place = self.place();
+        let at = if place.is_empty() { String::new() } else { format!("{place}: ") };
+        let mut out = format!("{}[{}]: {at}{}\n", self.severity.word(lang), self.code, self.extra.say(&self.message, lang));
         if let (Some(s), Some(l)) = (&self.src, self.line) {
             out.push_str(&format!("  {l:>4} | {s}\n"));
         }
@@ -227,27 +243,30 @@ impl<X: Extra> Diag<X> {
     }
 
     /// The same finding for a program. The keys are English whatever the language, in this
-    /// order: `code`, `severity`, `file` (from the root), `line`, `col`, `message`, `notes`,
-    /// the language's own, `fix`.
+    /// order: `code`, `severity`, `file` (from the root; null when there is none), `line`, `col`,
+    /// `message`, `notes`, the language's own, `fix` (unless the language has none,
+    /// [`Extra::fix_key`]).
     pub fn to_json(&self, lang: Lang) -> Json {
         let mut o: Vec<(String, Json)> = vec![
             ("code".into(), Json::str(self.code)),
             ("severity".into(), Json::str(self.severity.key())),
-            ("file".into(), Json::str(&self.rel)),
+            ("file".into(), if self.rel.is_empty() { Json::Null } else { Json::str(&self.rel) }),
             ("line".into(), self.line.into()),
             ("col".into(), self.col.into()),
             ("message".into(), Json::str(self.extra.say(&self.message, lang))),
             ("notes".into(), Json::arr(self.notes.iter().map(|n| Json::str(self.extra.say(n, lang))))),
         ];
         o.extend(self.extra.json(lang));
-        o.push((
-            "fix".into(),
-            match &self.fix {
-                Some(Fix::Line(l)) => Json::str(l),
-                Some(Fix::Command(c)) => Json::str(c.get(lang)),
-                None => Json::Null,
-            },
-        ));
+        if self.extra.fix_key() {
+            o.push((
+                "fix".into(),
+                match &self.fix {
+                    Some(Fix::Line(l)) => Json::str(l),
+                    Some(Fix::Command(c)) => Json::str(c.get(lang)),
+                    None => Json::Null,
+                },
+            ));
+        }
         Json::Obj(o)
     }
 }

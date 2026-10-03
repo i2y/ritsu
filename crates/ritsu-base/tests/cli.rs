@@ -2,7 +2,7 @@
 //! for letter (the commands here are copied from their tables, and what they print is held to
 //! what the two printed, in `tests/golden/compat/`), and a command line read against it.
 
-use ritsu_base::cli::{Args, Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
+use ritsu_base::cli::{Args, Cmd, Flag, Misuse, Reading, Table, flag, help_flag, lang_flag};
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
 use std::path::Path;
@@ -37,6 +37,7 @@ fn yuen() -> Table {
         globals: yuen_globals(),
         commands: vec![Cmd {
             name: "review",
+            usage: None,
             args: "<path>...",
             purpose: tr!(
                 "人が確かめたことを書く。選んだリンクと見送りのうち印の付いたものに、確かめた記録（日付、役割、両端のハッシュ）を書き、確かめたときの中身を reviewed/ に置く",
@@ -67,7 +68,7 @@ fn yuen() -> Table {
 }
 
 fn cmd(name: &'static str, args: &'static str, purpose: Text) -> Cmd {
-    Cmd { name, args, purpose, params: vec![], flags: vec![], exits: vec![], examples: vec![], codes: vec![] }
+    Cmd { name, usage: None, args, purpose, params: vec![], flags: vec![], exits: vec![], examples: vec![], codes: vec![] }
 }
 
 fn koyomi() -> Table {
@@ -117,7 +118,7 @@ fn koyomi() -> Table {
             ),
             tr!("exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル", "Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read"),
         ],
-        reading: Reading { negative_numbers: true, no_dashes_in_values: false },
+        reading: Reading { negative_numbers: true, ..Reading::default() },
     }
 }
 
@@ -183,6 +184,17 @@ fn what_a_command_line_says() {
     assert_eq!(read(&k2, &["--budget", "--lang"]).unwrap().get("--budget"), Some("--lang"));
     k2.reading.no_dashes_in_values = true;
     assert_eq!(read(&k2, &["--budget", "--lang"]).unwrap_err().en, "`--budget <n>` is missing its value");
+    // chobo takes no `--flag=value`, and reads anything that does not start with `--` as an argument.
+    let mut c = koyomi();
+    c.commands = vec![Cmd { flags: vec![flag("--format", Some("json"), Text::same("f")).choices(&["json"])], ..cmd("check", "<file.book>...", Text::same("check")) }];
+    c.reading = Reading { no_dashes_in_values: true, no_inline_values: true, single_dash_args: true, ..Reading::default() };
+    let check = c.command("check").unwrap();
+    assert_eq!(c.read(check, &args(&["--format=json"])), Err(Misuse::UnknownFlag("--format=json".into())));
+    assert_eq!(c.read(check, &args(&["-x", "-5", "-"])).unwrap().pos, ["-x", "-5", "-"]);
+    assert_eq!(c.read(check, &args(&["--format", "yaml"])), Err(Misuse::NotAChoice { flag: "--format", value: "yaml".into(), choices: &["json"] }));
+    assert_eq!(c.read(check, &args(&["--format"])), Err(Misuse::MissingValue { flag: "--format", placeholder: "json" }));
+    assert_eq!(c.read(check, &args(&["--format", "json", "--format", "json"])), Err(Misuse::Twice("--format")));
+    assert_eq!(Misuse::Twice("--format").text("chobo", "check").ja, "`--format` が二度書かれています");
 }
 
 #[test]
@@ -192,6 +204,9 @@ fn the_usage_line_and_a_flag_spelled() {
         y.usage_line(y.command("review").unwrap()),
         "yuen review <path>... [--at <file.req>:<line>...] [--requirement '<name>[ v<n>]'...] [--all] [--by <role>] [--date <YYYY-MM-DD>]"
     );
+    let mut explain = cmd("explain", "<code>", Text::same("explain"));
+    explain.usage = Some("chobo explain <code> | --all [--format markdown]");
+    assert_eq!(y.usage_line(&explain), "chobo explain <code> | --all [--format markdown]", "a line written by hand is the line");
     assert_eq!(flag("--map", Some("<spec>"), Text::default()).repeats().spelled(), "--map <spec>...");
     assert_eq!(help_flag().spelled(), "--help");
 }

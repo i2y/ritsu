@@ -53,12 +53,16 @@ impl Flag {
     }
 }
 
-/// `--lang ja|en`, whose help names the tool's own variable (`KOYOMI_LANG`).
+/// `--lang ja|en`, whose help names the variables read without it, in the order
+/// [`crate::text::Lang::pick`] reads them: the tool's own (`KOYOMI_LANG`), then `RITSU_LANG`.
 pub fn lang_flag(var: &str) -> Flag {
     flag(
         "--lang",
         Some("ja|en"),
-        tr!("文面の言語。無ければ環境変数 {var}、それも無ければ en", "the language of the text; else the {var} environment variable, else en"),
+        tr!(
+            "文面の言語。無ければ環境変数 {var}、次に RITSU_LANG、どちらも無ければ en",
+            "the language of the text; else the {var} environment variable, then RITSU_LANG, else en"
+        ),
     )
     .choices(&["ja", "en"])
     .default("en")
@@ -71,6 +75,10 @@ pub fn help_flag() -> Flag {
 
 pub struct Cmd {
     pub name: &'static str,
+    /// The usage line written by hand, when the arguments and the flags cannot say it: a flag the
+    /// command needs, or one of two ways to call it (chobo's `explain <code> | --all`). None for
+    /// the line drawn from them ([`Table::usage_line`]).
+    pub usage: Option<&'static str>,
     pub args: &'static str,
     pub purpose: Text,
     pub params: Vec<(&'static str, Text)>,
@@ -86,8 +94,47 @@ pub struct Cmd {
 pub struct Reading {
     /// `-5` is an argument, not a flag (koyomi takes negative numbers).
     pub negative_numbers: bool,
-    /// A value that starts with `--` is not taken: the flag is missing its value (sakai).
+    /// A value that starts with `--` is not taken: the flag is missing its value (sakai, chobo).
     pub no_dashes_in_values: bool,
+    /// `--format=json` is one word, an unknown flag, not a flag and its value (chobo).
+    pub no_inline_values: bool,
+    /// Only what starts with `--` is a flag; `-x` and `-5` are arguments (chobo).
+    pub single_dash_args: bool,
+}
+
+/// What stops a command line, before it is said in words ([`Misuse::text`]). A tool that words
+/// it its own way reads the kind (chobo).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Misuse {
+    /// A flag neither the command nor every command takes, as written.
+    UnknownFlag(String),
+    /// `--all=yes`: a flag that takes no value, given one.
+    TakesNoValue { flag: &'static str, value: String },
+    /// A flag at the end, or before a word it does not take as its value.
+    MissingValue { flag: &'static str, placeholder: &'static str },
+    /// A value outside the flag's closed set.
+    NotAChoice { flag: &'static str, value: String, choices: &'static [&'static str] },
+    /// A flag that does not repeat, given twice.
+    Twice(&'static str),
+}
+
+impl Misuse {
+    /// In ritsu-base's words, for `<tool> <cmd>`.
+    pub fn text(&self, tool: &str, cmd: &str) -> Text {
+        match self {
+            Misuse::UnknownFlag(name) => tr!("知らないフラグ `{name}` です。`{tool} {cmd} --help` を読んでください", "unknown flag `{name}`; run `{tool} {cmd} --help`"),
+            Misuse::TakesNoValue { flag, value } => tr!("`{flag}` は値を取りません（`={value}` が付いています）", "`{flag}` takes no value (it was given `={value}`)"),
+            Misuse::MissingValue { flag, placeholder } => {
+                let s = format!("{flag} {placeholder}");
+                tr!("`{s}` に値がありません", "`{s}` is missing its value")
+            }
+            Misuse::NotAChoice { flag, value, choices } => {
+                let cs = choices.join(" | ");
+                tr!("`{flag} {value}` は知らない値です。書けるのは {cs} だけです", "`{flag} {value}` is not a value this flag takes; it takes only {cs}")
+            }
+            Misuse::Twice(flag) => tr!("`{flag}` が二度書かれています", "`{flag}` is given twice"),
+        }
+    }
 }
 
 /// A tool's commands, its flags for every command, and the lines of its `--help`.
@@ -136,8 +183,11 @@ impl Table {
         self.commands.iter().find(|c| c.name == name)
     }
 
-    /// `koyomi check <file.cal>... [--format json]`.
+    /// `koyomi check <file.cal>... [--format json]`: the command's own line when it has one.
     pub fn usage_line(&self, c: &Cmd) -> String {
+        if let Some(u) = c.usage {
+            return u.to_string();
+        }
         let mut o = format!("{} {} {}", self.tool, c.name, c.args).trim_end().to_string();
         for f in &c.flags {
             o.push_str(&format!(" [{}]", f.spelled()));
@@ -211,7 +261,13 @@ impl Table {
 
     /// Read a command line against the command's flags and the flags every command takes.
     pub fn parse(&self, c: &Cmd, argv: &[String]) -> Result<Args, Text> {
+        self.read(c, argv).map_err(|m| m.text(self.tool, c.name))
+    }
+
+    /// The same, saying what stopped it as a [`Misuse`].
+    pub fn read(&self, c: &Cmd, argv: &[String]) -> Result<Args, Misuse> {
         let find = |name: &str| c.flags.iter().chain(self.globals.iter()).find(|f| f.name == name);
+        let r = self.reading;
         let mut out = Args::default();
         let mut i = 0;
         while i < argv.len() {
@@ -221,44 +277,36 @@ impl Table {
                 i += 1;
                 continue;
             }
-            if !a.starts_with('-') || a == "-" || (self.reading.negative_numbers && is_negative_number(a)) {
+            let argument = if r.single_dash_args { !a.starts_with("--") } else { !a.starts_with('-') || a == "-" || (r.negative_numbers && is_negative_number(a)) };
+            if argument {
                 out.pos.push(a.clone());
                 i += 1;
                 continue;
             }
-            let (name, inline) = match a.split_once('=') {
+            let (name, inline) = match a.split_once('=').filter(|_| !r.no_inline_values) {
                 Some((k, v)) => (k.to_string(), Some(v.to_string())),
                 None => (a.clone(), None),
             };
             let Some(f) = find(&name) else {
-                let (tool, cmd) = (self.tool, c.name);
-                return Err(tr!("知らないフラグ `{name}` です。`{tool} {cmd} --help` を読んでください", "unknown flag `{name}`; run `{tool} {cmd} --help`"));
+                return Err(Misuse::UnknownFlag(name));
             };
             let v = match (f.value, inline) {
-                (None, Some(v)) => {
-                    let n = f.name;
-                    return Err(tr!("`{n}` は値を取りません（`={v}` が付いています）", "`{n}` takes no value (it was given `={v}`)"));
-                }
+                (None, Some(v)) => return Err(Misuse::TakesNoValue { flag: f.name, value: v }),
                 (None, None) => String::new(),
                 (Some(_), Some(v)) => v,
-                (Some(_), None) => {
+                (Some(placeholder), None) => {
                     i += 1;
                     match argv.get(i) {
-                        Some(v) if !(self.reading.no_dashes_in_values && v.starts_with("--")) => v.clone(),
-                        _ => {
-                            let s = f.spelled();
-                            return Err(tr!("`{s}` に値がありません", "`{s}` is missing its value"));
-                        }
+                        Some(v) if !(r.no_dashes_in_values && v.starts_with("--")) => v.clone(),
+                        _ => return Err(Misuse::MissingValue { flag: f.name, placeholder }),
                     }
                 }
             };
             if !f.choices.is_empty() && !f.choices.contains(&v.as_str()) {
-                let (n, cs) = (f.name, f.choices.join(" | "));
-                return Err(tr!("`{n} {v}` は知らない値です。書けるのは {cs} だけです", "`{n} {v}` is not a value this flag takes; it takes only {cs}"));
+                return Err(Misuse::NotAChoice { flag: f.name, value: v, choices: f.choices });
             }
             if out.has(f.name) && !f.repeats {
-                let n = f.name;
-                return Err(tr!("`{n}` が二度書かれています", "`{n}` is given twice"));
+                return Err(Misuse::Twice(f.name));
             }
             out.got.push((f.name, v));
             i += 1;

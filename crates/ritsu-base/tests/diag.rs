@@ -119,3 +119,23 @@ fn a_languages_own_part_goes_where_it_says() {
     let keys: Vec<String> = d.to_json(Lang::En).as_obj().unwrap().iter().map(|(k, _)| k.clone()).collect();
     assert_eq!(keys, ["code", "severity", "file", "line", "col", "message", "notes", "chain", "steps", "fix"]);
 }
+
+/// geas's part: the run that gets there, and no `fix` key.
+#[derive(Clone, Debug, Default)]
+struct NoFix;
+
+impl Extra for NoFix {
+    fn fix_key(&self) -> bool {
+        false
+    }
+}
+
+#[test]
+fn a_diagnostic_without_a_file_or_a_fix_key() {
+    let d: Diag<NoFix> = Diag::whole("E081", "", tr!("読めません", "cannot read it"));
+    assert_eq!(d.render(Lang::En), "error[E081]: cannot read it\n", "no place, no `: ` before the message");
+    assert_eq!(d.to_json(Lang::En).compact(), r#"{"code":"E081","severity":"error","file":null,"line":null,"col":null,"message":"cannot read it","notes":[]}"#);
+    let d: Diag = Diag::whole("E081", "missing.geas", tr!("読めません", "cannot read it"));
+    assert_eq!(d.render(Lang::En), "error[E081]: missing.geas: cannot read it\n");
+    assert!(d.to_json(Lang::En).compact().ends_with(r#""notes":[],"fix":null}"#));
+}
