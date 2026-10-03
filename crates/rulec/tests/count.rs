@@ -22,6 +22,7 @@ fn dir(tag: &str) -> PathBuf {
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
         .output()

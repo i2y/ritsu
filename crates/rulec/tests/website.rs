@@ -130,6 +130,7 @@ fn authored_pages() -> Vec<(String, String)> {
 #[test]
 fn サイトが名指しするコマンドは実在する() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["--help", "--lang", "en"])
         .output()
@@ -261,6 +262,7 @@ fn 図が見せている出力は本物と一致する() {
 
         let o = Command::new("python3")
             .current_dir(root().join("website"))
+            .env("RULEC_LANG", "ja")
             .args([script, "--verify", env!("CARGO_BIN_EXE_rulec")])
             .output()
             .expect("python3 を起動できない");
@@ -796,6 +798,7 @@ fn kaniの件数はページと記録と実物で揃っている() {
     let out = std::env::temp_dir().join("rulec-kani-count");
     let _ = std::fs::remove_dir_all(&out);
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["gen", "tests/corpus/", "--out", &out.to_string_lossy()])
         .output()

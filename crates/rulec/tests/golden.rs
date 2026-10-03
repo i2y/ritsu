@@ -13,6 +13,7 @@ fn root() -> PathBuf {
 
 /// Check `rel`, render only the diagnostics with `code`, and concatenate them.
 fn rendered(rel: &str, code: &str) -> String {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = std::fs::read_to_string(root().join(rel)).unwrap_or_else(|_| panic!("読めない: {rel}"));
     let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
     let ds = rulec::check_source(&src, rel);

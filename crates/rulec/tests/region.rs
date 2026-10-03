@@ -281,7 +281,7 @@ fn 数の集合は値ごとの点になる() {
     std::fs::create_dir_all(&dir).unwrap();
     let p = dir.join("pieces.rule");
     std::fs::write(&p, src).unwrap();
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).args(["vectors", p.to_str().unwrap()]).output().unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["vectors", p.to_str().unwrap()]).output().unwrap();
     let text = String::from_utf8_lossy(&out.stdout);
     let got = |n: i128| {
         text.lines()

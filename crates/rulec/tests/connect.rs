@@ -25,6 +25,7 @@ fn generate(tag: &str, rules: &[&str]) -> PathBuf {
     args.extend_from_slice(rules);
     args.extend_from_slice(&["--out", dir.to_str().unwrap()]);
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(&args)
         .output()
@@ -35,6 +36,7 @@ fn generate(tag: &str, rules: &[&str]) -> PathBuf {
 
 fn api(rule: &str) -> rulec::json::Json {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["api", rule])
         .output()
@@ -134,6 +136,7 @@ fn 取り込んだ列挙は宣言し直さずに_import_する() {
     .unwrap();
     let out = d.join("out");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()])
         .output()
         .expect("rulec を起動できない");
@@ -158,6 +161,7 @@ fn 取り込んだ列挙は宣言し直さずに_import_する() {
     // `api` finds the contract from the rule's directory, wherever it is run from.
     for cwd in [root(), d.clone()] {
         let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "ja")
             .current_dir(&cwd)
             .args(["api", rule.to_str().unwrap()])
             .output()
@@ -285,6 +289,7 @@ fn walk(d: &std::path::Path) -> Vec<PathBuf> {
 #[test]
 fn アダプタのテンプレートは呼び先を包む() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["adapter", RULE, "--template", "connect-python"])
         .output()
@@ -422,6 +427,7 @@ fn 承認者のページは走らせた場所によらない() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(&dir)
         .args(["gen", rule, "--out", "out"])
         .output()
@@ -431,6 +437,7 @@ fn 承認者のページは走らせた場所によらない() {
     assert!(page.contains("_proto(shipment, [[\"declaredValueJpy\", \"declared_value_jpy\"]]"), "protojson の名前で読んでいない");
     for cwd in [root(), dir.clone(), std::env::temp_dir()] {
         let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "ja")
             .current_dir(&cwd)
             .args(["doc", rule, "--format", "html"])
             .output()
@@ -521,6 +528,7 @@ fn 名前は_buf_と同じに切る() {
     .unwrap();
     let rule = d.join("fee.rule");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .args(["check", rule.to_str().unwrap()])
         .output()
         .expect("rulec を起動できない");
@@ -529,6 +537,7 @@ fn 名前は_buf_と同じに切る() {
     assert!(!said.contains("E032"), "{said}");
     let out = d.join("out");
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .args(["gen", rule.to_str().unwrap(), "--out", out.to_str().unwrap()])
         .output()
         .expect("rulec を起動できない");
@@ -806,7 +815,7 @@ fn 契約の依存を_buf_yaml_と_buf_lock_に引き継ぐ() {
     assert!(got.contains(PROTOVALIDATE_PIN) && got.contains("buf.build/googleapis/googleapis"), "{got}");
     let gen_yaml = std::fs::read_to_string(d.join("out/proto/buf.gen.yaml")).unwrap();
     assert!(gen_yaml.contains("include_imports: true"), "{gen_yaml}");
-    let a = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&d).args(["api", "rules/fee.rule"]).output().unwrap();
+    let a = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["api", "rules/fee.rule"]).output().unwrap();
     let a = rulec::json::parse(&String::from_utf8_lossy(&a.stdout)).expect("JSON でない");
     let deps: Vec<&str> = a.get("connect").and_then(|c| c.get("deps")).map(items).unwrap().iter().filter_map(|x| x.as_str()).collect();
     assert_eq!(deps, ["buf.build/bufbuild/protovalidate"]);

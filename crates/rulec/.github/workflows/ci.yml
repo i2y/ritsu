@@ -30,9 +30,9 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # The suite asserts Japanese wording in places; `.cargo/config.toml` pins this
-  # for everything cargo launches, and it is set here too for the steps that
-  # call the binary directly.
+  # The suite asserts Japanese wording in places; the tests pass RULEC_LANG=ja to
+  # the rulec they run and set the language of what they render in-process, and it
+  # is set here too for the steps that call the binary directly.
   RULEC_LANG: ja
   # The model checker behind the proof harnesses (DESIGN §15.95). Pinned: a new
   # version that decides differently should be a change in this file, read as

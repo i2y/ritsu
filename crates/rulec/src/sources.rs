@@ -2095,7 +2095,7 @@ mod tests {
         assert!(s == "平成30年法律第7号" || s == "Act No. 7 of 2018", "{s}");
         assert_eq!(law_num_text("508CO0000000012"), "508CO0000000012");
         let w = revision_words("332AC0000000026_20260401_508AC0000000012").unwrap();
-        assert!(w.starts_with("2026-04-01"), "{w}");
+        assert!(w.starts_with("2026-04-01") || w.starts_with("in force from 2026-04-01"), "{w}");
         assert!(revision_words("nonsense").is_none());
     }
 

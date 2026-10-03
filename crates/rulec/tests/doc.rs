@@ -14,6 +14,7 @@ fn root() -> PathBuf {
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
         .output()
@@ -496,6 +497,7 @@ fn ページはホストの枠の中で名乗る() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
         .args(["doc", "tests/corpus/送料.rule", "--format", "html"])
         .output()

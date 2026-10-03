@@ -83,7 +83,7 @@ fn 台帳には1_0の診断コードが残っている() {
 }
 
 fn help(args: &[&str]) -> String {
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).args(args).output().expect("rulec を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(args).output().expect("rulec を起動できない");
     assert_eq!(o.status.code(), Some(0), "rulec {args:?}");
     String::from_utf8_lossy(&o.stdout).into_owned()
 }

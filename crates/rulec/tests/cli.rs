@@ -5,6 +5,7 @@ use std::process::Command;
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
         .output()
@@ -152,6 +153,7 @@ fn fmt_は矢印と集合区切りをasciiに正準化する() {
 
 fn run_in(dir: &std::path::Path, args: &[&str]) -> (i32, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(dir)
         .args(args)
         .output()
@@ -395,7 +397,7 @@ fn 一文字のフラグは何もせずに2で止まる() {
     let before = std::fs::read_to_string(&rule).unwrap().replacen("->", "→", 1);
     std::fs::write(&rule, &before).unwrap();
     let err_of = |args: &[&str]| {
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&dir).args(args).output().unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().unwrap();
         (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stderr).into_owned())
     };
     let (code, err) = err_of(&["gen", "r.rule", "-o", "out"]);
@@ -573,6 +575,7 @@ fn 検査を通らない規則に_どのコマンドが何を返すか() {
     // What the proofs are about waits for them.
     for cmd in ["check", "gen", "doc", "certificate", "api", "vectors", "coverage"] {
         let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "ja")
             .args([cmd, f])
             .output()
             .expect("rulec を起動できない");
@@ -587,6 +590,7 @@ fn 検査を通らない規則に_どのコマンドが何を返すか() {
     // fetched at all — a source not yet fetched being exactly why a rule does not pass yet.
     for cmd in ["graph", "schema", "adapter"] {
         let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "ja")
             .args([cmd, f])
             .output()
             .expect("rulec を起動できない");
@@ -595,6 +599,7 @@ fn 検査を通らない規則に_どのコマンドが何を返すか() {
     // The refusal says what is wrong, on stderr, so a caller reading JSON on stdout is not
     // handed prose in the middle of it.
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .args(["certificate", f])
         .output()
         .unwrap();

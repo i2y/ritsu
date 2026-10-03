@@ -73,6 +73,7 @@ fn setup(tag: &str) -> Option<PathBuf> {
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.to_string_lossy().to_string();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["gen", RULE, "--out", &out])
         .output()
@@ -156,6 +157,7 @@ fn 刻み未満のずれは丸め方の違いとして括られる() {
 fn 雛形とスキーマが出る() {
     let run = |args: &[&str]| -> String {
         let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "ja")
             .current_dir(root())
             .args(args)
             .output()
@@ -241,6 +243,7 @@ for line in sys.stdin:
     std::fs::write(dir.join("opt.rule"), rule).unwrap();
     std::fs::write(dir.join("adapter.py"), adapter).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(&dir)
         .args(["verify", "opt.rule", "--lang", "ja", "--adapter", "python3", "adapter.py"])
         .output()

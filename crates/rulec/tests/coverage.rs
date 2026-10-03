@@ -3,6 +3,9 @@
 //! The auditor itself is tested by mutation. Unless both are seen — red when vectors are removed,
 //! green when they are not — it cannot be told apart from "an auditor that always returns green".
 
+// Each test reads rulec's Japanese wording, so it sets the language first: rulec has one
+// language for the whole process (src/i18n.rs), and English is the default.
+
 use rulec::coverage::{self, BOUND, ROW, SHADOW, TIE, VALUE};
 use rulec::vectors::{self, Vector};
 
@@ -67,6 +70,7 @@ fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>)
 
 #[test]
 fn コーパスは七基準を全部満たす() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     for rel in CORPUS {
         let (f, c, _) = load(rel);
         // `audit_file` is what `rulec coverage` runs: the cases with an answer **and** the cases
@@ -90,6 +94,7 @@ fn コーパスは七基準を全部満たす() {
 /// "all satisfied" of the empty set says nothing when it returns green.
 #[test]
 fn 空集合はすべての義務が欠ける() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     for rel in CORPUS {
         let (f, c, vs) = load(rel);
         let full = coverage::audit(&f, &c, rel, &vs, &[]);
@@ -109,6 +114,7 @@ fn 空集合はすべての義務が欠ける() {
 /// Removing every vector that lets a row win leaves exactly that row's row coverage missing.
 #[test]
 fn 行を勝たせる例を抜くと行カバーが欠ける() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let rel = "tests/corpus/ゆうパック運賃.rule";
     let (f, c, vs) = load(rel);
     let tag = "表 運賃表 行42"; // the 沖縄 × S170 cell
@@ -124,6 +130,7 @@ fn 行を勝たせる例を抜くと行カバーが欠ける() {
 /// missing. An auditor that goes green on the inside alone cannot catch a boundary's ±1.
 #[test]
 fn 境界の片側を抜くと境界の両側カバーが欠ける() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let rel = "tests/corpus/ゆうパック運賃.rule";
     let (f, c, vs) = load(rel);
     // Drop every example that steps on 三辺合計 = 61cm (just outside <=60cm).
@@ -143,6 +150,7 @@ fn 境界の片側を抜くと境界の両側カバーが欠ける() {
 /// enough.
 #[test]
 fn 交差の内側を抜くと隠れ対カバーが欠ける() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let rel = "tests/corpus/送料.rule";
     let (f, c, vs) = load(rel);
     let checks = rulec::table_checks(&f, &c, rel);
@@ -168,6 +176,7 @@ fn 交差の内側を抜くと隠れ対カバーが欠ける() {
 /// cross-check breaks that silence.
 #[test]
 fn 境界の義務は素朴な数え上げと一致する() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     use rulec::ast::*;
     // The collector never consults coverage.rs. It counts by looking at the shape of cells alone.
     fn naive(f: &rulec::ast::RuleFile, c: &rulec::types::Checked, dead: &[Vec<usize>]) -> usize {
@@ -229,6 +238,7 @@ fn 境界の義務は素朴な数え上げと一致する() {
 /// feature.
 #[test]
 fn 義務の件数を固定する() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // (rule, row coverage, both-sides boundary coverage, shadow-pair coverage, value-pair
     // coverage, rounding-tie coverage)
     const PINNED: &[(&str, usize, usize, usize, usize, usize)] = &[
@@ -326,6 +336,7 @@ fn audit_src(tag: &str, src: &str) -> (coverage::Audit, Vec<Vector>) {
 /// of the machinery.
 #[test]
 fn 全列を名指しする行でも勝たせられる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (a, _) = audit_src(
         "win.rule",
         "\
@@ -372,6 +383,7 @@ policy first
 /// boundary and shadow obligations that hung off the same row come back with it.
 #[test]
 fn 導出列の直しが同じ行の別のセルを壊さない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (a, vs) = audit_src(
         "derive.rule",
         "\
@@ -424,6 +436,7 @@ policy first
 /// there, not that the sweep happened to pass through.
 #[test]
 fn 例はベクタ集合に入る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule t(t) v1
 
@@ -496,6 +509,7 @@ fn fee_of(v: &Vector) -> String {
 /// pair, an implementation that returned 0 on the row matched every vector.
 #[test]
 fn 計算した値を返す行は二つの値で試される() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (a, vs) = audit_src("fee.rule", FEE);
     assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
     assert_eq!(a.tally[VALUE], (1, 1));
@@ -509,6 +523,7 @@ fn 計算した値を返す行は二つの値で試される() {
 /// missing and names the row.
 #[test]
 fn 計算した値を一通りに減らすと計算値の対カバーが欠ける() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (f, c) = rulec::prepare(FEE, "fee.rule").expect("検査を通る");
     let vs = vectors::generate(&f, &c);
     let kept: Vec<Vector> = vs
@@ -527,6 +542,7 @@ fn 計算した値を一通りに減らすと計算値の対カバーが欠け�
 /// returns 受付. Of the order's ten rows, only the refund of what was paid is computed.
 #[test]
 fn 行が値を決めている行は計算値の義務にならない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (f, c, _) = load("tests/corpus/注文の状態.rule");
     let duties = coverage::value_duties(&f, &c);
     let named: Vec<(usize, &str)> = duties
@@ -544,6 +560,7 @@ fn 行が値を決めている行は計算値の義務にならない() {
 /// and an obligation it did not find there was never counted.
 #[test]
 fn 同着の義務は定数を返す行があっても立つ() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (a, vs) = audit_src("fee.rule", FEE);
     assert_eq!(a.tally[TIE], (1, 1));
     assert!(
@@ -555,6 +572,7 @@ fn 同着の義務は定数を返す行があっても立つ() {
 /// Taking the tie away leaves it missing, 0 of 1 — not 0 of 0.
 #[test]
 fn 同着のベクタを抜くと丸めの同着カバーが欠ける() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (f, c) = rulec::prepare(FEE, "fee.rule").expect("検査を通る");
     let vs = vectors::generate(&f, &c);
     let a = coverage::audit(&f, &c, "fee.rule", &vs, &[]);
@@ -581,6 +599,7 @@ fn 同着のベクタを抜くと丸めの同着カバーが欠ける() {
 /// half a cent, though 3.49% of 5,000 does.
 #[test]
 fn 同着に届かない出力は義務にならない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     for (rel, want) in [("tests/corpus/厚生年金保険料.rule", 0), ("tests/corpus/送料.rule", 0), ("tests/corpus/paypal_fee.rule", 1)] {
         let (f, c, vs) = load(rel);
         let a = coverage::audit(&f, &c, rel, &vs, &[]);
@@ -623,6 +642,7 @@ define 手数料(fee) : money[USDc] = 金額 × 3.49%
 /// nothing and passed.
 #[test]
 fn 表の無い規則にもベクタがある() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule 手数料率(fee_rate) v1
 
@@ -665,6 +685,7 @@ define 手数料(fee) : money[USDc] = 国内 × 3.49% + 国外 × 1.5%
 /// since the rounding is required and no example can land where no input does.
 #[test]
 fn 範囲の中で届かない同着と一つにしかならない値は義務にならない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (a, vs) = audit_src("two_rates.rule", &two_rates(0, 10));
     assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
     assert_eq!((a.tally[VALUE], a.tally[TIE]), ((0, 0), (0, 0)));
@@ -690,6 +711,7 @@ define 額(fee) : money[円] = 金額 × 率
 /// but the row that computes it only holds up to 10.
 #[test]
 fn 行の条件の中で届かない同着は義務にならない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule 行で狭い(narrow_row) v1
 
@@ -716,6 +738,7 @@ policy unique
 /// 1.745 + 1.755 — the generator solves for it rather than walking to it, and the tie is met.
 #[test]
 fn 二つの入力を同時に動かさないと届かない同着も見つける() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (a, vs) = audit_src("two_rates.rule", &two_rates(1, 120));
     assert!(a.ok(), "{}", coverage::render(&a, &vs, &[]));
     assert_eq!(a.tally[TIE], (1, 1));
@@ -728,6 +751,7 @@ fn 二つの入力を同時に動かさないと届かない同着も見つけ�
 /// 100 would. The inputs alone go up to 2,000 yen together.
 #[test]
 fn 導出の列の条件の中で届かない同着は義務にならない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule 導出の条件(derived_cond) v1
 
@@ -758,6 +782,7 @@ policy unique
 /// one by one. Where the row before it leaves 5,000 cents to it, the tie is owed and met.
 #[test]
 fn 前の行に取られる分は計算値にも同着にも入らない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = |cut: &str| {
         format!(
             "\
@@ -791,6 +816,7 @@ policy first
 /// 10 cents.
 #[test]
 fn 制約で届かない同着と一つにしかならない値は義務にならない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule 制約(constrained) v1
 
@@ -815,6 +841,7 @@ define 手数料(fee) : money[USDc] = 国内 × 3.49%
 /// evaluated (§15.153): 6,001 amounts by two, and none lands the rate on half a cent.
 #[test]
 fn 決めきれない形でも入力が少なければ総当たりで決める() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule 二列の先の行(first_two_cols) v1
 
@@ -845,6 +872,7 @@ policy first
 /// Where the line sits at 6,000 cents, 5,000 is left to the rate and the tie is owed and met.
 #[test]
 fn 真偽の定義の条件は比べている数の範囲として読む() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = |policy: &str, second: &str, cut: &str| {
         format!(
             "\

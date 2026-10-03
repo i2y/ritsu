@@ -3,6 +3,9 @@
 //! 1. The whole corpus passes check.
 //! 2. Mutant files, each seeded with a single error, emit exactly the code decided for them.
 
+// Each test reads rulec's Japanese wording, so it sets the language first: rulec has one
+// language for the whole process (src/i18n.rs), and English is the default.
+
 use std::path::Path;
 
 const CORPUS: &[&str] = &[
@@ -33,6 +36,7 @@ fn codes(rel: &str) -> Vec<String> {
 
 #[test]
 fn コーパスは全部通る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     for f in CORPUS {
         let ds = check(f);
         let bad: Vec<_> = ds.iter().filter(|(c, _)| c.starts_with('E')).collect();
@@ -42,6 +46,7 @@ fn コーパスは全部通る() {
 
 #[test]
 fn 変異は決めたコードだけを出す() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // Pin the **full set** of diagnostics each mutant file emits, down to the counts.
     //
     // Previously only "contains E112" was checked. Because of that, a mutant that had not followed
@@ -221,6 +226,7 @@ fn 変異は決めたコードだけを出す() {
 
 #[test]
 fn 隠れは三つに分けられる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // §4: structural and equivalent get counts only; only needs-confirmation pairs are listed.
     let r = |rel: &str| {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
@@ -245,6 +251,7 @@ fn 隠れは三つに分けられる() {
 
 #[test]
 fn 隠れは上からの表でだけ出る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // W105 does not appear in a `unique` table (an overlap there is an error).
     let ds = codes("tests/corpus/ゆうパック運賃.rule");
     assert!(!ds.iter().any(|c| c == "E105"), "上から の重なりがエラーになってはいけない");
@@ -252,6 +259,7 @@ fn 隠れは上からの表でだけ出る() {
 
 #[test]
 fn 例は実行される仕様である() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // Every example in the corpus must hit. A miss emits E107.
     for f in CORPUS {
         assert!(!codes(f).iter().any(|c| c == "E107"), "{f} の例が外れた");
@@ -263,6 +271,7 @@ fn 例は実行される仕様である() {
 /// other output, and two examples that were right came back as E107 (§15.148).
 #[test]
 fn 例の期待値は見出しの順で読む() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
                table u(u)\npolicy unique\n| a     | -> x(x) : bool | y(y) : bool |\n\
                | true  | true           | false       |\n| false | false          | true        |\n\n\
@@ -279,6 +288,7 @@ fn 例の期待値は見出しの順で読む() {
 
 #[test]
 fn 共有する入力ごしの重なりは消去で決まる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // §6.2 のふるいは導出ごとに独立な区間しか見ないので、入力を共有する二つの導出の結びつきが
     // 見えない。§15.126 の Fourier–Motzkin 消去がそれを決める。この規則の 行1 と 行2 は
     // 重なって見えるが、残高B <= 残高A なので同時には当たらない。
@@ -290,6 +300,7 @@ fn 共有する入力ごしの重なりは消去で決まる() {
 
 #[test]
 fn 真偽の定義の中の閾値も消去に入る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // §15.127: 重なりが真偽の定義を一つの値に決めているなら、その定義の本体は
     // そこで成り立たなければならない比較である。中の閾値が連立に入り、同じ入力から
     // 出た二つの定義が同時に真になれないことが決まる。
@@ -305,6 +316,7 @@ fn 真偽の定義の中の閾値も消去に入る() {
 
 #[test]
 fn 有理数で解く限界は警告に落ちる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // 残るのは、消去が有理数の上で解いているために決まらない形である。証明できていない
     // ものを証明済みとして出さないので、E105 ではなく W114 になる（§15.127 の正直な限界）。
     let ds = codes("tests/mutants/m_w114.rule");
@@ -324,6 +336,7 @@ const HEAD: &str = "rule 試し(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r
 
 #[test]
 fn 構文側の台帳も全部鳴る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let cases: &[(&str, &str, &str)] = &[
         ("E001", "rule 試し(t) v1\ndescription \"閉じない\n", "文字列が閉じていない"),
         ("E003", "description \"規則で始まらない\"\n", "rule の行で始まらない"),
@@ -343,6 +356,7 @@ fn 構文側の台帳も全部鳴る() {
 
 #[test]
 fn 重なりのない上からは一意を勧める() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // W110: if the order carries no meaning, `unique` can guarantee that reordering does not
     // change the meaning.
     let src = format!(
@@ -353,6 +367,7 @@ fn 重なりのない上からは一意を勧める() {
 
 #[test]
 fn 真偽定義の列が解析される() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // The sketch from §1.2. The happy path of putting a boolean definition in a column.
     // 負担判定 is `first`, and row 1 (大口) and row 2 (プラチナ) partially intersect with
     // differing outputs.
@@ -369,6 +384,7 @@ fn 真偽定義の列が解析される() {
 
 #[test]
 fn 日付の列が解析される() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // Dates are held as ordinals and reuse the comparison and range machinery as is (§2.1).
     // Opening a hole at a boundary makes that calendar day appear as the witness.
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/mutants/m_e101d.rule");
@@ -385,6 +401,7 @@ fn 日付の列が解析される() {
 
 #[test]
 fn 両端含みの敷き詰めは穴を作らない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // Holding dates as y*10000+m*100+d leaves a gap of nonexistent integers between the end of a
     // month and the start of the next, so a tiling of `<=2026-03-31` and `>=2026-04-01` emits a
     // false E101. It goes away by holding dates as day counts and never creating an open interval
@@ -401,6 +418,7 @@ fn 両端含みの敷き詰めは穴を作らない() {
 
 #[test]
 fn 日付どうしの比較が原子として通る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // The second atom of §5.3. Types that cannot be made into derivations (dates, enums) may be
     // compared with each other directly.
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus/適用順序.rule");
@@ -421,6 +439,7 @@ fn 日付どうしの比較が原子として通る() {
 
 #[test]
 fn 刻み隣接の空座標は三つの型で作られない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // If adjacent boundaries differ by exactly one step, there is no value between them. Creating
     // an empty coordinate makes a closed-interval tiling emit a false E101 (§6.3). Not only dates
     // but money and rates go through the same arm, so all three are pinned. The bug had been
@@ -459,6 +478,7 @@ fn 刻み隣接の空座標は三つの型で作られない() {
 
 #[test]
 fn 定義が絡む実在の重なりは入力を構成して示す() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // §6.2 "witness on a definition axis": region analysis merely places definitions as free axes,
     // so the coordinates of an intersection box need not actually exist. Construct an input, let
     // the evaluator compute the definitions too, and treat only what could be constructed as a
@@ -484,6 +504,7 @@ fn 定義が絡む実在の重なりは入力を構成して示す() {
 
 #[test]
 fn 定義の中で矛盾する重なりは消去が決める() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // For the same input, `>=3万円` and `<=1000円` cannot both hold. The region analysis
     // treats definitions as free axes and cannot eliminate the intersection on its own, and
     // no witness can be constructed either — it used to be demoted to W114 and a runtime
@@ -507,6 +528,7 @@ fn 定義の中で矛盾する重なりは消去が決める() {
 
 #[test]
 fn 決められない重なりはガードへ降ろす() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // What the elimination cannot decide it does not claim: it solves over the rationals, so
     // a pair kept apart only by the values being whole stays unconfirmed. Not an error, and
     // **not a proof of nonexistence** either — so the generated code gets a runtime guard.
@@ -536,6 +558,7 @@ fn 決められない重なりはガードへ降ろす() {
 
 #[test]
 fn 解析できない型の列は黙って飛ばさない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // When a type could not be analyzed, `TableRegion::build` gave up and ok was printed with
     // neither the completeness nor the duplication of that table checked. Having stepped on this
     // twice, with dates and with optional, we stop with E110 as a general breakwater (§6.3).
@@ -548,6 +571,7 @@ fn 解析できない型の列は黙って飛ばさない() {
 
 #[test]
 fn optionalの列も検査される() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // `T?` is treated as an enum with one extra value, "none". Opening a hole emits E101.
     let base = "rule t(t) v1\n\nenum 区分(k) = 甲(a) | 乙(b)\n\n\
                 inputs\n  金額(amt) : money[円, incl_tax]  range >=0円 <=100万円\n  任意値(opt) : 区分?\n\n\
@@ -571,6 +595,7 @@ fn optionalの列も検査される() {
 /// Both adding a word without writing it in the table, and listing a word the parser lacks, go red.
 #[test]
 fn 文書のキーワード表はパーサと一致する() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let md = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("website/docs-ja/tour.md"),
     )
@@ -618,6 +643,7 @@ impl<'a, I: Iterator<Item = &'a str>> FirstCell for I {
 /// generated" is a decision rather than a gap.
 #[test]
 fn 変異はコーパスから作り直せる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     // `m_e101c.rule` is written here rather than cut from a corpus rule: the shape it needs
     // is a `constraint` whose forbidden corner hides an uncovered box (§15.98), and no
     // corpus rule has one.
@@ -638,6 +664,7 @@ fn 変異はコーパスから作り直せる() {
     let out = std::process::Command::new("sh")
         .current_dir(root)
         .env("RULEC", env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .arg("tests/make-mutants.sh")
         .arg(&tmp)
         .output()
@@ -679,6 +706,7 @@ fn 変異はコーパスから作り直せる() {
 /// would hold a mutant to a contract its rule never saw.
 #[test]
 fn 変異の隣の契約はコーパスの写しと同じ() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut compared = 0;
     for e in std::fs::read_dir(root.join("tests/mutants/contracts")).unwrap().flatten() {
@@ -697,6 +725,7 @@ fn 変異の隣の契約はコーパスの写しと同じ() {
 /// that did not hold in it was never reported (§15.149). Every section runs now.
 #[test]
 fn 例の節は二つ以上書けて_どれも走る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
                table u(u)\npolicy unique\n| a     | -> x(x) : bool |\n| true  | true           |\n| false | false          |\n\n\
                examples\n| a    | -> x  |\n| true | false |\n\n\
@@ -713,6 +742,7 @@ fn 例の節は二つ以上書けて_どれも走る() {
 /// with one input fewer than its author wrote (§15.149).
 #[test]
 fn 型の無い宣言は黙って捨てない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let base = "rule t(t) v1\n\ninputs\n  a(a) : bool\nIN\n\noutputs\n  x(x) : bool\nOUT\n\n\
                 table u(u)\npolicy unique\n| a     | -> x(x) : bool |\n| true  | true           |\n| false | false          |\n";
     for (what, src) in [

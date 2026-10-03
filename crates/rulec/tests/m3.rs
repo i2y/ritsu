@@ -17,6 +17,7 @@ const RULE: &str = "tests/corpus/ゆうパック運賃.rule";
 
 fn rulec_in(cwd: &Path, args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(cwd)
         .args(args)
         .output()

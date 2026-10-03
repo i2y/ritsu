@@ -14,6 +14,7 @@ fn root() -> PathBuf {
 
 fn run(args: &[&str]) -> (i32, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
         .output()
@@ -305,6 +306,7 @@ fn adapter_dir() -> Option<PathBuf> {
 
 fn verify_json(dir: &PathBuf, bug: &str) -> (i32, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["verify", "tests/corpus/ゆうパック運賃.rule", "--format", "json", "--adapter", "python3"])
         .arg(dir.join("adapter.py"))
@@ -426,6 +428,7 @@ fn 飛ばした言語があると要求時に落ちる() {
         let mut args = vec!["test", dir.to_str().unwrap()];
         args.extend_from_slice(extra);
         let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "ja")
             .current_dir(root())
             .args(&args)
             .env("PATH", &bin)

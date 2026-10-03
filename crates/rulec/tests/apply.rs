@@ -3,6 +3,9 @@
 //! the apply's name with the bound inputs substituted. What is pinned here is the shape of the
 //! expansion the rest of the tool sees, and the flow from a changed callee to a new pin.
 
+// Each test reads rulec's Japanese wording, so it sets the language first: rulec has one
+// language for the whole process (src/i18n.rs), and English is the default.
+
 use rulec::ast::Item;
 use std::path::PathBuf;
 use std::process::Command;
@@ -21,6 +24,7 @@ fn prepared(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked) {
 
 #[test]
 fn 呼び先の定義は呼び出しの名前の下に展開される() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (f, c) = prepared(CALLER);
     let tables: Vec<String> = f
         .items
@@ -61,6 +65,7 @@ fn 呼び先の定義は呼び出しの名前の下に展開される() {
 
 #[test]
 fn 呼び先の行は呼び先のとおりに当たり_trace_は呼び出しの名前で言う() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (f, c) = prepared(CALLER);
     let mut inputs = std::collections::HashMap::new();
     inputs.insert("在職期間".to_string(), rulec::eval::Val::Num(rulec::num::Rat::int(3)));
@@ -75,6 +80,7 @@ fn 呼び先の行は呼び先のとおりに当たり_trace_は呼び出しの�
 
 #[test]
 fn 固定と違う呼び先は_e040_で止まり_pin_が見出しを書き換える() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let dir = std::env::temp_dir().join(format!("rulec-apply-pin-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -103,6 +109,7 @@ fn 固定と違う呼び先は_e040_で止まり_pin_が見出しを書き換え
 
 #[test]
 fn 呼び先が無ければ_e044_で止まる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=3\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"無い.rule\" sha256:0000000000000000\n  a = n\n  x -> y\n";
     let ds = rulec::report(src, "t.rule").diags;
     assert_eq!(ds.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E044"]);
@@ -110,6 +117,7 @@ fn 呼び先が無ければ_e044_で止まる() {
 
 #[test]
 fn 整形は呼び出しの本体を二字下げる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=3\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:0000000000000000\n    a   =  n\nexcept 表\n  x  ->   y\n";
     let out = rulec::fmt::format(src);
     assert!(out.contains("\n  a = n\n  except 表\n  x -> y\n"), "{out}");
@@ -126,6 +134,7 @@ fn 整形は呼び出しの本体を二字下げる() {
 /// literal, which Go and Swift typed as a plain integer.
 #[test]
 fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別子は衝突しない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = std::env::temp_dir().join(format!("rulec-bundle-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
@@ -162,9 +171,9 @@ fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別�
     assert_eq!(distinct.len(), idents.len(), "識別子が重なっている: {idents:?}");
     assert!(idents.contains(&"旧税額".to_string()), "別名の無い付け替え先は名前そのものが識別子になる: {idents:?}");
     // And the generated code answers like the evaluator wherever a toolchain is installed.
-    let generated = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&d).args(["gen", "束.rule", "--out", "out"]).output().unwrap();
+    let generated = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["gen", "束.rule", "--out", "out"]).output().unwrap();
     assert!(generated.status.success(), "{}", String::from_utf8_lossy(&generated.stderr));
-    let test = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&d).args(["test", "out"]).output().unwrap();
+    let test = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["test", "out"]).output().unwrap();
     let text = String::from_utf8_lossy(&test.stdout).into_owned() + &String::from_utf8_lossy(&test.stderr);
     assert!(test.status.success() && !text.contains("FAIL"), "{text}");
     let _ = std::fs::remove_dir_all(&d);
@@ -182,6 +191,7 @@ const PAIR: (&str, &str) = ("tests/apply_fixtures/適用.rule", "tests/apply_fix
 
 #[test]
 fn リテラルで束縛した入力は列ごと畳まれる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (f, _) = prepared(PAIR.0);
     // 基準日 is bound to a date and 特例 to `false`, so neither is a column of the expanded
     // table any more: the rows that could not match them are gone, and the rest lost the
@@ -217,6 +227,7 @@ fn リテラルで束縛した入力は列ごと畳まれる() {
 /// as a literal must not swallow a misspelled name.
 #[test]
 fn 名前でもリテラルでもない語はE041のまま() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = std::fs::read_to_string(root().join(PAIR.0)).unwrap();
     let broken = src.replace("  特例 = false", "  特例 = 幽霊");
     let ds = rulec::check_source(&broken, &root().join(PAIR.0).to_string_lossy());
@@ -226,16 +237,19 @@ fn 名前でもリテラルでもない語はE041のまま() {
 
 #[test]
 fn 呼び先の形が揃った規則も生成物は評価器と全言語で一致する() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let dir = std::env::temp_dir().join(format!("rulec-apply-run-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["gen", PAIR.0, "--out", &dir.to_string_lossy()])
         .output()
         .expect("rulec を起動できない");
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["test", &dir.to_string_lossy()])
         .output()

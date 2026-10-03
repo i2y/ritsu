@@ -16,6 +16,7 @@ fn root() -> PathBuf {
 
 fn run(args: &[&str]) -> (i32, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
         .output()
@@ -247,6 +248,7 @@ fn terseは三行に絞って最後に道案内を出す() {
     assert!(out.trim_end().ends_with("details: rulec explain <code>"), "{out}");
     // JSON is already the machine shape; combining the two is refused rather than guessed at.
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["check", "tests/mutants/m_e101.rule", "--terse", "--format", "json"])
         .output()

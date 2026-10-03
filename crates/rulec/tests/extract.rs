@@ -20,7 +20,7 @@ fn dir(tag: &str) -> PathBuf {
 }
 
 fn rulec(d: &PathBuf, args: &[&str]) -> (i32, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(d).args(args).output().expect("rulec を起動できない");
+    let out = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(d).args(args).output().expect("rulec を起動できない");
     (
         out.status.code().unwrap_or(-1),
         String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr),

@@ -8,8 +8,8 @@ use std::process::Command;
 fn run(args: &[&str], env: &[(&str, &str)]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_rulec"));
     c.current_dir(env!("CARGO_MANIFEST_DIR")).args(args);
-    // `.cargo/config.toml` pins RULEC_LANG=ja for the suite; clear it so the
-    // fallback order can be observed.
+    // The suite passes RULEC_LANG=ja to the rulec it runs, and the shell that runs the
+    // suite may have one set; clear it so the fallback order can be observed.
     c.env_remove("RULEC_LANG");
     for (k, v) in env {
         c.env(k, v);

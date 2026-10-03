@@ -19,6 +19,7 @@ fn check(tag: &str, rule: &str, file: &str, contract: &str) -> Vec<(String, Stri
     std::fs::write(dir.join("r.rule"), rule).unwrap();
     std::fs::write(dir.join(file), contract).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(&dir)
         .args(["check", "r.rule", "--format", "json", "--lang", "ja"])
         .output()

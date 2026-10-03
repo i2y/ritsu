@@ -8,6 +8,7 @@ use std::process::Command;
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         .args(args)
         .output()
@@ -15,8 +16,8 @@ fn run(args: &[&str]) -> (i32, String, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
-/// The same, with the language pinned. `.cargo/config.toml` forces `RULEC_LANG=ja` for
-/// everything cargo launches, so without this the English draft is never exercised.
+/// The same, with the language pinned. The suite runs rulec with `RULEC_LANG=ja`, so
+/// without this the English draft is never exercised.
 fn run_lang(lang: &str, args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
@@ -119,7 +120,7 @@ fn 表の形でないcsvは断る() {
 
 /// The draft has to parse, and the language's own words are not names (E009). Two sources of
 /// them: the draft's English word for its own table, which was `table`, and a column the file
-/// headed with a keyword. The suite runs in Japanese (`.cargo/config.toml`), where the table
+/// headed with a keyword. The suite runs in Japanese (`RULEC_LANG=ja`), where the table
 /// is `表`, so the English draft was broken for as long as it existed.
 #[test]
 fn キーワードと同じ名前の下書きは作らない() {

@@ -29,6 +29,7 @@ fn generated(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rulec-projection-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["gen", "tests/corpus/注文の送料.rule", "--out", &dir.to_string_lossy()])
         .output()
@@ -179,6 +180,7 @@ fn 契約のフィールドが変われば止まる() {
     // The contract renames one field, which is the change nothing else in this tool can see.
     std::fs::write(dir.join("contracts/order.schema.json"), schema.replace("\"zone\"", "\"region\"")).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .args(["check", &dir.join("r.rule").to_string_lossy(), "--format", "json"])
         .output()
         .expect("rulec を起動できない");
@@ -195,6 +197,7 @@ fn 射影の無い規則には何も出ない() {
     let dir = std::env::temp_dir().join(format!("rulec-projection-none-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["gen", "tests/corpus/送料.rule", "--out", &dir.to_string_lossy()])
         .output()
@@ -240,6 +243,7 @@ fn 日付の射影は五つの言語で同じ日を指す() {
         | >2026-06-30  | false                            |\n";
     std::fs::write(dir.join("d.rule"), rule).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .args(["gen", &dir.join("d.rule").to_string_lossy(), "--out", &dir.to_string_lossy()])
         .output()
         .expect("rulec を起動できない");
@@ -373,7 +377,7 @@ fn 省略できる入力は無いフィールドを_none_として読む() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("r.rule"), RULE).unwrap();
     std::fs::write(dir.join("order.json"), SCHEMA).unwrap();
-    let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&dir).args(args).output().expect("rulec を起動できない");
+    let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().expect("rulec を起動できない");
     let o = rulec(&["check", "r.rule"]);
     assert!(o.status.success(), "省略できる入力に `required` を求めてはいけない:\n{}", String::from_utf8_lossy(&o.stdout));
     let o = rulec(&["gen", "r.rule", "--out", "gen"]);
@@ -420,7 +424,7 @@ fn built(tag: &str, rule: &str, contract: (&str, &str)) -> PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("r.rule"), rule).unwrap();
     std::fs::write(dir.join(contract.0), contract.1).unwrap();
-    let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&dir).args(args).output().expect("rulec を起動できない");
+    let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&dir).args(args).output().expect("rulec を起動できない");
     let o = rulec(&["check", "r.rule", "--format", "json"]);
     assert!(o.status.success(), "契約と規則はそろっているはず:\n{}", String::from_utf8_lossy(&o.stdout));
     let o = rulec(&["gen", "r.rule", "--out", "gen"]);
@@ -599,6 +603,7 @@ fn コーパスのprotoの規則は要求をそのまま読む() {
     let dir = std::env::temp_dir().join(format!("rulec-projection-shipment-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["gen", "tests/corpus/出荷の送料.rule", "--out", &dir.join("gen").to_string_lossy()])
         .output()

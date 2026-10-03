@@ -21,6 +21,7 @@ fn have(cmd: &str) -> bool {
 
 fn run(args: &[&str]) -> (i32, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
         .output()
@@ -48,9 +49,9 @@ fn generate(tag: &str, rule: &str) -> PathBuf {
 /// input that did not compile at all in half the targets. The corpus is the only material
 /// that was ever run, so a shape the corpus does not have was a shape nobody ran.
 fn agrees_everywhere(tag: &str, dir: &Path) {
-    // The wording moves with `--lang` (the suite is pinned to Japanese by
-    // `.cargo/config.toml`), so what is asserted is the exit code and the absence of a
-    // failing line — neither of which is prose.
+    // The wording moves with `--lang` (the suite runs rulec with `RULEC_LANG=ja`), so
+    // what is asserted is the exit code and the absence of a failing line — neither of
+    // which is prose.
     let (c, out) = run(&["test", &dir.to_string_lossy()]);
     assert!(!out.lines().any(|l| l.starts_with("FAIL")), "{tag}: 一致しない言語がある:\n{out}");
     assert_eq!(c, 0, "{tag}: rulec test が 0 で終わらない:\n{out}");

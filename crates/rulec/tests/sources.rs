@@ -2,6 +2,9 @@
 //! copies beside the rule by pinned digests. Fetching is not exercised here — it reads the
 //! network — but everything from a copy on disk onward is.
 
+// Each test reads rulec's Japanese wording, so it sets the language first: rulec has one
+// language for the whole process (src/i18n.rs), and English is the default.
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -39,6 +42,7 @@ fn codes(src: &str, path: &Path) -> Vec<String> {
 
 fn rulec(dir: &Path, args: &[&str]) -> (i32, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(dir)
         .args(args)
         .output()
@@ -48,6 +52,7 @@ fn rulec(dir: &Path, args: &[&str]) -> (i32, String) {
 
 #[test]
 fn 写しと固定が合っていれば通る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = std::fs::read_to_string(root().join(RULE)).unwrap();
     let cs = codes(&src, &root().join(RULE));
     assert!(cs.iter().all(|c| c.starts_with('W')) && !cs.contains(&"W119".to_string()), "{cs:?}");
@@ -55,6 +60,7 @@ fn 写しと固定が合っていれば通る() {
 
 #[test]
 fn 固定の欠け_写しの変化_写しの欠け_余った固定() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = scratch("diags");
     let src = std::fs::read_to_string(d.join("a.rule")).unwrap();
     let pin = "  第91条 sha256:85faf53f6f6e8196\n";
@@ -89,6 +95,7 @@ fn 固定の欠け_写しの変化_写しの欠け_余った固定() {
 
 #[test]
 fn pinは固定行だけを書き換える() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = scratch("pin");
     let src = std::fs::read_to_string(d.join("a.rule")).unwrap();
     let pin = "  第91条 sha256:85faf53f6f6e8196\n";
@@ -111,6 +118,7 @@ fn pinは固定行だけを書き換える() {
 
 #[test]
 fn fmtは引用と固定行を整える() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule t(t) v1
 
@@ -136,6 +144,7 @@ table 表(t1)   @法 第1条
 
 #[test]
 fn ページは引いた断片を引用する() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (c, out) = rulec(&root(), &["doc", RULE, "--lang", "ja"]);
     assert_eq!(c, 0, "{out}");
     assert!(out.contains("出典: 措置法 第91条（法令 332AC0000000026、2026-04-01 時点。2026-04-01 施行、令和8年法律第12号による改正後）"), "{out}");
@@ -148,6 +157,7 @@ fn ページは引いた断片を引用する() {
 /// that is not one (`別紙1`) is E037 too (§15.82).
 #[test]
 fn ファイルは丸ごと引用でき_法令は箇所が要る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = scratch("whole");
     std::fs::write(d.join("料金表.txt"), "S60 990円\n").unwrap();
     let h = rulec::sha256::short(b"S60 990\xe5\x86\x86\n");
@@ -171,6 +181,7 @@ fn ファイルは丸ごと引用でき_法令は箇所が要る() {
 /// reads the copies and never the document, and `doc` quotes the table under the rows.
 #[test]
 fn 文書の表を引いて写しに固定する() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = scratch("fragments");
     let doc = "# 料金表\n\n前書き。\n\n| あて先 | S60 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n";
     std::fs::write(d.join("料金表.md"), doc).unwrap();
@@ -218,6 +229,7 @@ fn 文書の表を引いて写しに固定する() {
 /// language (§15.71).
 #[test]
 fn 生成物のヘッダは出典を名指す() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = std::env::temp_dir().join(format!("rulec-cites-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     let (c, out) = rulec(&root(), &["gen", RULE, "--out", &d.to_string_lossy(), "--lang", "en"]);
@@ -236,6 +248,7 @@ fn 生成物のヘッダは出典を名指す() {
 /// the document the rows were transcribed from.
 #[test]
 fn ファイルの出典はurlを持ち_それが下流まで届く() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = scratch("url");
     std::fs::write(d.join("料金表.txt"), "S60 990円\n").unwrap();
     let url = "https://raw.githubusercontent.com/o/r/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/docs/t.md";
@@ -286,6 +299,7 @@ fn ファイルの出典はurlを持ち_それが下流まで届く() {
 /// range over rows the copy lists one by one — is neither.
 #[test]
 fn 写した金額と写しを突き合わせる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = scratch("transcribe");
     let doc = "# 料金表\n\n| あて先 | S60 | S80 |\n|---|---|---|\n| 近畿 | 990円 | 1210円 |\n| 関東 | 880円 | 1100円 |\n";
     std::fs::write(d.join("料金表.md"), doc).unwrap();
@@ -348,6 +362,7 @@ fn 写した金額と写しを突き合わせる() {
 /// thousand is the rate it is.
 #[test]
 fn 金額は行の見出しの下で探す() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = scratch("heading");
     let doc = "# 料金表\n\n| あて先 | S60 | S80 |\n|---|---|---|\n| 近畿 | 990円 | 1210円 |\n| 関東 | 880円 | 1100円 |\n";
     std::fs::write(d.join("料金表.md"), doc).unwrap();
@@ -419,6 +434,7 @@ fn 金額は行の見出しの下で探す() {
 /// the table, not the file.
 #[test]
 fn 四つの形式が同じ写しと同じ固定になる() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     if !have("python3") {
         eprintln!("skip: python3 が無い");
         return;
@@ -536,6 +552,7 @@ fn have(cmd: &str) -> bool {
 /// error side of `sources::check` was reached only where a mutant seeded it.
 #[test]
 fn 写しが無い_固定が無い_引用が読めない() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = scratch("sources-errors");
     let rule = |src: &str, cite: &str| {
         format!(
@@ -603,6 +620,7 @@ fn 写しが無い_固定が無い_引用が読めない() {
 /// moved on — replacing the line rather than adding a second one.
 #[test]
 fn pinは変わった写しの固定を書き換える() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = scratch("sources-repin");
     let doc = |fee: &str| format!("| あて先 | 運賃 |\n|---|---|\n| 近畿 | {fee} |\n");
     std::fs::write(d.join("料金表.md"), doc("990円")).unwrap();
@@ -645,6 +663,7 @@ fn pinは変わった写しの固定を書き換える() {
 /// and of a fragment, which is what this holds.
 #[test]
 fn ecfrの出典は引用からピンまで通る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let d = std::env::temp_dir().join(format!("rulec-ecfr-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
@@ -675,6 +694,7 @@ fn ecfrの出典は引用からピンまで通る() {
 /// `rulec source pin`; leaving `§1910.157` bare writes a file that does not parse.
 #[test]
 fn ピンの行は必要なときだけ引用符で囲む() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     assert_eq!(rulec::sources::pin_line("第91条", "aa"), "  第91条 sha256:aa");
     assert_eq!(rulec::sources::pin_line("別表第一", "aa"), "  別表第一 sha256:aa");
     assert_eq!(rulec::sources::pin_line("表1", "aa"), "  表1 sha256:aa");

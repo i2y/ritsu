@@ -3,9 +3,9 @@
 //! states have to be what is on disk.
 //!
 //! Its own binary because the excerpts are of the **default** output, which is English
-//! (§11 principle 7), while `.cargo/config.toml` pins `RULEC_LANG=ja` for the suite. The
-//! output language is a process-wide setting, so a binary must not mix languages — the
-//! same reason `golden_en.rs` is separate from `golden.rs`.
+//! (§11 principle 7), while the suite runs in Japanese (`RULEC_LANG=ja`). The output
+//! language is a process-wide setting, so a binary must not mix languages — the same
+//! reason `golden_en.rs` is separate from `golden.rs`.
 
 fn readme() -> String {
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md");

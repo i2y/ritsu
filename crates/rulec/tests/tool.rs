@@ -22,6 +22,7 @@ fn generate(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rulec-tool-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(["gen", RULE, "--out", dir.to_str().unwrap()])
         .output()
@@ -113,7 +114,7 @@ fn contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
     assert!(desc.contains("厚生年金保険料") && desc.contains("報酬月額"), "{desc}");
     let schema = tool.get("inputSchema").expect("inputSchema");
     let want: rulec::json::Json = {
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(root()).args(["schema", RULE]).output().unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(["schema", RULE]).output().unwrap();
         let j = rulec::json::parse(String::from_utf8_lossy(&o.stdout).trim()).unwrap();
         j.get("properties").unwrap().get("in").unwrap().clone()
     };
@@ -175,7 +176,7 @@ fn サーバは生成物の一つとして数えられる() {
     for f in ["python/pension_premium_mcp.py", "typescript/pension_premium_mcp.ts", "javascript/pension_premium_mcp.mjs"] {
         assert!(dir.join(f).exists(), "{f} が無い");
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(root()).args(["api", RULE]).output().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(["api", RULE]).output().unwrap();
     let j = rulec::json::parse(String::from_utf8_lossy(&o.stdout).trim()).unwrap();
     for (lang, want) in [("python", "pension_premium_mcp.py"), ("typescript", "pension_premium_mcp.ts"), ("javascript", "pension_premium_mcp.mjs")] {
         assert_eq!(j.get(lang).and_then(|l| l.get("mcp")).and_then(|m| m.as_str()), Some(want), "{lang}");

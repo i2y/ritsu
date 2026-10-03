@@ -19,6 +19,7 @@ fn talk(requests: &[&str]) -> Vec<rulec::json::Json> {
 /// `talk`, with flags for `rulec mcp` itself.
 fn talk_with(flags: &[&str], requests: &[&str]) -> Vec<rulec::json::Json> {
     let mut child = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .arg("mcp")
         .args(flags)
@@ -217,7 +218,7 @@ fn 終わらない呼び出しは上限で止め_次の呼び出しに答える(
     assert_eq!(next.get("isError"), Some(&rulec::json::Json::Bool(false)), "{next:?}");
     // A limit that is not a number of seconds is refused before anything is served.
     for bad in ["0", "ten"] {
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).args(["mcp", "--timeout", bad]).stdin(Stdio::null()).output().unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["mcp", "--timeout", bad]).stdin(Stdio::null()).output().unwrap();
         assert_eq!(o.status.code(), Some(2), "--timeout {bad}");
     }
 }

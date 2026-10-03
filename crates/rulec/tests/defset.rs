@@ -1,6 +1,9 @@
 //! Definition sets (§15.66): several tables defining one output, ordered by
 //! `overrides`; row labels; and what the evaluator, the generators and the page do with them.
 
+// Each test reads rulec's Japanese wording, so it sets the language first: rulec has one
+// language for the whole process (src/i18n.rs), and English is the default.
+
 use std::collections::HashMap;
 
 const SPLIT: &str = "tests/corpus/印紙税の本則と軽減.rule";
@@ -23,6 +26,7 @@ fn checked(src: &str) -> (rulec::ast::RuleFile, rulec::types::Checked) {
 
 #[test]
 fn 本則と軽減の二表は通る() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = read(SPLIT);
     // At its real path: the copies of its sources sit beside it (§15.68).
     let cs: Vec<String> = rulec::check_source(&src, SPLIT).iter().map(|d| d.code.to_string()).collect();
@@ -32,6 +36,7 @@ fn 本則と軽減の二表は通る() {
 
 #[test]
 fn 二表は一つの定義集合にまとまり_例外が先に試される() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = read(SPLIT);
     let (_, c) = checked(&src);
     let set = c.sets.iter().find(|s| s.merged()).expect("merged set");
@@ -59,6 +64,7 @@ fn 二表は一つの定義集合にまとまり_例外が先に試される() {
 
 #[test]
 fn 評価は勝った表の行を書かれた位置で記録する() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = read(SPLIT);
     let (f, c) = checked(&src);
     use rulec::eval::Val;
@@ -93,6 +99,7 @@ fn 評価は勝った表の行を書かれた位置で記録する() {
 
 #[test]
 fn 順序の無い交わりはE105で_優先を書けば消える() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let base = "\
 rule t(t) v1
 
@@ -123,6 +130,7 @@ table 乙(otsu)
 
 #[test]
 fn 優先する表に丸ごと覆われた行はE102() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule t(t) v1
 
@@ -150,6 +158,7 @@ overrides 甲
 
 #[test]
 fn 指す先の誤りと出力の食い違いと二出力の共有() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let e035 = "\
 rule t(t) v1
 
@@ -213,6 +222,7 @@ overrides 甲
 
 #[test]
 fn ラベルの重複と予約語() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let dup = "\
 rule t(t) v1
 
@@ -238,6 +248,7 @@ r1 | false | false |
 
 #[test]
 fn fmtはラベルを一列に揃えて冪等() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule t(t) v1
 
@@ -263,6 +274,7 @@ const PROVISO: &str = "tests/corpus/送料のただし書.rule";
 
 #[test]
 fn 節は一行の表として集合に入り_例外が先に試される() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = read(PROVISO);
     let (f, c) = checked(&src);
     let set = c.sets.iter().find(|s| s.key == "送料").expect("the set of 送料");
@@ -300,6 +312,7 @@ fn 節は一行の表として集合に入り_例外が先に試される() {
 
 #[test]
 fn 節の形の誤りはE046() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let ok = "\
 rule t(t) v1
 
@@ -358,6 +371,7 @@ clause 例外(exception) -> x
 
 #[test]
 fn fmtは節の本体を二字下げにして冪等() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = "\
 rule t(t) v1
 

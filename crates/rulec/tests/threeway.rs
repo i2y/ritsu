@@ -25,6 +25,7 @@ fn have(cmd: &str) -> bool {
 
 fn rulec(args: &[&str]) -> String {
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
         .current_dir(root())
         .args(args)
         .output()
@@ -538,7 +539,7 @@ fn 数の集合は全言語で集合として読まれる() {
     std::fs::write(&p, "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n").unwrap();
     let out = dir.join("gen");
     rulec(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]);
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
     let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
     assert!(o.status.success(), "{said}");
     assert!(said.contains("matched"), "{said}");
@@ -562,7 +563,7 @@ fn 率の出力は全言語で宣言した刻みで返る() {
         std::fs::write(&p, src).unwrap();
         let out = dir.join(format!("gen-{name}"));
         rulec(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]);
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
         let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
         assert!(o.status.success(), "{name}: {said}");
         assert!(said.contains("matched"), "{name}: {said}");
