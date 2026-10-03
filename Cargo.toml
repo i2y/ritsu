@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/i2y/ritsu"
+
+# Cargo reads profiles only here, at the root of the workspace; the ones the crates keep in their
+# own Cargo.toml are ignored (DESIGN 12.4).
+[profile.release]
+strip = true
+
+# koyomi's tests walk every day of 1900-2100 several times over; unoptimized, that alone takes minutes.
+[profile.test.package.koyomi]
+opt-level = 2
