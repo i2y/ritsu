@@ -2,8 +2,8 @@
 //!
 //! | level | what runs |
 //! |---|---|
-//! | `fast` | nothing but cargo (git may be used) |
-//! | `tools` | the tools installed on the machine: compilers and checkers of generated code, PostgreSQL, TigerBeetle, Chrome, Mermaid, xmllint, Lean, the linters |
+//! | `fast` | nothing but cargo (git may be used, and curl, to ask a server the test itself started) |
+//! | `tools` | the tools installed on the machine: compilers and checkers of generated code, PostgreSQL, TigerBeetle, Chrome, Mermaid, xmllint, Lean, the linters, pixie's greeter, the binaries of the other languages a test runs (rulec 0.22.0 for dandori's; rulec, koyomi, chobo and dandori for sakai's) |
 //! | `platforms` | services and clusters a test starts, and the network: Temporal, Argo on kind, LocalStack, Ollama, TypeSafe, e-Gov and the eCFR, Kani |
 //!
 //! `RITSU_TEST_LEVEL` names the highest level to run; a test that needs a higher one prints a
@@ -73,6 +73,15 @@ pub enum Need {
     Lean,
     /// sakai's import-linter, dependency-cruiser, ArchUnit, Context Mapper, go-arch-lint.
     Linters,
+    /// The rulec binary dandori's tests read a flow's rules with (`DANDORI_RULEC`), until dandori
+    /// reads them in the same process (PLAN D.3).
+    Rulec,
+    /// The binaries of rulec, koyomi, chobo and dandori, which sakai's tests check the files its
+    /// example copied from them with (`SAKAI_RULEC` and the like), until sakai reads them in
+    /// the same process (PLAN D.8).
+    Suite,
+    /// A greeter built with pixie (`GEAS_PIXIE_GREETER`), which geas's tests drive.
+    Pixie,
     Temporal,
     Argo,
     LocalStack,
@@ -110,6 +119,9 @@ impl Need {
             Need::Xmllint => "xmllint",
             Need::Lean => "lean",
             Need::Linters => "linters",
+            Need::Rulec => "rulec",
+            Need::Suite => "rulec, koyomi, chobo and dandori",
+            Need::Pixie => "pixie's greeter",
             Need::Temporal => "temporal",
             Need::Argo => "argo",
             Need::LocalStack => "localstack",
@@ -130,5 +142,20 @@ pub fn need(n: Need) -> bool {
     }
     let top = level().map(Level::word).unwrap_or("");
     crate::skip::skip_for(crate::skip::Why::Level, &format!("needs {} (the {} level); RITSU_TEST_LEVEL is {top}", n.word(), l.word()));
+    false
+}
+
+/// What a test asks before it runs something beyond cargo: whether the level lets it ([`need`],
+/// a SKIP of the level when not), and whether it is on the machine (`found`, a SKIP saying
+/// `reason` when not). True when the test goes on. rulec's and dandori's tests ask this way,
+/// one question where they had asked the second alone.
+pub fn ready(n: Need, found: impl FnOnce() -> bool, reason: &str) -> bool {
+    if !need(n) {
+        return false;
+    }
+    if found() {
+        return true;
+    }
+    crate::skip::skip(reason);
     false
 }

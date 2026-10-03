@@ -258,11 +258,56 @@ fn write(v: &Json, indent: Option<&str>, level: usize, o: &mut String) {
 
 // ── Reading ─────────────────────────────────────────────────────────────
 
-/// What is wrong with a text that should be JSON, and the byte it is at.
+/// What is wrong with a text that should be JSON, and the byte it is at: [`Error::what`] for a
+/// tool that words it its own way (rulec), [`Error::message`] in ritsu-base's words.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error {
     pub at: usize,
+    pub what: Problem,
     pub message: Text,
+}
+
+/// What stops the reader, before it is said in words.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Problem {
+    /// Something after the value, at the byte the value ended.
+    Extra,
+    /// The character that has to come here.
+    Expected(char),
+    /// No value where one has to be.
+    MissingValue,
+    /// Nested deeper than [`MAX_DEPTH`].
+    TooDeep,
+    /// A word that is not `true`, `false` or `null`, or a number with no digit.
+    Unreadable,
+    /// A decimal point with no digit after it.
+    NoDigitAfterPoint,
+    /// `1e3`: an exponent, which is not read.
+    Exponent,
+    /// An integer outside `i128`.
+    TooLarge,
+    /// `\u` without four hex digits after it.
+    BadUnicodeEscape,
+    /// A high surrogate with no `\u` after it.
+    LoneHighSurrogate,
+    /// A high surrogate whose `\u` after it is not a low surrogate.
+    NotLowSurrogate,
+    /// An escape that names no character.
+    BadCodePoint,
+    /// `\x` and the other escapes JSON does not have.
+    UnknownEscape,
+    /// A control character written as it is inside a string.
+    ControlCharacter,
+    /// Bytes that are not UTF-8.
+    NotUtf8,
+    /// A string with no closing quote.
+    Unclosed,
+    /// Neither `,` nor `]` after an element of an array.
+    CommaOrBracket,
+    /// Neither `,` nor `}` after a member of an object.
+    CommaOrBrace,
+    /// The key that appears twice in one object.
+    DuplicateKey(String),
 }
 
 /// The deepest nesting read. The reader is recursive, and a line of some twenty thousand `[`
@@ -276,7 +321,7 @@ pub fn parse(src: &str) -> Result<Json, Error> {
     p.ws();
     if p.i != p.b.len() {
         let n = p.i + 1;
-        return Err(p.err(tr!("{n} バイト目から後ろに余分なものがあります", "extra content from byte {n} on")));
+        return Err(p.err(Problem::Extra, tr!("{n} バイト目から後ろに余分なものがあります", "extra content from byte {n} on")));
     }
     Ok(v)
 }
@@ -288,8 +333,8 @@ struct P<'a> {
 }
 
 impl P<'_> {
-    fn err(&self, message: Text) -> Error {
-        Error { at: self.i, message }
+    fn err(&self, what: Problem, message: Text) -> Error {
+        Error { at: self.i, what, message }
     }
 
     fn ws(&mut self) {
@@ -305,19 +350,19 @@ impl P<'_> {
             return Ok(());
         }
         let (n, c) = (self.i + 1, c as char);
-        Err(self.err(tr!("{n} バイト目に `{c}` が要ります", "byte {n}: expected `{c}`")))
+        Err(self.err(Problem::Expected(c), tr!("{n} バイト目に `{c}` が要ります", "byte {n}: expected `{c}`")))
     }
 
     fn value(&mut self) -> Result<Json, Error> {
         self.ws();
         let Some(&c) = self.b.get(self.i) else {
-            return Err(self.err(tr!("値がありません", "a value is missing")));
+            return Err(self.err(Problem::MissingValue, tr!("値がありません", "a value is missing")));
         };
         match c {
             b'{' | b'[' => {
                 if self.depth == MAX_DEPTH {
                     let n = self.i + 1;
-                    return Err(self.err(tr!("{n} バイト目: 入れ子が {MAX_DEPTH} 段を超えています", "byte {n}: nested deeper than {MAX_DEPTH} levels")));
+                    return Err(self.err(Problem::TooDeep, tr!("{n} バイト目: 入れ子が {MAX_DEPTH} 段を超えています", "byte {n}: nested deeper than {MAX_DEPTH} levels")));
                 }
                 self.depth += 1;
                 let v = if c == b'{' { self.obj() } else { self.arr() };
@@ -338,7 +383,7 @@ impl P<'_> {
             }
         }
         let n = self.i + 1;
-        Err(self.err(tr!("{n} バイト目が読めません", "cannot read byte {n}")))
+        Err(self.err(Problem::Unreadable, tr!("{n} バイト目が読めません", "cannot read byte {n}")))
     }
 
     fn number(&mut self) -> Result<Json, Error> {
@@ -352,7 +397,7 @@ impl P<'_> {
         let n = start + 1;
         if self.i == start || (self.i == start + 1 && self.b[start] == b'-') {
             self.i = start;
-            return Err(self.err(tr!("{n} バイト目が読めません", "cannot read byte {n}")));
+            return Err(self.err(Problem::Unreadable, tr!("{n} バイト目が読めません", "cannot read byte {n}")));
         }
         let mut frac = false;
         if self.b.get(self.i) == Some(&b'.') {
@@ -363,17 +408,17 @@ impl P<'_> {
                 self.i += 1;
             }
             if self.i == digits {
-                return Err(Error { at: start, message: tr!("{n} バイト目: 小数点のあとに数字がありません", "byte {n}: no digit after the decimal point") });
+                return Err(Error { at: start, what: Problem::NoDigitAfterPoint, message: tr!("{n} バイト目: 小数点のあとに数字がありません", "byte {n}: no digit after the decimal point") });
             }
         }
         if matches!(self.b.get(self.i), Some(b'e') | Some(b'E')) {
-            return Err(Error { at: start, message: tr!("{n} バイト目: 指数の書き方は読みません", "byte {n}: an exponent is not read") });
+            return Err(Error { at: start, what: Problem::Exponent, message: tr!("{n} バイト目: 指数の書き方は読みません", "byte {n}: an exponent is not read") });
         }
         let text = std::str::from_utf8(&self.b[start..self.i]).unwrap_or_default();
         if frac {
             return Ok(Json::Frac(text.to_string()));
         }
-        text.parse::<i128>().map(Json::Int).map_err(|_| Error { at: start, message: tr!("{n} バイト目: 整数が大きすぎます", "byte {n}: the integer is too large") })
+        text.parse::<i128>().map(Json::Int).map_err(|_| Error { at: start, what: Problem::TooLarge, message: tr!("{n} バイト目: 整数が大きすぎます", "byte {n}: the integer is too large") })
     }
 
     fn hex4(&mut self) -> Result<u32, Error> {
@@ -385,7 +430,7 @@ impl P<'_> {
             }
             None => {
                 let n = self.i + 1;
-                Err(self.err(tr!("{n} バイト目: \\u のあとが 16 進の 4 桁ではありません", "byte {n}: \\u is not followed by four hex digits")))
+                Err(self.err(Problem::BadUnicodeEscape, tr!("{n} バイト目: \\u のあとが 16 進の 4 桁ではありません", "byte {n}: \\u is not followed by four hex digits")))
             }
         }
     }
@@ -395,14 +440,14 @@ impl P<'_> {
         let mut out = String::new();
         loop {
             let Some(&c) = self.b.get(self.i) else {
-                return Err(self.err(tr!("文字列が閉じていません", "a string is not closed")));
+                return Err(self.err(Problem::Unclosed, tr!("文字列が閉じていません", "a string is not closed")));
             };
             self.i += 1;
             match c {
                 b'"' => return Ok(out),
                 b'\\' => {
                     let Some(&e) = self.b.get(self.i) else {
-                        return Err(self.err(tr!("文字列が閉じていません", "a string is not closed")));
+                        return Err(self.err(Problem::Unclosed, tr!("文字列が閉じていません", "a string is not closed")));
                     };
                     self.i += 1;
                     match e {
@@ -421,13 +466,13 @@ impl P<'_> {
                             let ch = if (0xD800..0xDC00).contains(&h) {
                                 if self.b.get(self.i..self.i + 2) != Some(b"\\u") {
                                     let n = self.i + 1;
-                                    return Err(self.err(tr!("{n} バイト目: 上位サロゲートのあとに下位サロゲートがありません", "byte {n}: a high surrogate without its low surrogate")));
+                                    return Err(self.err(Problem::LoneHighSurrogate, tr!("{n} バイト目: 上位サロゲートのあとに下位サロゲートがありません", "byte {n}: a high surrogate without its low surrogate")));
                                 }
                                 self.i += 2;
                                 let lo = self.hex4()?;
                                 if !(0xDC00..0xE000).contains(&lo) {
                                     let n = self.i - 3;
-                                    return Err(self.err(tr!("{n} バイト目: 下位サロゲートではありません", "byte {n}: not a low surrogate")));
+                                    return Err(self.err(Problem::NotLowSurrogate, tr!("{n} バイト目: 下位サロゲートではありません", "byte {n}: not a low surrogate")));
                                 }
                                 0x10000 + ((h - 0xD800) << 10) + (lo - 0xDC00)
                             } else {
@@ -435,18 +480,18 @@ impl P<'_> {
                             };
                             match char::from_u32(ch) {
                                 Some(c) => out.push(c),
-                                None => return Err(self.err(tr!("使えない符号位置です", "not a code point that can be used"))),
+                                None => return Err(self.err(Problem::BadCodePoint, tr!("使えない符号位置です", "not a code point that can be used"))),
                             }
                         }
                         _ => {
                             let n = self.i;
-                            return Err(Error { at: n - 1, message: tr!("{n} バイト目: 知らないエスケープです", "byte {n}: an escape that is not known") });
+                            return Err(Error { at: n - 1, what: Problem::UnknownEscape, message: tr!("{n} バイト目: 知らないエスケープです", "byte {n}: an escape that is not known") });
                         }
                     }
                 }
                 c if c < 0x20 => {
                     let n = self.i;
-                    return Err(Error { at: n - 1, message: tr!("{n} バイト目: 文字列の中に制御文字があります", "byte {n}: a control character in a string") });
+                    return Err(Error { at: n - 1, what: Problem::ControlCharacter, message: tr!("{n} バイト目: 文字列の中に制御文字があります", "byte {n}: a control character in a string") });
                 }
                 _ => {
                     // Pass a character's UTF-8 bytes through as they are.
@@ -464,7 +509,7 @@ impl P<'_> {
                         }
                         Err(_) => {
                             let n = self.i;
-                            return Err(Error { at: n - 1, message: tr!("{n} バイト目: UTF-8 として読めません", "byte {n}: not UTF-8") });
+                            return Err(Error { at: n - 1, what: Problem::NotUtf8, message: tr!("{n} バイト目: UTF-8 として読めません", "byte {n}: not UTF-8") });
                         }
                     }
                 }
@@ -491,7 +536,7 @@ impl P<'_> {
                 }
                 _ => {
                     let n = self.i + 1;
-                    return Err(self.err(tr!("{n} バイト目に `,` か `]` が要ります", "byte {n}: expected `,` or `]`")));
+                    return Err(self.err(Problem::CommaOrBracket, tr!("{n} バイト目に `,` か `]` が要ります", "byte {n}: expected `,` or `]`")));
                 }
             }
         }
@@ -512,7 +557,7 @@ impl P<'_> {
             self.eat(b':')?;
             let v = self.value()?;
             if out.iter().any(|(x, _)| *x == k) {
-                return Err(Error { at, message: tr!("キー `{k}` が二度あります", "the key `{k}` appears twice") });
+                return Err(Error { at, what: Problem::DuplicateKey(k.clone()), message: tr!("キー `{k}` が二度あります", "the key `{k}` appears twice") });
             }
             out.push((k, v));
             self.ws();
@@ -524,7 +569,7 @@ impl P<'_> {
                 }
                 _ => {
                     let n = self.i + 1;
-                    return Err(self.err(tr!("{n} バイト目に `,` か `}}` が要ります", "byte {n}: expected `,` or `}}`")));
+                    return Err(self.err(Problem::CommaOrBrace, tr!("{n} バイト目に `,` か `}}` が要ります", "byte {n}: expected `,` or `}}`")));
                 }
             }
         }

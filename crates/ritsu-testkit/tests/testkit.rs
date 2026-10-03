@@ -201,6 +201,41 @@ fn the_levels() {
     assert!(r.both().contains("RITSU_TEST_LEVEL=everything is not a level"), "{}", r.both());
 }
 
+/// `ready` asks the level first (a SKIP of the level, and the machine is not asked), then the
+/// machine (a SKIP for what is missing). The binaries of the other languages and pixie's greeter
+/// are tools.
+#[test]
+fn ready_asks_the_level_then_the_machine() {
+    use level::{Level, Need};
+    if in_child() {
+        let fast = std::env::var("RITSU_TEST_LEVEL").as_deref() == Ok("fast");
+        let mut asked = false;
+        let went = level::ready(
+            Need::Rulec,
+            || {
+                asked = true;
+                false
+            },
+            "no rulec here",
+        );
+        assert!(!went);
+        assert_eq!(asked, !fast, "at the fast level the machine is not asked");
+        assert_eq!(level::ready(Need::Pixie, || true, "not said"), !fast);
+        return;
+    }
+    for n in [Need::Rulec, Need::Suite, Need::Pixie] {
+        assert_eq!(n.level(), Level::Tools, "{n:?}");
+    }
+    let t = TempDir::new("readylog");
+    for (top, want) in [("fast", vec![skip::Why::Level, skip::Why::Level]), ("tools", vec![skip::Why::Missing])] {
+        let log = t.path().join(format!("{top}.tsv"));
+        let r = child("ready_asks_the_level_then_the_machine", &[("RITSU_TEST_LEVEL", top), ("RITSU_SKIP_LOG", log.to_str().unwrap())]);
+        assert!(r.ok, "{}", r.both());
+        let logged = skip::read_log(&std::fs::read_to_string(&log).unwrap());
+        assert_eq!(logged.iter().map(|l| l.why).collect::<Vec<_>>(), want, "RITSU_TEST_LEVEL={top}");
+    }
+}
+
 #[test]
 fn a_postgresql_cluster_is_started_and_stopped() {
     if !level::need(level::Need::Postgres) {

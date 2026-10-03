@@ -34,6 +34,29 @@ fn what_is_refused_and_where() {
         assert_eq!(e.at, at, "{bad}: {}", e.message.en);
         assert!(!e.message.ja.is_empty() && !e.message.en.is_empty());
     }
+    // What is wrong, for a tool that says it in words of its own (rulec).
+    use json::Problem as P;
+    for (bad, what) in [
+        (r#"{"a":1}x"#, P::Extra),
+        (r#"{"a" 1}"#, P::Expected(':')),
+        ("", P::MissingValue),
+        ("nul", P::Unreadable),
+        ("1.", P::NoDigitAfterPoint),
+        ("1e3", P::Exponent),
+        ("1000000000000000000000000000000000000000", P::TooLarge),
+        (r#""\u12""#, P::BadUnicodeEscape),
+        (r#""\ud83d""#, P::LoneHighSurrogate),
+        (r#""\ud83d\u0041""#, P::NotLowSurrogate),
+        (r#""\x""#, P::UnknownEscape),
+        ("\"a\u{1}b\"", P::ControlCharacter),
+        (r#""a"#, P::Unclosed),
+        ("[1 2]", P::CommaOrBracket),
+        (r#"{"a":1 "b":2}"#, P::CommaOrBrace),
+        (r#"{"a":1,"a":2}"#, P::DuplicateKey("a".into())),
+    ] {
+        assert_eq!(json::parse(bad).expect_err(bad).what, what, "{bad}");
+    }
+    assert_eq!(json::parse(&"[".repeat(json::MAX_DEPTH + 1)).expect_err("deep").what, P::TooDeep);
     let deep = "[".repeat(json::MAX_DEPTH + 1) + &"]".repeat(json::MAX_DEPTH + 1);
     assert!(json::parse(&deep).is_err(), "deeper than the limit");
     let ok = "[".repeat(json::MAX_DEPTH) + &"]".repeat(json::MAX_DEPTH);

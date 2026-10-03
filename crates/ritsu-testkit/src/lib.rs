@@ -30,7 +30,7 @@ pub mod tmp;
 pub mod tools;
 
 pub use golden::golden;
-pub use level::{Level, Need, need};
+pub use level::{Level, Need, need, ready};
 pub use run::{Ran, run};
 pub use skip::skip;
 pub use tmp::TempDir;

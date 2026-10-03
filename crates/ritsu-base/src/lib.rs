@@ -14,7 +14,7 @@
 //!   project, and paths from it and from where a tool runs.
 //! - [`sources`]: the copies of a law's articles, their text, their pins, and the requests to
 //!   e-Gov and the eCFR that bring them.
-//! - [`docpage`]: the frame of an approver's page — the HTML head, the palette, the stamp.
+//! - [`docpage`]: the frame of an approver's page — the HTML head and the palette.
 //! - [`json`]: a JSON value whose objects keep their order and whose integers are exact.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
