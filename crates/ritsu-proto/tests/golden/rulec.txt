@@ -1,0 +1,879 @@
+== ../rulec/tests/corpus/contracts/quote.proto
+package Some("shop.v1") imports ["buf/validate/validate.proto"]
+message QuoteRequest
+  weight_g int64 gte=1 lte=30000
+  express bool
+  declared_jpy int64 gte=0 lte=300000
+  cover_jpy int64 gte=0 lte=300000
+  rules cel=["!this.express || this.weight_g <= 5000", "this.declared_jpy <= this.cover_jpy"] oneofs=[] disabled=false
+== ../rulec/tests/corpus/contracts/shipment.proto
+package Some("shop.v1") imports ["buf/validate/validate.proto"]
+enum Handling HANDLING_STANDARD=0 HANDLING_FRAGILE=1
+message CreateShipmentRequest
+  destination Destination required
+  parcels Parcel repeated min_items=1 max_items=20
+  declared_value_jpy int64 gte=0 lte=1000000
+  delivery_window string optional str_in=["morning", "evening"]
+message Destination
+  region string str_in=["honshu", "hokkaido", "okinawa"]
+  postcode string
+message Parcel
+  weight_g int64 gte=1 lte=30000
+  handling Handling
+== ../rulec/tests/mutants/contracts/order.proto
+package Some("shop.v1") imports []
+enum MemberTier MEMBER_TIER_UNSPECIFIED=0 MEMBER_TIER_BASIC=1 MEMBER_TIER_GOLD=2 MEMBER_TIER_PLATINUM=3
+== ../rulec/tests/mutants/contracts/quote.proto
+package Some("shop.v1") imports ["buf/validate/validate.proto"]
+message QuoteRequest
+  weight_g int64 gte=1 lte=30000
+  express bool
+  declared_jpy int64 gte=0 lte=300000
+  cover_jpy int64 gte=0 lte=300000
+  rules cel=["!this.express || this.weight_g <= 5000", "this.declared_jpy <= this.cover_jpy"] oneofs=[] disabled=false
+== ../dandori/examples/fulfillment/specs/fulfillment.ja.proto
+package Some("shop.ja.v1") imports ["dandori/v1/options.proto", "google/protobuf/struct.proto", "warehouse.proto"]
+message FulfillRequest
+  order Order json_name="注文"
+message Order
+  id string
+  member bool json_name="会員"
+  amount int32 json_name="金額"
+  lines Line repeated json_name="明細"
+  gift Gift json_name="贈り物"
+  extra google.protobuf.Value json_name="付帯"
+message Line
+  sku string
+  quantity int32 json_name="数"
+message Gift
+  recipient string json_name="宛名"
+  message string optional json_name="メッセージ"
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated json_name="引当"
+  tracking_number string json_name="追跡番号"
+message AnswerPackingRequest
+  boxes int32 json_name="箱の数"
+message AnswerPackingResponse
+== ../dandori/examples/fulfillment/specs/fulfillment.proto
+package Some("shop.v1") imports ["dandori/v1/options.proto", "google/protobuf/struct.proto", "warehouse.proto"]
+message FulfillRequest
+  order Order
+message Order
+  id string
+  member bool
+  amount int32
+  lines Line repeated
+  gift Gift
+  extra google.protobuf.Value
+message Line
+  sku string
+  quantity int32
+message Gift
+  recipient string
+  message string optional
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated
+  tracking_number string json_name="tracking_number"
+message AnswerPackingRequest
+  boxes int32
+message AnswerPackingResponse
+== ../dandori/examples/fulfillment/specs/warehouse.proto
+package Some("warehouse.v1") imports []
+enum Stock unspecified=0 secured=1 short=2
+message ReserveRequest
+  sku string
+  quantity int32
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+message ReleaseRequest
+  id string
+message ReleaseResponse
+== ../dandori/proto/dandori/v1/options.proto
+package Some("dandori.v1") imports ["google/protobuf/descriptor.proto", "google/protobuf/struct.proto"]
+message WorkflowOptions
+  name string
+  version uint32
+message StartOptions
+  fails string repeated
+message EventOptions
+  task string
+message AnswerOptions
+  task string
+message StatusOptions
+message Status
+  at int32 optional
+  events string repeated
+== ../dandori/tests/fixtures/apis/warehouse.proto
+package Some("warehouse.v1") imports ["google/protobuf/timestamp.proto"]
+enum Stock unspecified=0 secured=1 short=2
+message ReserveRequest
+  sku string
+  quantity int32
+message WatchRequest
+  sku string
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+  count int64
+  price double
+  reserved_at google.protobuf.Timestamp
+== ../dandori/tests/fixtures/protos/common/v1/money.proto
+package Some("common.v1") imports ["buf/validate/validate.proto"]
+enum Currency CURRENCY_UNSPECIFIED=0 CURRENCY_JPY=1 CURRENCY_USD=2
+message Money
+  units string
+  nanos int32 gte=0 lte=999999999
+== ../dandori/tests/fixtures/protos/shop/v1/order.proto
+package Some("shop.v1") imports ["common/v1/money.proto"]
+message PlaceRequest
+  customer string
+message Order
+  id string
+  total common.v1.Money
+  currency common.v1.Currency
+== ../dandori/tests/fixtures/protos/tree.proto
+package Some("tree.v1") imports []
+message Tree
+  name string
+  children Tree repeated
+message Left
+  right Right
+message Right
+  left Left
+== ../dandori/tests/fixtures/protos/types.proto
+package Some("types.v1") imports ["buf/validate/validate.proto", "google/protobuf/any.proto", "google/protobuf/duration.proto", "google/protobuf/empty.proto", "google/protobuf/struct.proto", "google/protobuf/timestamp.proto", "google/protobuf/wrappers.proto"]
+enum Status STATUS_UNSPECIFIED=0 STATUS_OPEN=1 STATUS_CLOSED=2
+enum Mode ACTIVE=0 PAUSED=1
+message GetRequest
+  id string
+message Line
+  sku string
+  quantity int32 gte=1 lte=99
+  discount int32 gte=0 lte=50
+  offset int32 ignore=IGNORE_IF_ZERO_VALUE gt=0
+  outside int32 gt=10 lt=5
+  free int32
+  marks int32 repeated
+  fixed int32 const=7
+  total int64 gte=0
+message Box
+  count int32 gte=1 lte=10
+message Ticket
+  id string
+  status Status
+message Everything
+  name string
+  blob bytes
+  flag bool
+  count int32
+  small uint32
+  big int64
+  bigger uint64
+  ratio float
+  weight double
+  status Status
+  mode Mode
+  line Line
+  required_line Line required
+  lines Line repeated
+  note string optional
+  amount int32 optional gte=1
+  maybe_status Status optional
+  by_id string optional oneof=choice
+  by_number int32 optional oneof=choice
+  at google.protobuf.Timestamp
+  span google.protobuf.Duration
+  extra google.protobuf.Struct
+  value google.protobuf.Value
+  values google.protobuf.ListValue
+  any_thing google.protobuf.Any
+  nothing google.protobuf.Empty
+  wrapped google.protobuf.Int32Value
+  wrapped_big google.protobuf.Int64Value
+  wrapped_double google.protobuf.DoubleValue
+  wrapped_text google.protobuf.StringValue
+  times google.protobuf.Timestamp repeated
+  required_note string optional required
+  nested Nested
+  rules cel=[] oneofs=[(["by_id", "by_number"], false)] disabled=false
+message Nested
+  tag string
+== ../dandori/tests/fixtures/protos/unread.proto
+package Some("shop.v1") imports ["google/api/annotations.proto", "google/type/money.proto", "google/protobuf/timestamp.proto", "shop/v2/cancel.proto"]
+enum Kind KIND_UNSPECIFIED=0 KIND_BOOK=1 KIND_TOY=2
+message Item
+  sku string
+  kind Kind
+  listed_at google.protobuf.Timestamp
+message Priced
+  sku string
+  price google.type.Money
+message ItemRequest
+  sku string
+message QuoteRequest
+  budget google.type.Money
+message QuoteResponse
+  sku string
+== ../dandori/tests/fixtures/rules/account.proto
+package Some("bank.v1") imports []
+enum Status ACTIVE=0 CLOSED=1
+== ../dandori/tests/fixtures/rules/order.proto
+package Some("shop.v1") imports []
+enum MemberTier MEMBER_TIER_UNSPECIFIED=0 MEMBER_TIER_BASIC=1 MEMBER_TIER_GOLD=2
+== ../dandori/tests/fixtures/services/methods.proto
+package Some("shop.v1") imports []
+message FulfillRequest
+message FulfillResponse
+message BeginRequest
+message BeginResponse
+message WatchRequest
+message WatchResponse
+message CancelRequest
+message CancelResponse
+message BothRequest
+message BothResponse
+message DeliveredRequest
+  where string
+message DeliveredResponse
+message ArrivedRequest
+  where string
+message ArrivedResponse
+message GetStatusRequest
+message GetStatusResponse
+  at int32 optional
+  events string repeated
+== ../dandori/tests/fixtures/services/shop.proto
+package Some("shop.v1") imports ["buf/validate/validate.proto", "dandori/v1/options.proto"]
+message FulfillRequest
+  order Order
+  priority int32
+  address Address
+message Order
+  id string
+  amount int64
+message Address
+  city string
+  code Code
+message Code
+  value string
+message FulfillResponse
+  tracking_number string json_name="tracking_number"
+  eta string
+  note string
+  count int64
+  tags string repeated
+  ref string optional required
+message DeliveredRequest
+  where string
+message DeliveredResponse
+message ArrivedRequest
+message ArrivedResponse
+message ApproveRequest
+  approver string
+message ApproveResponse
+  ok bool
+message AnswerPackingRequest
+  boxes int32
+message AnswerPackingResponse
+message GetStatusRequest
+  id string
+message GetStatusResponse
+  at int32 optional
+  extra string
+== ../dandori/tests/fixtures/services/targets.proto
+package Some("targets.v1") imports ["dandori/v1/options.proto", "google/protobuf/struct.proto"]
+message StartRequest
+  id string
+message StartResponse
+message ApproveRequest
+  approver string
+message ApproveResponse
+message GetStatusRequest
+message GetStatusResponse
+  at int32 optional
+  events string repeated
+== ../dandori/tests/fixtures/services/unread.proto
+package Some("shop.v1") imports ["dandori/v1/options.proto", "shop/v2/start.proto"]
+message StartResponse
+== ../dandori/tests/flows/protos/approvals.proto
+package Some("approvals.v1") imports ["dandori/v1/options.proto"]
+message StartRequest
+  order_id string json_name="注文ID"
+message StartResponse
+message ApproveRequest
+  approver string json_name="承認者"
+message ApproveResponse
+message GetStatusRequest
+== ../dandori/tests/flows/protos/order.proto
+package Some("order.v1") imports ["buf/validate/validate.proto", "google/protobuf/timestamp.proto"]
+enum OrderState ORDER_STATE_UNSPECIFIED=0 received=1 paid=2 shipped=3 delivered=4 cancelled=5
+message GetRequest
+  id string
+message ShipRequest
+  id string
+message Line
+  sku string
+  quantity int32 gte=1 lte=99
+message Order
+  id string
+  state OrderState
+  lines Line repeated
+  placed_at google.protobuf.Timestamp
+  serial int64
+  weight double
+  note string optional
+message PickRequest
+  sku string
+  quantity int32 gte=1 lte=99
+message PickResponse
+  ticket string
+== ../dandori/tests/flows/protos/shelf.proto
+package Some("shelf.v1") imports ["google/protobuf/struct.proto"]
+enum State STATE_UNSPECIFIED=0 COUNTED=1 MISSING=2
+message CountRequest
+  shelf string
+message Item
+  sku string
+  count int32
+  state State
+  checked bool
+  notes string repeated
+message Location
+  aisle string
+  level int32
+message CountResponse
+  shelf string
+  total int32
+  items Item repeated
+  location Location
+  serial int64
+  extra google.protobuf.Value
+message RecordRequest
+  shelf string
+  total int32
+  items Item repeated
+  aisle string
+  extra google.protobuf.Value
+message RecordResponse
+  record_id string
+== ../dandori/tests/flows/protos/shipping.proto
+package Some("shipping.v1") imports ["dandori/v1/options.proto", "google/protobuf/struct.proto"]
+enum Kind normal=0 express=1
+message ShipRequest
+  order_id string json_name="注文ID"
+  boxes Box repeated json_name="箱"
+  to Address json_name="宛先"
+  kind Kind json_name="区分"
+  extra google.protobuf.Value json_name="付帯"
+message Box
+  label string json_name="ラベル"
+  weight int32 json_name="重さ"
+  items Item repeated json_name="品"
+message Item
+  sku string
+  count int32 json_name="数"
+  fragile bool json_name="割れ物"
+message Address
+  city string json_name="市"
+  line string json_name="番地"
+message ShipResponse
+message AnswerPackingRequest
+  boxes int32 json_name="箱の数"
+  checked bool json_name="検品済み"
+message AnswerPackingResponse
+== ../sakai/examples/通販/proto/dandori/v1/options.proto
+package Some("dandori.v1") imports ["google/protobuf/descriptor.proto", "google/protobuf/struct.proto"]
+message WorkflowOptions
+  name string
+  version uint32
+message StartOptions
+  fails string repeated
+message EventOptions
+  task string
+message AnswerOptions
+  task string
+message StatusOptions
+message Status
+  at int32 optional
+  events string repeated
+== ../sakai/examples/通販/proto/shop/delivery/v1/shipment.proto
+package Some("shop.delivery.v1") imports ["buf/validate/validate.proto"]
+enum Handling HANDLING_STANDARD=0 HANDLING_FRAGILE=1
+message CreateShipmentRequest
+  destination Destination required
+  parcels Parcel repeated min_items=1 max_items=20
+  declared_value_jpy int64 gte=0 lte=1000000
+  delivery_window string optional str_in=["morning", "evening"]
+message Destination
+  region string str_in=["honshu", "hokkaido", "okinawa"]
+  postcode string
+message Parcel
+  weight_g int64 gte=1 lte=30000
+  handling Handling
+message CreateShipmentResponse
+  tracking_number string
+== ../sakai/examples/通販/proto/shop/ordering/v1/fulfillment.proto
+package Some("shop.ordering.v1") imports ["dandori/v1/options.proto", "google/protobuf/struct.proto", "warehouse/v1/stock.proto"]
+message FulfillRequest
+  order FulfillmentOrder json_name="注文"
+message FulfillmentOrder
+  id string
+  member bool json_name="会員"
+  amount int32 json_name="金額"
+  lines Line repeated json_name="明細"
+  gift Gift json_name="贈り物"
+  extra google.protobuf.Value json_name="付帯"
+message Line
+  sku string
+  quantity int32 json_name="数"
+message Gift
+  recipient string json_name="宛名"
+  message string optional json_name="メッセージ"
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated json_name="引当"
+  tracking_number string json_name="追跡番号"
+message AnswerPackingRequest
+  boxes int32 json_name="箱の数"
+message AnswerPackingResponse
+== ../sakai/examples/通販/proto/shop/ordering/v1/order.proto
+package Some("shop.ordering.v1") imports []
+enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4
+message Order
+  id string
+  status OrderStatus
+  amount_jpy int64
+message GetOrderRequest
+  id string
+message GetOrderResponse
+  order Order
+== ../sakai/examples/通販/proto/warehouse/v1/stock.proto
+package Some("warehouse.v1") imports []
+enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2
+enum PackingStatus PACKING_STATUS_UNSPECIFIED=0 PACKING_STATUS_WAITING=1 PACKING_STATUS_PACKED=2 PACKING_STATUS_SHORT=3
+message ReserveRequest
+  sku string
+  quantity int32
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+message ReleaseRequest
+  id string
+message ReleaseResponse
+message GetPackingRequest
+  order_id string
+message GetPackingResponse
+  status PackingStatus
+== ../sakai/tests/fixtures/proto/dandori/v1/options.proto
+package Some("dandori.v1") imports ["google/protobuf/descriptor.proto", "google/protobuf/struct.proto"]
+message WorkflowOptions
+  name string
+  version uint32
+message StartOptions
+  fails string repeated
+message EventOptions
+  task string
+message AnswerOptions
+  task string
+message StatusOptions
+message Status
+  at int32 optional
+  events string repeated
+== ../sakai/tests/fixtures/proto/shop/delivery/v1/shipment.proto
+package Some("shop.delivery.v1") imports ["buf/validate/validate.proto"]
+enum Handling HANDLING_STANDARD=0 HANDLING_FRAGILE=1
+message CreateShipmentRequest
+  destination Destination required
+  parcels Parcel repeated min_items=1 max_items=20
+  declared_value_jpy int64 gte=0 lte=1000000
+  delivery_window string optional str_in=["morning", "evening"]
+message Destination
+  region string str_in=["honshu", "hokkaido", "okinawa"]
+  postcode string
+message Parcel
+  weight_g int64 gte=1 lte=30000
+  handling Handling
+message CreateShipmentResponse
+  tracking_number string
+== ../sakai/tests/fixtures/proto/shop/ordering/v1/fulfillment.proto
+package Some("shop.ordering.v1") imports ["dandori/v1/options.proto", "google/protobuf/struct.proto", "warehouse/v1/stock.proto"]
+message FulfillRequest
+  order FulfillmentOrder json_name="注文"
+message FulfillmentOrder
+  id string
+  member bool json_name="会員"
+  amount int32 json_name="金額"
+  lines Line repeated json_name="明細"
+  gift Gift json_name="贈り物"
+  extra google.protobuf.Value json_name="付帯"
+message Line
+  sku string
+  quantity int32 json_name="数"
+message Gift
+  recipient string json_name="宛名"
+  message string optional json_name="メッセージ"
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated json_name="引当"
+  tracking_number string json_name="追跡番号"
+message AnswerPackingRequest
+  boxes int32 json_name="箱の数"
+message AnswerPackingResponse
+== ../sakai/tests/fixtures/proto/shop/ordering/v1/order.proto
+package Some("shop.ordering.v1") imports []
+enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4
+message Order
+  id string
+  status OrderStatus
+  amount_jpy int64
+message GetOrderRequest
+  id string
+message GetOrderResponse
+  order Order
+== ../sakai/tests/fixtures/proto/warehouse/v1/stock.proto
+package Some("warehouse.v1") imports []
+enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2
+enum PackingStatus PACKING_STATUS_UNSPECIFIED=0 PACKING_STATUS_WAITING=1 PACKING_STATUS_PACKED=2 PACKING_STATUS_SHORT=3
+message ReserveRequest
+  sku string
+  quantity int32
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+message ReleaseRequest
+  id string
+message ReleaseResponse
+message GetPackingRequest
+  order_id string
+message GetPackingResponse
+  status PackingStatus
+== ../sakai/tests/fixtures/proto-dandori/warehouse.proto
+package Some("warehouse.v1") imports []
+enum Stock unspecified=0 secured=1 short=2
+message ReserveRequest
+  sku string
+  quantity int32
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+message ReleaseRequest
+  id string
+message ReleaseResponse
+== ../sakai/tests/maps/パターン/proto/audit/v1/record.proto
+package Some("audit.v1") imports []
+message Record
+  contract_id string
+== ../sakai/tests/maps/パターン/proto/contracts/acl/v1/plan_view.proto
+package Some("contracts.acl.v1") imports ["pricing/v1/price.proto"]
+message PlanView
+  plan pricing.v1.Plan
+== ../sakai/tests/maps/パターン/proto/contracts/kernel/units.proto
+package Some("kernel") imports []
+message Days
+  count int32
+== ../sakai/tests/maps/パターン/proto/contracts/v1/contract.proto
+package Some("contracts.v1") imports ["contracts/kernel/units.proto"]
+enum ContractClass CONTRACT_CLASS_UNSPECIFIED=0 CONTRACT_CLASS_STANDARD=1 CONTRACT_CLASS_PREMIUM=2
+message Contract
+  class ContractClass
+  term kernel.Days
+== ../sakai/tests/maps/パターン/proto/notices/v1/notice.proto
+package Some("notices.v1") imports ["quotes/v1/estimate.proto"]
+message Notice
+  estimate quotes.v1.Estimate
+== ../sakai/tests/maps/パターン/proto/pricing/v1/price.proto
+package Some("pricing.v1") imports []
+enum Plan PLAN_UNSPECIFIED=0 PLAN_FREE=1 PLAN_BASIC=2 PLAN_PRO=3
+message Quote
+  plan Plan
+  monthly_jpy int64
+message QuoteRequest
+  plan Plan
+== ../sakai/tests/maps/パターン/proto/quotes/kernel/units.proto
+package Some("kernel") imports []
+message Days
+  count int32
+== ../sakai/tests/maps/パターン/proto/quotes/v1/estimate.proto
+package Some("quotes.v1") imports ["pricing/v1/price.proto", "quotes/kernel/units.proto"]
+message Estimate
+  quote pricing.v1.Quote
+  valid_for kernel.Days
+== ../sakai/tests/maps/入れ子/proto/warehouse/v1/stock.proto
+package Some("warehouse.v1") imports []
+message Stock
+  count int32
+== ../sakai/tests/maps/基本/proto/billing/acl/v1/order_view.proto
+package Some("billing.acl.v1") imports ["shop/ordering/v1/order.proto"]
+message OrderView
+  status shop.ordering.v1.OrderStatus
+== ../sakai/tests/maps/基本/proto/shop/billing/v1/billing.proto
+package Some("shop.billing.v1") imports []
+enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
+== ../sakai/tests/maps/基本/proto/shop/common/v1/money.proto
+package Some("shop.common.v1") imports []
+message Money
+  amount_jpy int64
+== ../sakai/tests/maps/基本/proto/shop/ordering/v1/fulfillment_lite.proto
+package Some("shop.ordering.v1") imports ["warehouse/v1/stock.proto"]
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated
+== ../sakai/tests/maps/基本/proto/shop/ordering/v1/order.proto
+package Some("shop.ordering.v1") imports []
+enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4
+message Order
+  id string
+  status OrderStatus
+  amount_jpy int64
+message GetOrderRequest
+  id string
+message GetOrderResponse
+  order Order
+== ../sakai/tests/maps/基本/proto/warehouse/v1/stock.proto
+package Some("warehouse.v1") imports ["shop/common/v1/money.proto"]
+enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2
+enum PackingStatus PACKING_STATUS_UNSPECIFIED=0 PACKING_STATUS_WAITING=1 PACKING_STATUS_PACKED=2 PACKING_STATUS_SHORT=3
+message ReserveRequest
+  sku string
+  quantity int32
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+  price shop.common.v1.Money
+message ReleaseRequest
+  id string
+message ReleaseResponse
+message GetPackingRequest
+  order_id string
+message GetPackingResponse
+  status PackingStatus
+== ../sakai/tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto
+package Some("shop.billing.v1") imports ["warehouse/v1/stock.proto"]
+enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
+message StockSeen
+  stock warehouse.v1.Stock
+== ../sakai/tests/mutants/E202_在庫の内側を参照/proto/shop/ordering/v1/fulfillment_lite.proto
+package Some("shop.ordering.v1") imports ["warehouse/v1/stock.proto", "warehouse/internal/v1/ledger.proto"]
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated
+  shelves warehouse.internal.v1.Shelf repeated
+== ../sakai/tests/mutants/E202_在庫の内側を参照/proto/warehouse/internal/v1/ledger.proto
+package Some("warehouse.internal.v1") imports []
+message Shelf
+  sku string
+  count int32
+== ../sakai/tests/mutants/E203_through_に無い_package/proto/shop/ordering/v1/fulfillment_lite.proto
+package Some("shop.ordering.v1") imports ["warehouse/v1/stock.proto", "warehouse/v2/stock.proto"]
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated
+  reservations_v2 warehouse.v2.Reservation repeated
+== ../sakai/tests/mutants/E203_through_に無い_package/proto/warehouse/v2/stock.proto
+package Some("warehouse.v2") imports []
+message Reservation
+  sku string
+== ../sakai/tests/mutants/E204_腐敗防止層の外/proto/billing/report/v1/report.proto
+package Some("billing.report.v1") imports ["shop/ordering/v1/order.proto"]
+message MonthlyRow
+  status shop.ordering.v1.OrderStatus
+== ../sakai/tests/mutants/E205_公表された言語に上流の型/proto/shop/billing/v1/billing.proto
+package Some("shop.billing.v1") imports ["shop/ordering/v1/order.proto"]
+enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
+message Invoice
+  order shop.ordering.v1.Order
+== ../sakai/tests/mutants/E206_別々の道の相手を参照/proto/audit/v1/record.proto
+package Some("audit.v1") imports ["quotes/v1/estimate.proto"]
+message Record
+  contract_id string
+  estimate quotes.v1.Estimate
+== ../sakai/tests/mutants/E308_写しの中身が違う/proto/contracts/kernel/units.proto
+package Some("kernel") imports []
+message Days
+  count int64
+== ../sakai/tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto
+package Some("warehouse.v1") imports []
+enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2
+enum PackingStatus PACKING_STATUS_UNSPECIFIED=0 PACKING_STATUS_WAITING=1 PACKING_STATUS_PACKED=2 PACKING_STATUS_SHORT=3 PACKING_STATUS_DAMAGED=4
+message ReserveRequest
+  sku string
+  quantity int32
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+message ReleaseRequest
+  id string
+message ReleaseResponse
+message GetPackingRequest
+  order_id string
+message GetPackingResponse
+  status PackingStatus
+== ../sakai/tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto
+package Some("shop.ordering.v1") imports []
+enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4 ORDER_STATUS_RETURNED=5
+message Order
+  id string
+  status OrderStatus
+  amount_jpy int64
+message GetOrderRequest
+  id string
+message GetOrderResponse
+  order Order
+== ../sakai/tests/mutants/W102_見つからない_import/proto/shop/billing/v1/billing.proto
+package Some("shop.billing.v1") imports ["google/type/money.proto"]
+enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
+== tests/fixtures/dandori/bad/specs/order.proto
+package Some("shop.v1") imports ["money.proto"]
+message Order
+== tests/fixtures/dandori/buf/common/v1/money.proto
+package Some("common.v1") imports []
+message Money
+  currency string
+  units int64
+== tests/fixtures/dandori/buf/shop/v1/order.proto
+package Some("shop.v1") imports ["common/v1/money.proto"]
+message Order
+  total common.v1.Money
+== tests/fixtures/dandori/clutter.proto
+package Some("acme.v1") imports ["google/protobuf/timestamp.proto", "buf/validate/validate.proto"]
+enum Kind KIND_UNSPECIFIED=0 KIND_A=1 KIND_B=1
+message GetOrderRequest
+  name string str_min_len=1 unread=["string.min_len", "string.max_len", "string.pattern"]
+message Order
+  name string json_name="orderName" required
+  total int32 gte=0 lte=1000
+  lines Line repeated min_items=1 max_items=50
+  created google.protobuf.Timestamp
+  card string optional oneof=payment
+  bank string optional oneof=payment
+  rules cel=["this.total > 0"] oneofs=[(["card", "bank"], true)] disabled=false
+message Line
+  sku string
+== tests/fixtures/dandori/flat/specs/money.proto
+package Some("shop.v1") imports []
+message Money
+  currency string
+== tests/fixtures/dandori/flat/specs/order.proto
+package Some("shop.v1") imports ["money.proto"]
+message Order
+  total Money
+== tests/fixtures/dandori/gone/specs/order.proto
+package Some("shop.v1") imports ["google/api/annotations.proto", "google/type/money.proto", "google/protobuf/timestamp.proto"]
+message Order
+  id string
+  total google.type.Money
+  parts google.type.Money repeated
+  at google.protobuf.Timestamp
+== tests/fixtures/dandori/known.proto
+package Some("shop.v1") imports ["dandori/v1/options.proto", "google/protobuf/timestamp.proto", "buf/validate/validate.proto"]
+message A
+  status dandori.v1.Status
+== tests/fixtures/dandori/message_values.proto
+package Some("a.v1") imports []
+== tests/fixtures/dandori/passed_over.proto
+package Some("a.v1") imports []
+message M
+  s string str_min_len=2 unread=["string.(my.rule)", "string.min_len"]
+  n int32 gte=1 in=[1, 2, 3]
+== tests/fixtures/dandori/protovalidate.proto
+package Some("a.v1") imports []
+message M
+  grouped int32 gte=1 lte=100
+  apart int32 gte=1 lt=50
+  negative int32 json_name="neg" gte=-5 lte=5
+  zero_ok int32 ignore=IGNORE_IF_ZERO_VALUE gt=0
+  each int32 repeated
+  note string optional required
+  plain string
+== tests/fixtures/dandori/service_options.proto
+package Some("shop.v1") imports ["dandori/v1/options.proto"]
+message A
+message B
+== tests/fixtures/dandori/typo/specs/order.proto
+package Some("shop.v1") imports []
+message Order
+  total Moneyy
+== tests/fixtures/rulec/enums.proto
+package None imports []
+enum MemberTier MEMBER_TIER_UNSPECIFIED=0 MEMBER_TIER_GOLD=1 MEMBER_TIER_BASIC=2
+enum HTTPMethod HTTP_METHOD_UNSPECIFIED=0 HTTP_METHOD_GET=1 HTTP_METHOD_POST=2
+enum Size SIZE_UNSPECIFIED=0 SIZE_60=1 SIZE_80=2 SIZE_LARGE=3
+enum Color COLOR_UNSPECIFIED=0 COLOR_RED=1 RED=2
+enum Status STATUS_ACTIVE=0 STATUS_CLOSED=1
+== tests/fixtures/rulec/imports.proto
+package Some("shop.v1") imports ["buf/validate/validate.proto", "shop/v1/common.proto", "google/protobuf/struct.proto"]
+message Imported
+  importance int64
+  x imported.Foo
+== tests/fixtures/rulec/order.proto
+package Some("shop.v1") imports []
+message Order
+  weight_g int64 gte=1 lte=40000
+  total_jpy int64 gte=0 lte=10000000
+  lines Line repeated min_items=1 max_items=50
+  zone string str_in=["honshu", "hokkaido; okinawa"]
+  tier int32 required ignore=IGNORE_IF_ZERO_VALUE cel=["this > 0 && this != 7"]
+  note string json_name="memo"
+  delta sint32 gte=-5 lte=16 not_in=[3, 4]
+  custom int64 unread=["int64.(my.rule)"]
+  coupon int64 optional
+message Line
+  amount int64 in=[100, 200]
+== tests/fixtures/rulec/rules.proto
+package Some("shop.v1") imports []
+message Quote
+  min_weight int64 cel=["this >= 1"]
+  max_weight int64 cel=["this >= 1", "this <= 50000"]
+  coupon int64
+  points int64
+  card Card optional oneof=payment
+  bank string optional oneof=payment str_min_len=1 unread=["string.min_len"]
+  memo string
+  rules cel=["this.min_weight <= this.max_weight", "this.max_weight <= 30000"] oneofs=[(["coupon", "points"], true), (["card", "bank"], true)] disabled=false
+message Card
+  number string
+message Old
+  n int64 unread=["(buf.validate.message).disabled"]
+  a int64 optional oneof=pick unread=["(buf.validate.message).disabled"]
+  b int64 optional oneof=pick unread=["(buf.validate.message).disabled"]
+  rules cel=[] oneofs=[(["a", "b"], false)] disabled=true
+== tests/fixtures/sakai/names/a/v1/a.proto
+package Some("a.v1") imports ["b/v1/b.proto"]
+message Outer
+  x In
+message In
+message Top
+  y Outer.In
+  z .a.v1.Outer
+  w b.v1.B
+== tests/fixtures/sakai/names/b/v1/b.proto
+package Some("b.v1") imports []
+message B
+== tests/fixtures/sakai/nested.proto
+package Some("shop.v1") imports ["a/b.proto"]
+enum Status STATUS_UNSPECIFIED=0 STATUS_OPEN=1
+message Order
+  lines Line repeated
+  card string optional oneof=pay
+  bank string optional oneof=pay
+  rules cel=[] oneofs=[(["card", "bank"], false)] disabled=false
+message Line
+  sku string json_name="品番"
+== ../dandori/proto/buf.yaml
+deps []
+== tests/fixtures/rulec/buf/nodeps.buf.yaml
+deps []
+== tests/fixtures/rulec/buf/v1.buf.lock
+version "v1"
+pin buf.build/bufbuild/protovalidate 511051f7f4374c3ca873b53ae68a9288 shake256:b911
+== tests/fixtures/rulec/buf/v1.buf.yaml
+deps ["buf.build/bufbuild/protovalidate", "buf.build/acme/x"]
+== tests/fixtures/rulec/buf/v2.buf.lock
+version "v2"
+pin buf.build/bufbuild/protovalidate 511051f7f4374c3ca873b53ae68a9288 b5:a4a2
+pin buf.build/googleapis/googleapis 61b203b9a9164be9a834f58c37be6f62 b5:7811
+== tests/fixtures/rulec/buf/v2.buf.yaml
+deps ["buf.build/bufbuild/protovalidate", "buf.build/googleapis/googleapis"]

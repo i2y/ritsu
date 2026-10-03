@@ -1,0 +1,10 @@
+syntax = "proto3"; package a.v1;
+            message M {
+              int32 grouped = 1 [(buf.validate.field).int32 = {gte: 1, lte: 100}];
+              int32 apart = 2 [(buf.validate.field).int32.gte = 1, (buf.validate.field).int32.lt = 50];
+              int32 negative = 3 [(buf.validate.field).int32 = {gte: -5, lte: 5}, json_name = "neg"];
+              int32 zero_ok = 4 [(buf.validate.field).int32.gt = 0, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+              repeated int32 each = 5 [(buf.validate.field).repeated.items.int32 = {gte: 1, lte: 9}];
+              optional string note = 6 [(buf.validate.field).required = true];
+              string plain = 7;
+            }

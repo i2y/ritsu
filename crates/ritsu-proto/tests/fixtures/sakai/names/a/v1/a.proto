@@ -1,0 +1,5 @@
+syntax = "proto3";
+package a.v1;
+import "b/v1/b.proto";
+message Outer { message In {} In x = 1; }
+message Top { Outer.In y = 1; .a.v1.Outer z = 2; b.v1.B w = 3; }

@@ -87,6 +87,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ritsu-proto"
+version = "0.1.0"
+dependencies = [
+ "dandori",
+ "ritsu-base",
+ "ritsu-testkit",
+ "rulec",
+]
+
+[[package]]
 name = "ritsu-testkit"
 version = "0.1.0"
 

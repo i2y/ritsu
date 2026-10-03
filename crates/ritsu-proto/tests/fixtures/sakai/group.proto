@@ -1,0 +1,4 @@
+syntax = "proto2";
+message M {
+  optional group G = 1 { optional int32 a = 2; }
+}

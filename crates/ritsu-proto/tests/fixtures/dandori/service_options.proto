@@ -1,0 +1,16 @@
+syntax = "proto3"; package shop.v1;
+            import "dandori/v1/options.proto";
+            service S {
+              option (dandori.v1.workflow) = {name: "fulfillment", version: 1};
+              rpc Start(A) returns (B) {
+                option (dandori.v1.start) = {fails: ["OutOfStock", "DeliveryFailed"]};
+                option idempotency_level = NO_SIDE_EFFECTS;
+              }
+              rpc Again(A) returns (B) {
+                option (.dandori.v1.start) = {fails: "One" fails: "Two"};
+              }
+              rpc Plain(A) returns (B);
+              rpc Stream(stream A) returns (stream B) {}
+            }
+            message A {}
+            message B {}

@@ -1,0 +1,15 @@
+syntax = "proto3";
+package shop.v1;
+import public "a/b.proto";
+message Order {
+  message Line { string sku = 1 [json_name = "品番"]; }
+  repeated Line lines = 1;
+  map<string, Line> by_sku = 2;
+  oneof pay { string card = 3; string bank = 4; }
+  enum Status { STATUS_UNSPECIFIED = 0; STATUS_OPEN = 1; }
+  reserved 9 to 11;
+}
+service S {
+  option (dandori.v1.workflow) = {name: "引当", version: 1};
+  rpc Do(stream Order) returns (Order.Line) { option idempotency_level = NO_SIDE_EFFECTS; }
+}

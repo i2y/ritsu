@@ -1,0 +1,7 @@
+version: v1
+deps:
+  - remote: buf.build
+    owner: bufbuild
+    repository: protovalidate
+    commit: 511051f7f4374c3ca873b53ae68a9288
+    digest: shake256:b911

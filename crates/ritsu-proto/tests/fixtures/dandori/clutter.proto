@@ -1,0 +1,30 @@
+syntax = "proto3";
+            package acme.v1;
+            import "google/protobuf/timestamp.proto";
+            import "buf/validate/validate.proto";
+            option go_package = "acme/v1;acmev1";
+            option java_multiple_files = true;
+            /* a block
+               comment; with a semicolon */
+            service Orders {
+              option (some.api.default_host) = "orders.example.com";
+              rpc Get(GetOrderRequest) returns (Order) {
+                option (some.api.http) = { get: "/v1/{name=orders/*}" additional_bindings { get: "/v1/x" body: "*" } };
+                option idempotency_level = NO_SIDE_EFFECTS;
+              }
+              // a method with its options on one line
+              rpc Put(Order) returns (Order) { option deprecated = true; };
+            }
+            message GetOrderRequest { string name = 1 [(buf.validate.field).string = {min_len: 1, max_len: 63, pattern: "^orders/[a-z]+$"}]; }
+            message Order {
+              option (buf.validate.message).cel = { id: "x", message: "a;b]c", expression: "this.total > 0" };
+              reserved 4, 5; reserved "old", "older";
+              extensions 100 to 199;
+              string name = 1 [(buf.validate.field).required = true, (some.api.field_behavior) = IDENTIFIER, json_name = "orderName"];
+              int32 total = 2 [(buf.validate.field).int32 = {gte: 0, lte: 1000}, deprecated = true];
+              repeated Line lines = 3 [(buf.validate.field).repeated = {min_items: 1, max_items: 50, items: {int32: {gte: 1}}}];
+              google.protobuf.Timestamp created = 6;
+              oneof payment { option (buf.validate.oneof).required = true; string card = 7; string bank = 8; }
+              enum Kind { option allow_alias = true; KIND_UNSPECIFIED = 0; KIND_A = 1 [deprecated = true]; KIND_B = 1; }
+              message Line { string sku = 1; }
+            }

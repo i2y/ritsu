@@ -1,0 +1,38 @@
+
+syntax = "proto3";
+package shop.v1;
+
+message Quote {
+  option (buf.validate.message).cel = {
+    id: "weight_order",
+    message: "min must not exceed max",
+    expression: "this.min_weight <= this.max_weight"
+  };
+  option (buf.validate.message).cel_expression = "this.max_weight <= 30000";
+  option (buf.validate.message).oneof = {fields: ["coupon", "points"], required: true};
+  option deprecated = true;
+
+  int64 min_weight = 1 [(buf.validate.field).cel_expression = "this >= 1"];
+  int64 max_weight = 2 [(buf.validate.field) = {cel: [{id: "a", expression: "this >= 1"}, {id: "b", expression: "this <= 50000"}]}];
+  int64 coupon = 3;
+  int64 points = 4;
+  oneof payment {
+    option (buf.validate.oneof).required = true;
+    Card card = 5;
+    string bank = 6 [(buf.validate.field).string.min_len = 1];
+  }
+  string memo = 7;
+}
+
+message Card {
+  string number = 1;
+}
+
+message Old {
+  option (buf.validate.message).disabled = true;
+  int64 n = 1 [(buf.validate.field).int64.gte = 1];
+  oneof pick {
+    int64 a = 2;
+    int64 b = 3;
+  }
+}

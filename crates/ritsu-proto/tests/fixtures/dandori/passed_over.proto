@@ -1,0 +1,5 @@
+syntax = "proto3"; package a.v1;
+            message M {
+              string s = 1 [(buf.validate.field).string.(my.rule) = true, (buf.validate.field).string.min_len = 2, deprecated = true];
+              int32 n = 2 [(buf.validate.field).int32 = {in: [1, 2, 3], gte: 1}];
+            }

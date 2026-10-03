@@ -1,0 +1,24 @@
+
+syntax = "proto3";
+package shop.v1;
+
+message Order {
+  // The two spellings Protovalidate accepts, one per field.
+  int64 weight_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 40000}];
+  int64 total_jpy = 2 [
+    (buf.validate.field).int64.gte = 0,  // a comment inside the options
+    (buf.validate.field).int64.lte = 10000000
+  ];
+  // A list inside the options: the `]` of `[1, 2]` is not the end of them.
+  repeated Line lines = 3 [(buf.validate.field).repeated = {min_items: 1, max_items: 50, items: {message: {required: true}}}];
+  string zone = 4 [(buf.validate.field).string = {in: ["honshu", "hokkaido; okinawa"]}];
+  int32 tier = 5 [(buf.validate.field).required = true, (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE, (buf.validate.field).cel = {id: "x", expression: "this > 0 && this != 7"}];
+  string note = 6 [json_name = "memo", deprecated = true];
+  sint32 delta = 7 [(buf.validate.field).sint32 = {gte: -5, lte: 0x10, not_in: [3, 4]}];
+  int64 custom = 8 [(buf.validate.field).int64.(my.rule) = 3];
+  optional int64 coupon = 9;
+}
+
+message Line {
+  int64 amount = 1 [(buf.validate.field).int64 = {in: [100, 200]}];
+}

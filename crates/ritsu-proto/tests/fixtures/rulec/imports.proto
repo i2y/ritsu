@@ -1,0 +1,7 @@
+syntax = "proto3";
+package shop.v1;
+import "buf/validate/validate.proto";
+import public 'shop/v1/common.proto';
+import weak "google/protobuf/struct.proto";
+// import "commented.proto";
+message Imported { int64 importance = 1; imported.Foo x = 2; }

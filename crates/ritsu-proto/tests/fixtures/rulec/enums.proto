@@ -1,0 +1,6 @@
+syntax = "proto3";
+enum MemberTier { MEMBER_TIER_UNSPECIFIED = 0; MEMBER_TIER_GOLD = 1 [(foo) = {a: [1, 2]}]; MEMBER_TIER_BASIC = 2; }
+enum HTTPMethod { HTTP_METHOD_UNSPECIFIED = 0; HTTP_METHOD_GET = 1; HTTP_METHOD_POST = 2; }
+enum Size { SIZE_UNSPECIFIED = 0; SIZE_60 = 1; SIZE_80 = 2; SIZE_LARGE = 3; }
+enum Color { COLOR_UNSPECIFIED = 0; COLOR_RED = 1; RED = 2; }
+enum Status { STATUS_ACTIVE = 0; STATUS_CLOSED = 1; }

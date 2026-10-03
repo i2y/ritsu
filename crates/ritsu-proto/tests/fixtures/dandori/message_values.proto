@@ -1,0 +1,6 @@
+syntax = "proto3"; package a.v1;
+            service S {
+              option (x.y) = {name: "a" version: 1};
+              option (x.z) = {name: "b"; version: 2; inner { deep: [1, 2] } tag: "a;b]c"};
+              option (x.w) = { list: [ {k: 1}, {k: 2} ] };
+            }

@@ -1,0 +1,6 @@
+syntax = "proto3"; package shop.v1;
+import "google/api/annotations.proto";
+import "google/type/money.proto";
+import "google/protobuf/timestamp.proto";
+message Order { string id = 1; google.type.Money total = 2; repeated google.type.Money parts = 3; google.protobuf.Timestamp at = 4; }
+service OrderService { rpc Place(Order) returns (Order) { option (google.api.http) = {post: "/v1/orders" body: "*"}; } }

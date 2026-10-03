@@ -1,0 +1,1 @@
+syntax = "proto3"; package shop.v1; message Money { string currency = 1; }

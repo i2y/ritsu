@@ -1,0 +1,1 @@
+syntax = "proto3"; package shop.v1; import "money.proto"; message Order { Money total = 1; }

@@ -1,0 +1,1 @@
+syntax = "proto3"; package shop.v1; import "dandori/v1/options.proto"; import "google/protobuf/timestamp.proto"; import "buf/validate/validate.proto"; message A { dandori.v1.Status status = 1; }
