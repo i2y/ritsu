@@ -7,25 +7,18 @@ mod common;
 
 #[test]
 fn every_example_gives_its_code() {
-    let mut failures = Vec::new();
+    let ledger = yuen::codes::ledger();
+    let scratch = ritsu_testkit::TempDir::new("codes");
     let mut n = 0;
-    for e in yuen::codes::ledger() {
-        if e.later {
-            assert!(e.example.is_empty(), "{} waits for the tools, and has an example", e.code);
-            continue;
-        }
-        let dir = common::TempDir::new(&format!("codes-{}", e.code));
-        for (name, body) in e.files {
-            dir.write(name, body);
-        }
-        dir.write("example.req", e.example.as_bytes());
-        let r = common::yuen(dir.path(), &["check", "example.req"]);
+    let failures = ritsu_base::ledger::check_every(&ledger, scratch.path(), |e, dir| {
+        n += 1;
+        let r = common::yuen(dir, &["check", "example.req"]);
         let got = common::codes(&r.stdout);
         if !got.iter().any(|c| c == e.code) {
-            failures.push(format!("{}: got {:?}\n{}{}", e.code, got, r.stdout, r.stderr));
+            eprintln!("{}:\n{}{}", e.code, r.stdout, r.stderr);
         }
-        n += 1;
-    }
+        got
+    });
     assert_eq!(n, 36, "36 codes are reproduced in this stage");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -33,13 +26,13 @@ fn every_example_gives_its_code() {
 #[test]
 fn every_code_has_a_mutant() {
     let names: Vec<String> = std::fs::read_dir("tests/mutants").unwrap().filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect();
-    let missing: Vec<&str> = yuen::codes::ledger().iter().filter(|e| !e.later).map(|e| e.code).filter(|c| !names.iter().any(|n| n.starts_with(&format!("{c}_")))).collect();
+    let missing: Vec<&str> = yuen::codes::ledger().entries.iter().filter(|e| !matches!(e.repro, ritsu_base::ledger::Repro::Later)).map(|e| e.code).filter(|c| !names.iter().any(|n| n.starts_with(&format!("{c}_")))).collect();
     assert!(missing.is_empty(), "codes with no mutant in tests/mutants: {missing:?}");
 }
 
 #[test]
 fn the_ledger_has_each_code_of_design_once_and_in_order() {
-    let codes: Vec<&str> = yuen::codes::ledger().iter().map(|e| e.code).collect();
+    let codes: Vec<&str> = yuen::codes::ledger().entries.iter().map(|e| e.code).collect();
     let mut seen = std::collections::HashSet::new();
     for c in &codes {
         assert!(seen.insert(*c), "{c} is in the ledger twice");

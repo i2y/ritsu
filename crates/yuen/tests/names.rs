@@ -1,6 +1,7 @@
-//! Naming an artifact (DESIGN 2, PLAN B.3). The table `tests/fixtures/naming.tsv` is shared
-//! with sakai: every line that gives JSON gives that JSON to the letter, and every line that
-//! gives an error is an error here, with the code its reason stands for.
+//! Naming an artifact (DESIGN 2, PLAN B.3). The table of the form is ritsu-base's
+//! (`crates/ritsu-base/tests/fixtures/naming.tsv`), and sakai is held to it too: every line
+//! that gives JSON gives that JSON to the letter, read from a `.req`'s words, and every line
+//! that gives an error is an error here, with the code its reason stands for.
 
 use yuen::names::{self, Name, Tool};
 
@@ -26,7 +27,7 @@ fn code_of(reason: &str) -> Option<&'static str> {
 
 #[test]
 fn every_line_of_the_shared_table() {
-    let table = std::fs::read_to_string("tests/fixtures/naming.tsv").unwrap();
+    let table = std::fs::read_to_string("../ritsu-base/tests/fixtures/naming.tsv").unwrap();
     let mut failures = Vec::new();
     let (mut ok, mut errors) = (0, 0);
     for (i, line) in table.lines().enumerate() {
@@ -40,7 +41,7 @@ fn every_line_of_the_shared_table() {
         let got = names::parse_one(naming);
         match (want.strip_prefix("ERROR: "), got) {
             (None, Ok(n)) => {
-                let json = serde_json::to_string(&n.to_json()).unwrap();
+                let json = n.to_json().compact();
                 if json != want {
                     failures.push(format!("line {}: {naming}\n  want {want}\n  got  {json}", i + 1));
                 }
@@ -52,7 +53,7 @@ fn every_line_of_the_shared_table() {
                 ok += 1;
             }
             (None, Err(e)) => failures.push(format!("line {}: {naming}: want {want}, got {} {}", i + 1, e.code, e.msg.en)),
-            (Some(reason), Ok(n)) => failures.push(format!("line {}: {naming}: want an error ({reason}), got {}", i + 1, serde_json::to_string(&n.to_json()).unwrap())),
+            (Some(reason), Ok(n)) => failures.push(format!("line {}: {naming}: want an error ({reason}), got {}", i + 1, n.to_json().compact())),
             (Some(reason), Err(e)) => {
                 if let Some(code) = code_of(reason)
                     && code != e.code

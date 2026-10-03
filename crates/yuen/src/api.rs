@@ -4,9 +4,9 @@
 
 use crate::ast::*;
 use crate::check::{self, Checked};
-use crate::i18n::Lang;
+use ritsu_base::text::Lang;
 use crate::marks::{LinkKind, Thing};
-use crate::sha256;
+use ritsu_base::sha256;
 use crate::sources::Resolved;
 use serde_json::{Value, json};
 
@@ -46,7 +46,7 @@ pub fn api(c: &Checked, label: &str, lang: Lang) -> Option<Value> {
                 Resolved::File { name: n, url, pin, .. } => json!({
                     "file": f.rel, "name": name, "kind": "file", "path": n.path, "url": url, "sha256": pin, "borrowed": null,
                 }),
-                Resolved::Borrowed { name: n } => json!({"file": f.rel, "name": name, "kind": "borrowed", "borrowed": n.to_json()}),
+                Resolved::Borrowed { name: n } => json!({"file": f.rel, "name": name, "kind": "borrowed", "borrowed": crate::diag::value(&n.to_json())}),
                 Resolved::Broken => json!({"file": f.rel, "name": name, "kind": null, "borrowed": null}),
             });
         }
@@ -85,7 +85,7 @@ pub fn api(c: &Checked, label: &str, lang: Lang) -> Option<Value> {
             .map(|(i, l)| {
                 let st = check::state(m, r, LinkKind::To(i));
                 json!({
-                    "line": l.span.line, "role": l.side.word(), "artifact": p.names.links[r][i].as_ref().map(|n| n.to_json()),
+                    "line": l.span.line, "role": l.side.word(), "artifact": p.names.links[r][i].as_ref().map(|n| crate::diag::value(&n.to_json())),
                     "sha256": st.and_then(|s| s.down.as_ref()).map(|e| e.end.hash.clone()),
                     "reviewed": reviewed(l.record.as_ref()), "status": st.map(|s| s.status.word()),
                 })
@@ -121,7 +121,7 @@ pub fn api(c: &Checked, label: &str, lang: Lang) -> Option<Value> {
         .artifacts
         .iter()
         .map(|(n, e)| {
-            let mut j = n.to_json();
+            let mut j = crate::diag::value(&n.to_json());
             let o = j.as_object_mut().unwrap();
             o.insert("sha256".into(), json!(e.as_ref().ok().map(|e| e.hash.clone())));
             o.insert("end".into(), json!(if n.items.is_empty() { "file" } else { "item" }));
@@ -132,7 +132,7 @@ pub fn api(c: &Checked, label: &str, lang: Lang) -> Option<Value> {
     let scopes: Vec<Value> = m
         .scopes
         .iter()
-        .map(|s| json!({"file": p.files[s.file].rel, "line": p.files[s.file].ast.scopes[s.idx].span.line, "text": s.text, "artifacts": s.artifacts.len(), "untraced": s.untraced.iter().map(|n| n.to_json()).collect::<Vec<_>>()}))
+        .map(|s| json!({"file": p.files[s.file].rel, "line": p.files[s.file].ast.scopes[s.idx].span.line, "text": s.text, "artifacts": s.artifacts.len(), "untraced": s.untraced.iter().map(|n| crate::diag::value(&n.to_json())).collect::<Vec<_>>()}))
         .collect();
     Some(json!({
         "yuen": VERSION,

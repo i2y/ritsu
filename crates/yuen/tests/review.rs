@@ -32,7 +32,7 @@ fn review_clears_the_marks_and_changes_nothing_but_the_records() {
         let now: std::collections::BTreeSet<String> = std::fs::read_dir(d.join("reviewed")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         for f in &now {
             let b = std::fs::read(d.join("reviewed").join(f)).unwrap();
-            assert_eq!(&yuen::sha256::short(&b), f, "{name}: reviewed/{f}");
+            assert_eq!(&ritsu_base::sha256::short(&b), f, "{name}: reviewed/{f}");
         }
         assert_ne!(now, old, "{name}");
         for f in old.difference(&now) {

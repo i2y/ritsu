@@ -10,8 +10,8 @@
 //! and `source <name> =` before anything but `law` and `file`.
 
 use crate::date::Day;
-use crate::diag::Diag;
-use crate::i18n::Text;
+use crate::diag::{self, Diag};
+use ritsu_base::text::Text;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Tok {
@@ -174,7 +174,7 @@ fn naming_from(cs: &[char], mut j: usize, toks: &mut Vec<Token>) -> Result<(), (
     Ok(())
 }
 
-/// The tokens of a naming written on its own (a line of `tests/fixtures/naming.tsv`).
+/// The tokens of a naming written on its own (a line of ritsu-base's `tests/fixtures/naming.tsv`).
 pub fn naming_tokens(s: &str) -> Result<Vec<Token>, (usize, Text)> {
     let cs: Vec<char> = s.chars().collect();
     let end = comment_start(&cs);
@@ -219,7 +219,7 @@ pub fn lex(file: &str, rel: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
     for (i, text) in src.lines().enumerate() {
         let no = i + 1;
         let all: Vec<char> = text.chars().collect();
-        let err = |code: &'static str, col: usize, msg: Text| Diag::error(code, file, rel, no, col, msg).source(src);
+        let err = |code: &'static str, col: usize, msg: Text| diag::error(code, file, rel, no, col, msg).source(src);
         // Indentation is spaces. A tab is refused: how wide it is depends on the editor, and the
         // lines of a block are told apart by lining up (E005).
         let mut indent = 0;
@@ -393,7 +393,7 @@ mod tests {
 
     fn words(src: &str) -> Vec<Vec<String>> {
         let (lines, diags) = lex("t.req", "t.req", src);
-        assert!(diags.is_empty(), "{:?}", diags.iter().map(|d| d.render(crate::i18n::Lang::En)).collect::<Vec<_>>());
+        assert!(diags.is_empty(), "{:?}", diags.iter().map(|d| d.render(ritsu_base::text::Lang::En)).collect::<Vec<_>>());
         lines.iter().map(|l| l.tokens.iter().map(|t| t.tok.spelled()).collect()).collect()
     }
 

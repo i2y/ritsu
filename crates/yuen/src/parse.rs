@@ -4,8 +4,8 @@
 
 use crate::ast::*;
 use crate::date::{Day, Period};
-use crate::diag::Diag;
-use crate::i18n::Text;
+use crate::diag::{self, Diag};
+use ritsu_base::text::Text;
 use crate::kw;
 use crate::lex::{self, Line, Tok, Token};
 
@@ -264,12 +264,12 @@ struct Parser<'a> {
 
 impl Parser<'_> {
     fn err(&mut self, code: &'static str, line: usize, col: usize, msg: Text) -> &mut Diag {
-        self.diags.push(Diag::error(code, self.file, self.rel, line, col, msg).source(self.src));
+        self.diags.push(diag::error(code, self.file, self.rel, line, col, msg).source(self.src));
         self.diags.last_mut().unwrap()
     }
 
     fn bad(&mut self, line: usize, b: Bad) {
-        let mut d = Diag::error(b.code, self.file, self.rel, line, b.col, b.msg).source(self.src);
+        let mut d = diag::error(b.code, self.file, self.rel, line, b.col, b.msg).source(self.src);
         d.notes = b.notes;
         self.diags.push(d);
     }

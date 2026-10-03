@@ -4,12 +4,12 @@
 //! and the scopes name (E007–E013, E403).
 
 use crate::ast::*;
-use crate::diag::Diag;
-use crate::i18n::Text;
+use crate::diag::{self, Diag};
+use ritsu_base::text::Text;
 use crate::names::{self, Name, Tool};
 use crate::parse;
 use std::collections::BTreeMap;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 pub struct SrcFile {
     /// The path as the command line named it (a directory joined with what was found in it).
@@ -78,36 +78,22 @@ pub struct Project {
 #[derive(Debug)]
 pub struct Refusal(pub Text);
 
-/// `to` as seen from the directory `from`, both absolute.
+/// `to` as seen from the directory `from`, both absolute (ritsu-base's `paths::between`).
 pub fn relative(from: &Path, to: &Path) -> String {
-    let a: Vec<Component> = from.components().collect();
-    let b: Vec<Component> = to.components().collect();
-    let common = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
-    let mut parts: Vec<String> = Vec::new();
-    for _ in common..a.len() {
-        parts.push("..".into());
-    }
-    for c in &b[common..] {
-        parts.push(c.as_os_str().to_string_lossy().to_string());
-    }
-    if parts.is_empty() { ".".to_string() } else { parts.join("/") }
+    ritsu_base::paths::between(from, to)
 }
 
 /// The root of a project (DESIGN 2.2): the nearest directory at or above the first path given
-/// that has a `.git`, else the directory given (a file's own directory).
+/// that has a `.git`, else the directory given (a file's own directory). It is found as every
+/// language of ritsu finds it (ritsu-base's `paths::find_root`), then with its symbolic links
+/// followed, as yuen keeps every path of a project.
 pub fn find_root(first: &Path) -> Option<PathBuf> {
-    let start = if first.is_dir() { first.to_path_buf() } else { first.parent().map(|p| if p.as_os_str().is_empty() { Path::new(".") } else { p }).unwrap_or(Path::new(".")).to_path_buf() };
-    let abs = std::fs::canonicalize(&start).ok()?;
-    for d in abs.ancestors() {
-        if d.join(".git").exists() {
-            return Some(d.to_path_buf());
-        }
-    }
-    Some(abs)
+    std::fs::canonicalize(ritsu_base::paths::find_root(first)).ok()
 }
 
 /// The `.req` files a path stands for: itself, or every `.req` under a directory, in path
-/// order, leaving out what is hidden, `target` and `node_modules`.
+/// order, leaving out what every language of ritsu passes over (what is hidden, `target`,
+/// `node_modules`, `site-packages`, `__pycache__`).
 pub fn expand(arg: &str) -> Vec<String> {
     let p = Path::new(arg);
     if !p.is_dir() {
@@ -121,7 +107,7 @@ pub fn expand(arg: &str) -> Vec<String> {
         for e in es {
             let name = e.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
             if e.is_dir() {
-                if name.starts_with('.') || name == "target" || name == "node_modules" {
+                if ritsu_base::paths::skipped_name(&name) {
                     continue;
                 }
                 walk(&e, out);
@@ -211,21 +197,18 @@ impl Project {
     /// written from there (`tests/x.req`), not up to the root and down again
     /// (`../../crates/yuen/tests/x.req`).
     pub fn shown(&self, rel: &str) -> String {
-        if self.root_shown == "." {
-            return rel.to_string();
-        }
-        let target = if rel == "." { self.root.clone() } else { self.root.join(rel) };
-        relative(&self.cwd, &target)
+        let given = self.args.first().map(String::as_str).unwrap_or(".");
+        ritsu_base::paths::Shown::run_in(&self.root, &self.cwd, given).path(rel)
     }
 
     pub fn err(&self, fi: usize, code: &'static str, s: Span, msg: Text) -> Diag {
         let f = &self.files[fi];
-        Diag::error(code, &f.display, &f.rel, s.line, s.col, msg).source(&f.src)
+        diag::error(code, &f.display, &f.rel, s.line, s.col, msg).source(&f.src)
     }
 
     pub fn warn(&self, fi: usize, code: &'static str, s: Span, msg: Text) -> Diag {
         let f = &self.files[fi];
-        Diag::warning(code, &f.display, &f.rel, s.line, s.col, msg).source(&f.src)
+        diag::warning(code, &f.display, &f.rel, s.line, s.col, msg).source(&f.src)
     }
 
     /// A requirement version as a person reads it: `満了日` or `支払日 v2` when it has more
@@ -505,7 +488,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                 }
                 Ok((n, _)) => match placed(&n, Place::Link(l.side)) {
                     Err((code, msg, notes)) => {
-                        let mut dg = p.err(fi, code, Span { line: l.span.line, col: l.naming.tool.col }, msg);
+                        let mut dg = p.err(fi, code, Span { line: l.span.line, col: l.naming.tool.at }, msg);
                         dg.notes = notes;
                         diags.push(dg);
                         None
@@ -532,7 +515,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                 }
                 Ok((n, g)) => match placed(&n, Place::Scope).and(gathered_ok(&n, g.as_ref().map(|w| w.text.as_str()))) {
                     Err((code, msg, notes)) => {
-                        let mut dg = p.err(fi, code, Span { line: s.span.line, col: s.naming.tool.col }, msg);
+                        let mut dg = p.err(fi, code, Span { line: s.span.line, col: s.naming.tool.at }, msg);
                         dg.notes = notes;
                         diags.push(dg);
                         None
@@ -552,7 +535,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                     }
                     Ok((n, _)) => match placed(&n, Place::Borrowed) {
                         Err((code, msg, notes)) => {
-                            let mut dg = p.err(fi, code, Span { line: s.span.line, col: naming.tool.col }, msg);
+                            let mut dg = p.err(fi, code, Span { line: s.span.line, col: naming.tool.at }, msg);
                             dg.notes = notes;
                             diags.push(dg);
                             None
@@ -561,11 +544,11 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                     },
                 },
                 SourceKind::File { path, path_span, .. } => {
-                    if path.is_empty() || names::is_absolute(path) {
+                    if path.is_empty() || ritsu_base::paths::is_absolute(path) {
                         diags.push(p.err(fi, "E013", *path_span, tr!("出典の写しのパス `{path}` は、.req からの相対で書きます", "Write the path `{path}` of the copy from the directory of the .req")));
                         None
                     } else {
-                        match names::collapse(&dir, path) {
+                        match ritsu_base::paths::join(&dir, path).ok() {
                             None => {
                                 diags.push(p.err(fi, "E013", *path_span, tr!("`{path}` はルートの外に出ます", "`{path}` goes outside the root")));
                                 None

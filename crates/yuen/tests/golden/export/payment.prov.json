@@ -22,7 +22,7 @@
     }
   },
   "entity": {
-    "y:source/f33d9d2c570483a6cad7bc55ceeea093": {
+    "y:source/e61bbf9072a5dcaf14d418fff67fdd57": {
       "prov:type": {
         "$": "yuen:Source",
         "type": "prov:QUALIFIED_NAME"
@@ -32,7 +32,7 @@
       "yuen:url": "https://example.org/terms.md",
       "yuen:sha256": "57a614edc586dc22"
     },
-    "y:artifact/b8f811719c48fd13b012c525c6999863": {
+    "y:artifact/fb394c1ef2567222cf53786d43419dab": {
       "prov:type": {
         "$": "yuen:Artifact",
         "type": "prov:QUALIFIED_NAME"
@@ -41,7 +41,7 @@
       "yuen:sha256": "9bb0abb20fa56cb7",
       "yuen:end": "file"
     },
-    "y:artifact/97b12342c8d1bfdda9e6e8a73d0c309a": {
+    "y:artifact/2cfb2262e77efbfc9ffff3fe4c8e6609": {
       "prov:type": {
         "$": "yuen:Artifact",
         "type": "prov:QUALIFIED_NAME"
@@ -50,7 +50,7 @@
       "yuen:sha256": "93e39b25842afd07",
       "yuen:end": "file"
     },
-    "y:artifact/7385048207f471fe7a462db96a1bf964": {
+    "y:artifact/e79d715b486896b4fc8e35bf02b98bd2": {
       "prov:type": {
         "$": "yuen:Artifact",
         "type": "prov:QUALIFIED_NAME"
@@ -138,7 +138,7 @@
     }
   },
   "activity": {
-    "y:decision/517680cf92857f6ede374b41a7937f91": {
+    "y:decision/365c646ab13c849722510f7ba053c201": {
       "prov:startTime": "2025-12-01T00:00:00",
       "prov:type": {
         "$": "yuen:Decision",
@@ -146,7 +146,7 @@
       },
       "yuen:why": "締めを月末にそろえる。この材料のために決めたもの"
     },
-    "y:review/591ac3e64896c78809a9ac5abd5a4f0f": {
+    "y:review/224471a9e99688bbc1edfa344f9fb312": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -157,7 +157,7 @@
       "yuen:down": "9bb0abb20fa56cb7",
       "yuen:status": "ok"
     },
-    "y:waiver/3afd6eee825546b4f1678a5f076618db": {
+    "y:waiver/652ffb5a22a4b89dce115e712d99900f": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Waiver",
@@ -168,7 +168,7 @@
       "yuen:sha256": "f96940c54fbf4ebe",
       "yuen:status": "ok"
     },
-    "y:review/01cc15cb5e8831646bf90062c383e155": {
+    "y:review/ede272a6b842bde60bca6bfde0dffd4c": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -179,7 +179,7 @@
       "yuen:down": "48e56488e5f09eed",
       "yuen:status": "ok"
     },
-    "y:review/6997a2f0a3599e33ac790639ed58f093": {
+    "y:review/c845e012edac7d5c7a87e935218b3c4c": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -190,7 +190,7 @@
       "yuen:down": "93e39b25842afd07",
       "yuen:status": "ok"
     },
-    "y:review/50f6b87f7d7da267156e5eff7099e05f": {
+    "y:review/572a4c872dc497e1a14adeedd8ab0502": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -201,7 +201,7 @@
       "yuen:down": "df4a7416b584ec48",
       "yuen:status": "ok"
     },
-    "y:decision/59f5a1d2ef3bc59ca1fb9f8554decdb4": {
+    "y:decision/114955aaa1ee7c846c902880fcc3750f": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Decision",
@@ -209,7 +209,7 @@
       },
       "yuen:why": "2027 年 4 月から、締めを 20 日に変える。この材料のために決めたもの"
     },
-    "y:review/febed410345bd0b7cc56a534c6351128": {
+    "y:review/ae08a6d6cb3364adcb519d88c8e4984f": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -220,7 +220,7 @@
       "yuen:down": "dfb59e69c88ea653",
       "yuen:status": "ok"
     },
-    "y:review/7b0cbaa225a1965cd8915acc199cac7e": {
+    "y:review/af96a52794e7839f65f32a1e93629810": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -231,7 +231,7 @@
       "yuen:down": "93e39b25842afd07",
       "yuen:status": "ok"
     },
-    "y:review/bb71facb03e67f1b4be1ca6b6ef15104": {
+    "y:review/4f4dccf217a294cedcaba9f504eb9438": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -242,7 +242,7 @@
       "yuen:down": "df4a7416b584ec48",
       "yuen:status": "ok"
     },
-    "y:decision/3434227fbe400268a0efd6ab27f579cf": {
+    "y:decision/1dd3194be1bfb4a116083464b1b55706": {
       "prov:startTime": "2026-09-01T00:00:00",
       "prov:type": {
         "$": "yuen:Decision",
@@ -250,7 +250,7 @@
       },
       "yuen:why": "約款の第 4 条の「締め日から」を、締め日の翌日から数えると読む。この材料のために決めたもの"
     },
-    "y:review/2a5783374a291f50d68e2fb790a6e3b9": {
+    "y:review/f4b4b268b5347dde9ec51cc455bd0271": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -261,7 +261,7 @@
       "yuen:down": "2ad565ae8b811d54",
       "yuen:status": "ok"
     },
-    "y:review/6eb11e9d6d1e0d83fd4dc9a5e3a41e88": {
+    "y:review/ef02c3ee44c7d6deb280eccc1e216aa1": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -272,7 +272,7 @@
       "yuen:down": "93e39b25842afd07",
       "yuen:status": "ok"
     },
-    "y:review/34f0cfe4f6d698887c28a006f8686058": {
+    "y:review/a4c0714ae290e8baedb70df0f79a92f6": {
       "prov:startTime": "2026-10-03T00:00:00",
       "prov:type": {
         "$": "yuen:Review",
@@ -286,69 +286,69 @@
   },
   "wasAssociatedWith": {
     "_:r2": {
-      "prov:activity": "y:decision/517680cf92857f6ede374b41a7937f91",
+      "prov:activity": "y:decision/365c646ab13c849722510f7ba053c201",
       "prov:agent": "y:role/経理"
     },
     "_:r7": {
-      "prov:activity": "y:review/591ac3e64896c78809a9ac5abd5a4f0f",
+      "prov:activity": "y:review/224471a9e99688bbc1edfa344f9fb312",
       "prov:agent": "y:role/開発"
     },
     "_:r9": {
-      "prov:activity": "y:waiver/3afd6eee825546b4f1678a5f076618db",
+      "prov:activity": "y:waiver/652ffb5a22a4b89dce115e712d99900f",
       "prov:agent": "y:role/経理"
     },
     "_:r16": {
-      "prov:activity": "y:review/01cc15cb5e8831646bf90062c383e155",
+      "prov:activity": "y:review/ede272a6b842bde60bca6bfde0dffd4c",
       "prov:agent": "y:role/経理"
     },
     "_:r19": {
-      "prov:activity": "y:review/6997a2f0a3599e33ac790639ed58f093",
+      "prov:activity": "y:review/c845e012edac7d5c7a87e935218b3c4c",
       "prov:agent": "y:role/開発"
     },
     "_:r22": {
-      "prov:activity": "y:review/50f6b87f7d7da267156e5eff7099e05f",
+      "prov:activity": "y:review/572a4c872dc497e1a14adeedd8ab0502",
       "prov:agent": "y:role/開発"
     },
     "_:r27": {
-      "prov:activity": "y:decision/59f5a1d2ef3bc59ca1fb9f8554decdb4",
+      "prov:activity": "y:decision/114955aaa1ee7c846c902880fcc3750f",
       "prov:agent": "y:role/経理"
     },
     "_:r33": {
-      "prov:activity": "y:review/febed410345bd0b7cc56a534c6351128",
+      "prov:activity": "y:review/ae08a6d6cb3364adcb519d88c8e4984f",
       "prov:agent": "y:role/経理"
     },
     "_:r36": {
-      "prov:activity": "y:review/7b0cbaa225a1965cd8915acc199cac7e",
+      "prov:activity": "y:review/af96a52794e7839f65f32a1e93629810",
       "prov:agent": "y:role/開発"
     },
     "_:r39": {
-      "prov:activity": "y:review/bb71facb03e67f1b4be1ca6b6ef15104",
+      "prov:activity": "y:review/4f4dccf217a294cedcaba9f504eb9438",
       "prov:agent": "y:role/開発"
     },
     "_:r42": {
-      "prov:activity": "y:decision/3434227fbe400268a0efd6ab27f579cf",
+      "prov:activity": "y:decision/1dd3194be1bfb4a116083464b1b55706",
       "prov:agent": "y:role/経理"
     },
     "_:r49": {
-      "prov:activity": "y:review/2a5783374a291f50d68e2fb790a6e3b9",
+      "prov:activity": "y:review/f4b4b268b5347dde9ec51cc455bd0271",
       "prov:agent": "y:role/経理"
     },
     "_:r52": {
-      "prov:activity": "y:review/6eb11e9d6d1e0d83fd4dc9a5e3a41e88",
+      "prov:activity": "y:review/ef02c3ee44c7d6deb280eccc1e216aa1",
       "prov:agent": "y:role/開発"
     },
     "_:r55": {
-      "prov:activity": "y:review/34f0cfe4f6d698887c28a006f8686058",
+      "prov:activity": "y:review/a4c0714ae290e8baedb70df0f79a92f6",
       "prov:agent": "y:role/開発"
     }
   },
   "wasInfluencedBy": {
     "_:r3": {
       "prov:influencee": "y:requirement/month_end_close/v1",
-      "prov:influencer": "y:decision/517680cf92857f6ede374b41a7937f91"
+      "prov:influencer": "y:decision/365c646ab13c849722510f7ba053c201"
     },
     "_:r4": {
-      "prov:influencee": "y:artifact/b8f811719c48fd13b012c525c6999863",
+      "prov:influencee": "y:artifact/fb394c1ef2567222cf53786d43419dab",
       "prov:influencer": "y:requirement/month_end_close/v1",
       "prov:type": {
         "$": "yuen:satisfies",
@@ -356,7 +356,7 @@
       }
     },
     "_:r12": {
-      "prov:influencee": "y:artifact/97b12342c8d1bfdda9e6e8a73d0c309a",
+      "prov:influencee": "y:artifact/2cfb2262e77efbfc9ffff3fe4c8e6609",
       "prov:influencer": "y:requirement/payment_day/v1",
       "prov:type": {
         "$": "yuen:satisfies",
@@ -364,7 +364,7 @@
       }
     },
     "_:r13": {
-      "prov:influencee": "y:artifact/7385048207f471fe7a462db96a1bf964",
+      "prov:influencee": "y:artifact/e79d715b486896b4fc8e35bf02b98bd2",
       "prov:influencer": "y:requirement/payment_day/v1",
       "prov:type": {
         "$": "yuen:verifies",
@@ -373,10 +373,10 @@
     },
     "_:r28": {
       "prov:influencee": "y:requirement/payment_day/v2",
-      "prov:influencer": "y:decision/59f5a1d2ef3bc59ca1fb9f8554decdb4"
+      "prov:influencer": "y:decision/114955aaa1ee7c846c902880fcc3750f"
     },
     "_:r29": {
-      "prov:influencee": "y:artifact/97b12342c8d1bfdda9e6e8a73d0c309a",
+      "prov:influencee": "y:artifact/2cfb2262e77efbfc9ffff3fe4c8e6609",
       "prov:influencer": "y:requirement/payment_day/v2",
       "prov:type": {
         "$": "yuen:satisfies",
@@ -384,7 +384,7 @@
       }
     },
     "_:r30": {
-      "prov:influencee": "y:artifact/7385048207f471fe7a462db96a1bf964",
+      "prov:influencee": "y:artifact/e79d715b486896b4fc8e35bf02b98bd2",
       "prov:influencer": "y:requirement/payment_day/v2",
       "prov:type": {
         "$": "yuen:verifies",
@@ -393,10 +393,10 @@
     },
     "_:r43": {
       "prov:influencee": "y:requirement/payment_policy/v1",
-      "prov:influencer": "y:decision/3434227fbe400268a0efd6ab27f579cf"
+      "prov:influencer": "y:decision/1dd3194be1bfb4a116083464b1b55706"
     },
     "_:r45": {
-      "prov:influencee": "y:artifact/97b12342c8d1bfdda9e6e8a73d0c309a",
+      "prov:influencee": "y:artifact/2cfb2262e77efbfc9ffff3fe4c8e6609",
       "prov:influencer": "y:requirement/payment_policy/v1",
       "prov:type": {
         "$": "yuen:satisfies",
@@ -404,7 +404,7 @@
       }
     },
     "_:r46": {
-      "prov:influencee": "y:artifact/7385048207f471fe7a462db96a1bf964",
+      "prov:influencee": "y:artifact/e79d715b486896b4fc8e35bf02b98bd2",
       "prov:influencer": "y:requirement/payment_policy/v1",
       "prov:type": {
         "$": "yuen:verifies",
@@ -414,92 +414,92 @@
   },
   "used": {
     "_:r5": {
-      "prov:activity": "y:review/591ac3e64896c78809a9ac5abd5a4f0f",
+      "prov:activity": "y:review/224471a9e99688bbc1edfa344f9fb312",
       "prov:entity": "y:requirement/month_end_close/v1"
     },
     "_:r6": {
-      "prov:activity": "y:review/591ac3e64896c78809a9ac5abd5a4f0f",
-      "prov:entity": "y:artifact/b8f811719c48fd13b012c525c6999863"
+      "prov:activity": "y:review/224471a9e99688bbc1edfa344f9fb312",
+      "prov:entity": "y:artifact/fb394c1ef2567222cf53786d43419dab"
     },
     "_:r8": {
-      "prov:activity": "y:waiver/3afd6eee825546b4f1678a5f076618db",
+      "prov:activity": "y:waiver/652ffb5a22a4b89dce115e712d99900f",
       "prov:entity": "y:requirement/month_end_close/v1"
     },
     "_:r14": {
-      "prov:activity": "y:review/01cc15cb5e8831646bf90062c383e155",
+      "prov:activity": "y:review/ede272a6b842bde60bca6bfde0dffd4c",
       "prov:entity": "y:requirement/payment_policy/v1"
     },
     "_:r15": {
-      "prov:activity": "y:review/01cc15cb5e8831646bf90062c383e155",
+      "prov:activity": "y:review/ede272a6b842bde60bca6bfde0dffd4c",
       "prov:entity": "y:requirement/payment_day/v1"
     },
     "_:r17": {
-      "prov:activity": "y:review/6997a2f0a3599e33ac790639ed58f093",
+      "prov:activity": "y:review/c845e012edac7d5c7a87e935218b3c4c",
       "prov:entity": "y:requirement/payment_day/v1"
     },
     "_:r18": {
-      "prov:activity": "y:review/6997a2f0a3599e33ac790639ed58f093",
-      "prov:entity": "y:artifact/97b12342c8d1bfdda9e6e8a73d0c309a"
+      "prov:activity": "y:review/c845e012edac7d5c7a87e935218b3c4c",
+      "prov:entity": "y:artifact/2cfb2262e77efbfc9ffff3fe4c8e6609"
     },
     "_:r20": {
-      "prov:activity": "y:review/50f6b87f7d7da267156e5eff7099e05f",
+      "prov:activity": "y:review/572a4c872dc497e1a14adeedd8ab0502",
       "prov:entity": "y:requirement/payment_day/v1"
     },
     "_:r21": {
-      "prov:activity": "y:review/50f6b87f7d7da267156e5eff7099e05f",
-      "prov:entity": "y:artifact/7385048207f471fe7a462db96a1bf964"
+      "prov:activity": "y:review/572a4c872dc497e1a14adeedd8ab0502",
+      "prov:entity": "y:artifact/e79d715b486896b4fc8e35bf02b98bd2"
     },
     "_:r31": {
-      "prov:activity": "y:review/febed410345bd0b7cc56a534c6351128",
+      "prov:activity": "y:review/ae08a6d6cb3364adcb519d88c8e4984f",
       "prov:entity": "y:requirement/payment_policy/v1"
     },
     "_:r32": {
-      "prov:activity": "y:review/febed410345bd0b7cc56a534c6351128",
+      "prov:activity": "y:review/ae08a6d6cb3364adcb519d88c8e4984f",
       "prov:entity": "y:requirement/payment_day/v2"
     },
     "_:r34": {
-      "prov:activity": "y:review/7b0cbaa225a1965cd8915acc199cac7e",
+      "prov:activity": "y:review/af96a52794e7839f65f32a1e93629810",
       "prov:entity": "y:requirement/payment_day/v2"
     },
     "_:r35": {
-      "prov:activity": "y:review/7b0cbaa225a1965cd8915acc199cac7e",
-      "prov:entity": "y:artifact/97b12342c8d1bfdda9e6e8a73d0c309a"
+      "prov:activity": "y:review/af96a52794e7839f65f32a1e93629810",
+      "prov:entity": "y:artifact/2cfb2262e77efbfc9ffff3fe4c8e6609"
     },
     "_:r37": {
-      "prov:activity": "y:review/bb71facb03e67f1b4be1ca6b6ef15104",
+      "prov:activity": "y:review/4f4dccf217a294cedcaba9f504eb9438",
       "prov:entity": "y:requirement/payment_day/v2"
     },
     "_:r38": {
-      "prov:activity": "y:review/bb71facb03e67f1b4be1ca6b6ef15104",
-      "prov:entity": "y:artifact/7385048207f471fe7a462db96a1bf964"
+      "prov:activity": "y:review/4f4dccf217a294cedcaba9f504eb9438",
+      "prov:entity": "y:artifact/e79d715b486896b4fc8e35bf02b98bd2"
     },
     "_:r44": {
-      "prov:activity": "y:decision/3434227fbe400268a0efd6ab27f579cf",
-      "prov:entity": "y:source/f33d9d2c570483a6cad7bc55ceeea093"
+      "prov:activity": "y:decision/1dd3194be1bfb4a116083464b1b55706",
+      "prov:entity": "y:source/e61bbf9072a5dcaf14d418fff67fdd57"
     },
     "_:r47": {
-      "prov:activity": "y:review/2a5783374a291f50d68e2fb790a6e3b9",
-      "prov:entity": "y:source/f33d9d2c570483a6cad7bc55ceeea093"
+      "prov:activity": "y:review/f4b4b268b5347dde9ec51cc455bd0271",
+      "prov:entity": "y:source/e61bbf9072a5dcaf14d418fff67fdd57"
     },
     "_:r48": {
-      "prov:activity": "y:review/2a5783374a291f50d68e2fb790a6e3b9",
+      "prov:activity": "y:review/f4b4b268b5347dde9ec51cc455bd0271",
       "prov:entity": "y:requirement/payment_policy/v1"
     },
     "_:r50": {
-      "prov:activity": "y:review/6eb11e9d6d1e0d83fd4dc9a5e3a41e88",
+      "prov:activity": "y:review/ef02c3ee44c7d6deb280eccc1e216aa1",
       "prov:entity": "y:requirement/payment_policy/v1"
     },
     "_:r51": {
-      "prov:activity": "y:review/6eb11e9d6d1e0d83fd4dc9a5e3a41e88",
-      "prov:entity": "y:artifact/97b12342c8d1bfdda9e6e8a73d0c309a"
+      "prov:activity": "y:review/ef02c3ee44c7d6deb280eccc1e216aa1",
+      "prov:entity": "y:artifact/2cfb2262e77efbfc9ffff3fe4c8e6609"
     },
     "_:r53": {
-      "prov:activity": "y:review/34f0cfe4f6d698887c28a006f8686058",
+      "prov:activity": "y:review/a4c0714ae290e8baedb70df0f79a92f6",
       "prov:entity": "y:requirement/payment_policy/v1"
     },
     "_:r54": {
-      "prov:activity": "y:review/34f0cfe4f6d698887c28a006f8686058",
-      "prov:entity": "y:artifact/7385048207f471fe7a462db96a1bf964"
+      "prov:activity": "y:review/a4c0714ae290e8baedb70df0f79a92f6",
+      "prov:entity": "y:artifact/e79d715b486896b4fc8e35bf02b98bd2"
     }
   },
   "wasDerivedFrom": {
@@ -529,7 +529,7 @@
     },
     "_:r41": {
       "prov:generatedEntity": "y:requirement/payment_policy/v1",
-      "prov:usedEntity": "y:source/f33d9d2c570483a6cad7bc55ceeea093",
+      "prov:usedEntity": "y:source/e61bbf9072a5dcaf14d418fff67fdd57",
       "prov:type": {
         "$": "prov:PrimarySource",
         "type": "prov:QUALIFIED_NAME"

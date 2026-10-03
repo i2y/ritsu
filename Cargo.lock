@@ -201,6 +201,8 @@ dependencies = [
 name = "yuen"
 version = "0.1.0"
 dependencies = [
+ "ritsu-base",
+ "ritsu-testkit",
  "serde_json",
 ]
 

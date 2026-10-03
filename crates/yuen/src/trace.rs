@@ -6,7 +6,7 @@
 use crate::ast::*;
 use crate::check::{Checked, Model};
 use crate::copies;
-use crate::i18n::{Lang, Text};
+use ritsu_base::text::{Lang, Text};
 use crate::marks::{EndInfo, LinkKind, LinkState, Status, Thing};
 use crate::names::{self, Name};
 use crate::project::{Project, Refusal};
@@ -213,7 +213,7 @@ fn requirement(p: &Project, m: &Model, r: usize, depth: usize, o: &mut Out, seen
                 Side::Verified => tr!("確かめるもの: {a} — {}", "checked by {a} — {}", status.ja; status.en),
             };
             o.push(depth + 1, line);
-            links.push(json!({"line": l.span.line, "role": side.word(), "artifact": name.map(|n| n.to_json()), "reviewed": rec.map(record_json), "status": st.map(|s| s.status.word())}));
+            links.push(json!({"line": l.span.line, "role": side.word(), "artifact": name.map(|n| crate::diag::value(&n.to_json())), "reviewed": rec.map(record_json), "status": st.map(|s| s.status.word())}));
         }
         for (i, w) in d.waivers.iter().enumerate().filter(|(_, w)| w.side == side) {
             let st = crate::check::state(m, r, LinkKind::Waiver(i));
@@ -299,7 +299,7 @@ pub fn trace(c: &Checked, start: &Start) -> Result<Traced, Refusal> {
                 let mut seen = Vec::new();
                 out.push(requirement(p, m, r, 1, &mut o, &mut seen));
             }
-            json!({"artifact": n.to_json(), "in_scope": in_scope, "requirements": out})
+            json!({"artifact": crate::diag::value(&n.to_json()), "in_scope": in_scope, "requirements": out})
         }
         Start::Source(spec) => {
             let s = spec.trim().strip_prefix('@').unwrap_or(spec.trim());

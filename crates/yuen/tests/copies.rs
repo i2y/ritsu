@@ -6,7 +6,7 @@ mod common;
 
 use yuen::ast::LawDb;
 use yuen::copies;
-use yuen::sha256;
+use ritsu_base::sha256;
 
 #[test]
 fn sha256_against_fips_180_4() {
@@ -20,7 +20,7 @@ fn sha256_against_fips_180_4() {
 #[test]
 fn base64_round_trips() {
     let bytes: Vec<u8> = (0..=255u8).collect();
-    assert_eq!(yuen::base64::decode(&yuen::base64::encode(&bytes)).unwrap(), bytes);
+    assert_eq!(ritsu_base::sources::base64_decode(&ritsu_base::sources::base64_encode(&bytes)).unwrap(), bytes);
 }
 
 const LAW: &str = "tests/fixtures/period/sources/law/129AC0000000089@2026-10-01";

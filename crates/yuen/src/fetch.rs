@@ -21,13 +21,12 @@
 use crate::ast::*;
 use crate::copies;
 use crate::diag::DiffLine;
-use crate::i18n::{Text, plural};
 use crate::project::Project;
-use crate::sha256;
-use serde_json::Value;
+use ritsu_base::sha256;
+use ritsu_base::sources::{self, Ecfr, Egov};
+use ritsu_base::text::{Text, plural};
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::process::Command;
 
 /// What a command did or found, a line each, and whether an original moved on (`outdated`'s
 /// exit code).
@@ -36,169 +35,54 @@ pub struct Outcome {
     pub changed: bool,
 }
 
-/// e-Gov law API v2: `YUEN_EGOV`, else e-Gov itself.
-pub fn egov() -> String {
-    base("YUEN_EGOV", "https://laws.e-gov.go.jp/api/2")
+/// ritsu-base's message, its English starting with a capital as yuen's sentences do (yuen
+/// prints a message as written).
+fn cap(t: Text) -> Text {
+    Text { en: ritsu_base::text::capitalize(&t.en), ja: t.ja }
+}
+
+/// e-Gov law API v2: `YUEN_EGOV`, else e-Gov itself. The requests, the retries and the reading
+/// of a reply are ritsu-base's (`ritsu_base::sources`).
+pub fn egov() -> Egov {
+    Egov { base: sources::base_url("YUEN_EGOV", sources::EGOV) }
 }
 
 /// The eCFR's versioner API: `YUEN_ECFR`, else the eCFR itself.
-pub fn ecfr() -> String {
-    base("YUEN_ECFR", "https://www.ecfr.gov/api/versioner/v1")
-}
-
-fn base(var: &str, default: &str) -> String {
-    std::env::var(var).ok().filter(|s| !s.is_empty()).unwrap_or_else(|| default.to_string()).trim_end_matches('/').to_string()
-}
-
-/// One run of curl: the body, what curl said when it failed, or that curl itself cannot be run.
-fn curl_once(url: &str) -> Result<Vec<u8>, Result<String, Text>> {
-    let out = match Command::new("curl").args(["-fsSL", "--max-time", "120", url]).output() {
-        Ok(o) => o,
-        Err(e) => return Err(Err(tr!("curl を走らせられません（PATH にありますか）: {e}", "Cannot run curl (is it on the PATH?): {e}"))),
-    };
-    if out.status.success() { Ok(out.stdout) } else { Err(Ok(String::from_utf8_lossy(&out.stderr).trim().to_string())) }
+pub fn ecfr() -> Ecfr {
+    Ecfr { base: sources::base_url("YUEN_ECFR", sources::ECFR) }
 }
 
 /// One request: three tries over HTTP and HTTPS, two seconds before the second and four
 /// before the third (a busy server refuses now and then; a scheduled job that stops on one
 /// refusal is one nobody reads), and one for a `file://` URL (DESIGN 14).
 pub fn curl(url: &str) -> Result<Vec<u8>, Text> {
-    let tries = if url.starts_with("http://") || url.starts_with("https://") { 3 } else { 1 };
-    let mut last = String::new();
-    for attempt in 0..tries {
-        if attempt > 0 {
-            std::thread::sleep(std::time::Duration::from_secs(2 * attempt));
-        }
-        match curl_once(url) {
-            Ok(b) => return Ok(b),
-            Err(Ok(e)) => last = e,
-            Err(Err(no_curl)) => return Err(no_curl),
-        }
-    }
-    Err(tr!("{url} を取れません（{tries} 回試しました）: {last}", "Cannot fetch {url} (tried {tries} times): {last}"))
-}
-
-fn json_of(url: &str) -> Result<Value, Text> {
-    let body = curl(url)?;
-    serde_json::from_slice(&body).map_err(|e| tr!("{url} のレスポンスが JSON として読めません: {e}", "The response of {url} is not JSON: {e}"))
+    sources::curl(url).map_err(cap)
 }
 
 /// Whether two copies say the same: their text, not their markup (rulec's §15.71).
 pub fn same_text(a: &[u8], b: &[u8]) -> bool {
-    copies::xml_text(&String::from_utf8_lossy(a)) == copies::xml_text(&String::from_utf8_lossy(b))
-}
-
-// ── Where an article is ─────────────────────────────────────────────────────
-
-/// What e-Gov's `elm` asks for, from the file an article is copied into: the element path,
-/// with `[1]` for an appendix table, and for an amending law's supplementary provisions the
-/// law's number, whose position e-Gov alone knows (rulec's `Fragment`).
-struct Element {
-    /// With `{k}` where the position of an amending law's supplementary provisions goes.
-    template: String,
-    amend: Option<String>,
-}
-
-fn element(file: &str) -> Element {
-    let stem = file.trim_end_matches(".xml");
-    if let Some(rest) = stem.strip_prefix("AppdxTable_") {
-        return Element { template: format!("AppdxTable[{rest}]"), amend: None };
-    }
-    if let Some(rest) = stem.strip_prefix("SupplProvision_") {
-        let (num, tail) = match rest.find("-Article_") {
-            Some(i) => (&rest[..i], &rest[i..]),
-            None => (rest, ""),
-        };
-        return Element { template: format!("SupplProvision[{{k}}]{tail}"), amend: Some(num.to_string()) };
-    }
-    Element { template: stem.to_string(), amend: None }
-}
-
-fn query(s: &str) -> String {
-    s.replace('[', "%5B").replace(']', "%5D")
-}
-
-/// The supplementary provisions of a law in document order, each with the amending law it
-/// came with (rulec's `suppl_ordinals`): what `SupplProvision[k]` counts.
-fn suppl_ordinals(xml: &str) -> Vec<Option<String>> {
-    let mut out = Vec::new();
-    let mut rest = xml;
-    while let Some(i) = rest.find("<SupplProvision") {
-        let after = &rest[i + "<SupplProvision".len()..];
-        if !after.starts_with([' ', '>', '\n', '\t', '/']) {
-            rest = after;
-            continue;
-        }
-        let end = after.find('>').unwrap_or(after.len());
-        let tag = &after[..end];
-        out.push(tag.find("AmendLawNum=\"").map(|p| {
-            let v = &tag[p + "AmendLawNum=\"".len()..];
-            v[..v.find('"').unwrap_or(v.len())].to_string()
-        }));
-        rest = &after[end..];
-    }
-    out
-}
-
-/// What a law's `law_data` holds: the XML inside `law_full_text`, and the revision.
-fn law_xml(j: &Value, url: &str) -> Result<(Vec<u8>, String), Text> {
-    let b64 = j.get("law_full_text").and_then(|x| x.as_str()).ok_or_else(|| tr!("{url} のレスポンスに law_full_text がありません", "The response of {url} has no law_full_text"))?;
-    let xml = crate::base64::decode(b64).ok_or_else(|| tr!("{url} の law_full_text が base64 として読めません", "The law_full_text of {url} is not base64"))?;
-    let rev = j.get("revision_info").and_then(|r| r.get("law_revision_id")).and_then(|x| x.as_str()).unwrap_or("").to_string();
-    Ok((xml, rev))
+    sources::same_text(a, b)
 }
 
 /// What the network is asked for one command: the positions of supplementary provisions, a
 /// whole law per date at most once.
 #[derive(Default)]
 struct Net {
-    suppl: BTreeMap<String, Vec<Option<String>>>,
+    suppl: sources::SupplCache,
 }
 
 impl Net {
-    fn suppl_index(&mut self, id: &str, asof: &str, amend: &str) -> Result<usize, Text> {
-        let key = format!("{id}@{asof}");
-        if !self.suppl.contains_key(&key) {
-            let url = format!("{}/law_data/{id}?asof={asof}&law_full_text_format=xml", egov());
-            let (xml, _) = law_xml(&json_of(&url)?, &url)?;
-            self.suppl.insert(key.clone(), suppl_ordinals(&String::from_utf8_lossy(&xml)));
-        }
-        self.suppl[&key]
-            .iter()
-            .position(|n| n.as_deref() == Some(amend))
-            .map(|p| p + 1)
-            .ok_or_else(|| tr!("法令 {id} の {asof} 時点に、附則（{amend}）がありません", "The law {id} as of {asof} has no supplementary provisions of {amend}"))
-    }
-
     /// An article of a law as of a date, and the revision it came from (empty for the eCFR,
-    /// whose version is the date asked for).
+    /// whose version is the date asked for). The position of an amending law's supplementary
+    /// provisions is looked up as of the same date.
     fn article(&mut self, db: LawDb, id: &str, asof: &str, file: &str) -> Result<(Vec<u8>, String), Text> {
         match db {
             LawDb::Egov => {
-                let e = element(file);
-                let elm = match &e.amend {
-                    Some(a) => e.template.replace("{k}", &self.suppl_index(id, asof, a)?.to_string()),
-                    None => e.template.clone(),
-                };
-                let url = format!("{}/law_data/{id}?asof={asof}&elm={}&law_full_text_format=xml", egov(), query(&elm));
-                law_xml(&json_of(&url)?, &url)
+                let (elm, amend) = sources::element_of_file(file);
+                egov().element(id, asof, asof, &elm, amend.as_deref(), &mut self.suppl).map_err(cap)
             }
-            LawDb::Ecfr => {
-                let (title, part) = cfr_id(id)?;
-                let section = file.trim_end_matches(".xml");
-                let url = format!("{}/full/{asof}/title-{title}.xml?part={part}&section={section}", ecfr());
-                Ok((curl(&url)?, String::new()))
-            }
+            LawDb::Ecfr => Ok((ecfr().section(id, asof, file.trim_end_matches(".xml")).map_err(cap)?, String::new())),
         }
-    }
-}
-
-/// The title and the part of a CFR id: `29 CFR 1910` is title 29, part 1910.
-fn cfr_id(id: &str) -> Result<(String, String), Text> {
-    let words: Vec<&str> = id.split_whitespace().collect();
-    match words.as_slice() {
-        [t, c, part] if c.eq_ignore_ascii_case("cfr") && t.chars().all(|x| x.is_ascii_digit()) && part.chars().all(|x| x.is_ascii_alphanumeric()) => Ok((t.to_string(), part.to_string())),
-        _ => Err(tr!("CFR の ID は `29 CFR 1910` の形（title と part）で書きます: `{id}`", "A CFR id is written `29 CFR 1910`, a title and a part: `{id}`")),
     }
 }
 
@@ -355,46 +239,6 @@ pub fn fetch(p: &Project) -> Result<Outcome, Text> {
 
 // ── pin ─────────────────────────────────────────────────────────────────────
 
-/// The byte offset of the `sha256:` of a line and of the `#` that starts its comment, each
-/// outside the strings of the line (koyomi's).
-fn marks(line: &str) -> (Option<usize>, Option<usize>) {
-    let mut in_str = false;
-    let mut escaped = false;
-    let mut pin = None;
-    for (i, c) in line.char_indices() {
-        if in_str {
-            match (escaped, c) {
-                (true, _) => escaped = false,
-                (false, '\\') => escaped = true,
-                (false, '"') => in_str = false,
-                _ => {}
-            }
-            continue;
-        }
-        match c {
-            '"' => in_str = true,
-            '#' => return (pin, Some(i)),
-            's' if pin.is_none() && line[i..].starts_with("sha256:") => pin = Some(i),
-            _ => {}
-        }
-    }
-    (pin, None)
-}
-
-/// The line with `sha256:<pin>` in place of the digits it has, or with ` sha256:<pin>` added
-/// after its last word (before a comment). Nothing else on the line changes.
-pub fn pinned(line: &str, pin: &str) -> String {
-    let (at, comment) = marks(line);
-    if let Some(i) = at {
-        let start = i + "sha256:".len();
-        let end = start + line[start..].bytes().take_while(|b| b.is_ascii_hexdigit()).count();
-        return format!("{}{pin}{}", &line[..start], &line[end..]);
-    }
-    let body_end = comment.unwrap_or(line.len());
-    let content = line[..body_end].trim_end();
-    format!("{content} sha256:{pin}{}", &line[content.len()..])
-}
-
 /// An article as a pin line writes it: bare when it is a name, else in quotes (`"§1910.157"`).
 fn fragment_word(fr: &str) -> String {
     if fr.chars().all(|c| c.is_alphanumeric() || c == '_') { fr.to_string() } else { crate::names::quote(fr) }
@@ -438,7 +282,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                     }
                     let k = s.span.line - 1;
                     let (body, end) = split(&lines[k]);
-                    lines[k] = pinned(&body, &h) + &end;
+                    lines[k] = sources::pinned(&body, &h) + &end;
                     report.push(tr!("{name}: sha256:{h} で固定しました", "{name}: pinned at sha256:{h}"));
                 }
                 SourceKind::Law { db, id, asof, pins } => {
@@ -455,7 +299,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                         if pl.pin.as_deref() != Some(h.as_str()) {
                             let k = pl.span.line - 1;
                             let (body, end) = split(&lines[k]);
-                            lines[k] = pinned(&body, &h) + &end;
+                            lines[k] = sources::pinned(&body, &h) + &end;
                             let fr = &pl.fragment;
                             report.push(tr!("{name}: {fr} を sha256:{h} で固定しました", "{name}: pinned {fr} at sha256:{h}"));
                         }
@@ -513,45 +357,6 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
 }
 
 // ── outdated ────────────────────────────────────────────────────────────────
-
-/// The revisions of a law enforced after `asof`, as (enforcement date, revision id), one a day.
-fn later_revisions(id: &str, asof: &str) -> Result<Vec<(String, String)>, Text> {
-    let j = json_of(&format!("{}/law_revisions/{id}", egov()))?;
-    let mut v = Vec::new();
-    if let Some(revs) = j.get("revisions").and_then(|r| r.as_array()) {
-        for r in revs {
-            let date = r.get("amendment_enforcement_date").and_then(|x| x.as_str()).unwrap_or("");
-            let rid = r.get("law_revision_id").and_then(|x| x.as_str()).unwrap_or("");
-            if crate::date::Day::parse(date).is_some() && date > asof {
-                v.push((date.to_string(), rid.to_string()));
-            }
-        }
-    }
-    v.sort();
-    // Several revisions can come into force on one day; the text as of that day is one.
-    v.dedup_by(|a, b| a.0 == b.0);
-    Ok(v)
-}
-
-/// The days after `asof` on which a cited section of the CFR was amended in substance (the
-/// eCFR says whether a version only moved the markup), as (date, "").
-fn ecfr_amendments(id: &str, asof: &str, sections: &[String]) -> Result<Vec<(String, String)>, Text> {
-    let (title, part) = cfr_id(id)?;
-    let mut out: Vec<(String, String)> = Vec::new();
-    for s in sections {
-        let j = json_of(&format!("{}/versions/title-{title}.json?part={part}&section={s}", ecfr()))?;
-        for v in j.get("content_versions").and_then(|x| x.as_array()).into_iter().flatten() {
-            let date = v.get("amendment_date").and_then(|x| x.as_str()).unwrap_or("");
-            let substantive = v.get("substantive").and_then(|x| x.as_bool()).unwrap_or(false);
-            if substantive && crate::date::Day::parse(date).is_some() && date > asof {
-                out.push((date.to_string(), String::new()));
-            }
-        }
-    }
-    out.sort();
-    out.dedup_by(|a, b| a.0 == b.0);
-    Ok(out)
-}
 
 /// Who an article or a file source reaches: the requirement versions that cite it, those
 /// read from them in turn, and how many links and waivers each change will mark.
@@ -684,8 +489,8 @@ pub fn outdated(p: &Project) -> Result<Outcome, Text> {
                     let frs = fragments(&f.ast, name, pins);
                     let files: Vec<(String, String)> = frs.iter().filter_map(|fr| copies::fragment_file(*db, fr).map(|file| (fr.clone(), file))).collect();
                     let later = match db {
-                        LawDb::Egov => later_revisions(id, &asof)?,
-                        LawDb::Ecfr => ecfr_amendments(id, &asof, &files.iter().map(|(_, file)| file.trim_end_matches(".xml").to_string()).collect::<Vec<_>>())?,
+                        LawDb::Egov => egov().later_revisions(id, &asof).map_err(cap)?,
+                        LawDb::Ecfr => ecfr().amendments(id, &asof, &files.iter().map(|(_, file)| file.trim_end_matches(".xml").to_string()).collect::<Vec<_>>()).map_err(cap)?.into_iter().map(|(d, _)| (d, String::new())).collect(),
                     };
                     if later.is_empty() {
                         lines.push(match db {

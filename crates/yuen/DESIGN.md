@@ -76,7 +76,7 @@ yuen が確かめるのは、つながりとハッシュと期間だけである
 | 書き方 | キーワードは英語の一種類だけ。名前は日本語で書ける。字下げがブロックを表し、`#` から行末までがコメント。日付の区間は `..` で、両端を含む（koyomi の 1.2） |
 | 出典 | `source <名前> = law [<データベース>] "<ID>" asof <日付>` と条ごとの固定の行、`source <名前> = file "…" url "…" sha256:<16 桁>`、引用は `@<出典> <条>[, <条>…]`。写しは `sources/law/<ID>@<日付>/<要素>.xml`。`yuen source fetch \| pin \| outdated`。`check` は通信しない（rulec の §15.68・§15.76・§15.108、koyomi の 1.5） |
 | ハッシュ | SHA-256 の先頭 16 桁を `sha256:` に続けて書く。SHA-256 は自前で書く |
-| 診断 | koyomi と chobo の形（`error[E301]: <ファイル>:<行>:<列>: …`、原文の行、注、そうなる例）。英語が既定で、`--lang ja` か `YUEN_LANG=ja` で日本語。台帳は一か所にあり、`yuen explain` が引く |
+| 診断 | koyomi と chobo の形（`error[E301]: <ファイル>:<行>:<列>: …`、原文の行、注、そうなる例）。英語が既定で、`--lang ja` か `YUEN_LANG=ja`（ritsu のどの言語も読む `RITSU_LANG=ja` でもよい）で日本語。台帳は一か所にあり、`yuen explain` が引く |
 | CLI | コマンドとフラグを一枚の表に置き、知らないフラグは exit 2（rulec の §12.1）。exit code は 0・1・2 |
 | 確かめ方 | 文書に載せた出力はテストが走らせて照らし合わせる。外のツールが無ければ `SKIP:` の行を出して通す。golden の取り直しは `YUEN_BLESS=1` |
 | 語 | 「証明」は使わない。通ったことは「確かめた」と書く（rulec の §15.47） |
@@ -361,7 +361,7 @@ scope file "src/"
 
 ## 2. 成果物の名指し方
 
-この章の決まりは、sakai（境界づけられたコンテキストの言語、`.ctx`）と一字も違えずにそろえる。二つの言語が同じ成果物を同じ綴りで指し、同じ JSON に直せるようにするためである。名指し方について決めたことは、ここに全部まとめる。決まりを試す表 `tests/fixtures/naming.tsv` は sakai のリポジトリにも同じものがあり、表のどの行も右の列のとおりになることを、テストが確かめる（2.6）。表を直すときは、二つのリポジトリで同じに直す。
+この章の決まりは、sakai（境界づけられたコンテキストの言語、`.ctx`）と一字も違えずにそろえる。二つの言語が同じ成果物を同じ綴りで指し、同じ JSON に直せるようにするためである。名指し方について決めたことは、ここに全部まとめる。決まりを試す表は、ritsu に取り込んでからは ritsu-base の `tests/fixtures/naming.tsv` 一つで、sakai もこの表で確かめる。表のどの行も右の列のとおりになることを、テストが確かめる（2.6）。名指しを読む仕組みも ritsu-base のもの（`ritsu_base::naming`）で、yuen に残るのは、`.req` の字句から名指しの語を切り出すところと、診断のコードと文（E011、E012、E013）である。
 
 ### 2.1 形
 
@@ -405,7 +405,7 @@ sakai "contexts/受注.ctx" term キャンセル
 - 畳んで何も残らないパス（`"."`）は、書いたファイルのディレクトリそのものを指す。ディレクトリを書けるのは `scope` だけである（2.5）。ルートそのものは、文字にするときも JSON でも `"."` と書く。
 - **ルート**：最初に渡したパスの上で、`.git` を持つ一番近いディレクトリ。git を走らせず、ディレクトリを見て探す。無ければ、渡したディレクトリ（ファイルなら、それがあるディレクトリ）。`--root` で替えられる。geas の `map` の記録のルート（geas の DESIGN 7.4）と同じ決まりにした。git の差分のパスも、geas の記録のパスも、このルートからの相対なので、そのまま突き合わせられる。
 - JSON で出すとき（`api`、`--format json`、書き出し）は、パスをルートからの相対にする。ルートそのものは、yuen を走らせたディレクトリから見た相対で `root` に書く（そこで走らせれば `"."`）。手元の絶対パスを出力に入れないためである。
-- 人が読む文面（診断、`trace`、`review`、`source` のコマンド）でファイルの場所を言うときは、一式（koyomi・chobo・dandori・geas）と同じく、走らせたディレクトリからの相対で書く。`.req` は渡したとおりのパス（ディレクトリを渡したなら、そのパスに見つけたファイルをつないだもの）で、写しや成果物のファイルは、走らせたディレクトリからいちばん短い相対で書く（ritsu の段階 C で直した。ルートが走らせたディレクトリより上にあるとき、前はルートまで上ってから下りる `../../crates/yuen/…` の形で書いていた）。どれも、走らせた場所からそのまま開ける。名指しを文字にしたもの（2.4）だけは、どこに出してもルートからの相対のままにする。読み直すと同じ名指しになり、ルートにある `.req` にそのまま貼れる形だからである。
+- 人が読む文面（診断、`trace`、`review`、`source` のコマンド）でファイルの場所を言うときは、一式（koyomi・chobo・dandori・geas）と同じく、走らせたディレクトリからの相対で書く。`.req` は渡したとおりのパス（ディレクトリを渡したなら、そのパスに見つけたファイルをつないだもの）で、写しや成果物のファイルは、走らせたディレクトリからいちばん短い相対で書く（ritsu の段階 C で直した。ルートが走らせたディレクトリより上にあるとき、前はルートまで上ってから下りる `../../crates/yuen/…` の形で書いていた）。最初に渡したパスが絶対パスなら、写しや成果物のファイルも絶対パスで書く（ritsu の土台の `paths::Shown` の決まり。渡したとおりの形で書く）。どれも、走らせた場所からそのまま開ける。名指しを文字にしたもの（2.4）だけは、どこに出してもルートからの相対のままにする。読み直すと同じ名指しになり、ルートにある `.req` にそのまま貼れる形だからである。
 
 ### 2.3 ツールと種類
 
@@ -459,7 +459,7 @@ sakai "contexts/受注.ctx" term キャンセル
 
 キーは `text`、`tool`、`path`、`items` の順に並べる。`path` はルートからの相対、`items` は種類と名前の組の並び（組が無ければ `[]`）、`text` は 2.4 の形で文字にしたものである。一つの名指しだけを出すときは、serde_json の詰めた書き方（空白を入れず、ASCII でない文字はエスケープしない）にする。`api` のように整形した JSON の中に置くときも、キーと値は同じで、違うのは空白だけである。
 
-`tests/fixtures/naming.tsv` は、この決まりを試す表である。一行が一つの名指しで、タブの左が名指し（書いたファイルはルートにあるとする）、右が、その名指しだけを出したときの JSON か、`ERROR: <理由>` である。`tests/names.rs` は、表のどの行についても、JSON の行では一字も違わない JSON を出すこと、エラーの行ではエラーにすることを確かめる。エラーの理由は、知らないツールとツールの語を `"…"` で書いたものなら E011、種類と組（種類を `"…"` で書いた、種類のあとに名前が無い、を含む）なら E012、パス（空のパスを含む）なら E013、字句（文字列の外の全角の空白、`\"` と `\\` のほかのエスケープ）なら E001 に当たることも確かめる。表は 2026-10-03 に 36 行（JSON 21 行、エラー 15 行）になった。
+ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表である。一行が一つの名指しで、タブの左が名指し（書いたファイルはルートにあるとする）、右が、その名指しだけを出したときの JSON か、`ERROR: <理由>` である。`tests/names.rs` は、表のどの行についても、JSON の行では一字も違わない JSON を出すこと、エラーの行ではエラーにすることを確かめる。エラーの理由は、知らないツールとツールの語を `"…"` で書いたものなら E011、種類と組（種類を `"…"` で書いた、種類のあとに名前が無い、を含む）なら E012、パス（空のパスを含む）なら E013、字句（文字列の外の全角の空白、`\"` と `\\` のほかのエスケープ）なら E001 に当たることも確かめる。表は 2026-10-03 に 36 行（JSON 21 行、エラー 15 行）になった。
 
 ### 2.7 dandori と geas に足りないもの
 
@@ -858,7 +858,7 @@ error[E302]: <ファイル>:<行>:<列>: <一行の見出し>
 
 一行めは、要件と成果物の言葉で完結させる。どの診断にも、そこに至る具体的なもの（変わった本文の差分、循環の要件の並び、隙間の日付、名前の候補）を添える。直し方は、書き換えたあとの形まで書く。コマンドで直すもの（`yuen review`、`yuen source pin`）は、そのコマンドの行を書く。
 
-文面は英語が既定で、`--lang ja` か環境変数 `YUEN_LANG=ja` で日本語にする。システムのロケールは見ない。日本語と英語は `tr!("…", "…")` で隣に書き、言語は描くときに渡す（koyomi と同じく、テストが同じプロセスの中で二つの言語の golden を描けるように）。日本語の文では、ASCII の名前と日本語のあいだに空白を入れる。
+文面は英語が既定で、`--lang ja` か環境変数 `YUEN_LANG=ja`（無ければ `RITSU_LANG=ja`）で日本語にする。システムのロケールは見ない。日本語と英語は `tr!("…", "…")` で隣に書き、言語は描くときに渡す（koyomi と同じく、テストが同じプロセスの中で二つの言語の golden を描けるように）。日本語の文では、ASCII の名前と日本語のあいだに空白を入れる。
 
 `--format json` は、プロジェクトに一つの JSON を出す：`{"root", "ok", "summary", "diagnostics": [{"code", "severity", "file", "line", "col", "message", "notes", "diff", "chain", "candidates", "fix"}]}`。`diff` は差分の行（`{"op": "-" | "+" | " " | "@@", "text"}` の並び。`@@` は統一形式の塊の見出し `@@ -18,5 +18,5 @@`）、`chain` は循環や期間の並び（`{"text", "file", "line"}`）、`candidates` は名前の候補、`fix` は `.req` に貼れる書き換えたあとの行かコマンドの行（無ければ null）。キーは `--lang` に依らず英語。文字で出すときは、行を「直した行:」、コマンドを「確かめたら:」の注にする（英語は `The line, fixed:` と `Once a person has looked:`）。
 
@@ -957,7 +957,7 @@ tests/mutants/E406_隙間が一日: エラー 1 件
 | `yuen source fetch\|pin\|outdated <path>...` | 出典の写しを取る・固定する・元が変わったかを問う（14 章） |
 | `yuen explain <コード>`、`yuen explain --all [--format markdown]` | 診断のコードを引く |
 
-どのコマンドにも `--lang ja|en`（無ければ `YUEN_LANG`、それも無ければ英語）と `--root <dir>`（2.2）を付けられる。`yuen --help`、`yuen <コマンド> --help`、`yuen --version`。
+どのコマンドにも `--lang ja|en`（無ければ `YUEN_LANG`、次に `RITSU_LANG`、どちらも無ければ英語）と `--root <dir>`（2.2）を付けられる。`yuen --help`、`yuen <コマンド> --help`、`yuen --version`。
 
 **決定**：コマンドとフラグの定義を `src/cli.rs` の一枚の表に置き、`--help` の表示と引数の読み取りが同じ表を引く（rulec の §12.1、koyomi の 5 章）。知らないフラグ、閉じた集合の外の値、値の無いフラグ、二度書いたフラグ（`--at` と `--requirement` と `--map` のように、何度でも書けると表に書いたものを除く）は exit 2 で止める。黙って無視すると、エージェントはフラグが効いたと信じて次に進むからである。
 
@@ -1117,27 +1117,27 @@ HTML は一枚で、script も外のファイル（フォント、画像、ス�
 `tests/fixtures/period` の `満了日` は、一行の `from` で二つの条を引いている。この行は条ごとのつながりになり、そのうち 141 条へのつながりは次のとおりである（`tests/golden/export/period.reqif` から。テストが書き出したものと照らし合わせる）。`yuen.up` は、記録が持つ二つのハッシュのうち 141 条のもの、`yuen.down` は `満了日` の端のハッシュである。
 
 ```xml
-<SPEC-RELATION IDENTIFIER="_43371712f92206dd07e3c2918c9dbbb5" LAST-CHANGE="2026-10-03T00:00:00Z">
+<SPEC-RELATION IDENTIFIER="_7810875129fd3f884d62b3acce632f7e" LAST-CHANGE="2026-10-03T00:00:00Z">
   <VALUES>
     <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-03">
-      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7ca18310b0d3a9b20e425370519751e9</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
     </ATTRIBUTE-VALUE-STRING>
     <ATTRIBUTE-VALUE-STRING THE-VALUE="法務">
-      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_371c3bafd031cba970533175a5277184</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
     </ATTRIBUTE-VALUE-STRING>
     <ATTRIBUTE-VALUE-STRING THE-VALUE="0575c131b9f08063">
-      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3a7302ec89fa1f28a7aae662e3c336e4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
     </ATTRIBUTE-VALUE-STRING>
     <ATTRIBUTE-VALUE-STRING THE-VALUE="465b83ed8c251406">
-      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f316ed0828433d1100d6e1bb7aa76e9f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
     </ATTRIBUTE-VALUE-STRING>
     <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
-      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_2388f768752f7e0049b0d3a67446c642</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+      <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
     </ATTRIBUTE-VALUE-STRING>
   </VALUES>
-  <SOURCE><SPEC-OBJECT-REF>_602b87a81e94e62f7b9ef8363edac961</SPEC-OBJECT-REF></SOURCE>
-  <TARGET><SPEC-OBJECT-REF>_bbd90173d0724e0fd9f0e53dd1dcb355</SPEC-OBJECT-REF></TARGET>
-  <TYPE><SPEC-RELATION-TYPE-REF>_c476c95631074f5947a101cd08e6c457</SPEC-RELATION-TYPE-REF></TYPE>
+  <SOURCE><SPEC-OBJECT-REF>_b8700228e15f67ee73ae42631eca2022</SPEC-OBJECT-REF></SOURCE>
+  <TARGET><SPEC-OBJECT-REF>_41bb84d09b5f8588640f53db293c758c</SPEC-OBJECT-REF></TARGET>
+  <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
 </SPEC-RELATION>
 ```
 
@@ -1189,20 +1189,20 @@ document
   prefix y <urn:yuen:>
 
   agent(y:role/safety, [prov:type='yuen:Role', prov:label="safety", yuen:description="decides how the regulation reads"])
-  entity(y:source/2ebb34027105aca1efe3bb44f31826f3, [prov:type='yuen:Source', prov:label="osha §1910.157", yuen:law="ecfr 29 CFR 1910", yuen:asof="2026-01-01", yuen:sha256="c2a9ce966c7e2269"])
+  entity(y:source/7e4bbf45001c614fa29502d3bc2fa12e, [prov:type='yuen:Source', prov:label="osha §1910.157", yuen:law="ecfr 29 CFR 1910", yuen:asof="2026-01-01", yuen:sha256="c2a9ce966c7e2269"])
   entity(y:requirement/extinguisher_distance/v1, [prov:type='yuen:Requirement', prov:label="extinguisher_distance", yuen:version="1", yuen:text="No employee travels more than 75 feet to a portable fire extinguisher for Class A fires", yuen:sha256="08a4819829372b9b"])
   wasAttributedTo(y:requirement/extinguisher_distance/v1, y:role/safety, [prov:type='yuen:owner'])
-  wasDerivedFrom(y:requirement/extinguisher_distance/v1, y:source/2ebb34027105aca1efe3bb44f31826f3, -, -, -, [prov:type='prov:PrimarySource'])
-  activity(y:review/b93a2eeac6f9411b02e1abe0d5d58313, 2026-10-03T00:00:00, -, [prov:type='yuen:Review', yuen:link="from", yuen:up="c2a9ce966c7e2269", yuen:down="08a4819829372b9b", yuen:status="ok"])
-  used(y:review/b93a2eeac6f9411b02e1abe0d5d58313, y:source/2ebb34027105aca1efe3bb44f31826f3, -)
-  used(y:review/b93a2eeac6f9411b02e1abe0d5d58313, y:requirement/extinguisher_distance/v1, -)
-  wasAssociatedWith(y:review/b93a2eeac6f9411b02e1abe0d5d58313, y:role/safety, -)
-  activity(y:waiver/672b83d12365bd1820129a5b56f1dc42, 2026-10-03T00:00:00, -, [prov:type='yuen:Waiver', yuen:side="not satisfied", yuen:why="The test material names no artifact", yuen:sha256="08a4819829372b9b", yuen:status="ok"])
-  used(y:waiver/672b83d12365bd1820129a5b56f1dc42, y:requirement/extinguisher_distance/v1, -)
-  wasAssociatedWith(y:waiver/672b83d12365bd1820129a5b56f1dc42, y:role/safety, -)
-  activity(y:waiver/ec77eefabfd36daeaaeb6b65eea137ce, 2026-10-03T00:00:00, -, [prov:type='yuen:Waiver', yuen:side="not verified", yuen:why="The test material names no claim", yuen:sha256="08a4819829372b9b", yuen:status="ok"])
-  used(y:waiver/ec77eefabfd36daeaaeb6b65eea137ce, y:requirement/extinguisher_distance/v1, -)
-  wasAssociatedWith(y:waiver/ec77eefabfd36daeaaeb6b65eea137ce, y:role/safety, -)
+  wasDerivedFrom(y:requirement/extinguisher_distance/v1, y:source/7e4bbf45001c614fa29502d3bc2fa12e, -, -, -, [prov:type='prov:PrimarySource'])
+  activity(y:review/e8256013bfdb91ba1b18e75857e38792, 2026-10-03T00:00:00, -, [prov:type='yuen:Review', yuen:link="from", yuen:up="c2a9ce966c7e2269", yuen:down="08a4819829372b9b", yuen:status="ok"])
+  used(y:review/e8256013bfdb91ba1b18e75857e38792, y:source/7e4bbf45001c614fa29502d3bc2fa12e, -)
+  used(y:review/e8256013bfdb91ba1b18e75857e38792, y:requirement/extinguisher_distance/v1, -)
+  wasAssociatedWith(y:review/e8256013bfdb91ba1b18e75857e38792, y:role/safety, -)
+  activity(y:waiver/4e902a59567f475e5b5593df6d352e3e, 2026-10-03T00:00:00, -, [prov:type='yuen:Waiver', yuen:side="not satisfied", yuen:why="The test material names no artifact", yuen:sha256="08a4819829372b9b", yuen:status="ok"])
+  used(y:waiver/4e902a59567f475e5b5593df6d352e3e, y:requirement/extinguisher_distance/v1, -)
+  wasAssociatedWith(y:waiver/4e902a59567f475e5b5593df6d352e3e, y:role/safety, -)
+  activity(y:waiver/59d5526e231fd907efa661ba6466811e, 2026-10-03T00:00:00, -, [prov:type='yuen:Waiver', yuen:side="not verified", yuen:why="The test material names no claim", yuen:sha256="08a4819829372b9b", yuen:status="ok"])
+  used(y:waiver/59d5526e231fd907efa661ba6466811e, y:requirement/extinguisher_distance/v1, -)
+  wasAssociatedWith(y:waiver/59d5526e231fd907efa661ba6466811e, y:role/safety, -)
 endDocument
 ```
 
@@ -1280,15 +1280,28 @@ exit code は rulec と koyomi と同じにする。`fetch` と `pin` は済め�
 ## 16. 実装
 
 - Rust（edition 2024、手元の stable 1.94.1 で通ること）。依存は serde_json だけ（`preserve_order` の機能を使い、`api` と `--format json` のキーをこの文書の順に出す）。
-- SHA-256 と base64（e-Gov の `law_full_text`）は自前で書く。SHA-256 は FIPS 180-4 の既知の値でテストする。
-- 法令の写しの XML は、タグを落として本文にする小さな読み手を自前で持つ（rulec の `xml_text` と koyomi の `article_lines` と同じ考え）。proto の読み手も自前で書く（3.4）。ReqIF と PROV は、エスケープを自前でして書く。
+- SHA-256 と base64（e-Gov の `law_full_text`）は ritsu-base のもの（依存を足さずに書いたもので、SHA-256 は FIPS 180-4 の既知の値でテストしている）を使う（16.1）。
+- 法令の写しの XML から本文を取り出す読み手は ritsu-base のもの（rulec の `xml_text` と koyomi の `article_lines` を一つにしたもの）を使う。proto の読み手は自前で書く（3.4）。ReqIF と PROV は、エスケープを自前でして書く。
 - 差分は、行の LCS で自前で作る（統一形式、前後二行、40 行を超えれば「ほか N 行」）。
 - 一式のツールは子プロセスで呼ぶ（`YUEN_RULEC`・`YUEN_KOYOMI`・`YUEN_CHOBO`・`YUEN_GEAS`、無ければ PATH）。通信は `curl` を子プロセスで（`source fetch` と `source outdated` だけ）。
 - 診断の文面は `tr!` で英語と日本語を隣に書く。台帳は `src/codes.rs`。
-- テストのための外のツール：一式のツール（無ければ SKIP）、xmllint（`YUEN_XMLLINT`、無ければ PATH）と `tools/reqif/fetch.sh` が取る 24 個のスキーマ（`YUEN_REQIF_XSD`、無ければ `tools/reqif/xsd`。無ければ SKIP）、curl（`source fetch` と `outdated` のテスト。無ければ SKIP）、`tools/requirements.txt` の `prov==3.2.2` と `reqif==0.1.0`（`uv venv --python 3.13 tools/.venv` に入れる。`YUEN_PYTHON` でほかの場所も使える。無ければ SKIP）、python3（greeter の例のサーバー。無ければ SKIP）、Chrome（`doc` の HTML の画面。`YUEN_CHROME`、無ければ macOS の Google Chrome、PATH の `google-chrome` か `chromium`。無ければ SKIP）。
+- テストの共通の部分（一時ディレクトリ、golden、SKIP、ツールの探し方、テストの中の HTTP サーバー）は ritsu-testkit のものを使う。テストのための外のツール：一式のツール（無ければ SKIP）、xmllint（`YUEN_XMLLINT`、無ければ PATH）と `tools/reqif/fetch.sh` が取る 24 個のスキーマ（`YUEN_REQIF_XSD`、無ければ `tools/reqif/xsd`。無ければ SKIP）、curl（`source fetch` と `outdated` のテスト。無ければ SKIP）、`tools/requirements.txt` の `prov==3.2.2` と `reqif==0.1.0`（`uv venv --python 3.13 tools/.venv` に入れる。`YUEN_PYTHON` でほかの場所も使える。無ければ SKIP）、python3（greeter の例のサーバー。無ければ SKIP）、Chrome（`doc` の HTML の画面。`YUEN_CHROME`、無ければ macOS の Google Chrome、PATH の `google-chrome` か `chromium`。無ければ SKIP）。
 - 文書は `docs/`（英語の `reference.md`、`yuen explain --all --format markdown` の出力そのものの `codes.md` と `codes.ja.md`）、README.md、README.ja.md、`skills/yuen`（`SKILL.md` は手で書き、ほかは `skills/sync.sh` が `docs/` から写す）。README とスキルに載せた `.req` の行、コマンドの出力、診断は、テストが実物と照らし合わせる。
 
 モジュールの分け方と、各段階の作業は PLAN.md にある。
+
+### 16.1 ritsu の土台へ移したもの
+
+yuen は ritsu（七つの言語を一つにまとめる処理系）に取り込まれ、ほかの言語と重なっていたコードを、ritsu の土台のクレート（ritsu-base と ritsu-testkit）のものに替えた（ritsu の PLAN の C.7）。替えたのは、SHA-256、base64、二つの言語の文（`tr!`、`Text`、`Lang`）、診断の共通の部分、台帳の書き出しと再現の走らせ方、コマンドの表の読み方と `--help` の組み立て、名指しを読む仕組み（2 章の決まりそのもの）、ルートの探し方と表示のパス、法令の写しの扱い（引用から写しのファイルの名前を作ること、写しの本文、固定の行の書き換え、e-Gov と eCFR への問い合わせ）、テストの共通の部分である。yuen に残したのは、`.req` の字句と構文、診断の yuen の部分（つながり、差分、候補。`Trail`）、名指しの診断のコードと文（E011、E012、E013）、台帳とコマンドの表の中身、ReqIF と PROV の書き出しである。名指しを試す表は ritsu-base の `tests/fixtures/naming.tsv` 一つになり、yuen の写しは消した。
+
+出力は、次のものを除いて一字も変えていない。
+
+- **書き出しの識別子**：12 章に書いたとおり、SHA-256 を一度だけかけた値の先頭 32 桁にした。実装は、ダイジェストをもう一度 SHA-256 にかけていた（`hex(digest(b))` が、渡したバイト列のダイジェストを書くため）。公開する前で、yurai から yuen への改名で識別子はすでに全部変わっていたので、直すのはいまがいちばん安い。ReqIF と PROV の golden（三つの例の三つずつ、九つのファイル）を取り直し、識別子の値のほかは一字も変わらないこと、古い識別子と新しい識別子が一対一に対応すること（150 個）を確かめた。12 章と 13 章の例も取り直した。
+- **言語の選び方に `RITSU_LANG` が入った**：`--lang`、`YUEN_LANG`、`RITSU_LANG`、英語の順に読む。`--lang` の説明と `yuen --help` の最後の行が、この順を書くようになった。
+- **行の無い診断の JSON**：`line` と `col` を `0` でなく `null` で書く。行が無いことを行番号の 0 で表さないためで、ritsu のどの言語も同じに書く（いまの yuen が JSON で出す診断には、行の無いものは無い）。
+- **表示のパス**：最初に渡したパスが絶対パスのとき、写しや成果物のファイルを絶対パスで書く（2.2）。ディレクトリを歩くときに飛ばす名前に、ritsu のどの言語とも同じく `site-packages` と `__pycache__` が入った。
+- **通信**：curl に `--compressed` が付いた（eCFR は付けないと 406 を返す。rulec が見つけたこと）。e-Gov が JSON でないページを返したときは、二度まで取り直してから止める。JSON として読めないときの文の後ろの部分（読めなかった理由）は、ritsu-base の JSON の読み手の言い方になった。
+- テストの SKIP の行は、ritsu のどのクレートとも同じ `SKIP: yuen: <理由>` の形になった。本物の e-Gov と eCFR には、`YUEN_NET=1` のときのほか、`RITSU_TEST_LEVEL=platforms` のときも問い合わせる。
 
 ## 17. 捨てたもの
 

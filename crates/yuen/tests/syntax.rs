@@ -50,7 +50,7 @@ fn every_req_design_shows_parses() {
         };
         let p = parse("DESIGN.md", "DESIGN.md", &src);
         if p.file.is_none() || !p.diags.is_empty() {
-            let shown: String = p.diags.iter().map(|d| d.render(yuen::i18n::Lang::En)).collect();
+            let shown: String = p.diags.iter().map(|d| d.render(ritsu_base::text::Lang::En)).collect();
             failures.push(format!("{src}\n{shown}"));
         }
         n += 1;

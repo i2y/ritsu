@@ -4,11 +4,10 @@
 //! PLAN.md.
 
 #[macro_use]
-pub mod i18n;
+extern crate ritsu_base;
 
 pub mod api;
 pub mod ast;
-pub mod base64;
 pub mod check;
 pub mod cli;
 pub mod codes;
@@ -28,6 +27,5 @@ pub mod names;
 pub mod parse;
 pub mod project;
 pub mod review;
-pub mod sha256;
 pub mod sources;
 pub mod trace;

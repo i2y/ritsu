@@ -1,7 +1,7 @@
 //! What a `.req` says, as the parser reads it (DESIGN 1).
 
 use crate::date::{Day, Period};
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::names::Written;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -34,28 +34,8 @@ pub struct RoleDecl {
     pub span: Span,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum LawDb {
-    Egov,
-    Ecfr,
-}
-
-impl LawDb {
-    pub fn word(self) -> &'static str {
-        match self {
-            LawDb::Egov => "egov",
-            LawDb::Ecfr => "ecfr",
-        }
-    }
-
-    /// The database as a person calls it.
-    pub fn title(self) -> &'static str {
-        match self {
-            LawDb::Egov => "e-Gov",
-            LawDb::Ecfr => "eCFR",
-        }
-    }
-}
+/// Where a law is read from: e-Gov or the eCFR (ritsu-base's).
+pub use ritsu_base::sources::LawDb;
 
 #[derive(Clone, Debug)]
 pub struct SourceDecl {

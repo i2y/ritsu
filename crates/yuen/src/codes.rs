@@ -2,42 +2,14 @@
 //! run every entry's example and require its code to come out, so the example cannot go stale
 //! while the prose around it still reads well.
 
-use crate::diag::Severity;
-use crate::i18n::{Lang, Text};
+use ritsu_base::ledger::{Entry, Ledger, Repro};
+use ritsu_base::text::Text;
 
-pub struct Entry {
-    pub code: &'static str,
-    pub severity: Severity,
-    /// One line, like the diagnostic's own first line.
-    pub title: Text,
-    /// When it is printed.
-    pub when: Text,
-    /// How to get rid of it, down to what to write.
-    pub fix: Text,
-    /// The smallest `.req` that gets it.
-    pub example: &'static str,
-    /// What has to be beside the example for it to get there, as (path, contents).
-    pub files: &'static [(&'static str, &'static [u8])],
-    pub related: &'static [&'static str],
-    /// The reproduction needs the suite's tools or a `.proto`, which yuen reads from the stage
-    /// after this one (PLAN C): until then the entry has no example.
-    pub later: bool,
-}
-
+/// An entry whose example is the smallest `.req` that gets the code. One whose reproduction
+/// needs the suite's tools or a `.proto`, which yuen reads from the stage after this one (PLAN
+/// C), has no example yet ([`Entry::later`]).
 fn e(code: &'static str, title: Text, when: Text, fix: Text, example: &'static str, related: &'static [&'static str]) -> Entry {
-    Entry { code, severity: if code.starts_with('W') { Severity::Warning } else { Severity::Error }, title, when, fix, example, files: &[], related, later: false }
-}
-
-impl Entry {
-    fn with(mut self, files: &'static [(&'static str, &'static [u8])]) -> Entry {
-        self.files = files;
-        self
-    }
-
-    fn later(mut self) -> Entry {
-        self.later = true;
-        self
-    }
+    Entry::new(code, title, when, fix, Repro::File { body: example, beside: &[] }, related)
 }
 
 // ── What the examples need beside them ───────────────────────────────────
@@ -54,8 +26,8 @@ const OLD_X: (&str, &[u8]) = ("reviewed/f1e653e8ce72c16f", b"text the old x\n");
 /// What `a.txt` was when the link was looked at.
 const OLD_A: (&str, &[u8]) = ("reviewed/0263829989b6fd95", b"b\n");
 
-pub fn ledger() -> Vec<Entry> {
-    vec![
+pub fn ledger() -> Ledger {
+    let entries = vec![
         // ── Words and lines ──
         e(
             "E001",
@@ -212,7 +184,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E101", "E103"],
         )
-        .with(&[COPY_142]),
+        .beside(&[COPY_142]),
         e(
             "E103",
             tr!("写しが固定と違います", "A copy does not match its pin"),
@@ -221,7 +193,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:0000000000000000\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E102", "E302"],
         )
-        .with(&[COPY_142]),
+        .beside(&[COPY_142]),
         e(
             "E104",
             tr!("写しが読めません", "A copy cannot be read"),
@@ -230,7 +202,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:6210aedce8fd1601\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E101"],
         )
-        .with(&[NOT_XML]),
+        .beside(&[NOT_XML]),
         e(
             "E105",
             tr!("引用が使えません", "A citation cannot be used"),
@@ -252,7 +224,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:fc8c35a0769d3b35\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E102"],
         )
-        .with(&[COPY_142]),
+        .beside(&[COPY_142]),
         // ── Artifacts ──
         e(
             "E201",
@@ -276,7 +248,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E302", "E303"],
         )
-        .with(&[A_TXT]),
+        .beside(&[A_TXT]),
         e(
             "E302",
             tr!("確かめたあとで、リンク元が変わりました", "The upper end changed after the link was looked at"),
@@ -288,7 +260,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:f1e653e8ce72c16f -> sha256:87428fc522803d31\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E303", "E304", "W301"],
         )
-        .with(&[A_TXT, OLD_X]),
+        .beside(&[A_TXT, OLD_X]),
         e(
             "E303",
             tr!("確かめたあとで、リンク先が変わりました", "The lower end changed after the link was looked at"),
@@ -297,7 +269,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f -> sha256:0263829989b6fd95\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E302", "W301"],
         )
-        .with(&[A_TXT, OLD_A]),
+        .beside(&[A_TXT, OLD_A]),
         e(
             "E304",
             tr!("見送りが承認されていないか、承認のあとで要件が変わりました", "A waiver is not approved, or the requirement changed after it was"),
@@ -314,7 +286,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E301"],
         )
-        .with(&[A_TXT]),
+        .beside(&[A_TXT]),
         e(
             "W301",
             tr!("確かめたときの中身が reviewed/ に無いので、差分を見せられません", "What was looked at is not in reviewed/, so no diff can be shown"),
@@ -323,7 +295,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f -> sha256:0263829989b6fd95\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E302", "E303"],
         )
-        .with(&[A_TXT]),
+        .beside(&[A_TXT]),
         // ── Structure and coverage ──
         e(
             "E401",
@@ -357,7 +329,7 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nscope file \"b.txt\"\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E401"],
         )
-        .with(&[B_TXT]),
+        .beside(&[B_TXT]),
         e(
             "E405",
             tr!("要件のあいだに循環があります", "The requirements make a cycle"),
@@ -406,95 +378,21 @@ pub fn ledger() -> Vec<Entry> {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f -> sha256:87428fc522803d31\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E401"],
         )
-        .with(&[A_TXT]),
-    ]
+        .beside(&[A_TXT]),
+    ];
+    let later = tr!("（再現には一式のツールが要ります。yuen がツールを読むようになったら足します。）", "(The reproduction needs the suite's tools; it is added when yuen reads them.)");
+    Ledger {
+        tool: "yuen",
+        example_file: "example.req",
+        fence: "req",
+        repro_heading: tr!("再現", "Example"),
+        later_text: later.clone(),
+        later_markdown: later,
+        entries,
+    }
 }
 
+/// The entry of a code, written in either case.
 pub fn find(code: &str) -> Option<Entry> {
-    let code = code.to_ascii_uppercase();
-    ledger().into_iter().find(|e| e.code == code)
-}
-
-fn later_note(lang: Lang) -> &'static str {
-    match lang {
-        Lang::En => "(The reproduction needs the suite's tools; it is added when yuen reads them.)",
-        Lang::Ja => "（再現には一式のツールが要ります。yuen がツールを読むようになったら足します。）",
-    }
-}
-
-/// `yuen explain <CODE>` for a terminal.
-pub fn render_text(e: &Entry, lang: Lang) -> String {
-    let kind = match (e.severity, lang) {
-        (Severity::Error, Lang::En) => "error",
-        (Severity::Warning, Lang::En) => "warning",
-        (Severity::Error, Lang::Ja) => "エラー",
-        (Severity::Warning, Lang::Ja) => "警告",
-    };
-    let (when, fix, example, also) = match lang {
-        Lang::En => ("When", "Fix", "Example", "See also"),
-        Lang::Ja => ("いつ出るか", "直し方", "再現", "関連"),
-    };
-    let mut o = format!("{} ({kind}) — {}\n\n", e.code, e.title.get(lang));
-    o.push_str(&format!("{when}: {}\n\n{fix}: {}\n\n{example}:\n", e.when.get(lang), e.fix.get(lang)));
-    if e.later {
-        o.push_str(&format!("    {}\n", later_note(lang)));
-    }
-    for l in e.example.lines() {
-        o.push_str(&format!("    {l}\n"));
-    }
-    for (name, body) in e.files {
-        let label = if lang == Lang::Ja { "隣に置くファイル" } else { "beside it" };
-        o.push_str(&format!("\n  {label}: {name}\n"));
-        if let Ok(t) = std::str::from_utf8(body)
-            && body.len() < 400
-        {
-            for l in t.lines() {
-                o.push_str(&format!("    {l}\n"));
-            }
-        }
-    }
-    if !e.related.is_empty() {
-        o.push_str(&format!("\n{also}: {}\n", e.related.join(" ")));
-    }
-    o
-}
-
-/// One code in Markdown, under an anchor of its own (`#e302`).
-pub fn render_markdown_one(e: &Entry, lang: Lang) -> String {
-    let (when, fix, example, also) = match lang {
-        Lang::En => ("When", "Fix", "Example", "See also"),
-        Lang::Ja => ("いつ出るか", "直し方", "再現", "関連"),
-    };
-    let mut o = format!("<a id=\"{}\"></a>\n\n## {} — {}\n\n", e.code.to_lowercase(), e.code, e.title.get(lang));
-    o.push_str(&format!("**{when}**: {}\n\n**{fix}**: {}\n\n**{example}**:", e.when.get(lang), e.fix.get(lang)));
-    if e.later {
-        o.push_str(&format!(" {}\n", later_note(lang)));
-    } else {
-        o.push_str(&format!("\n\n```req\n{}```\n", e.example));
-    }
-    for (name, body) in e.files {
-        if let Ok(t) = std::str::from_utf8(body)
-            && body.len() < 400
-        {
-            o.push_str(&format!("\n`{name}`:\n\n```\n{t}```\n"));
-        }
-    }
-    if !e.related.is_empty() {
-        let links: Vec<String> = e.related.iter().map(|c| format!("[{c}](#{})", c.to_lowercase())).collect();
-        o.push_str(&format!("\n{also}: {}\n", links.join(", ")));
-    }
-    o
-}
-
-/// `yuen explain --all --format markdown`: every code, for `docs/codes.md` (stage D).
-pub fn render_markdown(lang: Lang) -> String {
-    let mut o = match lang {
-        Lang::En => "# Diagnostic codes\n\nWritten by `yuen explain --all --format markdown`; do not edit.\n".to_string(),
-        Lang::Ja => "# 診断のコード\n\n`yuen explain --all --format markdown --lang ja` の出力です。手で直しません。\n".to_string(),
-    };
-    for e in ledger() {
-        o.push('\n');
-        o.push_str(&render_markdown_one(&e, lang));
-    }
-    o
+    ledger().find(code).cloned()
 }

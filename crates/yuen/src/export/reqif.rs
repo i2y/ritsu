@@ -12,7 +12,7 @@
 //! out. The XML is written by hand, escaped here: yuen depends on nothing but serde_json.
 
 use super::{Graph, RelKind, SourceKey, Target, digits};
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::project::Refusal;
 
 pub const NAMESPACE: &str = "http://www.omg.org/spec/ReqIF/20110401/reqif.xsd";
@@ -219,7 +219,7 @@ impl W {
                 (V::S(s), false) => {
                     let n = s.chars().count();
                     if n > MAX_LENGTH && self.refused.is_none() {
-                        let (n, max) = (crate::i18n::count(n as u64), crate::i18n::count(MAX_LENGTH as u64));
+                        let (n, max) = (ritsu_base::text::count(n as u64), ritsu_base::text::count(MAX_LENGTH as u64));
                         self.refused = Some(tr!(
                             "{name} の値が {n} 文字あり、文字列の型の長さの上限 {max} を超えるので、書き出せません",
                             "the value of {name} is {n} characters, more than the {max} the string type holds, so it cannot be written out"

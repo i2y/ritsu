@@ -1,17 +1,14 @@
 //! `yuen source fetch | pin | outdated` (PLAN C.12, DESIGN 14), without the network: e-Gov
-//! law API v2 and the eCFR are a small HTTP server inside the test (`YUEN_EGOV`,
-//! `YUEN_ECFR`), serving the copies of the test material; a `file` source's `url` is a
-//! `file://` URL. The real e-Gov and eCFR are asked only when `YUEN_NET=1`.
+//! law API v2 and the eCFR are ritsu-testkit's small HTTP server inside the test
+//! (`YUEN_EGOV`, `YUEN_ECFR`), serving the copies of the test material; a `file` source's `url`
+//! is a `file://` URL. The real e-Gov and eCFR are asked only when `YUEN_NET=1` or
+//! `RITSU_TEST_LEVEL=platforms`.
 
 mod common;
 
 use common::{Ran, TempDir};
-use std::collections::BTreeMap;
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use ritsu_testkit::http::HttpServer;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 
 const LAW: &str = "sources/law/129AC0000000089@2026-10-01";
 const REVISION: &str = "129AC0000000089_20260624_508AC0000000045";
@@ -24,80 +21,29 @@ fn no_curl() -> bool {
     if common::on_path("curl") {
         return false;
     }
-    println!("SKIP: curl is not on the PATH; source fetch and outdated are not run");
+    ritsu_testkit::skip("curl is not on the PATH; source fetch and outdated are not run");
     true
 }
 
-/// A small HTTP server: a body for each request target it knows, 404 for the rest (and
-/// those are kept, so a test can say what it asked for that was not there).
-struct Server {
-    addr: String,
-    stop: Arc<AtomicBool>,
-    routes: Arc<Mutex<BTreeMap<String, Vec<u8>>>>,
-    misses: Arc<Mutex<Vec<String>>>,
-    thread: Option<std::thread::JoinHandle<()>>,
-}
+/// ritsu-testkit's small HTTP server (a body for each request target it knows, 404 for the rest,
+/// which it keeps), at the places yuen is told e-Gov and the eCFR are.
+struct Server(HttpServer);
 
 impl Server {
     fn start() -> Server {
-        let l = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = format!("http://{}", l.local_addr().unwrap());
-        let stop = Arc::new(AtomicBool::new(false));
-        let routes: Arc<Mutex<BTreeMap<String, Vec<u8>>>> = Arc::new(Mutex::new(BTreeMap::new()));
-        let misses = Arc::new(Mutex::new(Vec::new()));
-        let (s, r, m) = (Arc::clone(&stop), Arc::clone(&routes), Arc::clone(&misses));
-        let thread = std::thread::spawn(move || {
-            for conn in l.incoming() {
-                if s.load(Ordering::SeqCst) {
-                    break;
-                }
-                let Ok(mut conn) = conn else { continue };
-                let mut buf = Vec::new();
-                let mut chunk = [0u8; 4096];
-                while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
-                    match conn.read(&mut chunk) {
-                        Ok(0) | Err(_) => break,
-                        Ok(n) => buf.extend_from_slice(&chunk[..n]),
-                    }
-                }
-                let head = String::from_utf8_lossy(&buf).to_string();
-                let target = head.split_whitespace().nth(1).unwrap_or("/").to_string();
-                let body = r.lock().unwrap().get(&target).cloned();
-                let _ = match body {
-                    Some(b) => {
-                        let _ = write!(conn, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", b.len());
-                        conn.write_all(&b)
-                    }
-                    None => {
-                        m.lock().unwrap().push(target);
-                        write!(conn, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-                    }
-                };
-            }
-        });
-        Server { addr, stop, routes, misses, thread: Some(thread) }
+        Server(HttpServer::start())
     }
 
     fn set(&self, target: &str, body: impl Into<Vec<u8>>) {
-        self.routes.lock().unwrap().insert(target.to_string(), body.into());
+        self.0.set(target, body);
     }
 
     fn env(&self) -> Vec<(&'static str, String)> {
-        vec![("YUEN_EGOV", format!("{}/egov", self.addr)), ("YUEN_ECFR", format!("{}/ecfr", self.addr))]
+        vec![("YUEN_EGOV", format!("{}/egov", self.0.addr)), ("YUEN_ECFR", format!("{}/ecfr", self.0.addr))]
     }
 
     fn missed(&self) -> Vec<String> {
-        self.misses.lock().unwrap().clone()
-    }
-}
-
-impl Drop for Server {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::SeqCst);
-        let _ = TcpStream::connect(self.addr.trim_start_matches("http://"));
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
-        }
+        self.0.missed()
     }
 }
 
@@ -108,7 +54,7 @@ fn yuen(dir: &Path, s: &Server, args: &[&str]) -> Ran {
 }
 
 fn law_data(xml: &[u8], rev: &str) -> Vec<u8> {
-    serde_json::json!({"law_info": {"law_id": "129AC0000000089"}, "revision_info": {"law_revision_id": rev}, "law_full_text": yuen::base64::encode(xml)}).to_string().into_bytes()
+    serde_json::json!({"law_info": {"law_id": "129AC0000000089"}, "revision_info": {"law_revision_id": rev}, "law_full_text": ritsu_base::sources::base64_encode(xml)}).to_string().into_bytes()
 }
 
 /// How one later revision differs from the copy.
@@ -349,8 +295,9 @@ fn what_the_source_commands_refuse() {
 
 #[test]
 fn the_real_e_gov_and_ecfr_when_asked() {
-    if std::env::var("YUEN_NET").as_deref() != Ok("1") {
-        println!("not asked: YUEN_NET is not 1, so the real e-Gov and eCFR were not asked (set YUEN_NET=1 to ask them)");
+    let platforms = ritsu_testkit::level::level() == Some(ritsu_testkit::Level::Platforms);
+    if std::env::var("YUEN_NET").as_deref() != Ok("1") && !platforms {
+        println!("not asked: YUEN_NET is not 1 and RITSU_TEST_LEVEL is not platforms, so the real e-Gov and eCFR were not asked (set YUEN_NET=1 to ask them)");
         return;
     }
     if no_curl() {

@@ -2,8 +2,8 @@
 //! a requirement's versions and of what replaces what.
 
 use crate::date::{Day, days};
-use crate::diag::{ChainItem, Diag};
-use crate::i18n::Text;
+use crate::diag::{ChainItem, Diag, DiagExt};
+use ritsu_base::text::Text;
 use crate::project::Project;
 
 /// The cycles of `from <requirement>` and `replaces` (E405), and which versions are in a
@@ -185,7 +185,7 @@ pub fn periods(p: &Project) -> Vec<Diag> {
                     p.err(fi, "E406", sp, tr!("要件「{name}」の {va} と {vb} のあいだの {gap} が、どの版の期間にも入りません", "{gap}, between {name} {va} and {vb}, falls in no version's period"))
                         .note(tr!("{va} の期間は `{a}`、{vb} の期間は `{b}` です。", "{va} is in force `{a}`, and {vb} `{b}`."))
                         .chain(tr!("期間の順", "in the order of the periods"), chain.clone())
-                        .fix_line(format!("  {fix}")),
+                        .fix_trimmed(format!("  {fix}")),
                 );
             } else {
                 let o1 = end_a.min(b.end());
@@ -232,7 +232,7 @@ pub fn periods(p: &Project) -> Vec<Diag> {
                 diags.push(
                     p.err(fi, "E409", sp, tr!("「{me}」は「{old}」を置き換えるのに、{old} の終わり（{end}）の翌日の {want} から始まっていません", "{me} replaces {old}, and does not start on {want}, the day after {old} ends ({end})"))
                         .note(now)
-                        .fix_line(fix),
+                        .fix_trimmed(fix),
                 );
             }
         }

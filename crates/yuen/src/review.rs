@@ -8,8 +8,8 @@
 
 use crate::check::{self, Checked};
 use crate::date::Day;
-use crate::diag::Diag;
-use crate::i18n::{Lang, Text};
+use crate::diag::{self, Diag};
+use ritsu_base::text::{Lang, Text};
 use crate::marks::{LinkKind, LinkState, Status};
 use crate::project::{Project, Refusal};
 use std::collections::{BTreeMap, BTreeSet};
@@ -181,7 +181,7 @@ pub fn review(args: &[String], root: Option<&str>, c: &Choice, by: &str, date: O
     };
     let p = checked.project.as_ref().unwrap();
     if !p.files.iter().any(|f| f.ast.roles.iter().any(|r| r.name == by)) {
-        let d = Diag::error("E008", "--by", "--by", 0, 0, tr!("役割「{by}」はこのプロジェクトで宣言されていません", "The role {by} is not declared in this project"))
+        let d = diag::error("E008", "--by", "--by", 0, 0, tr!("役割「{by}」はこのプロジェクトで宣言されていません", "The role {by} is not declared in this project"))
             .note(tr!("確かめた人の役割は、`role {by}` と宣言した役割で書きます。", "Whoever looked is named by a declared role (`role {by}`)."));
         return Ok(Outcome { lines: vec![tr!("何も書きません", "Nothing was written")], diags: vec![d], exit: 1 });
     }
@@ -263,7 +263,7 @@ pub fn review(args: &[String], root: Option<&str>, c: &Choice, by: &str, date: O
         lines.push(tr!("選んだリンクと見送りには印が無いので、何も書きませんでした", "Nothing chosen was marked, so nothing was written"));
     } else {
         let n = wrote;
-        lines.push(tr!("記録を {n} 件書きました", "Wrote {}", ; crate::i18n::plural(n, "record", "records")));
+        lines.push(tr!("記録を {n} 件書きました", "Wrote {}", ; ritsu_base::text::plural(n, "record", "records")));
     }
     Ok(Outcome { lines, diags: vec![], exit: if refused { 1 } else { 0 } })
 }

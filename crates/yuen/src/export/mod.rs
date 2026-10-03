@@ -15,7 +15,7 @@ use crate::copies;
 use crate::marks::{LinkKind, LinkState};
 use crate::names::Name;
 use crate::project::Project;
-use crate::sha256;
+use ritsu_base::sha256;
 use crate::sources::Resolved;
 
 /// Whether the check stopped the project from being written out: an error of the first four
@@ -37,7 +37,7 @@ pub fn digits(kind: &str, parts: &[&str]) -> String {
         b.push(0);
         b.extend_from_slice(p.as_bytes());
     }
-    sha256::hex(&sha256::digest(&b))[..32].to_string()
+    sha256::hex(&b)[..32].to_string()
 }
 
 /// What tells two sources apart: an article of a law as of a date, or a file.

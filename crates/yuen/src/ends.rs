@@ -10,7 +10,7 @@
 use crate::ast::FromWhat;
 use crate::names::{Name, Tool};
 use crate::project::Project;
-use crate::sha256;
+use ritsu_base::sha256;
 use crate::sources::{Cited, Sources};
 
 #[derive(Clone, Debug, PartialEq, Eq)]

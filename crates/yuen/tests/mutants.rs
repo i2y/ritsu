@@ -6,7 +6,7 @@
 mod common;
 
 use yuen::check::{check, render};
-use yuen::i18n::Lang;
+use ritsu_base::text::Lang;
 
 fn mutants() -> Vec<String> {
     let mut v: Vec<String> = std::fs::read_dir("tests/mutants").unwrap().filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().to_string()).collect();

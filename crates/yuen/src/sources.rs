@@ -4,10 +4,10 @@
 
 use crate::ast::*;
 use crate::copies;
-use crate::diag::Diag;
+use crate::diag::{Diag, DiagExt};
 use crate::names::Name;
 use crate::project::Project;
-use crate::sha256;
+use ritsu_base::sha256;
 use std::path::PathBuf;
 
 /// One article of a law a `.req` pins.
@@ -94,15 +94,6 @@ impl Sources {
     }
 }
 
-/// The source line with `sha256:<pin>` in place of whatever pin it had.
-pub fn pinned_line(line: &str, pin: &str) -> String {
-    let t = line.trim_end();
-    match t.find("sha256:") {
-        Some(i) => format!("{}sha256:{pin}{}", &t[..i], &t[(i + 23).min(t.len())..]),
-        None => format!("{t} sha256:{pin}"),
-    }
-}
-
 /// Check every source and every citation of the project.
 pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
     let mut diags = Vec::new();
@@ -124,7 +115,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                             diags.push(p.err(fi, "E105", pl.span, tr!("`{fr}` は条の書き方になっていません", "`{fr}` is not written as an article")).note(copies::fragment_shapes(*db)));
                             continue;
                         };
-                        let rel = crate::names::collapse(&f.dir, &format!("{dir_shown}/{file}")).unwrap_or_else(|| format!("{dir_shown}/{file}"));
+                        let rel = ritsu_base::paths::join(&f.dir, &format!("{dir_shown}/{file}")).ok().unwrap_or_else(|| format!("{dir_shown}/{file}"));
                         let shown = p.shown(&rel);
                         let abs = dir.join(&file);
                         let mut a = Article { fragment: pl.fragment.clone(), rel, abs: abs.clone(), pin: pl.pin.clone(), bytes: None, span: pl.span };
@@ -149,7 +140,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                         None => diags.push(
                                             p.err(fi, "E102", pl.span, tr!("{name} {fr} が固定されていません（`sha256:` がありません）", "{name} {fr} is not pinned (it has no `sha256:`)"))
                                                 .note(tr!("いまの写しなら sha256:{actual} です（`yuen source pin` でも書けます）。", "For the copy as it is, that is sha256:{actual} (`yuen source pin` writes it too)."))
-                                                .fix_line(pinned_line(&line_of(pl.span.line), &actual)),
+                                                .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(pl.span.line), &actual)),
                                         ),
                                         Some(pin) if *pin != actual => diags.push(
                                             p.err(fi, "E103", pl.span, tr!(
@@ -160,7 +151,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                                 "固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えます。",
                                                 "The copy changed after it was pinned. Read what changed in the text, then pin it again."
                                             ))
-                                            .fix_line(pinned_line(&line_of(pl.span.line), &actual)),
+                                            .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(pl.span.line), &actual)),
                                         ),
                                         Some(_) => a.bytes = Some(bytes),
                                     }
@@ -196,7 +187,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                     None => diags.push(
                                         p.err(fi, "E102", s.span, tr!("出典「{sname}」が固定されていません（`sha256:` がありません）", "The source {sname} is not pinned (it has no `sha256:`)"))
                                             .note(tr!("いまの写しなら sha256:{actual} です（`yuen source pin` でも書けます）。", "For the copy as it is, that is sha256:{actual} (`yuen source pin` writes it too)."))
-                                            .fix_line(pinned_line(&line_of(s.span.line), &actual)),
+                                            .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(s.span.line), &actual)),
                                     ),
                                     Some(pn) if *pn != actual => diags.push(
                                         p.err(fi, "E103", s.span, tr!(
@@ -207,7 +198,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                             "固定したあとで写しが変わりました。何が変わったかを読んでから（`yuen source outdated`）、固定を書き換えます。",
                                             "The copy changed after it was pinned. Read what changed (`yuen source outdated`), then pin it again."
                                         ))
-                                        .fix_line(pinned_line(&line_of(s.span.line), &actual)),
+                                        .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(s.span.line), &actual)),
                                     ),
                                     Some(_) => bytes = Some(b),
                                 }
@@ -269,7 +260,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                             "引く条は、出典の下に固定の行を書きます。どの版の条文を読んで要件を書いたかを、固定で残すためです。",
                                             "Every article cited has a pin line under its source: it records which version of the text the requirement was read from."
                                         ))
-                                        .fix_line(fix),
+                                        .fix_trimmed(fix),
                                 );
                             }
                         }

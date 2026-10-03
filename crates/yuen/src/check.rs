@@ -10,7 +10,7 @@ use crate::coverage::{self, ScopeResult};
 use crate::diag::{self, Diag};
 use crate::ends::{self, End, Unread};
 use crate::graph;
-use crate::i18n::{Lang, Text, plural};
+use ritsu_base::text::{Lang, Text, plural};
 use crate::marks::{self, Ctx, LinkKind, LinkState};
 use crate::names::Name;
 use crate::project::{self, Project, Refusal};
@@ -91,7 +91,7 @@ pub fn check(args: &[String], root: Option<&str>) -> Result<Checked, Refusal> {
         for (li, n) in p.names.links[r].iter().enumerate() {
             let Some(n) = n else { continue };
             let line = p.decl(r).links[li].span.line;
-            let col = p.decl(r).links[li].naming.tool.col;
+            let col = p.decl(r).links[li].naming.tool.at;
             let e = artifacts.entry(n.clone()).or_insert_with(|| ends::artifact_end(&p, n)).clone();
             match e {
                 Err(Unread::NotYet(t)) => return Err(not_yet(&p, t, &n.text(), fi, line)),
@@ -115,7 +115,7 @@ pub fn check(args: &[String], root: Option<&str>) -> Result<Checked, Refusal> {
                 }
                 Err(Unread::Missing { .. }) => {
                     let path = p.shown(&n.path);
-                    d4.push(p.err(fi, "E201", crate::ast::Span { line: decl.span.line, col: decl.naming.path.as_ref().map(|w| w.col).unwrap_or(1) }, tr!("範囲のパス {path} がありません", "The path {path} of the scope is not there")));
+                    d4.push(p.err(fi, "E201", crate::ast::Span { line: decl.span.line, col: decl.naming.path.as_ref().map(|w| w.at).unwrap_or(1) }, tr!("範囲のパス {path} がありません", "The path {path} of the scope is not there")));
                 }
                 Ok(items) => {
                     let text = match kind {
@@ -252,7 +252,7 @@ pub fn to_json(c: &Checked, label: &str, lang: Lang) -> Value {
         "root": c.project.as_ref().map(|p| p.root_shown.clone()),
         "ok": !c.has_errors(),
         "summary": summary(c, label).get(lang).trim_end(),
-        "diagnostics": c.diags.iter().map(|d| d.to_json(lang)).collect::<Vec<_>>(),
+        "diagnostics": c.diags.iter().map(|d| crate::diag::value(&d.to_json(lang))).collect::<Vec<_>>(),
     })
 }
 

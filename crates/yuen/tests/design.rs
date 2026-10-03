@@ -42,7 +42,7 @@ fn every_command_in_design_prints_what_design_shows() {
                 continue;
             }
             let args = split(&cmd);
-            let o = Command::new(env!("CARGO_BIN_EXE_yuen")).args(&args[1..]).env_remove("YUEN_LANG").output().unwrap();
+            let o = Command::new(env!("CARGO_BIN_EXE_yuen")).args(&args[1..]).env_remove("YUEN_LANG").env_remove("RITSU_LANG").output().unwrap();
             let got = String::from_utf8_lossy(&o.stdout).to_string();
             if got != want {
                 failures.push(format!("$ {cmd}\n--- DESIGN.md shows\n{want}--- it prints\n{got}"));

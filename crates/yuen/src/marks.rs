@@ -5,10 +5,10 @@
 
 use crate::ast::*;
 use crate::copies;
-use crate::diag::{Diag, DiffLine};
+use crate::diag::{Diag, DiffLine, DiagExt};
 use crate::diff;
 use crate::ends::{End, Upper};
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::names::Name;
 use crate::project::Project;
 use std::collections::{BTreeMap, BTreeSet};
@@ -611,11 +611,11 @@ fn mark_diag(p: &Project, ctx: &Ctx, by_req: &BTreeMap<usize, Vec<&LinkState>>, 
                                     }
                                 }
                                 None => {
-                                    let size = crate::i18n::count(e.end.bytes.len() as u64);
+                                    let size = ritsu_base::text::count(e.end.bytes.len() as u64);
                                     d = d.note(tr!(
                                         "テキストではないので、差分は見せません。いまは {size} バイト、sha256:{new} です。確かめたときは sha256:{old}（{} バイト）でした。",
                                         "It is not text, so no diff is shown: it is now {size} bytes, sha256:{new}; it was sha256:{old} ({} bytes) when it was looked at.",
-                                        crate::i18n::count(b.len() as u64)
+                                        ritsu_base::text::count(b.len() as u64)
                                     ));
                                 }
                             },

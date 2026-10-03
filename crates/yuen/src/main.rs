@@ -2,8 +2,8 @@
 
 use std::process::ExitCode;
 use yuen::cli::{self, Args};
-use yuen::i18n::{Lang, Text};
-use yuen::tr;
+use ritsu_base::text::{Lang, Text};
+use ritsu_base::tr;
 
 /// Die quietly when the reader of a pipe goes away, as `cat` does.
 #[cfg(unix)]
@@ -51,15 +51,15 @@ fn main() -> ExitCode {
 
 fn run() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let lang = Lang::pick(lang_flag(&args).as_deref());
+    let lang = Lang::pick(lang_flag(&args).as_deref(), "YUEN_LANG");
+    let table = cli::table();
     let Some(first) = args.first() else {
-        eprint!("{}", cli::help_all(lang));
+        eprint!("{}", table.help_all(lang));
         return ExitCode::from(2);
     };
-    let cmds = cli::commands();
     match first.as_str() {
         "--help" | "-h" => {
-            print!("{}", cli::help_all(lang));
+            print!("{}", table.help_all(lang));
             return ExitCode::SUCCESS;
         }
         "--version" | "-V" => {
@@ -81,12 +81,12 @@ fn run() -> ExitCode {
             }
             return match rest.first() {
                 None => {
-                    print!("{}", cli::help_all(lang));
+                    print!("{}", table.help_all(lang));
                     ExitCode::SUCCESS
                 }
-                Some(n) => match cmds.iter().find(|c| c.name == n.as_str()) {
+                Some(n) => match table.command(n) {
                     Some(c) => {
-                        print!("{}", cli::help_cmd(c, lang));
+                        print!("{}", table.help_cmd(c, lang));
                         ExitCode::SUCCESS
                     }
                     None => refuse(tr!("`{n}` というコマンドはありません。`yuen --help` を読んでください", "there is no command `{n}`; run `yuen --help`"), lang),
@@ -95,15 +95,15 @@ fn run() -> ExitCode {
         }
         _ => {}
     }
-    let Some(cmd) = cmds.iter().find(|c| c.name == first.as_str()) else {
+    let Some(cmd) = table.command(first) else {
         return refuse(tr!("`{first}` というコマンドはありません。`yuen --help` を読んでください", "there is no command `{first}`; run `yuen --help`"), lang);
     };
-    let a = match cli::parse(cmd, &args[1..]) {
+    let a = match table.parse(cmd, &args[1..]) {
         Ok(a) => a,
         Err(e) => return refuse(e, lang),
     };
     if a.has("--help") {
-        print!("{}", cli::help_cmd(cmd, lang));
+        print!("{}", table.help_cmd(cmd, lang));
         return ExitCode::SUCCESS;
     }
     match cmd.name {
@@ -252,7 +252,7 @@ fn source_cmd(a: &Args, lang: Lang) -> ExitCode {
                 eprint!("{}", d.render(lang));
             }
             let (e, _) = yuen::diag::count(&diags);
-            eprintln!("{}", tr!("{label}: エラー {e} 件", "{label}: {}", ; yuen::i18n::plural(e, "error", "errors")).get(lang));
+            eprintln!("{}", tr!("{label}: エラー {e} 件", "{label}: {}", ; ritsu_base::text::plural(e, "error", "errors")).get(lang));
             return ExitCode::from(1);
         }
     };
@@ -340,15 +340,16 @@ fn api_cmd(a: &Args, lang: Lang) -> ExitCode {
 
 fn explain_cmd(a: &Args, lang: Lang) -> ExitCode {
     let markdown = a.get("--format") == Some("markdown");
+    let ledger = yuen::codes::ledger();
     if a.has("--all") {
         if markdown {
-            print!("{}", yuen::codes::render_markdown(lang));
+            print!("{}", ledger.render_markdown(lang));
         } else {
-            for (i, e) in yuen::codes::ledger().iter().enumerate() {
+            for (i, e) in ledger.entries.iter().enumerate() {
                 if i > 0 {
                     println!();
                 }
-                print!("{}", yuen::codes::render_text(e, lang));
+                print!("{}", ledger.render_text(e, lang));
             }
         }
         return ExitCode::SUCCESS;
@@ -356,12 +357,12 @@ fn explain_cmd(a: &Args, lang: Lang) -> ExitCode {
     let Some(code) = a.pos.first() else {
         return refuse(tr!("`yuen explain` には `E302` のようなコードか `--all` が要ります", "`yuen explain` needs a code such as `E302`, or `--all`"), lang);
     };
-    match yuen::codes::find(code) {
+    match ledger.find(code) {
         Some(e) => {
             if markdown {
-                print!("{}", yuen::codes::render_markdown_one(&e, lang));
+                print!("{}", ledger.render_markdown_one(e, lang));
             } else {
-                print!("{}", yuen::codes::render_text(&e, lang));
+                print!("{}", ledger.render_text(e, lang));
             }
             ExitCode::SUCCESS
         }
