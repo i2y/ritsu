@@ -1235,7 +1235,7 @@ exit code は rulec と同じにした。`fetch` と `pin` は済めば 0、`out
 ## 11. 実装
 
 - Rust（edition 2024、手元の stable 1.94.1 で通ること）。依存は serde_json だけ（GOV.UK の JSON、`api`、vectors、`--format json`）。`preserve_order` の機能を使い、`api` と `--format json` のキーをこの文書の順に出す。
-- テストのビルドは `[profile.test] opt-level = 2` にした。1900〜2100 年のすべての日を月数や締め日ごとに何度も回すテスト（`tests/date.rs`）が、最適化なしでは遅すぎるため。
+- テストのビルドは `[profile.test] opt-level = 2` にした。1900〜2100 年のすべての日を月数や締め日ごとに何度も回すテスト（`tests/date.rs`）が、最適化なしでは遅すぎるため。ritsu に取り込んでからは、cargo がワークスペースの根のプロファイルしか読まないので、根の `Cargo.toml` の `[profile.test.package.koyomi]` に置いている。
 - SHA-256 は自前で書く（FIPS 180-4 の既知の値でテストする）。rulec と同じ。
 - Shift_JIS は自前で読む。変換表は WHATWG の `index-jis0208.txt` から作った `src/sjis_table.rs`（作る手順は `tools/sjis/`。表の頭に、元の索引の Identifier、日付、SHA-256 を書く）。テストは、python3 があれば、全符号を Python の `cp932` と比べる（無ければ SKIP）。
 - 通信は `curl` を子プロセスで呼ぶ（`source fetch` と `source outdated` だけ。`src/fetch.rs`）。

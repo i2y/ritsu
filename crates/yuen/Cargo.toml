@@ -9,6 +9,3 @@ repository = "https://github.com/i2y/yuen"
 [dependencies]
 # preserve_order: `yuen api` and `--format json` print their keys in the order DESIGN.md writes them
 serde_json = { version = "1", features = ["preserve_order"] }
-
-[profile.release]
-strip = true
