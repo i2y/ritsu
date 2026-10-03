@@ -1,0 +1,18 @@
+book 単位 v1
+unit 個
+unit 円
+
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 客 : 円 outside
+account 仕入先 : 個 outside
+
+transfer 出荷(注文: string, sku: string, 数: 個)
+  key 注文
+  move 数 from 在庫(sku) to 客
+transfer 値付け(伝票: string, sku: string, 額: 円)
+  key 伝票
+  move 額 from 仕入先 to 在庫(sku)
+transfer 送料(伝票: string)
+  key 伝票
+  move 500 from 客 to 仕入先

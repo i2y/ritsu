@@ -1,0 +1,18 @@
+# 安全在庫：0 より大きい下限。勘定は 0 から始まるので、はじめは下限を下回っている
+book 安全在庫 v1
+description "棚に 3 個を残し、それより下は出荷しない"
+
+unit 個
+
+account 棚(sku: string) : 個
+  at least 3 refused as 安全在庫割れ
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 補充(伝票: string, sku: string, 数: 個)
+  key 伝票, sku
+  move 数 from 仕入先 to 棚(sku)
+
+transfer 出荷(注文: string, sku: string, 数: 個)
+  key 注文, sku
+  move 数 from 棚(sku) to 客

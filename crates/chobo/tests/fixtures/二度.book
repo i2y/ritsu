@@ -1,0 +1,22 @@
+book 二度 v1
+unit 個
+unit 個
+
+account 在庫(sku: string, sku: string) : 個
+  description "棚"
+  description "倉庫"
+  at least 0 refused as 在庫切れ
+  at least 1 refused as 安全在庫割れ
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 客 : 個 outside
+
+transfer 出荷(注文: string, sku: string, 数: 個)
+  key 注文, 注文
+  key sku
+  pending never expires
+  pending expires after 1 hour
+  move 数 from 在庫(sku, sku) to 客
+transfer 出荷(注文: string, 数: 個)
+  key 注文
+  move 数 from 在庫(注文, 注文) to 客

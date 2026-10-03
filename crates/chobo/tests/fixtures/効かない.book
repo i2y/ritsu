@@ -1,0 +1,12 @@
+# W106：入れる移動の無い勘定の上限
+book 効かない v1
+unit 円
+
+account 与信(会員: string) : 円
+  at least -1000 refused as 与信枠超え
+  at most 0 refused as 前払い超過
+account 店 : 円 outside
+
+transfer 後払い(伝票: string, 会員: string, 額: 円)
+  key 伝票
+  move 額 from 与信(会員) to 店

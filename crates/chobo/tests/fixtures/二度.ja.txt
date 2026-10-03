@@ -1,0 +1,19 @@
+エラー[E003]: 二度.book:3:6: 単位 `個` は 2 行目で宣言済みです
+     3 | unit 個
+エラー[E003]: 二度.book:5:25: 引数 `sku` が二度あります
+     5 | account 在庫(sku: string, sku: string) : 個
+エラー[E003]: 二度.book:7:3: `description` の行が二つあります
+     7 |   description "倉庫"
+エラー[E003]: 二度.book:9:3: `at least` の行が二つあります
+     9 |   at least 1 refused as 安全在庫割れ
+エラー[E003]: 二度.book:10:9: 勘定 `在庫` は 5 行目で宣言済みです
+    10 | account 在庫(sku: string) : 個
+エラー[E003]: 二度.book:15:11: キーに `注文` が二度あります
+    15 |   key 注文, 注文
+エラー[E003]: 二度.book:16:3: `key` の行が二つあります。キーは一行にまとめて書いてください
+    16 |   key sku
+エラー[E003]: 二度.book:18:3: `pending` の行が二つあります
+    18 |   pending expires after 1 hour
+エラー[E003]: 二度.book:20:10: 振替 `出荷` は 14 行目で宣言済みです
+    20 | transfer 出荷(注文: string, 数: 個)
+二度.book: エラー 9 件、警告 0 件

@@ -1,0 +1,2216 @@
+[
+  {
+    "scenario": {
+      "name": "bound: 移し替え.do takes 倉庫(元, sku) to 1, one above `at least 0`",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "先": "先-5",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "先-5",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 移し替え.do takes 倉庫(元, sku) to exactly 0, its `at least 0`",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "先": "先-5",
+            "sku": "sku-3",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "先-5",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 移し替え.do would take 倉庫(元, sku) to -1, below `at least 0`",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "先": "先-5",
+            "sku": "sku-3",
+            "数": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "refused",
+          "reason": "在庫不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "先-5",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 本店へ.do takes 倉庫(元, sku) to 1, one above `at least 0`",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "本店",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 本店へ.do takes 倉庫(元, sku) to exactly 0, its `at least 0`",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "本店",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 本店へ.do would take 倉庫(元, sku) to -1, below `at least 0`",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "refused",
+          "reason": "在庫不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "本店",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 出庫.do takes 倉庫(場所, sku) to 1, one above `at least 0`",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-4",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "場所-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 出庫.do takes 倉庫(場所, sku) to exactly 0, its `at least 0`",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-4",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "場所-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 出庫.do would take 倉庫(場所, sku) to -1, below `at least 0`",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-4",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "refused",
+          "reason": "在庫不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "場所-2",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 入庫.do twice with the same arguments",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "場所-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 入庫.do again with another 数",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "場所-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 移し替え.do twice with the same arguments",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "先": "先-5",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "先": "先-5",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "先-5",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 移し替え.do again with another 数",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "先": "先-5",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "先": "先-5",
+            "sku": "sku-3",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "先-5",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 移し替え.do refused with 在庫不足, then again, and again once 倉庫(元, sku) has enough",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-1",
+            "元": "元-2",
+            "先": "先-3",
+            "sku": "sku-4",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-1",
+            "元": "元-2",
+            "先": "先-3",
+            "sku": "sku-4",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-5",
+            "場所": "元-2",
+            "sku": "sku-4",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-1",
+            "元": "元-2",
+            "先": "先-3",
+            "sku": "sku-4",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "refused",
+          "reason": "在庫不足"
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-4"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "先-3",
+            "sku-4"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 本店へ.do twice with the same arguments",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "本店",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 本店へ.do again with another 数",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-4",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "本店",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 本店へ.do refused with 在庫不足, then again, and again once 倉庫(元, sku) has enough",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-1",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-1",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-4",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-1",
+            "元": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "refused",
+          "reason": "在庫不足"
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "倉庫",
+          "args": [
+            "本店",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 出庫.do twice with the same arguments",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-4",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-4",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "場所-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 出庫.do again with another 数",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-4",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-4",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "場所-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 出庫.do refused with 在庫不足, then again, and again once 倉庫(場所, sku) has enough",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-4",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "refused",
+          "reason": "在庫不足"
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "入庫",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出庫",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "場所-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of 倉庫(元, sku) with 移し替え.do",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "移し替え",
+                "args": {
+                  "伝票": "伝票-4",
+                  "元": "元-2",
+                  "先": "先-5",
+                  "sku": "sku-3",
+                  "数": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "移し替え",
+                "args": {
+                  "伝票": "伝票-6",
+                  "元": "元-2",
+                  "先": "先-7",
+                  "sku": "sku-3",
+                  "数": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入庫",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "result": "refused",
+                    "reason": "在庫不足"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "倉庫",
+              "args": [
+                "元-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "倉庫",
+              "args": [
+                "先-5",
+                "sku-3"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "倉庫",
+              "args": [
+                "先-7",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入庫",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "result": "refused",
+                    "reason": "在庫不足"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "移し替え",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "倉庫",
+              "args": [
+                "元-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "倉庫",
+              "args": [
+                "先-5",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "倉庫",
+              "args": [
+                "先-7",
+                "sku-3"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of 倉庫(元, sku) with 本店へ.do",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "本店へ",
+                "args": {
+                  "伝票": "伝票-4",
+                  "元": "元-2",
+                  "sku": "sku-3",
+                  "数": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "本店へ",
+                "args": {
+                  "伝票": "伝票-5",
+                  "元": "元-2",
+                  "sku": "sku-3",
+                  "数": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入庫",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "result": "refused",
+                    "reason": "在庫不足"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "倉庫",
+              "args": [
+                "元-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "倉庫",
+              "args": [
+                "本店",
+                "sku-3"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入庫",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "result": "refused",
+                    "reason": "在庫不足"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "本店へ",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "倉庫",
+              "args": [
+                "元-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "倉庫",
+              "args": [
+                "本店",
+                "sku-3"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of 倉庫(場所, sku) with 出庫.do",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入庫",
+          "args": {
+            "伝票": "伝票-1",
+            "場所": "場所-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "出庫",
+                "args": {
+                  "伝票": "伝票-4",
+                  "場所": "場所-2",
+                  "sku": "sku-3",
+                  "数": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "出庫",
+                "args": {
+                  "伝票": "伝票-5",
+                  "場所": "場所-2",
+                  "sku": "sku-3",
+                  "数": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入庫",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "result": "refused",
+                    "reason": "在庫不足"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "倉庫",
+              "args": [
+                "場所-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "客",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入庫",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "result": "refused",
+                    "reason": "在庫不足"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "出庫",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "倉庫",
+              "args": [
+                "場所-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "客",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "same_account: 移し替え.do moves 倉庫(元, sku) to 倉庫(先, sku), the same account",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "args": {
+            "伝票": "伝票-1",
+            "元": "元-2",
+            "先": "元-2",
+            "sku": "sku-3",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "移し替え",
+          "result": "refused",
+          "reason": "same_account"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "元-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "same_account: 本店へ.do moves 倉庫(元, sku) to 倉庫(\"本店\", sku), the same account",
+      "book": "自分あて",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "args": {
+            "伝票": "伝票-1",
+            "元": "本店",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "本店へ",
+          "result": "refused",
+          "reason": "same_account"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "倉庫",
+          "args": [
+            "本店",
+            "sku-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  }
+]

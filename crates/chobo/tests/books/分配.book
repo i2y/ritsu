@@ -1,0 +1,35 @@
+# 分配：移動が三つある振替（同じ勘定に入れてから取る順）、リテラルの額、単位の違う二つの移動（両替）、scale 2 の単位
+book 分配 v1
+description "マーケットプレイスの売上を店と手数料と送料に分け、店の売上をドルで払い出す"
+
+unit 円
+unit USD scale 2
+
+account 買い手 : 円 outside
+account 手数料収入 : 円 outside
+account 送料 : 円 outside
+account 店の売上(店: string) : 円
+  at least 0 refused as 売上不足
+account 円の両替口 : 円 outside
+account ドルの両替口 : USD outside
+account ドル口座(店: string) : USD
+  at least 0 refused as ドル残高不足
+account 海外の銀行 : USD outside
+account 送金手数料 : USD outside
+
+transfer 売上(注文: string, 店: string, 代金: 円, 手数料: 円)
+  key 注文
+  move 代金 from 買い手 to 店の売上(店)
+  move 手数料 from 店の売上(店) to 手数料収入
+  move 100 from 店の売上(店) to 送料
+
+transfer ドル払い(払出番号: string, 店: string, 円額: 円, ドル額: USD)
+  description "両替の率は呼ぶ側が決め、円とドルの額を両方渡す"
+  key 払出番号
+  move 円額 from 店の売上(店) to 円の両替口
+  move ドル額 from ドルの両替口 to ドル口座(店)
+
+transfer ドル送金(送金番号: string, 店: string, 額: USD)
+  key 送金番号
+  move 額 from ドル口座(店) to 海外の銀行
+  move 1.50 from ドル口座(店) to 送金手数料

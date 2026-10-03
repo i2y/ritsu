@@ -1,0 +1,1343 @@
+{
+  "v": 1,
+  "book": "与信",
+  "version": 1,
+  "source_sha256": "7983f56ec2a21d1c83e0662b0e4a9559a30bd5ffe5489dc3da105530a8667ba5",
+  "units": [
+    {
+      "name": "円",
+      "scale": 0,
+      "ledger": 792519411
+    }
+  ],
+  "accounts": [
+    {
+      "name": "与信",
+      "params": [
+        "会員"
+      ],
+      "unit": "円",
+      "outside": false,
+      "lower": {
+        "value": -50000,
+        "refused_as": "与信枠超え"
+      },
+      "upper": {
+        "value": 10000,
+        "refused_as": "前払い超過"
+      },
+      "description": null,
+      "code": 56471
+    },
+    {
+      "name": "店",
+      "params": [],
+      "unit": "円",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 14336
+    },
+    {
+      "name": "銀行",
+      "params": [],
+      "unit": "円",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 62134
+    }
+  ],
+  "transfers": [
+    {
+      "name": "後払い",
+      "description": null,
+      "params": [
+        {
+          "name": "注文",
+          "type": "string"
+        },
+        {
+          "name": "会員",
+          "type": "string"
+        },
+        {
+          "name": "額",
+          "type": "amount",
+          "unit": "円"
+        }
+      ],
+      "key": [
+        "注文"
+      ],
+      "pending": {
+        "expires_after_seconds": 86400
+      },
+      "moves": [
+        {
+          "amount": {
+            "param": "額"
+          },
+          "from": {
+            "account": "与信",
+            "args": [
+              {
+                "param": "会員"
+              }
+            ]
+          },
+          "to": {
+            "account": "店",
+            "args": []
+          }
+        }
+      ],
+      "code": 4947,
+      "definition": "7ef7b68bbe34b2b69c264478d5d0cb4e",
+      "operations": {
+        "hold": {
+          "refusals": [
+            {
+              "name": "与信枠超え",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 50001
+                  },
+                  "result": "refused",
+                  "reason": "与信枠超え"
+                }
+              ],
+              "account": "与信",
+              "as_written": "与信(会員)",
+              "bound": "at least -50000",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 50001
+                  },
+                  "result": "refused",
+                  "reason": "与信枠超え"
+                },
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 50001
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "注文"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "会員",
+                "operations": [
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "args": {
+                      "注文": "注文-1",
+                      "会員": "会員-2",
+                      "額": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "args": {
+                      "注文": "注文-1",
+                      "会員": "会員-3",
+                      "額": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "額",
+                "operations": [
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "args": {
+                      "注文": "注文-1",
+                      "会員": "会員-2",
+                      "額": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "args": {
+                      "注文": "注文-1",
+                      "会員": "会員-2",
+                      "額": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "done_before",
+                "operations": [
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "args": {
+                      "注文": "注文-1",
+                      "会員": "会員-2",
+                      "額": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "pass",
+                    "duration": "1 day"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "後払い",
+                    "args": {
+                      "注文": "注文-1",
+                      "会員": "会員-2",
+                      "額": 2
+                    },
+                    "result": "done_before"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "post": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "amounts": {
+                    "額": 1
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_voided",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "result": "refused",
+                  "reason": "already_voided"
+                }
+              ]
+            },
+            {
+              "name": "expired",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "pass",
+                  "duration": "1 day"
+                },
+                {
+                  "op": "post",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "result": "refused",
+                  "reason": "expired"
+                }
+              ]
+            },
+            {
+              "name": "over_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "amounts": {
+                    "額": 3
+                  },
+                  "result": "refused",
+                  "reason": "over_hold"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "post",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        },
+        "void": {
+          "refusals": [
+            {
+              "name": "already_posted",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "result": "refused",
+                  "reason": "already_posted"
+                }
+              ]
+            },
+            {
+              "name": "expired",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1",
+                    "会員": "会員-2",
+                    "額": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "pass",
+                  "duration": "1 day"
+                },
+                {
+                  "op": "void",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "result": "refused",
+                  "reason": "expired"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "void",
+                  "kind": "後払い",
+                  "args": {
+                    "注文": "注文-1"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "返済",
+      "description": null,
+      "params": [
+        {
+          "name": "返済番号",
+          "type": "string"
+        },
+        {
+          "name": "会員",
+          "type": "string"
+        },
+        {
+          "name": "額",
+          "type": "amount",
+          "unit": "円"
+        }
+      ],
+      "key": [
+        "返済番号"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "額"
+          },
+          "from": {
+            "account": "銀行",
+            "args": []
+          },
+          "to": {
+            "account": "与信",
+            "args": [
+              {
+                "param": "会員"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 31850,
+      "definition": "d2d531386456adf4dd893030ee6b4cdc",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "前払い超過",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "返済",
+                  "args": {
+                    "返済番号": "返済番号-1",
+                    "会員": "会員-2",
+                    "額": 10000
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "返済",
+                  "args": {
+                    "返済番号": "返済番号-3",
+                    "会員": "会員-2",
+                    "額": 1
+                  },
+                  "result": "refused",
+                  "reason": "前払い超過"
+                }
+              ],
+              "account": "与信",
+              "as_written": "与信(会員)",
+              "bound": "at most 10000",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "返済",
+                  "args": {
+                    "返済番号": "返済番号-1",
+                    "会員": "会員-2",
+                    "額": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "返済",
+                  "args": {
+                    "返済番号": "返済番号-1",
+                    "会員": "会員-2",
+                    "額": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "返済",
+                  "args": {
+                    "返済番号": "返済番号-1",
+                    "会員": "会員-2",
+                    "額": 10000
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "返済",
+                  "args": {
+                    "返済番号": "返済番号-3",
+                    "会員": "会員-2",
+                    "額": 1
+                  },
+                  "result": "refused",
+                  "reason": "前払い超過"
+                },
+                {
+                  "op": "do",
+                  "kind": "返済",
+                  "args": {
+                    "返済番号": "返済番号-3",
+                    "会員": "会員-2",
+                    "額": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "返済番号"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "会員",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "返済",
+                    "args": {
+                      "返済番号": "返済番号-1",
+                      "会員": "会員-2",
+                      "額": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "返済",
+                    "args": {
+                      "返済番号": "返済番号-1",
+                      "会員": "会員-3",
+                      "額": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "額",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "返済",
+                    "args": {
+                      "返済番号": "返済番号-1",
+                      "会員": "会員-2",
+                      "額": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "返済",
+                    "args": {
+                      "返済番号": "返済番号-1",
+                      "会員": "会員-2",
+                      "額": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [
+    {
+      "name": "後払い",
+      "over": "後払い",
+      "carry": {
+        "input": "state",
+        "output": "next_state",
+        "enum": "state"
+      },
+      "held": [],
+      "never": [],
+      "once": [],
+      "states": [
+        "held",
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "initial": "held",
+      "final": [
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "events": [
+        "post",
+        "void",
+        "expire"
+      ],
+      "external": [
+        "expire"
+      ],
+      "certificate": {
+        "enums": {
+          "state": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "event": [
+            "post",
+            "void",
+            "expire"
+          ],
+          "reason": [
+            "none",
+            "already_posted",
+            "already_voided",
+            "expired"
+          ]
+        },
+        "types": {
+          "state": "state",
+          "event": "event",
+          "next_state": "state",
+          "refused": "bool",
+          "reason": "reason"
+        },
+        "machine": {
+          "table": "後払い",
+          "carry": {
+            "input": "state",
+            "output": "next_state"
+          },
+          "axis": 1,
+          "states": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "initial": 0,
+          "finals": [
+            1,
+            2,
+            3
+          ],
+          "rows": [
+            {
+              "row": 1,
+              "to": 1
+            },
+            {
+              "row": 2,
+              "to": 2
+            },
+            {
+              "row": 3,
+              "to": 3
+            },
+            {
+              "row": 4,
+              "stay": true
+            },
+            {
+              "row": 5,
+              "stay": true
+            },
+            {
+              "row": 6,
+              "stay": true
+            },
+            {
+              "row": 7,
+              "stay": true
+            },
+            {
+              "row": 8,
+              "stay": true
+            },
+            {
+              "row": 9,
+              "stay": true
+            }
+          ]
+        },
+        "tables": [
+          {
+            "table": "後払い",
+            "policy": "first",
+            "axes": [
+              {
+                "column": "event",
+                "coords": [
+                  "post",
+                  "void",
+                  "expire"
+                ]
+              },
+              {
+                "column": "state",
+                "coords": [
+                  "held",
+                  "posted",
+                  "voided",
+                  "expired"
+                ]
+              }
+            ],
+            "decides": [
+              "next_state",
+              "refused",
+              "reason"
+            ],
+            "rows": [
+              {
+                "row": 1,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "posted",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 2,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "voided",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 3,
+                "accepts": [
+                  [
+                    2
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "expired",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 4,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 5,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_posted"
+                ]
+              },
+              {
+                "row": 6,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_voided"
+                ]
+              },
+              {
+                "row": 7,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 8,
+                "accepts": [
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    3
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "expired"
+                ]
+              },
+              {
+                "row": 9,
+                "accepts": [
+                  [
+                    2
+                  ],
+                  [
+                    1,
+                    2,
+                    3
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "与信",
+      "functions": [
+        {
+          "kind": "後払い",
+          "op": "hold",
+          "name": "後払い_hold",
+          "params": [
+            "p_tenant",
+            "p_注文",
+            "p_会員",
+            "p_額"
+          ]
+        },
+        {
+          "kind": "後払い",
+          "op": "post",
+          "name": "後払い_post",
+          "params": [
+            "p_tenant",
+            "p_注文",
+            "p_額"
+          ],
+          "default_null": [
+            "p_額"
+          ]
+        },
+        {
+          "kind": "後払い",
+          "op": "void",
+          "name": "後払い_void",
+          "params": [
+            "p_tenant",
+            "p_注文"
+          ]
+        },
+        {
+          "kind": "後払い",
+          "op": "status",
+          "name": "後払い_status",
+          "params": [
+            "p_tenant",
+            "p_注文"
+          ]
+        },
+        {
+          "kind": "返済",
+          "op": "do",
+          "name": "返済_do",
+          "params": [
+            "p_tenant",
+            "p_返済番号",
+            "p_会員",
+            "p_額"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "与信",
+          "name": "balance_与信",
+          "params": [
+            "p_tenant",
+            "p_会員"
+          ]
+        },
+        {
+          "account": "店",
+          "name": "balance_店",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "銀行",
+          "name": "balance_銀行",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "与信.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "後払い",
+          "member": "後払い",
+          "args": "後払いArgs",
+          "key": "後払いKey",
+          "amounts": "後払いAmounts"
+        },
+        {
+          "kind": "返済",
+          "member": "返済",
+          "args": "返済Args"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "与信",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "後払い",
+          "member": "後払い",
+          "params": {
+            "注文": "注文",
+            "会員": "会員",
+            "額": "額"
+          }
+        },
+        {
+          "kind": "返済",
+          "member": "返済",
+          "params": {
+            "返済番号": "返済番号",
+            "会員": "会員",
+            "額": "額"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "book",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "後払い",
+          "member": "X後払い",
+          "args": "X後払いArgs",
+          "fields": {
+            "注文": "X注文",
+            "会員": "X会員",
+            "額": "X額"
+          },
+          "key": "X後払いKey",
+          "amounts": "X後払いAmounts"
+        },
+        {
+          "kind": "返済",
+          "member": "X返済",
+          "args": "X返済Args",
+          "fields": {
+            "返済番号": "X返済番号",
+            "会員": "X会員",
+            "額": "X額"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "与信",
+          "method": "X与信",
+          "args": "X与信Account",
+          "fields": {
+            "会員": "X会員"
+          }
+        },
+        {
+          "account": "店",
+          "method": "X店"
+        },
+        {
+          "account": "銀行",
+          "method": "X銀行"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "後払い",
+          "op": "hold",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "floor_out"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        },
+        {
+          "kind": "後払い",
+          "op": "post",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "floor_out"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        },
+        {
+          "kind": "後払い",
+          "op": "void",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "floor_out"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        },
+        {
+          "kind": "返済",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "room_in"
+            },
+            {
+              "move": 1,
+              "role": "floor_back"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

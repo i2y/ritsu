@@ -1,0 +1,26 @@
+# 自分あて：同じ種類の勘定のあいだの移動。元と先の引数が同じなら same_account で断られる
+book 自分あて v1
+description "倉庫のあいだの移し替え"
+
+unit 個
+
+account 倉庫(場所: string, sku: string) : 個
+  at least 0 refused as 在庫不足
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 入庫(伝票: string, 場所: string, sku: string, 数: 個)
+  key 伝票
+  move 数 from 仕入先 to 倉庫(場所, sku)
+
+transfer 移し替え(伝票: string, 元: string, 先: string, sku: string, 数: 個)
+  key 伝票
+  move 数 from 倉庫(元, sku) to 倉庫(先, sku)
+
+transfer 本店へ(伝票: string, 元: string, sku: string, 数: 個)
+  key 伝票
+  move 数 from 倉庫(元, sku) to 倉庫("本店", sku)
+
+transfer 出庫(伝票: string, 場所: string, sku: string, 数: 個)
+  key 伝票
+  move 数 from 倉庫(場所, sku) to 客

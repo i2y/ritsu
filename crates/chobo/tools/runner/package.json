@@ -1,0 +1,15 @@
+{
+  "name": "chobo-runner",
+  "private": true,
+  "description": "Runs the scenarios of a book through the TypeScript clients chobo writes, for the tests (tests/backends.rs)",
+  "type": "module",
+  "dependencies": {
+    "pg": "8.23.1",
+    "tigerbeetle-node": "0.17.9"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "@types/pg": "8.23.1",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,0 +1,736 @@
+[
+  {
+    "scenario": {
+      "name": "bound: 出荷.do takes 棚(sku) to 4, one above `at least 3`",
+      "book": "安全在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 5
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 出荷.do takes 棚(sku) to exactly 3, its `at least 3`",
+      "book": "安全在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 5
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 出荷.do would take 棚(sku) to 2, below `at least 3`",
+      "book": "安全在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 5
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "refused",
+          "reason": "安全在庫割れ"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 補充.do twice with the same arguments",
+      "book": "安全在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 補充.do again with another 数",
+      "book": "安全在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 出荷.do twice with the same arguments",
+      "book": "安全在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 4
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 出荷.do again with another 数",
+      "book": "安全在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 4
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-3",
+            "sku": "sku-2",
+            "数": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 出荷.do refused with 安全在庫割れ, then again, and again once 棚(sku) has enough",
+      "book": "安全在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-3",
+            "sku": "sku-2",
+            "数": 4
+          }
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "args": {
+            "注文": "注文-1",
+            "sku": "sku-2",
+            "数": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "refused",
+          "reason": "安全在庫割れ"
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "補充",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "出荷",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of 棚(sku) with 出荷.do",
+      "book": "安全在庫",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "補充",
+          "args": {
+            "伝票": "伝票-1",
+            "sku": "sku-2",
+            "数": 4
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "出荷",
+                "args": {
+                  "注文": "注文-3",
+                  "sku": "sku-2",
+                  "数": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "出荷",
+                "args": {
+                  "注文": "注文-4",
+                  "sku": "sku-2",
+                  "数": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "補充",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "出荷",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "出荷",
+                    "result": "refused",
+                    "reason": "安全在庫割れ"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "棚",
+              "args": [
+                "sku-2"
+              ],
+              "posted": 3,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -4,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "客",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "補充",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "出荷",
+                    "result": "refused",
+                    "reason": "安全在庫割れ"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "出荷",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "棚",
+              "args": [
+                "sku-2"
+              ],
+              "posted": 3,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "仕入先",
+              "args": [],
+              "posted": -4,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "客",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  }
+]

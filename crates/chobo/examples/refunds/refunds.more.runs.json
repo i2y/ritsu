@@ -1,0 +1,208 @@
+[
+  {
+    "scenario": {
+      "name": "more: two refunds of 20.00 at the same time on a sale of 30.00, then one of 10.00",
+      "book": "refunds",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "A-100",
+            "amount": 3000
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "hold",
+                "kind": "refund",
+                "args": {
+                  "request": "R-1",
+                  "order": "A-100",
+                  "amount": 2000
+                }
+              }
+            ],
+            [
+              {
+                "op": "hold",
+                "kind": "refund",
+                "args": {
+                  "request": "R-2",
+                  "order": "A-100",
+                  "amount": 2000
+                }
+              }
+            ]
+          ]
+        },
+        {
+          "op": "hold",
+          "kind": "refund",
+          "args": {
+            "request": "R-3",
+            "order": "A-100",
+            "amount": 1000
+          }
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "sale",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "refund",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "refund",
+                    "result": "refused",
+                    "reason": "refund_exceeds_sale"
+                  }
+                ]
+              ]
+            },
+            {
+              "op": "hold",
+              "kind": "refund",
+              "result": "done"
+            }
+          ],
+          "accounts": [
+            {
+              "account": "refundable",
+              "args": [
+                "A-100"
+              ],
+              "posted": 3000,
+              "held_in": 0,
+              "held_out": 3000
+            },
+            {
+              "account": "sales",
+              "args": [],
+              "posted": -3000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "refunded",
+              "args": [],
+              "posted": 0,
+              "held_in": 3000,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "refund",
+              "key": [
+                "R-1"
+              ],
+              "state": "held"
+            },
+            {
+              "kind": "refund",
+              "key": [
+                "R-3"
+              ],
+              "state": "held"
+            }
+          ]
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "sale",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "refund",
+                    "result": "refused",
+                    "reason": "refund_exceeds_sale"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "refund",
+                    "result": "done"
+                  }
+                ]
+              ]
+            },
+            {
+              "op": "hold",
+              "kind": "refund",
+              "result": "done"
+            }
+          ],
+          "accounts": [
+            {
+              "account": "refundable",
+              "args": [
+                "A-100"
+              ],
+              "posted": 3000,
+              "held_in": 0,
+              "held_out": 3000
+            },
+            {
+              "account": "sales",
+              "args": [],
+              "posted": -3000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "refunded",
+              "args": [],
+              "posted": 0,
+              "held_in": 3000,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "refund",
+              "key": [
+                "R-2"
+              ],
+              "state": "held"
+            },
+            {
+              "kind": "refund",
+              "key": [
+                "R-3"
+              ],
+              "state": "held"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

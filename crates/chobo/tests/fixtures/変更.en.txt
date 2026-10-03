@@ -1,0 +1,16 @@
+warning[W107]: 変更.book:1:1: the account `返品棚` of HEAD is gone: its balances stay in the database
+     1 | book 変更 v2
+warning[W107]: 変更.book:1:1: the transfer `返品` of HEAD is gone: a retry of it still in flight can no longer be made
+     1 | book 変更 v2
+warning[W107]: 変更.book:1:1: the transfer `戻し` of HEAD is gone: a retry of it still in flight can no longer be made
+     1 | book 変更 v2
+error[E050]: 変更.book:5:9: the account `在庫` differs from HEAD in its lower bound (0 → 3), its upper bound (none → 1000): the accounts that already exist keep the old definition, so chobo cannot make this change
+     5 | account 在庫(sku: string) : 個
+  hint: declare an account under a new name, and write a transfer that moves the balances over
+error[E051]: 変更.book:11:10: the transfer `入荷` differs from HEAD in its key: a retry in flight would be refused with key_conflict
+    11 | transfer 入荷(伝票: string, sku: string, 数: 個)
+  hint: declare the new form under a new name, and keep the old one until every hold it made has ended
+error[E051]: 変更.book:14:10: the transfer `引当` differs from HEAD in how its holds end: a retry in flight would be refused with key_conflict, and a hold still held could not be posted
+    14 | transfer 引当(注文: string, sku: string, 数: 個)
+  hint: declare the new form under a new name, and keep the old one until every hold it made has ended
+変更.book: 3 error(s), 3 warning(s)

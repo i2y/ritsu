@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="chobo doc">
+<title>返金 v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --box: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --no: #cf222e; --held: #9a6700; --lit: #fff8c5; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --box: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --no: #f85149; --held: #d29922; --lit: #3b2e00; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+header, main { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+header { padding-top: 12px; }
+h1 { font-size: 1.6em; margin: 0.4em 0 0.2em; }
+h2 { font-size: 1.3em; margin: 1.6em 0 0.5em; padding-bottom: 0.2em; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.12em; margin: 1.4em 0 0.4em; }
+h4 { font-size: 1em; margin: 1em 0 0.3em; }
+p, li { overflow-wrap: break-word; }
+nav a { color: var(--accent); }
+.muted { color: var(--muted); }
+code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 0 0.25em; border-radius: 4px; }
+pre { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 8px 12px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+.scroll { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; margin: 0.4em 0 0.8em; }
+th, td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; vertical-align: top; min-width: 4.5em; }
+.states td:first-child { white-space: nowrap; }
+th { background: var(--box); }
+td { overflow-wrap: break-word; }
+td code { white-space: nowrap; }
+figure { margin: 0.6em 0; overflow-x: auto; max-width: 100%; }
+svg { display: block; max-width: none; height: auto; }
+svg text { fill: var(--fg); font-size: 13px; }
+svg .name { font-weight: 600; font-size: 14px; }
+svg .sub { fill: var(--muted); }
+.node rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+.node.outside rect { stroke: var(--muted); stroke-dasharray: 5 3; }
+.edge path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.edge.pending path { stroke-dasharray: 6 4; }
+.head { fill: var(--muted); }
+.head.ok { fill: var(--ok); }
+.head.no { fill: var(--no); }
+.label rect { fill: var(--bg); opacity: 0.92; }
+.label text { font-size: 12px; }
+.edge.lit path { stroke: var(--ok); stroke-width: 3; }
+.edge.no path { stroke: var(--no); stroke-width: 3; }
+.label.lit text { fill: var(--ok); font-weight: 600; }
+.label.no text { fill: var(--no); font-weight: 600; }
+.life .state rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+.life .state rect.inner { fill: none; stroke-width: 0.8; }
+.life .arrow { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.life .arrow.external { stroke-dasharray: 5 3; }
+.life .start { fill: var(--fg); }
+.life .lbl { font-size: 12px; }
+.life .lblbg { fill: var(--bg); opacity: 0.9; }
+.life .note { font-size: 11px; fill: var(--muted); }
+details { margin: 0.5em 0; }
+summary { cursor: pointer; color: var(--accent); }
+.player { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0.8em 0; }
+.player select { max-width: 100%; font: inherit; padding: 2px 4px; }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.outs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.outs button, .ctl button { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--box); color: var(--fg); cursor: pointer; }
+.outs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cols { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 8px; }
+.cols > * { flex: 1 1 320px; min-width: 0; }
+#steps { margin: 0; padding-left: 1.8em; }
+#steps li { padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+#steps li.now { background: var(--lit); }
+#steps li.later { color: var(--muted); }
+#steps .call { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+#steps .res { display: block; font-size: 0.92em; }
+#steps .res.ok { color: var(--ok); }
+#steps .res.no { color: var(--no); }
+#steps .why { display: block; font-size: 0.85em; color: var(--muted); }
+.ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+#bal td.changed { background: var(--lit); font-weight: 600; }
+#bal td.num { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+<h1>返金 v1</h1>
+<p>注文ごとに、返金できる残りを勘定にする。売上で増え、返金で減り、0 より下にはならない。返金は承認を待つあいだ押さえる</p>
+<p class="muted"><code>chobo doc</code> が <code>examples/refunds/refunds.ja.book</code> から作ったページ。勘定ごとに残高を持ち、残高は入った量から出た量を引いたもの。どの振替も勘定の下限と上限を守り、守れない振替は、その境界に付けた名前で断られて、どの移動も行われない。振替には、すぐに動かすもの（<code>do</code>）と、動かす量をまず押さえるもの（<code>hold</code>）がある。押さえた分は、あとで確定される（<code>post</code>。全部か一部）か、取り消される（<code>void</code>）か、有効期限で切れる。</p>
+<nav><a href="#accounts">勘定</a> · <a href="#flow">流れ</a> · <a href="#transfers">振替</a> · <a href="#scenarios">シナリオ</a></nav>
+</header>
+<main>
+<section id="accounts">
+<h2>勘定</h2>
+<div class="scroll"><table><thead><tr><th>勘定</th><th>分け方</th><th>単位</th><th>境界</th><th>説明</th></tr></thead><tbody>
+<tr><td><code>返金できる残り</code></td><td><code>注文</code> ごと</td><td>円</td><td>0 以上。下回る振替は <code>返金超過</code> で断る</td><td>その注文でまだ返金できる額</td></tr>
+<tr><td><code>売上</code></td><td>一つだけ</td><td>円</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+<tr><td><code>返金済み</code></td><td>一つだけ</td><td>円</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+</tbody></table></div>
+</section>
+<section id="flow">
+<h2>勘定のあいだの流れ</h2>
+<figure><svg class="flow" viewBox="0 0 683 112" width="683" role="img" aria-labelledby="flow-t"><title id="flow-t">返金 の勘定のあいだの流れ</title>
+<defs><marker id="flow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge" data-k="0"><path d="M126 58 C191 58, 191 58, 256 58" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge pending" data-k="1"><path d="M427 58 C492 58, 492 58, 557 58" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="label" data-k="0"><rect x="161" y="49" width="59" height="16" rx="3"/><text x="191" y="61" text-anchor="middle">売上計上</text></g>
+<g class="label" data-k="1"><rect x="475" y="49" width="34" height="16" rx="3"/><text x="492" y="61" text-anchor="middle">返金</text></g>
+<g class="node" data-a="0"><rect x="256" y="24" width="172" height="68" rx="4"/><text x="342" y="44" text-anchor="middle" class="name">返金できる残り(注文)</text><text x="342" y="62" text-anchor="middle" class="sub">円</text><text x="342" y="80" text-anchor="middle" class="sub">0 以上（返金超過）</text></g>
+<g class="node outside" data-a="1"><rect x="20" y="33" width="106" height="50" rx="16"/><text x="73" y="53" text-anchor="middle" class="name">売上</text><text x="73" y="71" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node outside" data-a="2"><rect x="557" y="33" width="106" height="50" rx="16"/><text x="610" y="53" text-anchor="middle" class="name">返金済み</text><text x="610" y="71" text-anchor="middle" class="sub">円・外の勘定</text></g>
+</svg></figure>
+<p class="muted">四角は勘定で、矢印は振替の移動。角の丸い破線の四角は外の勘定で、境界を持たない。破線の矢印は仮押さえの振替で、まず押さえ、確定したときに動く。</p>
+</section>
+<section id="transfers">
+<h2>振替</h2>
+<article id="t0">
+<h3>売上計上</h3>
+<ul>
+<li>移動: <code>売上</code> から <code>返金できる残り(注文)</code> へ <code>額</code>。</li>
+<li>キー: <code>注文</code> ごとに一回。同じ呼び出しの二度目は何もせず、<code>done_before</code> を返す。<code>額</code> だけが違う二度目は <code>key_conflict</code> で断られる。</li>
+<li>すぐに動かす（<code>do</code>）。</li>
+</ul>
+<div class="scroll"><table><thead><tr><th>操作</th><th>断られうる理由</th><th>いつ</th></tr></thead><tbody>
+<tr><td><code>売上計上.do</code></td><td><code>key_conflict</code></td><td><code>注文</code> が同じで、ほかの引数が違う呼び出しが、前に済んでいる</td></tr>
+</tbody></table></div>
+<details><summary>断られる例</summary>
+<h4>売上計上.do: key_conflict</h4>
+<pre> 1  売上計上.do(注文: 注文-1, 額: 1)  通る
+ 2  売上計上.do(注文: 注文-1, 額: 2)  key_conflict で断られる</pre>
+</details>
+</article>
+<article id="t1">
+<h3>返金</h3>
+<p>承認を待つあいだ押さえる。承認されたら確定し、却下されたら取り消す</p>
+<ul>
+<li>移動: <code>返金できる残り(注文)</code> から <code>返金済み</code> へ <code>額</code>。</li>
+<li>キー: <code>申請</code> ごとに一回。同じ呼び出しの二度目は何もせず、<code>done_before</code> を返す。<code>注文</code> か <code>額</code> だけが違う二度目は <code>key_conflict</code> で断られる。押さえが終わったあとに同じキーで押さえ直すと <code>done_before</code> になり、何も押さえない。</li>
+<li>仮押さえ: まず押さえる。確定と取消は呼ぶ側がする。押さえてから 7 日で期限が切れ、押さえた量は元に戻る。</li>
+</ul>
+<figure><svg class="life" viewBox="0 0 589 240" width="589" role="img" aria-label="返金 の仮押さえのライフサイクル">
+<defs><marker id="life-返金" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<circle class="start" cx="16" cy="122" r="6"/>
+<path class="arrow" d="M22 122 L118 122" marker-end="url(#life-返金)"/><text class="lbl" x="71" y="115" text-anchor="middle">返金.hold</text>
+<g class="state" data-state="held"><rect x="120" y="105" width="96" height="34" rx="8"/><text x="168" y="127" text-anchor="middle">押さえ中</text></g>
+<path class="arrow" d="M216 114 C290 114, 290 31, 362 31" marker-end="url(#life-返金)"/><rect class="lblbg" x="272" y="13" width="87" height="15" rx="3"/><text class="lbl" x="354" y="24" text-anchor="end">確定（post）</text>
+<g class="state end" data-state="posted"><rect x="364" y="14" width="96" height="34" rx="8"/><rect class="inner" x="367" y="17" width="90" height="28" rx="6"/><text x="412" y="36" text-anchor="middle">確定</text></g>
+<text class="note" x="366" y="62">取消は already_posted で断る</text>
+<text class="note" x="366" y="76">違う額の確定は key_conflict で断る</text>
+<path class="arrow" d="M216 122 C290 122, 290 105, 362 105" marker-end="url(#life-返金)"/><rect class="lblbg" x="272" y="87" width="87" height="15" rx="3"/><text class="lbl" x="354" y="98" text-anchor="end">取消（void）</text>
+<g class="state end" data-state="voided"><rect x="364" y="88" width="96" height="34" rx="8"/><rect class="inner" x="367" y="91" width="90" height="28" rx="6"/><text x="412" y="110" text-anchor="middle">取消</text></g>
+<text class="note" x="366" y="136">確定は already_voided で断る</text>
+<path class="arrow external" d="M216 131 C290 131, 290 179, 362 179" marker-end="url(#life-返金)"/><rect class="lblbg" x="303" y="184" width="56" height="15" rx="3"/><text class="lbl" x="354" y="195" text-anchor="end">7 日たつ</text>
+<g class="state end" data-state="expired"><rect x="364" y="162" width="96" height="34" rx="8"/><rect class="inner" x="367" y="165" width="90" height="28" rx="6"/><text x="412" y="184" text-anchor="middle">期限切れ</text></g>
+<text class="note" x="366" y="210">確定も取消も expired で断る</text>
+</svg></figure>
+<div class="scroll"><table class="states"><thead><tr><th>仮押さえの状態</th><th>post（確定）</th><th>void（取消）</th></tr></thead><tbody>
+<tr><td>押さえ中</td><td>確定する。額を渡せばその額、渡さなければ全額で、残りは元に戻る。押さえた額を超えれば <code>over_hold</code> で断る。押さえてから 7 日たっていれば <code>expired</code> で断る</td><td>取り消す。押さえた量は元に戻る。押さえてから 7 日たっていれば <code>expired</code> で断る</td></tr>
+<tr><td>確定</td><td>同じ額なら <code>done_before</code>、違う額なら <code>key_conflict</code> で断る</td><td><code>already_posted</code> で断る</td></tr>
+<tr><td>取消</td><td><code>already_voided</code> で断る</td><td><code>done_before</code></td></tr>
+<tr><td>期限切れ</td><td><code>expired</code> で断る</td><td><code>expired</code> で断る</td></tr>
+<tr><td>仮押さえが無い</td><td><code>no_such_hold</code> で断る</td><td><code>no_such_hold</code> で断る</td></tr>
+</tbody></table></div>
+<div class="scroll"><table><thead><tr><th>操作</th><th>断られうる理由</th><th>いつ</th></tr></thead><tbody>
+<tr><td><code>返金.hold</code></td><td><code>返金超過</code></td><td><code>返金できる残り(注文)</code> が 0 を下回る</td></tr>
+<tr><td><code>返金.hold</code></td><td><code>key_conflict</code></td><td><code>申請</code> が同じで、ほかの引数が違う呼び出しが、前に済んでいる</td></tr>
+<tr><td><code>返金.hold</code></td><td><code>already_refused</code></td><td><code>申請</code> が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない</td></tr>
+<tr><td><code>返金.post</code></td><td><code>key_conflict</code></td><td>仮押さえは、違う額で確定済み</td></tr>
+<tr><td><code>返金.post</code></td><td><code>already_voided</code></td><td>仮押さえはもう取り消されている</td></tr>
+<tr><td><code>返金.post</code></td><td><code>expired</code></td><td>仮押さえの期限が切れている</td></tr>
+<tr><td><code>返金.post</code></td><td><code>over_hold</code></td><td>押さえた額より多く確定しようとした</td></tr>
+<tr><td><code>返金.post</code></td><td><code>no_such_hold</code></td><td>その <code>申請</code> の仮押さえが無い</td></tr>
+<tr><td><code>返金.void</code></td><td><code>already_posted</code></td><td>仮押さえはもう確定している</td></tr>
+<tr><td><code>返金.void</code></td><td><code>expired</code></td><td>仮押さえの期限が切れている</td></tr>
+<tr><td><code>返金.void</code></td><td><code>no_such_hold</code></td><td>その <code>申請</code> の仮押さえが無い</td></tr>
+</tbody></table></div>
+<details><summary>断られる例</summary>
+<h4>返金.hold: 返金超過</h4>
+<pre> 1  返金.hold(申請: 申請-1, 注文: 注文-2, 額: 1)  返金超過 で断られる（1 つ目の移動が 返金できる残り(注文-2) から 1 を取る。確定 0、出ていく仮押さえ 0）</pre>
+<h4>返金.hold: key_conflict</h4>
+<pre> 1  売上計上.do(注文: 注文-1, 額: 1)              通る
+ 2  返金.hold(申請: 申請-2, 注文: 注文-1, 額: 1)  通る
+ 3  返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)  key_conflict で断られる</pre>
+<h4>返金.hold: already_refused</h4>
+<pre> 1  返金.hold(申請: 申請-1, 注文: 注文-2, 額: 1)  返金超過 で断られる（1 つ目の移動が 返金できる残り(注文-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 2  返金.hold(申請: 申請-1, 注文: 注文-2, 額: 1)  already_refused で断られる</pre>
+<h4>返金.post: key_conflict</h4>
+<pre> 1  売上計上.do(注文: 注文-1, 額: 2)              通る
+ 2  返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)  通る
+ 3  返金.post(申請: 申請-2)                       通る
+ 4  返金.post(申請: 申請-2, 額: 1)                key_conflict で断られる</pre>
+<h4>返金.post: already_voided</h4>
+<pre> 1  売上計上.do(注文: 注文-1, 額: 2)              通る
+ 2  返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)  通る
+ 3  返金.void(申請: 申請-2)                       通る
+ 4  返金.post(申請: 申請-2)                       already_voided で断られる</pre>
+<h4>返金.post: expired</h4>
+<pre> 1  売上計上.do(注文: 注文-1, 額: 2)              通る
+ 2  返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)  通る
+ 3  pass 7 日                                     返金(申請-2) が期限切れ
+ 4  返金.post(申請: 申請-2)                       expired で断られる</pre>
+<h4>返金.post: over_hold</h4>
+<pre> 1  売上計上.do(注文: 注文-1, 額: 2)              通る
+ 2  返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)  通る
+ 3  返金.post(申請: 申請-2, 額: 3)                over_hold で断られる</pre>
+<h4>返金.post: no_such_hold</h4>
+<pre> 1  返金.post(申請: 申請-1)  no_such_hold で断られる</pre>
+<h4>返金.void: already_posted</h4>
+<pre> 1  売上計上.do(注文: 注文-1, 額: 2)              通る
+ 2  返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)  通る
+ 3  返金.post(申請: 申請-2)                       通る
+ 4  返金.void(申請: 申請-2)                       already_posted で断られる</pre>
+<h4>返金.void: expired</h4>
+<pre> 1  売上計上.do(注文: 注文-1, 額: 2)              通る
+ 2  返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)  通る
+ 3  pass 7 日                                     返金(申請-2) が期限切れ
+ 4  返金.void(申請: 申請-2)                       expired で断られる</pre>
+<h4>返金.void: no_such_hold</h4>
+<pre> 1  返金.void(申請: 申請-1)  no_such_hold で断られる</pre>
+</details>
+</article>
+</section>
+<section id="scenarios">
+<h2>シナリオ</h2>
+<p><code>chobo scenarios</code> が帳簿から作ったシナリオ 19 本。一つ選び、ステップを一つずつ進めると、そのあとの残高と仮押さえが見られる。図では、そのステップで呼んだ振替の矢印に色が付く（断られたものは赤）。</p>
+<div class="player" id="player">
+<div class="pick"><label for="sc">シナリオ</label><select id="sc">
+<option value="0">1. 境界: 返金.hold が 返金できる残り(注文) を 1 まで減らす。at least 0 の 1 つ手前</option>
+<option value="1">2. 境界: 返金.hold が 返金できる残り(注文) をちょうど 0 まで減らす。at least 0 ちょうど</option>
+<option value="2">3. 境界: 返金.hold は 返金できる残り(注文) を -1 まで減らすので断られる。at least 0 を割る</option>
+<option value="3">4. キー: 売上計上.do を同じ引数で二度呼ぶ</option>
+<option value="4">5. キー: 売上計上.do を 額 だけ変えてもう一度呼ぶ</option>
+<option value="5">6. キー: 返金.hold を同じ引数で二度呼ぶ</option>
+<option value="6">7. キー: 返金.hold を 額 だけ変えてもう一度呼ぶ</option>
+<option value="7">8. キー: 返金.hold が 返金超過 で断られ、同じ引数でもう一度、返金できる残り(注文) が足りるようになってからもう一度呼ぶ</option>
+<option value="8">9. 仮押さえ: 返金 を全額で確定する</option>
+<option value="9">10. 仮押さえ: 返金 を一部だけ確定する</option>
+<option value="10">11. 仮押さえ: 返金 を取り消す</option>
+<option value="11">12. 仮押さえ: 返金 を確定してから取り消そうとする</option>
+<option value="12">13. 仮押さえ: 返金 を取り消してから確定しようとする</option>
+<option value="13">14. 仮押さえ: 返金 を押さえた額より多く確定しようとし、押さえた額で確定する</option>
+<option value="14">15. 仮押さえ: 返金 を押さえる前に確定しようとし、押さえてから確定する</option>
+<option value="15">16. 仮押さえ: 返金 を二度確定する。同じ額で、そして違う額で</option>
+<option value="16">17. 期限切れ: 返金 が期限切れになってから、確定と取消を試す</option>
+<option value="17">18. 期限切れ: 返金 が期限切れになってから、同じキーで押さえ直す</option>
+<option value="18">19. 同時: 二つの呼び出し元が 返金.hold で 返金できる残り(注文) の最後の 1 を取り合う</option>
+</select></div>
+<div class="outs" id="outs"></div>
+<div class="cols">
+<ol id="steps"></ol>
+<div>
+<div class="ctl"><button id="prev" type="button" aria-label="前へ">◀</button><span id="pos"></span><button id="next" type="button" aria-label="次へ">▶</button></div>
+<div class="scroll"><table id="bal"><thead><tr><th>勘定</th><th>確定</th><th>出ていく仮押さえ</th><th>入ってくる仮押さえ</th></tr></thead><tbody id="bal-body"></tbody></table></div>
+<div class="scroll"><table id="holds"><thead><tr><th>仮押さえ</th><th>状態</th></tr></thead><tbody id="holds-body"></tbody></table></div>
+</div>
+</div>
+<figure id="mini"><svg class="flow" viewBox="0 0 683 112" width="683" role="img" aria-labelledby="mini-t"><title id="mini-t">返金 の勘定のあいだの流れ</title>
+<defs><marker id="mini-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge" data-k="0"><path d="M126 58 C191 58, 191 58, 256 58" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge pending" data-k="1"><path d="M427 58 C492 58, 492 58, 557 58" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="label" data-k="0"><rect x="161" y="49" width="59" height="16" rx="3"/><text x="191" y="61" text-anchor="middle">売上計上</text></g>
+<g class="label" data-k="1"><rect x="475" y="49" width="34" height="16" rx="3"/><text x="492" y="61" text-anchor="middle">返金</text></g>
+<g class="node" data-a="0"><rect x="256" y="24" width="172" height="68" rx="4"/><text x="342" y="44" text-anchor="middle" class="name">返金できる残り(注文)</text><text x="342" y="62" text-anchor="middle" class="sub">円</text><text x="342" y="80" text-anchor="middle" class="sub">0 以上（返金超過）</text></g>
+<g class="node outside" data-a="1"><rect x="20" y="33" width="106" height="50" rx="16"/><text x="73" y="53" text-anchor="middle" class="name">売上</text><text x="73" y="71" text-anchor="middle" class="sub">円・外の勘定</text></g>
+<g class="node outside" data-a="2"><rect x="557" y="33" width="106" height="50" rx="16"/><text x="610" y="53" text-anchor="middle" class="name">返金済み</text><text x="610" y="71" text-anchor="middle" class="sub">円・外の勘定</text></g>
+</svg></figure>
+</div>
+</section>
+</main>
+<script type="application/json" id="chobo-data">{"lang":"ja","scenarios":[{"title":"境界: 返金.hold が 返金できる残り(注文) を 1 まで減らす。`at least 0` の 1 つ手前","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","1","0"],["-2","0","0"],["0","0","1"]],"holds":[["返金(申請-2)","押さえ中"]]}]]},{"title":"境界: 返金.hold が 返金できる残り(注文) をちょうど 0 まで減らす。`at least 0` ちょうど","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]}]]},{"title":"境界: 返金.hold は 返金できる残り(注文) を -1 まで減らすので断られる。`at least 0` を割る","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 3)","result":"返金超過 で断られる","detail":"1 つ目の移動が 返金できる残り(注文-1) から 3 を取る。確定 2、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]}]]},{"title":"キー: 売上計上.do を同じ引数で二度呼ぶ","accounts":["返金できる残り(注文-1)","売上"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]},{"label":"売上計上.do(注文: 注文-1, 額: 1)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]}]]},{"title":"キー: 売上計上.do を 額 だけ変えてもう一度呼ぶ","accounts":["返金できる残り(注文-1)","売上"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]},{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"key_conflict で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]}]]},{"title":"キー: 返金.hold を同じ引数で二度呼ぶ","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 1)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["返金(申請-2)","押さえ中"]]}]]},{"title":"キー: 返金.hold を 額 だけ変えてもう一度呼ぶ","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"key_conflict で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["返金(申請-2)","押さえ中"]]}]]},{"title":"キー: 返金.hold が 返金超過 で断られ、同じ引数でもう一度、返金できる残り(注文) が足りるようになってからもう一度呼ぶ","accounts":["返金できる残り(注文-2)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"返金.hold(申請: 申請-1, 注文: 注文-2, 額: 1)","result":"返金超過 で断られる","detail":"1 つ目の移動が 返金できる残り(注文-2) から 1 を取る。確定 0、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-1, 注文: 注文-2, 額: 1)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"売上計上.do(注文: 注文-2, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-1, 注文: 注文-2, 額: 1)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]}]]},{"title":"仮押さえ: 返金 を全額で確定する","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.post(申請: 申請-2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["返金(申請-2)","確定"]]}]]},{"title":"仮押さえ: 返金 を一部だけ確定する","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.post(申請: 申請-2, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","0","0"],["-2","0","0"],["1","0","0"]],"holds":[["返金(申請-2)","確定"]]}]]},{"title":"仮押さえ: 返金 を取り消す","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.void(申請: 申請-2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["返金(申請-2)","取消"]]}]]},{"title":"仮押さえ: 返金 を確定してから取り消そうとする","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.post(申請: 申請-2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["返金(申請-2)","確定"]]},{"label":"返金.void(申請: 申請-2)","result":"already_posted で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["返金(申請-2)","確定"]]}]]},{"title":"仮押さえ: 返金 を取り消してから確定しようとする","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.void(申請: 申請-2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["返金(申請-2)","取消"]]},{"label":"返金.post(申請: 申請-2)","result":"already_voided で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["返金(申請-2)","取消"]]}]]},{"title":"仮押さえ: 返金 を押さえた額より多く確定しようとし、押さえた額で確定する","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.post(申請: 申請-2, 額: 3)","result":"over_hold で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.post(申請: 申請-2, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["返金(申請-2)","確定"]]}]]},{"title":"仮押さえ: 返金 を押さえる前に確定しようとし、押さえてから確定する","accounts":["返金できる残り(注文-2)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"返金.post(申請: 申請-1)","result":"no_such_hold で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"売上計上.do(注文: 注文-2, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-1, 注文: 注文-2, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["返金(申請-1)","押さえ中"]]},{"label":"返金.post(申請: 申請-1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-1","0","0"],["1","0","0"]],"holds":[["返金(申請-1)","確定"]]}]]},{"title":"仮押さえ: 返金 を二度確定する。同じ額で、そして違う額で","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"返金.post(申請: 申請-2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["返金(申請-2)","確定"]]},{"label":"返金.post(申請: 申請-2)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["返金(申請-2)","確定"]]},{"label":"返金.post(申請: 申請-2, 額: 2)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["返金(申請-2)","確定"]]},{"label":"返金.post(申請: 申請-2, 額: 1)","result":"key_conflict で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["返金(申請-2)","確定"]]}]]},{"title":"期限切れ: 返金 が期限切れになってから、確定と取消を試す","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"pass 10081 分","result":"返金(申請-2) が期限切れ","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["返金(申請-2)","期限切れ"]]},{"label":"返金.post(申請: 申請-2)","result":"expired で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["返金(申請-2)","期限切れ"]]},{"label":"返金.void(申請: 申請-2)","result":"expired で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["返金(申請-2)","期限切れ"]]}]]},{"title":"期限切れ: 返金 が期限切れになってから、同じキーで押さえ直す","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["返金(申請-2)","押さえ中"]]},{"label":"pass 10081 分","result":"返金(申請-2) が期限切れ","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["返金(申請-2)","期限切れ"]]},{"label":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 2)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["返金(申請-2)","期限切れ"]]}]]},{"title":"同時: 二つの呼び出し元が 返金.hold で 返金できる残り(注文) の最後の 1 を取り合う","accounts":["返金できる残り(注文-1)","売上","返金済み"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"売上計上.do(注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false}],[{"call":"返金.hold(申請: 申請-3, 注文: 注文-1, 額: 1)","result":"返金超過 で断られる","detail":"1 つ目の移動が 返金できる残り(注文-1) から 1 を取る。確定 1、出ていく仮押さえ 1","refused":true}]],"kinds":[[1,true],[1,false]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["返金(申請-2)","押さえ中"]]}],[{"label":"売上計上.do(注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"返金.hold(申請: 申請-2, 注文: 注文-1, 額: 1)","result":"返金超過 で断られる","detail":"1 つ目の移動が 返金できる残り(注文-1) から 1 を取る。確定 1、出ていく仮押さえ 1","refused":true}],[{"call":"返金.hold(申請: 申請-3, 注文: 注文-1, 額: 1)","result":"通る","detail":null,"refused":false}]],"kinds":[[1,false],[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["返金(申請-3)","押さえ中"]]}]]}],"words":{"ways":"同時の操作の順序によって、結果は {n} 通り:","outcome":"結果 {n}","caller":"呼び出し元 {n}","before":"最初のステップの前。どの残高も 0","pos":"{n} ステップのうち {i} つ目のあと","noholds":"仮押さえは無い"}}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('chobo-data').textContent);
+  var w = data.words;
+  var sel = document.getElementById('sc');
+  var at = { sc: 0, out: 0, step: 0 };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function steps() { return data.scenarios[at.sc].outcomes[at.out]; }
+  function after(j) { var sc = data.scenarios[at.sc]; return j === 0 ? { balances: sc.zero, holds: [] } : steps()[j - 1]; }
+  function readHash() {
+    var h = {}; location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p.length === 2) h[p[0]] = parseInt(p[1], 10); });
+    if (h.scenario >= 1 && h.scenario <= data.scenarios.length) at.sc = h.scenario - 1;
+    var outs = data.scenarios[at.sc].outcomes.length;
+    at.out = h.outcome >= 1 && h.outcome <= outs ? h.outcome - 1 : 0;
+    var n = steps().length;
+    at.step = h.step >= 0 && h.step <= n ? h.step : n;
+  }
+  function writeHash() {
+    var s = '#scenario=' + (at.sc + 1) + '&step=' + at.step + (data.scenarios[at.sc].outcomes.length > 1 ? '&outcome=' + (at.out + 1) : '');
+    if (location.hash !== s) history.replaceState(null, '', s);
+  }
+  function render() {
+    var sc = data.scenarios[at.sc];
+    sel.value = String(at.sc);
+    var outs = document.getElementById('outs');
+    outs.textContent = '';
+    if (sc.outcomes.length > 1) {
+      outs.appendChild(el('span', 'muted', w.ways.replace('{n}', sc.outcomes.length)));
+      sc.outcomes.forEach(function (_, k) {
+        var b = el('button', null, w.outcome.replace('{n}', k + 1));
+        b.setAttribute('aria-pressed', k === at.out ? 'true' : 'false');
+        b.onclick = function () { at.out = k; at.step = Math.min(at.step, steps().length); go(); };
+        outs.appendChild(b);
+      });
+    }
+    var list = document.getElementById('steps');
+    list.textContent = '';
+    steps().forEach(function (s, j) {
+      var li = el('li', j + 1 === at.step ? 'now' : (j + 1 > at.step ? 'later' : ''));
+      li.setAttribute('data-step', j + 1);
+      if (s.callers.length) {
+        li.appendChild(el('span', 'call', 'together'));
+        s.callers.forEach(function (cs, c) {
+          cs.forEach(function (x) {
+            li.appendChild(el('span', 'call res', w.caller.replace('{n}', c + 1) + ': ' + x.call));
+            li.appendChild(el('span', 'res ' + (x.refused ? 'no' : 'ok'), x.result));
+            if (x.detail) li.appendChild(el('span', 'why', x.detail));
+          });
+        });
+      } else {
+        li.appendChild(el('span', 'call', s.label));
+        if (s.result) li.appendChild(el('span', 'res ' + (s.refused ? 'no' : 'ok'), s.result));
+        if (s.detail) li.appendChild(el('span', 'why', s.detail));
+      }
+      li.onclick = function () { at.step = j + 1; go(); };
+      list.appendChild(li);
+    });
+    var n = steps().length;
+    document.getElementById('pos').textContent = at.step === 0 ? w.before : w.pos.replace('{i}', at.step).replace('{n}', n);
+    document.getElementById('prev').disabled = at.step === 0;
+    document.getElementById('next').disabled = at.step === n;
+    var now = after(at.step), was = at.step > 0 ? after(at.step - 1) : null;
+    var body = document.getElementById('bal-body');
+    body.textContent = '';
+    sc.accounts.forEach(function (name, a) {
+      var tr = el('tr');
+      tr.appendChild(el('td', null, name));
+      for (var q = 0; q < 3; q++) {
+        var changed = was && was.balances[a][q] !== now.balances[a][q];
+        tr.appendChild(el('td', 'num' + (changed ? ' changed' : ''), now.balances[a][q]));
+      }
+      body.appendChild(tr);
+    });
+    var hb = document.getElementById('holds-body');
+    hb.textContent = '';
+    if (!now.holds.length) {
+      var tr = el('tr'); var td = el('td', 'muted', w.noholds); td.colSpan = 2; tr.appendChild(td); hb.appendChild(tr);
+    }
+    now.holds.forEach(function (h) { var tr = el('tr'); tr.appendChild(el('td', null, h[0])); tr.appendChild(el('td', null, h[1])); hb.appendChild(tr); });
+    var lit = {};
+    if (at.step > 0) steps()[at.step - 1].kinds.forEach(function (k) { lit[k[0]] = lit[k[0]] === 'lit' || k[1] ? 'lit' : 'no'; });
+    document.querySelectorAll('#mini [data-k]').forEach(function (g) {
+      var how = lit[g.getAttribute('data-k')];
+      g.classList.remove('lit', 'no');
+      if (how) g.classList.add(how);
+      var p = g.querySelector('path');
+      if (p) p.setAttribute('marker-end', p.getAttribute(how === 'lit' ? 'data-ok' : how === 'no' ? 'data-no' : 'data-a'));
+    });
+  }
+  function go() { writeHash(); render(); }
+  sel.onchange = function () { at.sc = parseInt(sel.value, 10); at.out = 0; at.step = 0; go(); };
+  document.getElementById('prev').onclick = function () { if (at.step > 0) { at.step--; go(); } };
+  document.getElementById('next').onclick = function () { if (at.step < steps().length) { at.step++; go(); } };
+  document.getElementById('player').addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowRight' && at.step < steps().length) { at.step++; go(); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' && at.step > 0) { at.step--; go(); e.preventDefault(); }
+  });
+  window.addEventListener('hashchange', function () { readHash(); render(); });
+  readHash();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+error[E020]: 境界.book:4:9: the account `在庫` has no bound; give it `at least` or `at most`, or mark it `outside` if it stands for the world outside the book
+     4 | account 在庫(sku: string) : 個
+error[E021]: 境界.book:6:3: the outside account `仕入先` cannot have a bound: it stands for the world outside the book and may go below 0
+     6 |   at least 0 refused as 仕入先不足
+error[E022]: 境界.book:8:3: the lower bound 10 is above the upper bound 5, so no balance is allowed
+     8 |   at least 10 refused as 安全在庫割れ
+error[E022]: 境界.book:11:3: the upper bound -1 cannot be below 0: an account starts at 0, and below 0 nothing could ever be put into it
+    11 |   at most -1 refused as 満席
+error[E023]: 境界.book:13:3: the bound has no `refused as <reason>`: name the reason a call refused here is given
+    13 |   at least 0
+error[E023]: 境界.book:15:25: `expired` is a reason chobo gives itself and cannot name a bound's refusal
+    15 |   at least 0 refused as expired
+境界.book: 6 error(s), 0 warning(s)

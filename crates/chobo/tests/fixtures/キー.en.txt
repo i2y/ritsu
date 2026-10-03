@@ -1,0 +1,7 @@
+error[E030]: キー.book:9:10: the transfer `入荷` has no `key` line; every transfer needs an idempotency key. List the parameters it happens once for, like `key order`
+     9 | transfer 入荷(伝票: string, sku: string, 数: 個)
+error[E031]: キー.book:12:11: the amount `数` cannot be part of the key: two calls that differ only in the amount would both go through, as two transfers
+    12 |   key 注文, 数
+error[E030]: キー.book:15:7: `伝票番号` in the key is not a parameter of `返品`
+    15 |   key 伝票番号
+キー.book: 3 error(s), 0 warning(s)

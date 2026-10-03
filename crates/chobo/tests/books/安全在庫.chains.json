@@ -1,0 +1,1845 @@
+[
+  {
+    "scenario": "bound: 出荷.do takes 棚(sku) to 4, one above `at least 3`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "5",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb529d5970e3da5f0b335791ab168ccc",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "faa2d04d686e4be38be42797058fc3e2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "e075228abf534da60d475cbb70b9d0c0",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "2b96788cb9e48184cd1f916b77ab1716",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "e075228abf534da60d475cbb70b9d0c0",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: 出荷.do takes 棚(sku) to exactly 3, its `at least 3`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "5",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb529d5970e3da5f0b335791ab168ccc",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "faa2d04d686e4be38be42797058fc3e2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8ab207707d30bcc01269ff144db6224f",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "e075228abf534da60d475cbb70b9d0c0",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8ab207707d30bcc01269ff144db6224f",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "2b96788cb9e48184cd1f916b77ab1716",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "e075228abf534da60d475cbb70b9d0c0",
+              "user_data_128": "8ab207707d30bcc01269ff144db6224f",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: 出荷.do would take 棚(sku) to 2, below `at least 3`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "5",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "eb529d5970e3da5f0b335791ab168ccc",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "faa2d04d686e4be38be42797058fc3e2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "90edeec630d8c63136e7747666828b96",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "e075228abf534da60d475cbb70b9d0c0",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "90edeec630d8c63136e7747666828b96",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "2b96788cb9e48184cd1f916b77ab1716",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "e075228abf534da60d475cbb70b9d0c0",
+              "user_data_128": "90edeec630d8c63136e7747666828b96",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "key: 補充.do twice with the same arguments",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "b1786e1521d9c13539b2017fa1a1a539",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "b1786e1521d9c13539b2017fa1a1a539",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "key: 補充.do again with another 数",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "b1786e1521d9c13539b2017fa1a1a539",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "443190267ee1bf4f3162fe8e2bf867cb",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "key: 出荷.do twice with the same arguments",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "4",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "4f7bfcd9339f4b48dd09abf5b862b120",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "faa2d04d686e4be38be42797058fc3e2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "e075228abf534da60d475cbb70b9d0c0",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "2b96788cb9e48184cd1f916b77ab1716",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "e075228abf534da60d475cbb70b9d0c0",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "faa2d04d686e4be38be42797058fc3e2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "e075228abf534da60d475cbb70b9d0c0",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "2b96788cb9e48184cd1f916b77ab1716",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "e075228abf534da60d475cbb70b9d0c0",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: 出荷.do again with another 数",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "4",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "4f7bfcd9339f4b48dd09abf5b862b120",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "faa2d04d686e4be38be42797058fc3e2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "e075228abf534da60d475cbb70b9d0c0",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "2b96788cb9e48184cd1f916b77ab1716",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "e075228abf534da60d475cbb70b9d0c0",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "faa2d04d686e4be38be42797058fc3e2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8ab207707d30bcc01269ff144db6224f",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "e075228abf534da60d475cbb70b9d0c0",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8ab207707d30bcc01269ff144db6224f",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "2b96788cb9e48184cd1f916b77ab1716",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "e075228abf534da60d475cbb70b9d0c0",
+              "user_data_128": "8ab207707d30bcc01269ff144db6224f",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: 出荷.do refused with 安全在庫割れ, then again, and again once 棚(sku) has enough",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9b9ae1bb854183342293e51d1d79df88",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "babd91e05a092cce00bdffbd95b05284",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "521388d0161f32a9fff632b92053cbc2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "babd91e05a092cce00bdffbd95b05284",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "b52651f7c2ad2ff16cd5cdbf505b89ce",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "521388d0161f32a9fff632b92053cbc2",
+              "user_data_128": "babd91e05a092cce00bdffbd95b05284",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9b9ae1bb854183342293e51d1d79df88",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "babd91e05a092cce00bdffbd95b05284",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "521388d0161f32a9fff632b92053cbc2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "babd91e05a092cce00bdffbd95b05284",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "b52651f7c2ad2ff16cd5cdbf505b89ce",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "521388d0161f32a9fff632b92053cbc2",
+              "user_data_128": "babd91e05a092cce00bdffbd95b05284",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "a70496ef86f389f9242be47d35b3cc7b",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "4",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "9e0fb1fde7f484d5633aebb496501711",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9b9ae1bb854183342293e51d1d79df88",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "babd91e05a092cce00bdffbd95b05284",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "521388d0161f32a9fff632b92053cbc2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "babd91e05a092cce00bdffbd95b05284",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "b52651f7c2ad2ff16cd5cdbf505b89ce",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "521388d0161f32a9fff632b92053cbc2",
+              "user_data_128": "babd91e05a092cce00bdffbd95b05284",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 4
+      }
+    ]
+  },
+  {
+    "scenario": "together: two callers take the last 1 of 棚(sku) with 出荷.do",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "補充",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "仕入先",
+              "id": "ecf76bf97611be3dab54859167543b5c",
+              "ledger": 1653847866,
+              "code": 35012,
+              "flags": [],
+              "user_data_128": "92ec9733dca2fad316734cdbf6bf2407",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "caa09592594c5d796ed2997d2ae6821a",
+              "debit_account_id": "ecf76bf97611be3dab54859167543b5c",
+              "credit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "amount": "4",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "4f7bfcd9339f4b48dd09abf5b862b120",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 53034,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "faa2d04d686e4be38be42797058fc3e2",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "e075228abf534da60d475cbb70b9d0c0",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "2b96788cb9e48184cd1f916b77ab1716",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "e075228abf534da60d475cbb70b9d0c0",
+              "user_data_128": "3a4b38574c21c53e75c6a1226b8f88df",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 1
+      },
+      {
+        "op": "do",
+        "kind": "出荷",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "棚(sku-2)",
+              "id": "389ca5226aecd19fd843b9709722a89e",
+              "ledger": 1653847866,
+              "code": 20652,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "f7d539d6bf759bda97d9bce0f7f6c590",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "客",
+              "id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "ledger": 1653847866,
+              "code": 38136,
+              "flags": [],
+              "user_data_128": "e8613eddfc310ee4f40cd3dcff410e73",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "sink",
+              "of": "個",
+              "id": "7aacbfa46c23991c995c51eab1e46a28",
+              "ledger": 1653847866,
+              "code": 6644,
+              "flags": [],
+              "user_data_128": "00000000000000000000000000000000",
+              "user_data_64": 0,
+              "user_data_32": 3
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "bac4dffe10922045c8a3aebea7cf391b",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "86d7edd6dd5dd44602bd31eab18fa5d1",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "4c22ed4c2c16927839d437a25bcb921e",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked"
+              ]
+            },
+            {
+              "role": "probe",
+              "move": 1,
+              "id": "30ad7768cfb204bb95fa9dd04c9ac428",
+              "debit_account_id": "389ca5226aecd19fd843b9709722a89e",
+              "credit_account_id": "7aacbfa46c23991c995c51eab1e46a28",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "4c22ed4c2c16927839d437a25bcb921e",
+              "user_data_64": 0,
+              "user_data_32": 2,
+              "timeout": 0,
+              "ledger": 1653847866,
+              "code": 55057,
+              "flags": [
+                "linked",
+                "pending"
+              ]
+            },
+            {
+              "role": "probe_void",
+              "move": 1,
+              "id": "e40eb339a8fab30d5849e919be999e67",
+              "debit_account_id": "00000000000000000000000000000000",
+              "credit_account_id": "00000000000000000000000000000000",
+              "amount": "0",
+              "pending_id": "30ad7768cfb204bb95fa9dd04c9ac428",
+              "user_data_128": "4c22ed4c2c16927839d437a25bcb921e",
+              "user_data_64": 0,
+              "user_data_32": 3,
+              "timeout": 0,
+              "ledger": 0,
+              "code": 0,
+              "flags": [
+                "void_pending_transfer"
+              ]
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 2
+      }
+    ]
+  }
+]

@@ -1,0 +1,7 @@
+error[E005]: 型.book:4:28: an account's parameters are strings; `個` is a unit and cannot be one
+     4 | account 在庫(sku: string, 数: 個) : 個
+error[E005]: 型.book:10:8: `sku` is a string and cannot be the amount of a move; the amount is a parameter whose type is a unit, or a number
+    10 |   move sku from 在庫(sku, sku) to 客
+error[E005]: 型.book:11:18: `数` is an amount and cannot be an account's argument; an account's arguments are strings
+    11 |   move 数 from 在庫(数, sku) to 客
+型.book: 3 error(s), 0 warning(s)

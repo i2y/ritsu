@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="chobo doc">
+<title>marketplace v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --box: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --no: #cf222e; --held: #9a6700; --lit: #fff8c5; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --box: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --no: #f85149; --held: #d29922; --lit: #3b2e00; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+header, main { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+header { padding-top: 12px; }
+h1 { font-size: 1.6em; margin: 0.4em 0 0.2em; }
+h2 { font-size: 1.3em; margin: 1.6em 0 0.5em; padding-bottom: 0.2em; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.12em; margin: 1.4em 0 0.4em; }
+h4 { font-size: 1em; margin: 1em 0 0.3em; }
+p, li { overflow-wrap: break-word; }
+nav a { color: var(--accent); }
+.muted { color: var(--muted); }
+code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 0 0.25em; border-radius: 4px; }
+pre { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 8px 12px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+.scroll { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; margin: 0.4em 0 0.8em; }
+th, td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; vertical-align: top; min-width: 4.5em; }
+.states td:first-child { white-space: nowrap; }
+th { background: var(--box); }
+td { overflow-wrap: break-word; }
+td code { white-space: nowrap; }
+figure { margin: 0.6em 0; overflow-x: auto; max-width: 100%; }
+svg { display: block; max-width: none; height: auto; }
+svg text { fill: var(--fg); font-size: 13px; }
+svg .name { font-weight: 600; font-size: 14px; }
+svg .sub { fill: var(--muted); }
+.node rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+.node.outside rect { stroke: var(--muted); stroke-dasharray: 5 3; }
+.edge path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.edge.pending path { stroke-dasharray: 6 4; }
+.head { fill: var(--muted); }
+.head.ok { fill: var(--ok); }
+.head.no { fill: var(--no); }
+.label rect { fill: var(--bg); opacity: 0.92; }
+.label text { font-size: 12px; }
+.edge.lit path { stroke: var(--ok); stroke-width: 3; }
+.edge.no path { stroke: var(--no); stroke-width: 3; }
+.label.lit text { fill: var(--ok); font-weight: 600; }
+.label.no text { fill: var(--no); font-weight: 600; }
+.life .state rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+.life .state rect.inner { fill: none; stroke-width: 0.8; }
+.life .arrow { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.life .arrow.external { stroke-dasharray: 5 3; }
+.life .start { fill: var(--fg); }
+.life .lbl { font-size: 12px; }
+.life .lblbg { fill: var(--bg); opacity: 0.9; }
+.life .note { font-size: 11px; fill: var(--muted); }
+details { margin: 0.5em 0; }
+summary { cursor: pointer; color: var(--accent); }
+.player { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0.8em 0; }
+.player select { max-width: 100%; font: inherit; padding: 2px 4px; }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.outs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.outs button, .ctl button { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--box); color: var(--fg); cursor: pointer; }
+.outs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cols { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 8px; }
+.cols > * { flex: 1 1 320px; min-width: 0; }
+#steps { margin: 0; padding-left: 1.8em; }
+#steps li { padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+#steps li.now { background: var(--lit); }
+#steps li.later { color: var(--muted); }
+#steps .call { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+#steps .res { display: block; font-size: 0.92em; }
+#steps .res.ok { color: var(--ok); }
+#steps .res.no { color: var(--no); }
+#steps .why { display: block; font-size: 0.85em; color: var(--muted); }
+.ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+#bal td.changed { background: var(--lit); font-weight: 600; }
+#bal td.num { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+<h1>marketplace v1</h1>
+<p>The marketplace keeps a balance for each shop. A sale splits what the buyer paid between the shop's balance and the marketplace's fee, in amounts the caller works out (a rule decides the fee). A payout is held until the bank confirms it, and a refund takes both parts back</p>
+<p class="muted"><code>examples/marketplace/marketplace.book</code>, as <code>chobo doc</code> writes it. Each account keeps a balance: what came in, less what went out. Every transfer keeps the bounds of the accounts: one that would break a bound is refused with the name the book gives that bound, and nothing of it moves. A transfer either moves at once (<code>do</code>), or first holds what it moves (<code>hold</code>); a hold is then posted (<code>post</code>, all of it or part), voided (<code>void</code>), or expires.</p>
+<nav><a href="#accounts">Accounts</a> · <a href="#flow">How things move</a> · <a href="#transfers">Transfers</a> · <a href="#scenarios">Scenarios</a></nav>
+</header>
+<main>
+<section id="accounts">
+<h2>Accounts</h2>
+<div class="scroll"><table><thead><tr><th>Account</th><th>One for each</th><th>Unit</th><th>Bounds</th><th>What it is</th></tr></thead><tbody>
+<tr><td><code>shop_balance</code></td><td><code>shop</code></td><td>USD</td><td>at least 0.00; a transfer that would go below is refused with <code>insufficient_balance</code></td><td>what the marketplace owes the shop</td></tr>
+<tr><td><code>buyers</code></td><td>one account</td><td>USD</td><td>outside the book: no bounds, and it may go below 0</td><td></td></tr>
+<tr><td><code>fees</code></td><td>one account</td><td>USD</td><td>outside the book: no bounds, and it may go below 0</td><td></td></tr>
+<tr><td><code>bank</code></td><td>one account</td><td>USD</td><td>outside the book: no bounds, and it may go below 0</td><td></td></tr>
+</tbody></table></div>
+</section>
+<section id="flow">
+<h2>How things move</h2>
+<figure><svg class="flow" viewBox="0 0 896 198" width="896" role="img" aria-labelledby="flow-t"><title id="flow-t">How things move between the accounts of marketplace</title>
+<defs><marker id="flow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge" data-k="0"><path d="M142 71 C231 71, 231 47, 320 47" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="0"><path d="M142 111 C276 111, 276 141, 410 141" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="1"><path d="M410 159 C276 159, 276 131, 142 131" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="1"><path d="M320 69 C231 69, 231 91, 142 91" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge pending" data-k="2"><path d="M623 58 C688 58, 688 101, 753 101" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="label" data-k="0"><rect x="176" y="50" width="110" height="16" rx="3"/><text x="231" y="62" text-anchor="middle">sale (to_shop)</text></g>
+<g class="label" data-k="0"><rect x="236" y="117" width="81" height="16" rx="3"/><text x="276" y="129" text-anchor="middle">sale (fee)</text></g>
+<g class="label" data-k="1"><rect x="229" y="136" width="95" height="16" rx="3"/><text x="276" y="148" text-anchor="middle">refund (fee)</text></g>
+<g class="label" data-k="1"><rect x="168" y="71" width="125" height="16" rx="3"/><text x="231" y="83" text-anchor="middle">refund (to_shop)</text></g>
+<g class="label" data-k="2"><rect x="661" y="71" width="55" height="16" rx="3"/><text x="688" y="83" text-anchor="middle">payout</text></g>
+<g class="node" data-a="0"><rect x="320" y="24" width="304" height="68" rx="4"/><text x="472" y="44" text-anchor="middle" class="name">shop_balance(shop)</text><text x="472" y="62" text-anchor="middle" class="sub">USD</text><text x="472" y="80" text-anchor="middle" class="sub">at least 0.00 (insufficient_balance)</text></g>
+<g class="node outside" data-a="1"><rect x="20" y="51" width="122" height="100" rx="16"/><text x="81" y="96" text-anchor="middle" class="name">buyers</text><text x="81" y="114" text-anchor="middle" class="sub">USD · outside</text></g>
+<g class="node outside" data-a="2"><rect x="410" y="122" width="122" height="56" rx="16"/><text x="472" y="145" text-anchor="middle" class="name">fees</text><text x="472" y="163" text-anchor="middle" class="sub">USD · outside</text></g>
+<g class="node outside" data-a="3"><rect x="753" y="76" width="122" height="50" rx="16"/><text x="815" y="96" text-anchor="middle" class="name">bank</text><text x="815" y="114" text-anchor="middle" class="sub">USD · outside</text></g>
+</svg></figure>
+<p class="muted">A box is an account, and an arrow a move of a transfer. A rounded, dashed box is an account outside the book, which has no bounds. A dashed arrow belongs to a transfer that holds first, and moves when the hold is posted.</p>
+</section>
+<section id="transfers">
+<h2>Transfers</h2>
+<article id="t0">
+<h3>sale</h3>
+<p>to_shop and fee add up to what the buyer paid; the caller works out the fee</p>
+<ul>
+<li>2 moves, made in this order, all or none:<ol><li><code>to_shop</code> from <code>buyers</code> to <code>shop_balance(shop)</code></li><li><code>fee</code> from <code>buyers</code> to <code>fees</code></li></ol></li>
+<li>Key: once per <code>order</code>. The same call again does nothing, and answers <code>done_before</code>; one that differs only in <code>shop</code>, <code>to_shop</code> or <code>fee</code> is refused with <code>key_conflict</code>.</li>
+<li>Moves at once (<code>do</code>).</li>
+</ul>
+<div class="scroll"><table><thead><tr><th>Operation</th><th>May be refused with</th><th>When</th></tr></thead><tbody>
+<tr><td><code>sale.do</code></td><td><code>key_conflict</code></td><td>a call with the same <code>order</code> and other arguments came before</td></tr>
+</tbody></table></div>
+<details><summary>How each refusal comes about</summary>
+<h4>sale.do: key_conflict</h4>
+<pre> 1  sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)  done
+ 2  sale.do(order: order-1, shop: shop-2, to_shop: 0.03, fee: 0.02)  refused: key_conflict</pre>
+</details>
+</article>
+<article id="t1">
+<h3>refund</h3>
+<p>gives back the fee and the shop's part, both or neither</p>
+<ul>
+<li>2 moves, made in this order, all or none:<ol><li><code>fee</code> from <code>fees</code> to <code>buyers</code></li><li><code>to_shop</code> from <code>shop_balance(shop)</code> to <code>buyers</code></li></ol></li>
+<li>Key: once per <code>refund_id</code>. The same call again does nothing, and answers <code>done_before</code>; one that differs only in <code>shop</code>, <code>to_shop</code> or <code>fee</code> is refused with <code>key_conflict</code>.</li>
+<li>Moves at once (<code>do</code>).</li>
+</ul>
+<div class="scroll"><table><thead><tr><th>Operation</th><th>May be refused with</th><th>When</th></tr></thead><tbody>
+<tr><td><code>refund.do</code></td><td><code>insufficient_balance</code></td><td>move 2 would take <code>shop_balance(shop)</code> below 0.00</td></tr>
+<tr><td><code>refund.do</code></td><td><code>key_conflict</code></td><td>a call with the same <code>refund_id</code> and other arguments came before</td></tr>
+<tr><td><code>refund.do</code></td><td><code>already_refused</code></td><td>a call with the same <code>refund_id</code> was refused by a bound before; a key a bound refused stays refused, even once there is enough</td></tr>
+</tbody></table></div>
+<details><summary>How each refusal comes about</summary>
+<h4>refund.do: insufficient_balance</h4>
+<pre> 1  refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02)  refused: insufficient_balance (move 2 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00)</pre>
+<h4>refund.do: key_conflict</h4>
+<pre> 1  sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.03)            done
+ 2  refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.01, fee: 0.02)  done
+ 3  refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.04, fee: 0.02)  refused: key_conflict</pre>
+<h4>refund.do: already_refused</h4>
+<pre> 1  refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02)  refused: insufficient_balance (move 2 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00)
+ 2  refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02)  refused: already_refused</pre>
+</details>
+</article>
+<article id="t2">
+<h3>payout</h3>
+<p>held when the bank transfer starts: posted when the bank confirms it, voided when it fails</p>
+<ul>
+<li>Moves <code>amount</code> from <code>shop_balance(shop)</code> to <code>bank</code>.</li>
+<li>Key: once per <code>payout_id</code>. The same call again does nothing, and answers <code>done_before</code>; one that differs only in <code>shop</code> or <code>amount</code> is refused with <code>key_conflict</code>; holding again with the same key after the hold has ended answers <code>done_before</code>, and holds nothing.</li>
+<li>Holds first: the caller posts or voids the hold. It never expires, and stays held until one of them comes.</li>
+</ul>
+<figure><svg class="life" viewBox="0 0 611 166" width="611" role="img" aria-label="The life of a hold of payout">
+<defs><marker id="life-payout" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<circle class="start" cx="16" cy="85" r="6"/>
+<path class="arrow" d="M22 85 L138 85" marker-end="url(#life-payout)"/><text class="lbl" x="81" y="78" text-anchor="middle">payout.hold</text>
+<g class="state" data-state="held"><rect x="140" y="68" width="96" height="34" rx="8"/><text x="188" y="90" text-anchor="middle">held</text></g>
+<path class="arrow" d="M236 79 C296 79, 296 31, 354 31" marker-end="url(#life-payout)"/><rect class="lblbg" x="312" y="13" width="38" height="15" rx="3"/><text class="lbl" x="346" y="24" text-anchor="end">post</text>
+<g class="state end" data-state="posted"><rect x="356" y="14" width="96" height="34" rx="8"/><rect class="inner" x="359" y="17" width="90" height="28" rx="6"/><text x="404" y="36" text-anchor="middle">posted</text></g>
+<text class="note" x="358" y="62">void is refused: already_posted</text>
+<text class="note" x="358" y="76">post for other amounts: key_conflict</text>
+<path class="arrow" d="M236 91 C296 91, 296 105, 354 105" marker-end="url(#life-payout)"/><rect class="lblbg" x="312" y="110" width="38" height="15" rx="3"/><text class="lbl" x="346" y="121" text-anchor="end">void</text>
+<g class="state end" data-state="voided"><rect x="356" y="88" width="96" height="34" rx="8"/><rect class="inner" x="359" y="91" width="90" height="28" rx="6"/><text x="404" y="110" text-anchor="middle">voided</text></g>
+<text class="note" x="358" y="136">post is refused: already_voided</text>
+</svg></figure>
+<div class="scroll"><table class="states"><thead><tr><th>The hold</th><th>post</th><th>void</th></tr></thead><tbody>
+<tr><td>held</td><td>posts it: the amounts given, or all of it, and the rest goes back; more than it holds is refused with <code>over_hold</code></td><td>voids it: what it holds goes back</td></tr>
+<tr><td>posted</td><td><code>done_before</code> with the same amounts; refused with <code>key_conflict</code> with others</td><td>refused with <code>already_posted</code></td></tr>
+<tr><td>voided</td><td>refused with <code>already_voided</code></td><td><code>done_before</code></td></tr>
+<tr><td>no hold with the key</td><td>refused with <code>no_such_hold</code></td><td>refused with <code>no_such_hold</code></td></tr>
+</tbody></table></div>
+<div class="scroll"><table><thead><tr><th>Operation</th><th>May be refused with</th><th>When</th></tr></thead><tbody>
+<tr><td><code>payout.hold</code></td><td><code>insufficient_balance</code></td><td><code>shop_balance(shop)</code> would go below 0.00</td></tr>
+<tr><td><code>payout.hold</code></td><td><code>key_conflict</code></td><td>a call with the same <code>payout_id</code> and other arguments came before</td></tr>
+<tr><td><code>payout.hold</code></td><td><code>already_refused</code></td><td>a call with the same <code>payout_id</code> was refused by a bound before; a key a bound refused stays refused, even once there is enough</td></tr>
+<tr><td><code>payout.post</code></td><td><code>key_conflict</code></td><td>the hold was posted before, for other amounts</td></tr>
+<tr><td><code>payout.post</code></td><td><code>already_voided</code></td><td>the hold is voided already</td></tr>
+<tr><td><code>payout.post</code></td><td><code>over_hold</code></td><td>more than the hold holds</td></tr>
+<tr><td><code>payout.post</code></td><td><code>no_such_hold</code></td><td>there is no hold with that <code>payout_id</code></td></tr>
+<tr><td><code>payout.void</code></td><td><code>already_posted</code></td><td>the hold is posted already</td></tr>
+<tr><td><code>payout.void</code></td><td><code>no_such_hold</code></td><td>there is no hold with that <code>payout_id</code></td></tr>
+</tbody></table></div>
+<details><summary>How each refusal comes about</summary>
+<h4>payout.hold: insufficient_balance</h4>
+<pre> 1  payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01)  refused: insufficient_balance (move 1 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00)</pre>
+<h4>payout.hold: key_conflict</h4>
+<pre> 1  sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)  done
+ 2  payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.01)  done
+ 3  payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.03)  refused: key_conflict</pre>
+<h4>payout.hold: already_refused</h4>
+<pre> 1  payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01)  refused: insufficient_balance (move 1 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00)
+ 2  payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01)  refused: already_refused</pre>
+<h4>payout.post: key_conflict</h4>
+<pre> 1  sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)  done
+ 2  payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)  done
+ 3  payout.post(payout_id: payout_id-3)                              done
+ 4  payout.post(payout_id: payout_id-3, amount: 0.01)                refused: key_conflict</pre>
+<h4>payout.post: already_voided</h4>
+<pre> 1  sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)  done
+ 2  payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)  done
+ 3  payout.void(payout_id: payout_id-3)                              done
+ 4  payout.post(payout_id: payout_id-3)                              refused: already_voided</pre>
+<h4>payout.post: over_hold</h4>
+<pre> 1  sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)  done
+ 2  payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)  done
+ 3  payout.post(payout_id: payout_id-3, amount: 0.03)                refused: over_hold</pre>
+<h4>payout.post: no_such_hold</h4>
+<pre> 1  payout.post(payout_id: payout_id-1)  refused: no_such_hold</pre>
+<h4>payout.void: already_posted</h4>
+<pre> 1  sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)  done
+ 2  payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)  done
+ 3  payout.post(payout_id: payout_id-3)                              done
+ 4  payout.void(payout_id: payout_id-3)                              refused: already_posted</pre>
+<h4>payout.void: no_such_hold</h4>
+<pre> 1  payout.void(payout_id: payout_id-1)  refused: no_such_hold</pre>
+</details>
+</article>
+</section>
+<section id="scenarios">
+<h2>Scenarios</h2>
+<p>25 scenarios, which <code>chobo scenarios</code> makes from the book. Pick one and step through it: after each step come the balances and the holds it left, and on the chart the arrows of the transfers it called light up (red when refused).</p>
+<div class="player" id="player">
+<div class="pick"><label for="sc">Scenario</label><select id="sc">
+<option value="0">1. bound: refund.do move 2 takes shop_balance(shop) to 0.01, one above at least 0.00</option>
+<option value="1">2. bound: refund.do move 2 takes shop_balance(shop) to exactly 0.00, its at least 0.00</option>
+<option value="2">3. bound: refund.do move 2 would take shop_balance(shop) to -0.01, below at least 0.00</option>
+<option value="3">4. bound: payout.hold takes shop_balance(shop) to 0.01, one above at least 0.00</option>
+<option value="4">5. bound: payout.hold takes shop_balance(shop) to exactly 0.00, its at least 0.00</option>
+<option value="5">6. bound: payout.hold would take shop_balance(shop) to -0.01, below at least 0.00</option>
+<option value="6">7. key: sale.do twice with the same arguments</option>
+<option value="7">8. key: sale.do again with another to_shop</option>
+<option value="8">9. key: refund.do twice with the same arguments</option>
+<option value="9">10. key: refund.do again with another to_shop</option>
+<option value="10">11. key: refund.do refused with insufficient_balance, then again, and again once shop_balance(shop) has enough</option>
+<option value="11">12. key: payout.hold twice with the same arguments</option>
+<option value="12">13. key: payout.hold again with another amount</option>
+<option value="13">14. key: payout.hold refused with insufficient_balance, then again, and again once shop_balance(shop) has enough</option>
+<option value="14">15. hold: payout posted in full</option>
+<option value="15">16. hold: payout posted in part</option>
+<option value="16">17. hold: payout voided</option>
+<option value="17">18. hold: payout posted, then voided</option>
+<option value="18">19. hold: payout voided, then posted</option>
+<option value="19">20. hold: payout posted for more than it holds, then for what it holds</option>
+<option value="20">21. hold: payout posted before it is held, then held and posted</option>
+<option value="21">22. hold: payout posted twice, with the same amounts and with others</option>
+<option value="22">23. moves: refund.do refused at move 2 (shop_balance(shop)), and no move is made</option>
+<option value="23">24. together: two callers take the last 0.01 of shop_balance(shop) with refund.do</option>
+<option value="24">25. together: two callers take the last 0.01 of shop_balance(shop) with payout.hold</option>
+</select></div>
+<div class="outs" id="outs"></div>
+<div class="cols">
+<ol id="steps"></ol>
+<div>
+<div class="ctl"><button id="prev" type="button" aria-label="previous step">◀</button><span id="pos"></span><button id="next" type="button" aria-label="next step">▶</button></div>
+<div class="scroll"><table id="bal"><thead><tr><th>Account</th><th>Posted</th><th>Held out</th><th>Held in</th></tr></thead><tbody id="bal-body"></tbody></table></div>
+<div class="scroll"><table id="holds"><thead><tr><th>Hold</th><th>State</th></tr></thead><tbody id="holds-body"></tbody></table></div>
+</div>
+</div>
+<figure id="mini"><svg class="flow" viewBox="0 0 896 198" width="896" role="img" aria-labelledby="mini-t"><title id="mini-t">How things move between the accounts of marketplace</title>
+<defs><marker id="mini-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge" data-k="0"><path d="M142 71 C231 71, 231 47, 320 47" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="0"><path d="M142 111 C276 111, 276 141, 410 141" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="1"><path d="M410 159 C276 159, 276 131, 142 131" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="1"><path d="M320 69 C231 69, 231 91, 142 91" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge pending" data-k="2"><path d="M623 58 C688 58, 688 101, 753 101" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="label" data-k="0"><rect x="176" y="50" width="110" height="16" rx="3"/><text x="231" y="62" text-anchor="middle">sale (to_shop)</text></g>
+<g class="label" data-k="0"><rect x="236" y="117" width="81" height="16" rx="3"/><text x="276" y="129" text-anchor="middle">sale (fee)</text></g>
+<g class="label" data-k="1"><rect x="229" y="136" width="95" height="16" rx="3"/><text x="276" y="148" text-anchor="middle">refund (fee)</text></g>
+<g class="label" data-k="1"><rect x="168" y="71" width="125" height="16" rx="3"/><text x="231" y="83" text-anchor="middle">refund (to_shop)</text></g>
+<g class="label" data-k="2"><rect x="661" y="71" width="55" height="16" rx="3"/><text x="688" y="83" text-anchor="middle">payout</text></g>
+<g class="node" data-a="0"><rect x="320" y="24" width="304" height="68" rx="4"/><text x="472" y="44" text-anchor="middle" class="name">shop_balance(shop)</text><text x="472" y="62" text-anchor="middle" class="sub">USD</text><text x="472" y="80" text-anchor="middle" class="sub">at least 0.00 (insufficient_balance)</text></g>
+<g class="node outside" data-a="1"><rect x="20" y="51" width="122" height="100" rx="16"/><text x="81" y="96" text-anchor="middle" class="name">buyers</text><text x="81" y="114" text-anchor="middle" class="sub">USD · outside</text></g>
+<g class="node outside" data-a="2"><rect x="410" y="122" width="122" height="56" rx="16"/><text x="472" y="145" text-anchor="middle" class="name">fees</text><text x="472" y="163" text-anchor="middle" class="sub">USD · outside</text></g>
+<g class="node outside" data-a="3"><rect x="753" y="76" width="122" height="50" rx="16"/><text x="815" y="96" text-anchor="middle" class="name">bank</text><text x="815" y="114" text-anchor="middle" class="sub">USD · outside</text></g>
+</svg></figure>
+</div>
+</section>
+</main>
+<script type="application/json" id="chobo-data">{"lang":"en","scenarios":[{"title":"bound: refund.do move 2 takes shop_balance(shop) to 0.01, one above `at least 0.00`","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"]],"holds":[]},{"label":"refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0.01","0.00","0.00"],["-0.02","0.00","0.00"],["0.01","0.00","0.00"]],"holds":[]}]]},{"title":"bound: refund.do move 2 takes shop_balance(shop) to exactly 0.00, its `at least 0.00`","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"]],"holds":[]},{"label":"refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.02, fee: 0.01)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0.00","0.00","0.00"],["-0.02","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]}]]},{"title":"bound: refund.do move 2 would take shop_balance(shop) to -0.01, below `at least 0.00`","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.04)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.06","0.00","0.00"],["0.04","0.00","0.00"]],"holds":[]},{"label":"refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.03, fee: 0.01)","result":"refused: insufficient_balance","detail":"move 2 takes 0.03 from shop_balance(shop-2): posted 0.02, held out 0.00","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0.02","0.00","0.00"],["-0.06","0.00","0.00"],["0.04","0.00","0.00"]],"holds":[]}]]},{"title":"bound: payout.hold takes shop_balance(shop) to 0.01, one above `at least 0.00`","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.01)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.01","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.01"]],"holds":[["payout(payout_id-3)","held"]]}]]},{"title":"bound: payout.hold takes shop_balance(shop) to exactly 0.00, its `at least 0.00`","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.01)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.03","0.00","0.00"],["0.01","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.02","0.00"],["-0.03","0.00","0.00"],["0.01","0.00","0.00"],["0.00","0.00","0.02"]],"holds":[["payout(payout_id-3)","held"]]}]]},{"title":"bound: payout.hold would take shop_balance(shop) to -0.01, below `at least 0.00`","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.01)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.03","0.00","0.00"],["0.01","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.03)","result":"refused: insufficient_balance","detail":"move 1 takes 0.03 from shop_balance(shop-2): posted 0.02, held out 0.00","refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.02","0.00","0.00"],["-0.03","0.00","0.00"],["0.01","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]}]]},{"title":"key: sale.do twice with the same arguments","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]},{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]}]]},{"title":"key: sale.do again with another to_shop","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]},{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.03, fee: 0.02)","result":"refused: key_conflict","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]}]]},{"title":"key: refund.do twice with the same arguments","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.04","0.00","0.00"],["0.03","0.00","0.00"]],"holds":[]},{"label":"refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0.00","0.00","0.00"],["-0.01","0.00","0.00"],["0.01","0.00","0.00"]],"holds":[]},{"label":"refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0.00","0.00","0.00"],["-0.01","0.00","0.00"],["0.01","0.00","0.00"]],"holds":[]}]]},{"title":"key: refund.do again with another to_shop","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.04","0.00","0.00"],["0.03","0.00","0.00"]],"holds":[]},{"label":"refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0.00","0.00","0.00"],["-0.01","0.00","0.00"],["0.01","0.00","0.00"]],"holds":[]},{"label":"refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.04, fee: 0.02)","result":"refused: key_conflict","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0.00","0.00","0.00"],["-0.01","0.00","0.00"],["0.01","0.00","0.00"]],"holds":[]}]]},{"title":"key: refund.do refused with insufficient_balance, then again, and again once shop_balance(shop) has enough","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"refused: insufficient_balance","detail":"move 2 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"refused: already_refused","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"sale.do(order: order-3, shop: shop-2, to_shop: 0.01, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.04","0.00","0.00"],["0.03","0.00","0.00"]],"holds":[]},{"label":"refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"refused: already_refused","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0.01","0.00","0.00"],["-0.04","0.00","0.00"],["0.03","0.00","0.00"]],"holds":[]}]]},{"title":"key: payout.hold twice with the same arguments","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.01)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.01","0.01","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.01"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.01)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.01","0.01","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.01"]],"holds":[["payout(payout_id-3)","held"]]}]]},{"title":"key: payout.hold again with another amount","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.01)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.01","0.01","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.01"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.03)","result":"refused: key_conflict","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.01","0.01","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.01"]],"holds":[["payout(payout_id-3)","held"]]}]]},{"title":"key: payout.hold refused with insufficient_balance, then again, and again once shop_balance(shop) has enough","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01)","result":"refused: insufficient_balance","detail":"move 1 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00","refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01)","result":"refused: already_refused","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"sale.do(order: order-3, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01)","result":"refused: already_refused","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]}]]},{"title":"hold: payout posted in full","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.02","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.02"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.post(payout_id: payout_id-3)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.00","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[["payout(payout_id-3)","posted"]]}]]},{"title":"hold: payout posted in part","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.02","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.02"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.post(payout_id: payout_id-3, amount: 0.01)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.01","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.01","0.00","0.00"]],"holds":[["payout(payout_id-3)","posted"]]}]]},{"title":"hold: payout voided","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.02","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.02"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.void(payout_id: payout_id-3)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[["payout(payout_id-3)","voided"]]}]]},{"title":"hold: payout posted, then voided","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.02","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.02"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.post(payout_id: payout_id-3)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.00","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[["payout(payout_id-3)","posted"]]},{"label":"payout.void(payout_id: payout_id-3)","result":"refused: already_posted","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.00","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[["payout(payout_id-3)","posted"]]}]]},{"title":"hold: payout voided, then posted","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.02","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.02"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.void(payout_id: payout_id-3)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[["payout(payout_id-3)","voided"]]},{"label":"payout.post(payout_id: payout_id-3)","result":"refused: already_voided","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[["payout(payout_id-3)","voided"]]}]]},{"title":"hold: payout posted for more than it holds, then for what it holds","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.02","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.02"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.post(payout_id: payout_id-3, amount: 0.03)","result":"refused: over_hold","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.02","0.02","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.02"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.post(payout_id: payout_id-3, amount: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.00","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[["payout(payout_id-3)","posted"]]}]]},{"title":"hold: payout posted before it is held, then held and posted","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"payout.post(payout_id: payout_id-1)","result":"refused: no_such_hold","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-1, shop: shop-2, amount: 0.01)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.01","0.01","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.01"]],"holds":[["payout(payout_id-1)","held"]]},{"label":"payout.post(payout_id: payout_id-1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.00","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.01","0.00","0.00"]],"holds":[["payout(payout_id-1)","posted"]]}]]},{"title":"hold: payout posted twice, with the same amounts and with others","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.02, fee: 0.03)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.02","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.02","0.02","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.00","0.00","0.02"]],"holds":[["payout(payout_id-3)","held"]]},{"label":"payout.post(payout_id: payout_id-3)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.00","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[["payout(payout_id-3)","posted"]]},{"label":"payout.post(payout_id: payout_id-3)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.00","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[["payout(payout_id-3)","posted"]]},{"label":"payout.post(payout_id: payout_id-3, amount: 0.02)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["0.00","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[["payout(payout_id-3)","posted"]]},{"label":"payout.post(payout_id: payout_id-3, amount: 0.01)","result":"refused: key_conflict","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["0.00","0.00","0.00"],["-0.05","0.00","0.00"],["0.03","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[["payout(payout_id-3)","posted"]]}]]},{"title":"moves: refund.do refused at move 2 (shop_balance(shop)), and no move is made","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"refund.do(refund_id: refund_id-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"refused: insufficient_balance","detail":"move 2 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]}]]},{"title":"together: two callers take the last 0.01 of shop_balance(shop) with refund.do","accounts":["shop_balance(shop-2)","buyers","fees"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.04)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.05","0.00","0.00"],["0.04","0.00","0.00"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false}],[{"call":"refund.do(refund_id: refund_id-4, shop: shop-2, to_shop: 0.01, fee: 0.03)","result":"refused: insufficient_balance","detail":"move 2 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00","refused":true}]],"kinds":[[1,true],[1,false]],"balances":[["0.00","0.00","0.00"],["-0.02","0.00","0.00"],["0.02","0.00","0.00"]],"holds":[]}],[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.04)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.05","0.00","0.00"],["0.04","0.00","0.00"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"refund.do(refund_id: refund_id-3, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"refused: insufficient_balance","detail":"move 2 takes 0.01 from shop_balance(shop-2): posted 0.00, held out 0.00","refused":true}],[{"call":"refund.do(refund_id: refund_id-4, shop: shop-2, to_shop: 0.01, fee: 0.03)","result":"done","detail":null,"refused":false}]],"kinds":[[1,false],[1,true]],"balances":[["0.00","0.00","0.00"],["-0.01","0.00","0.00"],["0.01","0.00","0.00"]],"holds":[]}]]},{"title":"together: two callers take the last 0.01 of shop_balance(shop) with payout.hold","accounts":["shop_balance(shop-2)","buyers","fees","bank"],"zero":[["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"],["0.00","0.00","0.00"]],"outcomes":[[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.01)","result":"done","detail":null,"refused":false}],[{"call":"payout.hold(payout_id: payout_id-4, shop: shop-2, amount: 0.01)","result":"refused: insufficient_balance","detail":"move 1 takes 0.01 from shop_balance(shop-2): posted 0.01, held out 0.01","refused":true}]],"kinds":[[2,true],[2,false]],"balances":[["0.01","0.01","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.01"]],"holds":[["payout(payout_id-3)","held"]]}],[{"label":"sale.do(order: order-1, shop: shop-2, to_shop: 0.01, fee: 0.02)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0.01","0.00","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.00"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"payout.hold(payout_id: payout_id-3, shop: shop-2, amount: 0.01)","result":"refused: insufficient_balance","detail":"move 1 takes 0.01 from shop_balance(shop-2): posted 0.01, held out 0.01","refused":true}],[{"call":"payout.hold(payout_id: payout_id-4, shop: shop-2, amount: 0.01)","result":"done","detail":null,"refused":false}]],"kinds":[[2,false],[2,true]],"balances":[["0.01","0.01","0.00"],["-0.03","0.00","0.00"],["0.02","0.00","0.00"],["0.00","0.00","0.01"]],"holds":[["payout(payout_id-4)","held"]]}]]}],"words":{"ways":"It can come out {n} ways:","outcome":"outcome {n}","caller":"caller {n}","before":"before the first step: every balance is 0","pos":"after step {i} of {n}","noholds":"no holds"}}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('chobo-data').textContent);
+  var w = data.words;
+  var sel = document.getElementById('sc');
+  var at = { sc: 0, out: 0, step: 0 };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function steps() { return data.scenarios[at.sc].outcomes[at.out]; }
+  function after(j) { var sc = data.scenarios[at.sc]; return j === 0 ? { balances: sc.zero, holds: [] } : steps()[j - 1]; }
+  function readHash() {
+    var h = {}; location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p.length === 2) h[p[0]] = parseInt(p[1], 10); });
+    if (h.scenario >= 1 && h.scenario <= data.scenarios.length) at.sc = h.scenario - 1;
+    var outs = data.scenarios[at.sc].outcomes.length;
+    at.out = h.outcome >= 1 && h.outcome <= outs ? h.outcome - 1 : 0;
+    var n = steps().length;
+    at.step = h.step >= 0 && h.step <= n ? h.step : n;
+  }
+  function writeHash() {
+    var s = '#scenario=' + (at.sc + 1) + '&step=' + at.step + (data.scenarios[at.sc].outcomes.length > 1 ? '&outcome=' + (at.out + 1) : '');
+    if (location.hash !== s) history.replaceState(null, '', s);
+  }
+  function render() {
+    var sc = data.scenarios[at.sc];
+    sel.value = String(at.sc);
+    var outs = document.getElementById('outs');
+    outs.textContent = '';
+    if (sc.outcomes.length > 1) {
+      outs.appendChild(el('span', 'muted', w.ways.replace('{n}', sc.outcomes.length)));
+      sc.outcomes.forEach(function (_, k) {
+        var b = el('button', null, w.outcome.replace('{n}', k + 1));
+        b.setAttribute('aria-pressed', k === at.out ? 'true' : 'false');
+        b.onclick = function () { at.out = k; at.step = Math.min(at.step, steps().length); go(); };
+        outs.appendChild(b);
+      });
+    }
+    var list = document.getElementById('steps');
+    list.textContent = '';
+    steps().forEach(function (s, j) {
+      var li = el('li', j + 1 === at.step ? 'now' : (j + 1 > at.step ? 'later' : ''));
+      li.setAttribute('data-step', j + 1);
+      if (s.callers.length) {
+        li.appendChild(el('span', 'call', 'together'));
+        s.callers.forEach(function (cs, c) {
+          cs.forEach(function (x) {
+            li.appendChild(el('span', 'call res', w.caller.replace('{n}', c + 1) + ': ' + x.call));
+            li.appendChild(el('span', 'res ' + (x.refused ? 'no' : 'ok'), x.result));
+            if (x.detail) li.appendChild(el('span', 'why', x.detail));
+          });
+        });
+      } else {
+        li.appendChild(el('span', 'call', s.label));
+        if (s.result) li.appendChild(el('span', 'res ' + (s.refused ? 'no' : 'ok'), s.result));
+        if (s.detail) li.appendChild(el('span', 'why', s.detail));
+      }
+      li.onclick = function () { at.step = j + 1; go(); };
+      list.appendChild(li);
+    });
+    var n = steps().length;
+    document.getElementById('pos').textContent = at.step === 0 ? w.before : w.pos.replace('{i}', at.step).replace('{n}', n);
+    document.getElementById('prev').disabled = at.step === 0;
+    document.getElementById('next').disabled = at.step === n;
+    var now = after(at.step), was = at.step > 0 ? after(at.step - 1) : null;
+    var body = document.getElementById('bal-body');
+    body.textContent = '';
+    sc.accounts.forEach(function (name, a) {
+      var tr = el('tr');
+      tr.appendChild(el('td', null, name));
+      for (var q = 0; q < 3; q++) {
+        var changed = was && was.balances[a][q] !== now.balances[a][q];
+        tr.appendChild(el('td', 'num' + (changed ? ' changed' : ''), now.balances[a][q]));
+      }
+      body.appendChild(tr);
+    });
+    var hb = document.getElementById('holds-body');
+    hb.textContent = '';
+    if (!now.holds.length) {
+      var tr = el('tr'); var td = el('td', 'muted', w.noholds); td.colSpan = 2; tr.appendChild(td); hb.appendChild(tr);
+    }
+    now.holds.forEach(function (h) { var tr = el('tr'); tr.appendChild(el('td', null, h[0])); tr.appendChild(el('td', null, h[1])); hb.appendChild(tr); });
+    var lit = {};
+    if (at.step > 0) steps()[at.step - 1].kinds.forEach(function (k) { lit[k[0]] = lit[k[0]] === 'lit' || k[1] ? 'lit' : 'no'; });
+    document.querySelectorAll('#mini [data-k]').forEach(function (g) {
+      var how = lit[g.getAttribute('data-k')];
+      g.classList.remove('lit', 'no');
+      if (how) g.classList.add(how);
+      var p = g.querySelector('path');
+      if (p) p.setAttribute('marker-end', p.getAttribute(how === 'lit' ? 'data-ok' : how === 'no' ? 'data-no' : 'data-a'));
+    });
+  }
+  function go() { writeHash(); render(); }
+  sel.onchange = function () { at.sc = parseInt(sel.value, 10); at.out = 0; at.step = 0; go(); };
+  document.getElementById('prev').onclick = function () { if (at.step > 0) { at.step--; go(); } };
+  document.getElementById('next').onclick = function () { if (at.step < steps().length) { at.step++; go(); } };
+  document.getElementById('player').addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowRight' && at.step < steps().length) { at.step++; go(); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' && at.step > 0) { at.step--; go(); e.preventDefault(); }
+  });
+  window.addEventListener('hashchange', function () { readHash(); render(); });
+  readHash();
+  render();
+})();
+</script>
+</body>
+</html>

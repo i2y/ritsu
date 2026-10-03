@@ -1,0 +1,21 @@
+# 返金は売上を超えない。注文ごとの「返金できる残り」を勘定にして、下限を 0 にする
+book 返金 v1
+description "注文ごとに、返金できる残りを勘定にする。売上で増え、返金で減り、0 より下にはならない。返金は承認を待つあいだ押さえる"
+
+unit 円
+
+account 返金できる残り(注文: string) : 円
+  description "その注文でまだ返金できる額"
+  at least 0 refused as 返金超過
+account 売上 : 円 outside
+account 返金済み : 円 outside
+
+transfer 売上計上(注文: string, 額: 円)
+  key 注文
+  move 額 from 売上 to 返金できる残り(注文)
+
+transfer 返金(申請: string, 注文: string, 額: 円)
+  description "承認を待つあいだ押さえる。承認されたら確定し、却下されたら取り消す"
+  key 申請
+  pending expires after 7 days
+  move 額 from 返金できる残り(注文) to 返金済み

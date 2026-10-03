@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="chobo doc">
+<title>inventory v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --box: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --no: #cf222e; --held: #9a6700; --lit: #fff8c5; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --box: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --no: #f85149; --held: #d29922; --lit: #3b2e00; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+header, main { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+header { padding-top: 12px; }
+h1 { font-size: 1.6em; margin: 0.4em 0 0.2em; }
+h2 { font-size: 1.3em; margin: 1.6em 0 0.5em; padding-bottom: 0.2em; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.12em; margin: 1.4em 0 0.4em; }
+h4 { font-size: 1em; margin: 1em 0 0.3em; }
+p, li { overflow-wrap: break-word; }
+nav a { color: var(--accent); }
+.muted { color: var(--muted); }
+code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 0 0.25em; border-radius: 4px; }
+pre { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 8px 12px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+.scroll { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; margin: 0.4em 0 0.8em; }
+th, td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; vertical-align: top; min-width: 4.5em; }
+.states td:first-child { white-space: nowrap; }
+th { background: var(--box); }
+td { overflow-wrap: break-word; }
+td code { white-space: nowrap; }
+figure { margin: 0.6em 0; overflow-x: auto; max-width: 100%; }
+svg { display: block; max-width: none; height: auto; }
+svg text { fill: var(--fg); font-size: 13px; }
+svg .name { font-weight: 600; font-size: 14px; }
+svg .sub { fill: var(--muted); }
+.node rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+.node.outside rect { stroke: var(--muted); stroke-dasharray: 5 3; }
+.edge path { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.edge.pending path { stroke-dasharray: 6 4; }
+.head { fill: var(--muted); }
+.head.ok { fill: var(--ok); }
+.head.no { fill: var(--no); }
+.label rect { fill: var(--bg); opacity: 0.92; }
+.label text { font-size: 12px; }
+.edge.lit path { stroke: var(--ok); stroke-width: 3; }
+.edge.no path { stroke: var(--no); stroke-width: 3; }
+.label.lit text { fill: var(--ok); font-weight: 600; }
+.label.no text { fill: var(--no); font-weight: 600; }
+.life .state rect { fill: var(--box); stroke: var(--fg); stroke-width: 1.2; }
+.life .state rect.inner { fill: none; stroke-width: 0.8; }
+.life .arrow { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.life .arrow.external { stroke-dasharray: 5 3; }
+.life .start { fill: var(--fg); }
+.life .lbl { font-size: 12px; }
+.life .lblbg { fill: var(--bg); opacity: 0.9; }
+.life .note { font-size: 11px; fill: var(--muted); }
+details { margin: 0.5em 0; }
+summary { cursor: pointer; color: var(--accent); }
+.player { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0.8em 0; }
+.player select { max-width: 100%; font: inherit; padding: 2px 4px; }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.outs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.outs button, .ctl button { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--box); color: var(--fg); cursor: pointer; }
+.outs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cols { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 8px; }
+.cols > * { flex: 1 1 320px; min-width: 0; }
+#steps { margin: 0; padding-left: 1.8em; }
+#steps li { padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+#steps li.now { background: var(--lit); }
+#steps li.later { color: var(--muted); }
+#steps .call { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+#steps .res { display: block; font-size: 0.92em; }
+#steps .res.ok { color: var(--ok); }
+#steps .res.no { color: var(--no); }
+#steps .why { display: block; font-size: 0.85em; color: var(--muted); }
+.ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+#bal td.changed { background: var(--lit); font-weight: 600; }
+#bal td.num { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+<h1>inventory v1</h1>
+<p>Stock per SKU. A delivery adds to it, an order holds what it takes for 30 minutes, shipping posts the hold, cancelling voids it, and a return puts the goods back on the shelves</p>
+<p class="muted"><code>examples/inventory/inventory.book</code>, as <code>chobo doc</code> writes it. Each account keeps a balance: what came in, less what went out. Every transfer keeps the bounds of the accounts: one that would break a bound is refused with the name the book gives that bound, and nothing of it moves. A transfer either moves at once (<code>do</code>), or first holds what it moves (<code>hold</code>); a hold is then posted (<code>post</code>, all of it or part), voided (<code>void</code>), or expires.</p>
+<nav><a href="#accounts">Accounts</a> · <a href="#flow">How things move</a> · <a href="#transfers">Transfers</a> · <a href="#scenarios">Scenarios</a></nav>
+</header>
+<main>
+<section id="accounts">
+<h2>Accounts</h2>
+<div class="scroll"><table><thead><tr><th>Account</th><th>One for each</th><th>Unit</th><th>Bounds</th><th>What it is</th></tr></thead><tbody>
+<tr><td><code>stock</code></td><td><code>sku</code></td><td>pcs</td><td>at least 0; a transfer that would go below is refused with <code>out_of_stock</code></td><td>what is on the shelves</td></tr>
+<tr><td><code>suppliers</code></td><td>one account</td><td>pcs</td><td>outside the book: no bounds, and it may go below 0</td><td></td></tr>
+<tr><td><code>customers</code></td><td>one account</td><td>pcs</td><td>outside the book: no bounds, and it may go below 0</td><td></td></tr>
+</tbody></table></div>
+</section>
+<section id="flow">
+<h2>How things move</h2>
+<figure><svg class="flow" viewBox="0 0 760 112" width="760" role="img" aria-labelledby="flow-t"><title id="flow-t">How things move between the accounts of inventory</title>
+<defs><marker id="flow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge" data-k="0"><path d="M142 58 C207 58, 207 58, 272 58" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge pending" data-k="1"><path d="M487 47 C552 47, 552 49, 617 49" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="2"><path d="M617 67 C552 67, 552 69, 487 69" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="label" data-k="0"><rect x="176" y="49" width="62" height="16" rx="3"/><text x="207" y="61" text-anchor="middle">receive</text></g>
+<g class="label" data-k="1"><rect x="521" y="39" width="62" height="16" rx="3"/><text x="552" y="51" text-anchor="middle">reserve</text></g>
+<g class="label" data-k="2"><rect x="514" y="59" width="77" height="16" rx="3"/><text x="552" y="71" text-anchor="middle">take_back</text></g>
+<g class="node" data-a="0"><rect x="272" y="24" width="215" height="68" rx="4"/><text x="380" y="44" text-anchor="middle" class="name">stock(sku)</text><text x="380" y="62" text-anchor="middle" class="sub">pcs</text><text x="380" y="80" text-anchor="middle" class="sub">at least 0 (out_of_stock)</text></g>
+<g class="node outside" data-a="1"><rect x="20" y="33" width="122" height="50" rx="16"/><text x="81" y="53" text-anchor="middle" class="name">suppliers</text><text x="81" y="71" text-anchor="middle" class="sub">pcs · outside</text></g>
+<g class="node outside" data-a="2"><rect x="617" y="30" width="122" height="56" rx="16"/><text x="679" y="53" text-anchor="middle" class="name">customers</text><text x="679" y="71" text-anchor="middle" class="sub">pcs · outside</text></g>
+</svg></figure>
+<p class="muted">A box is an account, and an arrow a move of a transfer. A rounded, dashed box is an account outside the book, which has no bounds. A dashed arrow belongs to a transfer that holds first, and moves when the hold is posted.</p>
+</section>
+<section id="transfers">
+<h2>Transfers</h2>
+<article id="t0">
+<h3>receive</h3>
+<ul>
+<li>Moves <code>qty</code> from <code>suppliers</code> to <code>stock(sku)</code>.</li>
+<li>Key: once per <code>delivery</code> and <code>sku</code>. The same call again does nothing, and answers <code>done_before</code>; one that differs only in <code>qty</code> is refused with <code>key_conflict</code>.</li>
+<li>Moves at once (<code>do</code>).</li>
+</ul>
+<div class="scroll"><table><thead><tr><th>Operation</th><th>May be refused with</th><th>When</th></tr></thead><tbody>
+<tr><td><code>receive.do</code></td><td><code>key_conflict</code></td><td>a call with the same <code>delivery</code> and <code>sku</code> and other arguments came before</td></tr>
+</tbody></table></div>
+<details><summary>How each refusal comes about</summary>
+<h4>receive.do: key_conflict</h4>
+<pre> 1  receive.do(delivery: delivery-1, sku: sku-2, qty: 1)  done
+ 2  receive.do(delivery: delivery-1, sku: sku-2, qty: 2)  refused: key_conflict</pre>
+</details>
+</article>
+<article id="t1">
+<h3>reserve</h3>
+<p>posted when the order ships, voided when it is cancelled</p>
+<ul>
+<li>Moves <code>qty</code> from <code>stock(sku)</code> to <code>customers</code>.</li>
+<li>Key: once per <code>order</code> and <code>sku</code>. The same call again does nothing, and answers <code>done_before</code>; one that differs only in <code>qty</code> is refused with <code>key_conflict</code>; holding again with the same key after the hold has ended answers <code>done_before</code>, and holds nothing.</li>
+<li>Holds first: the caller posts or voids the hold. It expires 30 minutes after it was made, and what it holds goes back.</li>
+</ul>
+<figure><svg class="life" viewBox="0 0 680 240" width="680" role="img" aria-label="The life of a hold of reserve">
+<defs><marker id="life-reserve" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<circle class="start" cx="16" cy="122" r="6"/>
+<path class="arrow" d="M22 122 L145 122" marker-end="url(#life-reserve)"/><text class="lbl" x="85" y="115" text-anchor="middle">reserve.hold</text>
+<g class="state" data-state="held"><rect x="147" y="105" width="96" height="34" rx="8"/><text x="195" y="127" text-anchor="middle">held</text></g>
+<path class="arrow" d="M243 114 C334 114, 334 31, 423 31" marker-end="url(#life-reserve)"/><rect class="lblbg" x="381" y="13" width="38" height="15" rx="3"/><text class="lbl" x="415" y="24" text-anchor="end">post</text>
+<g class="state end" data-state="posted"><rect x="425" y="14" width="97" height="34" rx="8"/><rect class="inner" x="428" y="17" width="91" height="28" rx="6"/><text x="473" y="36" text-anchor="middle">posted</text></g>
+<text class="note" x="427" y="62">void is refused: already_posted</text>
+<text class="note" x="427" y="76">post for other amounts: key_conflict</text>
+<path class="arrow" d="M243 122 C334 122, 334 105, 423 105" marker-end="url(#life-reserve)"/><rect class="lblbg" x="381" y="87" width="38" height="15" rx="3"/><text class="lbl" x="415" y="98" text-anchor="end">void</text>
+<g class="state end" data-state="voided"><rect x="425" y="88" width="97" height="34" rx="8"/><rect class="inner" x="428" y="91" width="91" height="28" rx="6"/><text x="473" y="110" text-anchor="middle">voided</text></g>
+<text class="note" x="427" y="136">post is refused: already_voided</text>
+<path class="arrow external" d="M243 131 C334 131, 334 179, 423 179" marker-end="url(#life-reserve)"/><rect class="lblbg" x="299" y="184" width="119" height="15" rx="3"/><text class="lbl" x="415" y="195" text-anchor="end">after 30 minutes</text>
+<g class="state end" data-state="expired"><rect x="425" y="162" width="97" height="34" rx="8"/><rect class="inner" x="428" y="165" width="91" height="28" rx="6"/><text x="473" y="184" text-anchor="middle">expired</text></g>
+<text class="note" x="427" y="210">post and void are refused: expired</text>
+</svg></figure>
+<div class="scroll"><table class="states"><thead><tr><th>The hold</th><th>post</th><th>void</th></tr></thead><tbody>
+<tr><td>held</td><td>posts it: the amounts given, or all of it, and the rest goes back; more than it holds is refused with <code>over_hold</code>; once 30 minutes have passed since it was held, refused with <code>expired</code></td><td>voids it: what it holds goes back; once 30 minutes have passed since it was held, refused with <code>expired</code></td></tr>
+<tr><td>posted</td><td><code>done_before</code> with the same amounts; refused with <code>key_conflict</code> with others</td><td>refused with <code>already_posted</code></td></tr>
+<tr><td>voided</td><td>refused with <code>already_voided</code></td><td><code>done_before</code></td></tr>
+<tr><td>expired</td><td>refused with <code>expired</code></td><td>refused with <code>expired</code></td></tr>
+<tr><td>no hold with the key</td><td>refused with <code>no_such_hold</code></td><td>refused with <code>no_such_hold</code></td></tr>
+</tbody></table></div>
+<div class="scroll"><table><thead><tr><th>Operation</th><th>May be refused with</th><th>When</th></tr></thead><tbody>
+<tr><td><code>reserve.hold</code></td><td><code>out_of_stock</code></td><td><code>stock(sku)</code> would go below 0</td></tr>
+<tr><td><code>reserve.hold</code></td><td><code>key_conflict</code></td><td>a call with the same <code>order</code> and <code>sku</code> and other arguments came before</td></tr>
+<tr><td><code>reserve.hold</code></td><td><code>already_refused</code></td><td>a call with the same <code>order</code> and <code>sku</code> was refused by a bound before; a key a bound refused stays refused, even once there is enough</td></tr>
+<tr><td><code>reserve.post</code></td><td><code>key_conflict</code></td><td>the hold was posted before, for other amounts</td></tr>
+<tr><td><code>reserve.post</code></td><td><code>already_voided</code></td><td>the hold is voided already</td></tr>
+<tr><td><code>reserve.post</code></td><td><code>expired</code></td><td>the hold has expired</td></tr>
+<tr><td><code>reserve.post</code></td><td><code>over_hold</code></td><td>more than the hold holds</td></tr>
+<tr><td><code>reserve.post</code></td><td><code>no_such_hold</code></td><td>there is no hold with that <code>order</code> and <code>sku</code></td></tr>
+<tr><td><code>reserve.void</code></td><td><code>already_posted</code></td><td>the hold is posted already</td></tr>
+<tr><td><code>reserve.void</code></td><td><code>expired</code></td><td>the hold has expired</td></tr>
+<tr><td><code>reserve.void</code></td><td><code>no_such_hold</code></td><td>there is no hold with that <code>order</code> and <code>sku</code></td></tr>
+</tbody></table></div>
+<details><summary>How each refusal comes about</summary>
+<h4>reserve.hold: out_of_stock</h4>
+<pre> 1  reserve.hold(order: order-1, sku: sku-2, qty: 1)  refused: out_of_stock (move 1 takes 1 from stock(sku-2): posted 0, held out 0)</pre>
+<h4>reserve.hold: key_conflict</h4>
+<pre> 1  receive.do(delivery: delivery-1, sku: sku-2, qty: 1)  done
+ 2  reserve.hold(order: order-3, sku: sku-2, qty: 1)      done
+ 3  reserve.hold(order: order-3, sku: sku-2, qty: 2)      refused: key_conflict</pre>
+<h4>reserve.hold: already_refused</h4>
+<pre> 1  reserve.hold(order: order-1, sku: sku-2, qty: 1)  refused: out_of_stock (move 1 takes 1 from stock(sku-2): posted 0, held out 0)
+ 2  reserve.hold(order: order-1, sku: sku-2, qty: 1)  refused: already_refused</pre>
+<h4>reserve.post: key_conflict</h4>
+<pre> 1  receive.do(delivery: delivery-1, sku: sku-2, qty: 2)  done
+ 2  reserve.hold(order: order-3, sku: sku-2, qty: 2)      done
+ 3  reserve.post(order: order-3, sku: sku-2)              done
+ 4  reserve.post(order: order-3, sku: sku-2, qty: 1)      refused: key_conflict</pre>
+<h4>reserve.post: already_voided</h4>
+<pre> 1  receive.do(delivery: delivery-1, sku: sku-2, qty: 2)  done
+ 2  reserve.hold(order: order-3, sku: sku-2, qty: 2)      done
+ 3  reserve.void(order: order-3, sku: sku-2)              done
+ 4  reserve.post(order: order-3, sku: sku-2)              refused: already_voided</pre>
+<h4>reserve.post: expired</h4>
+<pre> 1  receive.do(delivery: delivery-1, sku: sku-2, qty: 2)  done
+ 2  reserve.hold(order: order-3, sku: sku-2, qty: 2)      done
+ 3  pass 30 minutes                                       reserve(order-3, sku-2) expired
+ 4  reserve.post(order: order-3, sku: sku-2)              refused: expired</pre>
+<h4>reserve.post: over_hold</h4>
+<pre> 1  receive.do(delivery: delivery-1, sku: sku-2, qty: 2)  done
+ 2  reserve.hold(order: order-3, sku: sku-2, qty: 2)      done
+ 3  reserve.post(order: order-3, sku: sku-2, qty: 3)      refused: over_hold</pre>
+<h4>reserve.post: no_such_hold</h4>
+<pre> 1  reserve.post(order: order-1, sku: sku-2)  refused: no_such_hold</pre>
+<h4>reserve.void: already_posted</h4>
+<pre> 1  receive.do(delivery: delivery-1, sku: sku-2, qty: 2)  done
+ 2  reserve.hold(order: order-3, sku: sku-2, qty: 2)      done
+ 3  reserve.post(order: order-3, sku: sku-2)              done
+ 4  reserve.void(order: order-3, sku: sku-2)              refused: already_posted</pre>
+<h4>reserve.void: expired</h4>
+<pre> 1  receive.do(delivery: delivery-1, sku: sku-2, qty: 2)  done
+ 2  reserve.hold(order: order-3, sku: sku-2, qty: 2)      done
+ 3  pass 30 minutes                                       reserve(order-3, sku-2) expired
+ 4  reserve.void(order: order-3, sku: sku-2)              refused: expired</pre>
+<h4>reserve.void: no_such_hold</h4>
+<pre> 1  reserve.void(order: order-1, sku: sku-2)  refused: no_such_hold</pre>
+</details>
+</article>
+<article id="t2">
+<h3>take_back</h3>
+<p>what a customer sent back, on the shelves again</p>
+<ul>
+<li>Moves <code>qty</code> from <code>customers</code> to <code>stock(sku)</code>.</li>
+<li>Key: once per <code>return_id</code> and <code>sku</code>. The same call again does nothing, and answers <code>done_before</code>; one that differs only in <code>qty</code> is refused with <code>key_conflict</code>.</li>
+<li>Moves at once (<code>do</code>).</li>
+</ul>
+<div class="scroll"><table><thead><tr><th>Operation</th><th>May be refused with</th><th>When</th></tr></thead><tbody>
+<tr><td><code>take_back.do</code></td><td><code>key_conflict</code></td><td>a call with the same <code>return_id</code> and <code>sku</code> and other arguments came before</td></tr>
+</tbody></table></div>
+<details><summary>How each refusal comes about</summary>
+<h4>take_back.do: key_conflict</h4>
+<pre> 1  take_back.do(return_id: return_id-1, sku: sku-2, qty: 1)  done
+ 2  take_back.do(return_id: return_id-1, sku: sku-2, qty: 2)  refused: key_conflict</pre>
+</details>
+</article>
+</section>
+<section id="scenarios">
+<h2>Scenarios</h2>
+<p>21 scenarios, which <code>chobo scenarios</code> makes from the book. Pick one and step through it: after each step come the balances and the holds it left, and on the chart the arrows of the transfers it called light up (red when refused).</p>
+<div class="player" id="player">
+<div class="pick"><label for="sc">Scenario</label><select id="sc">
+<option value="0">1. bound: reserve.hold takes stock(sku) to 1, one above at least 0</option>
+<option value="1">2. bound: reserve.hold takes stock(sku) to exactly 0, its at least 0</option>
+<option value="2">3. bound: reserve.hold would take stock(sku) to -1, below at least 0</option>
+<option value="3">4. key: receive.do twice with the same arguments</option>
+<option value="4">5. key: receive.do again with another qty</option>
+<option value="5">6. key: reserve.hold twice with the same arguments</option>
+<option value="6">7. key: reserve.hold again with another qty</option>
+<option value="7">8. key: reserve.hold refused with out_of_stock, then again, and again once stock(sku) has enough</option>
+<option value="8">9. key: take_back.do twice with the same arguments</option>
+<option value="9">10. key: take_back.do again with another qty</option>
+<option value="10">11. hold: reserve posted in full</option>
+<option value="11">12. hold: reserve posted in part</option>
+<option value="12">13. hold: reserve voided</option>
+<option value="13">14. hold: reserve posted, then voided</option>
+<option value="14">15. hold: reserve voided, then posted</option>
+<option value="15">16. hold: reserve posted for more than it holds, then for what it holds</option>
+<option value="16">17. hold: reserve posted before it is held, then held and posted</option>
+<option value="17">18. hold: reserve posted twice, with the same amounts and with others</option>
+<option value="18">19. pass: reserve expires, then is posted and voided</option>
+<option value="19">20. pass: reserve held again with the same key after it expired</option>
+<option value="20">21. together: two callers take the last 1 of stock(sku) with reserve.hold</option>
+</select></div>
+<div class="outs" id="outs"></div>
+<div class="cols">
+<ol id="steps"></ol>
+<div>
+<div class="ctl"><button id="prev" type="button" aria-label="previous step">◀</button><span id="pos"></span><button id="next" type="button" aria-label="next step">▶</button></div>
+<div class="scroll"><table id="bal"><thead><tr><th>Account</th><th>Posted</th><th>Held out</th><th>Held in</th></tr></thead><tbody id="bal-body"></tbody></table></div>
+<div class="scroll"><table id="holds"><thead><tr><th>Hold</th><th>State</th></tr></thead><tbody id="holds-body"></tbody></table></div>
+</div>
+</div>
+<figure id="mini"><svg class="flow" viewBox="0 0 760 112" width="760" role="img" aria-labelledby="mini-t"><title id="mini-t">How things move between the accounts of inventory</title>
+<defs><marker id="mini-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge" data-k="0"><path d="M142 58 C207 58, 207 58, 272 58" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge pending" data-k="1"><path d="M487 47 C552 47, 552 49, 617 49" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="2"><path d="M617 67 C552 67, 552 69, 487 69" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="label" data-k="0"><rect x="176" y="49" width="62" height="16" rx="3"/><text x="207" y="61" text-anchor="middle">receive</text></g>
+<g class="label" data-k="1"><rect x="521" y="39" width="62" height="16" rx="3"/><text x="552" y="51" text-anchor="middle">reserve</text></g>
+<g class="label" data-k="2"><rect x="514" y="59" width="77" height="16" rx="3"/><text x="552" y="71" text-anchor="middle">take_back</text></g>
+<g class="node" data-a="0"><rect x="272" y="24" width="215" height="68" rx="4"/><text x="380" y="44" text-anchor="middle" class="name">stock(sku)</text><text x="380" y="62" text-anchor="middle" class="sub">pcs</text><text x="380" y="80" text-anchor="middle" class="sub">at least 0 (out_of_stock)</text></g>
+<g class="node outside" data-a="1"><rect x="20" y="33" width="122" height="50" rx="16"/><text x="81" y="53" text-anchor="middle" class="name">suppliers</text><text x="81" y="71" text-anchor="middle" class="sub">pcs · outside</text></g>
+<g class="node outside" data-a="2"><rect x="617" y="30" width="122" height="56" rx="16"/><text x="679" y="53" text-anchor="middle" class="name">customers</text><text x="679" y="71" text-anchor="middle" class="sub">pcs · outside</text></g>
+</svg></figure>
+</div>
+</section>
+</main>
+<script type="application/json" id="chobo-data">{"lang":"en","scenarios":[{"title":"bound: reserve.hold takes stock(sku) to 1, one above `at least 0`","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","1","0"],["-2","0","0"],["0","0","1"]],"holds":[["reserve(order-3, sku-2)","held"]]}]]},{"title":"bound: reserve.hold takes stock(sku) to exactly 0, its `at least 0`","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]}]]},{"title":"bound: reserve.hold would take stock(sku) to -1, below `at least 0`","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 3)","result":"refused: out_of_stock","detail":"move 1 takes 3 from stock(sku-2): posted 2, held out 0","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]}]]},{"title":"key: receive.do twice with the same arguments","accounts":["stock(sku-2)","suppliers"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]},{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 1)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]}]]},{"title":"key: receive.do again with another qty","accounts":["stock(sku-2)","suppliers"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]},{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"refused: key_conflict","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]}]]},{"title":"key: reserve.hold twice with the same arguments","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 1)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["reserve(order-3, sku-2)","held"]]}]]},{"title":"key: reserve.hold again with another qty","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"refused: key_conflict","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["reserve(order-3, sku-2)","held"]]}]]},{"title":"key: reserve.hold refused with out_of_stock, then again, and again once stock(sku) has enough","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"reserve.hold(order: order-1, sku: sku-2, qty: 1)","result":"refused: out_of_stock","detail":"move 1 takes 1 from stock(sku-2): posted 0, held out 0","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-1, sku: sku-2, qty: 1)","result":"refused: already_refused","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"receive.do(delivery: delivery-3, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-1, sku: sku-2, qty: 1)","result":"refused: already_refused","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]}]]},{"title":"key: take_back.do twice with the same arguments","accounts":["stock(sku-2)","customers"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"take_back.do(return_id: return_id-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]},{"label":"take_back.do(return_id: return_id-1, sku: sku-2, qty: 1)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]}]]},{"title":"key: take_back.do again with another qty","accounts":["stock(sku-2)","customers"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"take_back.do(return_id: return_id-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[2,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]},{"label":"take_back.do(return_id: return_id-1, sku: sku-2, qty: 2)","result":"refused: key_conflict","detail":null,"refused":true,"callers":[],"kinds":[[2,false]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]}]]},{"title":"hold: reserve posted in full","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.post(order: order-3, sku: sku-2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["reserve(order-3, sku-2)","posted"]]}]]},{"title":"hold: reserve posted in part","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.post(order: order-3, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","0","0"],["-2","0","0"],["1","0","0"]],"holds":[["reserve(order-3, sku-2)","posted"]]}]]},{"title":"hold: reserve voided","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.void(order: order-3, sku: sku-2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["reserve(order-3, sku-2)","voided"]]}]]},{"title":"hold: reserve posted, then voided","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.post(order: order-3, sku: sku-2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["reserve(order-3, sku-2)","posted"]]},{"label":"reserve.void(order: order-3, sku: sku-2)","result":"refused: already_posted","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["reserve(order-3, sku-2)","posted"]]}]]},{"title":"hold: reserve voided, then posted","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.void(order: order-3, sku: sku-2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["reserve(order-3, sku-2)","voided"]]},{"label":"reserve.post(order: order-3, sku: sku-2)","result":"refused: already_voided","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["reserve(order-3, sku-2)","voided"]]}]]},{"title":"hold: reserve posted for more than it holds, then for what it holds","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.post(order: order-3, sku: sku-2, qty: 3)","result":"refused: over_hold","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.post(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["reserve(order-3, sku-2)","posted"]]}]]},{"title":"hold: reserve posted before it is held, then held and posted","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"reserve.post(order: order-1, sku: sku-2)","result":"refused: no_such_hold","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["reserve(order-1, sku-2)","held"]]},{"label":"reserve.post(order: order-1, sku: sku-2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-1","0","0"],["1","0","0"]],"holds":[["reserve(order-1, sku-2)","posted"]]}]]},{"title":"hold: reserve posted twice, with the same amounts and with others","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"reserve.post(order: order-3, sku: sku-2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["reserve(order-3, sku-2)","posted"]]},{"label":"reserve.post(order: order-3, sku: sku-2)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["reserve(order-3, sku-2)","posted"]]},{"label":"reserve.post(order: order-3, sku: sku-2, qty: 2)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["reserve(order-3, sku-2)","posted"]]},{"label":"reserve.post(order: order-3, sku: sku-2, qty: 1)","result":"refused: key_conflict","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["0","0","0"],["-2","0","0"],["2","0","0"]],"holds":[["reserve(order-3, sku-2)","posted"]]}]]},{"title":"pass: reserve expires, then is posted and voided","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"pass 31 minutes","result":"reserve(order-3, sku-2) expired","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["reserve(order-3, sku-2)","expired"]]},{"label":"reserve.post(order: order-3, sku: sku-2)","result":"refused: expired","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["reserve(order-3, sku-2)","expired"]]},{"label":"reserve.void(order: order-3, sku: sku-2)","result":"refused: expired","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["reserve(order-3, sku-2)","expired"]]}]]},{"title":"pass: reserve held again with the same key after it expired","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","2","0"],["-2","0","0"],["0","0","2"]],"holds":[["reserve(order-3, sku-2)","held"]]},{"label":"pass 31 minutes","result":"reserve(order-3, sku-2) expired","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["reserve(order-3, sku-2)","expired"]]},{"label":"reserve.hold(order: order-3, sku: sku-2, qty: 2)","result":"done_before","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["-2","0","0"],["0","0","0"]],"holds":[["reserve(order-3, sku-2)","expired"]]}]]},{"title":"together: two callers take the last 1 of stock(sku) with reserve.hold","accounts":["stock(sku-2)","suppliers","customers"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"reserve.hold(order: order-3, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false}],[{"call":"reserve.hold(order: order-4, sku: sku-2, qty: 1)","result":"refused: out_of_stock","detail":"move 1 takes 1 from stock(sku-2): posted 1, held out 1","refused":true}]],"kinds":[[1,true],[1,false]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["reserve(order-3, sku-2)","held"]]}],[{"label":"receive.do(delivery: delivery-1, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["1","0","0"],["-1","0","0"],["0","0","0"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"reserve.hold(order: order-3, sku: sku-2, qty: 1)","result":"refused: out_of_stock","detail":"move 1 takes 1 from stock(sku-2): posted 1, held out 1","refused":true}],[{"call":"reserve.hold(order: order-4, sku: sku-2, qty: 1)","result":"done","detail":null,"refused":false}]],"kinds":[[1,false],[1,true]],"balances":[["1","1","0"],["-1","0","0"],["0","0","1"]],"holds":[["reserve(order-4, sku-2)","held"]]}]]}],"words":{"ways":"It can come out {n} ways:","outcome":"outcome {n}","caller":"caller {n}","before":"before the first step: every balance is 0","pos":"after step {i} of {n}","noholds":"no holds"}}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('chobo-data').textContent);
+  var w = data.words;
+  var sel = document.getElementById('sc');
+  var at = { sc: 0, out: 0, step: 0 };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function steps() { return data.scenarios[at.sc].outcomes[at.out]; }
+  function after(j) { var sc = data.scenarios[at.sc]; return j === 0 ? { balances: sc.zero, holds: [] } : steps()[j - 1]; }
+  function readHash() {
+    var h = {}; location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p.length === 2) h[p[0]] = parseInt(p[1], 10); });
+    if (h.scenario >= 1 && h.scenario <= data.scenarios.length) at.sc = h.scenario - 1;
+    var outs = data.scenarios[at.sc].outcomes.length;
+    at.out = h.outcome >= 1 && h.outcome <= outs ? h.outcome - 1 : 0;
+    var n = steps().length;
+    at.step = h.step >= 0 && h.step <= n ? h.step : n;
+  }
+  function writeHash() {
+    var s = '#scenario=' + (at.sc + 1) + '&step=' + at.step + (data.scenarios[at.sc].outcomes.length > 1 ? '&outcome=' + (at.out + 1) : '');
+    if (location.hash !== s) history.replaceState(null, '', s);
+  }
+  function render() {
+    var sc = data.scenarios[at.sc];
+    sel.value = String(at.sc);
+    var outs = document.getElementById('outs');
+    outs.textContent = '';
+    if (sc.outcomes.length > 1) {
+      outs.appendChild(el('span', 'muted', w.ways.replace('{n}', sc.outcomes.length)));
+      sc.outcomes.forEach(function (_, k) {
+        var b = el('button', null, w.outcome.replace('{n}', k + 1));
+        b.setAttribute('aria-pressed', k === at.out ? 'true' : 'false');
+        b.onclick = function () { at.out = k; at.step = Math.min(at.step, steps().length); go(); };
+        outs.appendChild(b);
+      });
+    }
+    var list = document.getElementById('steps');
+    list.textContent = '';
+    steps().forEach(function (s, j) {
+      var li = el('li', j + 1 === at.step ? 'now' : (j + 1 > at.step ? 'later' : ''));
+      li.setAttribute('data-step', j + 1);
+      if (s.callers.length) {
+        li.appendChild(el('span', 'call', 'together'));
+        s.callers.forEach(function (cs, c) {
+          cs.forEach(function (x) {
+            li.appendChild(el('span', 'call res', w.caller.replace('{n}', c + 1) + ': ' + x.call));
+            li.appendChild(el('span', 'res ' + (x.refused ? 'no' : 'ok'), x.result));
+            if (x.detail) li.appendChild(el('span', 'why', x.detail));
+          });
+        });
+      } else {
+        li.appendChild(el('span', 'call', s.label));
+        if (s.result) li.appendChild(el('span', 'res ' + (s.refused ? 'no' : 'ok'), s.result));
+        if (s.detail) li.appendChild(el('span', 'why', s.detail));
+      }
+      li.onclick = function () { at.step = j + 1; go(); };
+      list.appendChild(li);
+    });
+    var n = steps().length;
+    document.getElementById('pos').textContent = at.step === 0 ? w.before : w.pos.replace('{i}', at.step).replace('{n}', n);
+    document.getElementById('prev').disabled = at.step === 0;
+    document.getElementById('next').disabled = at.step === n;
+    var now = after(at.step), was = at.step > 0 ? after(at.step - 1) : null;
+    var body = document.getElementById('bal-body');
+    body.textContent = '';
+    sc.accounts.forEach(function (name, a) {
+      var tr = el('tr');
+      tr.appendChild(el('td', null, name));
+      for (var q = 0; q < 3; q++) {
+        var changed = was && was.balances[a][q] !== now.balances[a][q];
+        tr.appendChild(el('td', 'num' + (changed ? ' changed' : ''), now.balances[a][q]));
+      }
+      body.appendChild(tr);
+    });
+    var hb = document.getElementById('holds-body');
+    hb.textContent = '';
+    if (!now.holds.length) {
+      var tr = el('tr'); var td = el('td', 'muted', w.noholds); td.colSpan = 2; tr.appendChild(td); hb.appendChild(tr);
+    }
+    now.holds.forEach(function (h) { var tr = el('tr'); tr.appendChild(el('td', null, h[0])); tr.appendChild(el('td', null, h[1])); hb.appendChild(tr); });
+    var lit = {};
+    if (at.step > 0) steps()[at.step - 1].kinds.forEach(function (k) { lit[k[0]] = lit[k[0]] === 'lit' || k[1] ? 'lit' : 'no'; });
+    document.querySelectorAll('#mini [data-k]').forEach(function (g) {
+      var how = lit[g.getAttribute('data-k')];
+      g.classList.remove('lit', 'no');
+      if (how) g.classList.add(how);
+      var p = g.querySelector('path');
+      if (p) p.setAttribute('marker-end', p.getAttribute(how === 'lit' ? 'data-ok' : how === 'no' ? 'data-no' : 'data-a'));
+    });
+  }
+  function go() { writeHash(); render(); }
+  sel.onchange = function () { at.sc = parseInt(sel.value, 10); at.out = 0; at.step = 0; go(); };
+  document.getElementById('prev').onclick = function () { if (at.step > 0) { at.step--; go(); } };
+  document.getElementById('next').onclick = function () { if (at.step < steps().length) { at.step++; go(); } };
+  document.getElementById('player').addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowRight' && at.step < steps().length) { at.step++; go(); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' && at.step > 0) { at.step--; go(); e.preventDefault(); }
+  });
+  window.addEventListener('hashchange', function () { readHash(); render(); });
+  readHash();
+  render();
+})();
+</script>
+</body>
+</html>

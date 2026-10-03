@@ -1,0 +1,2532 @@
+[
+  {
+    "scenario": {
+      "name": "bound: 入金.do fills ウォレット(会員) to 99999, one below `at most 100000`",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 99998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 99999,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -99999,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 入金.do fills ウォレット(会員) to exactly 100000, its `at most 100000`",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 99998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 100000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -100000,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 入金.do would fill ウォレット(会員) to 100001, past `at most 100000`",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 99998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-3",
+            "会員": "会員-2",
+            "額": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "refused",
+          "reason": "上限超え"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 99998,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -99998,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 支払.hold takes ウォレット(会員) to 1, one above `at least 0`",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 支払.hold takes ウォレット(会員) to exactly 0, its `at least 0`",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 2
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 2,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 支払.hold would take ウォレット(会員) to -1, below `at least 0`",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "残高不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 払い戻し.do takes ウォレット(会員) to 1, one above `at least 0`",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 払い戻し.do takes ウォレット(会員) to exactly 0, its `at least 0`",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: 払い戻し.do would take ウォレット(会員) to -1, below `at least 0`",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-3",
+            "会員": "会員-2",
+            "額": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "refused",
+          "reason": "残高不足"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 入金.do twice with the same arguments",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 入金.do again with another 額",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 入金.do refused with 上限超え, then again",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 100000
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "refused",
+          "reason": "上限超え"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 100000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -100000,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 支払.hold twice with the same arguments",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 支払.hold again with another 額",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 支払.hold refused with 残高不足, then again, and again once ウォレット(会員) has enough",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "残高不足"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 払い戻し.do twice with the same arguments",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 払い戻し.do again with another 額",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: 払い戻し.do refused with 残高不足, then again, and again once ウォレット(会員) has enough",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-3",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "args": {
+            "払戻番号": "払戻番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "refused",
+          "reason": "残高不足"
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "払い戻し",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 支払 posted in full",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 支払 posted in part",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          },
+          "amounts": {
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 支払 voided",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "支払",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 支払 posted, then voided",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          }
+        },
+        {
+          "op": "void",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "already_posted"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 支払 voided, then posted",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "already_voided"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 支払 posted for more than it holds, then for what it holds",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          },
+          "amounts": {
+            "額": 3
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          },
+          "amounts": {
+            "額": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "over_hold"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 支払 posted before it is held, then held and posted",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-1"
+          }
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "no_such_hold"
+        },
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: 支払 posted twice, with the same amounts and with others",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3",
+            "会員": "会員-2",
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          },
+          "amounts": {
+            "額": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "args": {
+            "注文": "注文-3"
+          },
+          "amounts": {
+            "額": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "支払",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "ウォレット",
+          "args": [
+            "会員-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "銀行",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "店",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "支払",
+          "key": [
+            "注文-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers fill the last 1 of room in ウォレット(会員) with 入金.do",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 99999
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "入金",
+                "args": {
+                  "入金番号": "入金番号-3",
+                  "会員": "会員-2",
+                  "額": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "入金",
+                "args": {
+                  "入金番号": "入金番号-4",
+                  "会員": "会員-2",
+                  "額": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入金",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "入金",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "入金",
+                    "result": "refused",
+                    "reason": "上限超え"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "ウォレット",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 100000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "銀行",
+              "args": [],
+              "posted": -100000,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入金",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "入金",
+                    "result": "refused",
+                    "reason": "上限超え"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "入金",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "ウォレット",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 100000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "銀行",
+              "args": [],
+              "posted": -100000,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of ウォレット(会員) with 支払.hold",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "hold",
+                "kind": "支払",
+                "args": {
+                  "注文": "注文-3",
+                  "会員": "会員-2",
+                  "額": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "hold",
+                "kind": "支払",
+                "args": {
+                  "注文": "注文-4",
+                  "会員": "会員-2",
+                  "額": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入金",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "支払",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "支払",
+                    "result": "refused",
+                    "reason": "残高不足"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "ウォレット",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 1
+            },
+            {
+              "account": "銀行",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "店",
+              "args": [],
+              "posted": 0,
+              "held_in": 1,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "支払",
+              "key": [
+                "注文-3"
+              ],
+              "state": "held"
+            }
+          ]
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入金",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "支払",
+                    "result": "refused",
+                    "reason": "残高不足"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "支払",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "ウォレット",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 1
+            },
+            {
+              "account": "銀行",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "店",
+              "args": [],
+              "posted": 0,
+              "held_in": 1,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "支払",
+              "key": [
+                "注文-4"
+              ],
+              "state": "held"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of ウォレット(会員) with 払い戻し.do",
+      "book": "ウォレット",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "入金",
+          "args": {
+            "入金番号": "入金番号-1",
+            "会員": "会員-2",
+            "額": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "払い戻し",
+                "args": {
+                  "払戻番号": "払戻番号-3",
+                  "会員": "会員-2",
+                  "額": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "払い戻し",
+                "args": {
+                  "払戻番号": "払戻番号-4",
+                  "会員": "会員-2",
+                  "額": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入金",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "払い戻し",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "払い戻し",
+                    "result": "refused",
+                    "reason": "残高不足"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "ウォレット",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "銀行",
+              "args": [],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "入金",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "払い戻し",
+                    "result": "refused",
+                    "reason": "残高不足"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "払い戻し",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "ウォレット",
+              "args": [
+                "会員-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "銀行",
+              "args": [],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  }
+]

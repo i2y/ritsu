@@ -1,0 +1,41 @@
+[
+  {
+    "name": "more: 引当 voided, then posted for more than it held",
+    "book": "在庫",
+    "steps": [
+      {"op": "do", "kind": "入荷", "args": {"納品書": "納品書-1", "sku": "sku-2", "数": 5}},
+      {"op": "hold", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2", "数": 2}},
+      {"op": "void", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2"}},
+      {"op": "post", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2"}, "amounts": {"数": 3}}
+    ]
+  },
+  {
+    "name": "more: 引当 expired, then posted for more than it held",
+    "book": "在庫",
+    "steps": [
+      {"op": "do", "kind": "入荷", "args": {"納品書": "納品書-1", "sku": "sku-2", "数": 5}},
+      {"op": "hold", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2", "数": 2}},
+      {"op": "pass", "duration": "31 minutes"},
+      {"op": "post", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2"}, "amounts": {"数": 3}}
+    ]
+  },
+  {
+    "name": "more: 引当 posted, then posted again for more than it held",
+    "book": "在庫",
+    "steps": [
+      {"op": "do", "kind": "入荷", "args": {"納品書": "納品書-1", "sku": "sku-2", "数": 5}},
+      {"op": "hold", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2", "数": 2}},
+      {"op": "post", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2"}},
+      {"op": "post", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2"}, "amounts": {"数": 3}}
+    ]
+  },
+  {
+    "name": "more: 引当 held, posted for nothing, then the stock is all there",
+    "book": "在庫",
+    "steps": [
+      {"op": "do", "kind": "入荷", "args": {"納品書": "納品書-1", "sku": "sku-2", "数": 5}},
+      {"op": "hold", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2", "数": 2}},
+      {"op": "post", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2"}, "amounts": {"数": 0}}
+    ]
+  }
+]

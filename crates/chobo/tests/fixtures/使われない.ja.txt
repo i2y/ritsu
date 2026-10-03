@@ -1,0 +1,11 @@
+警告[W105]: 使われない.book:4:6: 単位 `箱` はどこにも使われていません
+     4 | unit 箱
+警告[W105]: 使われない.book:8:9: 勘定 `返品棚` を使う振替がありません
+     8 | account 返品棚(sku: string) : 個
+警告[W105]: 使われない.book:13:44: 引数 `担当` はキーにも移動にも使われていません
+    13 | transfer 入荷(伝票: string, sku: string, 数: 個, 担当: string)
+使われない.book: ok、警告 3 件
+  入荷.do  断られうる理由: key_conflict
+  出荷.do  断られうる理由: 在庫切れ（在庫(sku) at least 0）、key_conflict、already_refused
+  キー: 入荷 は 伝票 ごとに一回。sku、数 か 担当 だけが違う二度目は key_conflict で断られる
+  キー: 出荷 は 注文 ごとに一回。sku か 数 だけが違う二度目は key_conflict で断られる

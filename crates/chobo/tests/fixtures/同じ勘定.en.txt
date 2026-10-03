@@ -1,0 +1,6 @@
+error[E012]: 同じ勘定.book:13:3: this move goes from 在庫(sku) to 在庫(sku): the same account whatever it is called with, so every call of `棚卸し` is refused with same_account
+    13 |   move 数 from 在庫(sku) to 在庫(sku)
+  the operations that get there:
+       1  棚卸し.do(伝票: 伝票-1, sku: sku-2, 数: 1)  refused: same_account
+  hint: move to another account, or to the same kind with other arguments
+同じ勘定.book: 1 error(s), 0 warning(s)

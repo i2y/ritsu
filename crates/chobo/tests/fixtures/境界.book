@@ -1,0 +1,15 @@
+book 境界 v1
+unit 個
+
+account 在庫(sku: string) : 個
+account 仕入先 : 個 outside
+  at least 0 refused as 仕入先不足
+account 棚(sku: string) : 個
+  at least 10 refused as 安全在庫割れ
+  at most 5 refused as 満杯
+account 予約枠(日: string) : 個
+  at most -1 refused as 満席
+account 倉庫(sku: string) : 個
+  at least 0
+account 預り(sku: string) : 個
+  at least 0 refused as expired

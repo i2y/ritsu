@@ -1,0 +1,20 @@
+# 与信：0 より小さい下限と上限（TigerBeetle では余裕と空きの勘定がどちらも要る）
+book 与信 v1
+description "会員ごとの後払いの枠。使えるのはマイナス 50000 円まで、前払いは 10000 円まで"
+
+unit 円
+
+account 与信(会員: string) : 円
+  at least -50000 refused as 与信枠超え
+  at most 10000 refused as 前払い超過
+account 店 : 円 outside
+account 銀行 : 円 outside
+
+transfer 後払い(注文: string, 会員: string, 額: 円)
+  key 注文
+  pending expires after 1 day
+  move 額 from 与信(会員) to 店
+
+transfer 返済(返済番号: string, 会員: string, 額: 円)
+  key 返済番号
+  move 額 from 銀行 to 与信(会員)

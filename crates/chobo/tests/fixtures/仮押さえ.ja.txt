@@ -1,0 +1,9 @@
+エラー[E040]: 仮押さえ.book:10:3: `pending` に終わり方がありません。`pending expires after 30 minutes` か `pending never expires` と書いてください
+    10 |   pending
+エラー[E041]: 仮押さえ.book:14:25: 有効期限は 1 秒から 4294967295 秒（約 136 年）までです。ここでは 0 秒です
+    14 |   pending expires after 0 seconds
+エラー[E041]: 仮押さえ.book:18:25: 有効期限は 1 秒から 4294967295 秒（約 136 年）までです。ここでは 4320000000 秒です
+    18 |   pending expires after 50000 days
+エラー[E041]: 仮押さえ.book:22:25: 有効期限は 1 秒から 4294967295 秒（約 136 年）までの整数で書いてください
+    22 |   pending expires after 1.5 hours
+仮押さえ.book: エラー 4 件、警告 0 件

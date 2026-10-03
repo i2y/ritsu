@@ -1,0 +1,23 @@
+book 仮押さえ v1
+unit 個
+
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 客 : 個 outside
+
+transfer 引当(注文: string, sku: string, 数: 個)
+  key 注文
+  pending
+  move 数 from 在庫(sku) to 客
+transfer 取り置き(注文: string, sku: string, 数: 個)
+  key 注文
+  pending expires after 0 seconds
+  move 数 from 在庫(sku) to 客
+transfer 予約(注文: string, sku: string, 数: 個)
+  key 注文
+  pending expires after 50000 days
+  move 数 from 在庫(sku) to 客
+transfer 長期予約(注文: string, sku: string, 数: 個)
+  key 注文
+  pending expires after 1.5 hours
+  move 数 from 在庫(sku) to 客

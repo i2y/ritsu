@@ -1,0 +1,16 @@
+book キー v1
+unit 個
+
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 入荷(伝票: string, sku: string, 数: 個)
+  move 数 from 仕入先 to 在庫(sku)
+transfer 出荷(注文: string, sku: string, 数: 個)
+  key 注文, 数
+  move 数 from 在庫(sku) to 客
+transfer 返品(伝票: string, sku: string, 数: 個)
+  key 伝票番号
+  move 数 from 客 to 在庫(sku)

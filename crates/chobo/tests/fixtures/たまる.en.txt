@@ -1,0 +1,8 @@
+warning[W101]: たまる.book:5:9: moves put into `ポイント`, and no move takes out of it anywhere: whatever goes in stays there
+     5 | account ポイント(会員: string) : 円
+  the operations that get there:
+       1  付与.do(伝票: 伝票-1, 会員: 会員-2, 額: 1)  done
+  hint: write a transfer that takes out of `ポイント`, or mark it `outside` if it stands for the world outside the book
+たまる.book: ok, 1 warning(s)
+  付与.do  may be refused: key_conflict
+  key: 付与 once per 伝票; a second call that differs only in 会員 or 額 is refused with key_conflict

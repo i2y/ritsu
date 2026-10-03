@@ -1,0 +1,4 @@
+# What the Python runner needs. requirements.txt is the lock, made from this with
+#   uv pip compile requirements.in --python-version 3.13 --generate-hashes -o requirements.txt
+tigerbeetle==0.17.9
+psycopg[binary]==3.3.6
