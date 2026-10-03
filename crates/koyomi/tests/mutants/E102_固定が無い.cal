@@ -1,0 +1,9 @@
+calendar 会社の休み(company) v1
+offset +09:00
+
+source 休業日 = file "../fixtures/data/holidays.csv"
+  format csv
+  covers 2026-01-01..2026-12-31
+
+closed weekly sat, sun
+closed 休業日

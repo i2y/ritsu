@@ -1,0 +1,11 @@
+error[E301]: tests/mutants/E301_modified_following.cal:17:3: The claim the_same_day fails for 21 of the 1,064 days of invoice_date
+    17 |   the_same_day : due = due_modified
+  = It fails on 2026-01-01, 2026-01-29, 2026-04-30..2026-05-01 (2 days), 2026-07-30..2026-08-01 (3 days), 2026-10-01, 2026-12-31..2027-01-01 (2 days), and 6 more runs; --format json lists them all
+  = The farthest is invoice_date 2026-07-30, where due 2026-09-01 is 4 days after due_modified
+  the first input it fails on:
+      invoice_date  2026-01-01 Thu
+      due           2026-01-31 Sat  + 30 days
+                    2026-02-02 Mon  roll following: 2026-01-31 (Saturday) and 2026-02-01 (Sunday) are closed
+      due_modified  2026-01-31 Sat  + 30 days
+                    2026-01-30 Fri  roll modified following: 2026-01-31 (Saturday) is closed; the next business day, 2026-02-02, is in the next month, so the business day before
+                    due is 3 days after due_modified

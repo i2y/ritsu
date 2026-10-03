@@ -1,0 +1,3 @@
+error[E014]: tests/mutants/E014_循環.cal:8:6: The dates go round in a circle: 締め日 <- 支払日 <- 締め日
+     8 | date 締め日(closing) = 支払日
+  = Every date has to start, in the end, from the date under `inputs`.

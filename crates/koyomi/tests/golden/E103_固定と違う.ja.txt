@@ -1,0 +1,4 @@
+エラー[E103]: tests/mutants/E103_固定と違う.cal:4:8: 出典「休業日」の写しが固定と違います（固定は sha256:cec37a743c96995c、写しは sha256:56ebcd2f1e91e0a1）
+     4 | source 休業日 = file "../fixtures/data/holidays.csv" sha256:cec37a743c96995c
+  = 固定したあとで写しが変わりました。何が変わったかを読んでから（`koyomi source outdated`）、固定を書き換えます。
+  = 直した行: source 休業日 = file "../fixtures/data/holidays.csv" sha256:56ebcd2f1e91e0a1

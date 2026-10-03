@@ -1,0 +1,4 @@
+warning[W102]: tests/mutants/W102_引かれない条.cal:5:3: 民法 第142条 is pinned but cited nowhere
+     5 |   第142条 sha256:fc8c35a0769d3b35
+  = It is what is left after a citation was removed; delete the pin line.
+tests/mutants/W102_引かれない条.cal: ok — every date computes on all 365 days of 起点 (2026-01-01..2026-12-31)

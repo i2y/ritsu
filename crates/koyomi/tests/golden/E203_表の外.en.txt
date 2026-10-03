@@ -1,0 +1,9 @@
+error[E203]: tests/mutants/E203_表の外.cal:6:3: The computation for 受領日 2027-11-21 asks whether 2028-01-10 is a business day, and the table 祝日 knows only 1955-01-01..2027-12-31
+     6 |   受領日(received) : date  range >=2026-01-01 <=2027-12-31
+  = The same happens for 41 days of 受領日: 2027-11-21..2027-12-31
+  = To fix it: make the range `range >=2026-01-01 <=2027-11-20`, or take the copy again once a newer table is out (koyomi source fetch)
+  the first input it happens on:
+      受領日  2027-11-21 Sun
+      締め日  2027-12-20 Mon  close day 20
+      支払日  2028-01-10 Mon  day 10 of month +1
+                              roll preceding: whether 2028-01-10 is a business day is outside what the calendar knows

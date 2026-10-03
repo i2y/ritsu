@@ -1,0 +1,6 @@
+dates 日付が一つも無い(no_dates_test) v1
+description "date の宣言が一つも無いファイル。検査を通るので、生成したコードも動かなければならない。カレンダーの is_open だけを持つ"
+use calendar "calendars/休みの書き方を全部使う.cal"
+
+inputs
+  起点(origin) : date  range >=2026-01-01 <=2026-01-03

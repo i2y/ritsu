@@ -1,0 +1,5 @@
+calendar 土日(weekends) v1
+description "土曜と日曜を休む。表を使わないので、どの日のことも分かる"
+offset +09:00
+
+closed weekly sat, sun

@@ -1,0 +1,3 @@
+error[E106]: tests/mutants/E106_行の無い年.cal:6:3: `covers listed years`, but the table 休業日 has no rows in 2026
+     6 |   covers listed years
+  = Koyomi cannot tell a year with no closed days from a year missing from the table; write the span as dates (like `covers 2025-01-01..2027-12-31`).

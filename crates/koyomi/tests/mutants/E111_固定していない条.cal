@@ -1,0 +1,12 @@
+dates 満了日(last_day) v1
+use calendar "../../examples/calendars/民法142条の休日.cal"
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第140条 sha256:e880059021fbb67d
+
+inputs
+  起点(origin) : date  range >=2026-01-01 <=2026-12-31
+
+date 起算日(first_day) = 起点    @民法 第140条
+  + 1 day
+date 満了日_142条(last_day_142) = 起算日    @民法 第142条
+  if closed + 1 day

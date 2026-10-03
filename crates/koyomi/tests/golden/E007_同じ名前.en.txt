@@ -1,0 +1,2 @@
+error[E007]: tests/mutants/E007_同じ名前.cal:11:6: The name 締め日 is declared twice (line 8 too)
+    11 | date 締め日(closing_25th) = 受領日

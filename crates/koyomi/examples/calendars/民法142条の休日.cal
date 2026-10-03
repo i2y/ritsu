@@ -1,0 +1,9 @@
+calendar 民法142条の休日(civil_code_142) v1
+description "民法 142 条が名指しする日（日曜日と、国民の祝日に関する法律に規定する休日）だけを休みにした。「その他の休日」に何が入るかは、この例では決めない"
+
+source 祝日 = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
+  format csv shift_jis
+  covers 1955-01-01..2027-12-31
+
+closed weekly sun
+closed 祝日

@@ -1,0 +1,9 @@
+dates 締め日を受け取る(closing_days) v1
+use calendar "../../examples/calendars/東京の営業日.cal"
+
+inputs
+  受領日(received)    : date  range >=2026-01-01 <=2026-12-31
+  締め日(closing_day) : int   range >=1 <=28
+
+date 締め(closing) = 締め日
+  close day 締め日

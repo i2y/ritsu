@@ -1,0 +1,28 @@
+dates 民法の期間_読み方の比較(civil_code_readings) v1
+description "わざと破る例。民法 142 条の「その翌日」を、文字どおりの翌日と休みが明けた日の二通りに書き、分かれる日を挙げる。143 条を、月数を足して月末に寄せる書き方とも比べる。どちらの読み方を採るかを決めるものではない"
+use calendar "../../examples/calendars/民法142条の休日.cal"
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第140条 sha256:e880059021fbb67d
+  第141条 sha256:0575c131b9f08063
+  第142条 sha256:fc8c35a0769d3b35
+  第143条 sha256:6950bdfb988439b6
+
+inputs
+  起点(origin)      : date  range >=2026-01-01 <=2026-12-31
+  月数(month_count) : int   range >=1 <=12
+
+date 起算日(first_day) = 起点                                         @民法 第140条
+  + 1 day
+date 満了日(last_day) = 起算日                                        @民法 第141条, 第143条
+  + 月数 months else start_of_next_month
+  - 1 day
+date 満了日_翌日(next_day) = 満了日                                   @民法 第142条
+  if closed + 1 day
+date 満了日_翌営業日(next_business_day) = 満了日                      @民法 第142条
+  roll following
+date 月数を足して寄せる(months_added) = 起点
+  + 月数 months else end_of_month
+
+claims
+  二つの読み方       : 満了日_翌日 = 満了日_翌営業日
+  月末に寄せる書き方 : 満了日 = 月数を足して寄せる

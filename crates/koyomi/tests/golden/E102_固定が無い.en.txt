@@ -1,0 +1,4 @@
+error[E102]: tests/mutants/E102_固定が無い.cal:4:8: The source 休業日 is not pinned (it has no `sha256:`)
+     4 | source 休業日 = file "../fixtures/data/holidays.csv"
+  = Pin it with the first 16 digits of the SHA-256 of the copy's bytes; for the copy as it is, that is sha256:56ebcd2f1e91e0a1 (`koyomi source pin` writes it too).
+  = The line, fixed: source 休業日 = file "../fixtures/data/holidays.csv" sha256:56ebcd2f1e91e0a1

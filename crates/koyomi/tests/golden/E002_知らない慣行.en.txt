@@ -1,0 +1,2 @@
+error[E002]: tests/mutants/E002_知らない慣行.cal:13:8: `roll` is followed by `following`, `preceding`, `modified following` or `modified preceding` (found `nearest`)
+    13 |   roll nearest

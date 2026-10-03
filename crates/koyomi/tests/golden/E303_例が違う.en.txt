@@ -1,0 +1,9 @@
+error[E303]: tests/mutants/E303_例が違う.cal:24:29: Example row 2 says 支払日 is 2027-02-09, and it computes to 2027-02-10
+    24 | | 2026-12-21 | 2027-01-20 | 2027-02-09 |
+  = The line, fixed: | 2026-12-21 | 2027-01-20 | 2027-02-10 |
+  the computation:
+      受領日  2026-12-21 Mon
+      締め日  2027-01-20 Wed  close day 20
+      支払日  2027-02-10 Wed  day 10 of month +1
+              2027-02-10 Wed  roll preceding: a business day, stays
+              time 2027-02-10T09:00:00+09:00 (2027-02-10T00:00:00Z in UTC)

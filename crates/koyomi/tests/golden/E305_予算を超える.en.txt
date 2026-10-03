@@ -1,0 +1,4 @@
+error[E305]: tests/mutants/E305_予算を超える.cal:5:3: Checking needs 380,444,400 input combinations, over the budget of 100,000,000, so nothing was checked
+     5 |   受領日(received)        : date  range >=1926-01-01 <=2025-12-31
+  = That is 受領日 36,525 days × 締め日 31 × 支払の月 12 × 支払の日 28
+  = It never tries some of the inputs and passes; narrow a range, split the file, or raise the budget with `--budget` (DESIGN 3.2).

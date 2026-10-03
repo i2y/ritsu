@@ -1,0 +1,20 @@
+dates net30 v1
+description "Net 30: due 30 days after the invoice date, moved to the next business day in England and Wales when that day is closed. The claims are this example's own, written as they read"
+use calendar "../../examples/calendars/england_and_wales.cal"
+
+inputs
+  invoice_date : date  range >=2026-01-01 <=2028-11-29
+
+date due = invoice_date
+  + 30 days
+  roll following
+
+date due_modified = invoice_date
+  + 30 days
+  roll modified following
+
+claims
+  the_same_day : due = due_modified
+  due_on_a_business_day   : due is open
+  at_least_30_days        : due >= invoice_date + 30 days
+  later_invoice_later_due : due is monotonic

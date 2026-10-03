@@ -1,0 +1,21 @@
+dates 締め日と支払日を受け取る(closing_and_payment_days) v1
+description "締め日、支払の月、支払の日を整数で受け取る。締め日を規則から受け取る形。支払日が休みなら前の営業日。条件は、この例のために文字どおりに書いたもの"
+use calendar "calendars/東京の営業日.cal"
+
+inputs
+  受領日(received)        : date  range >=2026-01-01 <=2027-10-01
+  締め日(closing_day)     : int   range >=1 <=31
+  支払の月(payment_month) : int   range >=1 <=2
+  支払の日(payment_day)   : int   range >=10 <=31
+
+date 締め(closing) = 受領日
+  close day 締め日 else end_of_month                 # 締め日で締める。その月に無い日（31 日など）なら月末で締める
+
+date 支払(payment) = 締め
+  day 支払の日 of month +支払の月 else end_of_month  # 支払の月だけ後の月の、支払の日。無い日なら月末
+  roll preceding                                     # 支払日が休みなら前の営業日
+
+claims
+  営業日に払う       : 支払 is open
+  締めのあとに払う   : 支払 > 締め
+  遅い受領は遅い支払 : 支払 is monotonic

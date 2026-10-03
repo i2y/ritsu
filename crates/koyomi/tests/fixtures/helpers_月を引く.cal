@@ -1,0 +1,11 @@
+dates 月を引く(subtract_months_test) v1
+description "月の引き算を、月末に寄せる扱いと次の月の 1 日に送る扱いで、月数 0〜24 と 1900〜2100 年のすべての日に使う。生成したコードの小さな関数を参照インタプリタと突き合わせるためのもの"
+
+inputs
+  起点(origin)      : date  range >=1900-01-01 <=2100-12-31
+  月数(month_count) : int   range >=0 <=24
+
+date 月末に寄せる(to_month_end) = 起点
+  - 月数 months else end_of_month
+date 翌月初に送る(to_next_month) = 起点
+  - 月数 months else start_of_next_month

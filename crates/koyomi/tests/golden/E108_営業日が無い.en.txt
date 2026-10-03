@@ -1,0 +1,3 @@
+error[E108]: tests/mutants/E108_営業日が無い.cal:1:1: This calendar has no business day at all
+     1 | calendar 毎日休み(always_closed) v1
+  = Every day of the data range 0001-01-01..9999-12-31 is closed, so looking for the next business day would never end.

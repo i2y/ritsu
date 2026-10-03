@@ -1,0 +1,4 @@
+警告[W201]: tests/mutants/W201_効かないelse.cal:12:27: `day 10 of month +1 else end_of_month` の日は 28 日までなので無い日に当たらず、`else` は効きません
+    12 |   day 10 of month +1 else end_of_month
+  = `else …` を消します。
+tests/mutants/W201_効かないelse.cal: ok — 3 つの条件が、受領日 2026-01-01〜2027-11-20 の 689 日のすべてで成り立ちます。例 2 行も合っています

@@ -1,0 +1,5 @@
+error[E105]: tests/mutants/E105_coversの外の行.cal:6:3: The table 祝日 has 17 rows outside `covers 1955-01-01..2026-12-31`
+     6 |   covers 1955-01-01..2026-12-31
+  = Outside: 2027-01-01 元日, 2027-01-11 成人の日, 2027-02-11 建国記念の日, 2027-02-23 天皇誕生日, 2027-03-21 春分の日, 2027-03-22 休日, and 11 more
+  = `covers` is the span the table lists every closed day of; when the table grew, so does the span. The table's rows run from 1955-01-01 to 2027-11-23.
+  = The line, fixed: covers 1955-01-01..2027-12-31

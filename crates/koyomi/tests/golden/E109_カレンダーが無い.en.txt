@@ -1,0 +1,6 @@
+error[E109]: tests/mutants/E109_カレンダーが無い.cal:12:3: This line asks which days are closed, and there is no calendar (no `use calendar`)
+    12 |   roll preceding
+  = Name the calendar after the heading, like `use calendar "calendars/tokyo.cal"`.
+error[E110]: tests/mutants/E109_カレンダーが無い.cal:13:3: `at` gives a time, which needs a calendar with an offset
+    13 |   at 09:00
+  = Write the calendar's offset, like `offset +09:00`. For a place with daylight saving time, give dates only (DESIGN 1.9).

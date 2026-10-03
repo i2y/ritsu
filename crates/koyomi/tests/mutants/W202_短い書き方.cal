@@ -1,0 +1,16 @@
+dates 月末締め翌々月末払い(eom_two_months) v1
+description "月末締め翌々月末払い。支払日が休みなら前の営業日。条件「受領から60日以内」をわざと破る例で、この条件は例のために文字どおりに書いたもの。法令の読み方を示すものではない"
+use calendar "../../examples/calendars/東京の営業日.cal"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2027-10-31
+
+date 締め日(closing) = 受領日
+  close end of month
+
+date 支払日(payment) = 締め日
+  day 31 of month +2 else end_of_month
+  roll preceding
+
+claims
+  受領から60日以内 : 支払日 <= 受領日 + 60 days

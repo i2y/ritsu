@@ -1,0 +1,27 @@
+error[E301]: tests/mutants/E301_二つの読み方.cal:27:3: The claim 二つの読み方 fails for 121 of the 4,380 combinations of 起点 and 月数
+    27 |   二つの読み方       : 満了日_翌日 = 満了日_翌営業日
+  = It fails on 月数 1: 2026-01-22, 2026-04-03..2026-04-05 (3 days), 2026-06-19, 2026-08-20..2026-08-22 (3 days), 2026-09-11, 2026-10-22, and 75 more runs; --format json lists them all
+  = By input: 月数 1 → 11, 月数 2 → 10, 月数 3 → 11, 月数 4 → 11, 月数 5 → 11, 月数 6 → 11, 月数 7 → 11, 月数 8 → 11, 月数 9 → 9, 月数 10 → 9, 月数 11 → 8, 月数 12 → 8
+  = The farthest is 起点 2026-04-03, 月数 1, where 満了日_翌日 2026-05-04 is 3 days before 満了日_翌営業日
+  the first input it fails on:
+      起点             2026-01-22 Thu
+                       月数 = 1
+      起算日           2026-01-23 Fri  + 1 day
+      満了日           2026-02-23 Mon  + 月数 months else start_of_next_month (月数 = 1)
+                       2026-02-22 Sun  - 1 day
+      満了日_翌日      2026-02-23 Mon  if closed + 1 day: 2026-02-22 (Sunday) is closed
+      満了日_翌営業日  2026-02-24 Tue  roll following: 2026-02-22 (Sunday) and 2026-02-23 (天皇誕生日) are closed
+                       満了日_翌日 is 1 day before 満了日_翌営業日
+error[E301]: tests/mutants/E301_二つの読み方.cal:28:3: The claim 月末に寄せる書き方 fails for 39 of the 4,380 combinations of 起点 and 月数
+    28 |   月末に寄せる書き方 : 満了日 = 月数を足して寄せる
+  = It fails on 月数 1: 2026-02-28, 2026-04-30, 2026-06-30, 2026-09-30, 2026-11-30; 月数 2: 2026-02-28, and 33 more runs; --format json lists them all
+  = By input: 月数 1 → 5, 月数 2 → 3, 月数 3 → 3, 月数 4 → 5, 月数 5 → 1, 月数 6 → 5, 月数 7 → 2, 月数 8 → 4, 月数 9 → 4, 月数 10 → 2, 月数 11 → 5
+  = The farthest is 起点 2026-02-28, 月数 1, where 満了日 2026-03-31 is 3 days after 月数を足して寄せる
+  the first input it fails on:
+      起点                2026-02-28 Sat
+                          月数 = 1
+      起算日              2026-03-01 Sun  + 1 day
+      満了日              2026-04-01 Wed  + 月数 months else start_of_next_month (月数 = 1)
+                          2026-03-31 Tue  - 1 day
+      月数を足して寄せる  2026-03-28 Sat  + 月数 months else end_of_month (月数 = 1)
+                          満了日 is 3 days after 月数を足して寄せる

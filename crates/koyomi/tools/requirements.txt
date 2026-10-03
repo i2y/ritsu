@@ -1,0 +1,7 @@
+# What tests/targets.rs type-checks the generated Python with (mypy --strict).
+#
+#   uv venv --python 3.13 tools/.venv
+#   uv pip install --python tools/.venv/bin/python -r tools/requirements.txt
+#
+# The test finds mypy at tools/.venv/bin/mypy, or where KOYOMI_MYPY says, or on the PATH.
+mypy==2.4.0

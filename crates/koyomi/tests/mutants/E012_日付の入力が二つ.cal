@@ -1,0 +1,8 @@
+dates 検収(acceptance) v1
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2026-12-31
+  検収日(accepted) : date  range >=2026-01-01 <=2026-12-31
+
+date 期日(due) = 検収日
+  + 30 days

@@ -1,0 +1,9 @@
+calendar 東京の営業日(tokyo) v1
+offset +09:00
+
+source 祝日 = file "../../examples/calendars/data/syukujitsu.csv" sha256:cec37a743c96995c
+  format csv
+  covers 1955-01-01..2027-12-31
+
+closed weekly sat, sun
+closed 祝日
