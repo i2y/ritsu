@@ -84,7 +84,7 @@ fn the_language() {
 
 #[test]
 fn the_json_of_check() {
-    let r = run(&["check", "tests/fixtures/period", "--format", "json"]);
+    let r = run(&["check", "tests/fixtures/period", "--root", ".", "--format", "json"]);
     assert_eq!(r.code, 0);
     let v: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
     assert_eq!(v["ok"], true);
