@@ -2,9 +2,9 @@
 //! quotes, and the month tables are tables of numbers with a legend.
 
 use super::{Block, Inline, Item, Legend, Page, Para, Quote};
-use crate::diag::ja_spacing;
+use ritsu_base::text::ja_spacing;
 use crate::doc::months::{Grid, named_runs};
-use crate::i18n::{Lang, Text};
+use ritsu_base::text::{Lang, Text};
 
 /// Text that Markdown must not read as markup. `_` is left as it is: GitHub never reads one
 /// between two letters as emphasis, and names such as `満了日_翌日` have it there.
@@ -46,7 +46,7 @@ fn inline(p: &Para, lang: Lang) -> String {
         match x {
             Inline::T(s) => o.push_str(&words(s, lang)),
             Inline::Say(s) => {
-                let s = if i == 0 && lang == Lang::En { crate::diag::capitalize(s) } else { s.clone() };
+                let s = if i == 0 && lang == Lang::En { ritsu_base::text::capitalize(s) } else { s.clone() };
                 o.push_str(&esc(&s));
             }
             Inline::C(s) => o.push_str(&code(s)),

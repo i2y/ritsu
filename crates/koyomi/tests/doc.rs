@@ -7,17 +7,15 @@
 //!   claim failing on; every holiday name on it is a row of the table the calendar read; and
 //!   every sentence it says an operation with comes from `paraphrase.rs`.
 //! - A file with an error other than a failing claim or example has no page.
-//! - In Chrome (`KOYOMI_CHROME`, else macOS's Google Chrome, else `google-chrome` or `chromium`
-//!   on the PATH), the pages
-//!   of the two examples that break a claim on purpose are drawn in the light and the dark
-//!   palette; `KOYOMI_BLESS=1` keeps the pictures in `docs/images/` for the READMEs.
+//! - In Chrome (found by ritsu-testkit: `RITSU_CHROME` or `KOYOMI_CHROME`, else macOS's Google
+//!   Chrome, else `google-chrome` or `chromium` on the PATH), the pages of the two examples that
+//!   break a claim on purpose are drawn in the light and the dark palette; `KOYOMI_BLESS=1` keeps
+//!   the pictures in `docs/images/` for the READMEs.
 
-mod common;
-
-use common::TempDir;
 use koyomi::check::{Checked, check};
+use ritsu_testkit::{Need, TempDir, chrome, need};
 use koyomi::doc::{self, Format, Options};
-use koyomi::i18n::Lang;
+use ritsu_base::text::Lang;
 use std::collections::BTreeSet;
 use std::process::Command;
 use std::time::Duration;
@@ -48,21 +46,13 @@ fn stem(path: &str) -> String {
 
 #[test]
 fn every_example_has_its_golden_page() {
-    let bless = std::env::var("KOYOMI_BLESS").is_ok();
-    std::fs::create_dir_all("tests/golden/doc").unwrap();
     let mut failures = Vec::new();
     for p in EXAMPLES {
         for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
             let text = page(p, lang, Format::Markdown);
             let golden = format!("tests/golden/doc/{}.{tag}.md", stem(p));
-            if bless {
-                std::fs::write(&golden, &text).unwrap();
-                continue;
-            }
-            let want = std::fs::read_to_string(&golden).unwrap_or_default();
-            if want != text {
-                let line = want.lines().zip(text.lines()).position(|(a, b)| a != b).unwrap_or(want.lines().count().min(text.lines().count()));
-                failures.push(format!("{p} ({tag}) differs from {golden} at line {}:\n--- want\n{}\n--- got\n{}", line + 1, want.lines().nth(line).unwrap_or(""), text.lines().nth(line).unwrap_or("")));
+            if let Err(e) = ritsu_testkit::golden::check(std::path::Path::new(&golden), &text) {
+                failures.push(format!("{p} ({tag}): {e}"));
             }
         }
     }
@@ -167,7 +157,7 @@ fn the_html_loads_nothing_and_shows_what_the_check_found() {
 }
 
 fn koyomi(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).env_remove("KOYOMI_LANG").output().unwrap()
+    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).env_remove("KOYOMI_LANG").env_remove("RITSU_LANG").output().unwrap()
 }
 
 #[test]
@@ -232,55 +222,6 @@ fn what_the_pages_say() {
 
 /// Chrome: `KOYOMI_CHROME`, else where macOS installs Google Chrome, else a Chrome or a Chromium
 /// on the PATH (the order dandori and chobo look in).
-fn chrome() -> Option<String> {
-    if let Ok(c) = std::env::var("KOYOMI_CHROME")
-        && !c.is_empty()
-    {
-        return Some(c);
-    }
-    let mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-    if std::path::Path::new(mac).is_file() {
-        return Some(mac.to_string());
-    }
-    ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"].iter().find(|c| common::on_path(c)).map(|c| c.to_string())
-}
-
-/// The width and the height of a PNG, from its header.
-fn png_size(b: &[u8]) -> Option<(u32, u32)> {
-    if b.len() < 24 || &b[..8] != b"\x89PNG\r\n\x1a\n" || &b[12..16] != b"IHDR" {
-        return None;
-    }
-    Some((u32::from_be_bytes(b[16..20].try_into().ok()?), u32::from_be_bytes(b[20..24].try_into().ok()?)))
-}
-
-/// Run Chrome until it has written `png`, then stop it: headless Chrome does not always end
-/// by itself after a screenshot (PLAN 0.2). A minute at most. What it said, when it fails.
-fn shoot(cmd: &mut Command, png: &std::path::Path) -> String {
-    use std::process::Stdio;
-    let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().expect("could not run Chrome");
-    let start = std::time::Instant::now();
-    let mut last = 0u64;
-    loop {
-        std::thread::sleep(Duration::from_millis(200));
-        let size = std::fs::metadata(png).map(|m| m.len()).unwrap_or(0);
-        if size > 0 && size == last {
-            break;
-        }
-        last = size;
-        if let Ok(Some(_)) = child.try_wait() {
-            break;
-        }
-        if start.elapsed() > Duration::from_secs(60) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return "Chrome took more than a minute".into();
-        }
-    }
-    let _ = child.kill();
-    let _ = child.wait();
-    String::new()
-}
-
 /// What the READMEs show: the top of a page, in the light palette, and its month tables, in
 /// the dark one. The page is the one `koyomi doc --format html` writes, with `data-theme` on
 /// its root to choose the palette and, for the month tables, everything but them hidden.
@@ -305,11 +246,14 @@ const SHOTS: &[Shot] = &[
 
 #[test]
 fn the_pages_in_chrome() {
-    let Some(chrome) = chrome() else {
-        println!("SKIP: Chrome is not found; set KOYOMI_CHROME to draw the pages");
+    if !need(Need::Chrome) {
+        return;
+    }
+    let Some(chrome) = chrome::find() else {
+        ritsu_testkit::skip("Chrome is not found; set RITSU_CHROME (or KOYOMI_CHROME) to draw the pages");
         return;
     };
-    let bless = std::env::var("KOYOMI_BLESS").is_ok();
+    let bless = ritsu_testkit::golden::bless();
     let dir = TempDir::new("doc-chrome");
     let mut sizes = Vec::new();
     std::thread::scope(|s| {
@@ -326,22 +270,8 @@ fn the_pages_in_chrome() {
                     let at = dir.join(format!("{i}.html"));
                     std::fs::write(&at, html).unwrap();
                     let png = dir.join(name);
-                    let profile = dir.join(format!("profile-{i}"));
-                    let err = shoot(
-                        Command::new(&chrome).args([
-                            "--headless=new",
-                            "--disable-gpu",
-                            "--no-first-run",
-                            "--no-default-browser-check",
-                            "--hide-scrollbars",
-                            &format!("--user-data-dir={}", profile.display()),
-                            &format!("--window-size={w},{h}"),
-                            &format!("--screenshot={}", png.display()),
-                            &format!("file://{}", at.display()),
-                        ]),
-                        &png,
-                    );
-                    let bytes = std::fs::read(&png).unwrap_or_else(|_| panic!("Chrome drew no picture of {p}: {err}"));
+                    let drawn = chrome::screenshot(&chrome, &format!("file://{}", at.display()), &png, *w, *h, Duration::from_secs(60));
+                    let bytes = std::fs::read(&png).unwrap_or_else(|_| panic!("Chrome drew no picture of {p}: {drawn:?}"));
                     (*name, bytes)
                 })
             })
@@ -351,7 +281,7 @@ fn the_pages_in_chrome() {
         }
     });
     for ((name, bytes), Shot { size: (w, h), .. }) in sizes.iter().zip(SHOTS) {
-        assert_eq!(png_size(bytes), Some((*w, *h)), "{name} is a {w}x{h} PNG");
+        assert_eq!(chrome::png_size(bytes), Some((*w, *h)), "{name} is a {w}x{h} PNG");
         assert!(bytes.len() > 50_000, "{name} is {} bytes: did the page draw?", bytes.len());
         if bless {
             std::fs::create_dir_all("docs/images").unwrap();

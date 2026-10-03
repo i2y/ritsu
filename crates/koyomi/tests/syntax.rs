@@ -75,7 +75,7 @@ fn every_cal_in_design_is_read() {
         n += 1;
         let p = parse("design.cal", &f);
         if !p.diags.is_empty() {
-            let text: String = p.diags.iter().map(|d| d.render(koyomi::i18n::Lang::En)).collect();
+            let text: String = p.diags.iter().map(|d| d.render(ritsu_base::text::Lang::En)).collect();
             failures.push(format!("--- block\n{f}--- says\n{text}"));
         }
     }
@@ -85,7 +85,7 @@ fn every_cal_in_design_is_read() {
 }
 
 fn codes(src: &str) -> Vec<(&'static str, usize, usize)> {
-    parse("t.cal", src).diags.iter().map(|d| (d.code, d.line, d.col)).collect()
+    parse("t.cal", src).diags.iter().map(|d| (d.code, d.line.unwrap_or(0), d.col.unwrap_or(0))).collect()
 }
 
 #[test]

@@ -1,17 +1,13 @@
 //! `koyomi source fetch | pin | outdated` (PLAN C.9, DESIGN 9), without the network: a
-//! table's `url` is a `file://` URL to a newer copy, and e-Gov law API v2 is a small HTTP
-//! server inside the test (`KOYOMI_EGOV`). The real Cabinet Office, GOV.UK and e-Gov are
-//! asked only when `KOYOMI_NET=1`.
+//! table's `url` is a `file://` URL to a newer copy, and e-Gov law API v2 is ritsu-testkit's
+//! small HTTP server inside the test (`KOYOMI_EGOV`). The real Cabinet Office, GOV.UK and e-Gov
+//! are asked only when `KOYOMI_NET=1`.
 
-mod common;
-
-use common::{TempDir, on_path};
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use ritsu_testkit::http::HttpServer;
+use ritsu_testkit::tools::on_path;
+use ritsu_testkit::{TempDir, skip};
 use std::path::Path;
 use std::process::{Command, Output};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 
 const CSV: &str = "examples/calendars/data/syukujitsu.csv";
 const JSON: &str = "examples/calendars/data/bank-holidays.json";
@@ -21,7 +17,7 @@ const REVISION: &str = "129AC0000000089_20260624_508AC0000000045";
 const LATER: [&str; 5] = ["2027-06-23", "2027-12-05", "2028-06-13", "2028-12-23", "2029-06-23"];
 
 fn koyomi(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).current_dir(dir).env_remove("KOYOMI_LANG").output().unwrap()
+    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).current_dir(dir).env_remove("KOYOMI_LANG").env_remove("RITSU_LANG").output().unwrap()
 }
 
 fn text(o: &Output) -> String {
@@ -33,14 +29,14 @@ fn code(o: &Output) -> i32 {
 }
 
 fn short(b: &[u8]) -> String {
-    koyomi::sha256::short(b)
+    ritsu_base::sha256::short(b)
 }
 
 fn no_curl() -> bool {
-    if on_path("curl") {
+    if on_path("curl").is_some() {
         return false;
     }
-    println!("SKIP: curl is not on the PATH; source fetch and outdated are not run");
+    skip("curl is not on the PATH; source fetch and outdated are not run");
     true
 }
 
@@ -169,22 +165,6 @@ fn pin_changes_only_the_digits() {
 
 // ── e-Gov, served from inside the test ───────────────────────────────────────
 
-fn base64(b: &[u8]) -> String {
-    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut s = String::new();
-    for c in b.chunks(3) {
-        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
-        for i in 0..4 {
-            if i <= c.len() {
-                s.push(A[(n >> (18 - 6 * i) & 63) as usize] as char);
-            } else {
-                s.push('=');
-            }
-        }
-    }
-    s
-}
-
 /// What the server changes in an article as of a later date.
 #[derive(Clone, Copy, PartialEq)]
 enum Change {
@@ -195,85 +175,56 @@ enum Change {
     Markup(&'static str),
 }
 
-/// e-Gov law API v2's `law_data` and `law_revisions` for the Civil Code, from the copies.
+/// e-Gov law API v2's `law_data` and `law_revisions` for the Civil Code, from the copies: every
+/// request the tests make, answered by ritsu-testkit's server.
 struct Egov {
+    server: HttpServer,
     addr: String,
-    stop: Arc<AtomicBool>,
-    change: Arc<Mutex<Change>>,
-    requests: Arc<Mutex<Vec<String>>>,
-    thread: Option<std::thread::JoinHandle<()>>,
 }
 
-fn respond(target: &str, change: Change) -> (u16, String) {
-    let (path, query) = target.split_once('?').unwrap_or((target, ""));
-    let q: std::collections::HashMap<&str, &str> = query.split('&').filter_map(|kv| kv.split_once('=')).collect();
-    if path == "/law_revisions/129AC0000000089" {
+/// The dates an article is asked for as of: the copy's, and the revisions after it.
+fn asofs() -> Vec<&'static str> {
+    let mut v = vec!["2026-10-01"];
+    v.extend(LATER);
+    v
+}
+
+impl Egov {
+    fn start() -> Egov {
+        let server = HttpServer::start();
+        let addr = server.addr.clone();
         let mut revs = vec![serde_json::json!({"law_revision_id": REVISION, "amendment_enforcement_date": "2026-06-24"})];
         for d in LATER {
             revs.push(serde_json::json!({"law_revision_id": format!("129AC0000000089_{}_TEST", d.replace('-', "")), "amendment_enforcement_date": d}));
         }
         revs.push(serde_json::json!({"law_revision_id": "129AC0000000089_UNKNOWN", "amendment_enforcement_date": null}));
-        return (200, serde_json::json!({"law_info": {"law_id": "129AC0000000089"}, "revisions": revs}).to_string());
+        server.set("/law_revisions/129AC0000000089", serde_json::json!({"law_info": {"law_id": "129AC0000000089"}, "revisions": revs}).to_string());
+        let e = Egov { server, addr };
+        e.set(Change::None);
+        e
     }
-    if path == "/law_data/129AC0000000089" && q.get("law_full_text_format") == Some(&"xml") {
-        let (Some(asof), Some(elm)) = (q.get("asof"), q.get("elm")) else { return (400, "{}".into()) };
-        let Ok(xml) = std::fs::read_to_string(format!("{LAW}/{elm}.xml")) else { return (404, "{}".into()) };
-        let xml = match change {
-            Change::Text(from) if elm.ends_with("_143") && *asof >= from => xml.replace("暦に従って計算する", "暦に従つて計算する"),
-            Change::Markup(from) if elm.ends_with("_143") && *asof >= from => xml.replace("WritingMode=\"vertical\"", "WritingMode=\"horizontal\""),
-            _ => xml,
-        };
-        let rev = if *asof == "2026-10-01" { REVISION.to_string() } else { format!("129AC0000000089_{}_TEST", asof.replace('-', "")) };
-        return (200, serde_json::json!({"law_info": {"law_id": "129AC0000000089"}, "revision_info": {"law_revision_id": rev}, "law_full_text": base64(xml.as_bytes())}).to_string());
-    }
-    (404, "{}".into())
-}
 
-impl Egov {
-    fn start() -> Egov {
-        let l = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = format!("http://{}", l.local_addr().unwrap());
-        let stop = Arc::new(AtomicBool::new(false));
-        let change = Arc::new(Mutex::new(Change::None));
-        let requests = Arc::new(Mutex::new(Vec::new()));
-        let (s, c, r) = (Arc::clone(&stop), Arc::clone(&change), Arc::clone(&requests));
-        let thread = std::thread::spawn(move || {
-            for conn in l.incoming() {
-                if s.load(Ordering::SeqCst) {
-                    break;
-                }
-                let Ok(mut conn) = conn else { continue };
-                let mut buf = Vec::new();
-                let mut chunk = [0u8; 4096];
-                while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
-                    match conn.read(&mut chunk) {
-                        Ok(0) | Err(_) => break,
-                        Ok(n) => buf.extend_from_slice(&chunk[..n]),
-                    }
-                }
-                let head = String::from_utf8_lossy(&buf).to_string();
-                let target = head.split_whitespace().nth(1).unwrap_or("/").to_string();
-                r.lock().unwrap().push(target.clone());
-                let (status, body) = respond(&target, *c.lock().unwrap());
-                let reason = if status == 200 { "OK" } else { "Not Found" };
-                let _ = write!(conn, "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+    /// Answer every article as of every date as `change` says.
+    fn set(&self, change: Change) {
+        for asof in asofs() {
+            for a in ["140", "141", "142", "143"] {
+                let elm = format!("MainProvision-Article_{a}");
+                let xml = std::fs::read_to_string(format!("{LAW}/{elm}.xml")).unwrap();
+                let xml = match change {
+                    Change::Text(from) if a == "143" && asof >= from => xml.replace("暦に従って計算する", "暦に従つて計算する"),
+                    Change::Markup(from) if a == "143" && asof >= from => xml.replace("WritingMode=\"vertical\"", "WritingMode=\"horizontal\""),
+                    _ => xml,
+                };
+                let rev = if asof == "2026-10-01" { REVISION.to_string() } else { format!("129AC0000000089_{}_TEST", asof.replace('-', "")) };
+                let body = serde_json::json!({"law_info": {"law_id": "129AC0000000089"}, "revision_info": {"law_revision_id": rev}, "law_full_text": ritsu_base::sources::base64_encode(xml.as_bytes())});
+                self.server.set(&format!("/law_data/129AC0000000089?asof={asof}&elm={elm}&law_full_text_format=xml"), body.to_string());
             }
-        });
-        Egov { addr, stop, change, requests, thread: Some(thread) }
-    }
-
-    fn set(&self, c: Change) {
-        *self.change.lock().unwrap() = c;
-    }
-}
-
-impl Drop for Egov {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::SeqCst);
-        let _ = TcpStream::connect(self.addr.trim_start_matches("http://"));
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
         }
+    }
+
+    /// Every request target asked for.
+    fn requests(&self) -> Vec<String> {
+        self.server.asked()
     }
 }
 
@@ -294,7 +245,7 @@ date 満了日(last_day) = 起算日           @民法 第141条, 第143条
 ";
 
 fn egov_run(dir: &Path, server: &Egov, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).current_dir(dir).env_remove("KOYOMI_LANG").env("KOYOMI_EGOV", &server.addr).output().unwrap()
+    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).current_dir(dir).env_remove("KOYOMI_LANG").env_remove("RITSU_LANG").env("KOYOMI_EGOV", &server.addr).output().unwrap()
 }
 
 #[test]
@@ -318,7 +269,7 @@ fn a_law_from_egov() {
         assert_eq!(std::fs::read(copies.join(&f)).unwrap(), std::fs::read(format!("{LAW}/{f}")).unwrap(), "fetch writes {f} as e-Gov gave it");
     }
     assert_eq!(std::fs::read_to_string(copies.join("revision.txt")).unwrap(), format!("{REVISION}\n"));
-    assert!(server.requests.lock().unwrap().iter().any(|r| r == "/law_data/129AC0000000089?asof=2026-10-01&elm=MainProvision-Article_143&law_full_text_format=xml"));
+    assert!(server.requests().iter().any(|r| r == "/law_data/129AC0000000089?asof=2026-10-01&elm=MainProvision-Article_143&law_full_text_format=xml"));
     let o = koyomi(dir, &["check", "期間.cal"]);
     assert!(text(&o).contains("E111") && text(&o).contains("第141条"), "{}", text(&o));
 
@@ -375,8 +326,9 @@ fn check_reads_no_network() {
 
 #[test]
 fn the_real_sources_when_asked() {
-    if std::env::var("KOYOMI_NET").as_deref() != Ok("1") {
-        println!("not asked: KOYOMI_NET is not 1, so the real Cabinet Office, GOV.UK and e-Gov were not asked (set KOYOMI_NET=1 to ask them)");
+    let platforms = ritsu_testkit::level::level() == Some(ritsu_testkit::Level::Platforms);
+    if std::env::var("KOYOMI_NET").as_deref() != Ok("1") && !platforms {
+        println!("not asked: KOYOMI_NET is not 1 and RITSU_TEST_LEVEL is not platforms, so the real Cabinet Office, GOV.UK and e-Gov were not asked (set KOYOMI_NET=1 to ask them)");
         return;
     }
     if no_curl() {

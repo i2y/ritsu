@@ -8,7 +8,7 @@
 use crate::ast::{self, Conv, File, Kind, RuleKind, Span};
 use crate::date::{self, Day, DateError};
 use crate::diag::Diag;
-use crate::i18n::{Text, count};
+use ritsu_base::text::{Text, count};
 use crate::sources::{self, Law, Origin, Table};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -381,7 +381,7 @@ impl Loader {
             version: f.version.clone(),
             path: clean(path),
             shown: f.path.clone(),
-            sha256: crate::sha256::hex(bytes),
+            sha256: ritsu_base::sha256::hex(bytes),
         };
         // Names (stage 2).
         let mut seen: HashMap<&str, Span> = HashMap::new();
@@ -561,8 +561,8 @@ impl Loader {
                     d = Day(d.0 + 1);
                 }
                 if !already.is_empty() {
-                    let shown: Vec<String> = already.iter().take(6).map(|d| crate::diag::day_with_weekday(*d, crate::i18n::Lang::Ja)).collect();
-                    let shown_en: Vec<String> = already.iter().take(6).map(|d| crate::diag::day_with_weekday(*d, crate::i18n::Lang::En)).collect();
+                    let shown: Vec<String> = already.iter().take(6).map(|d| crate::diag::day_with_weekday(*d, ritsu_base::text::Lang::Ja)).collect();
+                    let shown_en: Vec<String> = already.iter().take(6).map(|d| crate::diag::day_with_weekday(*d, ritsu_base::text::Lang::En)).collect();
                     diags.push(
                         Diag::warning("W101", &f.path, r.span.line, r.span.col, Text::new(
                             format!("`open` に書いた {}は、もともと営業日です", shown.join("、")),

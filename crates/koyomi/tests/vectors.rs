@@ -4,7 +4,7 @@
 use std::process::{Command, Output};
 
 fn koyomi(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).env_remove("KOYOMI_LANG").output().unwrap()
+    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).env_remove("KOYOMI_LANG").env_remove("RITSU_LANG").output().unwrap()
 }
 
 fn lines(path: &str) -> Vec<String> {

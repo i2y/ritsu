@@ -26,20 +26,13 @@ fn api(path: &str) -> serde_json::Value {
 
 #[test]
 fn every_example_has_its_golden_api() {
-    let bless = std::env::var("KOYOMI_BLESS").is_ok();
-    std::fs::create_dir_all("tests/golden/api").unwrap();
     let mut failures = Vec::new();
     for p in EXAMPLES {
         let text = serde_json::to_string_pretty(&api(p)).unwrap() + "\n";
         let name = std::path::Path::new(p).file_stem().unwrap().to_string_lossy().to_string();
         let golden = format!("tests/golden/api/{name}.json");
-        if bless {
-            std::fs::write(&golden, &text).unwrap();
-            continue;
-        }
-        let want = std::fs::read_to_string(&golden).unwrap_or_default();
-        if want != text {
-            failures.push(format!("{p} differs from {golden}:\n--- want\n{want}--- got\n{text}"));
+        if let Err(e) = ritsu_testkit::golden::check(std::path::Path::new(&golden), &text) {
+            failures.push(format!("{p}: {e}"));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -91,7 +84,7 @@ fn every_signature_is_in_the_generated_code() {
         let v = api(p);
         let mut o = check(p).unwrap();
         let checked = o.checked.take().unwrap();
-        let u = koyomi::codegen::unit_of(&checked, koyomi::i18n::Lang::En);
+        let u = koyomi::codegen::unit_of(&checked, ritsu_base::text::Lang::En);
         for t in koyomi::naming::TARGETS {
             let entry = &v[t.key()];
             let files = koyomi::codegen::files(&u, t);

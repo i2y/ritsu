@@ -11,8 +11,8 @@
 use crate::ast::{Cmp, File, Kind, Span, Ty};
 use crate::calendar::{Calendar, Loader};
 use crate::date::{Day, Missing};
-use crate::diag::{Diag, Run, Step};
-use crate::i18n::{Text, count};
+use crate::diag::{DiagExt, Diag, Run, Step};
+use ritsu_base::text::{Text, count};
 use crate::interp::{self, Ev, OpFail, Stop};
 use crate::resolve::{self, A, CK, Model, R, ROp, Ref};
 use crate::sources::{self, Origin};
@@ -173,7 +173,7 @@ fn prepare_file(f: File, path: &str, bytes: &[u8], loader: &mut Loader, opts: &O
     let dir = p.parent().unwrap_or(Path::new("")).to_path_buf();
     let mut diags = Vec::new();
     let use_cal = f.use_calendar.clone();
-    let model = resolve::resolve(f, p.clone(), crate::sha256::hex(bytes));
+    let model = resolve::resolve(f, p.clone(), ritsu_base::sha256::hex(bytes));
     let mut m = match model {
         Ok(m) => m,
         Err(mut ds) => {
@@ -1270,7 +1270,7 @@ fn examples(m: &Model) -> Vec<Diag> {
                 d = d.note(tr!("同じ行でほかにも違います: {}", "The row differs on more: {}", others.join("、"); others.join(", ")));
             }
             d = d.example(tr!("計算", "the computation"), t.steps, eval_inputs(m, &vals));
-            out.push(d.fix(fixed.iter().collect::<String>()));
+            out.push(d.fix_line(fixed.iter().collect::<String>()));
         }
     }
     out
@@ -1324,7 +1324,7 @@ fn calendar_summary(c: &Calendar) -> Text {
 }
 
 /// What a person reads for one file: the diagnostics, then `ok — …` when there were no errors.
-pub fn render(o: &Outcome, lang: crate::i18n::Lang) -> String {
+pub fn render(o: &Outcome, lang: ritsu_base::text::Lang) -> String {
     let mut s: String = o.diags.iter().map(|d| d.render(lang)).collect();
     if let Some(ok) = &o.ok {
         s.push_str(&format!("{}: ok — {}\n", o.path, ok.get(lang)));
@@ -1333,12 +1333,12 @@ pub fn render(o: &Outcome, lang: crate::i18n::Lang) -> String {
 }
 
 /// The `--format json` of one file.
-pub fn to_json(o: &Outcome, lang: crate::i18n::Lang) -> serde_json::Value {
+pub fn to_json(o: &Outcome, lang: ritsu_base::text::Lang) -> serde_json::Value {
     serde_json::json!({
         "file": o.path,
         "ok": !o.has_errors(),
         "summary": o.ok.as_ref().map(|t| t.get(lang).to_string()),
-        "diagnostics": o.diags.iter().map(|d| d.to_json(lang)).collect::<Vec<_>>(),
+        "diagnostics": o.diags.iter().map(|d| crate::diag::value(&d.to_json(lang))).collect::<Vec<_>>(),
     })
 }
 

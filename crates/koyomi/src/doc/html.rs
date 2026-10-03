@@ -1,27 +1,15 @@
 //! The page as one HTML file: nothing is loaded from anywhere else (no script, no font, no
 //! stylesheet), it has a light and a dark palette (`prefers-color-scheme`, or
-//! `data-theme="light|dark"` on the root to choose one), and it prints.
+//! `data-theme="light|dark"` on the root to choose one), and it prints. The frame — the head, the
+//! palette's variables and how a page chooses between them — is ritsu-base's
+//! ([`ritsu_base::docpage`]); the colours koyomi adds and the rules are koyomi's.
 
 use super::{Block, Inline, Item, Legend, Page, Para, Quote};
-use crate::diag::{Step, capitalize, ja_spacing};
+use crate::diag::Step;
+use ritsu_base::text::{capitalize, ja_spacing};
 use crate::doc::months::{Cell, Grid, Named};
-use crate::i18n::{Lang, Text};
-
-/// Text for HTML, in an element or an attribute.
-pub fn esc(s: &str) -> String {
-    let mut o = String::with_capacity(s.len());
-    for ch in s.chars() {
-        match ch {
-            '&' => o.push_str("&amp;"),
-            '<' => o.push_str("&lt;"),
-            '>' => o.push_str("&gt;"),
-            '"' => o.push_str("&quot;"),
-            '\'' => o.push_str("&#39;"),
-            _ => o.push(ch),
-        }
-    }
-    o
-}
+use ritsu_base::docpage::{self, Palette, esc};
+use ritsu_base::text::{Lang, Text};
 
 /// Words, in which what is between backticks is code, as in the diagnostics.
 fn words(s: &str, lang: Lang) -> String {
@@ -208,13 +196,9 @@ fn legend(l: &Legend, lang: Lang) -> String {
 
 pub fn render(p: &Page) -> String {
     let lang = p.lang;
-    let mut o = format!(
-        "<!doctype html>\n<html lang=\"{}\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"generator\" content=\"koyomi {}\">\n<title>{}</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n<main>\n<header>\n<h1>{}</h1>\n",
-        lang.code(),
-        crate::api::VERSION,
-        esc(&p.title),
-        esc(&p.title)
-    );
+    let css = format!("{}{RULES}", palette().css());
+    let mut o = docpage::html_head(lang, &format!("koyomi {}", crate::api::VERSION), &p.title, &css);
+    o.push_str(&format!("<main>\n<header>\n<h1>{}</h1>\n", esc(&p.title)));
     if let Some(d) = &p.description {
         o.push_str(&format!("<p class=\"desc\">{}</p>\n", esc(d)));
     }
@@ -292,40 +276,23 @@ pub fn render(p: &Page) -> String {
     o
 }
 
-/// The palette is a set of variables: the light one, the dark one when the reader's system
-/// asks for it (unless the page is told `data-theme="light"`), and the dark one when the page
-/// is told `data-theme="dark"`.
-const CSS: &str = r#":root {
-  color-scheme: light dark;
-  --bg: #fbfaf7; --fg: #1f2328; --dim: #59636e; --line: #d9dde3; --soft: #eef0f2;
-  --panel: #f3f2ee; --code: #efede7; --quote: #f4f3ef;
-  --closed: #ecebe6; --closed-fg: #b42318;
-  --fail-bg: #fff0c2; --fail-closed: #f3dca0; --fail: #c4620c;
-  --edge: #0b63ce; --unknown: #98a2b3;
-  --ok: #1a7f37; --warn: #b54708;
+/// The colours of the page: ritsu-base's palette, and koyomi's own after it — the background of
+/// a quote, a closed day and its number, a day an input fails on (alone and closed), the mark of
+/// an edge case, and a day the calendar does not know.
+fn palette() -> Palette {
+    Palette::default()
+        .set("quote", "#f4f3ef", "#1c1f24")
+        .set("closed", "#ecebe6", "#24272d")
+        .set("closed-fg", "#b42318", "#ff8f80")
+        .set("fail-bg", "#fff0c2", "#45330f")
+        .set("fail-closed", "#f3dca0", "#5a4316")
+        .set("fail", "#c4620c", "#f2b14c")
+        .set("edge", "#0b63ce", "#7cb6ff")
+        .set("unknown", "#98a2b3", "#6b7480")
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #15171b; --fg: #e4e7eb; --dim: #a0a8b3; --line: #343a42; --soft: #23272e;
-    --panel: #1c1f24; --code: #23272e; --quote: #1c1f24;
-    --closed: #24272d; --closed-fg: #ff8f80;
-    --fail-bg: #45330f; --fail-closed: #5a4316; --fail: #f2b14c;
-    --edge: #7cb6ff; --unknown: #6b7480;
-    --ok: #46c25a; --warn: #f2b14c;
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #15171b; --fg: #e4e7eb; --dim: #a0a8b3; --line: #343a42; --soft: #23272e;
-  --panel: #1c1f24; --code: #23272e; --quote: #1c1f24;
-  --closed: #24272d; --closed-fg: #ff8f80;
-  --fail-bg: #45330f; --fail-closed: #5a4316; --fail: #f2b14c;
-  --edge: #7cb6ff; --unknown: #6b7480;
-  --ok: #46c25a; --warn: #f2b14c;
-}
-:root[data-theme="light"] { color-scheme: light; }
-* { box-sizing: border-box; }
+
+/// The rules, after the palette's variables.
+const RULES: &str = r#"* { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--fg);
   font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;

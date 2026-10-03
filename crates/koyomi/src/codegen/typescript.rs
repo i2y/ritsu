@@ -3,6 +3,7 @@
 //! `enum`, no `namespace` with code in it, no parameter properties (`tsc --erasableSyntaxOnly`
 //! holds it to that).
 
+use ritsu_emit::header::Comment;
 use super::{Call, H, Msg, Num, Piece, Unit, at_doc, date_doc, day_text, is_open_doc, message};
 use crate::ast::{Kind, Ty};
 use crate::naming::Target;
@@ -10,7 +11,7 @@ use crate::naming::Target;
 const T: Target = Target::TypeScript;
 
 fn lit(s: &str) -> String {
-    serde_json::to_string(s).unwrap()
+    ritsu_emit::lit::json(s)
 }
 
 /// A message as a string expression: the pieces joined with `+`.
@@ -470,7 +471,7 @@ fn functions(u: &Unit) -> String {
 pub fn module(u: &Unit) -> String {
     let mut o = String::new();
     for h in &u.header {
-        o.push_str(&format!("// {h}\n"));
+        o.push_str(&Comment::Slashes.line(h));
     }
     o.push('\n');
     o.push_str(&doc(
@@ -505,7 +506,7 @@ pub fn module(u: &Unit) -> String {
 /// is imported as a namespace, so no function of it can meet a name of the runner.
 pub fn runner(u: &Unit) -> String {
     let mut o = String::new();
-    o.push_str(&format!("// {}\n", u.header[0]));
+    o.push_str(&Comment::Slashes.line(&u.header[0]));
     o.push_str(&format!("// {}\n", u.t(tr!(
         "koyomi vectors の行を標準入力から読み、関数の結果を一行ずつ書く（空白で区切る。エラーなら error <種類>）",
         "Reads the lines of koyomi vectors on standard input and writes what the functions give, a line each (separated by a space; error <kind> for an error)"

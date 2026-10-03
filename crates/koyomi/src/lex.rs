@@ -92,7 +92,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
     for (i, text) in src.lines().enumerate() {
         let no = i + 1;
         let all: Vec<char> = text.chars().collect();
-        let err = |code: &'static str, col: usize, msg: crate::i18n::Text| Diag::error(code, file, no, col, msg).source(src);
+        let err = |code: &'static str, col: usize, msg: ritsu_base::text::Text| Diag::error(code, file, no, col, msg).source(src);
         // Indentation is spaces. A tab is refused: how wide it is depends on the editor, and the
         // lines of a block are told apart by lining up (E005).
         let mut indent = 0;

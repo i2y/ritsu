@@ -36,7 +36,7 @@ fn every_command_in_design_prints_what_design_shows() {
         }
         for (cmd, want) in runs {
             let args: Vec<&str> = cmd.split_whitespace().skip(1).collect();
-            let o = Command::new(env!("CARGO_BIN_EXE_koyomi")).args(&args).env_remove("KOYOMI_LANG").output().unwrap();
+            let o = Command::new(env!("CARGO_BIN_EXE_koyomi")).args(&args).env_remove("KOYOMI_LANG").env_remove("RITSU_LANG").output().unwrap();
             let got = String::from_utf8_lossy(&o.stdout).to_string();
             if got != want {
                 failures.push(format!("$ {cmd}\n--- DESIGN.md shows\n{want}--- it prints\n{got}"));
@@ -88,7 +88,7 @@ fn the_code_design_shows_is_the_code_gen_writes() {
     for p in examples {
         let mut o = koyomi::check::check(p).unwrap();
         let checked = o.checked.take().unwrap();
-        for lang in [koyomi::i18n::Lang::En, koyomi::i18n::Lang::Ja] {
+        for lang in [ritsu_base::text::Lang::En, ritsu_base::text::Lang::Ja] {
             let u = koyomi::codegen::unit_of(&checked, lang);
             for t in koyomi::naming::TARGETS {
                 for (_, body) in koyomi::codegen::files(&u, t) {

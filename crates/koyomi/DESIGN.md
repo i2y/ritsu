@@ -762,7 +762,7 @@ $ koyomi check tests/mutants/E201_無い日の扱いが無い.cal --lang ja
 | `koyomi source fetch\|pin\|outdated <file.cal>` | 出典の写しを取る・固定する・元が変わったかを問う（9 章） |
 | `koyomi explain <コード>`、`koyomi explain --all [--format markdown]` | 診断のコードを引く |
 
-`--lang ja|en` はどのコマンドにも付けられる（無ければ `KOYOMI_LANG`、それも無ければ英語）。`koyomi --help`、`koyomi <コマンド> --help`、`koyomi --version`。
+`--lang ja|en` はどのコマンドにも付けられる（無ければ `KOYOMI_LANG`、次に ritsu のどの言語も読む `RITSU_LANG`、どちらも無ければ英語）。`koyomi --help`、`koyomi <コマンド> --help`、`koyomi --version`。
 
 `eval` の例（1.1 のファイル。B の段階の実際の出力）：
 
@@ -859,7 +859,7 @@ export function payment_at(received: string): string {
 
 検査を通ったファイルでは、範囲の中のどの入力でも `data`・`reject`・`date` は起きない。検査がすべての入力で確かめたからである。したがって公開する関数から実際に出るのは、範囲の外の入力の `range`、`is_open` にデータの範囲の外の日を渡したときの `data`、読めない日付の `date` の三つで、ほかは起きないはずのことへの備えである。
 
-**生成物が使う名前**：生成物とぶつかる別名は、生成する前に E009 で断る（`src/naming.rs` の `GENERATED` と `src/reserved.rs`）。生成物が置く `is_open`・`Date`・`KoyomiError`・`ParseDate`、Python が読み込む `date`・`datetime`・`timedelta`、Go の関数が使う `err`、Python の生成物が呼ぶ組み込みの関数（`range`・`str`・`int`・`bool`・`tuple`・`isinstance`・`frozenset`・`super`）、PostgreSQL の予約語と PL/pgSQL の予約語（`begin`・`declare`・`execute`・`foreach` など）である。ファイルの別名は Python と Rust のモジュール、PostgreSQL のスキーマの名前になるので、生成物が読み込むモジュール（Python の `datetime`・`json`・`sys`・`typing`、Rust の `std`・`core`・`alloc`）と PostgreSQL のスキーマ（`pg_catalog` など）の名前も断る（`src/naming.rs` の `MODULES`）。`err`、Python の組み込みの関数、PL/pgSQL の予約語、モジュールとスキーマの名前は、C の段階で足した。生成物を書いてみて、引数や関数がその名前だとコードが動かなくなることが分かったからである（Python で日付の別名を `range` にすると、`_close_day` の中の `range(...)` がその関数を呼ぶ）。
+**生成物が使う名前**：生成物とぶつかる別名は、生成する前に E009 で断る（`src/naming.rs` の `GENERATED` と `src/reserved.rs`。予約語の表そのものは C.10 から ritsu-emit のもの。11.1）。生成物が置く `is_open`・`Date`・`KoyomiError`・`ParseDate`、Python が読み込む `date`・`datetime`・`timedelta`、Go の関数が使う `err`、Python の生成物が呼ぶ組み込みの関数（`range`・`str`・`int`・`bool`・`tuple`・`isinstance`・`frozenset`・`super`）、PostgreSQL の予約語と PL/pgSQL の予約語（`begin`・`declare`・`execute`・`foreach` など）である。ファイルの別名は Python と Rust のモジュール、PostgreSQL のスキーマの名前になるので、生成物が読み込むモジュール（Python の `datetime`・`json`・`sys`・`typing`、Rust の `std`・`core`・`alloc`）と PostgreSQL のスキーマ（`pg_catalog` など）の名前も断る（`src/naming.rs` の `MODULES`）。`err`、Python の組み込みの関数、PL/pgSQL の予約語、モジュールとスキーマの名前は、C の段階で足した。生成物を書いてみて、引数や関数がその名前だとコードが動かなくなることが分かったからである（Python で日付の別名を `range` にすると、`_close_day` の中の `range(...)` がその関数を呼ぶ）。
 
 `--lang ja` を付けると、頭の二行目から下、関数の説明、エラーのメッセージが日本語になる。
 
@@ -1236,17 +1236,32 @@ exit code は rulec と同じにした。`fetch` と `pin` は済めば 0、`out
 
 - Rust（edition 2024、手元の stable 1.94.1 で通ること）。依存は serde_json だけ（GOV.UK の JSON、`api`、vectors、`--format json`）。`preserve_order` の機能を使い、`api` と `--format json` のキーをこの文書の順に出す。
 - テストのビルドは `[profile.test] opt-level = 2` にした。1900〜2100 年のすべての日を月数や締め日ごとに何度も回すテスト（`tests/date.rs`）が、最適化なしでは遅すぎるため。ritsu に取り込んでからは、cargo がワークスペースの根のプロファイルしか読まないので、根の `Cargo.toml` の `[profile.test.package.koyomi]` に置いている。
-- SHA-256 は自前で書く（FIPS 180-4 の既知の値でテストする）。rulec と同じ。
+- SHA-256 は ritsu-base のものを使う（依存を足さずに書いたもので、FIPS 180-4 の既知の値でテストしている）。
 - Shift_JIS は自前で読む。変換表は WHATWG の `index-jis0208.txt` から作った `src/sjis_table.rs`（作る手順は `tools/sjis/`。表の頭に、元の索引の Identifier、日付、SHA-256 を書く）。テストは、python3 があれば、全符号を Python の `cp932` と比べる（無ければ SKIP）。
-- 通信は `curl` を子プロセスで呼ぶ（`source fetch` と `source outdated` だけ。`src/fetch.rs`）。
+- 通信は `curl` を子プロセスで呼ぶ（`source fetch` と `source outdated` だけ。`src/fetch.rs` が、ritsu-base の `sources` の e-Gov への問い合わせを呼ぶ）。
 - 生成器は `src/codegen/`（共通の部分と、出力先ごとに一つのファイル）。PLAN は `src/gen/` としていたが、`gen` は Rust 2024 の予約語なので、rulec と同じ `codegen` にした。
 - 突き合わせのテストが使う型の検査器は、版を固定して `tools/` に置く。TypeScript は `tools/package.json` と `tools/package-lock.json`（`npm ci --prefix tools`。`tools/node_modules` は git に入れない）、mypy は `tools/requirements.txt`（`uv venv --python 3.13 tools/.venv` に入れる。venv は git に入れない）。テストは環境変数 `KOYOMI_TSC` と `KOYOMI_MYPY` でほかの場所のものも使える。PostgreSQL は `KOYOMI_PG_BIN`（`initdb`・`pg_ctl`・`psql` のあるディレクトリ）と `KOYOMI_PG_SOCKET_DIR`（ソケットのディレクトリ。パスは 103 バイトまで）で受け取る。
-- 診断の文面は `tr!` で英語と日本語を隣に書く。二つの文の引数が違うときは `;` で分ける（`tr!("{}曜", "{}", ja; en)`）。台帳は `src/codes.rs`。
+- 診断の文面は `tr!` で英語と日本語を隣に書く。二つの文の引数が違うときは `;` で分ける（`tr!("{}曜", "{}", ja; en)`）。`tr!` と、診断の共通の部分、台帳の書き出し、コマンドの表の読み方は ritsu-base のもので、台帳の中身（`src/codes.rs`）とコマンドの表（`src/cli.rs`）と計算の段（`src/diag.rs` の `Example`）が koyomi のものである（11.1）。
 - 承認する人のページは `src/doc/`。`mod.rs` がページを組み、`edges.rs` が範囲をもう一度計算してエッジケースと無い日の扱いの数を集め、`months.rs` が月の表を作り、`markdown.rs` と `html.rs` がそれぞれの形で出す（7 章）。
 - 文書は `docs/`（英語の `reference.md` と `generated-code.md`、`koyomi explain --all --format markdown` の出力そのものの `codes.md` と `codes.ja.md`）、README.md、README.ja.md、`skills/koyomi`（`SKILL.md` は手で書き、ほかは `skills/sync.sh` が `docs/` から写す）。`tests/docs.rs` が、README と `docs/` とスキルに載せた `.cal` の行、コマンドの出力、診断、生成したコード、vectors の行、比べた行の数が、実際のものと同じかを確かめ、`tests/skill.rs` がスキルの写しとリンクと frontmatter を確かめる。
-- Chrome は `KOYOMI_CHROME` で受け取り、無ければ macOS が Google Chrome を入れる場所、それも無ければ PATH の `google-chrome` か `chromium` を探す（dandori と chobo と同じ順）。ヘッドレスの Chrome はスクリーンショットを書き出したあとも終わらないことがあるので、テストはそのファイルの大きさが変わらなくなったところで止める。
+- テストの共通の部分（自分を消す一時ディレクトリ、ツールの探し方、時間を区切って走らせること、golden、SKIP、使い捨ての PostgreSQL、Chrome、テストの中の HTTP サーバー）は ritsu-testkit のものを使う。Chrome は `RITSU_CHROME` か `KOYOMI_CHROME` で受け取り、無ければ macOS が Google Chrome を入れる場所、それも無ければ PATH の `google-chrome` か `chromium` を探す（dandori と chobo と同じ順）。ヘッドレスの Chrome はスクリーンショットを書き出したあとも終わらないことがあるので、ritsu-testkit がそのファイルの大きさが変わらなくなったところで止める。
 
 モジュールの分け方と、各段階の作業は PLAN.md にある。
+
+### 11.1 ritsu の土台へ移したもの
+
+koyomi は ritsu（七つの言語を一つにまとめる処理系）に取り込まれ、ほかの言語と重なっていたコードを、ritsu の土台のクレート（ritsu-base と ritsu-testkit）のものに替えた（ritsu の PLAN の C.4）。替えたのは、SHA-256、二つの言語の文（`tr!`、`Text`、`Lang`）、診断の共通の部分、台帳の書き出しと再現の走らせ方、コマンドの表の読み方と `--help` の組み立て、法令の写しの扱い（引用から要素の名前を作ること、写しの場所と本文、固定の行の書き換え、e-Gov への問い合わせ）、承認する人のページの HTML の頭と配色の変数、テストの共通の部分である。koyomi に残したのは、台帳の中身、コマンドの表の中身、計算の段（`Example`）、祝日の表、法令の写しのうち koyomi が引くもの（本則の条・項・号だけ）、ページの中身と koyomi だけの色である。
+
+出力は、次のものを除いて一字も変えていない（ritsu の土台で決めたこと）。
+
+- 言語の選び方に `RITSU_LANG` が入った。`--lang`、`KOYOMI_LANG`、`RITSU_LANG`、英語の順に読む。ritsu のどの言語も同じ変数を読むので、一つの設定で全部の言語の文面を日本語にできる。`--lang` の説明と `koyomi --help` の最後の行が、この順を書くようになった。
+- HTML のページの配色の変数のうち、ほかの言語と共通の役割（背景、文字、線、パネル、コードの背景、成り立つ・注意の色）は、ritsu-base の値（GitHub の配色。chobo と dandori の値）になった。koyomi だけの色（休み、成り立たない日、エッジケース、カレンダーが知らない日、法令の引用）は値を変えていない。変数の並びは一行にまとめて書く。README の画像（`docs/images/`）は取り直した。
+- 行の無い診断（UTF-8 でないファイルの E001）の `--format json` は、`line` と `col` を `0` でなく `null` で書く。行が無いことを、行番号の 0 で表さないためである（ritsu の診断の共通の形）。
+- `source fetch` と `source outdated` の curl に `--compressed` が付いた（eCFR は付けないと 406 を返す。ritsu-base で rulec が見つけたこと）。e-Gov が JSON でないページを返したときは、二度まで取り直してから止める。curl が無いときは、三度試さずにすぐそう言う。
+- 写しの本文の取り出し（`source outdated` が比べて差分に出すもの）は、rulec と yuen の形になった。表の行と列も一行ずつ・空白で区切って読む。koyomi が引く本則の条には表が無いので、いまの例では変わらない。固定の行を書き換えるとき、文字列の中の `\"` を文字列の終わりと読まなくなった。
+- テストの SKIP の行は、ritsu のどのクレートとも同じ `SKIP: koyomi: <理由>` の形になった。
+
+続く C.10 で、生成先の言語の表面にかかわるところを、ritsu の生成器が共に使うクレート（ritsu-emit）のものに替えた。五つの出力先の予約語の表（E009 が断る語。ECMAScript 2025、Python 3.14.6、Go 1.25、Rust 1.94、PostgreSQL 18.0 のもの）、Go の名前の作り方（`PaymentAt`、`paymentterms`）、文字列のリテラル（四つの出力先は JSON の文字列、SQL は `'…'`）、生成物の頭の一行（`Code generated by koyomi 0.1.0. DO NOT EDIT.`）とそれを書くコメントである。koyomi に残したのは、生成物が使う名前（`GENERATED`、`MODULES`）と、各出力先の生成器の中身である。例の全部の `.cal` を五つの出力先に生成したファイル（80 個）が一バイトも変わらないこと、五つの出力先の突き合わせのテストと golden が通ることを確かめた。
 
 ## 12. まだやらないこと
 

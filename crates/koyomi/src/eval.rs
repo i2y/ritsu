@@ -5,7 +5,7 @@ use crate::ast::Ty;
 use crate::calendar::Calendar;
 use crate::date::{self, Day};
 use crate::diag::{day_with_weekday, render_steps, steps_json};
-use crate::i18n::{Lang, Text};
+use ritsu_base::text::{Lang, Text};
 use crate::interp;
 use crate::resolve::{CK, Model};
 use serde_json::{Value, json};
@@ -120,7 +120,7 @@ pub fn eval_dates(m: &Model, vals: &[i64], lang: Lang, as_json: bool) -> (String
             })).collect()),
             "dates": dates,
             "times": times,
-            "steps": steps_json(&t.steps, lang),
+            "steps": crate::diag::value(&steps_json(&t.steps, lang)),
             "claims": claims.iter().map(|(n, h, w)| json!({"name": n, "holds": h, "note": w.get(lang)})).collect::<Vec<_>>(),
             "error": t.stop.as_ref().map(|s| interp::fail_text(&s.fail).get(lang).to_string()),
         });

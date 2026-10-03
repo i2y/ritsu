@@ -10,8 +10,9 @@ use crate::ast::{Cite, Covers, File, Format, SourceDecl, SourceKind, Span};
 use crate::date::Day;
 use crate::diag::Diag;
 use crate::holidays::{self, Row};
-use crate::i18n::count;
-use crate::sha256;
+use ritsu_base::text::count;
+use ritsu_base::sha256;
+use ritsu_base::sources::{self, LawDb};
 use std::path::{Path, PathBuf};
 
 /// A table of holidays, read and checked.
@@ -41,21 +42,12 @@ pub struct Origin<'a> {
 }
 
 impl Origin<'_> {
-    fn err(&self, code: &'static str, s: Span, msg: crate::i18n::Text) -> Diag {
+    fn err(&self, code: &'static str, s: Span, msg: ritsu_base::text::Text) -> Diag {
         Diag::error(code, &self.file.path, s.line, s.col, msg).source(&self.file.src)
     }
 
-    fn warn(&self, code: &'static str, s: Span, msg: crate::i18n::Text) -> Diag {
+    fn warn(&self, code: &'static str, s: Span, msg: ritsu_base::text::Text) -> Diag {
         Diag::warning(code, &self.file.path, s.line, s.col, msg).source(&self.file.src)
-    }
-}
-
-/// The source line with `sha256:<pin>` in place of whatever pin it had.
-fn pinned_line(line: &str, pin: &str) -> String {
-    let t = line.trim_end();
-    match t.find("sha256:") {
-        Some(i) => format!("{}sha256:{pin}{}", &t[..i], &t[(i + 23).min(t.len())..]),
-        None => format!("{t} sha256:{pin}"),
     }
 }
 
@@ -93,7 +85,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
                         "写しのバイト列の SHA-256 の先頭 16 桁を書いて固定します。いまの写しなら sha256:{actual} です（`koyomi source pin` でも書けます）。",
                         "Pin it with the first 16 digits of the SHA-256 of the copy's bytes; for the copy as it is, that is sha256:{actual} (`koyomi source pin` writes it too)."
                     ))
-                    .fix(pinned_line(&line_text, actual)),
+                    .fix_line(sources::fixed_pin_line(&line_text, actual)),
             ]);
         }
         Some(p) if p != actual => {
@@ -106,7 +98,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
                     "固定したあとで写しが変わりました。何が変わったかを読んでから（`koyomi source outdated`）、固定を書き換えます。",
                     "The copy changed after it was pinned. Read what changed (`koyomi source outdated`), then pin it again."
                 ))
-                .fix(pinned_line(&line_text, actual)),
+                .fix_line(sources::fixed_pin_line(&line_text, actual)),
             ]);
         }
         Some(_) => {}
@@ -154,7 +146,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
                         "`covers` は、表が休みを全部載せている範囲です。表が延びたのなら範囲も延ばします。表の行は {first}〜{last} にあります。",
                         "`covers` is the span the table lists every closed day of; when the table grew, so does the span. The table's rows run from {first} to {last}."
                     ))
-                    .fix(format!("  covers {}..{}", a.min(Day::from_ymd(y0 as i64, 1, 1).unwrap()), b.max(Day::from_ymd(y1 as i64, 12, 31).unwrap())));
+                    .fix_line(format!("  covers {}..{}", a.min(Day::from_ymd(y0 as i64, 1, 1).unwrap()), b.max(Day::from_ymd(y1 as i64, 12, 31).unwrap())));
                 return Err(vec![d]);
             }
             (a, b, false)
@@ -214,73 +206,16 @@ pub struct Pinned {
     pub path: PathBuf,
 }
 
-/// A number as a law writes it: `百四十三`, `二十`, `千五十`, or ASCII digits.
-pub fn law_number(s: &str) -> Option<u32> {
-    if !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()) {
-        return s.parse().ok().filter(|n| *n > 0);
-    }
-    let digit = |c: char| "一二三四五六七八九".chars().position(|x| x == c).map(|i| i as u32 + 1);
-    let unit = |c: char| match c {
-        '十' => Some(10),
-        '百' => Some(100),
-        '千' => Some(1000),
-        _ => None,
-    };
-    let mut total = 0u32;
-    let mut pending: Option<u32> = None;
-    let mut last_unit = 10_000u32;
-    for c in s.chars() {
-        if let Some(d) = digit(c) {
-            if pending.is_some() {
-                return None;
-            }
-            pending = Some(d);
-        } else if let Some(u) = unit(c) {
-            if u >= last_unit {
-                return None;
-            }
-            total += pending.take().unwrap_or(1) * u;
-            last_unit = u;
-        } else {
-            return None;
-        }
-    }
-    total += pending.unwrap_or(0);
-    if total == 0 { None } else { Some(total) }
-}
-
 /// The e-Gov element an article, paragraph or item of the main provisions is addressed by:
-/// `第20条の2第3項第4号` is `MainProvision-Article_20_2-Paragraph_3-Item_4`. The
-/// supplementary provisions and the appended tables are not cited (DESIGN 1.5).
+/// `第20条の2第3項第4号` is `MainProvision-Article_20_2-Paragraph_3-Item_4` (ritsu-base reads the
+/// citation). The supplementary provisions and the appended tables are not cited (DESIGN 1.5).
 pub fn elm(fragment: &str) -> Option<String> {
-    let rest = fragment.strip_prefix('第')?;
-    let (art, rest) = rest.split_once('条')?;
-    let mut e = format!("MainProvision-Article_{}", law_number(art)?);
-    let mut rest = rest;
-    if let Some(r) = rest.strip_prefix('の') {
-        let end = r.find('第').unwrap_or(r.len());
-        e.push_str(&format!("_{}", law_number(&r[..end])?));
-        rest = &r[end..];
-    }
-    if let Some(r) = rest.strip_prefix('第') {
-        let (para, r) = r.split_once('項')?;
-        e.push_str(&format!("-Paragraph_{}", law_number(para)?));
-        rest = r;
-        if let Some(r) = rest.strip_prefix('第') {
-            let (item, r) = r.split_once('号')?;
-            e.push_str(&format!("-Item_{}", law_number(item)?));
-            rest = r;
-        }
-    }
-    if !rest.is_empty() {
-        return None;
-    }
-    Some(e)
+    sources::fragment(LawDb::Egov, fragment).filter(|f| f.is_main_provision()).map(|f| f.elm)
 }
 
 /// The directory a law's copies as of a date are kept in, beside the `.cal`.
 pub fn copy_dir(dir: &Path, id: &str, asof: Day) -> PathBuf {
-    dir.join("sources").join("law").join(format!("{id}@{asof}"))
+    dir.join(sources::copy_dir(id, &asof.to_string()))
 }
 
 /// Every citation in a file, with where it is.
@@ -345,7 +280,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
                     diags.push(
                         o.err("E102", p.span, tr!("{} {}が固定されていません（`sha256:` がありません）", "{} {} is not pinned (it has no `sha256:`)", s.name, p.fragment))
                             .note(tr!("いまの写しなら sha256:{actual} です。", "For the copy as it is, that is sha256:{actual}."))
-                            .fix(pinned_line(&line_text, &actual)),
+                            .fix_line(sources::fixed_pin_line(&line_text, &actual)),
                     );
                 }
                 Some(pin) if *pin != actual => {
@@ -360,7 +295,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
                             "固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えます。",
                             "The copy changed after it was pinned. Read what changed in the text, then pin it again."
                         ))
-                        .fix(pinned_line(&line_text, &actual)),
+                        .fix_line(sources::fixed_pin_line(&line_text, &actual)),
                     );
                 }
                 Some(pin) => law.pins.push(Pinned { fragment: p.fragment.clone(), elm: e, pin: pin.clone(), path }),
@@ -421,7 +356,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
                             "引く条は、出典の下に固定の行を書きます。どの版の条文を見て書いたかを、固定で残すためです。",
                             "Every article cited has a pin line under its source, which records the version of the text the line was written against."
                         ))
-                        .fix(fix),
+                        .fix_line(fix),
                 );
             }
         }
@@ -429,96 +364,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
     (laws, diags)
 }
 
-/// The text of an article's XML, with the tags removed: a line for each paragraph, item and
-/// sentence (rulec's `xml_text`). `source outdated` compares it and shows its lines; the
-/// approver's page quotes [`article_lines`] instead.
-pub fn xml_text(xml: &str) -> String {
-    let breaks = ["Paragraph", "Item", "Subitem1", "ArticleCaption", "ArticleTitle", "Sentence"];
-    let mut out = String::new();
-    let mut rest = xml;
-    while let Some(lt) = rest.find('<') {
-        out.push_str(&rest[..lt]);
-        let Some(gt) = rest[lt..].find('>') else { break };
-        let tag = &rest[lt + 1..lt + gt];
-        if let Some(name) = tag.strip_prefix('/')
-            && breaks.contains(&name.trim())
-        {
-            out.push('\n');
-        }
-        rest = &rest[lt + gt + 1..];
-    }
-    out.push_str(rest);
-    let mut lines: Vec<String> = Vec::new();
-    for l in out.lines() {
-        let t: String = l.split_whitespace().collect::<Vec<_>>().join(" ");
-        if !t.is_empty() && lines.last() != Some(&t) {
-            lines.push(t);
-        }
-    }
-    lines.join("\n")
-}
-
 /// The text of a pinned article, from its copy.
 pub fn article_text(p: &Pinned) -> Option<String> {
-    std::fs::read_to_string(&p.path).ok().map(|x| xml_text(&x))
-}
-
-/// U+3000, the space a Japanese law puts after an article's or a paragraph's number.
-const WIDE_SPACE: char = '　';
-
-/// An article's XML as the law prints it, for the approver's page: the caption on a line of
-/// its own, the article's number and its first paragraph on the next, and then a line for
-/// every other paragraph, item and subitem, its number and its sentences together
-/// (`２　週、月又は年の初めから…。ただし、…。`). Ruby readings are left out. [`xml_text`] keeps
-/// a line a sentence instead, which is what `source outdated` compares.
-pub fn article_lines(xml: &str) -> Vec<String> {
-    let mut lines: Vec<String> = Vec::new();
-    let mut cur = String::new();
-    let mut in_rt = 0usize;
-    let mut rest = xml;
-    let space = |cur: &mut String| {
-        if !cur.is_empty() && !cur.ends_with(WIDE_SPACE) {
-            cur.push(WIDE_SPACE);
-        }
-    };
-    let finish = |cur: &mut String, lines: &mut Vec<String>| {
-        let t = cur.trim_end_matches(WIDE_SPACE).to_string();
-        if !t.is_empty() {
-            lines.push(t);
-        }
-        cur.clear();
-    };
-    while let Some(lt) = rest.find('<') {
-        if in_rt == 0 {
-            cur.push_str(rest[..lt].trim());
-        }
-        let Some(gt) = rest[lt..].find('>') else { break };
-        let tag = rest[lt + 1..lt + gt].trim();
-        rest = &rest[lt + gt + 1..];
-        if tag.ends_with('/') {
-            continue;
-        }
-        let (closing, name) = match tag.strip_prefix('/') {
-            Some(n) => (true, n.trim()),
-            None => (false, tag.split_whitespace().next().unwrap_or("")),
-        };
-        if name == "Rt" {
-            in_rt = if closing { in_rt.saturating_sub(1) } else { in_rt + 1 };
-            continue;
-        }
-        if !closing {
-            continue;
-        }
-        match name {
-            "ArticleCaption" | "ParagraphCaption" => finish(&mut cur, &mut lines),
-            "ArticleTitle" | "ParagraphNum" | "ItemTitle" | "Subitem1Title" | "Subitem2Title" | "Column" => space(&mut cur),
-            "ParagraphSentence" | "ItemSentence" | "Subitem1Sentence" | "Subitem2Sentence" => finish(&mut cur, &mut lines),
-            _ => {}
-        }
-    }
-    if in_rt == 0 {
-        cur.push_str(rest.trim());
-    }
-    finish(&mut cur, &mut lines);
-    lines
+    std::fs::read_to_string(&p.path).ok().map(|x| sources::xml_text(&x))
 }

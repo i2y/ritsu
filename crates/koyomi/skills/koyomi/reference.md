@@ -368,7 +368,7 @@ Usage:
   koyomi explain <CODE>                        look a diagnostic code up: when it comes, how to fix it, the smallest reproduction
 
 For one command in detail: `koyomi <cmd> --help` (`koyomi help <cmd>` is the same page).
-Every command takes --lang ja|en (default en; the KOYOMI_LANG environment variable works too).
+Every command takes --lang ja|en (default en; the KOYOMI_LANG or RITSU_LANG environment variable works too).
 Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read
 ```
 
@@ -383,8 +383,8 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
 | `koyomi source fetch\|pin\|outdated <file.cal>` | |
 | `koyomi explain <CODE>` | `--all`, `--format markdown` |
 
-Every command takes `--lang ja|en`, else the `KOYOMI_LANG` environment variable, else English; the
-system's locale is never read. An unknown flag, a value outside a flag's set, a flag without its
+Every command takes `--lang ja|en`, else the `KOYOMI_LANG` environment variable, else `RITSU_LANG`
+(the variable every language of ritsu reads), else English; the system's locale is never read. An unknown flag, a value outside a flag's set, a flag without its
 value and a flag given twice are refused with exit code 2, never ignored.
 
 **Exit codes.** 0 when there is no error (warnings may be), 1 when there is one, 2 for bad
@@ -466,8 +466,10 @@ not know), `reject` (a missing day under `else reject`) and `date` (outside 0001
 | Variable | What it does |
 |---|---|
 | `KOYOMI_LANG` | `ja` or `en`, when `--lang` is not given |
+| `RITSU_LANG` | the same, when neither `--lang` nor `KOYOMI_LANG` is given (every language of ritsu reads it) |
 | `KOYOMI_EGOV` | where e-Gov law API v2 is, for `source fetch` and `source outdated` (the tests point it at a server of their own) |
 
-The tests read more: `KOYOMI_BLESS=1` writes the golden files again; `KOYOMI_TSC`, `KOYOMI_MYPY`,
-`KOYOMI_PG_BIN`, `KOYOMI_PG_SOCKET_DIR` and `KOYOMI_CHROME` say where the tools are; `KOYOMI_NET=1`
-lets them ask the real Cabinet Office, GOV.UK and e-Gov.
+The tests read more, through ritsu-testkit: `KOYOMI_BLESS=1` (or `RITSU_BLESS=1`) writes the golden
+files again; `KOYOMI_TSC`, `KOYOMI_MYPY`, `KOYOMI_PG_BIN`, `KOYOMI_PG_SOCKET_DIR` and `KOYOMI_CHROME`
+(or the same names starting `RITSU_`) say where the tools are; `KOYOMI_NET=1` lets them ask the real
+Cabinet Office, GOV.UK and e-Gov.

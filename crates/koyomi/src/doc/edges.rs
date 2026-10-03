@@ -9,7 +9,7 @@ use crate::ast::Cmp;
 use crate::calendar::{Calendar, Reason};
 use crate::check::{Inputs, Report};
 use crate::date::{Day, Missing};
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::interp::{self, Ev, OpFail};
 use crate::resolve::{CK, Model, ROp, Start};
 use std::collections::HashSet;

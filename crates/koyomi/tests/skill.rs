@@ -4,7 +4,6 @@
 //! skill says about the tool (its diagnostics, its lines of `.cal`) is held by tests/docs.rs, as
 //! the READMEs are.
 
-mod common;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,7 +26,7 @@ fn names(dir: &Path) -> Vec<String> {
 
 #[test]
 fn the_references_are_the_pages_as_sync_copies_them() {
-    let scratch = common::TempDir::new("skill");
+    let scratch = ritsu_testkit::TempDir::new("skill");
     let out = Command::new("sh").arg(root().join("skills/sync.sh")).arg(scratch.path()).output().expect("could not run sh");
     assert!(out.status.success(), "skills/sync.sh failed: {}", String::from_utf8_lossy(&out.stderr));
     let built = names(scratch.path());

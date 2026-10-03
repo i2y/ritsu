@@ -7,6 +7,7 @@
 //! no JSON, so the runner reads the one object `koyomi vectors` writes by itself: names come
 //! without escapes, values are a date in quotes or a number.
 
+use ritsu_emit::header::Comment;
 use super::{Call, H, Msg, Num, Piece, Unit, at_doc, date_doc, day_text, is_open_doc, message};
 use crate::ast::{Kind, Ty};
 use crate::naming::Target;
@@ -14,7 +15,7 @@ use crate::naming::Target;
 const T: Target = Target::Rust;
 
 fn lit(s: &str) -> String {
-    serde_json::to_string(s).unwrap()
+    ritsu_emit::lit::json(s)
 }
 
 /// A message as a `format!`.
@@ -536,7 +537,7 @@ fn functions(u: &Unit) -> String {
 pub fn module(u: &Unit) -> String {
     let mut o = String::new();
     for h in &u.header {
-        o.push_str(&format!("// {h}\n"));
+        o.push_str(&Comment::Slashes.line(h));
     }
     o.push('\n');
     let what = match u.kind {
@@ -581,7 +582,7 @@ pub fn module(u: &Unit) -> String {
 pub fn runner(u: &Unit) -> String {
     let a = &u.alias;
     let mut o = String::new();
-    o.push_str(&format!("// {}\n", u.header[0]));
+    o.push_str(&Comment::Slashes.line(&u.header[0]));
     o.push_str(&format!(
         "// {}\n\n",
         u.t(tr!(

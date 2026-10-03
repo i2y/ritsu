@@ -4,7 +4,7 @@
 use crate::ast::*;
 use crate::date::{Day, Missing};
 use crate::diag::Diag;
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::kw;
 use crate::lex::{self, Line, Tok, Token};
 
@@ -552,11 +552,11 @@ enum Block {
 
 pub fn parse(path: &str, src: &str) -> Parsed {
     let (lines, mut diags) = lex::lex(path, src);
-    let bad_lines: std::collections::HashSet<usize> = diags.iter().map(|d| d.line).collect();
+    let bad_lines: std::collections::HashSet<usize> = diags.iter().filter_map(|d| d.line).collect();
     let mut p = Parser { path, src, diags: Vec::new(), file: None };
     p.run(&lines, &bad_lines);
     // A line the lexer could not read says so once; what the parser made of it is noise.
-    p.diags.retain(|d| !bad_lines.contains(&d.line));
+    p.diags.retain(|d| !d.line.is_some_and(|l| bad_lines.contains(&l)));
     diags.append(&mut p.diags);
     diags.sort_by_key(|d| (d.line, d.col));
     let file = if diags.iter().any(|d| d.is_error()) { None } else { p.file };

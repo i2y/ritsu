@@ -9,7 +9,7 @@
 
 use crate::ast::{At, Conv};
 use crate::date::Missing;
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::resolve::{A, Model, ROp};
 
 /// A number as the sentence says it: the value written, or the input's name.

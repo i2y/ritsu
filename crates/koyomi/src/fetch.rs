@@ -15,13 +15,12 @@
 use crate::ast::{Covers, File, Format, SourceKind};
 use crate::date::Day;
 use crate::holidays::{self, Row};
-use crate::i18n::{Text, count};
-use crate::sha256;
-use crate::sources::{copy_dir, elm, xml_text};
-use serde_json::Value;
+use crate::sources::{copy_dir, elm};
+use ritsu_base::sha256;
+use ritsu_base::sources::{self, Egov};
+use ritsu_base::text::{Text, count};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// What a command did or found, a line each, and whether something moved on (`outdated`'s
 /// exit code).
@@ -30,80 +29,10 @@ pub struct Outcome {
     pub changed: bool,
 }
 
-/// Where e-Gov law API v2 is: `KOYOMI_EGOV`, else e-Gov itself.
-pub fn egov() -> String {
-    std::env::var("KOYOMI_EGOV").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "https://laws.e-gov.go.jp/api/2".into()).trim_end_matches('/').to_string()
-}
-
-fn curl_once(url: &str) -> Result<Vec<u8>, String> {
-    let out = Command::new("curl").args(["-fsSL", "--max-time", "120", url]).output().map_err(|e| format!("curl: {e}"))?;
-    if out.status.success() { Ok(out.stdout) } else { Err(String::from_utf8_lossy(&out.stderr).trim().to_string()) }
-}
-
-/// One request, tried three times over HTTP (a busy server refuses now and then; a scheduled
-/// job that stops on one refusal is one nobody reads), once for a `file://` URL.
-pub fn curl(url: &str) -> Result<Vec<u8>, Text> {
-    let tries = if url.starts_with("http://") || url.starts_with("https://") { 3 } else { 1 };
-    let mut last = String::new();
-    for attempt in 0..tries {
-        if attempt > 0 {
-            std::thread::sleep(std::time::Duration::from_secs(2 * attempt));
-        }
-        match curl_once(url) {
-            Ok(b) => return Ok(b),
-            Err(e) => last = e,
-        }
-    }
-    Err(tr!("{url} を取れません（{tries} 回試しました）: {last}", "cannot fetch {url} (tried {tries} times): {last}"))
-}
-
-fn base64_decode(s: &str) -> Option<Vec<u8>> {
-    let val = |c: u8| -> Option<u32> {
-        Some(match c {
-            b'A'..=b'Z' => (c - b'A') as u32,
-            b'a'..=b'z' => (c - b'a' + 26) as u32,
-            b'0'..=b'9' => (c - b'0' + 52) as u32,
-            b'+' | b'-' => 62,
-            b'/' | b'_' => 63,
-            _ => return None,
-        })
-    };
-    let mut out = Vec::with_capacity(s.len() * 3 / 4);
-    let (mut acc, mut bits) = (0u32, 0);
-    for c in s.bytes() {
-        if matches!(c, b'=' | b'\n' | b'\r' | b' ') {
-            continue;
-        }
-        acc = (acc << 6) | val(c)?;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push(((acc >> bits) & 0xff) as u8);
-        }
-    }
-    Some(out)
-}
-
-/// One e-Gov reply as JSON.
-fn egov_json(url: &str) -> Result<Value, Text> {
-    let body = curl(url)?;
-    serde_json::from_slice(&body).map_err(|e| tr!("{url} のレスポンスが JSON として読めません: {e}", "the reply of {url} is not JSON: {e}"))
-}
-
-/// An article as of a date: the XML inside `law_full_text`, and the revision it came from.
-fn law_article(id: &str, asof: &str, element: &str) -> Result<(Vec<u8>, String), Text> {
-    let url = format!("{}/law_data/{id}?asof={asof}&elm={element}&law_full_text_format=xml", egov());
-    let j = egov_json(&url)?;
-    let b64 = j.get("law_full_text").and_then(|x| x.as_str()).ok_or_else(|| tr!("{url} のレスポンスに law_full_text がありません", "the reply of {url} has no law_full_text"))?;
-    let xml = base64_decode(b64).ok_or_else(|| tr!("{url} の law_full_text が base64 として読めません", "the law_full_text of {url} is not base64"))?;
-    let rev = j.get("revision_info").and_then(|r| r.get("law_revision_id")).and_then(|x| x.as_str()).unwrap_or("").to_string();
-    Ok((xml, rev))
-}
-
-/// Whether two copies of an article say the same: their text, not their markup. e-Gov
-/// rewrites the attributes and the line breaks of an article no amendment touched.
-pub fn same_text(a: &[u8], b: &[u8]) -> bool {
-    xml_text(&String::from_utf8_lossy(a)) == xml_text(&String::from_utf8_lossy(b))
+/// Where e-Gov law API v2 is: `KOYOMI_EGOV`, else e-Gov itself. The requests, the retries and
+/// the reading of a reply are ritsu-base's ([`ritsu_base::sources`]).
+pub fn egov() -> Egov {
+    Egov { base: sources::base_url("KOYOMI_EGOV", sources::EGOV) }
 }
 
 /// The articles of a law source: the pinned ones, then the cited ones that have no pin yet.
@@ -137,7 +66,7 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                     lines.push(tr!("{name}: url が無いので取れません（`url \"…\"` を足すと取れます）", "{name}: no url, so the copy cannot be fetched (add `url \"…\"`)"));
                     continue;
                 };
-                let body = curl(url)?;
+                let body = sources::curl(url)?;
                 let dest = dir.join(path);
                 let before = std::fs::read(&dest).ok();
                 let h = short(&body);
@@ -172,13 +101,13 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                         lines.push(tr!("{name}: `{fr}` は条・項・号の書き方になっていないので取れません", "{name}: `{fr}` is not written as an article, a paragraph or an item, so it cannot be fetched"));
                         continue;
                     };
-                    let (xml, rev) = law_article(id, &asof.to_string(), &e)?;
+                    let (xml, rev) = egov().law_data(id, &asof.to_string(), Some(&e))?;
                     std::fs::create_dir_all(&cdir).map_err(|err| tr!("{} を作れません: {err}", "cannot create {}: {err}", cdir.display()))?;
                     let dest = cdir.join(format!("{e}.xml"));
                     let before = std::fs::read(&dest).ok();
                     // A copy whose text did not change keeps its bytes, and so its pin: e-Gov
                     // rewrites the markup of articles no amendment touched.
-                    let same = before.as_deref().is_some_and(|b| same_text(b, &xml));
+                    let same = before.as_deref().is_some_and(|b| sources::same_text(b, &xml));
                     if !same {
                         std::fs::write(&dest, &xml).map_err(|err| tr!("{} に書けません: {err}", "cannot write {}: {err}", dest.display()))?;
                     }
@@ -209,36 +138,6 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
 }
 
 // ── pin ──────────────────────────────────────────────────────────────────────
-
-/// The byte offset of the `sha256:` of a line, and of the `#` that starts its comment, each
-/// outside the strings of the line.
-fn marks(line: &str) -> (Option<usize>, Option<usize>) {
-    let mut in_str = false;
-    let mut pin = None;
-    for (i, c) in line.char_indices() {
-        match c {
-            '"' => in_str = !in_str,
-            '#' if !in_str => return (pin, Some(i)),
-            's' if !in_str && pin.is_none() && line[i..].starts_with("sha256:") => pin = Some(i),
-            _ => {}
-        }
-    }
-    (pin, None)
-}
-
-/// The line with `sha256:<pin>` in place of the digits it has, or with ` sha256:<pin>` added
-/// after its last word (before a comment). Nothing else on the line changes.
-pub fn pinned(line: &str, pin: &str) -> String {
-    let (at, comment) = marks(line);
-    if let Some(i) = at {
-        let start = i + "sha256:".len();
-        let end = start + line[start..].bytes().take_while(|b| b.is_ascii_hexdigit()).count();
-        return format!("{}{pin}{}", &line[..start], &line[end..]);
-    }
-    let body_end = comment.unwrap_or(line.len());
-    let content = line[..body_end].trim_end();
-    format!("{content} sha256:{pin}{}", &line[content.len()..])
-}
 
 /// What `pin` reads of a table, for the line that says it is pinned.
 fn table_summary(bytes: &[u8], format: &Option<(Format, crate::ast::Span)>, covers: &Option<(Covers, crate::ast::Span)>) -> Option<Text> {
@@ -285,7 +184,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
                 }
                 let k = s.span.line - 1;
                 let (body, end) = split(&lines[k]);
-                lines[k] = pinned(&body, &h) + &end;
+                lines[k] = sources::pinned(&body, &h) + &end;
                 changed = true;
                 report.push(tr!("{name}: sha256:{h} で固定しました{}", "{name}: pinned sha256:{h}{}", summary.ja; summary.en));
             }
@@ -302,7 +201,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
                     if p.pin.as_deref() != Some(h.as_str()) {
                         let k = p.span.line - 1;
                         let (body, end) = split(&lines[k]);
-                        lines[k] = pinned(&body, &h) + &end;
+                        lines[k] = sources::pinned(&body, &h) + &end;
                         changed = true;
                         report.push(tr!("{name}: {} を sha256:{h} で固定しました", "{name}: pinned {} at sha256:{h}", p.fragment));
                     }
@@ -444,36 +343,11 @@ fn table_diff(name: &str, old: &[Row], new: &[Row], covers: &Covers) -> (Vec<Tex
     (lines, moved)
 }
 
-/// The revisions of a law enforced after `asof`, as (enforcement date, revision id), one a day.
-fn later_revisions(id: &str, asof: Day) -> Result<Vec<(String, String)>, Text> {
-    let j = egov_json(&format!("{}/law_revisions/{id}", egov()))?;
-    let mut v = Vec::new();
-    if let Some(revs) = j.get("revisions").and_then(|r| r.as_array()) {
-        for r in revs {
-            let date = r.get("amendment_enforcement_date").and_then(|x| x.as_str()).unwrap_or("");
-            let rid = r.get("law_revision_id").and_then(|x| x.as_str()).unwrap_or("");
-            if crate::date::parse(date).is_some_and(|d| d > asof) {
-                v.push((date.to_string(), rid.to_string()));
-            }
-        }
-    }
-    v.sort();
-    // Several revisions can come into force on one day; the text as of that day is one.
-    v.dedup_by(|a, b| a.0 == b.0);
-    Ok(v)
-}
-
-/// The lines that differ between two texts, as `- old` and `+ new`, up to `cap`.
+/// The lines that differ between two texts, as `- old` and `+ new`, up to `cap` in all (the
+/// lines are ritsu-base's [`sources::diff_lines`]; koyomi keeps its own cap, across both sides).
 fn text_diff(old: &str, new: &str, cap: usize) -> Vec<String> {
-    let o: Vec<&str> = old.lines().collect();
-    let n: Vec<&str> = new.lines().collect();
-    let mut out = Vec::new();
-    for l in o.iter().filter(|l| !n.contains(l)) {
-        out.push(format!("- {l}"));
-    }
-    for l in n.iter().filter(|l| !o.contains(l)) {
-        out.push(format!("+ {l}"));
-    }
+    let (gone, came) = sources::diff_lines(old, new);
+    let mut out: Vec<String> = gone.iter().map(|l| format!("- {l}")).chain(came.iter().map(|l| format!("+ {l}"))).collect();
     out.truncate(cap);
     out
 }
@@ -490,7 +364,7 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                     lines.push(tr!("{name}: url が無いので、元が変わったかを問えません", "{name}: no url, so there is nothing to ask whether it moved on"));
                     continue;
                 };
-                let body = curl(url)?;
+                let body = sources::curl(url)?;
                 let h = short(&body);
                 if pin.as_deref() == Some(h.as_str()) {
                     lines.push(tr!("{name}: 変わっていません（{url} は sha256:{h} で、固定と同じ）", "{name}: unchanged ({url} is sha256:{h}, as pinned)"));
@@ -525,7 +399,7 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                 ));
             }
             SourceKind::Law { id, asof, pins } => {
-                let later = later_revisions(id, *asof)?;
+                let later = egov().later_revisions(id, &asof.to_string())?;
                 if later.is_empty() {
                     lines.push(tr!("{name}: {asof} より後に施行される版はありません", "{name}: no revision comes into force after {asof}"));
                     continue;
@@ -541,9 +415,9 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                         continue;
                     };
                     for (date, _) in &later {
-                        let (xml, _) = law_article(id, date, &e)?;
-                        if !same_text(&prev, &xml) {
-                            let diff = text_diff(&xml_text(&String::from_utf8_lossy(&prev)), &xml_text(&String::from_utf8_lossy(&xml)), 8);
+                        let (xml, _) = egov().law_data(id, date, Some(&e))?;
+                        if !sources::same_text(&prev, &xml) {
+                            let diff = text_diff(&sources::xml_text(&String::from_utf8_lossy(&prev)), &sources::xml_text(&String::from_utf8_lossy(&xml)), 8);
                             differs.entry(date.clone()).or_default().push((fr.clone(), diff));
                         }
                         prev = xml;

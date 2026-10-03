@@ -3,7 +3,7 @@
 //! (E104); nothing is skipped quietly.
 
 use crate::date::{self, Day};
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use serde_json::Value;
 use std::collections::HashMap;
 

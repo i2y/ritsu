@@ -3,6 +3,7 @@
 //! The date type is used only to take a date in and to hand one back: year, month and day go
 //! to day numbers and back by the same procedures as the other targets.
 
+use ritsu_emit::header::Comment;
 use super::{Call, H, Msg, Num, Piece, Unit, at_doc, date_doc, day_text, is_open_doc, message};
 use crate::ast::{Kind, Ty};
 use crate::naming::Target;
@@ -10,7 +11,7 @@ use crate::naming::Target;
 const T: Target = Target::Python;
 
 fn lit(s: &str) -> String {
-    serde_json::to_string(s).unwrap()
+    ritsu_emit::lit::json(s)
 }
 
 /// A message as an f-string, or a plain string when it has no values in it.
@@ -482,7 +483,7 @@ fn functions(u: &Unit) -> String {
 pub fn module(u: &Unit) -> String {
     let mut o = String::new();
     for h in &u.header {
-        o.push_str(&format!("# {h}\n"));
+        o.push_str(&Comment::Hash.line(h));
     }
     let what = match u.kind {
         Kind::Dates => {
@@ -516,7 +517,7 @@ pub fn module(u: &Unit) -> String {
 /// `python/<alias>_runner.py`.
 pub fn runner(u: &Unit) -> String {
     let mut o = String::new();
-    o.push_str(&format!("# {}\n", u.header[0]));
+    o.push_str(&Comment::Hash.line(&u.header[0]));
     o.push_str(&format!(
         "# {}\n",
         u.t(tr!(

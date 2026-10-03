@@ -4,7 +4,7 @@
 use koyomi::check::{Checked, Options, Outcome, Report, check, check_text};
 use koyomi::date::{Day, parse};
 use koyomi::diag::Diag;
-use koyomi::i18n::Lang;
+use ritsu_base::text::Lang;
 use koyomi::resolve::Model;
 
 fn d(s: &str) -> Day {
@@ -71,12 +71,12 @@ fn the_range_past_the_table() {
     // DESIGN 4.3: the same file, its range to the end of 2027.
     let o = changed("examples/支払_20日締め翌月10日払い.cal", "<=2027-11-20", "<=2027-12-31");
     let e = only(&o, "E203");
-    assert_eq!((e.line, e.col), (6, 3));
-    assert_eq!(e.inputs, vec![("受領日".to_string(), "2027-11-21".to_string())]);
+    assert_eq!((e.line, e.col), (Some(6), Some(3)));
+    assert_eq!(e.extra.inputs, vec![("受領日".to_string(), "2027-11-21".to_string())]);
     assert!(e.message.ja.contains("2028-01-10 が営業日か"), "{}", e.message.ja);
-    assert_eq!(e.fails.iter().map(|r| r.days()).sum::<i64>(), 41);
-    assert_eq!((e.fails[0].from, e.fails[0].to), (d("2027-11-21"), d("2027-12-31")));
-    assert_eq!(e.fix.as_deref(), Some("  受領日(received) : date  range >=2026-01-01 <=2027-11-20"));
+    assert_eq!(e.extra.fails.iter().map(|r| r.days()).sum::<i64>(), 41);
+    assert_eq!((e.extra.fails[0].from, e.extra.fails[0].to), (d("2027-11-21"), d("2027-12-31")));
+    assert_eq!(e.fixed_line(), Some("  受領日(received) : date  range >=2026-01-01 <=2027-11-20"));
     assert_eq!(d("2027-11-21").weekday(), 6);
 }
 
@@ -85,9 +85,9 @@ fn end_of_month_closing_two_months_later() {
     let path = "examples/支払_月末締め翌々月末払い.cal";
     let o = check(path).unwrap();
     let e = only(&o, "E301");
-    assert_eq!((e.line, e.col), (16, 3));
+    assert_eq!((e.line, e.col), (Some(16), Some(3)));
     assert_eq!(e.message.en, "The claim 受領から60日以内 fails for 648 of the 669 days of 受領日");
-    let runs: Vec<(String, String, i64)> = e.fails.iter().map(|r| (r.from.to_string(), r.to.to_string(), r.days())).collect();
+    let runs: Vec<(String, String, i64)> = e.extra.fails.iter().map(|r| (r.from.to_string(), r.to.to_string(), r.days())).collect();
     let want = [
         ("2026-01-01", "2026-01-29", 29),
         ("2026-02-01", "2026-03-29", 57),
@@ -102,7 +102,7 @@ fn end_of_month_closing_two_months_later() {
     ];
     assert_eq!(runs, want.iter().map(|(a, b, n)| (a.to_string(), b.to_string(), *n)).collect::<Vec<_>>());
     assert!(e.notes.iter().any(|n| n.ja == "いちばん外れるのは受領日 2026-05-01 のときで、支払日 2026-07-31 は受領日の 91 日後"), "{:?}", e.notes);
-    assert_eq!(e.inputs, vec![("受領日".to_string(), "2026-01-01".to_string())]);
+    assert_eq!(e.extra.inputs, vec![("受領日".to_string(), "2026-01-01".to_string())]);
     assert!(e.render(Lang::Ja).contains("支払日は受領日の 89 日後で、条件は 60 日後まで"));
     // The payment day 2026-12-31 (a Thursday, closed for the new year) moves to Monday 2026-12-28.
     let Some(Checked::Dates(m, r)) = &o.checked else { panic!() };
@@ -205,7 +205,7 @@ fn net_30() {
     let o = check_text(path, &src, &Options::default());
     let e = only(&o, "E301");
     assert!(e.message.en.contains("fails for 21 of the 1,064 days"), "{}", e.message.en);
-    assert_eq!(e.inputs, vec![("invoice_date".to_string(), "2026-01-01".to_string())]);
+    assert_eq!(e.extra.inputs, vec![("invoice_date".to_string(), "2026-01-01".to_string())]);
     let text = e.render(Lang::En);
     assert!(text.contains("2026-02-02") && text.contains("2026-01-30"), "{text}");
 }
@@ -247,11 +247,11 @@ fn e201_names_the_first_input_that_lands_on_a_missing_day() {
     let src = "dates 一か月後の例(month_later_example) v1\n\ninputs\n  受領日(received) : date  range >=2026-01-01 <=2026-12-31\n\ndate 一か月後(month_later) = 受領日\n  + 1 month\n";
     let o = check_text("一か月後の例.cal", src, &Options::default());
     let e = only(&o, "E201");
-    assert_eq!((e.line, e.col), (7, 3));
-    assert_eq!(e.inputs, vec![("受領日".to_string(), "2026-01-29".to_string())]);
+    assert_eq!((e.line, e.col), (Some(7), Some(3)));
+    assert_eq!(e.extra.inputs, vec![("受領日".to_string(), "2026-01-29".to_string())]);
     assert!(e.notes[0].ja.contains("2026-02-29"), "{:?}", e.notes);
     assert!(e.notes[1].ja.contains("2026-02-28 にする") && e.notes[1].ja.contains("2026-03-01 にする"), "{:?}", e.notes);
-    assert_eq!(e.fix.as_deref(), Some("  + 1 month else end_of_month"));
+    assert_eq!(e.fixed_line(), Some("  + 1 month else end_of_month"));
     // In a range where no day is missing, it still asks, and says so.
     let o = check_text("t.cal", &src.replace("<=2026-12-31", "<=2026-01-28"), &Options::default());
     let e = only(&o, "E201");

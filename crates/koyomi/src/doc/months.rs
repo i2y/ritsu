@@ -5,7 +5,7 @@
 
 use crate::calendar::{Calendar, Reason};
 use crate::date::{self, Day};
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use std::collections::BTreeMap;
 
 /// A year and a month.
@@ -189,7 +189,7 @@ pub fn grid(ym: Ym, cal: Option<&Calendar>, marks: &Marks) -> Grid {
 /// The named days of a month, the same names on days in a row together:
 /// `(3, 3, 憲法記念日)`, `(29, 31, 年末年始)`. A day with two names has them joined the way the
 /// language lists two things (`元日と年末年始`, `元日 and 年末年始`).
-pub fn named_runs(g: &Grid, lang: crate::i18n::Lang) -> Vec<(u32, u32, String)> {
+pub fn named_runs(g: &Grid, lang: ritsu_base::text::Lang) -> Vec<(u32, u32, String)> {
     let mut out: Vec<(u32, u32, String)> = Vec::new();
     for c in g.cells() {
         if c.names.is_empty() {
@@ -197,8 +197,8 @@ pub fn named_runs(g: &Grid, lang: crate::i18n::Lang) -> Vec<(u32, u32, String)> 
         }
         let names: Vec<String> = c.names.iter().map(|n| n.text().to_string()).collect();
         let text = match lang {
-            crate::i18n::Lang::Ja => crate::doc::ja_list(&names),
-            crate::i18n::Lang::En => crate::i18n::Text::list(&names.iter().map(|x| crate::i18n::Text::same(x.clone())).collect::<Vec<_>>()).en,
+            ritsu_base::text::Lang::Ja => crate::doc::ja_list(&names),
+            ritsu_base::text::Lang::En => ritsu_base::text::Text::list(&names.iter().map(|x| ritsu_base::text::Text::same(x.clone())).collect::<Vec<_>>()).en,
         };
         let (_, _, dd) = c.day.ymd();
         match out.last_mut() {

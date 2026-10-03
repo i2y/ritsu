@@ -1,13 +1,12 @@
 //! The command line (PLAN B.10, DESIGN 5): the table, `--help`, exit codes, and what is
 //! refused with exit 2 rather than ignored.
 
-mod common;
 
-use common::TempDir;
+use ritsu_testkit::TempDir;
 use std::process::{Command, Output};
 
 fn koyomi(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).env_remove("KOYOMI_LANG").output().unwrap()
+    Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).env_remove("KOYOMI_LANG").env_remove("RITSU_LANG").output().unwrap()
 }
 
 fn code(o: &Output) -> i32 {
@@ -173,7 +172,7 @@ fn explain() {
     let o = koyomi(&["explain", "e201", "--lang", "ja"]);
     assert!(out(&o).contains("いつ出るか"));
     let o = koyomi(&["explain", "--all"]);
-    for e in koyomi::codes::ledger() {
+    for e in koyomi::codes::ledger().entries {
         assert!(out(&o).contains(&format!("{} (", e.code)), "{}", e.code);
     }
     let o = koyomi(&["explain", "--all", "--format", "markdown"]);
@@ -251,7 +250,7 @@ fn gen_writes_and_checks() {
     );
     // What the command writes is what the library generates.
     let mut o = koyomi::check::check(good[0]).unwrap();
-    let u = koyomi::codegen::unit_of(&o.checked.take().unwrap(), koyomi::i18n::Lang::En);
+    let u = koyomi::codegen::unit_of(&o.checked.take().unwrap(), ritsu_base::text::Lang::En);
     for t2 in koyomi::naming::TARGETS {
         for (rel, body) in koyomi::codegen::files(&u, t2) {
             assert_eq!(std::fs::read_to_string(t.path().join(&rel)).unwrap(), body, "{rel}");

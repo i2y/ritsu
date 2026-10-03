@@ -2,7 +2,7 @@
 
 use koyomi::check::{Options, check_text};
 use koyomi::holidays::{read_csv, read_govuk};
-use koyomi::sha256;
+use ritsu_base::sha256;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
@@ -51,17 +51,16 @@ fn govuk_bank_holidays() {
     assert!(read_govuk(&std::fs::read(JSON).unwrap(), "wales").is_err());
 }
 
-/// `python3`, when it is there.
-fn python() -> Option<&'static str> {
-    Command::new("python3").arg("--version").output().ok().filter(|o| o.status.success()).map(|_| "python3")
-}
-
 #[test]
 fn shift_jis_agrees_with_cp932() {
-    let Some(py) = python() else {
-        println!("SKIP: python3 not found; the Shift_JIS table is not compared with Python's cp932");
+    if !ritsu_testkit::need(ritsu_testkit::Need::Python) {
         return;
-    };
+    }
+    if !ritsu_testkit::tools::runs("python3", &["--version"]) {
+        ritsu_testkit::skip("python3 not found; the Shift_JIS table is not compared with Python's cp932");
+        return;
+    }
+    let py = "python3";
     // The whole CSV.
     let bytes = std::fs::read(CSV).unwrap();
     let ours = koyomi::sjis::decode(&bytes).unwrap();
@@ -123,7 +122,7 @@ fn what_is_wrong_with_a_table() {
     assert_eq!(calendar_codes("source 休み = file \"data/gap.csv\" sha256:bec0e9a9279b388d", "format csv", "covers listed years"), vec!["E106"]);
     // E102's fix is the line with the copy's own pin.
     let o = check_text("tests/fixtures/t.cal", "calendar t v1\n\nsource 休み = file \"data/holidays.csv\"\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n", &Options::default());
-    assert_eq!(o.diags[0].fix.as_deref(), Some("source 休み = file \"data/holidays.csv\" sha256:56ebcd2f1e91e0a1"));
+    assert_eq!(o.diags[0].fixed_line(), Some("source 休み = file \"data/holidays.csv\" sha256:56ebcd2f1e91e0a1"));
 }
 
 #[test]
@@ -134,7 +133,7 @@ fn the_law_copies() {
         assert_eq!(sha256::short(&b), pin, "article {a}");
     }
     assert_eq!(std::fs::read_to_string(format!("{LAW}/revision.txt")).unwrap().trim(), "129AC0000000089_20260624_508AC0000000045");
-    let text = koyomi::sources::xml_text(&std::fs::read_to_string(format!("{LAW}/MainProvision-Article_143.xml")).unwrap());
+    let text = ritsu_base::sources::xml_text(&std::fs::read_to_string(format!("{LAW}/MainProvision-Article_143.xml")).unwrap());
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines[0], "（暦による期間の計算）");
     assert_eq!(lines[1], "第百四十三条");
@@ -177,5 +176,5 @@ fn citing_a_law() {
     assert_eq!(law_codes("source 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第143条 sha256:0000000000000000", "@民法 第143条"), vec!["E103"]);
     // E111's fix is the pin line, with the copy's digest.
     let o = check_text("examples/t.cal", &format!("dates t v1\n{src}\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d    @民法 第143条, 第142条\n  + 1 day\n"), &Options::default());
-    assert_eq!(o.diags[0].fix.as_deref(), Some("  第142条 sha256:fc8c35a0769d3b35"));
+    assert_eq!(o.diags[0].fixed_line(), Some("  第142条 sha256:fc8c35a0769d3b35"));
 }

@@ -2,7 +2,7 @@
 //! arithmetic. The design is DESIGN.md; the plan it is built by is PLAN.md.
 
 #[macro_use]
-pub mod i18n;
+extern crate ritsu_base;
 
 pub mod api;
 pub mod ast;
@@ -25,7 +25,6 @@ pub mod paraphrase;
 pub mod parse;
 pub mod reserved;
 pub mod resolve;
-pub mod sha256;
 pub mod sjis;
 pub mod sjis_table;
 pub mod sources;

@@ -93,7 +93,7 @@ fn a_calendar_read_with_use_calendar() {
     let p = "tests/fixtures/calendars/t.cal";
     // The calendar it reads, and its own closures on top.
     let o = check_text(p, "calendar 夏休み(summer) v1\nuse calendar \"土日.cal\"\n\nclosed 2026-08-13..2026-08-15 \"夏季休業\"\nopen 2026-08-15 \"出勤日\"\n", &Options::default());
-    assert!(!o.has_errors(), "{:?}", o.diags.iter().map(|d| d.render(koyomi::i18n::Lang::En)).collect::<Vec<_>>());
+    assert!(!o.has_errors(), "{:?}", o.diags.iter().map(|d| d.render(ritsu_base::text::Lang::En)).collect::<Vec<_>>());
     let Some(Checked::Calendar(c)) = o.checked else { panic!() };
     assert_eq!(c.offset, Some(9 * 60));
     assert_eq!(c.used.len(), 1);

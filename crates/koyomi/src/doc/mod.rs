@@ -15,8 +15,8 @@ use crate::ast::{Cite, File, RuleKind, Ty};
 use crate::calendar::{Calendar, Info, clean};
 use crate::check::{Checked, Outcome, Report};
 use crate::date::{self, Day};
-use crate::diag::{self, Diag, Step, day_with_weekday};
-use crate::i18n::{Lang, Text, count};
+use crate::diag::{Diag, Step, day_with_weekday};
+use ritsu_base::text::{Lang, Text, count};
 use crate::interp;
 use crate::paraphrase;
 use crate::resolve::{CK, Model, ROp};
@@ -188,7 +188,7 @@ fn quotes(laws: &[Law], cite: &Cite, lang: Lang) -> Vec<Quote> {
             Lang::Ja => format!("{} {fr}（e-Gov 法令検索、{} 時点、版 {rev}）", law.name, law.asof),
             Lang::En => format!("{} {fr} (e-Gov, as of {}, revision {rev})", law.name, law.asof),
         };
-        out.push(Quote { head, lines: sources::article_lines(&xml) });
+        out.push(Quote { head, lines: ritsu_base::sources::article_lines(&xml) });
     }
     out
 }
@@ -504,10 +504,10 @@ fn dates_page(m: &Model, rep: &Report, diags: &[Diag], ok: Option<&Text>, lang: 
     // The verdict.
     let failing: Vec<&Diag> = diags.iter().filter(|d| d.is_error()).collect();
     if failing.is_empty() {
-        let line = ok.map(|x| diag::say(x, lang)).unwrap_or_default();
+        let line = ok.map(|x| ritsu_base::text::spaced(x, lang)).unwrap_or_default();
         b.push(Block::Alert { ok: true, lines: vec![vec![t(format!("{line}{}", if lang == Lang::Ja { "。" } else { "." }))]] });
     } else {
-        let mut lines: Vec<Para> = failing.iter().map(|d| vec![t(format!("{}{}", diag::say(&d.message, lang), if lang == Lang::Ja { "。" } else { "." }))]).collect();
+        let mut lines: Vec<Para> = failing.iter().map(|d| vec![t(format!("{}{}", ritsu_base::text::spaced(&d.message, lang), if lang == Lang::Ja { "。" } else { "." }))]).collect();
         if failing.iter().any(|d| d.code != "E303") {
             lines.push(vec![t(s(tr!(
                 "成り立たない入力の日は、下の月の表で太字にしてあります。",
@@ -693,12 +693,12 @@ fn dates_page(m: &Model, rep: &Report, diags: &[Diag], ok: Option<&Text>, lang: 
             }
             b.push(Block::H3(s(tr!("「{}」が成り立たない入力", "Where {} fails", cl.name))));
             b.extend(runs_blocks(m, &cr.runs, cr.more_runs, lang));
-            if let Some(d) = diags.iter().find(|d| matches!(d.code, "E301" | "E302") && d.line == cl.span.line)
-                && !d.steps.is_empty()
+            if let Some(d) = diags.iter().find(|d| matches!(d.code, "E301" | "E302") && d.line == Some(cl.span.line))
+                && !d.extra.steps.is_empty()
             {
-                let head = d.example.as_ref().map(|h| h.get(lang).to_string()).unwrap_or_default();
-                b.push(Block::P(vec![t(format!("{}:", diag::capitalize(&head)))]));
-                b.push(Block::Trace(d.steps.clone()));
+                let head = d.extra.heading.as_ref().map(|h| h.get(lang).to_string()).unwrap_or_default();
+                b.push(Block::P(vec![t(format!("{}:", ritsu_base::text::capitalize(&head)))]));
+                b.push(Block::Trace(d.extra.steps.clone()));
             }
         }
     }

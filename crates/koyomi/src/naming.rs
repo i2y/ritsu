@@ -22,25 +22,9 @@ pub const GENERATED: &[&str] = &[
 /// imported in their place), Rust's `std`, `core` and `alloc`, and PostgreSQL's own schemas.
 pub const MODULES: &[&str] = &["datetime", "json", "sys", "typing", "std", "core", "alloc", "pg_catalog", "pg_temp", "pg_toast", "information_schema"];
 
-/// `payment_at` → `PaymentAt`: Go's exported name for an alias.
-pub fn pascal(alias: &str) -> String {
-    alias
-        .split('_')
-        .filter(|p| !p.is_empty())
-        .map(|p| {
-            let mut cs = p.chars();
-            match cs.next() {
-                Some(c) => c.to_ascii_uppercase().to_string() + cs.as_str(),
-                None => String::new(),
-            }
-        })
-        .collect()
-}
-
-/// `payment_terms` → `paymentterms`: a Go package name.
-pub fn go_package(alias: &str) -> String {
-    alias.replace('_', "")
-}
+/// `payment_at` → `PaymentAt`: Go's exported name for an alias; `payment_terms` →
+/// `paymentterms`: a Go package's name (ritsu's, `ritsu_emit::ident`).
+pub use ritsu_emit::ident::{go_package, pascal};
 
 /// The function that gives a date's time (`at`).
 pub fn at_alias(alias: &str) -> String {

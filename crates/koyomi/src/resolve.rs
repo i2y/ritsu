@@ -7,7 +7,7 @@ use crate::ast::*;
 use crate::calendar::Calendar;
 use crate::date::{Day, Missing};
 use crate::diag::Diag;
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::kw;
 use crate::naming;
 use crate::reserved;

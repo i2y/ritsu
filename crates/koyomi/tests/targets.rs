@@ -5,15 +5,19 @@
 //! line it prints is compared with what the reference interpreter gives.
 //!
 //! The vectors are made in this process and piped to the runner as they are made; nothing as
-//! large as them is written to disk. A tool that is missing prints `SKIP:` and the test passes.
+//! large as them is written to disk. A tool that is missing prints `SKIP:` and the test passes
+//! (ritsu-testkit's: the tools are found, the runners run and PostgreSQL is started by it).
 //! `-- --nocapture` shows a `compared <target> <file>: <n> lines` line for every comparison.
 
 mod common;
 
-use common::{Cluster, TempDir, have, on_path, pg_bin, pipe, run, tool, version};
+use ritsu_testkit::pg::{self, Postgres};
+use ritsu_testkit::run::{Ran, pipe, run};
+use ritsu_testkit::tools::{find, on_path, runs, version};
+use ritsu_testkit::{Need, TempDir, need, skip};
 use koyomi::check::{Checked, check};
 use koyomi::codegen;
-use koyomi::i18n::Lang;
+use ritsu_base::text::Lang;
 use koyomi::naming::{Target, go_package};
 use koyomi::vectors::{self, Expect, Row};
 use std::path::Path;
@@ -179,14 +183,17 @@ fn compare_all(target: &str, ss: &[Subject], job: impl Fn(&Subject) -> Command +
 }
 
 /// Fail with what a tool said, unless it succeeded.
-fn ok_or_fail(what: &str, r: &common::Ran) {
+fn ok_or_fail(what: &str, r: &Ran) {
     assert!(r.ok && !r.timed_out, "{what} failed:\n{}{}", r.stdout, r.stderr);
 }
 
 #[test]
 fn typescript() {
-    if !have("node") {
-        println!("SKIP: node is not on the PATH; the TypeScript target is not run");
+    if !need(Need::Node) {
+        return;
+    }
+    if !runs("node", &["--version"]) {
+        skip("node is not on the PATH; the TypeScript target is not run");
         return;
     }
     let ss = subjects();
@@ -197,7 +204,7 @@ fn typescript() {
         std::fs::write(d.path().join("typescript/package.json"), "{\"type\": \"module\"}\n").unwrap();
     }
     println!("typescript: {}", version("node", "--version"));
-    match tool("KOYOMI_TSC", "tools/node_modules/.bin/tsc", "tsc") {
+    match find("TSC", Some(Path::new("tools/node_modules/.bin/tsc")), "tsc", &["--version"]) {
         Some(tsc) => {
             let types = std::fs::canonicalize("tools/node_modules/@types").ok();
             for d in [&dir, &ja] {
@@ -214,7 +221,7 @@ fn typescript() {
             }
             println!("typescript: tsc --strict --erasableSyntaxOnly passes, in English and in Japanese ({})", version(&tsc, "--version"));
         }
-        None => println!("SKIP: tsc is not installed (npm ci --prefix tools); the TypeScript is run but not type-checked"),
+        None => skip("tsc is not installed (npm ci --prefix tools); the TypeScript is run but not type-checked"),
     }
     let runner = |d: &TempDir, s: &Subject| {
         let mut c = Command::new("node");
@@ -227,8 +234,11 @@ fn typescript() {
 
 #[test]
 fn python() {
-    if !have("python3") {
-        println!("SKIP: python3 is not on the PATH; the Python target is not run");
+    if !need(Need::Python) {
+        return;
+    }
+    if !runs("python3", &["--version"]) {
+        skip("python3 is not on the PATH; the Python target is not run");
         return;
     }
     let ss = subjects();
@@ -236,7 +246,7 @@ fn python() {
     generate(dir.path(), Target::Python, &ss, Lang::En);
     generate(ja.path(), Target::Python, &ss, Lang::Ja);
     println!("python: {}", version("python3", "--version"));
-    match tool("KOYOMI_MYPY", "tools/.venv/bin/mypy", "mypy") {
+    match find("MYPY", Some(Path::new("tools/.venv/bin/mypy")), "mypy", &["--version"]) {
         Some(mypy) => {
             for d in [&dir, &ja] {
                 let mut c = Command::new(&mypy);
@@ -248,7 +258,7 @@ fn python() {
             }
             println!("python: mypy --strict passes, in English and in Japanese ({})", version(&mypy, "--version"));
         }
-        None => println!("SKIP: mypy is not installed (tools/requirements.txt); the Python is run but not type-checked"),
+        None => skip("mypy is not installed (tools/requirements.txt); the Python is run but not type-checked"),
     }
     let runner = |d: &TempDir, s: &Subject| {
         let mut c = Command::new("python3");
@@ -261,8 +271,11 @@ fn python() {
 
 #[test]
 fn go() {
-    if !on_path("go") || !on_path("gofmt") {
-        println!("SKIP: go or gofmt is not on the PATH; the Go target is not run");
+    if !need(Need::Go) {
+        return;
+    }
+    if on_path("go").is_none() || on_path("gofmt").is_none() {
+        skip("go or gofmt is not on the PATH; the Go target is not run");
         return;
     }
     let ss = subjects();
@@ -295,8 +308,11 @@ fn go() {
 
 #[test]
 fn rust() {
-    if !have("rustc") {
-        println!("SKIP: rustc is not on the PATH; the Rust target is not run");
+    if !need(Need::Rustc) {
+        return;
+    }
+    if !runs("rustc", &["--version"]) {
+        skip("rustc is not on the PATH; the Rust target is not run");
         return;
     }
     let ss = subjects();
@@ -339,15 +355,18 @@ fn rust() {
 
 #[test]
 fn sql() {
-    let Some(bin) = pg_bin() else {
-        println!("SKIP: initdb is not found (KOYOMI_PG_BIN or the PATH); the SQL target is not run");
+    if !need(Need::Postgres) {
         return;
-    };
+    }
+    if let Err(why) = pg::bin() {
+        skip(&format!("{why}; the SQL target is not run"));
+        return;
+    }
     let ss = subjects();
     let (dir, ja) = (TempDir::new("sql"), TempDir::new("sql-ja"));
     generate(dir.path(), Target::Sql, &ss, Lang::En);
     generate(ja.path(), Target::Sql, &ss, Lang::Ja);
-    let cluster = match Cluster::start(&bin) {
+    let cluster = match Postgres::start() {
         Ok(c) => c,
         Err(e) => panic!("cannot start a PostgreSQL cluster: {e}"),
     };

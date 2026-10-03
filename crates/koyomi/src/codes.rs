@@ -1,35 +1,14 @@
 //! The ledger of every diagnostic code (DESIGN 4.2). `koyomi explain` reads it, and the
 //! tests run every entry's example and require its code to come out, so the example cannot
-//! go stale while the prose around it still reads well.
+//! go stale while the prose around it still reads well. The entries are koyomi's; how they are
+//! written out, and how every example is run, is ritsu-base's ([`ritsu_base::ledger`]).
 
-use crate::diag::Severity;
-use crate::i18n::{Lang, Text};
+use ritsu_base::ledger::{Entry, Ledger, Repro};
+use ritsu_base::text::Text;
 
-pub struct Entry {
-    pub code: &'static str,
-    pub severity: Severity,
-    /// One line in the words of the business, like the diagnostic's own first line.
-    pub title: Text,
-    /// When it is printed.
-    pub when: Text,
-    /// How to get rid of it, down to what to write.
-    pub fix: Text,
-    /// The smallest `.cal` that gets it.
-    pub example: &'static str,
-    /// What has to be beside the example for it to get there, as (path, contents).
-    pub files: &'static [(&'static str, &'static [u8])],
-    pub related: &'static [&'static str],
-}
-
+/// An entry whose example is the smallest `.cal` that gets the code.
 fn e(code: &'static str, title: Text, when: Text, fix: Text, example: &'static str, related: &'static [&'static str]) -> Entry {
-    Entry { code, severity: if code.starts_with('W') { Severity::Warning } else { Severity::Error }, title, when, fix, example, files: &[], related }
-}
-
-impl Entry {
-    fn with(mut self, files: &'static [(&'static str, &'static [u8])]) -> Entry {
-        self.files = files;
-        self
-    }
+    Entry::new(code, title, when, fix, Repro::File { body: example, beside: &[] }, related)
 }
 
 // ── What the examples need beside them ───────────────────────────────────
@@ -50,9 +29,9 @@ const LAW_142: (&str, &[u8]) = (
 
 const RANGE_JAN: &str = "range >=2026-01-01 <=2026-01-31";
 
-pub fn ledger() -> Vec<Entry> {
+pub fn ledger() -> Ledger {
     let _ = RANGE_JAN;
-    vec![
+    let entries = vec![
         // ── Words and lines ──
         e(
             "E001",
@@ -246,7 +225,7 @@ pub fn ledger() -> Vec<Entry> {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\"\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &["E101", "E103"],
         )
-        .with(&[HOLIDAYS]),
+        .beside(&[HOLIDAYS]),
         e(
             "E103",
             tr!("写しが固定と違います", "A copy does not match its pin"),
@@ -255,7 +234,7 @@ pub fn ledger() -> Vec<Entry> {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:0123456789abcdef\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &["E102"],
         )
-        .with(&[HOLIDAYS]),
+        .beside(&[HOLIDAYS]),
         e(
             "E104",
             tr!("写しが読めません", "A copy cannot be read"),
@@ -267,7 +246,7 @@ pub fn ledger() -> Vec<Entry> {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:72fa28860be08f0a\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &[],
         )
-        .with(&[HOLIDAYS_BAD]),
+        .beside(&[HOLIDAYS_BAD]),
         e(
             "E105",
             tr!("表の行が `covers` の外にあります", "A row of a table is outside `covers`"),
@@ -276,7 +255,7 @@ pub fn ledger() -> Vec<Entry> {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:56ebcd2f1e91e0a1\n  format csv\n  covers 2026-01-01..2026-03-31\n\nclosed 休み\n",
             &["E106"],
         )
-        .with(&[HOLIDAYS]),
+        .beside(&[HOLIDAYS]),
         e(
             "E106",
             tr!("`covers listed years` で、行の無い年があります", "`covers listed years`, and a year has no rows"),
@@ -285,7 +264,7 @@ pub fn ledger() -> Vec<Entry> {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:bec0e9a9279b388d\n  format csv\n  covers listed years\n\nclosed 休み\n",
             &["E105"],
         )
-        .with(&[HOLIDAYS_GAP]),
+        .beside(&[HOLIDAYS_GAP]),
         e(
             "E107",
             tr!("オフセットが `±HH:MM` の形ではありません", "The offset is not of the form `±HH:MM`"),
@@ -321,7 +300,7 @@ pub fn ledger() -> Vec<Entry> {
             "dates t v1\nuse calendar \"weekends.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  roll following\n  at 09:00\n",
             &["E107"],
         )
-        .with(&[WEEKENDS_NO_OFFSET]),
+        .beside(&[WEEKENDS_NO_OFFSET]),
         e(
             "E111",
             tr!("法令の引用が使えません", "A citation of a law cannot be used"),
@@ -352,7 +331,7 @@ pub fn ledger() -> Vec<Entry> {
             "dates t v1\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:fc8c35a0769d3b35\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n",
             &["E111"],
         )
-        .with(&[LAW_142]),
+        .beside(&[LAW_142]),
         // ── Computing dates ──
         e(
             "E201",
@@ -387,7 +366,7 @@ pub fn ledger() -> Vec<Entry> {
             "dates t v1\nuse calendar \"closed_days.cal\"\n\ninputs\n  d : date  range >=2026-12-01 <=2026-12-31\n\ndate x = d\n  + 5 business days\n",
             &["E108"],
         )
-        .with(&[TABLE_2026, HOLIDAYS]),
+        .beside(&[TABLE_2026, HOLIDAYS]),
         e(
             "E204",
             tr!("計算した日付が 0001-01-01〜9999-12-31 の外に出ます", "A computed date falls outside 0001-01-01..9999-12-31"),
@@ -427,7 +406,7 @@ pub fn ledger() -> Vec<Entry> {
             "dates t v1\nuse calendar \"weekends.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  + 1 day\n\nclaims\n  営業日 : x is open\n",
             &["E302"],
         )
-        .with(&[WEEKENDS]),
+        .beside(&[WEEKENDS]),
         e(
             "E302",
             tr!("日付が単調ではありません", "A date is not monotonic"),
@@ -436,7 +415,7 @@ pub fn ledger() -> Vec<Entry> {
             "dates t v1\nuse calendar \"weekends.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  if closed + 3 days\n\nclaims\n  遅いほど遅い : x is monotonic\n",
             &["E301"],
         )
-        .with(&[WEEKENDS]),
+        .beside(&[WEEKENDS]),
         e(
             "E303",
             tr!("例の値が違います", "An example has a different value"),
@@ -461,79 +440,19 @@ pub fn ledger() -> Vec<Entry> {
             "dates t v1\n\ninputs\n  d : date  range >=0001-01-01 <=9999-12-31\n  n : int   range >=1 <=100\n\ndate x = d\n  + n days\n",
             &[],
         ),
-    ]
+    ];
+    Ledger {
+        tool: "koyomi",
+        example_file: "example.cal",
+        fence: "cal",
+        repro_heading: tr!("再現", "Example"),
+        later_text: Text::default(),
+        later_markdown: Text::default(),
+        entries,
+    }
 }
 
+/// The entry of a code, written in either case.
 pub fn find(code: &str) -> Option<Entry> {
-    let code = code.to_ascii_uppercase();
-    ledger().into_iter().find(|e| e.code == code)
-}
-
-/// `koyomi explain <CODE>` for a terminal.
-pub fn render_text(e: &Entry, lang: Lang) -> String {
-    let kind = match (e.severity, lang) {
-        (Severity::Error, Lang::En) => "error",
-        (Severity::Warning, Lang::En) => "warning",
-        (Severity::Error, Lang::Ja) => "エラー",
-        (Severity::Warning, Lang::Ja) => "警告",
-    };
-    let (when, fix, example, also) = match lang {
-        Lang::En => ("When", "Fix", "Example", "See also"),
-        Lang::Ja => ("いつ出るか", "直し方", "再現", "関連"),
-    };
-    let mut o = format!("{} ({kind}) — {}\n\n", e.code, e.title.get(lang));
-    o.push_str(&format!("{when}: {}\n\n{fix}: {}\n\n{example}:\n", e.when.get(lang), e.fix.get(lang)));
-    for l in e.example.lines() {
-        o.push_str(&format!("    {l}\n"));
-    }
-    for (name, body) in e.files {
-        let label = if lang == Lang::Ja { "隣に置くファイル" } else { "beside it" };
-        o.push_str(&format!("\n  {label}: {name}\n"));
-        if let Ok(t) = std::str::from_utf8(body)
-            && body.len() < 400
-        {
-            for l in t.lines() {
-                o.push_str(&format!("    {l}\n"));
-            }
-        }
-    }
-    if !e.related.is_empty() {
-        o.push_str(&format!("\n{also}: {}\n", e.related.join(" ")));
-    }
-    o
-}
-
-/// One code in Markdown, under an anchor of its own (`#e301`).
-pub fn render_markdown_one(e: &Entry, lang: Lang) -> String {
-    let (when, fix, example, also) = match lang {
-        Lang::En => ("When", "Fix", "Example", "See also"),
-        Lang::Ja => ("いつ出るか", "直し方", "再現", "関連"),
-    };
-    let mut o = format!("<a id=\"{}\"></a>\n\n## {} — {}\n\n", e.code.to_lowercase(), e.code, e.title.get(lang));
-    o.push_str(&format!("**{when}**: {}\n\n**{fix}**: {}\n\n**{example}**:\n\n```cal\n{}```\n", e.when.get(lang), e.fix.get(lang), e.example));
-    for (name, body) in e.files {
-        if let Ok(t) = std::str::from_utf8(body)
-            && body.len() < 400
-        {
-            o.push_str(&format!("\n`{name}`:\n\n```\n{t}```\n"));
-        }
-    }
-    if !e.related.is_empty() {
-        let links: Vec<String> = e.related.iter().map(|c| format!("[{c}](#{})", c.to_lowercase())).collect();
-        o.push_str(&format!("\n{also}: {}\n", links.join(", ")));
-    }
-    o
-}
-
-/// `koyomi explain --all --format markdown`: every code, for `docs/codes.md` (stage D).
-pub fn render_markdown(lang: Lang) -> String {
-    let mut o = match lang {
-        Lang::En => "# Diagnostic codes\n\nWritten by `koyomi explain --all --format markdown`; do not edit.\n".to_string(),
-        Lang::Ja => "# 診断のコード\n\n`koyomi explain --all --format markdown --lang ja` の出力です。手で直しません。\n".to_string(),
-    };
-    for e in ledger() {
-        o.push('\n');
-        o.push_str(&render_markdown_one(&e, lang));
-    }
-    o
+    ledger().find(code).cloned()
 }

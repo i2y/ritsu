@@ -13,7 +13,7 @@
 mod common;
 
 use koyomi::check::{Checked, check};
-use koyomi::i18n::Lang;
+use ritsu_base::text::Lang;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -76,7 +76,7 @@ fn shown(p: &Path) -> String {
 #[test]
 fn the_codes_pages_are_what_explain_prints() {
     for (page, lang) in [("docs/codes.md", Lang::En), ("docs/codes.ja.md", Lang::Ja)] {
-        let want = koyomi::codes::render_markdown(lang);
+        let want = koyomi::codes::ledger().render_markdown(lang);
         let have = fs::read_to_string(root().join(page)).unwrap();
         assert!(have == want, "{page} is not what `koyomi explain --all --format markdown` prints; write it again with that command");
     }
@@ -124,7 +124,7 @@ fn the_cal_on_the_pages_is_from_the_files() {
 }
 
 fn koyomi(args: &[&str]) -> String {
-    let o = Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).current_dir(root()).env_remove("KOYOMI_LANG").output().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_koyomi")).args(args).current_dir(root()).env_remove("KOYOMI_LANG").env_remove("RITSU_LANG").output().unwrap();
     String::from_utf8_lossy(&o.stdout).to_string()
 }
 
@@ -289,7 +289,7 @@ fn the_code_on_the_pages_is_what_gen_writes() {
 
 /// `5341318` as the pages write it, `5,341,318`.
 fn with_commas(n: u64) -> String {
-    koyomi::i18n::count(n)
+    ritsu_base::text::count(n)
 }
 
 #[test]

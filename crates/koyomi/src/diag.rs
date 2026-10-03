@@ -1,18 +1,21 @@
 //! Diagnostics (DESIGN 4.1): a code, a place, the message in both languages, notes, and —
 //! for what only shows on some inputs — the input and its computation, one step a line.
 //!
-//! The shape follows dandori's `src/diag.rs`: the headline, the source line, `= ` notes, then
-//! the example. The JSON keeps its keys in English whatever the language (DESIGN 4.1).
+//! What every language's diagnostic has is ritsu-base's ([`ritsu_base::diag`]): the headline,
+//! the source line, `= ` notes, the fixed line, and the JSON with its keys in English whatever
+//! the language. What is koyomi's is [`Example`]: the computation under the fixed line, and in
+//! the JSON the example's input, its steps and every input that fails. A message is spaced and
+//! capitalized as the suite's Japanese and English write it ([`ritsu_base::text::spaced`]).
 
 use crate::date::Day;
-use crate::i18n::{Lang, Text, pad, width};
-use serde_json::{Value, json};
+use ritsu_base::diag::Extra;
+use ritsu_base::json::Json;
+use ritsu_base::text::{Lang, Text, ja_spacing, pad, spaced, width};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Severity {
-    Error,
-    Warning,
-}
+pub use ritsu_base::diag::Severity;
+
+/// A diagnostic of koyomi's: ritsu-base's, with the computation that led there.
+pub type Diag = ritsu_base::diag::Diag<Example>;
 
 /// One line of a computation.
 #[derive(Clone, Debug)]
@@ -56,197 +59,71 @@ impl Run {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Diag {
-    pub code: &'static str,
-    pub severity: Severity,
-    /// The file the line is in, as the command line named it (or as `use calendar` reached it).
-    pub file: String,
-    pub line: usize,
-    pub col: usize,
-    /// The text of that line.
-    pub src: Option<String>,
-    pub message: Text,
-    pub notes: Vec<Text>,
-    /// The heading of the computation shown under the notes.
-    pub example: Option<Text>,
+/// koyomi's part of a diagnostic: the computation shown under the fixed line.
+#[derive(Clone, Debug, Default)]
+pub struct Example {
+    /// The heading of the computation.
+    pub heading: Option<Text>,
     pub steps: Vec<Step>,
     /// The example's input, name by name, in the form `koyomi eval` takes.
     pub inputs: Vec<(String, String)>,
     /// Every input that fails, as runs (`--format json` lists them all).
     pub fails: Vec<Run>,
-    /// What to paste into the `.cal` instead.
-    pub fix: Option<String>,
-    /// Whether the text shows `fix` on a line of its own; not when a note already says it.
-    pub show_fix: bool,
 }
 
-impl Diag {
-    fn new(code: &'static str, severity: Severity, file: &str, line: usize, col: usize, message: Text) -> Diag {
-        Diag {
-            code,
-            severity,
-            file: file.to_string(),
-            line,
-            col,
-            src: None,
-            message,
-            notes: vec![],
-            example: None,
-            steps: vec![],
-            inputs: vec![],
-            fails: vec![],
-            fix: None,
-            show_fix: true,
-        }
-    }
-
-    pub fn error(code: &'static str, file: &str, line: usize, col: usize, message: Text) -> Diag {
-        Diag::new(code, Severity::Error, file, line, col, message)
-    }
-
-    pub fn warning(code: &'static str, file: &str, line: usize, col: usize, message: Text) -> Diag {
-        Diag::new(code, Severity::Warning, file, line, col, message)
-    }
-
-    /// The line's text, from the file's source.
-    pub fn source(mut self, src: &str) -> Diag {
-        if self.line > 0 {
-            self.src = src.lines().nth(self.line - 1).map(|s| s.trim_end().to_string());
-        }
-        self
-    }
-
-    pub fn note(mut self, t: Text) -> Diag {
-        self.notes.push(t);
-        self
-    }
-
-    pub fn fix(mut self, f: impl Into<String>) -> Diag {
-        self.fix = Some(f.into());
-        self
-    }
-
-    /// The fix, which a note has already spelled out.
-    pub fn fix_in_notes(mut self, f: impl Into<String>) -> Diag {
-        self.fix = Some(f.into());
-        self.show_fix = false;
-        self
-    }
-
-    pub fn example(mut self, heading: Text, steps: Vec<Step>, inputs: Vec<(String, String)>) -> Diag {
-        self.example = Some(heading);
-        self.steps = steps;
-        self.inputs = inputs;
-        self
-    }
-
-    pub fn fails(mut self, runs: Vec<Run>) -> Diag {
-        self.fails = runs;
-        self
-    }
-
-    pub fn is_error(&self) -> bool {
-        self.severity == Severity::Error
-    }
-
-    /// What a person reads.
-    pub fn render(&self, lang: Lang) -> String {
-        let kind = match (self.severity, lang) {
-            (Severity::Error, Lang::En) => "error",
-            (Severity::Warning, Lang::En) => "warning",
-            (Severity::Error, Lang::Ja) => "エラー",
-            (Severity::Warning, Lang::Ja) => "警告",
-        };
-        let place = if self.line > 0 {
-            format!("{}:{}:{}", self.file, self.line, self.col)
-        } else {
-            self.file.clone()
-        };
-        let mut out = format!("{kind}[{}]: {place}: {}\n", self.code, say(&self.message, lang));
-        if let Some(s) = &self.src {
-            out.push_str(&format!("  {:>4} | {}\n", self.line, s));
-        }
-        for n in &self.notes {
-            out.push_str(&format!("  = {}\n", say(n, lang)));
-        }
-        if let Some(f) = self.fix.as_ref().filter(|_| self.show_fix) {
-            let head = if lang == Lang::Ja { "直した行" } else { "The line, fixed" };
-            out.push_str(&format!("  = {head}: {}\n", f.trim()));
-        }
-        if let Some(h) = &self.example {
+impl Extra for Example {
+    fn after_fix(&self, lang: Lang, out: &mut String) {
+        if let Some(h) = &self.heading {
             out.push_str(&format!("  {}:\n", h.get(lang)));
             for l in render_steps(&self.steps, lang, false) {
                 out.push_str(&format!("      {l}\n"));
             }
         }
-        out
     }
 
-    pub fn to_json(&self, lang: Lang) -> Value {
-        json!({
-            "code": self.code,
-            "severity": match self.severity { Severity::Error => "error", Severity::Warning => "warning" },
-            "file": self.file,
-            "line": self.line,
-            "col": self.col,
-            "message": say(&self.message, lang),
-            "notes": self.notes.iter().map(|n| say(n, lang)).collect::<Vec<_>>(),
-            "inputs": if self.inputs.is_empty() { Value::Null } else {
-                Value::Object(self.inputs.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect())
-            },
-            "steps": steps_json(&self.steps, lang),
-            "fails": self.fails.iter().map(|r| json!({
-                "from": r.from.to_string(),
-                "to": r.to.to_string(),
-                "params": Value::Object(r.params.iter().map(|(k, v)| (k.clone(), json!(v))).collect()),
-            })).collect::<Vec<_>>(),
-            "fix": self.fix,
-        })
+    fn json(&self, lang: Lang) -> Vec<(String, Json)> {
+        let inputs = if self.inputs.is_empty() { Json::Null } else { Json::obj(self.inputs.iter().map(|(k, v)| (k.clone(), Json::str(v)))) };
+        let fails = self.fails.iter().map(|r| {
+            Json::obj([
+                ("from", Json::str(r.from.to_string())),
+                ("to", Json::str(r.to.to_string())),
+                ("params", Json::obj(r.params.iter().map(|(k, v)| (k.clone(), Json::int(*v))))),
+            ])
+        });
+        vec![("inputs".into(), inputs), ("steps".into(), steps_json(&self.steps, lang)), ("fails".into(), Json::arr(fails))]
+    }
+
+    fn say(&self, t: &Text, lang: Lang) -> String {
+        spaced(t, lang)
     }
 }
 
-/// An English sentence starts with a capital, whatever the template it came from began with.
-pub fn capitalize(s: &str) -> String {
-    let mut cs = s.chars();
-    match cs.next() {
-        Some(c) if c.is_ascii_lowercase() => c.to_ascii_uppercase().to_string() + cs.as_str(),
-        _ => s.to_string(),
+/// What koyomi adds to a diagnostic as it is built.
+pub trait DiagExt {
+    /// The computation of an input that shows it, under a heading, and that input as
+    /// `koyomi eval` takes it.
+    fn example(self, heading: Text, steps: Vec<Step>, inputs: Vec<(String, String)>) -> Self;
+    /// Every input that fails, as runs.
+    fn fails(self, runs: Vec<Run>) -> Self;
+}
+
+impl DiagExt for Diag {
+    fn example(mut self, heading: Text, steps: Vec<Step>, inputs: Vec<(String, String)>) -> Diag {
+        self.extra.heading = Some(heading);
+        self.extra.steps = steps;
+        self.extra.inputs = inputs;
+        self
+    }
+
+    fn fails(mut self, runs: Vec<Run>) -> Diag {
+        self.extra.fails = runs;
+        self
     }
 }
 
-fn is_kana_or_kanji(c: char) -> bool {
-    matches!(c as u32, 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0x3005)
-}
-
-/// Japanese text with a space between an ASCII word and the Japanese around it: a name such
-/// as `invoice_date` reads `invoice_date は`, as the Japanese of this project writes `10 日`.
-/// Digits are left alone (`第140条`), and so is `_`, which joins a name like `満了日_翌日`.
-pub fn ja_spacing(s: &str) -> String {
-    let cs: Vec<char> = s.chars().collect();
-    let mut out = String::with_capacity(s.len() + 8);
-    let mut in_code = false;
-    for (i, c) in cs.iter().enumerate() {
-        if *c == '`' {
-            in_code = !in_code;
-        }
-        if i > 0 && !in_code {
-            let p = cs[i - 1];
-            if (p.is_ascii_alphabetic() && is_kana_or_kanji(*c)) || (is_kana_or_kanji(p) && c.is_ascii_alphabetic()) {
-                out.push(' ');
-            }
-        }
-        out.push(*c);
-    }
-    out
-}
-
-/// A message as the language prints it.
-pub fn say(t: &Text, lang: Lang) -> String {
-    match lang {
-        Lang::En => capitalize(&t.en),
-        Lang::Ja => ja_spacing(&t.ja),
-    }
+/// ritsu-base's JSON as serde_json's, for the outputs koyomi writes with serde_json.
+pub fn value(j: &Json) -> serde_json::Value {
+    serde_json::from_str(&j.compact()).expect("ritsu-base writes JSON serde_json reads")
 }
 
 /// `2026-01-01 Thu` and `2026-01-01（木）`.
@@ -311,23 +188,18 @@ pub fn render_steps(steps: &[Step], lang: Lang, detail: bool) -> Vec<String> {
     out
 }
 
-pub fn steps_json(steps: &[Step], lang: Lang) -> Value {
-    Value::Array(
-        steps
-            .iter()
-            .map(|s| match s {
-                Step::Value { line, name, day, label, note, detail } => json!({
-                    "line": line,
-                    "name": if name.is_empty() { Value::Null } else { json!(name) },
-                    "date": day.map(|d| d.to_string()),
-                    "label": label.get(lang),
-                    "note": note.as_ref().map(|n| n.get(lang).to_string()),
-                    "detail": detail.as_ref().map(|n| n.get(lang).to_string()),
-                }),
-                Step::Say { line, text } => json!({ "line": line, "text": text.get(lang) }),
-            })
-            .collect(),
-    )
+pub fn steps_json(steps: &[Step], lang: Lang) -> Json {
+    Json::arr(steps.iter().map(|s| match s {
+        Step::Value { line, name, day, label, note, detail } => Json::obj([
+            ("line", Json::from(*line)),
+            ("name", if name.is_empty() { Json::Null } else { Json::str(name) }),
+            ("date", Json::opt_str(day.map(|d| d.to_string()))),
+            ("label", Json::str(label.get(lang))),
+            ("note", Json::opt_str(note.as_ref().map(|n| n.get(lang)))),
+            ("detail", Json::opt_str(detail.as_ref().map(|n| n.get(lang)))),
+        ]),
+        Step::Say { line, text } => Json::obj([("line", Json::from(*line)), ("text", Json::str(text.get(lang)))]),
+    }))
 }
 
 pub fn has_errors(diags: &[Diag]) -> bool {

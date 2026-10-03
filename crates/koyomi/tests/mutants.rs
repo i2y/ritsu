@@ -3,7 +3,7 @@
 //! `tests/golden/`. `KOYOMI_BLESS=1 cargo test` writes the golden files again; read the diff.
 
 use koyomi::check::{check, render};
-use koyomi::i18n::Lang;
+use ritsu_base::text::Lang;
 
 fn mutants() -> Vec<String> {
     let mut v: Vec<String> = std::fs::read_dir("tests/mutants")
@@ -18,7 +18,6 @@ fn mutants() -> Vec<String> {
 
 #[test]
 fn every_mutant_gives_its_code_and_says_what_its_golden_files_say() {
-    let bless = std::env::var("KOYOMI_BLESS").is_ok();
     let mut failures = Vec::new();
     let mut n = 0;
     for name in mutants() {
@@ -32,13 +31,8 @@ fn every_mutant_gives_its_code_and_says_what_its_golden_files_say() {
         for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
             let text = render(&o, lang);
             let golden = format!("tests/golden/{stem}.{tag}.txt");
-            if bless {
-                std::fs::write(&golden, &text).unwrap();
-                continue;
-            }
-            let want = std::fs::read_to_string(&golden).unwrap_or_default();
-            if want != text {
-                failures.push(format!("{path} ({tag}) differs from {golden}:\n--- want\n{want}--- got\n{text}"));
+            if let Err(e) = ritsu_testkit::golden::check(std::path::Path::new(&golden), &text) {
+                failures.push(format!("{path} ({tag}): {e}"));
             }
         }
         n += 1;

@@ -9,7 +9,7 @@ use crate::ast::{At, Cmp, Conv};
 use crate::calendar::{Calendar, CalError, Reason, same_month};
 use crate::date::{self, Day, DateError, Missing};
 use crate::diag::Step;
-use crate::i18n::Text;
+use ritsu_base::text::Text;
 use crate::paraphrase;
 use crate::resolve::{A, CK, D, Model, R, ROp, Ref, Start};
 

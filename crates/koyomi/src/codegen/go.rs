@@ -6,6 +6,7 @@
 //! when `KOYOMI_RUNNER` is set, reads the vectors instead of running tests. Being in the
 //! package, it needs no import path, so the generated directory works inside any module.
 
+use ritsu_emit::header::Comment;
 use super::{Call, H, Msg, Num, Piece, Unit, aligned, at_doc, date_doc, day_text, is_open_doc, message};
 use crate::ast::{Kind, Ty};
 use crate::naming::Target;
@@ -13,7 +14,7 @@ use crate::naming::Target;
 const T: Target = Target::Go;
 
 fn lit(s: &str) -> String {
-    serde_json::to_string(s).unwrap()
+    ritsu_emit::lit::json(s)
 }
 
 /// A message as a string expression: the pieces joined with `+` (every variable is a string),
@@ -641,7 +642,7 @@ pub fn module(u: &Unit) -> String {
     let pkg = T.module(&u.alias);
     let mut o = String::new();
     for h in &u.header {
-        o.push_str(&format!("// {h}\n"));
+        o.push_str(&Comment::Slashes.line(h));
     }
     o.push('\n');
     let what = match u.kind {
@@ -680,7 +681,7 @@ pub fn module(u: &Unit) -> String {
 pub fn runner(u: &Unit) -> String {
     let pkg = T.module(&u.alias);
     let mut o = String::new();
-    o.push_str(&format!("// {}\n", u.header[0]));
+    o.push_str(&Comment::Slashes.line(&u.header[0]));
     o.push('\n');
     o.push_str(&format!("package {pkg}\n\n"));
     let strings = if u.kind == Kind::Dates { "\t\"strings\"\n" } else { "" };

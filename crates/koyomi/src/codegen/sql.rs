@@ -13,6 +13,7 @@
 //! The runner (`<alias>_runner.sql`) is a psql script: it reads the vectors from psql's
 //! standard input (`\copy … FROM pstdin`) and writes a line an input with `COPY … TO STDOUT`.
 
+use ritsu_emit::header::Comment;
 use super::{Call, H, Msg, Num, Piece, Unit, at_doc, date_doc, day_text, is_open_doc, message};
 use crate::ast::{Kind, Ty};
 use crate::naming::Target;
@@ -20,7 +21,7 @@ use crate::naming::Target;
 const T: Target = Target::Sql;
 
 fn lit(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "''"))
+    ritsu_emit::lit::sql(s)
 }
 
 /// A message as a `||` expression; the variables are the helper's locals, `_` and the name.
@@ -374,7 +375,7 @@ fn functions(u: &Unit) -> String {
 pub fn module(u: &Unit) -> String {
     let mut o = String::new();
     for h in &u.header {
-        o.push_str(&format!("-- {h}\n"));
+        o.push_str(&Comment::Dashes.line(h));
     }
     o.push('\n');
     let what = match u.kind {
@@ -402,7 +403,7 @@ pub fn module(u: &Unit) -> String {
 pub fn runner(u: &Unit) -> String {
     let s = &u.alias;
     let mut o = String::new();
-    o.push_str(&format!("-- {}\n", u.header[0]));
+    o.push_str(&Comment::Dashes.line(&u.header[0]));
     o.push_str(&format!(
         "-- {}\n",
         u.t(tr!(
