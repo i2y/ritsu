@@ -68,7 +68,9 @@ fn every_repro_gives_its_own_code() {
         let args: Vec<&str> = repro.get("args").arr().iter().map(Json::str).collect();
         let log = pid_log(&s);
         let log_s = log.to_str().expect("a UTF-8 path");
+        let tmp = ChromeTmp::new();
         let mut env: Vec<(&str, &str)> = vec![("GEAS_PID_LOG", log_s)];
+        env.extend(tmp.vars());
         // the Chrome the tests found, unless the repro names its own
         let chrome = chrome_path().map(|c| c.to_string_lossy().into_owned());
         if let Some(c) = &chrome {

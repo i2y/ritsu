@@ -13,6 +13,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -33,9 +34,12 @@ fn run(args: &[&str]) -> (i32, String, String) {
 }
 
 fn have(cmd: &str) -> bool {
+    // swiftc leaves an empty directory in its TMPDIR almost every time it answers
+    // `--version`, so the probe gets a TMPDIR of its own, which goes when this returns.
+    let tmp = TempDir::new("probe");
     ["--version", "version"]
         .iter()
-        .any(|a| Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
+        .any(|a| Command::new(cmd).arg(a).env("TMPDIR", tmp.path()).output().map(|o| o.status.success()).unwrap_or(false))
 }
 
 fn api(rule: &str) -> rulec::json::Json {
@@ -768,6 +772,7 @@ fn swiftは目録から組んだ呼び出しが動く() {
         std::fs::write(&p, format!("do {{\n{body}}} catch {{\n    print(error)\n}}\n")).unwrap();
         let o = Command::new("swiftc")
             .current_dir(dir.join("swift"))
+            .env("TMPDIR", tmpdir_in(&dir))
             .args(["-typecheck", &s(sw_j, "module"), "main.swift"])
             .output()
             .expect("swiftc を起動できない");

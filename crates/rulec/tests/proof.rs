@@ -9,6 +9,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need, ready};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -22,6 +23,14 @@ fn dir(tag: &str) -> (TempDir, PathBuf) {
 
 fn run(args: &[&str]) -> (i32, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).output().expect("rulec を起動できない");
+    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+}
+
+/// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
+/// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
+/// with that.
+fn run_tmp(tmp: &std::path::Path, args: &[&str]) -> (i32, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args).output().expect("rulec を起動できない");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
 }
 
@@ -100,7 +109,7 @@ fn フラグが無ければ証明は走らない() {
     let (_tmp, out) = dir("noflag");
     let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
     assert_eq!(c, 0, "{said}");
-    let (_, said) = run(&["test", out.to_str().unwrap(), "--format", "json"]);
+    let (_, said) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
     assert!(
         rows(&said).iter().all(|r| r.get("via").and_then(|v| v.as_str()) != Some("proof")),
         "`--proofs` が無いのに証明が走った: {said}"
@@ -117,7 +126,7 @@ fn フラグを付ければ証明が走る() {
     let (_tmp, out) = dir("flag");
     let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
     assert_eq!(c, 0, "{said}");
-    let (code, said) = run(&["test", out.to_str().unwrap(), "--proofs", "--format", "json"]);
+    let (code, said) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--proofs", "--format", "json"]);
     assert_eq!(code, 0, "{said}");
     let p: Vec<rulec::json::Json> =
         rows(&said).into_iter().filter(|r| r.get("via").and_then(|v| v.as_str()) == Some("proof")).collect();

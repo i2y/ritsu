@@ -2,7 +2,8 @@
 //! sakai each kept in `tests/common`, and dandori, koyomi and chobo in their `tests/doc.rs`.
 //!
 //! - [`tmp`]: a directory that removes itself, and the directories of test processes that
-//!   ended without removing theirs (and the servers they left running).
+//!   ended without removing theirs (and the servers they left running); the TMPDIR to hand a
+//!   program a test runs, under one.
 //! - [`tools`]: finding a program: `RITSU_<TOOL>`, the crate's own variable, a place in the
 //!   crate, the PATH.
 //! - [`run`]: running a program with a time limit (macOS has no `timeout`).

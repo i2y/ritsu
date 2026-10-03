@@ -77,6 +77,16 @@ impl Drop for TempDir {
     }
 }
 
+/// The directory under `dir` to hand a program a test runs as its TMPDIR (made if it is not
+/// there): what the program leaves in its temporary directory goes with `dir`. swiftc leaves an
+/// empty `TemporaryDirectory.*` there almost every time it answers `--version`, and `rulec test`
+/// asks it.
+pub fn tmpdir_in(dir: &Path) -> PathBuf {
+    let p = dir.join(".tmp");
+    std::fs::create_dir_all(&p).unwrap_or_else(|e| panic!("cannot make {}: {e}", p.display()));
+    p
+}
+
 /// Copy a directory, every file under it, in name order.
 pub fn copy_dir(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();

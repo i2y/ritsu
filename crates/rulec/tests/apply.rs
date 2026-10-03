@@ -10,6 +10,7 @@ use rulec::ast::Item;
 use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -174,7 +175,7 @@ fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別�
     }
     let generated = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["gen", "束.rule", "--out", "out"]).output().unwrap();
     assert!(generated.status.success(), "{}", String::from_utf8_lossy(&generated.stderr));
-    let test = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["test", "out"]).output().unwrap();
+    let test = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&d.join("out"))).current_dir(&d).args(["test", "out"]).output().unwrap();
     let text = String::from_utf8_lossy(&test.stdout).into_owned() + &String::from_utf8_lossy(&test.stderr);
     assert!(test.status.success() && !text.contains("FAIL"), "{text}");
 }
@@ -252,6 +253,7 @@ fn 呼び先の形が揃った規則も生成物は評価器と全言語で一�
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
+        .env("TMPDIR", tmpdir_in(&dir))
         .current_dir(root())
         .args(["test", &dir.to_string_lossy()])
         .output()

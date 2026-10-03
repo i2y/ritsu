@@ -3,10 +3,29 @@
 
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .args(args)
+        .output()
+        .expect("rulec を起動できない");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
+/// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
+/// with that.
+fn run_tmp(tmp: &std::path::Path, args: &[&str]) -> (i32, String, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
+        .env("TMPDIR", tmp)
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
         .output()
@@ -285,7 +304,7 @@ fn ディレクトリを渡すと中の規則を全部見る() {
     let d = dir.to_string_lossy().to_string();
     let (c, _, _) = run(&["gen", "tests/corpus/期間区分.rule", "--out", &d]);
     assert_eq!(c, 0);
-    let (c, r, _) = run(&["test", &d]);
+    let (c, r, _) = run_tmp(&tmpdir_in(&dir), &["test", &d]);
     assert_eq!(c, 0, "test がディレクトリを展開してしまった:\n{r}");
     assert!(r.contains("period"), "{r}");
 }

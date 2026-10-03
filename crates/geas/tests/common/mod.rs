@@ -279,6 +279,28 @@ pub fn chrome_path() -> Option<PathBuf> {
     ritsu_testkit::chrome::find()
 }
 
+/// A temporary directory for the Chrome geas starts, outside the scratch directory, and the
+/// variables that hand it over: `MAC_CHROMIUM_TMPDIR`, which macOS's Chrome reads instead of
+/// `TMPDIR`, and `TMPDIR`. A Chrome that geas stops leaves the directory of its singleton socket
+/// (`com.google.Chrome.*`) in its temporary directory; this one goes when the value is dropped,
+/// after geas has ended.
+pub struct ChromeTmp {
+    _dir: Scratch,
+    path: String,
+}
+
+impl ChromeTmp {
+    pub fn new() -> ChromeTmp {
+        let dir = Scratch::new("chrome-tmp");
+        let path = dir.path().to_string_lossy().into_owned();
+        ChromeTmp { _dir: dir, path }
+    }
+
+    pub fn vars(&self) -> [(&'static str, &str); 2] {
+        [("MAC_CHROMIUM_TMPDIR", self.path.as_str()), ("TMPDIR", self.path.as_str())]
+    }
+}
+
 /// After a run with Chrome: no process whose command line holds the scratch path
 /// (Chrome's profile is under it), and no profile directory left under `.geas/`.
 pub fn no_chrome_left(s: &Scratch) {

@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use ritsu_testkit::{Need, TempDir, ready};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -23,6 +24,24 @@ fn dir(tag: &str) -> (TempDir, PathBuf) {
 fn run(args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
+        .current_dir(root())
+        .args(args)
+        .output()
+        .expect("rulec を起動できない");
+    (
+        o.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&o.stdout).into_owned(),
+        String::from_utf8_lossy(&o.stderr).into_owned(),
+    )
+}
+
+/// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
+/// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
+/// with that.
+fn run_tmp(tmp: &Path, args: &[&str]) -> (i32, String, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
+        .env("TMPDIR", tmp)
         .current_dir(root())
         .args(args)
         .output()
@@ -437,7 +456,7 @@ fn 断る入力は生成コードにも断らせる() {
     assert!(lines[0].contains("確定"), "どの遷移か言っていない: {body}");
 
     // As generated, every language refuses it.
-    let (_, said, _) = run(&["test", out.to_str().unwrap(), "--format", "json"]);
+    let (_, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
     let j = rulec::json::parse(said.lines().next().expect("結果が無い")).unwrap();
     let rulec::json::Json::Arr(rs) = j.get("results").unwrap() else { panic!("{said}") };
     let mut checked = 0;
@@ -453,7 +472,7 @@ fn 断る入力は生成コードにも断らせる() {
 
     // And a language that answers instead of raising is caught, by name.
     answer_instead_of_raising(&out);
-    let (code, said, _) = run(&["test", out.to_str().unwrap()]);
+    let (code, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap()]);
     assert_eq!(code, 1, "断らなくなったのに緑のまま: {said}");
     assert!(
         said.contains("answered an input") || said.contains("答えました"),
@@ -516,7 +535,7 @@ fn 途中で落ちたrulec_testは立てたプロセスを残さない() {
     // rulec in a process group of its own: what it starts is in the group too, and stays in it
     // after rulec has ended.
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rulec"));
-    cmd.env("RULEC_LANG", "ja").current_dir(root()).args(["test", out.to_str().unwrap()]).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&out)).current_dir(root()).args(["test", out.to_str().unwrap()]).stdout(Stdio::piped()).stderr(Stdio::piped());
     std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
     let child = cmd.spawn().expect("rulec を起動できない");
     let group = child.id();
@@ -549,7 +568,7 @@ fn 生成されたたどり方は参照評価器と一致する() {
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
     assert_eq!(code, 0, "{said}{e}");
 
-    let (_, said, _) = run(&["test", out.to_str().unwrap(), "--format", "json"]);
+    let (_, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
     let j = rulec::json::parse(said.lines().next().expect("結果が無い")).unwrap();
     let rulec::json::Json::Arr(rs) = j.get("results").unwrap() else { panic!("{said}") };
     let mut ran = 0;

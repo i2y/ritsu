@@ -26,13 +26,15 @@ fn ready(what: &str) -> bool {
     python3(what) && chrome(what).is_some()
 }
 
-/// The variables geas runs with: the pid log, and `GEAS_CHROME`, the Chrome the tests
-/// found.
+/// The variables geas runs with: the pid log, `GEAS_CHROME`, the Chrome the tests found, and
+/// that Chrome's temporary directory.
 fn run_logged(s: &Scratch, args: &[&str], extra: &[(&str, &str)]) -> (String, String, i32) {
     let log = pid_log(s);
     let log_s = log.to_string_lossy().into_owned();
     let chrome = chrome_path().map(|c| c.to_string_lossy().into_owned());
+    let tmp = ChromeTmp::new();
     let mut env: Vec<(&str, &str)> = vec![("GEAS_PID_LOG", log_s.as_str())];
+    env.extend(tmp.vars());
     if let Some(c) = &chrome {
         env.push(("GEAS_CHROME", c.as_str()));
     }
@@ -148,6 +150,8 @@ fn interrupted_while_a_page_loads() {
     if let Some(c) = chrome_path() {
         cmd.env("GEAS_CHROME", c);
     }
+    let tmp = ChromeTmp::new();
+    cmd.envs(tmp.vars());
     let mut child = cmd.spawn().expect("start geas");
     // wait until Chrome runs and the page has begun to load
     let deadline = Instant::now() + Duration::from_secs(20);

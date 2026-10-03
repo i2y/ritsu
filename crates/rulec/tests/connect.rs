@@ -10,6 +10,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need, ready, skip};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -633,6 +634,7 @@ fn 生成したまま立ち_名前の誤りと省いた入力を断る() {
     }
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "en")
+        .env("TMPDIR", tmpdir_in(&out))
         .args(["test", out.to_str().unwrap()])
         .output()
         .expect("rulec を起動できない");
@@ -879,7 +881,7 @@ fn 依存のある契約のサービスが立つ() {
             let _ = std::fs::remove_dir_all(e.path());
         }
     }
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").args(["test", out.to_str().unwrap()]).output().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap()]).output().unwrap();
     let said = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(o.status.success() && said.contains("delivery_fee (Python, Connect/WSGI) "), "{said}{}", String::from_utf8_lossy(&o.stderr));
     assert!(!said.contains("FAIL"), "{said}");

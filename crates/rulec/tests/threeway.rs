@@ -11,6 +11,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need, ready, skip};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -19,9 +20,12 @@ fn root() -> PathBuf {
 fn have(cmd: &str) -> bool {
     // go takes `go version`, python3 takes `python3 --version`. Try both.
     // Trying only one and skipping silently would go green without anything having run.
+    // swiftc leaves an empty directory in its TMPDIR almost every time it answers
+    // `--version`, so the probe gets a TMPDIR of its own, which goes when this returns.
+    let tmp = TempDir::new("probe");
     ["--version", "version"]
         .iter()
-        .any(|a| Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
+        .any(|a| Command::new(cmd).arg(a).env("TMPDIR", tmp.path()).output().map(|o| o.status.success()).unwrap_or(false))
 }
 
 fn rulec(args: &[&str]) -> String {
@@ -172,6 +176,7 @@ fn 評価器と生成コードが全言語で一致する() {
             if let Some((cmd, args)) = &plan.build {
                 let built = Command::new(cmd)
                     .current_dir(&cwd)
+                    .env("TMPDIR", tmpdir_in(&dir))
                     .args(args)
                     .output()
                     .unwrap_or_else(|e| panic!("{}: {cmd} を起動できない: {e}", b.name));
@@ -544,7 +549,7 @@ fn 数の集合は全言語で集合として読まれる() {
     std::fs::write(&p, "rule 個数の割引(pieces) v1\n\ninputs\n  個数(n) : number  range >=1 <=500\n\noutputs\n  割引(off) : money[円]  round down(1円)\n\ntable 割引表(t)\npolicy first\n| 個数         | -> 割引 |\n| 100, 200     | 500円   |\n| not: 300, 400 | 100円   |\n| -            | 0円     |\n").unwrap();
     let out = dir.join("gen");
     rulec(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]);
-    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
     let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
     assert!(o.status.success(), "{said}");
     assert!(said.contains("matched"), "{said}");
@@ -569,7 +574,7 @@ fn 率の出力は全言語で宣言した刻みで返る() {
         std::fs::write(&p, src).unwrap();
         let out = dir.join(format!("gen-{name}"));
         rulec(&["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]);
-        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmpdir_in(&out)).args(["test", out.to_str().unwrap(), "--lang", "en"]).output().expect("rulec test を起動できない");
         let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
         assert!(o.status.success(), "{name}: {said}");
         assert!(said.contains("matched"), "{name}: {said}");

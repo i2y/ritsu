@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need, ready};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -16,6 +17,20 @@ fn root() -> PathBuf {
 fn run(args: &[&str]) -> (i32, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
+        .current_dir(root())
+        .args(args)
+        .output()
+        .expect("rulec を起動できない");
+    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+}
+
+/// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
+/// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
+/// with that.
+fn run_tmp(tmp: &std::path::Path, args: &[&str]) -> (i32, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
+        .env("TMPDIR", tmp)
         .current_dir(root())
         .args(args)
         .output()
@@ -154,7 +169,7 @@ fn testは言語ごとの結果と最初の食い違いを出す() {
         return;
     }
     let (_tmp, dir) = gen_dir("run", "tests/corpus/期間区分.rule");
-    let (c, out) = run(&["test", dir.to_str().unwrap(), "--format", "json"]);
+    let (c, out) = run_tmp(&tmpdir_in(&dir), &["test", dir.to_str().unwrap(), "--format", "json"]);
     assert_eq!(c, 0, "{out}");
     let j = obj(&out);
     keys(&j, &["results", "skipped"], "test");
@@ -328,8 +343,10 @@ fn 鍵は言語で変わらない() {
         ja.extend(["--lang", "ja"]);
         let mut en: Vec<&str> = case.clone();
         en.extend(["--lang", "en"]);
-        let (_, a) = run(&ja);
-        let (_, b) = run(&en);
+        // `test` with its TMPDIR under the test's directory (see `run_tmp`).
+        let go = |args: &[&str]| if case[0] == "test" { run_tmp(&tmpdir_in(&dir), args) } else { run(args) };
+        let (_, a) = go(&ja);
+        let (_, b) = go(&en);
         let shape = |s: &str| -> Vec<Vec<String>> {
             objects(s)
                 .iter()
@@ -374,7 +391,7 @@ fn 走らなかった実行は食い違いとして報告されない() {
     let module = dir.join("python").join("period.py");
     std::fs::write(&module, "this is not python\n").unwrap();
 
-    let (c, out) = run(&["test", dir.to_str().unwrap()]);
+    let (c, out) = run_tmp(&tmpdir_in(&dir), &["test", dir.to_str().unwrap()]);
     assert_eq!(c, 1, "{out}");
     assert!(out.contains("could not be run") || out.contains("走らせられません"), "{out}");
     assert!(
@@ -382,7 +399,7 @@ fn 走らなかった実行は食い違いとして報告されない() {
         "走らなかった実行が食い違い扱いのまま: {out}"
     );
 
-    let (_, out) = run(&["test", dir.to_str().unwrap(), "--format", "json"]);
+    let (_, out) = run_tmp(&tmpdir_in(&dir), &["test", dir.to_str().unwrap(), "--format", "json"]);
     let j = obj(&out);
     let rulec::json::Json::Arr(rs) = j.get("results").unwrap() else { panic!() };
     let py = rs.iter().find(|r| r.get("lang").unwrap().as_str().unwrap() == "python").unwrap();
@@ -421,6 +438,7 @@ fn 飛ばした言語があると要求時に落ちる() {
             .current_dir(root())
             .args(&args)
             .env("PATH", &bin)
+            .env("TMPDIR", tmpdir_in(&dir))
             .output()
             .expect("rulec を起動できない");
         (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())

@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready, skip};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -20,6 +21,24 @@ fn rulec_in(cwd: &Path, args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(cwd)
+        .args(args)
+        .output()
+        .expect("rulec を起動できない");
+    (
+        o.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&o.stdout).into_owned(),
+        String::from_utf8_lossy(&o.stderr).into_owned(),
+    )
+}
+
+/// `rulec`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
+/// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
+/// with that.
+fn rulec_tmp(tmp: &Path, args: &[&str]) -> (i32, String, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
+        .env("TMPDIR", tmp)
+        .current_dir(root())
         .args(args)
         .output()
         .expect("rulec を起動できない");
@@ -446,7 +465,7 @@ fn rulec_testが生成物を走らせる() {
     let (c, _, e) = rulec(&["gen", RULE, "--out", &out]);
     assert_eq!(c, 0, "{e}");
 
-    let (c, r, _) = rulec(&["test", &out]);
+    let (c, r, _) = rulec_tmp(&tmpdir_in(&dir), &["test", &out]);
     assert_eq!(c, 0, "素の生成物が通らない:\n{r}");
     assert!(r.contains("ok    yupack_fee"), "{r}");
     assert!(r.contains("丸めヘルパ"), "丸めの単体ベクタも回す: {r}");
@@ -456,7 +475,7 @@ fn rulec_testが生成物を走らせる() {
         let p = dir.join("python").join("yupack_fee.py");
         let src = std::fs::read_to_string(&p).unwrap();
         std::fs::write(&p, tweak(&src, "fee = 4350", "fee = 4351", 1)).unwrap();
-        let (c, r, _) = rulec(&["test", &out]);
+        let (c, r, _) = rulec_tmp(&tmpdir_in(&dir), &["test", &out]);
         assert_eq!(c, 1, "壊れた生成物を通した:\n{r}");
         assert!(r.contains("FAIL  yupack_fee (Python)"), "{r}");
         assert!(r.contains("行目"), "何行目で食い違ったかを言う: {r}");

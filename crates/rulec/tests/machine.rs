@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use ritsu_testkit::{Need, TempDir, need, ready};
+use ritsu_testkit::tmp::tmpdir_in;
 
 use rulec::json::Json;
 
@@ -20,6 +21,14 @@ fn root() -> PathBuf {
 
 fn rulec(args: &[&str]) -> (i32, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).output().expect("rulec を起動できない");
+    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+}
+
+/// `rulec`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
+/// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
+/// with that.
+fn rulec_tmp(tmp: &Path, args: &[&str]) -> (i32, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args).output().expect("rulec を起動できない");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
 }
 
@@ -192,7 +201,7 @@ fn 出力が状態だけの機械も生成したコードで回る() {
     assert_eq!(c, 0, "{out}");
     assert!(d.join("gen/vectors/traffic_light.traces.jsonl").exists(), "手順のベクタが出ていない");
     if need(Need::Python) {
-        let (c, out) = rulec(&["test", &out_dir, "--format", "json"]);
+        let (c, out) = rulec_tmp(&tmpdir_in(Path::new(&out_dir)), &["test", &out_dir, "--format", "json"]);
         assert_eq!(c, 0, "生成したコードが手順で食い違う:\n{out}");
     }
 }
@@ -638,6 +647,6 @@ fn heldのある機械も生成したコードで回る() {
     let out_dir = d.join("gen").to_string_lossy().into_owned();
     let (c, out) = rulec(&["gen", &rule, "--out", &out_dir]);
     assert_eq!(c, 0, "{out}");
-    let (c, out) = rulec(&["test", &out_dir, "--format", "json"]);
+    let (c, out) = rulec_tmp(&tmpdir_in(Path::new(&out_dir)), &["test", &out_dir, "--format", "json"]);
     assert_eq!(c, 0, "生成したコードが食い違う:\n{out}");
 }

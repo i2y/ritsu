@@ -16,6 +16,8 @@ use std::process::{Command, Stdio};
 /// A terminal session in a scratch directory, written down as the terminal shows it.
 struct Session {
     s: Scratch,
+    /// The temporary directory of the Chrome a story's geas starts.
+    chrome: ChromeTmp,
     text: String,
     log: PathBuf,
 }
@@ -24,7 +26,7 @@ impl Session {
     fn new(name: &str) -> Session {
         let s = Scratch::new(name);
         let log = pid_log(&s);
-        Session { s, text: String::new(), log }
+        Session { s, chrome: ChromeTmp::new(), text: String::new(), log }
     }
 
     fn path(&self) -> &Path {
@@ -40,7 +42,9 @@ impl Session {
         let words: Vec<&str> = command.split_whitespace().collect();
         assert_eq!(words[0], "geas", "{line}");
         let log = self.log.to_string_lossy().into_owned();
-        let (out, err, code) = run_with_input(self.s.path(), &words[1..], &[("GEAS_PID_LOG", &log)], input);
+        let mut env = vec![("GEAS_PID_LOG", log.as_str())];
+        env.extend(self.chrome.vars());
+        let (out, err, code) = run_with_input(self.s.path(), &words[1..], &env, input);
         self.text.push_str(&format!("$ {line}\n{out}{err}"));
         code
     }

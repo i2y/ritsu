@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -11,6 +12,14 @@ fn root() -> PathBuf {
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(root()).args(args).output().expect("rulec を起動できない");
+    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+}
+
+/// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
+/// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
+/// with that.
+fn run_tmp(tmp: &std::path::Path, args: &[&str]) -> (i32, String, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").env("TMPDIR", tmp).current_dir(root()).args(args).output().expect("rulec を起動できない");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
@@ -86,7 +95,7 @@ fn モジュールは参照評価器と一致しtestがそう言う() {
         return;
     }
     let (_tmp, dir) = generate("test");
-    let (c, out, e) = run(&["test", dir.to_str().unwrap(), "--lang", "en"]);
+    let (c, out, e) = run_tmp(&tmpdir_in(&dir), &["test", dir.to_str().unwrap(), "--lang", "en"]);
     assert_eq!(c, 0, "{out}{e}");
     assert!(out.contains("shipping_fee (Wasm) 70 vectors"), "{out}");
     assert!(out.contains("rounding helper (Wasm) unit vectors"), "{out}");

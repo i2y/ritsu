@@ -9,20 +9,38 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, need, ready};
+use ritsu_testkit::tmp::tmpdir_in;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 fn have(cmd: &str) -> bool {
+    // swiftc leaves an empty directory in its TMPDIR almost every time it answers
+    // `--version`, so the probe gets a TMPDIR of its own, which goes when this returns.
+    let tmp = TempDir::new("probe");
     ["--version", "version"]
         .iter()
-        .any(|a| Command::new(cmd).arg(a).output().map(|o| o.status.success()).unwrap_or(false))
+        .any(|a| Command::new(cmd).arg(a).env("TMPDIR", tmp.path()).output().map(|o| o.status.success()).unwrap_or(false))
 }
 
 fn run(args: &[&str]) -> (i32, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
+        .current_dir(root())
+        .args(args)
+        .output()
+        .expect("rulec を起動できない");
+    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+}
+
+/// `run`, with `tmp` as rulec's TMPDIR. `rulec test` asks swiftc for its version, and swiftc
+/// leaves an empty directory in its TMPDIR almost every time; under the test's directory, it goes
+/// with that.
+fn run_tmp(tmp: &Path, args: &[&str]) -> (i32, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "ja")
+        .env("TMPDIR", tmp)
         .current_dir(root())
         .args(args)
         .output()
@@ -55,7 +73,7 @@ fn agrees_everywhere(tag: &str, dir: &Path) {
     if !need(Need::Python) {
         return;
     }
-    let (c, out) = run(&["test", &dir.to_string_lossy()]);
+    let (c, out) = run_tmp(&tmpdir_in(dir), &["test", &dir.to_string_lossy()]);
     assert!(!out.lines().any(|l| l.starts_with("FAIL")), "{tag}: 一致しない言語がある:\n{out}");
     assert_eq!(c, 0, "{tag}: rulec test が 0 で終わらない:\n{out}");
 }
@@ -121,6 +139,7 @@ fn sw_typechecks(dir: &Path, module: &str) {
     }
     let o = Command::new("swiftc")
         .current_dir(dir.join("swift"))
+        .env("TMPDIR", tmpdir_in(dir))
         .args(["-typecheck", &format!("{module}.swift"), &format!("{module}_runner.swift")])
         .output()
         .expect("swiftc を起動できない");

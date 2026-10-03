@@ -1,6 +1,7 @@
 //! A headless Chrome for a test (dandori's, koyomi's, chobo's and geas's): found in the order
-//! the five crates looked, run with a profile of its own in a [`TempDir`], and stopped as soon
-//! as its page or picture is out — headless Chrome can take a long while to end by itself.
+//! the five crates looked, run with a profile and a temporary directory of its own in a
+//! [`TempDir`], and stopped as soon as its page or picture is out — headless Chrome can take a
+//! long while to end by itself.
 
 use crate::tmp::TempDir;
 use crate::tools;
@@ -29,14 +30,27 @@ pub fn find() -> Option<PathBuf> {
 /// The flags every run takes: headless, no first-run pages, files may read files.
 const FLAGS: &[&str] = &["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--allow-file-access-from-files"];
 
+/// Chrome with the flags every run takes, its profile in `work`, and its temporary directory
+/// under `work` too. A Chrome that is stopped before it ends leaves the directory of its
+/// singleton socket (`com.google.Chrome.*`) in its temporary directory; under `work`, it goes
+/// with the profile. macOS's Chrome takes that directory from `MAC_CHROMIUM_TMPDIR` (it does not
+/// read `TMPDIR`), and Chrome elsewhere from `TMPDIR`.
+fn command(chrome: &Path, work: &TempDir) -> Command {
+    let tmp = crate::tmp::tmpdir_in(work.path());
+    let mut c = Command::new(chrome);
+    c.args(FLAGS)
+        .arg(format!("--user-data-dir={}", work.path().display()))
+        .env("MAC_CHROMIUM_TMPDIR", &tmp)
+        .env("TMPDIR", &tmp);
+    c
+}
+
 /// The DOM of a page after its scripts ran (up to `budget_ms` of virtual time), as headless
 /// Chrome dumps it. Chrome is stopped as soon as the page is out, or after `limit`.
 pub fn dump_dom(chrome: &Path, url: &str, budget_ms: u32, limit: Duration) -> String {
     let profile = TempDir::new("chrome-profile");
-    let mut child = Command::new(chrome)
-        .args(FLAGS)
+    let mut child = command(chrome, &profile)
         .arg(format!("--virtual-time-budget={budget_ms}"))
-        .arg(format!("--user-data-dir={}", profile.path().display()))
         .args(["--dump-dom", url])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -71,11 +85,9 @@ pub fn dump_dom(chrome: &Path, url: &str, budget_ms: u32, limit: Duration) -> St
 /// file stops growing, or after `limit`; Err says why there is no picture.
 pub fn screenshot(chrome: &Path, url: &str, png: &Path, width: u32, height: u32, limit: Duration) -> Result<(), String> {
     let profile = TempDir::new("chrome-profile");
-    let mut child = Command::new(chrome)
-        .args(FLAGS)
+    let mut child = command(chrome, &profile)
         .arg("--hide-scrollbars")
         .arg(format!("--window-size={width},{height}"))
-        .arg(format!("--user-data-dir={}", profile.path().display()))
         .arg(format!("--screenshot={}", png.display()))
         .arg(url)
         .stdin(Stdio::null())
