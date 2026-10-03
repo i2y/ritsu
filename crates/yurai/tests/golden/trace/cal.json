@@ -1,0 +1,277 @@
+{
+  "artifact": {
+    "text": "file \"民法の期間.cal\"",
+    "tool": "file",
+    "path": "民法の期間.cal",
+    "items": []
+  },
+  "in_scope": true,
+  "requirements": [
+    {
+      "name": "起算日",
+      "alias": "first_day",
+      "version": 1,
+      "file": "民法の期間.req",
+      "line": 15,
+      "text": "日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "法務",
+      "replaces": [],
+      "sha256": "a9ebc73907faddc8",
+      "from": [
+        {
+          "line": 19,
+          "sources": [
+            {
+              "source": "民法",
+              "fragment": "第140条",
+              "db": "egov",
+              "id": "129AC0000000089",
+              "asof": "2026-10-01",
+              "revision": "129AC0000000089_20260624_508AC0000000045",
+              "copy": "sources/law/129AC0000000089@2026-10-01/MainProvision-Article_140.xml",
+              "sha256": "e880059021fbb67d",
+              "text": [
+                "第百四十条　日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない。"
+              ]
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "法務",
+            "up": [
+              "e880059021fbb67d"
+            ],
+            "down": "a9ebc73907faddc8"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 21,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"民法の期間.cal\"",
+            "tool": "file",
+            "path": "民法の期間.cal",
+            "items": []
+          },
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "開発",
+            "up": [
+              "a9ebc73907faddc8"
+            ],
+            "down": "c9b94eecde23e6b5"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 23,
+          "role": "not verified",
+          "why": "初日を算入しないことは、koyomi doc のページで、条文と言い直しを見比べて確かめる。この材料に、それを確かめる条件は無い",
+          "approved": {
+            "date": "2026-10-03",
+            "by": "法務",
+            "up": [
+              "a9ebc73907faddc8"
+            ],
+            "down": null
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "満了日",
+      "alias": "last_day",
+      "version": 1,
+      "file": "民法の期間.req",
+      "line": 26,
+      "text": "月によって期間を定めたときは、最後の月においてその起算日に応当する日の前日の終わりに満了する。応当する日がないときは、その月の末日の終わりに満了する",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "法務",
+      "replaces": [],
+      "sha256": "465b83ed8c251406",
+      "from": [
+        {
+          "line": 30,
+          "sources": [
+            {
+              "source": "民法",
+              "fragment": "第141条",
+              "db": "egov",
+              "id": "129AC0000000089",
+              "asof": "2026-10-01",
+              "revision": "129AC0000000089_20260624_508AC0000000045",
+              "copy": "sources/law/129AC0000000089@2026-10-01/MainProvision-Article_141.xml",
+              "sha256": "0575c131b9f08063",
+              "text": [
+                "（期間の満了）",
+                "第百四十一条　前条の場合には、期間は、その末日の終了をもって満了する。"
+              ]
+            },
+            {
+              "source": "民法",
+              "fragment": "第143条",
+              "db": "egov",
+              "id": "129AC0000000089",
+              "asof": "2026-10-01",
+              "revision": "129AC0000000089_20260624_508AC0000000045",
+              "copy": "sources/law/129AC0000000089@2026-10-01/MainProvision-Article_143.xml",
+              "sha256": "6950bdfb988439b6",
+              "text": [
+                "（暦による期間の計算）",
+                "第百四十三条　週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。",
+                "２　週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。"
+              ]
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "法務",
+            "up": [
+              "0575c131b9f08063",
+              "6950bdfb988439b6"
+            ],
+            "down": "465b83ed8c251406"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 32,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"民法の期間.cal\"",
+            "tool": "file",
+            "path": "民法の期間.cal",
+            "items": []
+          },
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "開発",
+            "up": [
+              "465b83ed8c251406"
+            ],
+            "down": "c9b94eecde23e6b5"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 34,
+          "role": "not verified",
+          "why": "条文の場合分けをそのまま書いた関数と、起点 2000〜2027 年のすべての日と月数 1〜12 で一致することを、koyomi の設計の段階の試作が確かめた。この材料の中に、それを確かめる条件は無い",
+          "approved": {
+            "date": "2026-10-03",
+            "by": "法務",
+            "up": [
+              "465b83ed8c251406"
+            ],
+            "down": null
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "満了日_142条",
+      "alias": "last_day_142",
+      "version": 1,
+      "file": "民法の期間.req",
+      "line": 37,
+      "text": "期間の末日が日曜日、国民の祝日に関する法律に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "法務",
+      "replaces": [],
+      "sha256": "d4f2d2a67322df17",
+      "from": [
+        {
+          "line": 41,
+          "sources": [
+            {
+              "source": "民法",
+              "fragment": "第142条",
+              "db": "egov",
+              "id": "129AC0000000089",
+              "asof": "2026-10-01",
+              "revision": "129AC0000000089_20260624_508AC0000000045",
+              "copy": "sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml",
+              "sha256": "fc8c35a0769d3b35",
+              "text": [
+                "第百四十二条　期間の末日が日曜日、国民の祝日に関する法律（昭和二十三年法律第百七十八号）に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する。"
+              ]
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "法務",
+            "up": [
+              "fc8c35a0769d3b35"
+            ],
+            "down": "d4f2d2a67322df17"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [
+        {
+          "date": "2026-10-03",
+          "by": "法務",
+          "why": "「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。この材料のために決めたもので、法令の読み方を示すものではない"
+        }
+      ],
+      "links": [
+        {
+          "line": 44,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"民法の期間.cal\"",
+            "tool": "file",
+            "path": "民法の期間.cal",
+            "items": []
+          },
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "開発",
+            "up": [
+              "d4f2d2a67322df17"
+            ],
+            "down": "c9b94eecde23e6b5"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 46,
+          "role": "not verified",
+          "why": "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない",
+          "approved": {
+            "date": "2026-10-03",
+            "by": "法務",
+            "up": [
+              "d4f2d2a67322df17"
+            ],
+            "down": null
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ]
+}

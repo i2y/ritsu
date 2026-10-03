@@ -1,0 +1,17 @@
+requirements osha v1
+description "A requirement read from 29 CFR 1910.157, for the tests. Written as an example; it does not say how the regulation is to be read"
+
+role safety "decides how the regulation reads"
+
+source osha = law ecfr "29 CFR 1910" asof 2026-01-01
+  "§1910.157" sha256:c2a9ce966c7e2269
+
+requirement extinguisher_distance
+  text "No employee travels more than 75 feet to a portable fire extinguisher for Class A fires"
+  owner safety
+  from @osha "§1910.157"
+    reviewed 2026-10-03 by safety sha256:c2a9ce966c7e2269 -> sha256:08a4819829372b9b
+  not satisfied "The test material names no artifact"
+    approved 2026-10-03 by safety sha256:08a4819829372b9b
+  not verified "The test material names no claim"
+    approved 2026-10-03 by safety sha256:08a4819829372b9b

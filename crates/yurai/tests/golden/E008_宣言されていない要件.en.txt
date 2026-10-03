@@ -1,0 +1,3 @@
+error[E008]: tests/mutants/E008_宣言されていない要件/支払.req:10:8: The requirement 支払の方針 is not declared
+    10 |   from 支払の方針
+tests/mutants/E008_宣言されていない要件: 1 error

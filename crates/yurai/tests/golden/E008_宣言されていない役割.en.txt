@@ -1,0 +1,4 @@
+error[E008]: tests/mutants/E008_宣言されていない役割/支払.req:9:9: The role 経理部 is not declared
+     9 |   owner 経理部
+  = Declare a role with `role legal "decides how the articles read"` before it is used; that stops a misspelling (`Legal` for `legal`).
+tests/mutants/E008_宣言されていない役割: 1 error

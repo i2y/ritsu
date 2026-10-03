@@ -1,0 +1,17 @@
+<Article Num="143">
+            <ArticleCaption>（暦による期間の計算）</ArticleCaption>
+            <ArticleTitle>第百四十三条</ArticleTitle>
+            <Paragraph Num="1">
+              <ParagraphNum/>
+              <ParagraphSentence>
+                <Sentence Num="1" WritingMode="vertical">週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。</Sentence>
+              </ParagraphSentence>
+            </Paragraph>
+            <Paragraph Num="2">
+              <ParagraphNum>２</ParagraphNum>
+              <ParagraphSentence>
+                <Sentence Function="main" Num="1" WritingMode="vertical">週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。</Sentence>
+                <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。</Sentence>
+              </ParagraphSentence>
+            </Paragraph>
+          </Article>

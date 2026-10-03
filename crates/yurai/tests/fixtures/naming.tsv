@@ -1,0 +1,36 @@
+rulec "rules/送料.rule"	{"text":"rulec \"rules/送料.rule\"","tool":"rulec","path":"rules/送料.rule","items":[]}
+rulec "rules/送料.rule" output 送料	{"text":"rulec \"rules/送料.rule\" output 送料","tool":"rulec","path":"rules/送料.rule","items":[["output","送料"]]}
+rulec "billing/請求の要否.rule" enum 注文の状態 value 受注で取消	{"text":"rulec \"billing/請求の要否.rule\" enum 注文の状態 value 受注で取消","tool":"rulec","path":"billing/請求の要否.rule","items":[["enum","注文の状態"],["value","受注で取消"]]}
+dandori "order.flow"	{"text":"dandori \"order.flow\"","tool":"dandori","path":"order.flow","items":[]}
+koyomi "./calendars/../支払条件.cal" date 支払日	{"text":"koyomi \"支払条件.cal\" date 支払日","tool":"koyomi","path":"支払条件.cal","items":[["date","支払日"]]}
+koyomi "支払条件.cal" claim 受領から60日以内	{"text":"koyomi \"支払条件.cal\" claim 受領から60日以内","tool":"koyomi","path":"支払条件.cal","items":[["claim","受領から60日以内"]]}
+koyomi "支払条件.cal" claim 40営業日以内	{"text":"koyomi \"支払条件.cal\" claim 40営業日以内","tool":"koyomi","path":"支払条件.cal","items":[["claim","40営業日以内"]]}
+chobo "在庫.book" transfer 引当	{"text":"chobo \"在庫.book\" transfer 引当","tool":"chobo","path":"在庫.book","items":[["transfer","引当"]]}
+geas "greeter.geas" claim "rejects an empty name"	{"text":"geas \"greeter.geas\" claim \"rejects an empty name\"","tool":"geas","path":"greeter.geas","items":[["claim","rejects an empty name"]]}
+geas "a.geas" claim "say \"hi\" #1"	{"text":"geas \"a.geas\" claim \"say \\\"hi\\\" #1\"","tool":"geas","path":"a.geas","items":[["claim","say \"hi\" #1"]]}
+proto "shop/v1/order.proto" service OrderService method Create	{"text":"proto \"shop/v1/order.proto\" service OrderService method Create","tool":"proto","path":"shop/v1/order.proto","items":[["service","OrderService"],["method","Create"]]}
+proto "warehouse/v1/stock.proto" enum PackingStatus value PACKING_STATUS_SHORT	{"text":"proto \"warehouse/v1/stock.proto\" enum PackingStatus value PACKING_STATUS_SHORT","tool":"proto","path":"warehouse/v1/stock.proto","items":[["enum","PackingStatus"],["value","PACKING_STATUS_SHORT"]]}
+proto "shop/v1/order.proto" message Order.Line field quantity	{"text":"proto \"shop/v1/order.proto\" message Order.Line field quantity","tool":"proto","path":"shop/v1/order.proto","items":[["message","Order.Line"],["field","quantity"]]}
+proto "shop/v1/order.proto" message Order	{"text":"proto \"shop/v1/order.proto\" message Order","tool":"proto","path":"shop/v1/order.proto","items":[["message","Order"]]}
+file "src/app.py"	{"text":"file \"src/app.py\"","tool":"file","path":"src/app.py","items":[]}
+yurai "民法の期間.req" requirement 満了日_142条	{"text":"yurai \"民法の期間.req\" requirement 満了日_142条","tool":"yurai","path":"民法の期間.req","items":[["requirement","満了日_142条"]]}
+sakai "contexts/受注.ctx" term キャンセル	{"text":"sakai \"contexts/受注.ctx\" term キャンセル","tool":"sakai","path":"contexts/受注.ctx","items":[["term","キャンセル"]]}
+sakai "contexts/在庫.ctx" context 在庫	{"text":"sakai \"contexts/在庫.ctx\" context 在庫","tool":"sakai","path":"contexts/在庫.ctx","items":[["context","在庫"]]}
+dandori "order.flow" task reserve	ERROR: dandori has no kinds yet
+rulec "x.rule" value 受注	ERROR: value only right after enum
+proto "x.proto" method Create	ERROR: method only right after service
+proto "x.proto" service S method M method N	ERROR: one child at most
+chobo "在庫.book" account 在庫 value X	ERROR: chobo has no nested kinds
+koyomi "a.cal" alias x	ERROR: unknown kind for koyomi
+excel "a.xlsx"	ERROR: unknown tool
+file "/etc/hosts"	ERROR: absolute path
+file "../outside.txt"	ERROR: outside the root
+koyomi "支払条件.cal" claim "受領から　60日"	{"text":"koyomi \"支払条件.cal\" claim \"受領から　60日\"","tool":"koyomi","path":"支払条件.cal","items":[["claim","受領から　60日"]]}
+file "."	{"text":"file \".\"","tool":"file","path":".","items":[]}
+file "src/"	{"text":"file \"src\"","tool":"file","path":"src","items":[]}
+koyomi "支払条件.cal" claim 受領から　60日	ERROR: a full-width space outside a string
+geas "a.geas" claim "line\nbreak"	ERROR: only \" and \\ are escapes
+koyomi "支払条件.cal" "date" 支払日	ERROR: a kind written as a string
+"koyomi" "支払条件.cal"	ERROR: a tool written as a string
+rulec "x.rule" output	ERROR: a kind without a name
+file ""	ERROR: an empty path

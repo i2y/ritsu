@@ -1,0 +1,3 @@
+error[E009]: tests/mutants/E009_版を書かずに指す/支払.req:26:8: The requirement 支払日 has more than one version, so say which (v1, v2)
+    26 |   from 支払日
+tests/mutants/E009_版を書かずに指す: 1 error

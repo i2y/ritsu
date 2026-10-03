@@ -1,0 +1,12 @@
+エラー[E302]: tests/mutants/E304_承認のあとで要件が変わった/支払.req:11:3: 支払日 は、2026-10-03 に 経理 がこのリンクを確かめたあとで変わりました
+    11 |   satisfied by file "pay.py"
+  支払日 の変わったところ:
+      @@ -1,1 +1,1 @@
+      - text 20 日締め翌月 10 日払い
+      + text 20 日締め翌月 10 日払い。休みなら前の営業日
+  = 確かめたら: yurai review tests/mutants/E304_承認のあとで要件が変わった --root tests/mutants/E304_承認のあとで要件が変わった --at tests/mutants/E304_承認のあとで要件が変わった/支払.req:11 --by <役割>
+エラー[E304]: tests/mutants/E304_承認のあとで要件が変わった/支払.req:13:3: 支払日 が変わったので、この見送りを承認し直します（tests/mutants/E304_承認のあとで要件が変わった/支払.req:11 と同じ変更）
+    13 |   not verified "月に一度、経理が照らし合わせる"
+  = 2026-10-03 に 経理 が承認した見送りです。
+  = 確かめたら: yurai review tests/mutants/E304_承認のあとで要件が変わった --root tests/mutants/E304_承認のあとで要件が変わった --at tests/mutants/E304_承認のあとで要件が変わった/支払.req:13 --by <役割>
+tests/mutants/E304_承認のあとで要件が変わった: エラー 2 件

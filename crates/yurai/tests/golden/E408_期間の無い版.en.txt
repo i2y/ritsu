@@ -1,0 +1,4 @@
+error[E408]: tests/mutants/E408_期間の無い版/支払.req:16:13: 支払日 v2 has no `in force`
+    16 | requirement 支払日(payment_day) v2
+  = When a requirement has more than one version, each has a period: the periods say which version holds on which day.
+tests/mutants/E408_期間の無い版: 1 error

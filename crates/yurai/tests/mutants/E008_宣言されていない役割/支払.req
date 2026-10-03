@@ -1,0 +1,12 @@
+requirements 支払 v1
+description "テストの材料。例として決めた決まりで、どこかの会社の決まりではない"
+
+role 経理 "支払の決まりを決める"
+role 開発 "コードを書く"
+
+requirement 支払日(payment_day)
+  text "20 日締め翌月 10 日払い"
+  owner 経理部
+  decided 2026-10-03 by 経理 "例として決めた"
+  satisfied by file "pay.py"
+  not verified "月に一度、経理が照らし合わせる"

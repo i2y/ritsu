@@ -1,0 +1,7 @@
+warning[W101]: tests/mutants/E105_宣言されていない出典/民法の期間.req:10:3: 民法 第142条 is pinned but no requirement cites it
+    10 |   第142条 sha256:fc8c35a0769d3b35
+  = If it is what is left after a citation was removed, delete the pin line.
+error[E105]: tests/mutants/E105_宣言されていない出典/民法の期間.req:41:9: The source 民法典 is not declared in this file
+    41 |   from @民法典 第142条
+  = Declare the source in the same file, like `source 民法典 = law "<law id>" asof <date>`; source names belong to a file.
+tests/mutants/E105_宣言されていない出典: 1 error, 1 warning

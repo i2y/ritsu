@@ -1,0 +1,5 @@
+error[E102]: tests/mutants/E102_引いた条の固定が無い/民法の期間.req:40:12: 民法 第142条 is cited but not pinned
+    40 |   from @民法 第142条
+  = Every article cited has a pin line under its source: it records which version of the text the requirement was read from.
+  = The line, fixed: 第142条 sha256:fc8c35a0769d3b35
+tests/mutants/E102_引いた条の固定が無い: 1 error

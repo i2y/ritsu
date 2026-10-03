@@ -1,0 +1,4 @@
+エラー[E011]: tests/mutants/E011_dir/支払.req:7:7: `dir` というツールはありません。名指しは rulec、dandori、koyomi、chobo、geas、proto、file、yurai、sakai のどれかで始めます
+     7 | scope dir "src"
+  = ディレクトリは名指しの語にしません。範囲なら `scope file "src/"` のように書きます。
+tests/mutants/E011_dir: エラー 1 件

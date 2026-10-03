@@ -1,0 +1,4 @@
+error[E012]: tests/mutants/E012_yuraiの名指し/支払.req:11:16: A `yurai` naming is not written in a .req
+    11 |   satisfied by yurai "方針.req" requirement 支払の方針
+  = One requirement points at another with `from <requirement>`, by name; a `yurai` naming is how the other languages point at a requirement.
+tests/mutants/E012_yuraiの名指し: 1 error

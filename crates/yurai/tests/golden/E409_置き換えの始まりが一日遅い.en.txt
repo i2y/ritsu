@@ -1,0 +1,5 @@
+error[E409]: tests/mutants/E409_置き換えの始まりが一日遅い/支払.req:18:3: 十日払い replaces 月末払い, and does not start on 2027-04-01, the day after 月末払い ends (2027-03-31)
+    18 |   in force 2027-04-02..
+  = Its period now is `2027-04-02..`.
+  = The line, fixed: in force 2027-04-01..
+tests/mutants/E409_置き換えの始まりが一日遅い: 1 error

@@ -1,0 +1,125 @@
+{
+  "prefix": {
+    "yurai": "https://github.com/i2y/yurai/ns#",
+    "y": "urn:yurai:"
+  },
+  "agent": {
+    "y:role/safety": {
+      "prov:type": {
+        "$": "yurai:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "safety",
+      "yurai:description": "decides how the regulation reads"
+    }
+  },
+  "entity": {
+    "y:source/94f3394541453806caaa0259627b1345": {
+      "prov:type": {
+        "$": "yurai:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "osha §1910.157",
+      "yurai:law": "ecfr 29 CFR 1910",
+      "yurai:asof": "2026-01-01",
+      "yurai:sha256": "c2a9ce966c7e2269"
+    },
+    "y:requirement/extinguisher_distance/v1": {
+      "prov:type": {
+        "$": "yurai:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "extinguisher_distance",
+      "yurai:version": "1",
+      "yurai:text": "No employee travels more than 75 feet to a portable fire extinguisher for Class A fires",
+      "yurai:sha256": "08a4819829372b9b"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/extinguisher_distance/v1",
+      "prov:agent": "y:role/safety",
+      "prov:type": {
+        "$": "yurai:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/extinguisher_distance/v1",
+      "prov:usedEntity": "y:source/94f3394541453806caaa0259627b1345",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/45cb69baa7f83b51bcfd90fe0d84ada6": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yurai:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yurai:link": "from",
+      "yurai:up": "c2a9ce966c7e2269",
+      "yurai:down": "08a4819829372b9b",
+      "yurai:status": "ok"
+    },
+    "y:waiver/dac00bb63d23f8a579505a65b7cd4c88": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yurai:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yurai:side": "not satisfied",
+      "yurai:why": "The test material names no artifact",
+      "yurai:sha256": "08a4819829372b9b",
+      "yurai:status": "ok"
+    },
+    "y:waiver/4da8dc7156df2e0b03abd29a1350f0ae": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yurai:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yurai:side": "not verified",
+      "yurai:why": "The test material names no claim",
+      "yurai:sha256": "08a4819829372b9b",
+      "yurai:status": "ok"
+    }
+  },
+  "used": {
+    "_:r3": {
+      "prov:activity": "y:review/45cb69baa7f83b51bcfd90fe0d84ada6",
+      "prov:entity": "y:source/94f3394541453806caaa0259627b1345"
+    },
+    "_:r4": {
+      "prov:activity": "y:review/45cb69baa7f83b51bcfd90fe0d84ada6",
+      "prov:entity": "y:requirement/extinguisher_distance/v1"
+    },
+    "_:r6": {
+      "prov:activity": "y:waiver/dac00bb63d23f8a579505a65b7cd4c88",
+      "prov:entity": "y:requirement/extinguisher_distance/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:waiver/4da8dc7156df2e0b03abd29a1350f0ae",
+      "prov:entity": "y:requirement/extinguisher_distance/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r5": {
+      "prov:activity": "y:review/45cb69baa7f83b51bcfd90fe0d84ada6",
+      "prov:agent": "y:role/safety"
+    },
+    "_:r7": {
+      "prov:activity": "y:waiver/dac00bb63d23f8a579505a65b7cd4c88",
+      "prov:agent": "y:role/safety"
+    },
+    "_:r9": {
+      "prov:activity": "y:waiver/4da8dc7156df2e0b03abd29a1350f0ae",
+      "prov:agent": "y:role/safety"
+    }
+  }
+}

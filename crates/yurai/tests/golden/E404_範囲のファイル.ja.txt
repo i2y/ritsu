@@ -1,0 +1,5 @@
+エラー[E404]: tests/mutants/E404_範囲のファイル/支払.req:7:1: file "src/report.py" は範囲にありますが、どの要件からも辿れません
+     7 | scope file "src"
+  = 範囲のほかのものは辿れます: file "src/pay.py"
+  = `satisfied by` か `verified by` でこれを名指す要件を足すか、範囲を狭めます。
+tests/mutants/E404_範囲のファイル: エラー 1 件
