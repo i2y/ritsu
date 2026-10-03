@@ -4,7 +4,7 @@
 
 名前は律（りつ）から取った。
 
-この文書は段階 A（設計）で書き、段階 C の最初の部分で、作者が決めたこと（★だった項目）、yuen への改名（2.2）、作った土台の形（4.12）とテストの道具の形（10.9）を書き足した。1 章の行数と数、1.4 と 12.5 の出力は、2026-10-03 にこの機械（macOS arm64、rustc 1.94.1）で、各リポジトリを読み、作業場所に写したものを走らせて取った。元のリポジトリでは何もビルドしていない。各リポジトリのテストの件数と時間のうち、ここで走らせていないものは、それぞれの最後の記録から引き、そう書いた。段階ごとの作業と完了の条件は PLAN.md にある。
+この文書は段階 A（設計）で書き、段階 C の最初の部分で、作者が決めたこと（★だった項目）、yuen への改名（2.2）、作った土台の形（4.12）とテストの道具の形（10.9）を書き足した。段階 D の最初の部分で、口の実物（3.2）、rulec の言語をスレッドごとに持つこと（4.1）、rulec と dandori の `.proto` の読み手（4.13）、単位の型の実物（5.1、5.2）を書き足した。1 章の行数と数、1.4 と 12.5 の出力は、2026-10-03 にこの機械（macOS arm64、rustc 1.94.1）で、各リポジトリを読み、作業場所に写したものを走らせて取った。元のリポジトリでは何もビルドしていない。各リポジトリのテストの件数と時間のうち、ここで走らせていないものは、それぞれの最後の記録から引き、そう書いた。段階ごとの作業と完了の条件は PLAN.md にある。
 
 ## 0. 全体像
 
@@ -98,12 +98,12 @@ serde_json を使う五つの `Cargo.lock` は、どれも serde_json 1.0.151 �
 |---|---|---|---|
 | SHA-256 | rulec `src/sha256.rs` 87、koyomi `src/sha256.rs` 75、yuen `src/sha256.rs` 75、sakai `src/sha256.rs` 84、chobo `src/ids.rs` の 12〜79 行（68）。計 389 | `ritsu-base` の `sha256` 82 | なし（`grep -rn 0x428a2f98 crates/*/src` は土台にしか当たらない）。chobo の ID の決め方は chobo に残る |
 | 診断 | `src/diag.rs`：rulec 549、dandori 159、koyomi 335、chobo 184、geas 260、yuen 223、sakai 214。計 1,924 | `diag` 296 | そこに至る例の部分（`src/diag.rs`：koyomi 207、chobo 144、geas 210、yuen 138、sakai 138）。rulec（549）と dandori（147）は自分の診断の型を残した（4.2。dandori の文は土台の `Text`） |
-| 二つの言語の文 | `src/i18n.rs`：rulec 76、koyomi 155、yuen 167、sakai 183。計 581。ほかに chobo、geas、dandori の `Text` や `Lang` | `text` 248 | rulec の `src/i18n.rs` 76（プロセスで一つの言語を持つ `tr!`。D.5 まで） |
+| 二つの言語の文 | `src/i18n.rs`：rulec 76、koyomi 155、yuen 167、sakai 183。計 581。ほかに chobo、geas、dandori の `Text` や `Lang` | `text` 248 | rulec の `src/i18n.rs` 117（プロセスの言語を持つ `tr!` に、D.5 でスレッドごとの言語 `with` を足した） |
 | 診断の台帳の枠 | `src/codes.rs` の `find` と書き出し：rulec 135、chobo 88、geas 108、koyomi 73、yuen 88、sakai 74。計 566 | `ledger` 284 | rulec の 135（rulec の台帳は自分の形のまま）。台帳の中身（`codes.rs`：rulec 2,198、koyomi 458、chobo 850、geas 1,175、yuen 398、sakai 711） |
 | CLI の表 | 表を読む仕組み：koyomi、yuen、sakai、chobo にそれぞれ 190〜240 行ほど。計約 875 | `cli` 316 | コマンドとフラグの表（koyomi `src/cli.rs` 242、yuen `src/cli.rs` 232、sakai `src/cli.rs` 161、chobo `src/main.rs` 637 の一部、dandori `src/cli.rs` 145）。rulec の `src/main.rs`（2,214）と geas の `src/main.rs`（785）は自分の形の表を残した |
 | 出典の写しと固定、改正の検知 | rulec `src/sources.rs` の 1,390 行、koyomi `src/fetch.rs` 581 と `src/sources.rs` の 326 行、yuen `src/fetch.rs` 762・`src/copies.rs` 323・`src/base64.rs` 74・`src/sources.rs` 305。計約 3,760 | `sources` 938 | rulec `src/sources.rs` 1,640（写しと表の突き合わせ、`source fetch`・`pin`・`outdated` を rulec の文で言う部分、単体テスト。移す前は全体で 2,142）、koyomi `src/fetch.rs` 455 と `src/sources.rs` 370（祝日の表を含む全体）、yuen `src/fetch.rs` 567・`src/copies.rs` 54・`src/sources.rs` 296（借りた出典を含む） |
 | 名指し | yuen `src/names.rs` 422、sakai `src/naming.rs` 367。計 789。ほかにルートとパスの扱い（sakai `src/paths.rs` 268 など） | `naming` 496、`paths` 247 | 診断のコードと文（yuen `src/names.rs` 146、sakai `src/naming.rs` 142、sakai `src/paths.rs` 75） |
-| `.proto` の読み手 | rulec `src/proto.rs` 1,358、dandori `src/proto.rs` 1,153、sakai `src/proto.rs` 1,080。計 3,591 | `ritsu-proto` 1,846 | sakai `src/proto.rs` 76。rulec と dandori の読み手（1,358 と 1,153）は D.10 まで残る |
+| `.proto` の読み手 | rulec `src/proto.rs` 1,358、dandori `src/proto.rs` 1,153、sakai `src/proto.rs` 1,080。計 3,591 | `ritsu-proto` 1,850 | sakai `src/proto.rs` 76。rulec `src/proto.rs` 569（列挙の別名、`shape` のパスがたどるフィールドの取り方、単体テスト）と dandori `src/proto.rs` 551（import の探し方、proto3 だけを読むこと、型の名前の解き方、単体テスト）。どちらも D.10 で ritsu-proto で読むようにした |
 | JSON（依存の無い二つ） | rulec `src/json.rs` 456、geas `src/json.rs` 513。計 969 | `json` 577 | rulec `src/json.rs` 204（誤りの文、値の種類の名前、キーを並べて書き戻すこと、`--format json` の書き手）。geas `src/json.rs` 513 は残した（4.9） |
 | doc のページの CSS | rulec、dandori、koyomi、chobo の四つ。計約 340 | `docpage` 139（ページの頭、配色、外の URL の確かめ） | koyomi と chobo は土台の配色を使う。rulec と dandori は、doc の出力を変えないために自分の CSS を残した（4.8） |
 | 生成物の予約語 | rulec `src/backend.rs` の `words`（189 行）、koyomi `src/reserved.rs` 76、dandori と chobo の表。計約 300 | `ritsu-emit` の `words` 139、`copies` 276（ほかに `ident`・`lit`・`header` 155） | koyomi `src/reserved.rs` 23（出力先と表の組）。rulec と dandori は、`copies` に写した自分の表を読む（9.5） |
@@ -112,7 +112,9 @@ serde_json を使う五つの `Cargo.lock` は、どれも serde_json 1.0.151 �
 
 テストの共通部分の中で重なっていたのは、自分を消す一時ディレクトリ（koyomi、chobo、geas、yuen、sakai と、dandori の `tests/examples.rs`）、時間を区切って子プロセスを走らせること（macOS に `timeout` が無いため。koyomi、geas、sakai）、golden と取り直し（chobo、geas、yuen、sakai と、koyomi、dandori、rulec のテストの中）、使い捨ての PostgreSQL のクラスタ（koyomi、chobo）、Chrome を探すこと（dandori、koyomi、chobo、geas。順は五つとも同じ）、Mermaid で図を描けるかを確かめること（dandori と chobo）である。どれも `ritsu-testkit` の一つになった（10.8、10.9）。rulec のテストは PostgreSQL を `PG*` の環境変数で受け取る形のまま、SKIP と段を `ritsu-testkit` にした。一時ディレクトリも、C のあとに `TempDir` にした（PLAN の 7.5）。
 
-移す前の表の合計は、テストの共通部分を除いて約 1 万 4 千行だった（診断のうち言語に残る部分も含む）。土台に移せば 6 千行ほどになると見込んでいた。段階 C の終わりの土台の三つは 6,087 行（`ritsu-base` 3,654、`ritsu-proto` 1,846、`ritsu-emit` 587）で、見込みに近い。七つの言語の src は 163,913 行から 158,157 行になった（rulec 68,571、dandori 30,763、koyomi 15,764、chobo 11,070、geas 16,380、yuen 8,414、sakai 7,195）。土台が言語ごとの形のいちばん広いものを取り、単体テストも持つので、全体の行数はほとんど減っていない。減ったのは、同じ役目の実装の数である。rulec と dandori の `.proto` の読み手（D.10）、rulec の診断と台帳と `tr!`（D.5 と E）、二つの doc の CSS が、まだ言語の側に残っている。
+単位の表と有理数（rulec の `src/types.rs` の `CURRENCIES`、`money_unit`、`unit_info`、`unit_offset` と、`src/num.rs` の有理数）は、D.1 で `ritsu-units`（628 行。表と有理数と単位の型。テストは別のファイル）に移した。rulec の `src/num.rs` は 282 行から 165 行になり、丸めの五つの仕方だけが残った。口の型とトレイトは D.2 で `ritsu-ports`（706 行）に置き、各言語の `src/ports.rs`（rulec 493、koyomi 267、chobo 266、sakai 211、yuen 128、geas 93）が答える。
+
+移す前の表の合計は、テストの共通部分を除いて約 1 万 4 千行だった（診断のうち言語に残る部分も含む）。土台に移せば 6 千行ほどになると見込んでいた。段階 C の終わりの土台の三つは 6,087 行（`ritsu-base` 3,654、`ritsu-proto` 1,846、`ritsu-emit` 587）で、見込みに近い。七つの言語の src は 163,913 行から 158,157 行になった（rulec 68,571、dandori 30,763、koyomi 15,764、chobo 11,070、geas 16,380、yuen 8,414、sakai 7,195）。土台が言語ごとの形のいちばん広いものを取り、単体テストも持つので、全体の行数はほとんど減っていない。減ったのは、同じ役目の実装の数である。段階 D の最初の部分のあとは、七つの言語の src が 158,439 行になった（D の前のコミットでは 158,226 行。rulec 68,648 から 68,447、dandori 30,755 から 30,161、koyomi 15,764 から 16,033、chobo 11,070 から 11,364、geas 16,380 から 16,482、yuen 8,414 から 8,544、sakai 7,195 から 7,408）。口に答える `src/ports.rs` の 1,458 行が増え、rulec と dandori の `.proto` の読み手が 1,383 行減った。rulec の診断と台帳と `tr!`（E）、二つの doc の CSS が、まだ言語の側に残っている。
 
 キーワードの表（各言語の `kw.rs` や `syntax.rs`）、字句と構文、検査、参照インタプリタは重なりに数えない。言語ごとの語彙と意味そのものだからである。
 
@@ -273,25 +275,51 @@ ritsu/
 | `Items` | 七つ全部 | yuen、sakai、LSP | 中のもの（種類、名前、行の範囲、定義の文）。6.4 |
 | `References` | 七つ全部 | sakai、yuen、LSP | 参照（行、先の名指し、参照の仕方）。6.4 |
 
-どの問いの答えも、P5 の三つのどれかになる。
+どの問いの答えも、P5 の三つのどれかになる。値を尋ねる問い（koyomi の日付がとりうる値の集合など）は、その値か、決められない理由かの二つになる。
 
 ```rust
-// ritsu-ports のスケッチ。名前と細部は C と D で決める
-pub enum Answer<E> {
-    Holds,                 // 成り立つことを示した
-    Fails(E),              // 成り立たない例（入力の値と、そこに至るもの）
-    Undecided(Text),       // 決められない。理由を言う
-}
+// ritsu-ports（段階 D の最初の部分で作った形）
+pub enum Answer<E> { Holds, Fails(E), Undecided(Text) }   // 成り立つ、成り立たない例、決められない理由
+pub enum Found<T> { Value(T), Undecided(Text) }            // 値を尋ねる問いの答え
+pub struct Said { code, file, line, message: Text }        // 答えられないときに、その言語が言うこと
 
 pub trait Rules {
-    fn facts(&self, rule: &Name) -> Result<RuleFacts, Vec<Diag>>;
-    fn preconditions_hold(&self, rule: &Name, ranges: &[(String, Range)]) -> Vec<(Precondition, Answer<Values>)>;
-    fn checked_over(&self, rule: &Name, input: &str, days: &DaySet) -> Answer<Diag>;
-    fn eval(&self, rule: &Name, inputs: &Values) -> Result<Values, RuleError>;
+    fn facts(&self, rule: &Path) -> Result<RuleFacts, Vec<Said>>;
+    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>>;
+    fn checked_over(&self, rule: &Path, input: &str, days: &DaySet) -> Result<Answer<Text>, Vec<Said>>;
+    fn eval(&self, rule: &Path, inputs: &Values) -> Result<Values, RuleError>;
+    fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>>;
 }
+// `..` は `&self, file: &Path`。`Dates`・`Books`・`Claims` の答えは `Result<_, Vec<Said>>` に包む（`Ledger` の `apply` と `balance` は `Result<_, Text>`）
+pub trait Dates { fn facts(..) -> DateFacts; fn values(.., date) -> Found<DaySet>; fn days(.., date) -> Found<(i64, i64)>; fn eval(.., inputs) -> Vec<(String, DateValue)>; }
+pub trait Books { fn facts(..) -> BookFacts; fn refusals(.., transfer, amounts) -> Found<Vec<(op, reasons)>>; fn open(..) -> Box<dyn Ledger>; }
+pub trait Ledger { fn apply(&mut self, &BookCall) -> Result<BookOutcome, Text>; fn pass(&mut self, seconds) -> expired; fn balance(&self, account, args) -> Balance; }
+pub trait Claims { fn claims(..) -> Vec<Claim>; fn map_record(..) -> Option<MapRecord>; }
+pub trait Items { fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, Vec<Said>>; }       // Item { naming, lines, text }
+pub trait References { fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>>; } // Reference { line, target, how }
 ```
 
 `RuleFacts` は、dandori の `src/rulec.rs` がいま三つの JSON から組み立てている `RuleInfo`（入力と出力の `Column`、列挙、`Machine`、前提、`walks`）を、単位の型（5 章）の付いた形にしたものである。D の段階では、例のすべての規則について、型の付いた呼び出しで得た事実と、いまの JSON から読んだ事実が同じになることを一度確かめてから、JSON の読み手を消す。
+
+**段階 D の最初の部分で作った形**（PLAN の D.2）。スケッチから変えたのは次のことである。
+
+- 問いの相手は、名指し（`Name`）ではなく、呼ぶ側が届くファイルのパス（`&Path`）にした。dandori の `use rule` のパスも、yuen と sakai の名指しも、呼ぶ側がファイルのパスに直してから尋ねる。中のものと参照（`Items`、`References`）だけは、名指しを作るためにルート（6.2 の 3）とルートからのパスを受け取る。
+- 答えられないときに返すのは、言語ごとの診断の型ではなく `Said`（その言語のコード、ファイル、行、二つの言語の文）にした。言語の診断の型を口に出すと、受け取る側が出す側のクレートを知ることになる。
+- `Rules` に `doc` を足した（表の中身にあった「`rulec doc` が描いたもの」）。言語は呼ぶ側が渡し、rulec はそのスレッドの言語で描く（4.1）。ファイルの名前（ページの頭に書くもの）も呼ぶ側が渡す。dandori は、ファイルの名前だけを書いたページを埋め込むからである。
+- `RuleFacts` は `RuleInfo` の項目を全部作れる形にした。規則の名前と別名と版と SHA-256、rulec の版、入力と出力（名前、別名、型。数は rulec の綴りのままの型と、単位の型（率は刻みつき）と、受け渡す整数での範囲）、並び、列挙（別名と値の別名つき）、ステートマシン（軸、行が受け付ける座標、行き先、書く値、held）、前提、Connect のサービスの形（パス、フィールド、ワイヤの列挙の名前と番号）、生成したコードの TypeScript・Python・Go での呼び方（モジュール、関数、引数と出力の名前と型、列挙のメンバー）である。`RuleInfo` の `api`（`rulec api` の JSON そのもの）にあたるものは、dandori が読んでいるところ（TypeScript・Python・Go の呼び方と Connect の形）を型にした。率の刻みは、JSON の側が JSON Schema の説明の文から読んでいるが、型の側は rulec の型の刻みを持つ。rulec の `tests/ports.rs` が、コーパスの 50 本の全部で、口の事実が `rulec api`・`certificate`・`schema` の JSON を読んだものと同じことを確かめる。
+- 出す側の実装は、どれも各言語の `src/ports.rs` の `Engine` である。geas は、口に答えるためにライブラリとコマンドに分けた（`src/lib.rs` と `src/main.rs`）。
+
+この段階で答えを作った問いと、まだ答えない問い（決められない、と理由を言う）は次のとおり。
+
+| 口 | 答える | まだ答えない |
+|---|---|---|
+| `Rules`（rulec） | `facts`、`doc`、`eval`（参照評価器。生成したコードが入口で断る入力、つまり型と列挙と範囲と入力どうしの関係を破るものは断る）、`preconditions_hold` のうち入力どうしの関係（範囲の箱のいちばん厳しい角で決まる。成り立たなければその角が例） | `preconditions_hold` のうち並びの合計と長さの上限（問いが並びの長さの範囲を持たない）、`checked_over`（rulec の検査が日付の集合を軸に置く形を持たない。E の X3 (b)） |
+| `Dates`（koyomi） | `facts`、`values`、`days`、`eval`（範囲のすべての入力で計算する） | 入力の組み合わせが koyomi の確かめる数を超えるとき、途中で計算が止まる入力があるときは、決められないと言う |
+| `Books`（chobo） | `facts`、`open`（参照インタプリタの帳簿。操作、時間を進める、残高） | `refusals`（chobo の検査は額を決まった値でしか試さない。E の X4） |
+| `Claims`（geas） | `claims`、`map_record` | — |
+| `Items`、`References` | rulec、koyomi、chobo（中のものだけ）、geas（中のものだけ）、yuen、sakai | dandori（D.6） |
+
+中のものの定義の文は、6.4 の表のとおりにした。rulec は `rulec fmt` が書く形の行、koyomi は `date … =` の塊の行と条件の行（コメントと前後の空白を除く）、chobo は yuen の DESIGN 3.2 の形の JSON（yuen の試作が計算したハッシュと同じになる）、geas は主張の塊の行である。表に無かった yuen は要件の端の中身（yuen の DESIGN 4.1）と出典の固定の行、sakai はコンテキストのファイルの行と語の塊の行にした。
 
 ### 3.3 テストと dev-dependency
 
@@ -301,7 +329,7 @@ pub trait Rules {
 
 土台の層の `ritsu-proto` と `ritsu-emit` のテストは、言語の側が移るまでのあいだだけ、rulec（`ritsu-proto` は dandori も）を `[dev-dependencies]` に持ち、言語のいまの読み手と表を、土台のものと生のまま比べる（C.9、C.10）。決まり 2 の例外で、移したあとに残しておく理由は無い。言語の側が土台のものを使うようになるとき（表は C.11、読み手は D.10）に、比べる部分とその dev-dependency を消し、golden と比べるテストだけを残す。そのままにすると依存が輪になり、比べる相手も土台のものになって、比べる意味が無くなる。`cargo xtask deps` は dev-dependency を決まり 1〜3 の外に置くので、この例外はこの節で守る。
 
-C.11 で rulec と dandori が `copies` の表を読むようになったので、`ritsu-emit` の比べる部分と rulec への dev-dependency を消した。`crates/ritsu-emit/tests/copies.rs` は、表を語の並びにしたものを `tests/golden/copies.txt` と比べるだけになった。`ritsu-proto` の比べる部分と、rulec と dandori への dev-dependency は D.10 まで残る。
+C.11 で rulec と dandori が `copies` の表を読むようになったので、`ritsu-emit` の比べる部分と rulec への dev-dependency を消した。`crates/ritsu-emit/tests/copies.rs` は、表を語の並びにしたものを `tests/golden/copies.txt` と比べるだけになった。D.10 で rulec と dandori が `ritsu-proto` で読むようになったので、`ritsu-proto` の比べる部分と、rulec と dandori への dev-dependency も消した。`crates/ritsu-proto/tests/readers.rs` は、三つの言語の形にしたものを `tests/golden/` の `sakai.txt`、`rulec.txt`、`dandori.txt` と比べるだけになった。これで、土台の層のクレートの dev-dependency に言語のクレートは無くなった。
 
 ### 3.4 決まりの確かめ方
 
@@ -323,7 +351,7 @@ C.11 で rulec と dandori が `copies` の表を読むようになったので�
 `Text`（日本語と英語の文の組）と `tr!("日本語", "English")` を一つにする。koyomi、chobo、yuen、sakai の形で、どちらの文を出すかは出すところが決める。同じプロセスの中で英語と日本語の golden を取れ、wasm では呼ぶたびに言語を変えられ、ほかの言語のクレートからも、欲しい言語で呼べる。
 
 - geas の `t(en, ja)` と dandori の `(en, ja)` の組は、C の段階で `tr!("日本語", "English")` の順に直す。機械的な直しで、文は一字も変えない。
-- rulec の `tr!` は、プロセスで一つの言語を読む（呼び出しは 2,800 か所）。C の段階ではそのままにする。D の段階で、言語をスレッドごとに持てるようにする（`i18n::with(lang, || …)`）。dandori や yuen が rulec を同じプロセスの中で、ほかのテストと並んで、違う言語で呼ぶからである。CLI の振る舞いは変わらない。rulec のすべての文を `Text` に移すことは、要るとわかるまでしない（15 章）。
+- rulec の `tr!` は、プロセスで一つの言語を読む（呼び出しは 2,800 か所）。C の段階ではそのままにする。D の段階で、言語をスレッドごとに持てるようにする（`i18n::with(lang, || …)`）。dandori や yuen が rulec を同じプロセスの中で、ほかのテストと並んで、違う言語で呼ぶからである。CLI の振る舞いは変わらない。D.5 で作った（rulec の §15.165）。`with` の中で作る文はそのスレッドではその言語になり、抜ければ（パニックで抜けても）前の言語に戻る。スレッドの言語はプロセスの言語に勝つ。rulec の `tests/lang.rs` が、英語と日本語の `rulec doc` を四つのスレッドで同時に描いて確かめる。rulec はまだ `RITSU_LANG` を読まない（PLAN 7.6）。rulec のすべての文を `Text` に移すことは、要るとわかるまでしない（15 章）。
 - 言語の選び方は、`--lang`、`<名前>_LANG`、`RITSU_LANG`、英語の順。システムのロケールは見ない（rulec の §11 の原則 7。生成物と CI のログが機械で変わらないため）。
 - 文の幅（East Asian Width で W と F を 2 と数える）、件数、日本語の空白の詰め方の小さな関数も置く。
 
@@ -424,6 +452,14 @@ C.9 で `ritsu-proto` を作り、sakai をこれに替えた（rulec と dandor
 - 読んだものから言語が作るもの（rulec の列挙の値の別名、sakai の何も設定していない値、dandori の proto2 を断ること）は、言語に残した。
 - 三つの読み手と同じものを読むことは、三つのリポジトリの全部の `.proto` と、三つの読み手が自分のテストに使っていた例で確かめる（`crates/ritsu-proto/tests/readers.rs`）。違うのは、rulec の読み手が行の頭にしか `package` を見つけないことと、壊れたファイルを途中まで読むことだけで、どちらも新しい読み手の方が多く読む（PLAN の C.9）。
 
+**D.10 で rulec と dandori を替えた形**。二つの言語は、自分の `src/proto.rs` の読み手を消して `ritsu-proto` で読む。言語に残したのは、読んだものから自分が作るものだけである。
+
+- rulec：`proto::read(パス, 中身)` が、`ritsu-proto` の読んだものから、規則が契約に尋ねるもの（package、import、列挙と値、メッセージと`shape` のパスがたどるフィールド、Protovalidate の規則）を取る。列挙の値の別名、`upper_snake`、整数の範囲（`int_bounds`）は rulec に残した。`src/proto.rs` は 1,358 行から 569 行になった。
+- **rulec は、読めない `.proto` を途中まで読まない**（★、rulec の §15.166）。前の読み手は、読めない文を飛ばして読めたところまでを返していた。最後の `}` が欠けた契約は、そこまでの値で突き合わせて通り、値の行の `=` が抜けた契約は、その値が消えたと E032 で言っていた。いまは E013（「`order.proto` を読めません」）で止め、どこで何が読めないかを注に書く。コーパスと変異にもテストにも壊れた契約は無く、出力は 1,782 回とも変わらない。
+- dandori：import をたどる部分は dandori に残した。ファイルを、ディスクからも、ブラウザで試すページが持つファイル（`Sources`）からも探すからである。たどった一つずつのファイルを `ritsu_proto::read` で読み、型の名前は `Protos` で、見えるファイル（自分、import した先、`import public` の先）だけから引く。proto2 と editions は断る。読めなかった import があるときは、引けない名前を書いたまま持つ（その import の先の型を、無い型として断らない）。`src/proto.rs` は 1,145 行から 551 行になった（1.2 の表の 1,153 行は元のリポジトリのもので、C で単体テストの一時ディレクトリを替えて 1,145 行になっていた）。読めないファイルの文の形が変わった（dandori の DESIGN 0.3）が、例と `tests/flows` の出力は 701 回とも変わらない。
+- `ritsu-proto` の文：何が要るか（`Problem::Expected` の `what`）を、英語の語から二つの言語の文にした。日本語の文に英語の語が混ざっていた（「a name が要るところに」）のが、「名前が要るところに」になる。sakai の E106 の日本語の文はこれで変わるが、sakai の golden には当たるものが無かった。`tests/golden/sakai.txt` の一行を取り直した。
+- 三つの読み手と生のまま比べるのはやめ、`tests/readers.rs` は三つの golden と比べる形だけを残した（3.3）。比べるのをやめる前に、替えたあとの rulec と dandori の読み方と生のまま比べて、三つの golden の全部と同じことを確かめた。
+
 ## 5. 単位の型
 
 ### 5.1 rulec の書き方を土台にする
@@ -444,9 +480,18 @@ pub enum Dim { Mass, Length, Area, Volume, Duration, Temperature, Sound, Money(C
 pub struct Unit { pub dim: Dim, pub unit: String, pub tax: Option<Tax>, pub step: Option<Rat> }
 ```
 
+**D.1 で作った形**。`ritsu-units` は、有理数 `Rat`（rulec の `src/num.rs` から移した。`i128` の分子と分母）、表 `table`（`CURRENCIES`、お金の単位を引く `money`、量の単位を次元と係数で引く `unit`、℉ のずれの `offset`、すべての綴りの `spellings`）、単位の型 `Unit` と `Dim`、`Tax`、綴りが単位でない理由の `Problem` を持つ。表の中身は rulec のものを一つも変えずに移した。スケッチから変えたのは次のことである。
+
+- 通貨は、別の型にせず、表の綴りの文字列で持つ（`Dim::Money("円")`）。通貨の表は閉じているので、表に無い綴りは `Unit::money` が断る。
+- `Unit` の `unit` は、書いたとおりの綴りを持つ（`money[JPY, incl_tax]` の `JPY` は `JPY` のまま）。どの言語も、出力は書いたとおりに出すからである。同じ単位かは `Unit::same` が表を引いて決める（`JPY` と `円` は同じで、`kg` と `g` は違う）。表の綴りにそろえた形は `Unit::canonical` で得る。
+- rulec の綴りを読む `Unit::parse` と、書く `Display` を置いた。正確な換算は `Unit::convert`（有理数のまま）と `Unit::whole`（換算した値が整数のときだけ）、順序だけの次元かは `compares_only` である。
+- 丸めの五つの仕方（rulec の `RoundMode` と `round_to`）は、rulec の意味（rulec の §7.3）なので、rulec に残した。
+
 ### 5.2 rulec
 
 rulec の `Ty::Money`・`Ty::Qty`・`Ty::Rate`・`Ty::Number` は、中に `ritsu_units::Unit` を持つ形にする。振る舞いは変えない（D の段階で、コーパスの golden と証明書が一字も変わらないことを確かめる）。率の刻みは、入力と出力の型として `Rules` の口に出す。dandori は説明の文から刻みを読まなくなる。
+
+**D.1 で変えたこと（★）**：`Ty` の中に `Unit` を持たせるのはやめ、`Ty` は書いたとおりの綴りを持ち続ける（`Ty::Money { cur, tax }`、`Ty::Qty { dim, unit }`）。単位の意味（次元、係数、ずれ）は、どれも `ritsu-units` の表から引く。`Ty` を `Unit` にするのは `Ty::unit(刻み)` で、`Rules` の口はこれで入力と出力の単位を渡す（率には、入力の宣言にある刻みを添える）。理由は二つある。率の刻みは rulec の型ではなく入力の宣言にあり（1.4）、`Ty::Rate` に刻みを入れると、刻みの違う二つの率が違う型になって、rulec の型の決まり（E103 など）が変わる。また、税の区別の無いお金の値（`500円` という書き方）はどちらの区別のお金とも合う（rulec の `unifies`）が、`Unit::same` は区別まで同じものだけを同じとする。`Ty` を `Unit` にすると、rulec の 19 のファイルの 129 か所の `Ty::Money` と `Ty::Qty` を、この違いを保ったまま書き直すことになり、得るものが無い。税の語を `incl_tax` と `excl_tax` のほかに書いた型（`money[円, foo]`）は、rulec がいまも黙って通す。その型には単位が無い（`Ty::unit` が None を返す）。直すかは rulec の決めることとして残した（PLAN 7.6）。
 
 ### 5.3 dandori
 
@@ -663,7 +708,7 @@ dandori に、期日と帳簿を読む宣言を足す（E の段階。dandori �
 
 ### 7.12 一つの `.proto` の読み方（X12）
 
-検査を足すのではなく、`ritsu-proto` に読み手を一つにすること（4.10）で、同じ `.proto` を rulec、dandori、sakai、yuen が違って読む余地を無くす。C の段階で sakai を、D の段階で rulec と dandori を移し、移す前と後で、それぞれのテストの結果が同じことを確かめる。
+検査を足すのではなく、`ritsu-proto` に読み手を一つにすること（4.10）で、同じ `.proto` を rulec、dandori、sakai、yuen が違って読む余地を無くす。C の段階で sakai を、D の段階で rulec と dandori を移し、移す前と後で、それぞれのテストの結果が同じことを確かめる。D.10 で rulec と dandori を移した（4.13）。rulec は 1,782 回、dandori は 701 回の出力が移す前と一字も違わず、rulec の契約の突き合わせ（コーパスと変異）と、dandori の `connect`・`implements`・`.proto` の型（`tests/protos.rs` と例）のテストも同じに通った。出力が変わったのは、`.proto` として読めないファイルのときだけである。rulec は途中まで読まずに E013 で止め（★）、dandori の E016 の注と sakai の E106 の日本語の文は言い方が変わった（4.13）。
 
 ### 7.13 処理系自身の依存（X13）
 

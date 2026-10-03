@@ -333,9 +333,26 @@ C.13 で確かめたこと（2026-10-03、この機械で）：
 
 DESIGN 5 章。rulec の `src/types.rs` の `money_unit`・`unit_info`・`unit_offset`・`CURRENCIES` と `src/num.rs` の有理数を移し、`Unit`（次元、単位、税込か税抜か、刻み）を足す。テストは、表のすべての綴りの係数、`JPY` と `円`、`USD` と `USDc` の換算、℉ の一次式、順序だけの次元、整数にならない換算を断ること。rulec をこれに替え、コーパスの golden と、すべての規則の `rulec certificate` と `rulec api` の出力が一字も変わらないことを確かめる。
 
+D.1 でしたこと（2026-10-04）：
+
+- `crates/ritsu-units`（`ritsu-base` だけに依存）を作った。rulec の `src/num.rs` の有理数 `Rat`（`Hash` を足した）と、`src/types.rs` の表（`CURRENCIES`、`money_unit`、`unit_info`、`unit_offset`）を中身を変えずに移し、単位の型 `Unit`（次元、書いたとおりの綴り、税込か税抜か、刻み）と `Dim`、`Tax`、`Problem` を足した。形は DESIGN 5.1 の「D.1 で作った形」に書いた。テストは `tests/units.rs` の 9 本（表のすべての綴りの次元と係数、`JPY` と `円`、`USD` と `USDc` の換算と、二つの通貨は換算しないこと、整数にならない換算を断ること、℉ の一次式、順序だけの次元、綴りを読んで書き戻すと同じになること、単位でない綴りの理由、有理数が正確で溢れを言うこと）。
+- rulec を替えた。`num::Rat` は `ritsu_units::Rat` を指し、`unit_info` と `unit_offset` は表を引くだけになった。丸めの仕方（`RoundMode` と `round_to`）は rulec の意味なので rulec に残し、`round_to` は rulec が `Rat` に足すトレイト `RoundTo` のメソッドにした（使う六つのファイルが `use` する）。rulec の DESIGN §15.164 に書いた。
+- 確かめたこと：コーパスの 50 本、変異の 109 本、ほかの 16 本の規則について、`check`（英語、日本語、JSON）、`certificate`、`api`、`schema`、`graph` を、コーパスの 50 本についてはさらに `fmt --check`、`vectors`、`coverage`、`doc`（Markdown と HTML、二つの言語、顧客向け）、`gen`、`adapter` を、替える前と後のバイナリで出し、1,782 回とも一字も違わなかった（以下、この 1,782 回を「rulec の出力の突き合わせ」と呼ぶ）。rulec の `tests/units.rs` に二本足した（単位を挙げる文が表のすべての綴りを挙げること、コーパスのどの数の型も表で書けること。206 の数）。
+- 決めたこと（★）：rulec の `Ty` は、中に `Unit` を持たず、書いたとおりの綴りを持ち続ける。`Ty::unit(刻み)` で単位の型にする。DESIGN 5.2 の「D.1 で変えたこと」に理由を書いた。税の語を `incl_tax` と `excl_tax` のほかに書いた型（`money[円, foo]`）を rulec が黙って通すことは、変えなかった（7.6）。
+
 ### D.2 `ritsu-ports`
 
 DESIGN 3.2 の型とトレイト（`RuleFacts`、`DateFacts`、`BookFacts`、`Claims`、`Items`、`References`、`Answer`）。出す側が自分で実装する：rulec（`Rules`、`Items`、`References`）、koyomi（`Dates`、`Items`、`References`）、chobo（`Books`、`Items`）、geas（`Claims`、`Items`）、dandori（`Items`、`References`）、yuen と sakai（自分の名指しの `Items` と `References`）。
+
+D.2 でしたこと（2026-10-04）：
+
+- `crates/ritsu-ports`（`ritsu-base` と `ritsu-units` だけに依存）を作った。答えの形（`Answer`、`Found`、答えられないときにその言語が言う `Said`）、`Rules` と `RuleFacts`、`Dates` と `DateFacts`、`Books` と `BookFacts` と `Ledger`、`Claims`、`Items` と `Item`、`References` と `Reference` である。スケッチからの違い（問いの相手をファイルのパスにしたこと、診断の型の代わりに `Said`、`Rules::doc` を足したこと）は DESIGN 3.2 に書いた。テストは `tests/ports.rs` の 2 本（名指しの最後の組が中のものの種類と名前になること、`Said` が二つの言語の文を持つこと）。どの口もトレイトオブジェクトで持てることは、同じファイルがコンパイルで確かめる。
+- 出す側の実装は、各言語の `src/ports.rs` の `Engine` にした。rulec（`Rules`、`Items`、`References`）、koyomi（`Dates`、`Items`、`References`）、chobo（`Books`、`Items`）、geas（`Claims`、`Items`）、yuen と sakai（`Items`、`References`）。geas は口に答えるために、ライブラリ（`src/lib.rs`）とコマンド（`src/main.rs`）に分けた。どの問いに答え、どの問いがまだ「決められない」と理由を言うかは、DESIGN 3.2 の表に書いた。dandori の `Items` と `References` は D.6 に残した。
+- 口の事実を作るために、言語の中で JSON を書くところを、型を返す関数とそれを JSON にする部分に分けた。rulec は `codegen` の `enum_list`（`api` の列挙もここから書く）、`calls`、`connect_facts`、`cert::machine_facts`、`doc::render_named`（ページの頭に書くファイルの名前を、読む場所と別に渡す）。chobo は `api` の仮押さえの状態の表（`hold_table`。`api` の JSON もここから書く）。どれも出力は変わらない。
+- `RuleFacts` は、dandori の `RuleInfo` の項目を全部作れる（規則の名前と版と SHA-256、入力と出力の名前と型、列挙、ステートマシン、前提、歩く並び。`api` の JSON から読んでいるところは、TypeScript・Python・Go の呼び方と Connect の形として型にした）。率の刻みは、説明の文からではなく rulec の型と入力の宣言から取る。
+- テスト（どれも `tests/ports.rs`）：rulec 6 本（コーパスの 50 本の全部で、口の事実が `api`・`certificate`・`schema` の JSON と同じこと、50 本の 4,894 のベクタの全部で口の評価が `rulec vectors` と同じこと、口の描くページが `rulec doc` と一字も同じこと、前提の問い、検査を通らない規則の診断、ファイルが持つものと名指すもの）、koyomi 4 本（事実が `koyomi api` と同じこと、DESIGN 7.5 の例の日付の値 23 個と日数 18〜51、評価がベクタと同じこと、中のものと参照）、chobo 3 本（事実が `chobo api` と同じこと、帳簿が参照インタプリタと同じにすべてのシナリオを走ること、中のものの定義の文のハッシュが yuen の試作の計算と同じこと）、geas 3 本、yuen 2 本（要件の定義の文が、記録の確かめたハッシュと同じこと）、sakai 2 本（`means` の名指しが `sakai api` と同じこと）。
+- 確かめたこと：七つの言語のコマンドの出力が、替える前と一字も違わなかった（rulec の出力の突き合わせの 1,782 回、dandori 701 回、koyomi 352 回、chobo 273 回、geas 9 回、yuen 527 回、sakai 205 回）。`cargo xtask deps` は 14 のクレートで通る。
+- 決めたこと：問いの相手はファイルのパスにし、答えられないときは言語の診断の型ではなく `Said` を返し、`Rules` に `doc` を足した（理由は DESIGN 3.2）。geas は、口をライブラリの側で実装するために、ライブラリとコマンドに分けた（コマンドの振る舞いは変えていない）。rulec の `Engine` は、読んだ規則をパスと中身の SHA-256 で覚えておく（コーパスの全部のベクタを口から評価するテストが、60 秒ほどから 9 秒ほどになった）。
 
 ### D.3 dandori と rulec のつなぎ
 
@@ -351,6 +368,12 @@ DESIGN 5.3。`Ty::Num(Unit)`、`UNIT_KINDS` を `ritsu-units` から、`rate_uni
 ### D.5 rulec の言語をスレッドごとに
 
 DESIGN 4.1。`i18n::with(lang, || …)` を足し、dandori と yuen が rulec を呼ぶところで使う。テストで、英語と日本語の `rulec doc` を同時に（別のスレッドで）描いて、どちらも正しい言語になること。
+
+D.5 でしたこと（2026-10-04）：
+
+- rulec の `src/i18n.rs` に `with` を足した（スレッドごとの言語。抜ければパニックでも前の言語に戻る。スレッドの言語はプロセスの言語に勝つ）。CLI はこれまでどおり `set` でプロセスの言語を決める。2,800 か所の `tr!` は書き換えていない。rulec の DESIGN §15.165 に書いた。
+- テスト：rulec の `tests/lang.rs` に一本足した。`送料.rule` のページを、Markdown と HTML、英語と日本語の四つのスレッドで同時に四回ずつ描き、どれも `rulec doc --lang …` の出力と同じこと、抜けたスレッドの言語が戻ることを見る。スレッドの言語を読まないようにすると落ちる。rulec の出力の突き合わせも一字も違わなかった。
+- dandori と yuen が rulec を呼ぶところで使うのは、まだできない（どちらもまだ rulec を同じプロセスで呼ばない。D.3 と D.7）。いまは rulec の口の `Rules::doc` が `with` を使い、dandori と yuen はこの口から呼ぶ。rulec に `RITSU_LANG` を読ませることは、CLI の振る舞いを変えないためにしなかった（7.6）。
 
 ### D.6 dandori の種類の語
 
@@ -383,6 +406,14 @@ DESIGN 5.4。chobo の単位を単位の型に載せ、お金の単位に税込�
 ### D.10 rulec と dandori を `ritsu-proto` に
 
 二つの `src/proto.rs` を `ritsu-proto` に替える。rulec の契約の検査（コーパスと変異）、dandori の `connect`・`implements`・proto から作る型（`tests/protos.rs` と例）の結果が、替える前と同じであること。
+
+D.10 でしたこと（2026-10-04）：
+
+- rulec と dandori の `src/proto.rs` を `ritsu-proto` で読む形にした（rulec 1,358 行から 569 行、dandori 1,145 行から 551 行）。それぞれに残したものは DESIGN 4.13 の「D.10 で rulec と dandori を替えた形」に書いた。dandori は import をたどる部分を残し（ディスクからも、ブラウザで試すページが持つファイルからも探すため）、型の名前は見えるファイルだけから引き、proto2 と editions を断り、読めなかった import があれば引けない名前を書いたまま持つ。
+- 決めたこと（★）：rulec は、`.proto` として読めない契約を途中まで読まずに、E013 で場所を言う。rulec の DESIGN §15.166 に理由を書いた。前の読み手は、最後の `}` が欠けた契約を通し、値の行の `=` が抜けた契約に E032 を出していた。
+- `ritsu-proto` の文：何が要るかの語を二つの言語の文にし、日本語の文に英語の語が混ざらないようにした（「a name が要る」が「名前が要る」）。dandori の読めないファイルの文の形も変わった（dandori の DESIGN 0.3）。
+- `ritsu-proto` の `tests/readers.rs` から、rulec と dandori の古い読み手と生のまま比べる部分を消し、rulec と dandori への dev-dependency を消した（DESIGN 3.3）。消す前に、替えたあとの二つの読み方とも生のまま比べ、golden の全部と同じことを確かめた。golden は `tests/golden/sakai.txt` の一行（上の文の直し）だけが変わった。
+- 確かめたこと：rulec の出力の突き合わせ（コーパスと変異の契約の突き合わせを含む）と、dandori の 701 回の出力（93 の `.flow` の `check` を英語・日本語・JSON で、例の七つの出力先への `build` とシナリオと `doc`、`tests/flows` の Temporal への `build`）が、替える前と一字も違わなかった。rulec の読み手の単体テスト 14 本と dandori の 9 本は、そのまま通る。rulec のテストを二本足した（`tests/proto.rs` の「読めない契約は途中まで読まずに場所を言う」と `tests/projection.rs` の「読めない proto の契約は読めないと言う」）。dandori の `tests/protos.rs` と、`.proto` を読む例（fulfillment）と Connect で規則を呼ぶ例（order）を走らせる重いテスト九つも通った（7.6）。
 
 ### D.11 D の完了の条件
 
@@ -564,3 +595,25 @@ DESIGN 11 章。`crates/rulec/proofs/` を根の `proofs/` に移し、rulec の
     - swiftc は `--version` に答えると、ほとんど毎回、空の `TemporaryDirectory.*` を TMPDIR に残す。`rulec test` は全部のツールチェーンにバージョンを聞くので、回すたびに一つ残っていた。rulec のテストは、`rulec test` を走らせるときと、swiftc を自分で呼ぶとき（`--version` で確かめるところも）に、子の TMPDIR をそのテストの一時ディレクトリの下に向ける。下に作るのは `ritsu-testkit` の `tmp::tmpdir_in` である。`rulec test` が swiftc に渡す環境は変えていない。
     - Chrome は、止められるとシングルトンのソケットのディレクトリ（`com.google.Chrome.*`）を一時ディレクトリに残す。macOS の Chrome はその場所を `TMPDIR` ではなく `MAC_CHROMIUM_TMPDIR` から読む。`ritsu-testkit` の Chrome には両方を渡し、プロファイルの下に向けた。geas のテストは、geas が立てる Chrome に同じ二つを渡す（一回で 41 個残していた）。
     - 回した前と後で、`TemporaryDirectory.*` は 0 個と 0 個、`com.google.Chrome.*` は 2,391 個と 2,391 個だった（rulec の全部、dandori の doc と playground、koyomi・chobo の doc、geas の全部、`ritsu-testkit`）。
+
+### 7.6 D の最初の部分から、D の残りへ（D の最初の部分の終わりに書いた）
+
+- 済んだもの：D.1、D.2、D.5、D.10。七つの言語のコマンドの出力は、`.proto` として読めないファイルのとき（rulec は途中まで読まずに E013 で止める（★）。dandori の E016 の注と sakai の E106 の日本語の文は言い方が変わった。D.10）のほかは変わらない。土台の層は `ritsu-units` と `ritsu-ports` が加わって五つになり（テストの共通部分の `ritsu-testkit` は別）、`ritsu-proto` と `ritsu-emit` の dev-dependency に言語のクレートは無くなった。
+- D.3 の手がかり：
+  - 口は `rulec::ports::Engine`（`ritsu_ports::Rules`）。読んだ規則をパスと中身の SHA-256 で覚えておくので、同じ規則を何度尋ねても検査は一度で済む。
+  - D.3 の 1 の突き合わせのうち、口の事実と rulec の JSON が同じことは、rulec の `tests/ports.rs` がコーパスの 50 本で確かめている。dandori の `RuleInfo` と比べるときに気をつけることが三つある。
+    - ステートマシンの状態の軸（`Machine::state_axis`）は、口では `Option` で、遷移を決める表に状態の列が軸として無いときは None になる（証明書の `machine` の `axis` が null）。dandori はいま null を 0 と読み、最初の軸を状態の軸として扱う（`axes_with_value` が最初の軸を除く）。口に替えるときに、None の扱いを決める。
+    - 率の刻みは、口では単位の型（`Unit::step`）にある。dandori はいま JSON Schema の説明の文から読んでいる（DESIGN 1.4）。
+    - 前提と `api` は、dandori はいま JSON（`Value`）のまま持っている。口では型（`Precondition`、`Call`、`Connect`）にし、dandori がいま読んでいる項目だけを入れた。dandori が `api` の別の項目を読むようになるなら、口に足す。
+  - 規則のページ（`Rules::doc`）は、言語と、ページの頭に書くファイルの名前を渡す。dandori が埋め込むページは、ファイルの名前だけを書いている。
+  - 答えられないときの `Said` の文は `Text`（二つの言語）で返る。dandori の `src/rulec.rs` の文の組は `(en, ja)` のまま。
+- D.4 の手がかり：dandori の型の綴りは rulec と同じなので、`ritsu_units::Unit::parse` がそのまま読む。`money[JPY, incl_tax]` と `money[円, incl_tax]` は `Unit::same` で同じになり、範囲の端に付けた単位は `Unit::whole`（整数にならない換算は None）で数える。
+- D.5 に残したこと：rulec は `RITSU_LANG` をまだ読まない（`--lang` と `RULEC_LANG` だけ）。DESIGN 4.1 の順（`--lang`、`<名前>_LANG`、`RITSU_LANG`、英語）にすると、`RITSU_LANG` を置いた環境で rulec の言語が変わる。CLI の振る舞いを変えることになるので、作者が決めてからにする。dandori と yuen は `with` を直に呼ばなくてよい。口の `Rules::doc` に言語を渡せば、rulec がそのスレッドの言語で描く。
+- D.6：dandori の `Items` と `References` はまだ無い。ほかの六つの言語の `src/ports.rs` が形の手本になる。定義の文は DESIGN 6.4 の表のとおり。
+- D.7：yuen の端になるのは、rulec（`rulec fmt` が書く形の行）、koyomi（`date … =` の塊と条件の行）、chobo（yuen の DESIGN 3.2 の形の JSON。yuen の試作が計算したハッシュと同じになることを chobo のテストで確かめた）、geas（主張の塊の行）の `Items` の `text` である。yuen 自身の `Items` は、要件の端が作れないとき（上の端が読めない、`from` が輪になる）は空の文を返す。端のハッシュを取り直すときは、空の文のハッシュを端として使わないこと。
+- D.8：sakai の `Items` と `References` はできた（`means` の名指しは `sakai api` と同じ）。D.8 で sakai が尋ねる口（rulec の列挙と `shape` の契約、koyomi のカレンダーへの参照、chobo の勘定と振替）には、それぞれの `Engine` がもう答える。
+- D.9：chobo の名前だけの単位の置き場所は `Dim::Count(名前)`。`Unit` に `scale` は無いので、DESIGN 5.4 のとおり `scale 2` の通貨は `<コード>c` の綴りにする。chobo の `Books` の事実の単位（`BookUnit`）は、いまは chobo の名前と scale のまま。
+- まだ答えない問い（`Undecided` と理由を返す）：`Rules::preconditions_hold` の並びの合計と長さの上限（問いが並びの長さの範囲を持たない。E の X2 で問いの形を決める）、`Rules::checked_over`（E の X3 (b)）、`Books::refusals`（E の X4）、`Dates::values` と `days` の、確かめる数を超える入力と、計算が途中で止まる入力。
+- geas は、口に答えるためにライブラリとコマンドに分けた。`src/lib.rs` は全部のモジュールを公開している。口に要るものだけに絞るかは、F で ritsu の CLI にまとめるときに決める。
+- D.1 で見つけたこと：rulec は、税の語の場所に `incl_tax` と `excl_tax` のほかを書いた型（`money[円, foo]`）を黙って通す。その型には単位が無い（`Ty::unit` が None）。直すなら rulec の検査に診断を足すことになり、その規則の出力が変わる。作者の判断を待つ。
+- テストの回し方：7.5 と同じ。根から `cargo xtask test -- --skip localstack --skip temporal --skip pydantic_graph --skip durable --skip argo --skip ollama` を回し、dandori の重いテストは `cargo xtask test --level platforms -p dandori -- --exact <名前>` で一つずつ回す。
