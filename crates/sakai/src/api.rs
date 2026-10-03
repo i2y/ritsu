@@ -1,5 +1,5 @@
 //! `sakai api` (DESIGN 9): the map, who owns each artifact, and the references that cross a
-//! boundary, as JSON for other tools. yurai reads which context an artifact belongs to and who
+//! boundary, as JSON for other tools. yuen reads which context an artifact belongs to and who
 //! owns it; a future dandori could read whether its references follow the map. Names are in the
 //! form of DESIGN 2.6, paths from the root, and the keys come in the order written here.
 

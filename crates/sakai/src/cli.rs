@@ -149,8 +149,8 @@ pub fn commands() -> Vec<Cmd> {
             name: "api",
             args: "<map.ctx>",
             purpose: tr!(
-                "地図、属し方、境界を越える参照を JSON で出す（yurai などほかのツールが読む形）",
-                "print the map, who owns each artifact, and the references that cross a boundary, as JSON for other tools (yurai, for one)"
+                "地図、属し方、境界を越える参照を JSON で出す（yuen などほかのツールが読む形）",
+                "print the map, who owns each artifact, and the references that cross a boundary, as JSON for other tools (yuen, for one)"
             ),
             params: vec![("<map.ctx>", tr!("検査を通る map のファイル", "a map file that passes check"))],
             flags: vec![root_flag()],

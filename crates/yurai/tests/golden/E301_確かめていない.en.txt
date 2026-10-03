@@ -1,5 +1,0 @@
-error[E301]: tests/mutants/E301_確かめていない/民法の期間.req:21:3: No one has looked at the link from 起算日 to file "民法の期間.cal" yet
-    21 |   satisfied by file "民法の期間.cal"
-  = Once a person has read both ends and the link holds, `yurai review` writes who looked, when, and the hashes of both ends under the link.
-  = Once a person has looked: yurai review tests/mutants/E301_確かめていない --root tests/mutants/E301_確かめていない --at tests/mutants/E301_確かめていない/民法の期間.req:21 --by <role>
-tests/mutants/E301_確かめていない: 1 error

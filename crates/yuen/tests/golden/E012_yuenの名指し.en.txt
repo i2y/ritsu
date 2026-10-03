@@ -1,0 +1,4 @@
+error[E012]: tests/mutants/E012_yuenの名指し/支払.req:11:16: A `yuen` naming is not written in a .req
+    11 |   satisfied by yuen "方針.req" requirement 支払の方針
+  = One requirement points at another with `from <requirement>`, by name; a `yuen` naming is how the other languages point at a requirement.
+tests/mutants/E012_yuenの名指し: 1 error

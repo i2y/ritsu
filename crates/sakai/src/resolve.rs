@@ -372,5 +372,5 @@ fn known(names: &[String]) -> Text {
 /// The tool whose artifact a file is, by its extension, if it is one of the suite's.
 pub fn tool_of(path: &str) -> Option<Tool> {
     let ext = path.rsplit_once('.').map(|(_, e)| e)?;
-    Tool::ALL.into_iter().find(|t| t.extension() == Some(ext) && !matches!(t, Tool::Yurai | Tool::Sakai))
+    Tool::ALL.into_iter().find(|t| t.extension() == Some(ext) && !matches!(t, Tool::Yuen | Tool::Sakai))
 }

@@ -1,0 +1,423 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/法務": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "法務",
+      "yuen:description": "条文の読み方を決める"
+    },
+    "y:role/開発": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "開発",
+      "yuen:description": "koyomi のファイルを書いて直す"
+    }
+  },
+  "entity": {
+    "y:source/fe91fb325dc87c9940802e5a8e494b21": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "民法 第140条",
+      "yuen:law": "egov 129AC0000000089",
+      "yuen:asof": "2026-10-01",
+      "yuen:revision": "129AC0000000089_20260624_508AC0000000045",
+      "yuen:sha256": "e880059021fbb67d"
+    },
+    "y:source/bbd90173d0724e0fd9f0e53dd1dcb355": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "民法 第141条",
+      "yuen:law": "egov 129AC0000000089",
+      "yuen:asof": "2026-10-01",
+      "yuen:revision": "129AC0000000089_20260624_508AC0000000045",
+      "yuen:sha256": "0575c131b9f08063"
+    },
+    "y:source/362304930d56a93994a51daeda037580": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "民法 第142条",
+      "yuen:law": "egov 129AC0000000089",
+      "yuen:asof": "2026-10-01",
+      "yuen:revision": "129AC0000000089_20260624_508AC0000000045",
+      "yuen:sha256": "fc8c35a0769d3b35"
+    },
+    "y:source/b84134e0a6ced1debdad287f168bdd66": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "民法 第143条",
+      "yuen:law": "egov 129AC0000000089",
+      "yuen:asof": "2026-10-01",
+      "yuen:revision": "129AC0000000089_20260624_508AC0000000045",
+      "yuen:sha256": "6950bdfb988439b6"
+    },
+    "y:artifact/202a88c745f94d6e5626f8be732ace06": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "file \"民法の期間.cal\"",
+      "yuen:sha256": "c9b94eecde23e6b5",
+      "yuen:end": "file"
+    },
+    "y:requirement/first_day/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "起算日",
+      "yuen:version": "1",
+      "yuen:text": "日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "a9ebc73907faddc8"
+    },
+    "y:requirement/last_day/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "満了日",
+      "yuen:version": "1",
+      "yuen:text": "月によって期間を定めたときは、最後の月においてその起算日に応当する日の前日の終わりに満了する。応当する日がないときは、その月の末日の終わりに満了する",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "465b83ed8c251406"
+    },
+    "y:requirement/last_day_142/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "満了日_142条",
+      "yuen:version": "1",
+      "yuen:text": "期間の末日が日曜日、国民の祝日に関する法律に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "d4f2d2a67322df17"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/first_day/v1",
+      "prov:agent": "y:role/法務",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r12": {
+      "prov:entity": "y:requirement/last_day/v1",
+      "prov:agent": "y:role/法務",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r25": {
+      "prov:entity": "y:requirement/last_day_142/v1",
+      "prov:agent": "y:role/法務",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/first_day/v1",
+      "prov:usedEntity": "y:source/fe91fb325dc87c9940802e5a8e494b21",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r13": {
+      "prov:generatedEntity": "y:requirement/last_day/v1",
+      "prov:usedEntity": "y:source/bbd90173d0724e0fd9f0e53dd1dcb355",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r14": {
+      "prov:generatedEntity": "y:requirement/last_day/v1",
+      "prov:usedEntity": "y:source/b84134e0a6ced1debdad287f168bdd66",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r26": {
+      "prov:generatedEntity": "y:requirement/last_day_142/v1",
+      "prov:usedEntity": "y:source/362304930d56a93994a51daeda037580",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/202a88c745f94d6e5626f8be732ace06",
+      "prov:influencer": "y:requirement/first_day/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r15": {
+      "prov:influencee": "y:artifact/202a88c745f94d6e5626f8be732ace06",
+      "prov:influencer": "y:requirement/last_day/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r28": {
+      "prov:influencee": "y:requirement/last_day_142/v1",
+      "prov:influencer": "y:decision/2cc675fc0b2c724902d42a6e20c69636"
+    },
+    "_:r30": {
+      "prov:influencee": "y:artifact/202a88c745f94d6e5626f8be732ace06",
+      "prov:influencer": "y:requirement/last_day_142/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/c95cfe090a34f71722f994ea46287c67": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "e880059021fbb67d",
+      "yuen:down": "a9ebc73907faddc8",
+      "yuen:status": "ok"
+    },
+    "y:review/b081bc609a54a416d252f8477eb73f96": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "a9ebc73907faddc8",
+      "yuen:down": "c9b94eecde23e6b5",
+      "yuen:status": "ok"
+    },
+    "y:waiver/a7b28ad80e65275f7a84c775bf086520": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "初日を算入しないことは、koyomi doc のページで、条文と言い直しを見比べて確かめる。この材料に、それを確かめる条件は無い",
+      "yuen:sha256": "a9ebc73907faddc8",
+      "yuen:status": "ok"
+    },
+    "y:review/4b5f76c5ec638902d91aa465e7c439d5": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "0575c131b9f08063 6950bdfb988439b6",
+      "yuen:down": "465b83ed8c251406",
+      "yuen:status": "ok"
+    },
+    "y:review/9f8c590dfb9d563df77d4de40c71ce59": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "465b83ed8c251406",
+      "yuen:down": "c9b94eecde23e6b5",
+      "yuen:status": "ok"
+    },
+    "y:waiver/9e657e17dd51779af4118553d3cd60c2": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "条文の場合分けをそのまま書いた関数と、起点 2000〜2027 年のすべての日と月数 1〜12 で一致することを、koyomi の設計の段階の試作が確かめた。この材料の中に、それを確かめる条件は無い",
+      "yuen:sha256": "465b83ed8c251406",
+      "yuen:status": "ok"
+    },
+    "y:decision/2cc675fc0b2c724902d42a6e20c69636": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Decision",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:why": "「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。この材料のために決めたもので、法令の読み方を示すものではない"
+    },
+    "y:review/1564aae2be56c8ed7440b2f7f5e5189b": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "fc8c35a0769d3b35",
+      "yuen:down": "d4f2d2a67322df17",
+      "yuen:status": "ok"
+    },
+    "y:review/30a07a8c9cbc81bda4e8db35122310ca": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "d4f2d2a67322df17",
+      "yuen:down": "c9b94eecde23e6b5",
+      "yuen:status": "ok"
+    },
+    "y:waiver/0a4f281a33547708f00d3dbeda08e76a": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない",
+      "yuen:sha256": "d4f2d2a67322df17",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r4": {
+      "prov:activity": "y:review/c95cfe090a34f71722f994ea46287c67",
+      "prov:entity": "y:source/fe91fb325dc87c9940802e5a8e494b21"
+    },
+    "_:r5": {
+      "prov:activity": "y:review/c95cfe090a34f71722f994ea46287c67",
+      "prov:entity": "y:requirement/first_day/v1"
+    },
+    "_:r7": {
+      "prov:activity": "y:review/b081bc609a54a416d252f8477eb73f96",
+      "prov:entity": "y:requirement/first_day/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/b081bc609a54a416d252f8477eb73f96",
+      "prov:entity": "y:artifact/202a88c745f94d6e5626f8be732ace06"
+    },
+    "_:r10": {
+      "prov:activity": "y:waiver/a7b28ad80e65275f7a84c775bf086520",
+      "prov:entity": "y:requirement/first_day/v1"
+    },
+    "_:r16": {
+      "prov:activity": "y:review/4b5f76c5ec638902d91aa465e7c439d5",
+      "prov:entity": "y:source/bbd90173d0724e0fd9f0e53dd1dcb355"
+    },
+    "_:r17": {
+      "prov:activity": "y:review/4b5f76c5ec638902d91aa465e7c439d5",
+      "prov:entity": "y:source/b84134e0a6ced1debdad287f168bdd66"
+    },
+    "_:r18": {
+      "prov:activity": "y:review/4b5f76c5ec638902d91aa465e7c439d5",
+      "prov:entity": "y:requirement/last_day/v1"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/9f8c590dfb9d563df77d4de40c71ce59",
+      "prov:entity": "y:requirement/last_day/v1"
+    },
+    "_:r21": {
+      "prov:activity": "y:review/9f8c590dfb9d563df77d4de40c71ce59",
+      "prov:entity": "y:artifact/202a88c745f94d6e5626f8be732ace06"
+    },
+    "_:r23": {
+      "prov:activity": "y:waiver/9e657e17dd51779af4118553d3cd60c2",
+      "prov:entity": "y:requirement/last_day/v1"
+    },
+    "_:r29": {
+      "prov:activity": "y:decision/2cc675fc0b2c724902d42a6e20c69636",
+      "prov:entity": "y:source/362304930d56a93994a51daeda037580"
+    },
+    "_:r31": {
+      "prov:activity": "y:review/1564aae2be56c8ed7440b2f7f5e5189b",
+      "prov:entity": "y:source/362304930d56a93994a51daeda037580"
+    },
+    "_:r32": {
+      "prov:activity": "y:review/1564aae2be56c8ed7440b2f7f5e5189b",
+      "prov:entity": "y:requirement/last_day_142/v1"
+    },
+    "_:r34": {
+      "prov:activity": "y:review/30a07a8c9cbc81bda4e8db35122310ca",
+      "prov:entity": "y:requirement/last_day_142/v1"
+    },
+    "_:r35": {
+      "prov:activity": "y:review/30a07a8c9cbc81bda4e8db35122310ca",
+      "prov:entity": "y:artifact/202a88c745f94d6e5626f8be732ace06"
+    },
+    "_:r37": {
+      "prov:activity": "y:waiver/0a4f281a33547708f00d3dbeda08e76a",
+      "prov:entity": "y:requirement/last_day_142/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r6": {
+      "prov:activity": "y:review/c95cfe090a34f71722f994ea46287c67",
+      "prov:agent": "y:role/法務"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/b081bc609a54a416d252f8477eb73f96",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r11": {
+      "prov:activity": "y:waiver/a7b28ad80e65275f7a84c775bf086520",
+      "prov:agent": "y:role/法務"
+    },
+    "_:r19": {
+      "prov:activity": "y:review/4b5f76c5ec638902d91aa465e7c439d5",
+      "prov:agent": "y:role/法務"
+    },
+    "_:r22": {
+      "prov:activity": "y:review/9f8c590dfb9d563df77d4de40c71ce59",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r24": {
+      "prov:activity": "y:waiver/9e657e17dd51779af4118553d3cd60c2",
+      "prov:agent": "y:role/法務"
+    },
+    "_:r27": {
+      "prov:activity": "y:decision/2cc675fc0b2c724902d42a6e20c69636",
+      "prov:agent": "y:role/法務"
+    },
+    "_:r33": {
+      "prov:activity": "y:review/1564aae2be56c8ed7440b2f7f5e5189b",
+      "prov:agent": "y:role/法務"
+    },
+    "_:r36": {
+      "prov:activity": "y:review/30a07a8c9cbc81bda4e8db35122310ca",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r38": {
+      "prov:activity": "y:waiver/0a4f281a33547708f00d3dbeda08e76a",
+      "prov:agent": "y:role/法務"
+    }
+  }
+}

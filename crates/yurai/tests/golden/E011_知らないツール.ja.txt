@@ -1,3 +1,0 @@
-エラー[E011]: tests/mutants/E011_知らないツール/支払.req:11:16: `excel` というツールはありません。名指しは rulec、dandori、koyomi、chobo、geas、proto、file、yurai、sakai のどれかで始めます
-    11 |   satisfied by excel "支払日.xlsx"
-tests/mutants/E011_知らないツール: エラー 1 件

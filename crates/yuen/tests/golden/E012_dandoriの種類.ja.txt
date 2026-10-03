@@ -1,0 +1,4 @@
+エラー[E012]: tests/mutants/E012_dandoriの種類/支払.req:11:37: dandori にはまだ種類がありません。ファイルで名指します
+    11 |   satisfied by dandori "order.flow" task reserve
+  = dandori はタスクや案件の一覧を JSON で出さないので、yuen は `.flow` の中を名指せません（DESIGN 2.7）。`dandori "order.flow"` のように書き、どのタスクかは要件の文か `decided` に書きます。
+tests/mutants/E012_dandoriの種類: エラー 1 件

@@ -1,0 +1,20 @@
+エラー[E303]: period/民法の期間.req:21:3: file "民法の期間.cal" は、2026-10-03 に 開発 がこのリンクを確かめたあとで変わりました
+    21 |   satisfied by file "民法の期間.cal"
+  period/民法の期間.cal の変わったところ:
+      @@ -18,5 +18,5 @@
+          - 1 day                                  # その前日。応当する日が無かったときは、最後の月の末日になる
+        date 満了日_142条(last_day_142) = 満了日                 @民法 第142条
+      -   if closed + 1 day                        # 末日が休みなら、その翌日
+      +   roll following                           # 末日が休みなら、休みが明けるまで
+
+        claims
+  = 確かめたら: yuen review period --root period --at period/民法の期間.req:21 --by <役割>
+エラー[E303]: period/民法の期間.req:32:3: file "民法の期間.cal" は、2026-10-03 に 開発 がこのリンクを確かめたあとで変わりました
+    32 |   satisfied by file "民法の期間.cal"
+  = period/民法の期間.req:21 と同じ変更です。差分は繰り返しません。
+  = 確かめたら: yuen review period --root period --at period/民法の期間.req:32 --by <役割>
+エラー[E303]: period/民法の期間.req:44:3: file "民法の期間.cal" は、2026-10-03 に 開発 がこのリンクを確かめたあとで変わりました
+    44 |   satisfied by file "民法の期間.cal"
+  = period/民法の期間.req:21 と同じ変更です。差分は繰り返しません。
+  = 確かめたら: yuen review period --root period --at period/民法の期間.req:44 --by <役割>
+period: エラー 3 件

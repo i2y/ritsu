@@ -1,0 +1,5 @@
+エラー[E301]: tests/mutants/E301_確かめていない/民法の期間.req:21:3: 起算日 から file "民法の期間.cal" へのリンクを、まだ誰も確かめていません
+    21 |   satisfied by file "民法の期間.cal"
+  = 両端を読んで、つながりが正しいと確かめたら、`yuen review` がリンクの下に、確かめた人と日付と両端のハッシュを書きます。
+  = 確かめたら: yuen review tests/mutants/E301_確かめていない --root tests/mutants/E301_確かめていない --at tests/mutants/E301_確かめていない/民法の期間.req:21 --by <役割>
+tests/mutants/E301_確かめていない: エラー 1 件

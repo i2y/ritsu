@@ -442,7 +442,7 @@ rulec の規則を対応の先にできるようにしたのは、規則の `imp
 
 ## 2. 成果物の名指し方
 
-yurai（要件の来歴の言語）と sakai は、成果物を同じ形で名指す。この章の決まりは、A の段階の終わりに二つの設計を突き合わせて決めたもので、二つの言語は同じ形を一字も違えずに使う。決まりの試しの表 `tests/fixtures/naming.tsv` を二つのリポジトリが同じものとして持ち、`tests/naming.rs` が全行を確かめる。
+yuen（要件の来歴の言語）と sakai は、成果物を同じ形で名指す。この章の決まりは、A の段階の終わりに二つの設計を突き合わせて決めたもので、二つの言語は同じ形を一字も違えずに使う。決まりの試しの表 `tests/fixtures/naming.tsv` を二つのリポジトリが同じものとして持ち、`tests/naming.rs` が全行を確かめる。
 
 ### 2.1 形
 
@@ -461,7 +461,7 @@ proto "shop/v1/order.proto" service OrderService method Create
 proto "warehouse/v1/stock.proto" enum PackingStatus value PACKING_STATUS_SHORT
 proto "shop/v1/order.proto" message Order.Line field quantity
 file "src/app.py"
-yurai "民法の期間.req" requirement 満了日_142条
+yuen "民法の期間.req" requirement 満了日_142条
 sakai "contexts/受注.ctx" term キャンセル
 ```
 
@@ -474,11 +474,11 @@ sakai "contexts/受注.ctx" term キャンセル
 
 子の種類（`method`、`field`、`value`）は、親の種類のすぐあとにしか書けない。子の組は一つまでである。
 
-sakai が列挙の値（対応の網羅）とフィールド（語の `means`）を名指すので、入れ子が要る。yurai もこの形をそのまま受け付ける。
+sakai が列挙の値（対応の網羅）とフィールド（語の `means`）を名指すので、入れ子が要る。yuen もこの形をそのまま受け付ける。
 
 ### 2.2 ツールの語と種類の語
 
-ツールの語は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`、`yurai`、`sakai` の九つである。
+ツールの語は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`、`yuen`、`sakai` の九つである。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、二つの言語で使う種類を合わせた。
 
@@ -491,10 +491,10 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 | `dandori` | `.flow` | なし（ファイルでだけ名指す） | dandori は名前を JSON で出さない（4.7）。dandori が api を持てば、そこから決める |
 | `proto` | `.proto` | `service`（下に `method`）、`message`（下に `field`）、`enum`（下に `value`） | proto のファイルの中の名前 |
 | `file` | 何でも | なし | |
-| `yurai` | `.req` | `requirement`、`source` | `yurai api` |
+| `yuen` | `.req` | `requirement`、`source` | `yuen api` |
 | `sakai` | `.ctx` | `context`、`term` | sakai の地図とコンテキストのファイル |
 
-どちらの言語も、自分が使わない種類も名指しとして受け付け、JSON に出せる。sakai が名前まで確かめるのは、自分が読むもの（proto の要素。一式の読み込みを作ってからは rulec の `input`、`output`、`enum`、`value` も。PLAN の C.2）だけで、ほかの種類（koyomi の `date`、yurai の `requirement` など）は形だけを確かめる。同じ種類の名前を二つの JSON から読めるとき（rulec の `input` は `rulec api` からも `rulec graph` からも読める）に名前が一致することは、一式の読み込み（PLAN の C.2）のテストで確かめる。
+どちらの言語も、自分が使わない種類も名指しとして受け付け、JSON に出せる。sakai が名前まで確かめるのは、自分が読むもの（proto の要素。一式の読み込みを作ってからは rulec の `input`、`output`、`enum`、`value` も。PLAN の C.2）だけで、ほかの種類（koyomi の `date`、yuen の `requirement` など）は形だけを確かめる。同じ種類の名前を二つの JSON から読めるとき（rulec の `input` は `rulec api` からも `rulec graph` からも読める）に名前が一致することは、一式の読み込み（PLAN の C.2）のテストで確かめる。
 
 ディレクトリは成果物ではないので、ツールの語にしない。sakai の `.ctx` は、属し方、腐敗防止層の置き場所、生成したコードの置き場所、共有カーネルにディレクトリを書くので、`dir "<パス>"` を `.ctx` の構文の語として持つ（名指しの形ではない）。JSON では、ディレクトリはパスの文字列で出す。
 
@@ -512,7 +512,7 @@ JSON（`api` と、名指しの JSON の形）では、パスをルートから�
 
 診断の文面では、ファイルの場所を、一式のツール（koyomi、chobo、dandori、geas）と同じく、sakai を走らせたディレクトリから、渡したパスと同じ書き方で書く。相対パスを渡したなら走らせたディレクトリからの相対、絶対パスを渡したなら絶対パスになる。ファイルの場所とは、位置の `<パス>:<行>:<列>`、関わるものの `<パス>:<行>`、文と注の中のファイルのパス（「「在庫」の proto/warehouse/v1/stock.proto が…」）、通ったときの要約の行の地図である。一方、名指しを文字にして出すときは（関わるものの `proto "…" enum OrderStatus`、文と注の中の名指し、`.ctx` の項を写した `dir "…"`）、JSON と同じくルートからの相対の形のままにする。`--format json` では、ファイルの場所である `file` と `references[].file` を文面と同じに書き、`references[].name` はルートからの相対である。ルートで走らせれば、二つの書き方は同じになる（`tests/golden/` の変異の診断は、変異のディレクトリをルートにして、そこで `sakai check .` を走らせた形である）。`tests/cli.rs` が、ルートの上のディレクトリ、ルートの下のディレクトリ、絶対パスの三つで走らせて、この書き方を確かめる。
 
-**理由**：ファイルの場所は、読む人がそのまま開くためのものなので、走らせた場所から書く。名指しは、読み直すと同じ名指しになり、ほかのツール（yurai、git の差分、geas の記録）や api の JSON と突き合わせられることが大事なので、どこで走らせても同じ形にする。
+**理由**：ファイルの場所は、読む人がそのまま開くためのものなので、走らせた場所から書く。名指しは、読み直すと同じ名指しになり、ほかのツール（yuen、git の差分、geas の記録）や api の JSON と突き合わせられることが大事なので、どこで走らせても同じ形にする。
 
 **捨てたもの**：
 
@@ -537,24 +537,24 @@ JSON（`api` と、名指しの JSON の形）では、パスをルートから�
 
 ### 2.8 試しの表と、決着した食い違い
 
-`tests/fixtures/naming.tsv` は、この章の決まりの試しの表である。一行が一つの名指しで、タブの左が名指し（書いたファイルがルートにあるとする）、右が JSON か `ERROR: <理由>` である。`tests/naming.rs` は、全行で右と同じ JSON を出すことと、`ERROR` の行をどれも誤りにすることを確かめる。表を直すときは、yurai の同じ表も同じに直す。
+`tests/fixtures/naming.tsv` は、この章の決まりの試しの表である。一行が一つの名指しで、タブの左が名指し（書いたファイルがルートにあるとする）、右が JSON か `ERROR: <理由>` である。`tests/naming.rs` は、全行で右と同じ JSON を出すことと、`ERROR` の行をどれも誤りにすることを確かめる。表を直すときは、yuen の同じ表も同じに直す。
 
 `tests/naming.rs` は、誤りの行が、表の理由のとおりの理由で断られることも確かめる（理由ごとに、sakai の英語の文面に出る語句を表にしてある）。別の理由でたまたま断られた行を、通ったことにしないためである。
 
 `.ctx` に書いた名指しの誤りは、形の誤り（知らないツールの語、そのツールに無い種類の語、親のすぐあとでない子、二つめの子、dandori の種類、文字列の外の全角の空白、使えないエスケープ）が E011、絶対パス、ルートの外に出るパス、空のパスが E012 である。
 
-A の段階の終わりに、yurai の DESIGN 2 章（2.8 の七項目）と並べると、五つが食い違っていた。それぞれ次のように決めた。
+A の段階の終わりに、yuen の DESIGN 2 章（2.8 の七項目）と並べると、五つが食い違っていた。それぞれ次のように決めた。
 
 | 項目 | 決めたこと |
 |---|---|
 | 組の数 | ツールの構造どおりに入れ子にする（proto の `service … method …`、`message … field …`、`enum … value …` と、rulec の `enum … value …`）。ほかのツールは一つまで |
-| ツールの語 | `dir` はツールの語にしない。sakai の `.ctx` の構文の語にとどめる（yurai の `scope` の書き方は yurai の構文の中で決める） |
+| ツールの語 | `dir` はツールの語にしない。sakai の `.ctx` の構文の語にとどめる（yuen の `scope` の書き方は yuen の構文の中で決める） |
 | パスの基点 | JSON はルート（`.git` を持つ一番近いディレクトリ。`--root` で替える）からの相対。ルートの外はエラー。診断の文面のファイルの場所は、走らせたディレクトリから書く（名指しはルートからの相対のまま。B の段階のあとで決めた。2.4） |
 | 種類の語 | 二つの言語の和（2.2 の表） |
-| 同じ・含む | yurai の「含む」に、proto の `message`・`enum` と rulec の `enum` が子を含むことを足した |
+| 同じ・含む | yuen の「含む」に、proto の `message`・`enum` と rulec の `enum` が子を含むことを足した |
 | JSON の形 | `{"text", "tool", "path", "items"}` |
 
-名前の決まり（2.3）は、A の段階のうちに yurai の 2.4 に合わせてあった。
+名前の決まり（2.3）は、A の段階のうちに yuen の 2.4 に合わせてあった。
 
 B の段階のあとで、二つの言語の細かい形をもう一度そろえた。試しの表に 9 行を足して 36 行にし（全角の空白、エスケープ、`"…"` で書いた種類とツールの語、名前の無い種類、空のパス、`"."`、末尾の `/`。2.3、2.4）、診断の文面のファイルの場所を走らせたディレクトリから書くことにした（名指しはルートからの相対のまま。2.4）。
 
@@ -725,7 +725,7 @@ dates のファイルとカレンダーは、属し方と、参照のもと（`u
 
 ### 4.6 geas
 
-geas の主張は、プログラムを外から叩き、成果物の名前を持たない（geas の DESIGN の 0 章）。属し方だけを決め、中は読まない。geas は主張の一覧を、走らせずに JSON で出すコマンドを持たない（`check` と `map` はプログラムを走らせる）。主張を名指すこと（2 章の `geas "…" claim "…"`）が要るのは yurai の側である。
+geas の主張は、プログラムを外から叩き、成果物の名前を持たない（geas の DESIGN の 0 章）。属し方だけを決め、中は読まない。geas は主張の一覧を、走らせずに JSON で出すコマンドを持たない（`check` と `map` はプログラムを走らせる）。主張を名指すこと（2 章の `geas "…" claim "…"`）が要るのは yuen の側である。
 
 ### 4.7 dandori：足りないものと選択肢
 
@@ -744,7 +744,7 @@ dandori の DESIGN の 7 章も「`build` の JSON 出力」をまだやって�
 
 選択肢は次のとおり。
 
-- **A：dandori に `dandori api <file.flow>` を足す**。rulec、koyomi、chobo の `api` と同じく、ワークフローの呼び方と参照を JSON で出す。sakai が要るのは、ワークフローの名前とバージョン、`implements`（proto のファイルとサービスの完全な名前）、`use` ごとの種類（規則、proto、OpenAPI、Smithy）とファイルと呼び方（同梱、Lambda、Connect の URL、ローカル）、タスクごとの呼び方（`connect` のサービスとメソッド、子の `.flow` のファイル、HTTP、AWS、コールバック、エージェント）、proto から作った型（`warehouse.ReserveResponse` がどのファイルのどのメッセージか）、それぞれの行番号。yurai も、タスクや案件を名指すのに同じものが要る。dandori の検査はこれを全部もう持っている。
+- **A：dandori に `dandori api <file.flow>` を足す**。rulec、koyomi、chobo の `api` と同じく、ワークフローの呼び方と参照を JSON で出す。sakai が要るのは、ワークフローの名前とバージョン、`implements`（proto のファイルとサービスの完全な名前）、`use` ごとの種類（規則、proto、OpenAPI、Smithy）とファイルと呼び方（同梱、Lambda、Connect の URL、ローカル）、タスクごとの呼び方（`connect` のサービスとメソッド、子の `.flow` のファイル、HTTP、AWS、コールバック、エージェント）、proto から作った型（`warehouse.ReserveResponse` がどのファイルのどのメッセージか）、それぞれの行番号。yuen も、タスクや案件を名指すのに同じものが要る。dandori の検査はこれを全部もう持っている。
 - **B：sakai は `.flow` をファイルの単位でだけ名指す**。属し方と doc には出すが、参照は確かめず、`check` の要約と note（N101）で「dandori の参照は確かめていない」と毎回言う。dandori が生成したコードをリポジトリに置き、地図の `code` の置き場所の下にあれば、そのコードの import（たとえば Temporal の TypeScript のアクティビティが、同梱した規則のモジュールを import する）は、7 章のツールが確かめる。
 - **C：sakai が `.flow` を読む**。P2 に反し、dandori の構文を二か所で持つことになる。取らない。
 - **D：sakai が dandori の doc や生成したコードを読み解く**。同じ理由で取らない。
@@ -1207,7 +1207,7 @@ BoundedContext ordering {
 
 ## 9. api
 
-**決定**：`sakai api <map.ctx>` は、地図と属し方と境界を越える参照を JSON で出す。読むのは yurai（成果物がどのコンテキストに属し、持ち主はだれか）と、将来の dandori（自分の参照が地図に沿うか）で、検査を通らない地図には出さない（exit 1。診断は標準エラーに出す）。形は一式の api にそろえ、キーを決まった順に出す（serde_json の `preserve_order`）。名前は 2 章の JSON の形、パスはルートからの相対で書く。
+**決定**：`sakai api <map.ctx>` は、地図と属し方と境界を越える参照を JSON で出す。読むのは yuen（成果物がどのコンテキストに属し、持ち主はだれか）と、将来の dandori（自分の参照が地図に沿うか）で、検査を通らない地図には出さない（exit 1。診断は標準エラーに出す）。形は一式の api にそろえ、キーを決まった順に出す（serde_json の `preserve_order`）。名前は 2 章の JSON の形、パスはルートからの相対で書く。
 
 キーは `sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings`、`not_checked` の順。`tests/maps/基本/` の api（全文は `tests/golden/api/基本.json`）から、頭と、関係と成果物と境界を越える参照の一つめずつを抜き出す（`…` は省いたところ）。
 
@@ -1307,7 +1307,7 @@ BoundedContext ordering {
 
 - `contexts[]`：名前、別名、版、ファイル、ファイルの SHA-256、説明、持ち主、`also`、`owns`（ディレクトリは `{"dir": "<パス>"}`、ファイルは `{"name": <名指し>}`）、`published`（package、`from` に proto か規則の名指し、`services`、`generated`）、`terms`（名前、定義、`also`、`means` の名指し、`as`）。
 - `relationships[]`：`kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。上流と下流の関係は、`roles` の `upstream`（`supplier`、`open_host_service`、`published_language`）と `downstream`（`conformist`、`anticorruption_layer`、`customer`）、`through`、`layer`、`enums`（上流の列挙の名指し、先、`checked`、値の対応）、`terms`、`declared`（宣言した `.ctx` の行）を持つ。対応の先が名前だけなら `"to": {"name": "出荷の可否"}` で、`checked` は false になる。共有カーネルは `sides` に両側の並びを持つ。
-- `artifacts[]`：範囲の成果物の全部。名指しと、属するコンテキストと、それを決めた `owns` の行と、ファイルの SHA-256（先頭 16 桁）。yurai が、成果物の定義が変わったかを知るのに使える。
+- `artifacts[]`：範囲の成果物の全部。名指しと、属するコンテキストと、それを決めた `owns` の行と、ファイルの SHA-256（先頭 16 桁）。yuen が、成果物の定義が変わったかを知るのに使える。
 - `crossings[]`：境界を越える参照の全部。もとと先の名指し、行、二つのコンテキスト、読んだところ（`via`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3）、許した関係（`allowed_by`）。
 - `not_checked[]`：確かめていない成果物。いまは空で、dandori の扱い（PLAN の C.4）を作ると dandori のファイルが並ぶ。
 

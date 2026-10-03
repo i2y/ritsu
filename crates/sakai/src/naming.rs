@@ -1,6 +1,6 @@
 //! Naming an artifact, or a thing in one (DESIGN 2): `<tool> "<path>" [<kind> <name>]...`.
 //!
-//! yurai names things the same way, letter for letter; `tests/fixtures/naming.tsv` is the table
+//! yuen names things the same way, letter for letter; `tests/fixtures/naming.tsv` is the table
 //! both repositories hold and test against. Reading a name from text, checking its kinds,
 //! printing it, and turning it into JSON are all here, so `api`, the diagnostics and the `.ctx`
 //! reader cannot spell a name two ways.
@@ -18,12 +18,12 @@ pub enum Tool {
     Geas,
     Proto,
     File,
-    Yurai,
+    Yuen,
     Sakai,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 9] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::File, Tool::Yurai, Tool::Sakai];
+    pub const ALL: [Tool; 9] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::File, Tool::Yuen, Tool::Sakai];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -34,7 +34,7 @@ impl Tool {
             Tool::Geas => "geas",
             Tool::Proto => "proto",
             Tool::File => "file",
-            Tool::Yurai => "yurai",
+            Tool::Yuen => "yuen",
             Tool::Sakai => "sakai",
         }
     }
@@ -53,7 +53,7 @@ impl Tool {
             Tool::Geas => Some("geas"),
             Tool::Proto => Some("proto"),
             Tool::File => None,
-            Tool::Yurai => Some("req"),
+            Tool::Yuen => Some("req"),
             Tool::Sakai => Some("ctx"),
         }
     }
@@ -67,7 +67,7 @@ impl Tool {
             Tool::Chobo => &["unit", "account", "transfer"],
             Tool::Geas => &["claim"],
             Tool::Proto => &["service", "message", "enum"],
-            Tool::Yurai => &["requirement", "source"],
+            Tool::Yuen => &["requirement", "source"],
             Tool::Sakai => &["context", "term"],
             Tool::Dandori | Tool::File => &[],
         }
@@ -260,8 +260,8 @@ pub fn read(text: &str) -> Result<Written, (usize, Text)> {
             Some(t) => t,
             None => {
                 return Err((at, tr!(
-                    "知らないツールの語 `{w}` です。書けるのは rulec、dandori、koyomi、chobo、geas、proto、file、yurai、sakai です",
-                    "`{w}` is not a tool; the tools are rulec, dandori, koyomi, chobo, geas, proto, file, yurai and sakai"
+                    "知らないツールの語 `{w}` です。書けるのは rulec、dandori、koyomi、chobo、geas、proto、file、yuen、sakai です",
+                    "`{w}` is not a tool; the tools are rulec, dandori, koyomi, chobo, geas, proto, file, yuen and sakai"
                 )));
             }
         },

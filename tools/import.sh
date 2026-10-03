@@ -9,6 +9,9 @@
 # crates/<name>/ and renames the tags to <name>/<tag>, keeping the authors and the dates. The
 # original repositories are only read. Each clone is then merged into the repository this
 # script sits in, which makes one merge commit per language at the time it runs.
+#
+# yurai is the repository yuen came from: it was brought in as crates/yurai, and stage C
+# renamed the crate to yuen (DESIGN 2.2). The script keeps the names the repositories have.
 set -eu
 
 work=${1:?usage: tools/import.sh <work directory> [<directory that holds the seven repositories>]}

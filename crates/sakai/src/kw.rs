@@ -77,7 +77,7 @@ pub const TABLE: &[(&str, &[&str])] = &[
             "separate ways from",
         ],
     ),
-    ("tool", &["rulec", "dandori", "koyomi", "chobo", "geas", "proto", "file", "yurai", "sakai"]),
+    ("tool", &["rulec", "dandori", "koyomi", "chobo", "geas", "proto", "file", "yuen", "sakai"]),
     (
         "kind",
         &[

@@ -1,5 +1,0 @@
-error[E305]: tests/mutants/E305_矢印が無い/支払.req:12:55: The record is not written right: `->` belongs here (found `sha256:8a668601c703003d`)
-    12 |     reviewed 2026-10-03 by 経理 sha256:cdd8998a17be5a4b sha256:8a668601c703003d
-  = A record is what `yurai review` writes; look again, and let it write the record anew.
-  = Once a person has looked: yurai review tests/mutants/E305_矢印が無い --root tests/mutants/E305_矢印が無い --at tests/mutants/E305_矢印が無い/支払.req:11 --by <role>
-tests/mutants/E305_矢印が無い: 1 error

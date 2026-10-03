@@ -1,9 +1,0 @@
-エラー[E301]: period/民法の期間.req:21:3: 起算日 から file "民法の期間.cal" へのリンクを、まだ誰も確かめていません
-    21 |   satisfied by file "民法の期間.cal"
-  = 両端を読んで、つながりが正しいと確かめたら、`yurai review` がリンクの下に、確かめた人と日付と両端のハッシュを書きます。
-  = 確かめたら: yurai review period --root period --at period/民法の期間.req:21 --by <役割>
-エラー[E304]: period/民法の期間.req:33:3: この見送りは、まだ承認されていません
-    33 |   not verified "条文の場合分けをそのまま書いた関数と、起点 2000〜2027 年のすべての日と月数 1〜12 で一致することを、koyomi の設計の段階の試作が確かめた。この材料の中に、それを確かめる条件は無い"
-  = 見送りも人の判断です。持ち主が理由を読んで承認したら、`yurai review` が、承認した人と日付と要件のハッシュを下に書きます。
-  = 確かめたら: yurai review period --root period --at period/民法の期間.req:33 --by <役割>
-period: エラー 2 件

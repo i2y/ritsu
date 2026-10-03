@@ -1,4 +1,0 @@
-エラー[E012]: tests/mutants/E012_yuraiの名指し/支払.req:11:16: `yurai` の名指しは .req の中には書けません
-    11 |   satisfied by yurai "方針.req" requirement 支払の方針
-  = 要件どうしは `from <要件>` で、名前だけで書きます。`yurai` の名指しは、ほかの言語が yurai の要件を指すためのものです。
-tests/mutants/E012_yuraiの名指し: エラー 1 件

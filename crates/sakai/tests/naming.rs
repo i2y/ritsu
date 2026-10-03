@@ -1,4 +1,4 @@
-//! The table both yurai and sakai hold (DESIGN 2.8): every line of `tests/fixtures/naming.tsv`
+//! The table both yuen and sakai hold (DESIGN 2.8): every line of `tests/fixtures/naming.tsv`
 //! is a name written in a file at the root, a tab, and the JSON it gives or `ERROR: <why>`.
 //! sakai gives that JSON, byte for byte, and refuses every line the table refuses, for the
 //! reason the table gives.
@@ -67,7 +67,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused() {
     assert_eq!((ok, refused), (21, 15), "the table has 21 names and 15 refusals");
 }
 
-/// The table is the same as the one in yurai's repository; this test only says what it holds,
+/// The table is the same as the one in yuen's repository; this test only says what it holds,
 /// so that a line dropped by accident shows.
 #[test]
 fn the_table_names_every_tool_but_dir() {

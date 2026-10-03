@@ -1,0 +1,12 @@
+error[E302]: tests/mutants/E304_承認のあとで要件が変わった/支払.req:11:3: 支払日 changed after 経理 looked at this link on 2026-10-03
+    11 |   satisfied by file "pay.py"
+  what changed in 支払日:
+      @@ -1,1 +1,1 @@
+      - text 20 日締め翌月 10 日払い
+      + text 20 日締め翌月 10 日払い。休みなら前の営業日
+  = Once a person has looked: yuen review tests/mutants/E304_承認のあとで要件が変わった --root tests/mutants/E304_承認のあとで要件が変わった --at tests/mutants/E304_承認のあとで要件が変わった/支払.req:11 --by <role>
+error[E304]: tests/mutants/E304_承認のあとで要件が変わった/支払.req:13:3: 支払日 changed, so this waiver needs approving again (the same change as at tests/mutants/E304_承認のあとで要件が変わった/支払.req:11)
+    13 |   not verified "月に一度、経理が照らし合わせる"
+  = 経理 approved this waiver on 2026-10-03.
+  = Once a person has looked: yuen review tests/mutants/E304_承認のあとで要件が変わった --root tests/mutants/E304_承認のあとで要件が変わった --at tests/mutants/E304_承認のあとで要件が変わった/支払.req:13 --by <role>
+tests/mutants/E304_承認のあとで要件が変わった: 2 errors

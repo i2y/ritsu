@@ -1,5 +1,0 @@
-エラー[E305]: tests/mutants/E305_ハッシュの数/民法の期間.req:31:5: 記録にはリンク元のハッシュが 1 個ありますが、リンク元は 2 個（民法 第141条、第143条）です
-    31 |     reviewed 2026-10-03 by 法務 sha256:0575c131b9f08063 -> sha256:465b83ed8c251406
-  = 記録は `yurai review` が書くものです。確かめ直して、書き直させます。
-  = 確かめたら: yurai review tests/mutants/E305_ハッシュの数 --root tests/mutants/E305_ハッシュの数 --at tests/mutants/E305_ハッシュの数/民法の期間.req:30 --by <役割>
-tests/mutants/E305_ハッシュの数: エラー 1 件

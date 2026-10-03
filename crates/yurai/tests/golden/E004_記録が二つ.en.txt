@@ -1,4 +1,0 @@
-error[E004]: tests/mutants/E004_記録が二つ/支払.req:13:5: A link has one record
-    13 |     reviewed 2026-10-03 by 経理 sha256:cdd8998a17be5a4b -> sha256:8a668601c703003d
-  = When it is looked at again, `yurai review` rewrites the record; the one before stays in the git history.
-tests/mutants/E004_記録が二つ: 1 error

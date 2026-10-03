@@ -443,7 +443,7 @@ impl<'a> P<'a> {
                         tool = Some(None);
                     } else {
                         match Tool::from_word(&w) {
-                            Some(Tool::Yurai | Tool::Sakai) => {
+                            Some(Tool::Yuen | Tool::Sakai) => {
                                 self.push("E002", l, col, tr!("ここに `{w}` のファイルは書けません", "A `{w}` file does not go here"));
                                 self.note(tr!(
                                     "書けるのは成果物（rulec、dandori、koyomi、chobo、geas、proto、file）とディレクトリ（dir）です。",

@@ -1,0 +1,8 @@
+エラー[E201]: tests/mutants/E201_ディレクトリ/支払.req:11:16: file "src" はディレクトリです。リンクが名指すのはファイルです
+    11 |   satisfied by file "src"
+  = ディレクトリを書けるのは `scope` だけです（`scope file "src/"`）。
+エラー[E304]: tests/mutants/E201_ディレクトリ/支払.req:12:3: この見送りは、まだ承認されていません
+    12 |   not verified "月に一度、経理が照らし合わせる"
+  = 見送りも人の判断です。持ち主が理由を読んで承認したら、`yuen review` が、承認した人と日付と要件のハッシュを下に書きます。
+  = 確かめたら: yuen review tests/mutants/E201_ディレクトリ --root tests/mutants/E201_ディレクトリ --at tests/mutants/E201_ディレクトリ/支払.req:12 --by <役割>
+tests/mutants/E201_ディレクトリ: エラー 2 件

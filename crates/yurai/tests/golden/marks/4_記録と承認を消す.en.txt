@@ -1,9 +1,0 @@
-error[E301]: period/民法の期間.req:21:3: No one has looked at the link from 起算日 to file "民法の期間.cal" yet
-    21 |   satisfied by file "民法の期間.cal"
-  = Once a person has read both ends and the link holds, `yurai review` writes who looked, when, and the hashes of both ends under the link.
-  = Once a person has looked: yurai review period --root period --at period/民法の期間.req:21 --by <role>
-error[E304]: period/民法の期間.req:33:3: This waiver has not been approved yet
-    33 |   not verified "条文の場合分けをそのまま書いた関数と、起点 2000〜2027 年のすべての日と月数 1〜12 で一致することを、koyomi の設計の段階の試作が確かめた。この材料の中に、それを確かめる条件は無い"
-  = A waiver is a decision too: once the owner has read the reason and approves it, `yurai review` writes who approved it, when, and the requirement's hash under it.
-  = Once a person has looked: yurai review period --root period --at period/民法の期間.req:33 --by <role>
-period: 2 errors

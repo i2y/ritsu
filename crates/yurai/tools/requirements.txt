@@ -1,5 +1,0 @@
-# What the tests of yurai's export read the output with (PLAN C.10, C.11):
-#   uv venv --python 3.13 tools/.venv && VIRTUAL_ENV=tools/.venv uv pip install -r tools/requirements.txt
-# or point YURAI_PYTHON at a Python that has both.
-prov==3.2.2
-reqif==0.1.0

@@ -53,7 +53,7 @@ proto の読み込みは、一式の読み込みと一緒に C に置く分け�
 
 #### 名指しの形（DESIGN 2 章）
 
-yurai との決着（DESIGN 2.8）のとおり。`src/naming.rs` の `Name { tool: Tool, path: String, items: Vec<(String, String)> }`。`Tool` は `Rulec`、`Dandori`、`Koyomi`、`Chobo`、`Geas`、`Proto`、`File`、`Yurai`、`Sakai` の九つで、`dir` はツールの語にしない（`.ctx` の構文の語）。種類の語は DESIGN 2.2 の表（二つの言語の和）で、子の種類（`method`、`field`、`value`）は proto と rulec の親のすぐあとに一つだけ書ける。文字にすること（`Name::text`）、文字から読むこと（`naming::read` と `naming::parse`。`.ctx` の `means` と対応の先も、行の文字をこの関数に渡して読む）、JSON にすること（`{"text", "tool", "path", "items"}`、`Name::to_json`）の三つを一か所に置き、api、診断、doc が同じ関数を使う。パスはルート（`.git` を持つ一番近いディレクトリ、`--root`）からの相対で、`.` と `..` と末尾の `/` は字の上で畳み、ルートの外、絶対パス、空のパスは E012。診断の文面では、ファイルの場所（位置、関わるものの行、文の中のファイルのパス）を走らせたディレクトリから書き、名指しはルートからの相対のまま書く（DESIGN 2.4。`paths::Shown` と `paths::shown`）。`tests/fixtures/naming.tsv` は yurai と同じ表（36 行）で、`tests/naming.rs` が全行と、誤りの行が表の理由のとおりに断られることを確かめる。表を直すときは yurai の表も同じに直す。
+yuen との決着（DESIGN 2.8）のとおり。`src/naming.rs` の `Name { tool: Tool, path: String, items: Vec<(String, String)> }`。`Tool` は `Rulec`、`Dandori`、`Koyomi`、`Chobo`、`Geas`、`Proto`、`File`、`Yuen`、`Sakai` の九つで、`dir` はツールの語にしない（`.ctx` の構文の語）。種類の語は DESIGN 2.2 の表（二つの言語の和）で、子の種類（`method`、`field`、`value`）は proto と rulec の親のすぐあとに一つだけ書ける。文字にすること（`Name::text`）、文字から読むこと（`naming::read` と `naming::parse`。`.ctx` の `means` と対応の先も、行の文字をこの関数に渡して読む）、JSON にすること（`{"text", "tool", "path", "items"}`、`Name::to_json`）の三つを一か所に置き、api、診断、doc が同じ関数を使う。パスはルート（`.git` を持つ一番近いディレクトリ、`--root`）からの相対で、`.` と `..` と末尾の `/` は字の上で畳み、ルートの外、絶対パス、空のパスは E012。診断の文面では、ファイルの場所（位置、関わるものの行、文の中のファイルのパス）を走らせたディレクトリから書き、名指しはルートからの相対のまま書く（DESIGN 2.4。`paths::Shown` と `paths::shown`）。`tests/fixtures/naming.tsv` は yuen と同じ表（36 行）で、`tests/naming.rs` が全行と、誤りの行が表の理由のとおりに断られることを確かめる。表を直すときは yuen の表も同じに直す。
 
 #### コマンドの表（DESIGN 6 章）
 
@@ -829,7 +829,7 @@ public class Validate {
 
 B で決めて、DESIGN と、この計画の B の項を直したこと：
 
-- 名指しは yurai との決着どおり（DESIGN 2 章）。JSON と診断のパスはルートからの相対で、`check` と `api` は `--root` を取る。絶対パスとルートの外に出るパスは、新しいコード E012。（C の段階で、診断の文面のファイルの場所は走らせたディレクトリから書くことにした。5.3）
+- 名指しは yuen との決着どおり（DESIGN 2 章）。JSON と診断のパスはルートからの相対で、`check` と `api` は `--root` を取る。絶対パスとルートの外に出るパスは、新しいコード E012。（C の段階で、診断の文面のファイルの場所は走らせたディレクトリから書くことにした。5.3）
 - 段の止め方（DESIGN 3.1）：段 1 と段 2 のエラーは後の段を止め、段 3 から後はどの段も走らせる。地図が名指す要素（`means`、対応の列挙と先）は、段 3 で proto を読んだあとに引く（E007、E011、範囲の外の proto は E103）。要素を一つでも引けなかった地図では、W401 を出さない（何が越えるかが分からないので）。
 - proto の名前の表は、同じ完全な名前を二つのファイルが持てる（共有カーネルの写し）。型は、名指したファイルから見えるほうに解決する。
 - `check` にディレクトリを渡すと、地図が読む `.ctx` は地図を通して言い、どの地図にも読まれない context のファイルに W103、map でも context でもない `.ctx` に読んだときの診断（E003 など）を出す。
