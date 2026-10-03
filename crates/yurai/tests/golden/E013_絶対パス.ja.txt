@@ -1,0 +1,4 @@
+エラー[E013]: tests/mutants/E013_絶対パス/支払.req:11:21: `/etc/hosts` は絶対パスです。名指しを書いたファイルのディレクトリからの相対で書きます
+    11 |   satisfied by file "/etc/hosts"
+  = 絶対パスは、ほかの人の機械では別の場所を指します。
+tests/mutants/E013_絶対パス: エラー 1 件

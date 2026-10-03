@@ -1,0 +1,4 @@
+エラー[E401]: tests/mutants/E401_満たすものが無い/支払.req:7:13: 支払日 には、満たす成果物も、それを置かない見送りもありません
+     7 | requirement 支払日(payment_day)
+  = `satisfied by <成果物>` を書くか、満たすものを置かないなら `not satisfied "<理由>"` を書いて承認してもらいます。
+tests/mutants/E401_満たすものが無い: エラー 1 件

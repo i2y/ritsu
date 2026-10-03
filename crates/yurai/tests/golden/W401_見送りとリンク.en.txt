@@ -1,0 +1,4 @@
+warning[W401]: tests/mutants/W401_見送りとリンク/支払.req:13:3: 支払日 has a `satisfied by`, so this `not satisfied` is not needed
+    13 |   not satisfied "例"
+  = A waiver says no link is to be there; now that there is one, delete the waiver.
+tests/mutants/W401_見送りとリンク: ok — 1 requirement, whose 1 link and 2 waivers are as they were looked at; every requirement is met and checked, or waived (1 warning)

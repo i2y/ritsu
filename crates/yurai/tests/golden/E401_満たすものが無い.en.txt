@@ -1,0 +1,4 @@
+error[E401]: tests/mutants/E401_満たすものが無い/支払.req:7:13: 支払日 has nothing that meets it, and no waiver for that
+     7 | requirement 支払日(payment_day)
+  = Write `satisfied by <artifact>`, or, if nothing is to meet it, `not satisfied "<why>"`, and have that approved.
+tests/mutants/E401_満たすものが無い: 1 error

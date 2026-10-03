@@ -1,0 +1,7 @@
+起算日 (tests/fixtures/period/民法の期間.req:15), owned by 法務, in force from 2026-10-01
+  "日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない"
+  comes from 民法 第140条 (e-Gov 129AC0000000089 as of 2026-10-01, revision 129AC0000000089_20260624_508AC0000000045; the copy tests/fixtures/period/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_140.xml)
+    > 第百四十条　日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない。
+    looked at by 法務 on 2026-10-03; as it was looked at
+  met by file "民法の期間.cal" — looked at by 開発 on 2026-10-03; as it was looked at
+  not verified: "初日を算入しないことは、koyomi doc のページで、条文と言い直しを見比べて確かめる。この材料に、それを確かめる条件は無い" — approved by 法務 on 2026-10-03; as it was approved

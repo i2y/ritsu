@@ -1,0 +1,5 @@
+error[E403]: tests/mutants/E403_出力を確かめる側に/支払.req:12:15: rulec "支払.rule" output 支払日 checks nothing, so it cannot be written after `verified by`
+    12 |   verified by rulec "支払.rule" output 支払日
+  = The side that verifies takes what can fail: a geas or koyomi claim (`claim`), the whole file of a tool that checks it (`rulec "x.rule"` stands for rulec's check), or a test file (`file "…"`).
+  = If it is what meets the requirement, it goes after `satisfied by`.
+tests/mutants/E403_出力を確かめる側に: 1 error

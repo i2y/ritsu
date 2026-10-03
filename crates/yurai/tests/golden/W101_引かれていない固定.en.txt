@@ -1,0 +1,4 @@
+warning[W101]: tests/mutants/W101_引かれていない固定/支払.req:7:3: 民法 第142条 is pinned but no requirement cites it
+     7 |   第142条 sha256:fc8c35a0769d3b35
+  = If it is what is left after a citation was removed, delete the pin line.
+tests/mutants/W101_引かれていない固定: ok — 1 requirement, whose 1 link and 1 waiver are as they were looked at; every requirement is met and checked, or waived (1 warning)

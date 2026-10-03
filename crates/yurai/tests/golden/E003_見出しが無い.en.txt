@@ -1,0 +1,4 @@
+error[E003]: tests/mutants/E003_見出しが無い/支払.req:1:1: A file starts with a `requirements` line
+     1 | description "テストの材料。例として決めた決まりで、どこかの会社の決まりではない"
+  = The first line names the set of requirements and its version, like `requirements payment_terms v1`.
+tests/mutants/E003_見出しが無い: 1 error

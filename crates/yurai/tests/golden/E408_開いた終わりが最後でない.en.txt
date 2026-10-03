@@ -1,0 +1,4 @@
+error[E408]: tests/mutants/E408_開いた終わりが最後でない/支払.req:8:3: 支払日 v1 leaves its end open, and it is not the last version
+     8 |   in force 2026-01-01..
+  = Only the last version leaves its end open; end it on the day before the next one starts.
+tests/mutants/E408_開いた終わりが最後でない: 1 error

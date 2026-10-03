@@ -1,0 +1,3 @@
+error[E012]: tests/mutants/E012_valueだけ/支払.req:11:35: `value` comes only right after `enum`
+    11 |   satisfied by rulec "請求の要否.rule" value 受注で取消
+tests/mutants/E012_valueだけ: 1 error

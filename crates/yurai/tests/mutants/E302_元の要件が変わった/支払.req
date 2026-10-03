@@ -1,0 +1,24 @@
+requirements 支払 v1
+description "テストの材料。例として決めた決まりで、どこかの会社の決まりではない"
+
+role 経理 "支払の決まりを決める"
+role 開発 "コードを書く"
+
+requirement 支払の方針(payment_policy)
+  text "受け取った請求書は、締め日ごとにまとめて、翌月に払う"
+  owner 経理
+  decided 2026-10-03 by 経理 "例として決めた"
+  not satisfied "方針そのものを満たすコードは無い。下の要件が満たす"
+    approved 2026-10-03 by 経理 sha256:61098c8eaeda5022
+  not verified "下の要件が確かめる"
+    approved 2026-10-03 by 経理 sha256:61098c8eaeda5022
+
+requirement 支払日(payment_day)
+  text "20 日締め翌月 10 日払い"
+  owner 経理
+  from 支払の方針
+    reviewed 2026-10-03 by 経理 sha256:61098c8eaeda5022 -> sha256:620f4026b3b69712
+  satisfied by file "pay.py"
+    reviewed 2026-10-03 by 経理 sha256:620f4026b3b69712 -> sha256:8a668601c703003d
+  not verified "月に一度、経理が照らし合わせる"
+    approved 2026-10-03 by 経理 sha256:620f4026b3b69712

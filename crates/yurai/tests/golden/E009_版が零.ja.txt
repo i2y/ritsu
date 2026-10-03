@@ -1,0 +1,3 @@
+エラー[E009]: tests/mutants/E009_版が零/支払.req:7:30: 版は v1 から数えます
+     7 | requirement 支払日(payment_day) v0
+tests/mutants/E009_版が零: エラー 1 件

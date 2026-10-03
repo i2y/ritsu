@@ -1,0 +1,85 @@
+{
+  "requirements": [
+    {
+      "name": "起算日",
+      "alias": "first_day",
+      "version": 1,
+      "file": "民法の期間.req",
+      "line": 15,
+      "text": "日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "法務",
+      "replaces": [],
+      "sha256": "a9ebc73907faddc8",
+      "from": [
+        {
+          "line": 19,
+          "sources": [
+            {
+              "source": "民法",
+              "fragment": "第140条",
+              "db": "egov",
+              "id": "129AC0000000089",
+              "asof": "2026-10-01",
+              "revision": "129AC0000000089_20260624_508AC0000000045",
+              "copy": "sources/law/129AC0000000089@2026-10-01/MainProvision-Article_140.xml",
+              "sha256": "e880059021fbb67d",
+              "text": [
+                "第百四十条　日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない。"
+              ]
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "法務",
+            "up": [
+              "e880059021fbb67d"
+            ],
+            "down": "a9ebc73907faddc8"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 21,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"民法の期間.cal\"",
+            "tool": "file",
+            "path": "民法の期間.cal",
+            "items": []
+          },
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "開発",
+            "up": [
+              "a9ebc73907faddc8"
+            ],
+            "down": "c9b94eecde23e6b5"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 23,
+          "role": "not verified",
+          "why": "初日を算入しないことは、koyomi doc のページで、条文と言い直しを見比べて確かめる。この材料に、それを確かめる条件は無い",
+          "approved": {
+            "date": "2026-10-03",
+            "by": "法務",
+            "up": [
+              "a9ebc73907faddc8"
+            ],
+            "down": null
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ]
+}

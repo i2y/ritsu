@@ -1,0 +1,24 @@
+requirements 支払 v1
+description "テストの材料"
+
+role 経理 "支払の決まりを決める"
+
+requirement 支払日(payment_day) v1
+  text "末日締め翌月末払い"
+  in force 2027-04-01..
+  owner 経理
+  decided 2026-10-03 by 経理 "例として決めた"
+  satisfied by file "pay.py"
+    reviewed 2026-10-03 by 経理 sha256:a7f9b981eec04261 -> sha256:8a668601c703003d
+  not verified "月に一度、経理が照らし合わせる"
+    approved 2026-10-03 by 経理 sha256:a7f9b981eec04261
+
+requirement 支払日(payment_day) v2
+  text "20 日締め翌月 10 日払い"
+  in force 2026-01-01..2027-03-31
+  owner 経理
+  decided 2026-10-03 by 経理 "2027 年 4 月から締めを 20 日に変える"
+  satisfied by file "pay.py"
+    reviewed 2026-10-03 by 経理 sha256:ff62dd05c47b773c -> sha256:8a668601c703003d
+  not verified "月に一度、経理が照らし合わせる"
+    approved 2026-10-03 by 経理 sha256:ff62dd05c47b773c

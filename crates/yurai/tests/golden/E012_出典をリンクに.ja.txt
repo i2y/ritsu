@@ -1,0 +1,4 @@
+エラー[E012]: tests/mutants/E012_出典をリンクに/支払.req:11:16: 出典（`source`）はリンクや範囲に書けません
+    11 |   satisfied by koyomi "民法の期間.cal" source 民法
+  = 出典は要件の出どころで、要件を満たすものではありません。`source <名前> = koyomi "…" source <名前>` と借りて、`from @<名前> <条>` で引きます。
+tests/mutants/E012_出典をリンクに: エラー 1 件

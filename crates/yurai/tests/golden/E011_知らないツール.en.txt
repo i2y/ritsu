@@ -1,0 +1,3 @@
+error[E011]: tests/mutants/E011_知らないツール/支払.req:11:16: `excel` is not a tool; a naming starts with one of rulec, dandori, koyomi, chobo, geas, proto, file, yurai, sakai
+    11 |   satisfied by excel "支払日.xlsx"
+tests/mutants/E011_知らないツール: 1 error

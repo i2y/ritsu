@@ -1,0 +1,7 @@
+エラー[E405]: tests/mutants/E405_循環/支払.req:6:13: 要件のあいだに循環があります: 締め日 → 支払日 → 締め日
+     6 | requirement 締め日(closing_day)
+  = `from <要件>` と `replaces <要件>` は、元の要件と、置き換えられる要件を指します。たどって元に戻ってくるので、どれが先かを決められません。
+  循環:
+      締め日（tests/mutants/E405_循環/支払.req:6）
+      支払日（tests/mutants/E405_循環/支払.req:13）
+tests/mutants/E405_循環: エラー 1 件

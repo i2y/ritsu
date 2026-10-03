@@ -1,0 +1,20 @@
+document
+  prefix yurai <https://github.com/i2y/yurai/ns#>
+  prefix y <urn:yurai:>
+
+  agent(y:role/safety, [prov:type='yurai:Role', prov:label="safety", yurai:description="decides how the regulation reads"])
+  entity(y:source/94f3394541453806caaa0259627b1345, [prov:type='yurai:Source', prov:label="osha §1910.157", yurai:law="ecfr 29 CFR 1910", yurai:asof="2026-01-01", yurai:sha256="c2a9ce966c7e2269"])
+  entity(y:requirement/extinguisher_distance/v1, [prov:type='yurai:Requirement', prov:label="extinguisher_distance", yurai:version="1", yurai:text="No employee travels more than 75 feet to a portable fire extinguisher for Class A fires", yurai:sha256="08a4819829372b9b"])
+  wasAttributedTo(y:requirement/extinguisher_distance/v1, y:role/safety, [prov:type='yurai:owner'])
+  wasDerivedFrom(y:requirement/extinguisher_distance/v1, y:source/94f3394541453806caaa0259627b1345, -, -, -, [prov:type='prov:PrimarySource'])
+  activity(y:review/45cb69baa7f83b51bcfd90fe0d84ada6, 2026-10-03T00:00:00, -, [prov:type='yurai:Review', yurai:link="from", yurai:up="c2a9ce966c7e2269", yurai:down="08a4819829372b9b", yurai:status="ok"])
+  used(y:review/45cb69baa7f83b51bcfd90fe0d84ada6, y:source/94f3394541453806caaa0259627b1345, -)
+  used(y:review/45cb69baa7f83b51bcfd90fe0d84ada6, y:requirement/extinguisher_distance/v1, -)
+  wasAssociatedWith(y:review/45cb69baa7f83b51bcfd90fe0d84ada6, y:role/safety, -)
+  activity(y:waiver/dac00bb63d23f8a579505a65b7cd4c88, 2026-10-03T00:00:00, -, [prov:type='yurai:Waiver', yurai:side="not satisfied", yurai:why="The test material names no artifact", yurai:sha256="08a4819829372b9b", yurai:status="ok"])
+  used(y:waiver/dac00bb63d23f8a579505a65b7cd4c88, y:requirement/extinguisher_distance/v1, -)
+  wasAssociatedWith(y:waiver/dac00bb63d23f8a579505a65b7cd4c88, y:role/safety, -)
+  activity(y:waiver/4da8dc7156df2e0b03abd29a1350f0ae, 2026-10-03T00:00:00, -, [prov:type='yurai:Waiver', yurai:side="not verified", yurai:why="The test material names no claim", yurai:sha256="08a4819829372b9b", yurai:status="ok"])
+  used(y:waiver/4da8dc7156df2e0b03abd29a1350f0ae, y:requirement/extinguisher_distance/v1, -)
+  wasAssociatedWith(y:waiver/4da8dc7156df2e0b03abd29a1350f0ae, y:role/safety, -)
+endDocument

@@ -1,0 +1,5 @@
+error[E305]: tests/mutants/E305_ハッシュの数/民法の期間.req:31:5: The record holds 1 hashes for the upper ends, and the link has 2 (民法 第141条, 第143条)
+    31 |     reviewed 2026-10-03 by 法務 sha256:0575c131b9f08063 -> sha256:465b83ed8c251406
+  = A record is what `yurai review` writes; look again, and let it write the record anew.
+  = Once a person has looked: yurai review tests/mutants/E305_ハッシュの数 --root tests/mutants/E305_ハッシュの数 --at tests/mutants/E305_ハッシュの数/民法の期間.req:30 --by <role>
+tests/mutants/E305_ハッシュの数: 1 error

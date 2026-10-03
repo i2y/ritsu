@@ -1,0 +1,4 @@
+error[E402]: tests/mutants/E402_確かめるものが無い/支払.req:7:13: 支払日 has nothing that checks it, and no waiver for that
+     7 | requirement 支払日(payment_day)
+  = Write `verified by <claim>`, or, if nothing is to check it, `not verified "<why>"`, and have that approved.
+tests/mutants/E402_確かめるものが無い: 1 error

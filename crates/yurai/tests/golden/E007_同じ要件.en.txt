@@ -1,0 +1,4 @@
+error[E007]: tests/mutants/E007_同じ要件/支払.req:14:13: The requirement 支払日 is also declared at tests/mutants/E007_同じ要件/支払.req:7
+    14 | requirement 支払日(payment_day)
+  = If they are versions of one requirement, write `v1` and `v2` and give each an `in force`; if not, rename one.
+tests/mutants/E007_同じ要件: 1 error

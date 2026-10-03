@@ -1,0 +1,4 @@
+エラー[E012]: tests/mutants/E012_借りる出典がchobo/支払.req:7:13: 借りる出典は `rulec` か `koyomi` のファイルの `source` です
+     7 | source 在庫 = chobo "在庫.book" account 在庫
+  = `source 民法 = koyomi "民法の期間.cal" source 民法` のように書きます。
+tests/mutants/E012_借りる出典がchobo: エラー 1 件

@@ -1,0 +1,6 @@
+error[E408]: tests/mutants/E408_番号が期間の順でない/支払.req:8:3: The versions of 支払日 do not number in the order of their periods (v2 comes before v1)
+     8 |   in force 2027-04-01..
+  in the order of the periods:
+      v2 in force 2026-01-01..2027-03-31 (tests/mutants/E408_番号が期間の順でない/支払.req:18)
+      v1 in force 2027-04-01.. (tests/mutants/E408_番号が期間の順でない/支払.req:8)
+tests/mutants/E408_番号が期間の順でない: 1 error

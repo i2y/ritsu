@@ -1,0 +1,8 @@
+error[E201]: tests/mutants/E201_ディレクトリ/支払.req:11:16: file "src" is a directory; a link names a file
+    11 |   satisfied by file "src"
+  = Only a `scope` takes a directory (`scope file "src/"`).
+error[E304]: tests/mutants/E201_ディレクトリ/支払.req:12:3: This waiver has not been approved yet
+    12 |   not verified "月に一度、経理が照らし合わせる"
+  = A waiver is a decision too: once the owner has read the reason and approves it, `yurai review` writes who approved it, when, and the requirement's hash under it.
+  = Once a person has looked: yurai review tests/mutants/E201_ディレクトリ --root tests/mutants/E201_ディレクトリ --at tests/mutants/E201_ディレクトリ/支払.req:12 --by <role>
+tests/mutants/E201_ディレクトリ: 2 errors

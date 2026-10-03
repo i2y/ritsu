@@ -1,0 +1,4 @@
+error[E010]: tests/mutants/E010_出どころが無い/支払.req:7:13: The requirement 支払日 has no origin (no `from` and no `decided`)
+     7 | requirement 支払日(payment_day)
+  = A requirement read from a source says `from @<source> <article>`; one people decided says `decided <date> by <role> "<why>"`.
+tests/mutants/E010_出どころが無い: 1 error

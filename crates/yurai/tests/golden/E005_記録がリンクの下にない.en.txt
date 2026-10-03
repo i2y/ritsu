@@ -1,0 +1,4 @@
+error[E005]: tests/mutants/E005_記録がリンクの下にない/支払.req:9:5: A record is not under a link or a waiver
+     9 |     reviewed 2026-10-03 by 経理 sha256:0000000000000000 -> sha256:0000000000000000
+  = `reviewed` goes right under a `from`, `satisfied by` or `verified by` line, and `approved` right under a `not satisfied` or `not verified` line, indented deeper.
+tests/mutants/E005_記録がリンクの下にない: 1 error

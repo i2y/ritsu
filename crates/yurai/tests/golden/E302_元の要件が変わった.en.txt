@@ -1,0 +1,25 @@
+error[E304]: tests/mutants/E302_元の要件が変わった/支払.req:11:3: 支払の方針 changed after 経理 approved this waiver on 2026-10-03
+    11 |   not satisfied "方針そのものを満たすコードは無い。下の要件が満たす"
+  what changed in 支払の方針:
+      @@ -1,1 +1,1 @@
+      - text 受け取った請求書は、締め日ごとにまとめて払う
+      + text 受け取った請求書は、締め日ごとにまとめて、翌月に払う
+  = Once a person has looked: yurai review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:11 --by <role>
+error[E304]: tests/mutants/E302_元の要件が変わった/支払.req:13:3: 支払の方針 changed, so this waiver needs approving again (the same change as at tests/mutants/E302_元の要件が変わった/支払.req:11)
+    13 |   not verified "下の要件が確かめる"
+  = 経理 approved this waiver on 2026-10-03.
+  = Once a person has looked: yurai review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:13 --by <role>
+error[E302]: tests/mutants/E302_元の要件が変わった/支払.req:19:3: 支払の方針 changed after 経理 looked at this link on 2026-10-03
+    19 |   from 支払の方針
+  = The same change as at tests/mutants/E302_元の要件が変わった/支払.req:11; the diff is not shown again.
+  = Once a person has looked: yurai review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:19 --by <role>
+error[E302]: tests/mutants/E302_元の要件が変わった/支払.req:21:3: 支払日 comes from something that changed (支払の方針), so this link needs a look again
+    21 |   satisfied by file "pay.py"
+  = 経理 looked at this link on 2026-10-03.
+  = Look at what changed first, where its own diagnostic shows it.
+  = Once a person has looked: yurai review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:21 --by <role>
+error[E304]: tests/mutants/E302_元の要件が変わった/支払.req:23:3: 支払日 changed, so this waiver needs approving again (the same change as at tests/mutants/E302_元の要件が変わった/支払.req:21)
+    23 |   not verified "月に一度、経理が照らし合わせる"
+  = 経理 approved this waiver on 2026-10-03.
+  = Once a person has looked: yurai review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:23 --by <role>
+tests/mutants/E302_元の要件が変わった: 5 errors

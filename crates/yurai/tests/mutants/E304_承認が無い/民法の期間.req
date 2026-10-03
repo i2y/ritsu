@@ -1,0 +1,46 @@
+requirements 民法の期間 v1
+description "koyomi の例「民法の期間.cal」の日付が、民法のどの条から来たかを書いたテストの材料。出典は自分で写して固定し、成果物はファイルとして読む。例として書いたもので、法令の読み方を示すものではない"
+
+role 法務 "条文の読み方を決める"
+role 開発 "koyomi のファイルを書いて直す"
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第140条 sha256:e880059021fbb67d
+  第141条 sha256:0575c131b9f08063
+  第142条 sha256:fc8c35a0769d3b35
+  第143条 sha256:6950bdfb988439b6
+
+scope file "民法の期間.cal"
+
+requirement 起算日(first_day)
+  text "日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない"
+  in force 2026-10-01..
+  owner 法務
+  from @民法 第140条
+    reviewed 2026-10-03 by 法務 sha256:e880059021fbb67d -> sha256:a9ebc73907faddc8
+  satisfied by file "民法の期間.cal"
+    reviewed 2026-10-03 by 開発 sha256:a9ebc73907faddc8 -> sha256:c9b94eecde23e6b5
+  not verified "初日を算入しないことは、koyomi doc のページで、条文と言い直しを見比べて確かめる。この材料に、それを確かめる条件は無い"
+    approved 2026-10-03 by 法務 sha256:a9ebc73907faddc8
+
+requirement 満了日(last_day)
+  text "月によって期間を定めたときは、最後の月においてその起算日に応当する日の前日の終わりに満了する。応当する日がないときは、その月の末日の終わりに満了する"
+  in force 2026-10-01..
+  owner 法務
+  from @民法 第141条, 第143条
+    reviewed 2026-10-03 by 法務 sha256:0575c131b9f08063, sha256:6950bdfb988439b6 -> sha256:465b83ed8c251406
+  satisfied by file "民法の期間.cal"
+    reviewed 2026-10-03 by 開発 sha256:465b83ed8c251406 -> sha256:c9b94eecde23e6b5
+  not verified "条文の場合分けをそのまま書いた関数と、起点 2000〜2027 年のすべての日と月数 1〜12 で一致することを、koyomi の設計の段階の試作が確かめた。この材料の中に、それを確かめる条件は無い"
+
+requirement 満了日_142条(last_day_142)
+  text "期間の末日が日曜日、国民の祝日に関する法律に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する"
+  in force 2026-10-01..
+  owner 法務
+  from @民法 第142条
+    reviewed 2026-10-03 by 法務 sha256:fc8c35a0769d3b35 -> sha256:d4f2d2a67322df17
+  decided 2026-10-03 by 法務 "「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。この材料のために決めたもので、法令の読み方を示すものではない"
+  satisfied by file "民法の期間.cal"
+    reviewed 2026-10-03 by 開発 sha256:d4f2d2a67322df17 -> sha256:c9b94eecde23e6b5
+  not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない"
+    approved 2026-10-03 by 法務 sha256:d4f2d2a67322df17

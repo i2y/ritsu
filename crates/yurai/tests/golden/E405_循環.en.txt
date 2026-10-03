@@ -1,0 +1,7 @@
+error[E405]: tests/mutants/E405_循環/支払.req:6:13: The requirements make a cycle: 締め日 → 支払日 → 締め日
+     6 | requirement 締め日(closing_day)
+  = `from <requirement>` points at what a requirement is read from, and `replaces` at what it replaces; following them comes back here, so which comes first cannot be told.
+  the cycle:
+      締め日 (tests/mutants/E405_循環/支払.req:6)
+      支払日 (tests/mutants/E405_循環/支払.req:13)
+tests/mutants/E405_循環: 1 error

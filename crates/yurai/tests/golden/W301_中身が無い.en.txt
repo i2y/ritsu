@@ -1,0 +1,20 @@
+error[E302]: tests/mutants/W301_中身が無い/民法の期間.req:41:3: 民法 第142条 changed after 法務 looked at this link on 2026-10-03
+    41 |   from @民法 第142条
+  = 民法 第142条 is now sha256:54a319e4148c24c7; it was sha256:fc8c35a0769d3b35 when it was looked at.
+  = Once a person has looked: yurai review tests/mutants/W301_中身が無い --root tests/mutants/W301_中身が無い --at tests/mutants/W301_中身が無い/民法の期間.req:41 --by <role>
+warning[W301]: tests/mutants/W301_中身が無い/民法の期間.req:41:3: What was looked at on 2026-10-03 is not in reviewed/, so what changed cannot be shown
+    41 |   from @民法 第142条
+  = reviewed/fc8c35a0769d3b35 beside tests/mutants/W301_中身が無い/民法の期間.req is missing: `yurai review` writes it when a link is looked at, and it is kept in git.
+error[E302]: tests/mutants/W301_中身が無い/民法の期間.req:44:3: 満了日_142条 comes from something that changed (民法 第142条), so this link needs a look again
+    44 |   satisfied by file "民法の期間.cal"
+  = 開発 looked at this link on 2026-10-03.
+  = 満了日_142条 is now sha256:6e3a23a8aee65d9c; it was sha256:d4f2d2a67322df17 when it was looked at.
+  = Once a person has looked: yurai review tests/mutants/W301_中身が無い --root tests/mutants/W301_中身が無い --at tests/mutants/W301_中身が無い/民法の期間.req:44 --by <role>
+warning[W301]: tests/mutants/W301_中身が無い/民法の期間.req:44:3: What was looked at on 2026-10-03 is not in reviewed/, so what changed cannot be shown
+    44 |   satisfied by file "民法の期間.cal"
+  = reviewed/d4f2d2a67322df17 beside tests/mutants/W301_中身が無い/民法の期間.req is missing: `yurai review` writes it when a link is looked at, and it is kept in git.
+error[E304]: tests/mutants/W301_中身が無い/民法の期間.req:46:3: 満了日_142条 changed, so this waiver needs approving again (the same change as at tests/mutants/W301_中身が無い/民法の期間.req:44)
+    46 |   not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない"
+  = 法務 approved this waiver on 2026-10-03.
+  = Once a person has looked: yurai review tests/mutants/W301_中身が無い --root tests/mutants/W301_中身が無い --at tests/mutants/W301_中身が無い/民法の期間.req:46 --by <role>
+tests/mutants/W301_中身が無い: 3 errors, 2 warnings

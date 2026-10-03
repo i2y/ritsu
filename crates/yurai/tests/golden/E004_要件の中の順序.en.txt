@@ -1,0 +1,4 @@
+error[E004]: tests/mutants/E004_要件の中の順序/支払.req:9:3: The `text` line is out of order
+     9 |   text "20 日締め翌月 10 日払い"
+  = The lines of a requirement go: `text`, `in force`, `owner`, `replaces`, `from`, `decided`, `satisfied by` and `not satisfied`, `verified by` and `not verified`.
+tests/mutants/E004_要件の中の順序: 1 error
