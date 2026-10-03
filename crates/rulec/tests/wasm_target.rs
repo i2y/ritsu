@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -83,8 +84,7 @@ fn apiのwasmの項は生成物を指している() {
 
 #[test]
 fn モジュールは参照評価器と一致しtestがそう言う() {
-    if !toolchain() {
-        eprintln!("注意: node か rustc か wasm32-unknown-unknown が無いので飛ばした");
+    if !ready(Need::Rustc, toolchain, "node か rustc か wasm32-unknown-unknown が無いので飛ばした") {
         return;
     }
     let dir = generate("test");
@@ -97,8 +97,7 @@ fn モジュールは参照評価器と一致しtestがそう言う() {
 
 #[test]
 fn 契約の外の入力はerrorの行で返る() {
-    if !toolchain() {
-        eprintln!("注意: node か rustc か wasm32-unknown-unknown が無いので飛ばした");
+    if !ready(Need::Rustc, toolchain, "node か rustc か wasm32-unknown-unknown が無いので飛ばした") {
         return;
     }
     let dir = generate("error");
@@ -144,8 +143,7 @@ console.log(call('{"届け先":"北海道","重量":"2.5kg","注文金額":12000
 
 #[test]
 fn witとモジュールはcomponentになりwasmtimeが呼べる() {
-    if !toolchain() || !have("wasm-tools") {
-        eprintln!("注意: toolchain か wasm-tools が無いので飛ばした");
+    if !ready(Need::Rustc, || toolchain() && have("wasm-tools"), "toolchain か wasm-tools が無いので飛ばした") {
         return;
     }
     let dir = generate("component");

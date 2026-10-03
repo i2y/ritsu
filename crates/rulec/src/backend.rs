@@ -13,197 +13,11 @@
 use crate::codegen::{Gen, Lang};
 
 
-/// The words each target will not take as an identifier, or will take only by hiding
-/// something of its own (§15.103). Kept beside the registry that uses them.
-mod words {
-    // Two kinds of word, because the risk is not the same. A **keyword** cannot be an
-    // identifier at all, so an alias that is one stops the compiler wherever the generated
-    // code writes it. A **global** is a name the language already uses at the top of a
-    // file, so only the aliases that become top-level identifiers — the rule's function and
-    // an enum's type — can hide one.
-
-    pub const PY_KW: &[&str] = &[
-        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
-        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
-        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
-        "try", "while", "with", "yield",
-    ];
-    pub const PY_GLOBAL: &[&str] = &[
-        "abs", "all", "any", "bin", "bool", "bytes", "callable", "chr", "compile", "complex",
-        "dict", "dir", "divmod", "enumerate", "eval", "exec", "filter", "float", "format",
-        "frozenset", "getattr", "hash", "help", "hex", "id", "input", "int", "isinstance", "iter",
-        "len", "list", "map", "max", "min", "next", "object", "oct", "open", "ord", "pow", "print",
-        "property", "range", "repr", "reversed", "round", "set", "slice", "sorted", "str", "sum",
-        "super", "tuple", "type", "vars", "zip",
-    ];
-
-    pub const JS_KW: &[&str] = &[
-        "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
-        "delete", "do", "else", "enum", "export", "extends", "false", "finally", "for", "function",
-        "if", "import", "in", "instanceof", "new", "null", "return", "super", "switch", "this",
-        "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield", "let", "static",
-    ];
-    pub const JS_GLOBAL: &[&str] = &[
-        "Array", "BigInt", "Boolean", "Date", "Error", "JSON", "Map", "Math", "NaN", "Number",
-        "Object", "Promise", "Set", "String", "Symbol", "console", "globalThis", "undefined",
-        "interface", "namespace", "declare", "any", "unknown", "never", "readonly",
-    ];
-
-    pub const RS_KW: &[&str] = &[
-        "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
-        "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
-        "mut", "pub", "ref", "return", "self", "static", "struct", "super", "trait", "true",
-        "type", "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final",
-        "gen", "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
-    ];
-    /// The prelude types the generated Rust names itself. A variant is written qualified
-    /// (`判定::Ok`), so the prelude's values are not here.
-    pub const RS_GLOBAL: &[&str] = &["Option", "Result", "String", "Vec"];
-
-    pub const RB_KW: &[&str] = &[
-        "alias", "and", "begin", "break", "case", "class", "def", "do", "else", "elsif", "end",
-        "ensure", "false", "for", "if", "in", "module", "next", "nil", "not", "or", "redo",
-        "rescue", "retry", "return", "self", "super", "then", "true", "undef", "unless", "until",
-        "when", "while", "yield",
-    ];
-    pub const RB_GLOBAL: &[&str] = &[
-        "clone", "dup", "format", "freeze", "hash", "inspect", "lambda", "loop", "method",
-        "object_id", "print", "proc", "puts", "raise", "require", "send", "tap", "to_s",
-    ];
-    /// The classes and modules Ruby defines at the top level, with the two libraries the
-    /// generated code requires (`date` and `json`). The rule's module is its alias in
-    /// PascalCase, and `module Time` stops with "Time is not a module".
-    pub const RB_CORE: &[&str] = &[
-        "ArgumentError", "Array", "BasicObject", "Binding", "Class", "ClosedQueueError",
-        "Comparable", "Complex", "ConditionVariable", "Data", "Date", "DateTime", "DidYouMean",
-        "Dir", "EOFError", "Encoding", "EncodingError", "Enumerable", "Enumerator", "Errno",
-        "ErrorHighlight", "Exception", "FalseClass", "Fiber", "FiberError", "File", "FileTest",
-        "Float", "FloatDomainError", "FrozenError", "GC", "Gem", "Hash", "IO", "IOError",
-        "IndexError", "Integer", "Interrupt", "JSON", "Kernel", "KeyError", "LoadError",
-        "LocalJumpError", "Marshal", "MatchData", "Math", "Method", "Module", "Monitor",
-        "MonitorMixin", "Mutex", "NameError", "NilClass", "NoMatchingPatternError",
-        "NoMatchingPatternKeyError", "NoMemoryError", "NoMethodError", "NotImplementedError",
-        "Numeric", "Object", "ObjectSpace", "Pathname", "Proc", "Process", "Queue", "Ractor",
-        "Random", "Range", "RangeError", "Rational", "RbConfig", "Refinement", "Regexp",
-        "RegexpError", "Ruby", "RubyVM", "RuntimeError", "ScriptError", "SecurityError", "Set",
-        "Signal", "SignalException", "SizedQueue", "StandardError", "StopIteration", "String",
-        "Struct", "Symbol", "SyntaxError", "SyntaxSuggest", "SystemCallError", "SystemExit",
-        "SystemStackError", "Thread", "ThreadError", "ThreadGroup", "Time", "TracePoint",
-        "TrueClass", "TypeError", "UnboundMethod", "UncaughtThrowError", "UnicodeNormalize",
-        "Warning", "ZeroDivisionError",
-    ];
-
-    /// PHP writes a variable with a `$`, so a keyword is only a problem where a bare name
-    /// goes: the function this rule becomes.
-    pub const PHP_KW: &[&str] = &[];
-    pub const PHP_GLOBAL: &[&str] = &[
-        "abstract", "and", "array", "as", "break", "callable", "case", "catch", "class", "clone",
-        "const", "continue", "declare", "default", "die", "do", "echo", "else", "elseif", "empty",
-        "enum", "exit", "extends", "final", "finally", "fn", "for", "foreach", "function",
-        "global", "goto", "if", "implements", "include", "instanceof", "insteadof", "interface",
-        "isset", "list", "match", "namespace", "new", "or", "print", "private", "protected",
-        "public", "readonly", "require", "return", "static", "switch", "throw", "trait", "try",
-        "unset", "use", "var", "while", "xor", "yield", "true", "false", "null",
-        "count", "max", "min", "round", "sort",
-    ];
-
-    pub const GO_KW: &[&str] = &[
-        "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough",
-        "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range",
-        "return", "select", "struct", "switch", "type", "var",
-    ];
-    pub const GO_GLOBAL: &[&str] = &[
-        "any", "append", "bool", "byte", "cap", "clear", "close", "comparable", "complex", "copy",
-        "delete", "error", "false", "float32", "float64", "imag", "int", "int16", "int32", "int64",
-        "int8", "iota", "len", "make", "max", "min", "new", "nil", "panic", "print", "println",
-        "real", "recover", "rune", "string", "true", "uint", "uint16", "uint32", "uint64", "uint8",
-        "uintptr",
-    ];
-
-    pub const SWIFT_KW: &[&str] = &[
-        "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import",
-        "init", "inout", "internal", "let", "open", "operator", "private", "protocol", "public",
-        "rethrows", "static", "struct", "subscript", "typealias", "var", "break", "case",
-        "continue", "default", "defer", "do", "else", "fallthrough", "for", "guard", "if", "in",
-        "repeat", "return", "switch", "where", "while", "as", "catch", "false", "is", "nil",
-        "super", "self", "throw", "throws", "true", "try",
-    ];
-    pub const SWIFT_GLOBAL: &[&str] =
-        &["Array", "Bool", "Double", "Error", "Int", "Int64", "Result", "Set", "String"];
-
-    pub const JAVA_KW: &[&str] = &[
-        "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
-        "const", "continue", "default", "do", "double", "else", "enum", "extends", "final",
-        "finally", "float", "for", "goto", "if", "implements", "import", "instanceof", "int",
-        "interface", "long", "native", "new", "package", "private", "protected", "public",
-        "return", "short", "static", "strictfp", "super", "switch", "synchronized", "this",
-        "throw", "throws", "transient", "try", "void", "volatile", "while", "true", "false",
-        "null",
-    ];
-    /// The classes of `java.lang` the generated code names, and the ones its files import: the
-    /// rule's class is its alias in PascalCase, and a class `List` beside `import java.util.List`
-    /// does not compile.
-    pub const JAVA_GLOBAL: &[&str] = &[
-        "ArrayList", "Boolean", "BufferedReader", "Character", "Double", "Error", "Exception",
-        "IOException", "IllegalArgumentException", "InputStreamReader", "Integer", "LinkedHashMap",
-        "List", "Long", "Map", "Math", "Number", "NumberFormatException", "Object", "PrintStream",
-        "Record", "RuntimeException", "StandardCharsets", "String", "StringBuilder", "System",
-        "Thread",
-    ];
-
-    /// Python's standard library, as `sys.stdlib_module_names` lists it (3.14, without the
-    /// private modules), and the modules 3.12 and 3.13 removed. The rule's module is a file
-    /// named after its alias, so `time.py` is what `import time` finds from beside it.
-    pub const PY_STDLIB: &[&str] = &[
-        "abc", "aifc", "annotationlib", "antigravity", "argparse", "array", "ast", "asynchat",
-        "asyncio", "asyncore", "atexit", "audioop", "base64", "bdb", "binascii", "bisect",
-        "builtins", "bz2", "calendar", "cgi", "cgitb", "chunk", "cmath", "cmd", "code",
-        "codecs", "codeop", "collections", "colorsys", "compileall", "compression",
-        "concurrent", "configparser", "contextlib", "contextvars", "copy", "copyreg",
-        "cProfile", "crypt", "csv", "ctypes", "curses", "dataclasses", "datetime", "dbm",
-        "decimal", "difflib", "dis", "distutils", "doctest", "email", "encodings", "ensurepip",
-        "enum", "errno", "faulthandler", "fcntl", "filecmp", "fileinput", "fnmatch",
-        "fractions", "ftplib", "functools", "gc", "genericpath", "getopt", "getpass",
-        "gettext", "glob", "graphlib", "grp", "gzip", "hashlib", "heapq", "hmac", "html",
-        "http", "idlelib", "imaplib", "imghdr", "imp", "importlib", "inspect", "io",
-        "ipaddress", "itertools", "json", "keyword", "lib2to3", "linecache", "locale",
-        "logging", "lzma", "mailbox", "mailcap", "marshal", "math", "mimetypes", "mmap",
-        "modulefinder", "msilib", "msvcrt", "multiprocessing", "netrc", "nis", "nntplib", "nt",
-        "ntpath", "nturl2path", "numbers", "opcode", "operator", "optparse", "os",
-        "ossaudiodev", "pathlib", "pdb", "pickle", "pickletools", "pipes", "pkgutil",
-        "platform", "plistlib", "poplib", "posix", "posixpath", "pprint", "profile", "pstats",
-        "pty", "pwd", "py_compile", "pyclbr", "pydoc", "pydoc_data", "pyexpat", "queue",
-        "quopri", "random", "re", "readline", "reprlib", "resource", "rlcompleter", "runpy",
-        "sched", "secrets", "select", "selectors", "shelve", "shlex", "shutil", "signal",
-        "site", "smtpd", "smtplib", "sndhdr", "socket", "socketserver", "spwd", "sqlite3",
-        "sre_compile", "sre_constants", "sre_parse", "ssl", "stat", "statistics", "string",
-        "stringprep", "struct", "subprocess", "sunau", "symtable", "sys", "sysconfig",
-        "syslog", "tabnanny", "tarfile", "telnetlib", "tempfile", "termios", "textwrap",
-        "this", "threading", "time", "timeit", "tkinter", "token", "tokenize", "tomllib",
-        "trace", "traceback", "tracemalloc", "tty", "turtle", "turtledemo", "types", "typing",
-        "unicodedata", "unittest", "urllib", "uu", "uuid", "venv", "warnings", "wave",
-        "weakref", "webbrowser", "winreg", "winsound", "wsgiref", "xdrlib", "xml", "xmlrpc",
-        "zipapp", "zipfile", "zipimport", "zlib", "zoneinfo",
-    ];
-
-    /// The first element of every standard package's import path (`go list std`). The rule's
-    /// module is named after its alias, and a module `time` makes every `import "time"` —
-    /// the standard library's own included — ambiguous.
-    pub const GO_STD: &[&str] = &[
-        "archive", "bufio", "builtin", "bytes", "cmp", "compress", "container", "context",
-        "crypto", "database", "debug", "embed", "encoding", "errors", "expvar", "flag", "fmt",
-        "go", "hash", "html", "image", "index", "internal", "io", "iter", "log", "maps",
-        "math", "mime", "net", "os", "path", "plugin", "reflect", "regexp", "runtime",
-        "slices", "sort", "strconv", "strings", "structs", "sync", "syscall", "testing",
-        "text", "time", "unicode", "unique", "unsafe", "weak",
-    ];
-
-    /// SQL is the one target with nothing to list. The query quotes every identifier it
-    /// writes — `"on"`, `"select"`, the function's own name and each argument it is called
-    /// by name with — so a reserved word costs a reader of the relation a pair of quotes
-    /// and costs the generated code nothing (§15.103).
-    pub const NONE: &[&str] = &[];
-}
+/// The words each target will not take as an identifier, or will take only by hiding something
+/// of its own (§15.103): ritsu-emit's copies of the tables that were kept here (ritsu's DESIGN
+/// 9.5), read by the row of each backend below.
+use ritsu_emit::copies::rulec as words;
+use ritsu_emit::words::Words;
 
 /// What a backend has to say about itself for the shared machinery to drive it.
 pub struct Backend {
@@ -290,18 +104,18 @@ pub struct Backend {
     /// with an input aliased `type` generated Rust that reads `pub fn sum(type: i64, …)`
     /// and does not compile. Matching ignores case, because an alias arrives as
     /// `PascalCase` in some targets and `UPPER_CASE` in others.
-    pub reserved: &'static [&'static str],
+    pub reserved: Words,
     /// The names that are already taken at the top of a file here — builtins, the standard
     /// library, the globals in scope everywhere. Only the two aliases that become top-level
     /// identifiers are held to this: the rule's, which is the function's name, and an
     /// enum's, which is a type's. A parameter or a local of the same name shadows nothing
     /// outside its own body, which is why `min` and `list` in the corpus are silent.
-    pub globals: &'static [&'static str],
+    pub globals: Words,
     /// The names the rule's own alias cannot take here, because the module or package named
     /// after it would collide with one of the standard library's (§15.149). Held to
     /// `module_of(alias)`, the name that module actually gets. Only the rule's alias names a
     /// module; an enum's becomes a type inside it.
-    pub modules: &'static [&'static str],
+    pub modules: Words,
     /// The name the rule's module or package gets from its alias here.
     pub module_of: fn(&str) -> String,
 }
@@ -493,9 +307,9 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
-        reserved: words::PY_KW,
-        globals: words::PY_GLOBAL,
-        modules: words::PY_STDLIB,
+        reserved: words::PYTHON.reserved,
+        globals: words::PYTHON.globals,
+        modules: words::PYTHON.modules,
         module_of: same_name,
     },
     // The twelfth target is the one that is not a language: the rule travels as data and a
@@ -541,9 +355,9 @@ pub const ALL: &[Backend] = &[
             }
         }),
         // The plan is JSON: a name here is data the runtime reads, never an identifier.
-        reserved: words::NONE,
-        globals: words::NONE,
-        modules: words::NONE,
+        reserved: words::NUMPY.reserved,
+        globals: words::NUMPY.globals,
+        modules: words::NUMPY.modules,
         module_of: same_name,
     },
     Backend {
@@ -573,9 +387,9 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
-        reserved: words::JS_KW,
-        globals: words::JS_GLOBAL,
-        modules: words::NONE,
+        reserved: words::TYPESCRIPT.reserved,
+        globals: words::TYPESCRIPT.globals,
+        modules: words::TYPESCRIPT.modules,
         module_of: same_name,
     },
     Backend {
@@ -605,9 +419,9 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
-        reserved: words::JS_KW,
-        globals: words::JS_GLOBAL,
-        modules: words::NONE,
+        reserved: words::JAVASCRIPT.reserved,
+        globals: words::JAVASCRIPT.globals,
+        modules: words::JAVASCRIPT.modules,
         module_of: same_name,
     },
     Backend {
@@ -654,9 +468,9 @@ pub const ALL: &[Backend] = &[
         // the rule, included by path, so nothing has to be built first.
         proof: Some(|alias| Plan::new("rust", "kani", &[&format!("{alias}_proof.rs")])),
         ready: None,
-        reserved: words::RS_KW,
-        globals: words::RS_GLOBAL,
-        modules: words::NONE,
+        reserved: words::RUST.reserved,
+        globals: words::RUST.globals,
+        modules: words::RUST.modules,
         module_of: same_name,
     },
     Backend {
@@ -684,9 +498,9 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
-        reserved: words::RB_KW,
-        globals: words::RB_GLOBAL,
-        modules: words::RB_CORE,
+        reserved: words::RUBY.reserved,
+        globals: words::RUBY.globals,
+        modules: words::RUBY.modules,
         module_of: crate::codegen::ruby_module,
     },
     Backend {
@@ -715,9 +529,9 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
-        reserved: words::PHP_KW,
-        globals: words::PHP_GLOBAL,
-        modules: words::NONE,
+        reserved: words::PHP.reserved,
+        globals: words::PHP.globals,
+        modules: words::PHP.modules,
         module_of: same_name,
     },
     Backend {
@@ -748,9 +562,9 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
-        reserved: words::GO_KW,
-        globals: words::GO_GLOBAL,
-        modules: words::GO_STD,
+        reserved: words::GO.reserved,
+        globals: words::GO.globals,
+        modules: words::GO.modules,
         module_of: go_package,
     },
     Backend {
@@ -788,9 +602,9 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
-        reserved: words::SWIFT_KW,
-        globals: words::SWIFT_GLOBAL,
-        modules: words::NONE,
+        reserved: words::SWIFT.reserved,
+        globals: words::SWIFT.globals,
+        modules: words::SWIFT.modules,
         module_of: same_name,
     },
     Backend {
@@ -845,9 +659,9 @@ pub const ALL: &[Backend] = &[
                 Err(tr!("java が無いので Java 側を飛ばしました", "java not found; skipped the Java side"))
             }
         }),
-        reserved: words::JAVA_KW,
-        globals: words::JAVA_GLOBAL,
-        modules: words::NONE,
+        reserved: words::JAVA.reserved,
+        globals: words::JAVA.globals,
+        modules: words::JAVA.modules,
         module_of: same_name,
     },
     Backend {
@@ -878,9 +692,9 @@ pub const ALL: &[Backend] = &[
         proof: None,
         pg: Some(|alias| Plan::new("sql", "python3", &["-B", &format!("{alias}_function_runner.py")])),
         ready: None,
-        reserved: words::NONE,
-        globals: words::NONE,
-        modules: words::NONE,
+        reserved: words::SQL.reserved,
+        globals: words::SQL.globals,
+        modules: words::SQL.modules,
         module_of: same_name,
     },
     Backend {
@@ -931,9 +745,9 @@ pub const ALL: &[Backend] = &[
             }
             Ok(())
         }),
-        reserved: words::RS_KW,
-        globals: words::RS_GLOBAL,
-        modules: words::NONE,
+        reserved: words::WASM.reserved,
+        globals: words::WASM.globals,
+        modules: words::WASM.modules,
         module_of: same_name,
     },
 ];

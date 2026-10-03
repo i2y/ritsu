@@ -128,9 +128,10 @@ fn agentsの実演はいまの出力と一致する() {
 /// Re-serialise a parsed value in the compact form the document shows.
 fn to_json(j: &rulec::json::Json) -> String {
     match j {
-        rulec::json::Json::Obj(m) => {
-            let parts: Vec<String> = m
-                .iter()
+        rulec::json::Json::Obj(_) => {
+            let parts: Vec<String> = rulec::json::members(j)
+                .unwrap_or_default()
+                .into_iter()
                 .map(|(k, v)| format!("{}:{}", rulec::json::quote(k), to_json(v)))
                 .collect();
             format!("{{{}}}", parts.join(","))
@@ -139,7 +140,7 @@ fn to_json(j: &rulec::json::Json) -> String {
             format!("[{}]", a.iter().map(to_json).collect::<Vec<_>>().join(","))
         }
         rulec::json::Json::Str(s) => rulec::json::quote(s),
-        other => format!("{other}"),
+        other => rulec::json::show(other),
     }
 }
 

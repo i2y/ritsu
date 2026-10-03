@@ -216,10 +216,7 @@ fn obj<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
 }
 
 fn keys(v: &Json) -> Vec<String> {
-    match v {
-        Json::Obj(m) => m.iter().map(|(n, _)| n.clone()).collect(),
-        _ => Vec::new(),
-    }
+    crate::json::members(v).unwrap_or_default().into_keys().map(str::to_string).collect()
 }
 
 /// A JSON Pointer into the document, `#/a/b` or `/a/b`.
@@ -2109,7 +2106,7 @@ impl Contract {
         if depth > DEPTH {
             return Formula::unknown();
         }
-        let Json::Obj(kv) = v else { return schema_bool(v) };
+        let Some(kv) = crate::json::members(v) else { return schema_bool(v) };
         let mut parts = Vec::new();
         if let Some(r) = kv.get("$ref") {
             let to = self.target(r).map_or_else(Formula::unknown, |t| self.schema_object(t, at, reads, depth + 1));
@@ -2124,12 +2121,12 @@ impl Contract {
                 _ => vec![Formula::unknown()],
             }
         };
-        for (key, x) in kv {
-            parts.push(match key.as_str() {
+        for (&key, &x) in &kv {
+            parts.push(match key {
                 "properties" => {
-                    let Json::Obj(ps) = x else { continue };
+                    let Some(ps) = crate::json::members(x) else { continue };
                     Formula::and(
-                        ps.iter()
+                        ps.into_iter()
                             .map(|(name, sub)| {
                                 let q = step(at, name);
                                 if !self.present(&q) {
@@ -2187,7 +2184,7 @@ impl Contract {
         if depth > DEPTH {
             return Formula::unknown();
         }
-        let Json::Obj(kv) = v else { return schema_bool(v) };
+        let Some(kv) = crate::json::members(v) else { return schema_bool(v) };
         let t = Term::Field(q.to_vec());
         let val = Lin::term(t.clone());
         let n = Lin::term(Term::Size(q.to_vec()));
@@ -2214,8 +2211,8 @@ impl Contract {
             Kind::List => "array",
             Kind::Msg | Kind::Other => "object",
         };
-        for (key, x) in kv {
-            parts.push(match (key.as_str(), kind) {
+        for (&key, &x) in &kv {
+            parts.push(match (key, kind) {
                 ("allOf", _) => Formula::and(each(x)),
                 ("anyOf" | "oneOf", _) => Formula::or(each(x)),
                 ("not", _) => self.schema_value(x, q, kind, depth + 1).not(),

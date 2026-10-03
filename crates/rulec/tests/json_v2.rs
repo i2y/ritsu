@@ -36,7 +36,37 @@ fn lines_for(file: &str, code: &str, lang: &str) -> Vec<String> {
 /// Pretty-print so a diff in the golden file is readable line by line.
 fn pretty(l: &str) -> String {
     let j = rulec::json::parse(l).unwrap_or_else(|e| panic!("JSON として読めない: {e}\n{l}"));
-    format!("{j:#?}\n")
+    format!("{:#?}\n", Shape::of(&j))
+}
+
+/// A value in the shape rulec's own reader held it before ritsu-base's took its place: an
+/// object's keys sorted. The golden files were written from that shape, and what they pin is
+/// the data a diagnostic carries, which did not change with the reader.
+#[derive(Debug)]
+#[allow(dead_code)] // read through `Debug` alone, which is what the golden files hold
+enum Shape {
+    Null,
+    Bool(bool),
+    Int(i128),
+    Frac(String),
+    Str(String),
+    Arr(Vec<Shape>),
+    Obj(std::collections::BTreeMap<String, Shape>),
+}
+
+impl Shape {
+    fn of(j: &rulec::json::Json) -> Shape {
+        use rulec::json::Json;
+        match j {
+            Json::Null => Shape::Null,
+            Json::Bool(b) => Shape::Bool(*b),
+            Json::Int(n) => Shape::Int(*n),
+            Json::Frac(s) => Shape::Frac(s.clone()),
+            Json::Str(s) => Shape::Str(s.clone()),
+            Json::Arr(a) => Shape::Arr(a.iter().map(Shape::of).collect()),
+            Json::Obj(m) => Shape::Obj(m.iter().map(|(k, v)| (k.clone(), Shape::of(v))).collect()),
+        }
+    }
 }
 
 fn snapshot(name: &str, lang: &str, got: &str) {
@@ -62,8 +92,8 @@ fn snapshot(name: &str, lang: &str, got: &str) {
 /// else must be byte-identical.
 fn strip_prose(l: &str) -> String {
     let j = rulec::json::parse(l).unwrap();
-    let rulec::json::Json::Obj(m) = &j else { panic!("object でない") };
-    let mut o = m.clone();
+    let Some(m) = rulec::json::members(&j) else { panic!("object でない") };
+    let mut o: std::collections::BTreeMap<&str, rulec::json::Json> = m.into_iter().map(|(k, v)| (k, v.clone())).collect();
     o.remove("title");
     o.remove("notes");
     // A span's label is prose; its position is not.
@@ -73,13 +103,14 @@ fn strip_prose(l: &str) -> String {
             .map(|s| {
                 let rulec::json::Json::Obj(sm) = s else { return s.clone() };
                 let mut sm = sm.clone();
-                sm.remove("label");
+                sm.retain(|(k, _)| k != "label");
+                sm.sort_by(|a, b| a.0.cmp(&b.0));
                 rulec::json::Json::Obj(sm)
             })
             .collect();
-        o.insert("spans".into(), rulec::json::Json::Arr(stripped));
+        o.insert("spans", rulec::json::Json::Arr(stripped));
     }
-    format!("{:#?}", rulec::json::Json::Obj(o))
+    format!("{o:#?}")
 }
 
 const CASES: &[(&str, &str, &str)] = &[

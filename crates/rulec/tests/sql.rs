@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -81,8 +82,7 @@ fn apiはsqlの入口を言う() {
 /// hand, not through the runner, and read the answers back by id.
 #[test]
 fn 問い合わせは関係ごと答える() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let dir = generate("relation", "tests/corpus/送料.rule");
@@ -195,12 +195,10 @@ fn apiはsqlの関数を言う() {
 /// server, as everything that needs a toolchain is.
 #[test]
 fn 関数は宣言の外の入力に投げる() {
-    if !have("psql") || !rulec::backend::psql_ready() {
-        eprintln!("注意: psql が無いか繋がらないので飛ばした");
+    if !ready(Need::Postgres, || have("psql") && rulec::backend::psql_ready(), "psql が無いか繋がらないので飛ばした") {
         return;
     }
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let dir = generate("pg", "tests/corpus/送料.rule");

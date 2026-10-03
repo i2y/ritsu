@@ -334,7 +334,7 @@ fn json_の鍵は約束である() {
         "rule", "old", "new", "old_version", "new_version", "over_budget", "total", "cells", "feasible", "same",
         "differing", "unsettled", "unrealized", "domain", "changes", "unknown",
     ];
-    let have: Vec<String> = j.as_obj().expect("object").keys().cloned().collect();
+    let have: Vec<String> = rulec::json::members(&j).expect("object").into_keys().map(str::to_string).collect();
     for k in want {
         assert!(have.contains(&k.to_string()), "鍵 {k} が無い: {have:?}");
     }

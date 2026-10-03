@@ -12,6 +12,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -84,8 +85,7 @@ const RULES: &[(&str, &str)] = &[
 /// input just inside the bound is taken.
 #[test]
 fn 形だけでは足りない前提が_目録に並び_実際に断られる() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     // (rule, the entries expected, an input that only this entry refuses, one just inside)
@@ -408,8 +408,7 @@ fn 署名とガードが生成物と一致する() {
 
 #[test]
 fn pythonの実物の署名と一致する() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     for (tag, rule) in RULES {
@@ -459,8 +458,7 @@ fn pythonの実物の署名と一致する() {
 
 #[test]
 fn goは目録から組んだ呼び出しがvetを通る() {
-    if !have("go") {
-        eprintln!("注意: go が無いので飛ばした");
+    if !ready(Need::Go, || have("go"), "go が無いので飛ばした") {
         return;
     }
     for (tag, rule) in RULES {
@@ -581,8 +579,7 @@ fn 生成物の文書が実物の名前を使っている() {
 /// inventory gets wrong fails here, the same way `go vet` catches it on the Go side.
 #[test]
 fn typescriptは目録から組んだ呼び出しが動く() {
-    if !have("node") {
-        eprintln!("注意: node が無いので飛ばした");
+    if !ready(Need::Node, || have("node"), "node が無いので飛ばした") {
         return;
     }
     for (tag, rule) in RULES {
@@ -651,8 +648,7 @@ fn typescriptは目録から組んだ呼び出しが動く() {
 /// on, so reflection stands in for `go vet` — `method(:x).parameters` is the real signature.
 #[test]
 fn rubyの実物の署名と一致する() {
-    if !have("ruby") {
-        eprintln!("注意: ruby が無いので飛ばした");
+    if !ready(Need::Ruby, || have("ruby"), "ruby が無いので飛ばした") {
         return;
     }
     for (tag, rule) in RULES {
@@ -720,8 +716,7 @@ fn rubyの実物の署名と一致する() {
 /// compile, and nothing here reads the generated file to find out what to write.
 #[test]
 fn swiftは目録から組んだ呼び出しが動く() {
-    if !have("swiftc") {
-        eprintln!("注意: swiftc が無いので飛ばした");
+    if !ready(Need::Swift, || have("swiftc"), "swiftc が無いので飛ばした") {
         return;
     }
     for (tag, rule) in RULES {
@@ -830,7 +825,7 @@ fn wasiの項は実際に組めて同じ答えを返す() {
         }
     }
 
-    if !(have("rustc") && have("wasmtime") && rulec::backend::rust_target("wasm32-wasip1")) {
+    if !ready(Need::Rustc, || have("rustc") && have("wasmtime") && rulec::backend::rust_target("wasm32-wasip1"), "rustc か wasmtime か wasm32-wasip1 が無いので飛ばした") {
         let _ = std::fs::remove_dir_all(&dir);
         return;
     }

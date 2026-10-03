@@ -63,7 +63,7 @@ pub fn values(doc: &Json, pointer: &str) -> Found {
     for raw in steps(pointer) {
         let key = unescape(&raw);
         let next = match here {
-            Json::Obj(m) => m.get(&key),
+            Json::Obj(_) => here.get(&key),
             Json::Arr(a) => key.parse::<usize>().ok().and_then(|i| a.get(i)),
             _ => None,
         };
@@ -77,7 +77,7 @@ pub fn values(doc: &Json, pointer: &str) -> Found {
                 return Found::NoSuchPointer {
                     at: if walked.is_empty() { "#".into() } else { format!("#{walked}") },
                     keys: match here {
-                        Json::Obj(m) => m.keys().cloned().collect(),
+                        Json::Obj(_) => crate::json::members(here).unwrap_or_default().into_keys().map(str::to_string).collect(),
                         _ => Vec::new(),
                     },
                 }
@@ -89,16 +89,16 @@ pub fn values(doc: &Json, pointer: &str) -> Found {
         Json::Arr(a) => a,
         Json::Obj(_) => match here.get("enum") {
             Some(Json::Arr(a)) => a,
-            Some(other) => return Found::NotAnEnum(other.kind()),
+            Some(other) => return Found::NotAnEnum(crate::json::kind(other)),
             None => return Found::NotAnEnum("object"),
         },
-        other => return Found::NotAnEnum(other.kind()),
+        other => return Found::NotAnEnum(crate::json::kind(other)),
     };
     let mut out = Vec::new();
     for v in arr {
         match v {
             Json::Str(s) => out.push(s.clone()),
-            other => return Found::NotNames(format!("{other}")),
+            other => return Found::NotNames(crate::json::show(other)),
         }
     }
     Found::Values(out)

@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use ritsu_testkit::{Need, need, ready};
 
 use rulec::json::Json;
 
@@ -191,8 +192,10 @@ fn 出力が状態だけの機械も生成したコードで回る() {
     let (c, out) = rulec(&["gen", &rule, "--out", &out_dir]);
     assert_eq!(c, 0, "{out}");
     assert!(d.join("gen/vectors/traffic_light.traces.jsonl").exists(), "手順のベクタが出ていない");
-    let (c, out) = rulec(&["test", &out_dir, "--format", "json"]);
-    assert_eq!(c, 0, "生成したコードが手順で食い違う:\n{out}");
+    if need(Need::Python) {
+        let (c, out) = rulec(&["test", &out_dir, "--format", "json"]);
+        assert_eq!(c, 0, "生成したコードが手順で食い違う:\n{out}");
+    }
     let _ = std::fs::remove_dir_all(&d);
 }
 
@@ -407,8 +410,7 @@ fn feed(cmd: &mut Command, cert: &str) -> (i32, String) {
 
 #[test]
 fn ステートマシンの証明書は再検査を通り_偽れば落ちる() {
-    if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無い") {
         return;
     }
     let cert = cert();
@@ -425,8 +427,7 @@ fn ステートマシンの証明書は再検査を通り_偽れば落ちる() {
 #[test]
 fn ステートマシンの証明書は証明付きの検査器でも確かめられる() {
     let bin = root().join("proofs/.lake/build/bin/rulec-recheck");
-    if !bin.exists() {
-        eprintln!("skip: proofs/ が build されていない（lake build で作る）");
+    if !ready(Need::Lean, || bin.exists(), "proofs/ が build されていない（lake build で作る）") {
         return;
     }
     let cert = cert();
@@ -608,8 +609,9 @@ fn 世界ごとの証明書は再検査を通り_偽れば落ちる() {
         // with another world's amount.
         ("別の世界の額で呼んだ", cert.replacen(r#""at":[2,1,3]"#, r#""at":[2,1,4]"#, 1)),
     ];
-    let python = Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
+    let python = ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無いので Python の再検査を飛ばした");
     let lean = root().join("proofs/.lake/build/bin/rulec-recheck");
+    let lean = if ready(Need::Lean, || lean.exists(), "proofs/ が build されていない（lake build で作る）") { lean } else { PathBuf::new() };
     if python {
         let (c, said) = feed(Command::new("python3").args(["tools/recheck.py", "--rule", &rule]), &cert);
         assert_eq!(c, 0, "{said}");
@@ -637,6 +639,9 @@ fn 世界ごとの証明書は再検査を通り_偽れば落ちる() {
 /// order that is not the enum's, which the constants every runner prints first are held to.
 #[test]
 fn heldのある機械も生成したコードで回る() {
+    if !need(Need::Python) {
+        return;
+    }
     let d = scratch("review-gen");
     let rule = write(&d, "review.rule", REVIEW);
     let out_dir = d.join("gen").to_string_lossy().into_owned();

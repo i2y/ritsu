@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -155,6 +156,9 @@ fn coverageは七基準を名前つきで出す() {
 
 #[test]
 fn testは言語ごとの結果と最初の食い違いを出す() {
+    if !need(Need::Python) {
+        return;
+    }
     let dir = gen_dir("run", "tests/corpus/期間区分.rule");
     let (c, out) = run(&["test", dir.to_str().unwrap(), "--format", "json"]);
     assert_eq!(c, 0, "{out}");
@@ -268,7 +272,7 @@ fn verifyは一致率とクラスタを構造で出す() {
         }
         // The delta is keyed by output name, so several outputs can move independently.
         let rulec::json::Json::Obj(d) = c.get("delta").unwrap() else { panic!() };
-        for v in d.values() {
+        for (_, v) in d {
             keys(v, &["min", "max", "uniform", "total"], "delta");
         }
     }
@@ -285,12 +289,8 @@ fn verifyは一致率とクラスタを構造で出す() {
 /// The same fake legacy implementation `tests/verify.rs` uses: the generated Python, with an
 /// optional defect. Returns None when python3 is not installed.
 fn adapter_dir() -> Option<PathBuf> {
-    let ok = Command::new("python3")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if !ok {
+    let ok = || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
+    if !ready(Need::Python, ok, "python3 が無いので飛ばした") {
         return None;
     }
     let dir = std::env::temp_dir().join(format!("{TMP}-vf-{}", std::process::id()));
@@ -322,14 +322,17 @@ fn 鍵は言語で変わらない() {
     // so it must be identical in both languages, top level and one level down.
     let dir = gen_dir("keys", "tests/corpus/期間区分.rule");
     let d = dir.to_string_lossy().to_string();
-    let cases: Vec<Vec<&str>> = vec![
+    let mut cases: Vec<Vec<&str>> = vec![
         vec!["check", "tests/mutants/m_e101.rule", "--format", "json"],
         vec!["fmt", "--check", "tests/mutants/m_e102.rule", "--format", "json"],
         vec!["gen", "tests/corpus/送料.rule", "--out", &d, "--check", "--format", "json"],
         vec!["coverage", "tests/corpus/送料.rule", "--format", "json"],
-        vec!["test", &d, "--format", "json"],
         vec!["explain", "--all", "--format", "json"],
     ];
+    // `test` runs the generated code: the tools level's (ritsu's DESIGN 10.2).
+    if need(Need::Python) {
+        cases.insert(4, vec!["test", &d, "--format", "json"]);
+    }
     for case in &cases {
         let mut ja: Vec<&str> = case.clone();
         ja.extend(["--lang", "ja"]);
@@ -341,7 +344,7 @@ fn 鍵は言語で変わらない() {
             objects(s)
                 .iter()
                 .map(|j| match j {
-                    rulec::json::Json::Obj(m) => m.keys().cloned().collect(),
+                    rulec::json::Json::Obj(_) => rulec::json::members(j).unwrap_or_default().into_keys().map(str::to_string).collect(),
                     _ => Vec::new(),
                 })
                 .collect()
@@ -374,8 +377,7 @@ fn have(cmd: &str) -> bool {
 /// error, a process that died. `ran` is the field to branch on, and the heading splits with it.
 #[test]
 fn 走らなかった実行は食い違いとして報告されない() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let dir = gen_dir("broken", "tests/corpus/期間区分.rule");
@@ -409,8 +411,7 @@ fn 走らなかった実行は食い違いとして報告されない() {
 /// reference evaluator and **every** generated language agree.
 #[test]
 fn 飛ばした言語があると要求時に落ちる() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let dir = gen_dir("skipped", "tests/corpus/期間区分.rule");

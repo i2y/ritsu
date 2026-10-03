@@ -121,6 +121,11 @@ version = "0.1.0"
 [[package]]
 name = "rulec"
 version = "0.22.1"
+dependencies = [
+ "ritsu-base",
+ "ritsu-emit",
+ "ritsu-testkit",
+]
 
 [[package]]
 name = "sakai"

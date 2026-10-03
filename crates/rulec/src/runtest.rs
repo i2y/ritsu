@@ -629,7 +629,10 @@ fn via_mcp(
                 crate::json::Json::Obj(o) => o.clone(),
                 _ => return Err(broken(tr!("手順の in がオブジェクトではありません", "a trace's in is not an object"))),
             };
-            args.insert(cin.clone(), st);
+            // In the place of the input of the same name, if the record has one; `unparse`
+            // writes the keys sorted either way.
+            args.retain(|(k, _)| k != cin);
+            args.push((cin.clone(), st));
             let r = wire.ask(&format!(
                 "{{\"jsonrpc\":\"2.0\",\"id\":{},\"method\":\"tools/call\",\"params\":{{\"name\":{},\"arguments\":{}}}}}",
                 base + k,

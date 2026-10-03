@@ -7,6 +7,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use ritsu_testkit::{Need, ready};
 
 const RULE: &str = "tests/corpus/厚生年金保険料.rule";
 
@@ -147,8 +148,7 @@ fn contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
 
 #[test]
 fn pythonのサーバは規則を一つのツールとして出す() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let dir = generate("py");
@@ -158,8 +158,7 @@ fn pythonのサーバは規則を一つのツールとして出す() {
 
 #[test]
 fn nodeのサーバは規則を一つのツールとして出す() {
-    if !have("node") {
-        eprintln!("注意: node が無いので飛ばした");
+    if !ready(Need::Node, || have("node"), "node が無いので飛ばした") {
         return;
     }
     let dir = generate("js");
@@ -265,8 +264,7 @@ fn http_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
 
 #[test]
 fn pythonのサーバはhttpでも同じ約束を守る() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let dir = generate("pyhttp");
@@ -276,8 +274,7 @@ fn pythonのサーバはhttpでも同じ約束を守る() {
 
 #[test]
 fn nodeのサーバはhttpでも同じ約束を守る() {
-    if !have("node") {
-        eprintln!("注意: node が無いので飛ばした");
+    if !ready(Need::Node, || have("node"), "node が無いので飛ばした") {
         return;
     }
     let dir = generate("jshttp");
@@ -338,8 +335,7 @@ fn ui_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
 
 #[test]
 fn pythonのサーバはページをviewとして出す() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let dir = generate("pyui");
@@ -349,8 +345,7 @@ fn pythonのサーバはページをviewとして出す() {
 
 #[test]
 fn nodeのサーバはページをviewとして出す() {
-    if !have("node") {
-        eprintln!("注意: node が無いので飛ばした");
+    if !ready(Need::Node, || have("node"), "node が無いので飛ばした") {
         return;
     }
     let dir = generate("jsui");

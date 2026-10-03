@@ -10,6 +10,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -83,8 +84,7 @@ fn has_row(out: &str, cells: &[&str]) -> bool {
 
 #[test]
 fn シートは表になり_日付と率と単位が読める() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("fee");
@@ -111,8 +111,7 @@ fn シートは表になり_日付と率と単位が読める() {
 
 #[test]
 fn xlsxとcsvは同じ下書きになる() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("same");
@@ -139,8 +138,7 @@ fn xlsxとcsvは同じ下書きになる() {
 
 #[test]
 fn 無圧縮のzipも読める() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("stored");
@@ -157,8 +155,7 @@ fn 無圧縮のzipも読める() {
 /// reach across the window — the part of the reader a five-row fixture never exercises.
 #[test]
 fn 長いシートも読める() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("long");
@@ -184,8 +181,7 @@ fn 長いシートも読める() {
 
 #[test]
 fn シートの選び方() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("sheets");
@@ -203,8 +199,7 @@ fn シートの選び方() {
 
 #[test]
 fn 一九〇四年のブックも読める() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("1904");
@@ -229,7 +224,7 @@ fn xlsxでないファイルは断る() {
     assert!(e.contains("ZIP") || e.contains("zip"), "{e}");
     // A ZIP that is not a workbook.
     let z = d.join("plain.zip");
-    if have("python3") {
+    if ready(Need::Python, || have("python3"), "python3 が無いので、表計算でない ZIP の確かめを飛ばした") {
         let o = Command::new("python3")
             .args([
                 "-c",
@@ -252,8 +247,7 @@ fn xlsxでないファイルは断る() {
 /// people actually use is the other half of the evidence. Skipped where `uv` is not there.
 #[test]
 fn 実物の道具が書いたブックも読める() {
-    if !have("uv") {
-        eprintln!("skip: uv が無い（openpyxl を一時的に呼べない）");
+    if !ready(Need::Python, || have("uv"), "uv が無い（openpyxl を一時的に呼べない）") {
         return;
     }
     let d = dir("openpyxl");
@@ -290,7 +284,7 @@ wb.save(sys.argv[1])
         .output()
         .expect("uv を起動できない");
     if !o.status.success() {
-        eprintln!("skip: openpyxl を取れない: {}", String::from_utf8_lossy(&o.stderr));
+        skip(&format!("openpyxl を取れない: {}", String::from_utf8_lossy(&o.stderr)));
         return;
     }
     let (c, out, e) = run(&["import", "xlsx", x.to_str().unwrap(), "--lang", "ja"]);
@@ -303,8 +297,7 @@ wb.save(sys.argv[1])
 /// `@料金表 表2` names the second sheet however much prose the first one holds (§15.82).
 #[test]
 fn ブックの引用箇所はシートで_順番はシートの順番() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("fragments");

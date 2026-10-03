@@ -8,6 +8,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -76,8 +77,7 @@ fn 証明のハーネスは生成され_apiの名前と一致する() {
 /// nothing, and cost a build nothing.
 #[test]
 fn 証明のファイルは普通のビルドでは空である() {
-    if !have("rustc") {
-        eprintln!("skip: rustc が無い");
+    if !ready(Need::Rustc, || have("rustc"), "rustc が無い") {
         return;
     }
     let out = dir("rustc");
@@ -96,6 +96,10 @@ fn 証明のファイルは普通のビルドでは空である() {
 /// (§15.95). Without the flag the run says nothing about proofs at all.
 #[test]
 fn フラグが無ければ証明は走らない() {
+    // `test` runs the generated code in every language there is a toolchain for.
+    if !need(Need::Python) {
+        return;
+    }
     let out = dir("noflag");
     let (c, said) = run(&["gen", RULE, "--out", out.to_str().unwrap()]);
     assert_eq!(c, 0, "{said}");
@@ -111,8 +115,7 @@ fn フラグが無ければ証明は走らない() {
 /// With the flag and the checker, the pass runs and the generated Rust holds.
 #[test]
 fn フラグを付ければ証明が走る() {
-    if !have("kani") || !have("rustc") {
-        eprintln!("skip: kani が無い");
+    if !ready(Need::Kani, || have("kani") && have("rustc"), "kani が無い") {
         return;
     }
     let out = dir("flag");

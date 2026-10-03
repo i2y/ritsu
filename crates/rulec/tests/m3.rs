@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::{Need, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -342,8 +343,9 @@ fn 刻み未満のずれは丸め方の違いとして括られる() {
 /// §1.4: `送料@v3` is sugar for looking up the git tag `rules/送料/v3`.
 #[test]
 fn 版の参照はgitタグを引く() {
+    // git is there at every level (ritsu's DESIGN 10.2), so only its absence is said.
     let Some(_) = which("git") else {
-        eprintln!("注意: git が無いので飛ばした");
+        skip("git が無いので飛ばした");
         return;
     };
     let dir = setup("git");
@@ -449,8 +451,7 @@ fn markdownで貼れる形が出る() {
 /// §9.3-3, §12: the generated code can also be run in the user's CI.
 #[test]
 fn rulec_testが生成物を走らせる() {
-    if which("python3").is_none() && which("go").is_none() {
-        eprintln!("注意: python3 も go も無いので飛ばした");
+    if !ready(Need::Python, || which("python3").is_some() || which("go").is_some(), "python3 も go も無いので飛ばした") {
         return;
     }
     let dir = std::env::temp_dir().join(format!("rulec-m3-test-{}", std::process::id()));

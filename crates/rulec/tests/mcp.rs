@@ -84,7 +84,7 @@ fn ツールの一覧はコマンドの表そのもの() {
     assert!(!names.contains(&"rulec_mcp"), "サーバ自身はツールにしない");
     let check = tools.iter().find(|t| s(t, "name") == "rulec_check").unwrap();
     let schema = check.get("inputSchema").unwrap();
-    let props = schema.get("properties").and_then(|p| p.as_obj()).unwrap();
+    let props = schema.get("properties").and_then(rulec::json::members).unwrap();
     for want in ["files", "format", "diff_base", "terse", "lang"] {
         assert!(props.contains_key(want), "check の引数 {want} が無い: {:?}", props.keys().collect::<Vec<_>>());
     }
@@ -92,10 +92,10 @@ fn ツールの一覧はコマンドの表そのもの() {
     assert_eq!(s(props.get("files").unwrap(), "type"), "array");
     assert!(s(check, "description").contains("Exit codes"), "exit code の意味を説明に入れる");
     let verify = tools.iter().find(|t| s(t, "name") == "rulec_verify").unwrap();
-    let props = verify.get("inputSchema").unwrap().get("properties").and_then(|p| p.as_obj()).unwrap();
+    let props = verify.get("inputSchema").unwrap().get("properties").and_then(rulec::json::members).unwrap();
     assert!(props.contains_key("adapter") && props.contains_key("file"));
     let fx = tools.iter().find(|t| s(t, "name") == "rulec_fixtures").unwrap();
-    let props = fx.get("inputSchema").unwrap().get("properties").and_then(|p| p.as_obj()).unwrap();
+    let props = fx.get("inputSchema").unwrap().get("properties").and_then(rulec::json::members).unwrap();
     assert!(props.contains_key("fixtures") && props.contains_key("rule") && props.contains_key("fill"));
     assert_eq!(s(props.get("fill").unwrap(), "type"), "array", "繰り返せるフラグは配列");
 }

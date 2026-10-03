@@ -11,6 +11,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -244,8 +245,7 @@ fn 例のページは両言語で同じ規則を同じ順に並べる() {
 /// carries a `--verify` mode that holds every one of those to the real thing; this runs it.
 #[test]
 fn 図が見せている出力は本物と一致する() {
-    if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無いので飛ばした") {
         return;
     }
     for (script, prefix) in DIAGRAMS {
@@ -299,8 +299,7 @@ fn 図が見せている出力は本物と一致する() {
 /// worse than no generator, so it is held to its own output the same way the diagrams are.
 #[test]
 fn 例のページは作り直しても変わらない() {
-    if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無いので飛ばした") {
         return;
     }
     let pages = ["website/docs/examples.md", "website/docs-ja/examples.md"];

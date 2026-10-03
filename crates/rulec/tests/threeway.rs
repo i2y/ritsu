@@ -10,6 +10,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::{Need, need, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -112,6 +113,10 @@ fn コーパスは全部載っている() {
 
 #[test]
 fn 評価器と生成コードが全言語で一致する() {
+    // Every language there is a toolchain for, the tools level's (ritsu's DESIGN 10.2).
+    if !need(Need::Python) {
+        return;
+    }
     let dir = std::env::temp_dir().join(format!("rulec-3way-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out = dir.to_string_lossy().to_string();
@@ -135,8 +140,8 @@ fn 評価器と生成コードが全言語で一致する() {
     for b in rulec::backend::ALL {
         if !present.iter().any(|p| p.id == b.id) {
             match ready(b) {
-                Err(why) if have(b.tool) => eprintln!("注意: {why}"),
-                _ => eprintln!("注意: {} が無いので {} を飛ばした", b.tool, b.name),
+                Err(why) if have(b.tool) => skip(&why),
+                _ => skip(&format!("{} が無いので {} を飛ばした", b.tool, b.name)),
             }
         }
     }
@@ -256,8 +261,7 @@ fn 生成物は両言語の整形器に素で通る() {
     // §8.1 criterion 5. The output is formatted at generation time rather than by running gofmt
     // afterwards (running it afterwards makes the output environment-dependent and breaks the
     // determinism of §8.5).
-    if !have("go") {
-        eprintln!("注意: go が無いので gofmt の検査を飛ばした");
+    if !ready(Need::Go, || have("go"), "go が無いので gofmt の検査を飛ばした") {
         return;
     }
     let dir = std::env::temp_dir().join(format!("rulec-fmt-{}", std::process::id()));
@@ -293,7 +297,7 @@ fn 生成物は両言語の整形器に素で通る() {
     // The PEP 8 side (the counterpart of an empty `gofmt -l`). Unlike Go, Python has no single
     // formatter, so the claim is split in two and measured separately.
     let Some(ruff) = ruff() else {
-        eprintln!("注意: ruff が無いので PEP 8 の検査を飛ばした");
+        skip("ruff が無いので PEP 8 の検査を飛ばした");
         let _ = std::fs::remove_dir_all(&dir);
         return;
     };
@@ -356,6 +360,9 @@ fn ruff() -> Option<Vec<String>> {
 #[test]
 fn 丸めヘルパは両言語で参照実装と一致する() {
     // §8.5: table-level agreement alone lets a helper bug hide in a table that yields no fractions.
+    if !need(Need::Python) {
+        return;
+    }
     let dir = std::env::temp_dir().join(format!("rulec-round-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out = dir.to_string_lossy().to_string();
@@ -404,8 +411,11 @@ fn mypy() -> Option<Vec<String>> {
 /// caller constructs a branded argument.
 #[test]
 fn 生成pythonはmypy_strictを通る() {
+    if !need(Need::Python) {
+        return;
+    }
     let Some(my) = mypy() else {
-        eprintln!("注意: mypy も uvx も無いので飛ばした");
+        skip("mypy も uvx も無いので飛ばした");
         return;
     };
     let dir = root().join("target").join("mypy-check");
@@ -458,8 +468,7 @@ fn steep() -> bool {
 /// alias is the same type, which is measured rather than assumed in §15.23.
 #[test]
 fn 生成rubyは自分のrbsでsteepを通る() {
-    if !steep() {
-        eprintln!("注意: steep か rbs が無いので飛ばした");
+    if !ready(Need::Ruby, steep, "steep か rbs が無いので飛ばした") {
         return;
     }
     let dir = root().join("target").join("steep-check");
@@ -493,8 +502,7 @@ fn 生成rubyは自分のrbsでsteepを通る() {
 /// are a closed union of the values themselves, not `String`.
 #[test]
 fn rbsは誤った呼び出しを拒む() {
-    if !steep() {
-        eprintln!("注意: steep か rbs が無いので飛ばした");
+    if !ready(Need::Ruby, steep, "steep か rbs が無いので飛ばした") {
         return;
     }
     let dir = root().join("target").join("steep-bite");
@@ -532,6 +540,9 @@ fn rbsは誤った呼び出しを拒む() {
 /// on the corpus; what nothing exercises is not checked.
 #[test]
 fn 数の集合は全言語で集合として読まれる() {
+    if !need(Need::Python) {
+        return;
+    }
     let dir = std::env::temp_dir().join(format!("rulec-threeway-set-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -555,6 +566,9 @@ fn 数の集合は全言語で集合として読まれる() {
 /// tenths of a percent. Each language holds the value finer inside and divides down once.
 #[test]
 fn 率の出力は全言語で宣言した刻みで返る() {
+    if !need(Need::Python) {
+        return;
+    }
     let dir = std::env::temp_dir().join(format!("rulec-threeway-step-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

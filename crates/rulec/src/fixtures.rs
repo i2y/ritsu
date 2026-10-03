@@ -141,7 +141,7 @@ pub fn to_val_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Check
             }
             Ok(Val::Num(v))
         }
-        (_, got) => Err(tr!("{} を期待しましたが {} でした", "expected {}, found {}", ty_word(&inner), got.kind())),
+        (_, got) => Err(tr!("{} を期待しましたが {} でした", "expected {}, found {}", ty_word(&inner), crate::json::kind(got))),
     }
 }
 
@@ -255,17 +255,17 @@ impl Manifest {
             }
         }
         let mut m = Manifest::default();
-        let Some(fills) = j.get("fills").and_then(|x| x.as_obj()) else {
+        let Some(fills) = crate::json::members_of(&j, "fills") else {
             return Ok(m);
         };
         for (name, v) in fills {
-            if !f.inputs.iter().any(|i| i.name.text == *name) {
+            if !f.inputs.iter().any(|i| i.name.text == name) {
                 return Err(tr!("`{name}` は規則の入力ではありません", "`{name}` is not an input of the rule"));
             }
             let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
             let val = to_val(v, &ty, c, name).map_err(|e| tr!("既定値 `{name}`: {e}", "default value `{name}`: {e}"))?;
-            m.shown.insert(name.clone(), format!("{v}"));
-            m.fills.insert(name.clone(), val);
+            m.shown.insert(name.to_string(), crate::json::show(v));
+            m.fills.insert(name.to_string(), val);
         }
         Ok(m)
     }
@@ -313,11 +313,11 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
             });
         };
 
-        let Some(ins) = j.get("in").and_then(|x| x.as_obj()) else {
+        let Some(ins) = crate::json::members_of(&j, "in") else {
             bad("no_in", "", tr!("`in` がありません", "`in` is missing"), &tr!("入力は `in` の下に、規則の和名で置きます。", "Inputs go under `in`, keyed by the names used in the rule."));
             continue;
         };
-        let Some(obs) = j.get("observed").and_then(|x| x.as_obj()) else {
+        let Some(obs) = crate::json::members_of(&j, "observed") else {
             bad("no_observed", "", tr!("`observed` がありません", "`observed` is missing"), &tr!("そのとき実際に出た値を `observed` に置きます。", "Put the values that actually came out at the time under `observed`."));
             continue;
         };
@@ -326,13 +326,13 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
         // a spelling mistake into "filled in with the default value", and only the agreement
         // rate moves.
         let known: Vec<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();
-        let mut extra: Vec<&String> = ins.keys().filter(|k| !known.contains(&k.as_str())).collect();
+        let mut extra: Vec<&str> = ins.keys().copied().filter(|k| !known.contains(k)).collect();
         extra.sort();
         if !extra.is_empty() {
             bad(
                 "unknown_field",
                 extra[0],
-                tr!("`in` に規則が知らないフィールドがあります: {}", "`in` has fields the rule does not know: {}", extra.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")),
+                tr!("`in` に規則が知らないフィールドがあります: {}", "`in` has fields the rule does not know: {}", extra.join(", ")),
                 &tr!("規則の入力の和名と綴りを合わせてください。", "Match the spelling of the rule's input names."),
             );
             continue;
@@ -344,7 +344,7 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
         for i in &f.inputs {
             let name = &i.name.text;
             let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
-            match ins.get(name) {
+            match ins.get(name.as_str()) {
                 Some(v) => match to_val_as(v, &ty, c, name, then) {
                     Ok(v) => {
                         input.insert(name.clone(), v);
@@ -380,7 +380,7 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
         for o in &f.outputs {
             let name = &o.name.text;
             let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
-            match obs.get(name) {
+            match obs.get(name.as_str()) {
                 Some(v) => match to_val_as(v, &ty, c, name, then) {
                     Ok(v) => {
                         observed.insert(name.clone(), v);

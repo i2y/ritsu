@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().is_ok()
@@ -60,8 +61,7 @@ fn scratch(tag: &str) -> PathBuf {
 /// for a format this program reads itself.
 #[test]
 fn 抽出器を通して写しを取る() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = scratch("via");
@@ -104,8 +104,7 @@ fn 抽出器を通して写しを取る() {
 /// document. A half-read stream is the dangerous one — `表3` would quietly be another table.
 #[test]
 fn 途中で終わった抽出は写しにしない() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = scratch("bad");
@@ -156,8 +155,7 @@ fn テンプレートは文書を名指しする() {
 /// in names its columns 0, 1, 2, …, a row the document does not have.
 #[test]
 fn テンプレートは書いてある使い方のとおりに動く() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = scratch("docling");

@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 const RULE: &str = "tests/corpus/印紙税の本則と軽減.rule";
 
@@ -435,8 +436,7 @@ fn 金額は行の見出しの下で探す() {
 #[test]
 fn 四つの形式が同じ写しと同じ固定になる() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     // The rule is the same every time; only the document's name changes.

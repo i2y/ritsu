@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -345,7 +346,7 @@ fn html版は表の行に名前と番号を持ち_生成したjavascriptを積�
         }
     }
     // The module inside the page is what node runs: a syntax error here is a broken page.
-    if have("node") {
+    if ready(Need::Node, || have("node"), "node が無いので、ページのモジュールを走らせる確かめを飛ばした") {
         let start = html.find("<script type=\"module\">\n").expect("script が無い") + "<script type=\"module\">\n".len();
         let end = html[start..].find("</script>").unwrap() + start;
         let dir = std::env::temp_dir().join(format!("rulec-doc-html-{}", std::process::id()));

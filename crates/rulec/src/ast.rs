@@ -329,33 +329,7 @@ pub enum SourceKind {
 /// What differs between them is the shape of the id, the shape of a fragment, where a copy
 /// is fetched from and how `outdated` asks whether the text has moved on — not what a copy
 /// is or what it is held to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LawDb {
-    /// e-Gov, the Japanese government's statute database.
-    Egov,
-    /// The Electronic Code of Federal Regulations: the US federal regulations as in force on
-    /// a date, a section at a time.
-    Ecfr,
-}
-
-impl LawDb {
-    /// The word as it is written after `law`, or `None` for anything else — which is how the
-    /// parser tells a database word from the id that may stand in its place.
-    pub fn parse(w: &str) -> Option<Self> {
-        match w {
-            "egov" => Some(Self::Egov),
-            "ecfr" => Some(Self::Ecfr),
-            _ => None,
-        }
-    }
-
-    pub fn word(self) -> &'static str {
-        match self {
-            Self::Egov => "egov",
-            Self::Ecfr => "ecfr",
-        }
-    }
-}
+pub use ritsu_base::sources::LawDb;
 
 /// One pinned fragment under a `source … = law` line: `  第91条 sha256:77aa00bb11cc22dd`.
 #[derive(Debug, Clone)]

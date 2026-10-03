@@ -8,6 +8,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -51,8 +52,7 @@ fn 保険料額表の全等級と一致する() {
 /// A record edited by hand, or a table transcribed anew without regenerating, fails here.
 #[test]
 fn 記録は転記から作り直しても変わらない() {
-    if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無いので飛ばした") {
         return;
     }
     let dir = std::env::temp_dir().join(format!("rulec-oracle-{}", std::process::id()));

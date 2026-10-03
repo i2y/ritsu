@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -308,8 +309,7 @@ if (btns.length > 1) {
 /// argument the module takes (§15.52, §15.56).
 #[test]
 fn ページの試用欄は並びを編集して走る() {
-    if !have("node") {
-        eprintln!("注意: node が無いので飛ばした");
+    if !ready(Need::Node, || have("node"), "node が無いので飛ばした") {
         return;
     }
     let d = dir("page");
@@ -427,8 +427,7 @@ fn 並びの書き方の間違いは名指しされる() {
 /// would be named as uncovered forever.
 #[test]
 fn 断る入力は生成コードにも断らせる() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let d = dir("refused");
@@ -489,8 +488,7 @@ fn 断る入力は生成コードにも断らせる() {
 /// vector suite. A language whose toolchain is missing is skipped by `rulec test` itself.
 #[test]
 fn 生成されたたどり方は参照評価器と一致する() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let d = dir("agree");

@@ -61,7 +61,9 @@ pub mod replay;
 pub mod projection;
 pub mod report;
 pub mod runtest;
-pub mod sha256;
+/// SHA-256 (FIPS 180-4), ritsu-base's: the pinned digests of sources (§15.68) and the generated
+/// headers.
+pub use ritsu_base::sha256;
 pub mod sources;
 pub mod types;
 pub mod vfs;

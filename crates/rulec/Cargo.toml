@@ -25,7 +25,14 @@ include = [
     "/LICENSE-APACHE",
 ]
 
+# ritsu's base layer, nothing outside the workspace (ritsu's DESIGN 3.1, 4.9): rulec still
+# depends on nothing that `cargo install` would fetch.
 [dependencies]
+ritsu-base = { path = "../ritsu-base" }
+ritsu-emit = { path = "../ritsu-emit" }
+
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }
 
 # `cargo binstall rulec` takes the release archive instead of building. Linux has only the
 # static musl binaries, which run on a glibc system as well.

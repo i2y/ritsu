@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::{Need, need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -52,6 +53,9 @@ fn agrees_everywhere(tag: &str, dir: &Path) {
     // The wording moves with `--lang` (the suite runs rulec with `RULEC_LANG=ja`), so
     // what is asserted is the exit code and the absence of a failing line — neither of
     // which is prose.
+    if !need(Need::Python) {
+        return;
+    }
     let (c, out) = run(&["test", &dir.to_string_lossy()]);
     assert!(!out.lines().any(|l| l.starts_with("FAIL")), "{tag}: 一致しない言語がある:\n{out}");
     assert_eq!(c, 0, "{tag}: rulec test が 0 で終わらない:\n{out}");
@@ -60,8 +64,7 @@ fn agrees_everywhere(tag: &str, dir: &Path) {
 /// `go build` over the generated package, plus `gofmt -l`, which has to come out empty
 /// because the generator formats its own output (§8.5).
 fn go_builds(dir: &Path, pkg: &str) {
-    if !have("go") {
-        eprintln!("注意: go が無いので Go 側を飛ばした");
+    if !ready(Need::Go, || have("go"), "go が無いので Go 側を飛ばした") {
         return;
     }
     let p = dir.join("go").join(pkg);
@@ -78,8 +81,7 @@ fn go_builds(dir: &Path, pkg: &str) {
 }
 
 fn py_imports(dir: &Path, module: &str) {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので Python 側を飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので Python 側を飛ばした") {
         return;
     }
     let o = Command::new("python3")
@@ -94,8 +96,7 @@ fn py_imports(dir: &Path, module: &str) {
 /// for a constant that cannot exist, which is the failure the `GROUP_` prefix exists to
 /// avoid (§15.20).
 fn rb_loads(dir: &Path, module: &str) {
-    if !have("ruby") {
-        eprintln!("注意: ruby が無いので Ruby 側を飛ばした");
+    if !ready(Need::Ruby, || have("ruby"), "ruby が無いので Ruby 側を飛ばした") {
         return;
     }
     let o = Command::new("ruby")
@@ -116,8 +117,7 @@ fn rb_loads(dir: &Path, module: &str) {
 /// `rulec test` builds them, and the only way `@main` on the runner is exercised. A warning
 /// counts as a failure: the module is marked DO NOT EDIT, so nobody can quiet one.
 fn sw_typechecks(dir: &Path, module: &str) {
-    if !have("swiftc") {
-        eprintln!("注意: swiftc が無いので Swift 側を飛ばした");
+    if !ready(Need::Swift, || have("swiftc"), "swiftc が無いので Swift 側を飛ばした") {
         return;
     }
     let o = Command::new("swiftc")
@@ -134,8 +134,7 @@ fn sw_typechecks(dir: &Path, module: &str) {
 /// for a duplicate name or a constant expression it cannot fold, which is what the keyword
 /// suffix and the group constants exist to avoid (§15.77).
 fn php_loads(dir: &Path, module: &str) {
-    if !have("php") {
-        eprintln!("注意: php が無いので PHP 側を飛ばした");
+    if !ready(Need::Php, || have("php"), "php が無いので PHP 側を飛ばした") {
         return;
     }
     let o = Command::new("php")
@@ -156,8 +155,7 @@ fn php_loads(dir: &Path, module: &str) {
 /// claims (§15.78). A warning counts as a failure for the same reason it does in Swift: the
 /// file says DO NOT EDIT, so nobody can quiet one.
 fn java_compiles(dir: &Path, class: &str) {
-    if !have("javac") {
-        eprintln!("注意: javac が無いので Java 側を飛ばした");
+    if !ready(Need::Java, || have("javac"), "javac が無いので Java 側を飛ばした") {
         return;
     }
     let mut args: Vec<String> = rulec::backend::JAVAC_FLAGS.iter().map(|s| s.to_string()).collect();
@@ -177,8 +175,7 @@ fn java_compiles(dir: &Path, class: &str) {
 /// The generated TypeScript runner has to at least load. It is the other half of the pair
 /// that calls the rule by its bare name, so it is the other one a rule aliased `d` broke.
 fn ts_runs(dir: &Path, module: &str) {
-    if !have("node") {
-        eprintln!("注意: node が無いので TypeScript 側を飛ばした");
+    if !ready(Need::Node, || have("node"), "node が無いので TypeScript 側を飛ばした") {
         return;
     }
     let o = Command::new("node")
@@ -764,8 +761,7 @@ fold 採用 over 候補
 
 /// The JavaScript twin of `ts_runs`.
 fn js_runs(dir: &Path, module: &str) {
-    if !have("node") {
-        eprintln!("注意: node が無いので JavaScript 側を飛ばした");
+    if !ready(Need::Node, || have("node"), "node が無いので JavaScript 側を飛ばした") {
         return;
     }
     let o = Command::new("node")

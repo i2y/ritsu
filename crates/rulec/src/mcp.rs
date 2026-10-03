@@ -215,8 +215,7 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
     let Some(c) = name.strip_prefix("rulec_").and_then(|n| cmds.iter().find(|c| c.name == n)) else {
         return Err((-32602, format!("unknown tool: {name}")));
     };
-    let empty = std::collections::BTreeMap::new();
-    let args = params.and_then(|p| p.get("arguments")).and_then(|a| a.as_obj()).unwrap_or(&empty);
+    let args = params.and_then(|p| p.get("arguments")).and_then(json::members).unwrap_or_default();
     let mut argv: Vec<String> = vec![c.name.to_string()];
     if c.name == "fixtures" {
         argv.push("lint".into());
@@ -227,7 +226,7 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
             Json::Int(n) => Ok(n.to_string()),
             Json::Frac(s) => Ok(s.clone()),
             Json::Bool(b) => Ok(b.to_string()),
-            other => Err((-32602, format!("a {} is not a value an argument takes", other.kind()))),
+            other => Err((-32602, format!("a {} is not a value an argument takes", json::kind(other)))),
         }
     };
     let pos = positionals(c);
@@ -252,7 +251,7 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
     }
     let globals = global_flags();
     for (k, v) in args {
-        if pos.iter().any(|(p, ..)| p == k) {
+        if pos.iter().any(|(p, ..)| *p == k) {
             continue;
         }
         let flag_name = format!("--{}", k.replace('_', "-"));

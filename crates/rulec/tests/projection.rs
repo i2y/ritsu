@@ -13,6 +13,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::{Need, need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -71,6 +72,9 @@ fn check(lang: &str, cmd: &mut Command) {
 
 #[test]
 fn 射影は五つの言語で同じ答えを出す() {
+    if !need(Need::Python) {
+        return;
+    }
     let dir = generated("run");
     let mut ran = 0;
 
@@ -84,39 +88,33 @@ fn 射影は五つの言語で同じ答えを出す() {
     ran += 1;
 
     // --- JavaScript, and with it the TypeScript it is stripped from.
-    if have("node") {
+    if ready(Need::Node, || have("node"), "node が無いので JavaScript 側を飛ばした") {
         let script = format!(
             "import('./order_shipping.mjs').then(m => console.log(String(m.order_shipping_from(JSON.parse({:?})))));",
             order_json()
         );
         check("JavaScript", Command::new("node").current_dir(dir.join("javascript")).args(["--input-type=module", "-e", &script]));
         ran += 1;
-    } else {
-        eprintln!("注意: node が無いので JavaScript 側を飛ばした");
     }
 
     // --- Ruby
-    if have("ruby") {
+    if ready(Need::Ruby, || have("ruby"), "ruby が無いので Ruby 側を飛ばした") {
         let script = format!(
             "require 'json'\nrequire './order_shipping.rb'\nputs OrderShipping.order_shipping_from(JSON.parse({:?}))\n",
             order_json()
         );
         check("Ruby", Command::new("ruby").current_dir(dir.join("ruby")).args(["-e", &script]));
         ran += 1;
-    } else {
-        eprintln!("注意: ruby が無いので Ruby 側を飛ばした");
     }
 
     // --- PHP
-    if have("php") {
+    if ready(Need::Php, || have("php"), "php が無いので PHP 側を飛ばした") {
         let script = format!(
             "require './order_shipping.php'; echo \\OrderShipping\\order_shipping_from(json_decode({}, true));",
             php_str(&order_json())
         );
         check("PHP", Command::new("php").current_dir(dir.join("php")).args(["-r", &script]));
         ran += 1;
-    } else {
-        eprintln!("注意: php が無いので PHP 側を飛ばした");
     }
 
     // --- TypeScript. Node reads a `.ts` by stripping the types, which is how `rulec test`
@@ -225,6 +223,9 @@ fn 射影の無い規則には何も出ない() {
 /// copy that is off by a day, or that reads February wrong, moves it.
 #[test]
 fn 日付の射影は五つの言語で同じ日を指す() {
+    if !need(Need::Python) {
+        return;
+    }
     let dir = std::env::temp_dir().join(format!("rulec-projection-date-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -275,8 +276,7 @@ fn 日付の射影は五つの言語で同じ日を指す() {
     for (lang, sub, file) in
         [("JavaScript", "javascript", "d.mjs"), ("TypeScript", "typescript", "d.ts")]
     {
-        if !have("node") {
-            eprintln!("注意: node が無いので {lang} 側を飛ばした");
+        if !ready(Need::Node, || have("node"), &format!("node が無いので {lang} 側を飛ばした")) {
             continue;
         }
         let script = format!(
@@ -291,22 +291,18 @@ fn 日付の射影は五つの言語で同じ日を指す() {
         ran += 1;
     }
 
-    if have("ruby") {
+    if ready(Need::Ruby, || have("ruby"), "ruby が無いので Ruby 側を飛ばした") {
         let script = "require 'json'\nrequire './d.rb'\nputs STDIN.read.split(\"\\n\").reject(&:empty?).map{|l| D.d_from(JSON.parse(l))}.join(',')";
         let out = piped("Ruby", Command::new("ruby").current_dir(dir.join("ruby")).args(["-e", script]), &payload);
         say("Ruby", &out, &want, &dates);
         ran += 1;
-    } else {
-        eprintln!("注意: ruby が無いので Ruby 側を飛ばした");
     }
 
-    if have("php") {
+    if ready(Need::Php, || have("php"), "php が無いので PHP 側を飛ばした") {
         let script = "require './d.php';\n$o=[];foreach(explode(\"\\n\",trim(stream_get_contents(STDIN))) as $l){ if(trim($l)==='')continue; $o[]=\\D\\d_from(json_decode($l,true))?'true':'false'; }\necho implode(',',$o);";
         let out = piped("PHP", Command::new("php").current_dir(dir.join("php")).args(["-r", script]), &payload);
         say("PHP", &out, &want, &dates);
         ran += 1;
-    } else {
-        eprintln!("注意: php が無いので PHP 側を飛ばした");
     }
 
     eprintln!("日付の射影を走らせた言語: {ran}（日付 {} 件）", dates.len());
@@ -364,6 +360,9 @@ fn piped(lang: &str, cmd: &mut Command, input: &str) -> String {
 /// one, and the answer it points to is `T?`.
 #[test]
 fn 省略できる入力は無いフィールドを_none_として読む() {
+    if !need(Need::Python) {
+        return;
+    }
     const RULE: &str = "rule 任意の割引(opt_discount) v1\n\n\
         shape 注文(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
         enum 種別(kind) = percent(percent) | fixed(fixed)\n\n\
@@ -443,6 +442,10 @@ fn five(dir: &Path, alias: &str, cases: &[(String, &str)]) {
         assert!(o.status.success(), "{lang}: {case} で落ちた:\n{out}\n{}", String::from_utf8_lossy(&o.stderr));
         assert_eq!(out, want, "{lang}: {case} の答えが違う");
     };
+    if !need(Need::Python) {
+        let _ = std::fs::remove_dir_all(dir);
+        return;
+    }
     assert!(have("python3"), "python3 が要ります");
     for (case, w) in cases {
         let py = format!("import json, {alias} as m\nprint(m.{alias}_from(json.loads({case:?})))\n");

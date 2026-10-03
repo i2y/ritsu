@@ -2,6 +2,7 @@
 //! not the wording.
 
 use std::process::Command;
+use ritsu_testkit::{Need, need};
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_rulec"))
@@ -283,6 +284,9 @@ fn ディレクトリを渡すと中の規則を全部見る() {
     assert_eq!(out, again, "二度目で並びが変わった");
 
     // The argument of `test` is the output directory itself, so it must not be expanded.
+    if !need(Need::Python) {
+        return;
+    }
     let dir = std::env::temp_dir().join(format!("rulec-dir-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let d = dir.to_string_lossy().to_string();

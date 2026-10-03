@@ -14,6 +14,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -154,8 +155,7 @@ fn cases() -> Vec<(String, String)> {
 
 #[test]
 fn 版がバイナリと同じ() {
-    if !have("node") || !wasm().exists() {
-        eprintln!("skip: node が無いか rulec.wasm が無い");
+    if !ready(Need::Node, || have("node") && wasm().exists(), "node が無いか rulec.wasm が無い") {
         return;
     }
     let d = bench("version", "");
@@ -169,8 +169,7 @@ fn 版がバイナリと同じ() {
 
 #[test]
 fn checkの文面がコマンドと一字一句同じ() {
-    if !have("node") || !wasm().exists() {
-        eprintln!("skip: node が無いか rulec.wasm が無い");
+    if !ready(Need::Node, || have("node") && wasm().exists(), "node が無いか rulec.wasm が無い") {
         return;
     }
     for (name, src) in cases() {
@@ -185,8 +184,7 @@ fn checkの文面がコマンドと一字一句同じ() {
 
 #[test]
 fn genが書くファイルがコマンドと一字一句同じ() {
-    if !have("node") || !wasm().exists() {
-        eprintln!("skip: node が無いか rulec.wasm が無い");
+    if !ready(Need::Node, || have("node") && wasm().exists(), "node が無いか rulec.wasm が無い") {
         return;
     }
     for (name, src) in cases() {
@@ -230,8 +228,7 @@ fn walkdir(dir: &Path) -> Vec<PathBuf> {
 
 #[test]
 fn 承認者向けのページがコマンドと一字一句同じ() {
-    if !have("node") || !wasm().exists() {
-        eprintln!("skip: node が無いか rulec.wasm が無い");
+    if !ready(Need::Node, || have("node") && wasm().exists(), "node が無いか rulec.wasm が無い") {
         return;
     }
     let (name, src) = cases().into_iter().next().unwrap();

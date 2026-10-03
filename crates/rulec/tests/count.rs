@@ -8,6 +8,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -190,8 +191,7 @@ fn 使われない数え上げは注意される() {
 /// over, so the generated code refuses it at the door — and the vectors say the same.
 #[test]
 fn 上限を超えた並びは断られる() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let d = dir("cap");
@@ -220,8 +220,7 @@ fn 上限を超えた並びは断られる() {
 /// Every language counts the same elements the reference evaluator counts.
 #[test]
 fn 生成された数え上げは参照評価器と一致する() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
     let d = dir("agree");

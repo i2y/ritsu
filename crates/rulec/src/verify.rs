@@ -39,7 +39,7 @@ fn observed(c: &Checked, name: &str, j: &Json) -> String {
         Json::Int(n) => n.to_string(),
         Json::Frac(s) | Json::Str(s) => s.clone(),
         Json::Bool(b) => b.to_string(),
-        other => other.to_string(),
+        other => crate::json::show(other),
     }
 }
 
@@ -88,7 +88,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
             line.trim()
         ));
     }
-    let impl_id = hello.get("impl").map(|j| j.as_str().map(str::to_string).unwrap_or_else(|| j.to_string())).unwrap_or_default();
+    let impl_id = hello.get("impl").map(|j| j.as_str().map(str::to_string).unwrap_or_else(|| crate::json::show(j))).unwrap_or_default();
 
     let mut rep =
         Report { impl_id, ..Report::new(f, if crate::i18n::ja() { "現行" } else { "legacy" }) };
@@ -105,6 +105,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
         // An answer to another record would compare one case's values with another's.
         if let Some(got) = ans.get("id") {
             if got.as_int() != Some(id as i128) {
+                let got = crate::json::show(got);
                 return Err(tr!(
                     "アダプタが {id} 件目に {got} 件目の答えを返しました",
                     "The adapter answered record {id} with the answer to record {got}"
@@ -132,7 +133,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
                 tag: String::new(),
                 input: v.input.clone(),
                 outs: pairs,
-                err: Some(e.as_str().map(str::to_string).unwrap_or_else(|| e.to_string())),
+                err: Some(e.as_str().map(str::to_string).unwrap_or_else(|| crate::json::show(e))),
                 fired: fired_of(v),
             });
             continue;

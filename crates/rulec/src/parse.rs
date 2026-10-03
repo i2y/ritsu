@@ -1695,7 +1695,7 @@ impl P {
                 // reserved one — it can only stand where a quoted id is expected, so nothing
                 // else in the language has to give the name up. Left out, it is e-Gov.
                 let mut i = k + 2;
-                let db = match line.get(i).and_then(|t| t.ident()).and_then(crate::ast::LawDb::parse) {
+                let db = match line.get(i).and_then(|t| t.ident()).and_then(crate::ast::LawDb::from_word) {
                     Some(d) => {
                         i += 1;
                         d

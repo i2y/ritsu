@@ -10,6 +10,7 @@
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -46,8 +47,7 @@ fn recheck(cert: &str) -> (i32, String) {
 /// Every rule in the corpus states a certificate, and every certificate holds.
 #[test]
 fn コーパスの証明書は再検査を通る() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let dir = root().join("tests/corpus");
@@ -80,7 +80,7 @@ fn 消去で決めた対は乗数つきで書かれ_決められない対は未�
     assert_eq!(c, 0, "{cert}");
     assert!(cert.contains(r#""refuted":[{"a":1,"b":2,"farkas":"#), "消去で決めた対が乗数つきで出ていない:\n{cert}");
     assert!(cert.contains(r#""undecided":[]"#), "{cert}");
-    if have_python() {
+    if ready(Need::Python, have_python, "python3 が無い") {
         let (code, said) = recheck(&cert);
         assert_eq!(code, 0, "{said}");
         assert!(said.contains("2 pairs disjoint + 1 apart on the linear model"), "{said}");
@@ -94,8 +94,7 @@ fn 消去で決めた対は乗数つきで書かれ_決められない対は未�
 /// re-checker could be a program that prints ok.
 #[test]
 fn 偽った証明書は落ちる() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);
@@ -137,8 +136,7 @@ fn 偽った証明書は落ちる() {
 /// proved rather than stated, and each of the four lies is refused.
 #[test]
 fn 上流由来の葉は_事実から組み直される() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let rel = "tests/corpus/二つの区分.rule";
@@ -194,8 +192,7 @@ fn 上流由来の葉は_事実から組み直される() {
 /// The digest ties a certificate to one text. Pointed at another file, it has to refuse.
 #[test]
 fn 証明書はどのファイルのものかを言う() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let dir = std::env::temp_dir().join(format!("rulec-cert-sha-{}", std::process::id()));
@@ -224,8 +221,7 @@ fn 証明書はどのファイルのものかを言う() {
 /// a deep cover and values with an interval.
 #[test]
 fn 偽った覆いとint64も落ちる() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let (c, cert) = rulec(&["certificate", "tests/corpus/健康保険料.rule"]);
@@ -284,8 +280,7 @@ examples
 
 #[test]
 fn 制約で閉じた穴は証明書に出て_再検査される() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let dir = std::env::temp_dir().join(format!("rulec-cert-con-{}", std::process::id()));
@@ -317,8 +312,7 @@ fn 制約で閉じた穴は証明書に出て_再検査される() {
 /// used twice all have to fail (§15.97).
 #[test]
 fn 証明書はファイルを引用する() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);
@@ -372,8 +366,7 @@ fn 証明書はファイルを引用する() {
 /// the values behind it so that can be checked at all.
 #[test]
 fn 到達の点は篩を通る() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let dir = std::env::temp_dir().join(format!("rulec-cert-sieve-{}", std::process::id()));
@@ -404,8 +397,7 @@ fn 到達の点は篩を通る() {
 /// none is one an `apply` brought in. Each of these was a way to pass a rule with a gap.
 #[test]
 fn 引用は行と桁に縛られる() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let (c, cert) = rulec(&["certificate", "tests/corpus/送料.rule"]);
@@ -446,8 +438,7 @@ fn 引用は行と桁に縛られる() {
 /// certificate reading the file as something it does not say (§15.99).
 #[test]
 fn 軸は宣言範囲を敷き詰める() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);
@@ -503,8 +494,7 @@ fn chain_cert(tag: &str, src: &str) -> String {
 /// multiplier changed is a sum that no longer cancels, and the certificate fails (§15.141).
 #[test]
 fn 線形のモデルの乗数は再検査で足し算される() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let gap = chain_cert("gap", CHAIN_GAP);
@@ -582,8 +572,7 @@ fn recheck_rule(cert: &str, rule: &str) -> (i32, String) {
 /// leaves unproved is said out loud rather than passed.
 #[test]
 fn 契約の関係は再検査で確かめられる() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let rule = "tests/corpus/速達の見積.rule";
@@ -628,8 +617,7 @@ fn 契約の関係は再検査で確かめられる() {
 /// builds the box from them: a box widened past the cell is refused (§15.143).
 #[test]
 fn 数の集合の箱は値から組み直される() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let dir = std::env::temp_dir().join(format!("rulec-cert-set-{}", std::process::id()));
@@ -656,8 +644,7 @@ fn 数の集合の箱は値から組み直される() {
 /// for every output of rulec.
 #[test]
 fn 知らない形式の版の証明書は断る() {
-    if !have_python() {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }
     let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);

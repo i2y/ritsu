@@ -6,6 +6,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -64,8 +65,7 @@ for line in sys.stdin:
 /// `verify` exited 2 ("cannot read") instead of 1. It stayed green on a laptop for as long as
 /// the timing held, and failed the first time CI ran the suite (DESIGN §15.94).
 fn setup(tag: &str) -> Option<PathBuf> {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので等価検証を飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので等価検証を飛ばした") {
         return None;
     }
     let dir = std::env::temp_dir().join(format!("rulec-verify-{}-{tag}", std::process::id()));
@@ -206,8 +206,7 @@ fn jsonでない答えは止まって何件目かを言う() {
 /// it was compared as the text `null` against `none`, and never matched.
 #[test]
 fn 任意の出力のnullはnoneとして比べる() {
-    if !have("python3") {
-        eprintln!("注意: python3 が無いので等価検証を飛ばした");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので等価検証を飛ばした") {
         return;
     }
     let dir = std::env::temp_dir().join(format!("rulec-verify-{}-optional", std::process::id()));

@@ -8,6 +8,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -67,8 +68,7 @@ const TARIFF: &str = r#"{"out":"OUT","blocks":[
 
 #[test]
 fn ワードの表を読む() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("read");
@@ -88,8 +88,7 @@ fn ワードの表を読む() {
 
 #[test]
 fn ワードの表を引いて写しにする() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("cite");

@@ -9,6 +9,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, need, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -199,8 +200,7 @@ fn 取り込んだ列挙は宣言し直さずに_import_する() {
 /// floor under everything the toolchain-gated tests cannot reach on a machine without them.
 #[test]
 fn 生成した_python_は全部構文として通る() {
-    if !have("python3") {
-        eprintln!("python3 が無いので飛ばします");
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばします") {
         return;
     }
     let rules: Vec<String> = std::fs::read_dir(root().join("tests/corpus"))
@@ -245,7 +245,7 @@ fn 生成した_proto_は_buf_が受け取る() {
     ];
     let dir = generate("toolchain", &rules);
     let proto = dir.join("proto");
-    if have("buf") {
+    if ready(Need::Buf, || have("buf"), "buf が無いので lint を飛ばします") {
         // No configuration is written here: `gen` wrote the module's own `buf.yaml`, and what
         // is being checked is that buf accepts the tree as rulec left it.
         assert!(proto.join("buf.yaml").is_file(), "buf.yaml が生成されていない");
@@ -260,8 +260,6 @@ fn 生成した_proto_は_buf_が受け取る() {
         // `buf build` reads the same module and says whether protoc would accept it at all.
         let o = Command::new("buf").current_dir(&proto).args(["build", "-o", "/dev/null"]).output().expect("buf を起動できない");
         assert!(o.status.success(), "buf build が断りました:\n{}", String::from_utf8_lossy(&o.stderr));
-    } else {
-        eprintln!("buf が無いので lint を飛ばします");
     }
     let files: Vec<String> = walk(&proto).iter().map(|p| p.strip_prefix(&proto).unwrap().to_string_lossy().into_owned()).collect();
     assert_eq!(files.len(), rules.len(), "規則ごとに一つのはずです: {files:?}");
@@ -306,7 +304,7 @@ fn アダプタのテンプレートは呼び先を包む() {
     ] {
         assert!(t.contains(want), "テンプレートに `{want}` がありません:\n{t}");
     }
-    if have("python3") {
+    if ready(Need::Python, || have("python3"), "python3 が無いので adapter.py の構文の確かめを飛ばします") {
         let d = std::env::temp_dir().join(format!("rulec-connect-adapter-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
@@ -356,8 +354,7 @@ fn プロトが取る名前とぶつかる別名は_check_が言う() {
 /// the files rulec wrote.
 #[test]
 fn 生成した_python_は_mypy_strict_を通る() {
-    if rulec_connect_ready().is_none() {
-        eprintln!("buf・プラグイン・connectrpc・uvicorn・mypy のどれかが無いので飛ばします");
+    if !ready(Need::Buf, || rulec_connect_ready().is_some(), "buf・プラグイン・connectrpc・uvicorn・mypy のどれかが無いので飛ばします") {
         return;
     }
     let dir = generate("mypy", &[RULE, "tests/corpus/期間区分.rule", "tests/corpus/買物かごの送料.rule"]);
@@ -546,7 +543,7 @@ fn 名前は_buf_と同じに切る() {
     assert!(body.contains("enum HTTPRoute {\n  HTTP_ROUTE_UNSPECIFIED = 0;\n  HTTP_ROUTE_INNER = 1;"), "{body}");
     let svc = std::fs::read_to_string(out.join("python/fee_service.py")).unwrap();
     assert!(svc.contains("web_v1_web_pb.Size(1): m.Size.SIZE60,  # SIZE_60"), "{svc}");
-    if have("buf") {
+    if ready(Need::Buf, || have("buf"), "buf が無いので lint を飛ばします") {
         let o = Command::new("buf").current_dir(out.join("proto")).arg("lint").output().expect("buf を起動できない");
         assert!(o.status.success(), "buf lint:\n{}", String::from_utf8_lossy(&o.stdout));
     }
@@ -604,8 +601,7 @@ fn 生成したまま立ち_名前の誤りと省いた入力を断る() {
     let importable = |m: &str| {
         Command::new("python3").args(["-c", &format!("import {m}")]).output().map(|o| o.status.success()).unwrap_or(false)
     };
-    if !(have("buf") && have("protoc-gen-py") && have("protoc-gen-connectrpc") && importable("connectrpc")) {
-        eprintln!("buf・プラグイン・connectrpc のどれかが無いので飛ばします");
+    if !ready(Need::Buf, || have("buf") && have("protoc-gen-py") && have("protoc-gen-connectrpc") && importable("connectrpc"), "buf・プラグイン・connectrpc のどれかが無いので飛ばします") {
         return;
     }
     let d = std::env::temp_dir().join(format!("rulec-connect-stand-{}", std::process::id()));
@@ -871,11 +867,14 @@ fn 固定できない依存は言い_食い違うピンは止める() {
 /// says so and stops.
 #[test]
 fn 依存のある契約のサービスが立つ() {
+    // buf fetches the dependency from the Buf Schema Registry.
+    if !need(Need::Network) {
+        return;
+    }
     let importable = |m: &str| {
         Command::new("python3").args(["-c", &format!("import {m}")]).output().map(|o| o.status.success()).unwrap_or(false)
     };
-    if !(have("buf") && have("protoc-gen-py") && have("protoc-gen-connectrpc") && importable("connectrpc")) {
-        eprintln!("buf・プラグイン・connectrpc のどれかが無いので飛ばします");
+    if !ready(Need::Buf, || have("buf") && have("protoc-gen-py") && have("protoc-gen-connectrpc") && importable("connectrpc"), "buf・プラグイン・connectrpc のどれかが無いので飛ばします") {
         return;
     }
     let d = bsr_fixture(
@@ -893,7 +892,7 @@ fn 依存のある契約のサービスが立つ() {
             .iter()
             .any(|w| said.contains(w))
     {
-        eprintln!("BSR に届かないので飛ばします: {said}");
+        skip(&format!("BSR に届かないので飛ばします: {said}"));
         let _ = std::fs::remove_dir_all(&d);
         return;
     }

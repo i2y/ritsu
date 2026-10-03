@@ -13,6 +13,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -76,8 +77,7 @@ fn tmp(name: &str) -> PathBuf {
 
 #[test]
 fn 文書のクエリはec261と全件一致する() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い（sqlite3 は標準ライブラリなので他に要るものは無い）");
+    if !ready(Need::Python, || have("python3"), "python3 が無い（sqlite3 は標準ライブラリなので他に要るものは無い）") {
         return;
     }
     let dir = tmp("ok");
@@ -94,8 +94,7 @@ fn 文書のクエリはec261と全件一致する() {
 
 #[test]
 fn 閾値を一つ壊すとその入力ごと報告される() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let dir = tmp("broken");

@@ -10,14 +10,17 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready, skip};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// The Lean program, when the level lets the tests run it (ritsu's DESIGN 10.2) and it has been
+/// built (`lake build` in `proofs/`); a SKIP line says which it is not.
 fn checker() -> Option<PathBuf> {
     let p = root().join("proofs/.lake/build/bin/rulec-recheck");
-    p.exists().then_some(p)
+    ready(Need::Lean, || p.exists(), "proofs/ が build されていない（lake build で作る）").then_some(p)
 }
 
 fn rulec(args: &[&str]) -> (i32, String) {
@@ -57,7 +60,6 @@ fn lean(bin: &PathBuf, cert: &str, rule: Option<&str>) -> (i32, String) {
 #[test]
 fn コーパスは証明付きの検査器を通る() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない（lake build で作る）");
         return;
     };
     let dir = root().join("tests/corpus");
@@ -94,7 +96,6 @@ fn コーパスは証明付きの検査器を通る() {
 #[test]
 fn 偽った証明書は証明付きの検査器でも落ちる() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     };
     let (c, cert) = rulec(&["certificate", "tests/corpus/健康保険料.rule"]);
@@ -142,7 +143,6 @@ fn 偽った証明書は証明付きの検査器でも落ちる() {
 #[test]
 fn 上流由来の葉は_定理の中に入った() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     };
     let rel = "tests/corpus/二つの区分.rule";
@@ -200,7 +200,6 @@ fn 上流由来の葉は_定理の中に入った() {
 #[test]
 fn 配分の区間は制約に乗っている() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     };
     let rel = "tests/corpus/比例配分.rule";
@@ -237,7 +236,6 @@ fn 配分の区間は制約に乗っている() {
 #[test]
 fn 制約で閉じた葉も検査される() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     };
     let dir = std::env::temp_dir().join(format!("rulec-lean-con-{}", std::process::id()));
@@ -298,7 +296,6 @@ examples
 #[test]
 fn 証明付きの検査器は別のファイルを拒む() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     };
     let (c, cert) = rulec(&["certificate", "tests/corpus/印紙税.rule"]);
@@ -345,14 +342,13 @@ fn 証明に穴が無い() {
 #[test]
 fn 定理が立つ公理は三つだけ() {
     if checker().is_none() {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     }
     let lake = std::env::var("HOME").map(|h| PathBuf::from(h).join(".elan/bin/lake")).ok().filter(|p| p.exists());
     let Some(lake) = lake.or_else(|| {
         Command::new("sh").args(["-c", "command -v lake"]).output().ok().filter(|o| o.status.success()).map(|o| PathBuf::from(String::from_utf8_lossy(&o.stdout).trim().to_string()))
     }) else {
-        eprintln!("skip: lake が無い");
+        skip("lake が無い");
         return;
     };
     const THEOREMS: &[&str] = &[
@@ -412,7 +408,6 @@ fn 定理が立つ公理は三つだけ() {
 #[test]
 fn 線形のモデルの乗数は証明付きの検査器でも確かめられる() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     };
     let rules = [
@@ -477,7 +472,6 @@ fn with_a_clashing_case(cert: &str) -> String {
 #[test]
 fn 契約の関係は証明付きの検査器でも確かめられる() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     };
     let rule = "tests/corpus/速達の見積.rule";
@@ -522,7 +516,6 @@ fn 契約の関係は証明付きの検査器でも確かめられる() {
 #[test]
 fn 数の集合の箱は証明付きの検査器でも組み直される() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     };
     let dir = std::env::temp_dir().join(format!("rulec-lean-set-{}", std::process::id()));
@@ -549,7 +542,6 @@ fn 数の集合の箱は証明付きの検査器でも組み直される() {
 #[test]
 fn 知らない形式の版の証明書は証明付きの検査器でも断る() {
     let Some(bin) = checker() else {
-        eprintln!("skip: proofs/ が build されていない");
         return;
     };
     let (c, cert) = rulec(&["certificate", "tests/corpus/健康保険料.rule"]);

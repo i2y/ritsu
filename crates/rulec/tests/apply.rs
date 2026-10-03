@@ -9,6 +9,7 @@
 use rulec::ast::Item;
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, need};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -171,6 +172,10 @@ fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別�
     assert_eq!(distinct.len(), idents.len(), "識別子が重なっている: {idents:?}");
     assert!(idents.contains(&"旧税額".to_string()), "別名の無い付け替え先は名前そのものが識別子になる: {idents:?}");
     // And the generated code answers like the evaluator wherever a toolchain is installed.
+    if !need(Need::Python) {
+        let _ = std::fs::remove_dir_all(&d);
+        return;
+    }
     let generated = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["gen", "束.rule", "--out", "out"]).output().unwrap();
     assert!(generated.status.success(), "{}", String::from_utf8_lossy(&generated.stderr));
     let test = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").current_dir(&d).args(["test", "out"]).output().unwrap();
@@ -238,6 +243,9 @@ fn 名前でもリテラルでもない語はE041のまま() {
 #[test]
 fn 呼び先の形が揃った規則も生成物は評価器と全言語で一致する() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
+    if !need(Need::Python) {
+        return;
+    }
     let dir = std::env::temp_dir().join(format!("rulec-apply-run-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

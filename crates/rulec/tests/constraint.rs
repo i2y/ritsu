@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use ritsu_testkit::{Need, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -109,8 +110,7 @@ fn ベクタは制約を満たすものだけ() {
 
 #[test]
 fn 生成物は制約を破る入力を断る() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("guard");
@@ -226,8 +226,7 @@ examples
 
 #[test]
 fn 刻みの違う率どうしの制約を門が正しく比べる() {
-    if !have("python3") {
-        eprintln!("skip: python3 が無い");
+    if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
     let d = dir("steps");
