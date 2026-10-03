@@ -403,6 +403,13 @@ D.5 でしたこと（2026-10-04）：
 
 DESIGN 6.3。dandori の `Items`（`task`、`case`、`record` と `field`、`enum` と `value`、`input`、`output`）と `References`。`naming.tsv` の `dandori "order.flow" task reserve` の行を JSON の行に替え、dandori の入れ子の行を足す。
 
+D.6 でしたこと（2026-10-04）：
+
+- ritsu-base の名指しに、dandori の種類（`task`、`case`、`record` と下の `field`、`enum` と下の `value`、`input`、`output`）を足した。`naming.tsv` は、dandori の行を JSON にし、入れ子の行を二つ（`record 予約 field 泊数`、`enum Outcome value awaiting_review`）、入れ子の誤りの行を三つ（親のすぐあとでない `value`、`task` の下の組、`record` の下の `field` でない組）足した。種類の無いツールに種類を書く誤りは、`dandori has no kinds yet` の行が受け持っていたので、`file "src/app.py" task main` の行に替えた。表は 42 行（名指し 24、誤り 18）になった（DESIGN 6.3）。
+- dandori の `src/ports.rs` の `Engine` が `Items` と `References` に答える。どちらも `.flow` を構文まで読むだけで、規則は読まない（規則を読めないフローにも、タスクと案件はある）。定義の文は、タスク・案件・レコードなら宣言の塊の行、列挙・フィールド・入力・出力ならその行、列挙の値ならその名前で、どの行もコメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す（レコードのコロンをそろえ直しても、字下げの幅を変えても、定義は変わらない）。参照は、`use rule`（下に書いた呼び方を `use rule … lambda, local` のように添える）、`use proto`・`use openapi`・`use smithy`（OpenAPI と Smithy の記述は `file`）、`implements`（サービス）、`connect` のタスク（サービスとメソッド）、子の `flow` である。サービスは package から見た名前（最後の部分）で名指す。`tests/ports.rs` が、例とテストのフローの全部で、中のものの行が収まり、名指しが読み直せ、参照の先のファイルがあることを確かめる。dandori のコマンドの出力は変わらない。
+- 決めたこと（★）：型の中の参照（`<API>.<名前>`、`<規則>.<列挙>`、`follows <規則>.<ステートマシン>`）と、OpenAPI の操作を呼ぶ `http` は、参照に入れなかった。DESIGN 6.4 の一覧に無く、どれも、もう参照に出る `use rule` か `use proto|openapi` の行のファイルの中を指すからである。sakai が要素まで要ると分かったら（D.8）、足す。
+- 名指しの表が変わったので、yuen と sakai の名指しのテストを直した（表の行数、理由の表）。dandori に種類を書く誤りを試していた yuen の変異 `E012_dandoriの種類` は、dandori に無い種類（`table`）を書く形にし、golden を取り直した。yuen の台帳の E012 の例と文、sakai の台帳の E011 の文から「dandori の種類」を外した。sakai では種類の語が `.ctx` の予約語でもあるので、`task`、`case`、`record` を名前にできなくなった（sakai の DESIGN 12.1）。yuen と sakai は、dandori の中のものを読むのはまだで（D.7 と D.8）、種類つきの名指しを、ファイルで名指したときと同じに扱う。
+
 ### D.7 yuen の一式の読み込み
 
 yuen の PLAN の C.1〜C.9 を、子プロセスと JSON ではなく口で作るように書き直してから作る（書き直した計画を yuen の PLAN.md に書く）。

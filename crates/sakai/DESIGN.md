@@ -488,7 +488,7 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 | `koyomi` | `.cal` | `input`、`date`、`claim`、`source` | `koyomi api` の `inputs`、`dates`、`claims`、`sources`（カレンダーのファイルでは `calendar.sources`） |
 | `chobo` | `.book` | `unit`、`account`、`transfer` | `chobo api` の `units`、`accounts`、`transfers` |
 | `geas` | `.geas` | `claim` | `geas map` の記録の一行め（`.geas/<stem>.map.jsonl` の主張の並び）。geas は主張を、走らせずに並べるコマンドを持たない（4.6） |
-| `dandori` | `.flow` | なし（ファイルでだけ名指す） | dandori は名前を JSON で出さない（4.7）。dandori が api を持てば、そこから決める |
+| `dandori` | `.flow` | `task`、`case`、`record`（下に `field`）、`enum`（下に `value`）、`input`、`output` | ritsu の D.6 で足した（ritsu の DESIGN 6.3）。名前は dandori の口（`Items`）が渡す。sakai が読むのは、一式の読み込み（ritsu の D.8）からで、いまは形だけを確かめる（4.7） |
 | `proto` | `.proto` | `service`（下に `method`）、`message`（下に `field`）、`enum`（下に `value`） | proto のファイルの中の名前 |
 | `file` | 何でも | なし | |
 | `yuen` | `.req` | `requirement`、`source` | `yuen api` |
@@ -542,7 +542,7 @@ JSON（`api` と、名指しの JSON の形）では、パスをルートから�
 
 `tests/naming.rs` は、誤りの行が、表の理由のとおりの理由で断られることも確かめる（理由ごとに、sakai の英語の文面に出る語句を表にしてある）。別の理由でたまたま断られた行を、通ったことにしないためである。
 
-`.ctx` に書いた名指しの誤りは、形の誤り（知らないツールの語、そのツールに無い種類の語、親のすぐあとでない子、二つめの子、dandori の種類、文字列の外の全角の空白、使えないエスケープ）が E011、絶対パス、ルートの外に出るパス、空のパスが E012 である。
+`.ctx` に書いた名指しの誤りは、形の誤り（知らないツールの語、そのツールに無い種類の語、親のすぐあとでない子、二つめの子、`file` の種類、文字列の外の全角の空白、使えないエスケープ）が E011、絶対パス、ルートの外に出るパス、空のパスが E012 である。
 
 A の段階の終わりに、yuen の DESIGN 2 章（2.8 の七項目）と並べると、五つが食い違っていた。それぞれ次のように決めた。
 
@@ -799,7 +799,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E008 | 地図かコンテキストに ASCII の別名が無い、または形が違う |
 | E009 | 書いたパスが無い（`use context`、`owns`、`proto`、`generated dir`、`layer`、`covers`、`code`） |
 | E010 | `use context` の先が context のファイルでない、同じファイルを二度読む |
-| E011 | 成果物の名指しの形が違う（ツールの語と拡張子が合わない、`dir` の先がファイル、知らないツールや種類の語、親のすぐあとでない子、dandori の種類、列挙でない対応の先） |
+| E011 | 成果物の名指しの形が違う（ツールの語と拡張子が合わない、`dir` の先がファイル、知らないツールや種類の語、親のすぐあとでない子、`file` の種類、列挙でない対応の先） |
 | E012 | 絶対パス、ルートの外に出るパス、空のパス（2.4） |
 | E101 | どのコンテキストにも属さない成果物 |
 | E102 | 二つのコンテキストが同じ深さで持つ成果物 |
@@ -1400,6 +1400,8 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 同じとき（ritsu の PLAN の D.10）、ritsu-proto が読めない `.proto` を言う文の日本語を直した。期待したものが語のとき、英語のまま日本語に混ぜていた（「a name が要るところに `{` があります」）のを、日本語の語にした（「名前が要るところに `{` があります」）。E106 の文に出る。英語の文と、記号を期待するときの文（「`;` が要るところに `}` があります」）は変わらない。sakai の golden は変わらず、ritsu-proto の `tests/golden/sakai.txt` の一行が変わった。コマンドの振る舞いは、ほかに変えていない（205 回の出力が一字も違わない）。
 
 段階 D の二つ目の部分で、例が一式から写したものをそれぞれのツールの `check` で確かめるテスト（`what_was_copied_passes_the_suite`）は、dandori のワークフローを `ritsu dandori check` で確かめるようにした。dandori のクレートのバイナリは、ritsu の D.3 から規則を読まない（ritsu の DESIGN 2.3。規則を使うワークフローは `ritsu dandori` で走らせる）からである。ツールの場所は `SAKAI_DANDORI` に代えて `SAKAI_RITSU`（無ければワークスペースの `target/debug/ritsu`、次に PATH）から読む。sakai のコマンドの振る舞いは変わらない。
+
+段階 D の二つ目の部分で、ritsu の名指しの決まりに dandori の種類の語（`task`、`case`、`record` と下の `field`、`enum` と下の `value`、`input`、`output`）が入った（ritsu の DESIGN 6.3、PLAN の D.6）。sakai の振る舞いは二つ変わった。一つ、`dandori "…" task reserve` のような名指しを、これまでの E011（dandori にはまだ種類が無い）ではなく、ほかのツールの種類と同じに読む。dandori に無い種類（`table` など）と組の並びの誤りは、これまでどおり E011 である。二つ、種類の語は `.ctx` の予約語でもあるので（1.2）、`task`、`case`、`record` を地図、コンテキスト、語、下流の値の名前にできなくなった（E002）。例とテストに、この三つを名前にしたものは無かった。
 
 ## 13. 捨てたもの
 

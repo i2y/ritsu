@@ -1,4 +1,3 @@
-error[E012]: tests/mutants/E012_dandoriの種類/支払.req:11:37: dandori has no kinds yet; name the file
-    11 |   satisfied by dandori "order.flow" task reserve
-  = dandori does not list its tasks and cases as JSON, so yuen cannot name what is inside a `.flow` (DESIGN 2.7). Write `dandori "order.flow"`, and say which task in the requirement's text or a `decided`.
+error[E012]: tests/mutants/E012_dandoriの種類/支払.req:11:37: `table` is not a kind of dandori; the kinds of dandori are task, case, record, enum, input and output
+    11 |   satisfied by dandori "order.flow" table reserve
 tests/mutants/E012_dandoriの種類: 1 error

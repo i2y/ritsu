@@ -317,9 +317,9 @@ pub trait References { fn references(&self, root: &Path, file: &str) -> Result<V
 | `Dates`（koyomi） | `facts`、`values`、`days`、`eval`（範囲のすべての入力で計算する） | 入力の組み合わせが koyomi の確かめる数を超えるとき、途中で計算が止まる入力があるときは、決められないと言う |
 | `Books`（chobo） | `facts`、`open`（参照インタプリタの帳簿。操作、時間を進める、残高） | `refusals`（chobo の検査は額を決まった値でしか試さない。E の X4） |
 | `Claims`（geas） | `claims`、`map_record` | — |
-| `Items`、`References` | rulec、koyomi、chobo（中のものだけ）、geas（中のものだけ）、yuen、sakai | dandori（D.6） |
+| `Items`、`References` | rulec、koyomi、chobo（中のものだけ）、geas（中のものだけ）、yuen、sakai、dandori（D の二つ目の部分。D.6） | — |
 
-中のものの定義の文は、6.4 の表のとおりにした。rulec は `rulec fmt` が書く形の行、koyomi は `date … =` の塊の行と条件の行（コメントと前後の空白を除く）、chobo は yuen の DESIGN 3.2 の形の JSON（yuen の試作が計算したハッシュと同じになる）、geas は主張の塊の行である。表に無かった yuen は要件の端の中身（yuen の DESIGN 4.1）と出典の固定の行、sakai はコンテキストのファイルの行と語の塊の行にした。
+中のものの定義の文は、6.4 の表のとおりにした。rulec は `rulec fmt` が書く形の行、koyomi は `date … =` の塊の行と条件の行（コメントと前後の空白を除く）、chobo は yuen の DESIGN 3.2 の形の JSON（yuen の試作が計算したハッシュと同じになる）、geas は主張の塊の行、dandori はタスク・案件・レコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3）である。表に無かった yuen は要件の端の中身（yuen の DESIGN 4.1）と出典の固定の行、sakai はコンテキストのファイルの行と語の塊の行にした。
 
 ### 3.3 テストと dev-dependency
 
@@ -562,7 +562,7 @@ chobo の額は 0 から 2⁶³ − 1 までで、rulec の値は負にもなり
 1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）と、rulec の `enum E [value V]` だけで、ほかのツールの組は一つまで。子の種類は、親の種類のすぐあとにしか書けない。
 2. **ツールの語**：`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`、`yuen`、`sakai`。`dir` はツールの語にしない（sakai の `.ctx` の構文の語にとどめる）。
 3. **パス**：`.req` や `.ctx` の中では、書いたファイルのディレクトリからの相対。区切りは `/` で、`.` と `..` は字の上で畳む。絶対パスと空のパスはエラー。`"."` はルートを指す。末尾の `/` は取り除く。JSON では、ルート（`--root`、無ければ最初に渡したパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ渡したディレクトリ）からの相対で、ルートの外に出るパスはエラー。
-4. **種類の語**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`。dandori と `file` には無い（dandori には 6.3 で足す）。どの言語も、自分が使わない種類も名指しとして受け付ける。
+4. **種類の語**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3。D の二つ目の部分で足した）。`file` には無い。どの言語も、自分が使わない種類も名指しとして受け付ける。
 5. **名前**：ツールの名前（JSON の `name`）。別名は使わない。語（空白、`"`、`#` を含まない一続きの文字。頭が数字でもよい）か `"…"` で書く。`"…"` の中のエスケープは `\"` と `\\` だけで、ほかはエラー。正規化せず、大文字と小文字を区別する。proto の名前は、そのファイルの package から見た名前。文字列の外の全角の空白、`"…"` で書いた種類やツールの語、名前の無い種類はエラー。
 6. **同じ・含む**：同じは、ツールの語と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec の `enum`）は子を全部含む。
 7. **JSON の形**：`{"text": …, "tool": …, "path": …, "items": [[種類, 名前], …]}`（キーはこの順）。`text` は、パスをルートからの相対に直し、名前を語で書けるなら引用符なしで書いた形。空白を入れない詰めた書き方で、ASCII でない文字はそのまま出す。
@@ -577,7 +577,9 @@ chobo の額は 0 から 2⁶³ − 1 までで、rulec の値は負にもなり
 
 - dandori：`task`、`case`、`record`（下に `field`）、`enum`（下に `value`）、`input`、`output`。
 
-`naming.tsv` の `dandori "order.flow" task reserve` の行（いまは `ERROR: dandori has no kinds yet`）は、JSON の行に変わる。入れ子の決まり（子の種類は親のすぐあと）は proto と rulec と同じにする。geas の `target` など、ほかの言語の種類を足すのは、使う側が要るとわかってからにする。
+`naming.tsv` の `dandori "order.flow" task reserve` の行（`ERROR: dandori has no kinds yet` だった）は、JSON の行に変わる。入れ子の決まり（子の種類は親のすぐあと）は proto と rulec と同じにする。geas の `target` など、ほかの言語の種類を足すのは、使う側が要るとわかってからにする。
+
+D の二つ目の部分で、これを足した（PLAN の D.6）。表は、dandori の行を JSON にし、入れ子の行（`record 予約 field 泊数`、`enum Outcome value awaiting_review`）と、入れ子の誤りの行（親のすぐあとでない `value`、`task` の下の組、`record` の下の `field` でない組）と、種類の無い `file` に種類を書いた行（`dandori has no kinds yet` の行が受け持っていた誤りの種類）を足して、42 行（名指し 24、誤り 18）になった。
 
 ### 6.4 索引：中のものと参照
 
@@ -590,7 +592,7 @@ chobo の額は 0 から 2⁶³ − 1 までで、rulec の値は負にもなり
 | rulec | `table`、`clause`、`define`、`derive`、`input`、`output`、`enum`、`machine`、`source` | そのものの行を `rulec fmt` が書く形にしたもの（表なら見出しから最後の行まで） |
 | koyomi | `date`、`claim`、`input`、`source` | `date … =` の塊の行（操作の行を含む）、条件の行 |
 | chobo | `unit`、`account`、`transfer` | yuen の DESIGN 3.2 の形（`chobo api` の一つから名前とコードを除いたもの）を土台の JSON で |
-| dandori | 6.3 の種類 | タスクや案件の宣言の塊の行 |
+| dandori | 6.3 の種類 | タスクや案件やレコードの宣言の塊の行（列挙、フィールド、入力、出力はその行、列挙の値はその名前） |
 | geas | `claim` | 主張の塊の行 |
 | proto | `service`、`method`、`message`、`field`、`enum`、`value` | yuen の DESIGN 3.4 の決まった形の文 |
 

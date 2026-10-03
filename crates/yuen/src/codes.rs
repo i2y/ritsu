@@ -152,11 +152,11 @@ pub fn ledger() -> Ledger {
             "E012",
             tr!("その種類や組は、そこに書けません", "A kind or pair that cannot be written there"),
             tr!(
-                "ツールに無い種類、子の種類（`method`、`field`、`value`）が親のすぐあとにない、子の組が二つ、入れ子の無いツールで組が二つ、dandori と file の種類、種類のあとに名前が無いとき。`source` と `yuen` の名指しをリンクや範囲に書いたとき、借りた出典が rulec か koyomi の `source` でないときも。",
-                "A kind the tool does not have, a child kind (`method`, `field`, `value`) not right after its parent, two child pairs, two pairs for a tool without nesting, a kind for dandori or file, or a kind without its name; also `source` or a `yuen` naming in a link or a scope, and a borrowed source that is not the `source` of a rulec or koyomi file."
+                "ツールに無い種類、子の種類（`method`、`field`、`value`）が親のすぐあとにない、子の組が二つ、入れ子の無いツールで組が二つ、file の種類、種類のあとに名前が無いとき。`source` と `yuen` の名指しをリンクや範囲に書いたとき、借りた出典が rulec か koyomi の `source` でないときも。",
+                "A kind the tool does not have, a child kind (`method`, `field`, `value`) not right after its parent, two child pairs, two pairs for a tool without nesting, a kind for file, or a kind without its name; also `source` or a `yuen` naming in a link or a scope, and a borrowed source that is not the `source` of a rulec or koyomi file."
             ),
-            tr!("注に挙がる種類で書きます。dandori はファイルで名指します（`dandori \"order.flow\"`）。", "Write one of the kinds the note gives; name dandori by its file (`dandori \"order.flow\"`)."),
-            "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by dandori \"order.flow\" task reserve\n",
+            tr!("文に挙がる種類で書きます。file はファイルを丸ごと名指します（`file \"src/app.py\"`）。", "Write one of the kinds the message gives; file names a whole file (`file \"src/app.py\"`)."),
+            "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by dandori \"order.flow\" table reserve\n",
             &["E011", "E013"],
         ),
         e(

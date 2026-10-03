@@ -195,8 +195,8 @@ pub fn ledger() -> Ledger {
             "E011",
             tr!("成果物の名指しの形が違います", "The name of an artifact is not of the right form"),
             tr!(
-                "ツールの語と拡張子が合わないとき、`dir` の先がファイルのとき、ツールの語の先がディレクトリのとき、知らないツールの語や、そのツールに無い種類の語を書いたとき、子の種類（`value`、`field`、`method`）が親のすぐあとにないとき、dandori の成果物に種類を書いたとき。対応の先が列挙でないときも。",
-                "The tool and the extension do not agree, a `dir` is a file or a tool's file a directory, a tool or a kind is not one the tool has, a child kind (`value`, `field`, `method`) does not come right after its parent, or a dandori artifact is given a kind; also a mapping's target that is not an enum."
+                "ツールの語と拡張子が合わないとき、`dir` の先がファイルのとき、ツールの語の先がディレクトリのとき、知らないツールの語や、そのツールに無い種類の語を書いたとき、子の種類（`value`、`field`、`method`）が親のすぐあとにないとき、`file` に種類を書いたとき。対応の先が列挙でないときも。",
+                "The tool and the extension do not agree, a `dir` is a file or a tool's file a directory, a tool or a kind is not one the tool has, a child kind (`value`, `field`, `method`) does not come right after its parent, or a `file` is given a kind; also a mapping's target that is not an enum."
             ),
             tr!("`<ツール> \"<パス>\" [<種類> <名前>]…` の形で書きます。", "Write it in the form `<tool> \"<path>\" [<kind> <name>]...`."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  rulec \"a/a.proto\"\n")],

@@ -11,8 +11,10 @@ fn code_of(reason: &str) -> Option<&'static str> {
     match reason {
         "unknown tool" | "a tool written as a string" => Some("E011"),
         "absolute path" | "outside the root" | "an empty path" => Some("E013"),
-        "dandori has no kinds yet"
+        "file has no kinds"
         | "value only right after enum"
+        | "nothing under task"
+        | "only field under record"
         | "method only right after service"
         | "one child at most"
         | "chobo has no nested kinds"
@@ -64,7 +66,7 @@ fn every_line_of_the_shared_table() {
             }
         }
     }
-    assert!(ok == 21 && errors == 15, "{ok} lines of JSON and {errors} of errors");
+    assert!(ok == 24 && errors == 18, "{ok} lines of JSON and {errors} of errors");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

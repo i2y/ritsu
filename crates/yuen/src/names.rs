@@ -81,10 +81,6 @@ fn said(e: base::Error) -> NameError {
             "The root is the nearest directory above the path given that has a `.git` (else the directory given; `--root` changes it)."
         )),
         ErrorKind::QuotedKind(_) => err("E012", col, tr!("種類は `\"…\"` ではなく語で書きます", "A kind is a word, not a string in quotes")),
-        ErrorKind::NoKinds(Tool::Dandori) => err("E012", col, tr!("dandori にはまだ種類がありません。ファイルで名指します", "dandori has no kinds yet; name the file")).note(tr!(
-            "dandori はタスクや案件の一覧を JSON で出さないので、yuen は `.flow` の中を名指せません（DESIGN 2.7）。`dandori \"order.flow\"` のように書き、どのタスクかは要件の文か `decided` に書きます。",
-            "dandori does not list its tasks and cases as JSON, so yuen cannot name what is inside a `.flow` (DESIGN 2.7). Write `dandori \"order.flow\"`, and say which task in the requirement's text or a `decided`."
-        )),
         ErrorKind::NoKinds(_) => err("E012", col, tr!("file に種類はありません。file はファイルを丸ごと名指します", "file has no kinds; it names a whole file")),
         // The rest of what a kind can do wrong is said in ritsu-base's words, which were yuen's.
         kind @ (ErrorKind::ChildFirst { .. } | ErrorKind::UnknownKind { .. } | ErrorKind::NoNesting(_) | ErrorKind::NothingUnder(_) | ErrorKind::WrongChild { .. } | ErrorKind::TooManyPairs(_) | ErrorKind::MissingName(_)) => {

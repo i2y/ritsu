@@ -82,7 +82,7 @@ pub const TABLE: &[(&str, &[&str])] = &[
         "kind",
         &[
             "input", "output", "enum", "value", "table", "clause", "define", "derive", "machine", "source", "date", "claim", "unit", "account", "transfer", "service",
-            "method", "message", "field", "requirement", "context", "term",
+            "method", "message", "field", "requirement", "context", "term", "task", "case", "record",
         ],
     ),
 ];
@@ -96,7 +96,7 @@ pub fn is_reserved(w: &str) -> bool {
 mod tests {
     #[test]
     fn every_word_of_a_keyword_is_reserved() {
-        for w in ["map", "published", "language", "anticorruption", "layer", "ways", "rulec", "value", "refuse"] {
+        for w in ["map", "published", "language", "anticorruption", "layer", "ways", "rulec", "value", "refuse", "task"] {
             assert!(super::is_reserved(w), "{w}");
         }
         assert!(!super::is_reserved("在庫"));

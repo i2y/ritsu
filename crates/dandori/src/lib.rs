@@ -25,6 +25,7 @@ pub mod interp;
 pub mod lower;
 pub mod model;
 pub mod playground;
+pub mod ports;
 pub mod proto;
 pub mod pydantic_graph;
 pub mod ranges;

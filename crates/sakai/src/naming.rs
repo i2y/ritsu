@@ -86,10 +86,6 @@ fn said(kind: &ErrorKind, rest: &[base::Word]) -> Text {
         ErrorKind::AbsolutePath(p) => paths::error_text(paths::PathError::Absolute, p),
         ErrorKind::OutsideRoot(p) => paths::error_text(paths::PathError::Outside, p),
         ErrorKind::QuotedKind(_) => tr!("ここには種類の語を書きます", "a kind goes here"),
-        ErrorKind::NoKinds(Tool::Dandori) => tr!(
-            "dandori の成果物には、まだ種類を書けません。dandori が名前を JSON で出さないので、.flow はファイルでだけ名指します",
-            "the tool dandori has no kinds yet: dandori does not print its names as JSON, so a .flow is named as a file only"
-        ),
         ErrorKind::NoKinds(_) => tr!("`file` には種類を書けません", "`file` has no kinds"),
         ErrorKind::ChildFirst { kind, parent } => tr!("`{kind}` は `{parent}` のすぐあとにだけ書けます", "`{kind}` comes only right after `{parent}`"),
         ErrorKind::UnknownKind { tool, kind } => {

@@ -8,5 +8,5 @@ requirement 支払日(payment_day)
   text "20 日締め翌月 10 日払い"
   owner 経理
   decided 2026-10-03 by 経理 "例として決めた"
-  satisfied by dandori "order.flow" task reserve
+  satisfied by dandori "order.flow" table reserve
   not verified "月に一度、経理が照らし合わせる"

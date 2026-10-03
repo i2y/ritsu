@@ -68,7 +68,7 @@ impl Tool {
         }
     }
 
-    /// The kinds (DESIGN 6.2, item 4), in the order the design lists them, each with the kinds
+    /// The kinds (DESIGN 6.2, item 4, and dandori's of 6.3), in the order the design lists them, each with the kinds
     /// that come right after it.
     pub fn kinds(self) -> Kinds {
         match self {
@@ -86,7 +86,7 @@ impl Tool {
             Tool::Koyomi => &[("input", &[]), ("date", &[]), ("claim", &[]), ("source", &[])],
             Tool::Chobo => &[("unit", &[]), ("account", &[]), ("transfer", &[])],
             Tool::Geas => &[("claim", &[])],
-            Tool::Dandori => &[],
+            Tool::Dandori => &[("task", &[]), ("case", &[]), ("record", &["field"]), ("enum", &["value"]), ("input", &[]), ("output", &[])],
             Tool::Proto => &[("service", &["method"]), ("message", &["field"]), ("enum", &["value"])],
             Tool::File => &[],
             Tool::Yuen => &[("requirement", &[]), ("source", &[])],
@@ -109,7 +109,7 @@ impl Tool {
         self.kinds().iter().find(|(_, cs)| cs.contains(&child)).map(|(k, _)| *k)
     }
 
-    /// Whether a naming of the tool can have a pair under a pair (proto, rulec).
+    /// Whether a naming of the tool can have a pair under a pair (proto, rulec, dandori).
     pub fn nests(self) -> bool {
         self.kinds().iter().any(|(_, cs)| !cs.is_empty())
     }
@@ -248,7 +248,7 @@ pub enum ErrorKind {
     OutsideRoot(String),
     /// A kind written in quotes.
     QuotedKind(String),
-    /// A kind for a tool that has none (dandori, file).
+    /// A kind for a tool that has none (file).
     NoKinds(Tool),
     /// A child kind (`value`) that does not come right after its parent (`enum`).
     ChildFirst { kind: String, parent: &'static str },

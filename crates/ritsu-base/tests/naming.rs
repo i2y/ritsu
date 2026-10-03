@@ -9,8 +9,10 @@ use std::path::Path;
 /// What each reason of the table is, as an error of this crate.
 fn reason(why: &str) -> ErrorKind {
     match why {
-        "dandori has no kinds yet" => ErrorKind::NoKinds(Tool::Dandori),
+        "file has no kinds" => ErrorKind::NoKinds(Tool::File),
         "value only right after enum" => ErrorKind::ChildFirst { kind: "value".into(), parent: "enum" },
+        "nothing under task" => ErrorKind::NothingUnder("task".into()),
+        "only field under record" => ErrorKind::WrongChild { kind: "task".into(), parent: "record".into(), allowed: &["field"] },
         "method only right after service" => ErrorKind::ChildFirst { kind: "method".into(), parent: "service" },
         "one child at most" => ErrorKind::TooManyPairs("method".into()),
         "chobo has no nested kinds" => ErrorKind::NoNesting(Tool::Chobo),
@@ -62,7 +64,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused_for_its_reason() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (21, 15), "the table has 21 namings and 15 refusals");
+    assert_eq!((ok, refused), (24, 18), "the table has 24 namings and 18 refusals");
 }
 
 #[test]

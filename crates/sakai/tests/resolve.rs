@@ -69,10 +69,10 @@ fn a_child_that_is_not_there_and_a_child_of_the_wrong_kind() {
 fn an_absolute_path_and_a_kind_dandori_does_not_have() {
     let dir = variant("基本", &[("ctx/在庫.ctx", "dir \"../proto/warehouse\", \"../py/inventory\"", "dir \"../proto/warehouse\", \"../py/inventory\", \"/etc\"")]);
     assert_eq!(codes(&check_dir(dir.path())), ["E012"]);
-    let dir = variant("基本", &[("ctx/受注.ctx", "means message Order\n", "means dandori \"../py/ordering/fulfill.py\" task reserve\n")]);
+    let dir = variant("基本", &[("ctx/受注.ctx", "means message Order\n", "means dandori \"../py/ordering/fulfill.py\" table reserve\n")]);
     let os = check_dir(dir.path());
     assert_eq!(codes(&os), ["E011"]);
-    assert!(os[0].diags[0].message.en.contains("dandori has no kinds yet"), "{}", os[0].diags[0].message.en);
+    assert!(os[0].diags[0].message.en.contains("the tool dandori has no kind `table`; its kinds are task, case, record, enum, input, output"), "{}", os[0].diags[0].message.en);
 }
 
 #[test]

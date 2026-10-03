@@ -1298,6 +1298,21 @@ fn simple_stmt(cur: &mut Cur) -> Result<StmtKind, Diag> {
     ))
 }
 
+/// The lines each declaration is written on: its line at the left margin, and the last line of
+/// the block under it. Blank lines and comments do not count, so a comment above the next
+/// declaration is not the end of this one. What a `.flow` holds is told by these (ports).
+pub fn blocks(src: &str) -> Vec<(usize, usize)> {
+    let Ok(lines) = lex(src) else { return vec![] };
+    let mut out: Vec<(usize, usize)> = Vec::new();
+    for l in &lines {
+        match out.last_mut() {
+            Some(last) if l.indent > 0 => last.1 = l.line,
+            _ => out.push((l.line, l.line)),
+        }
+    }
+    out
+}
+
 pub fn parse(src: &str) -> Result<Program, Diag> {
     let lines = lex(src)?;
     let mut p = Parser { lines, pos: 0 };

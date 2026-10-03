@@ -7,8 +7,10 @@
 /// reason than the table's is refused by accident (a full-width space outside a string was once
 /// refused only because the word after it had no name).
 const REASONS: &[(&str, &str)] = &[
-    ("dandori has no kinds yet", "dandori has no kinds yet"),
+    ("file has no kinds", "`file` has no kinds"),
     ("value only right after enum", "`value` comes only right after `enum`"),
+    ("nothing under task", "`case` cannot come under `task`"),
+    ("only field under record", "`task` cannot come under `record`"),
     ("method only right after service", "`method` comes only right after `service`"),
     ("one child at most", "one child at most"),
     ("chobo has no nested kinds", "the tool chobo has no nested kinds"),
@@ -64,7 +66,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (21, 15), "the table has 21 names and 15 refusals");
+    assert_eq!((ok, refused), (24, 18), "the table has 24 names and 18 refusals");
 }
 
 /// The table is ritsu-base's, and yuen is held to it too; this test only says what it holds, so
