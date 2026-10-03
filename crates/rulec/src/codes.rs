@@ -1443,12 +1443,12 @@ pub fn ledger() -> Vec<Entry> {
             "E103",
             tr!("単位の混同: 型の違う値を混ぜています", "Unit mismatch: values of different types are being mixed"),
             tr!(
-                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です（§2.3）。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときもこれです。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。列の列挙に無い値や群をセルに書いたときもこれで、出力のセルと、二つの列挙の値を混ぜた群も含みます（§15.150）。",
-                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums (§15.150)."
+                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です（§2.3）。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときもこれです。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）もこれです。列の列挙に無い値や群をセルに書いたときもこれで、出力のセルと、二つの列挙の値を混ぜた群も含みます（§15.150）。",
+                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[円, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums (§15.150)."
             ),
             tr!(
-                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書きます。刻みなら、型と同じ単位で書きます（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。",
-                "Move one side into a table. \"A surcharge that depends on weight\" is `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`)."
+                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書きます。刻みなら、型と同じ単位で書きます（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書きます。",
+                "Move one side into a table. \"A surcharge that depends on weight\" is `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without."
             ),
             X_E103,
             &["E108", "E112"],

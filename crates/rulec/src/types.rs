@@ -766,6 +766,19 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
         for t in typed {
             let ty = c.resolve(t);
+            // E103: a money type whose tax is neither `incl_tax` nor `excl_tax`. It passed in
+            // silence, with the word taken as a tax of its own (§15.169).
+            if let Some(w) = unreadable_tax(t) {
+                c.diags.push(
+                    Diag::error("E103", tr!("税区分 `{w}` は incl_tax でも excl_tax でもありません", "The tax `{w}` is neither incl_tax nor excl_tax"))
+                        .at(at(t.span.line))
+                        .mark(t.span.clone(), tr!("この型が宣言している税区分です", "this is the tax the type declares"))
+                        .note(tr!(
+                            "お金の型の二つ目には、税込なら `incl_tax`、税抜なら `excl_tax` を書きます（§2.3）。ほかの語では、その金額が税込か税抜かが決まりません。",
+                            "The second word of a money type is `incl_tax` for an amount with tax and `excl_tax` for one without (§2.3). Any other word leaves it unsaid which the amount is."
+                        )),
+                );
+            }
             for a in &t.args {
                 if let TypeArg::Scaled(w, n) = a
                     && w == crate::kw::STEP
@@ -3768,6 +3781,19 @@ fn nonpositive(n: &crate::lex::Num, span: Span, at: String, what: String) -> Dia
             "刻みは、実行時の整数が何を 1 と数えるか、どこへ丸めるかを決めます。刻み 0 の丸めは生成コードの中で 0 で割り、実行時に止まっていました。刻み 0 の型は、黙って刻み 1 として読まれていました。",
             "A step decides what one unit of the runtime integer counts, or where a value is rounded to. A rounding grid of zero made the generated code divide by zero at run time, and a step of zero was quietly read as a step of one."
         ))
+}
+
+/// The tax of a money type, when it is written and is neither `incl_tax` nor `excl_tax`
+/// (`money[円, foo]`). The currency is the first word, the tax the second.
+fn unreadable_tax(tr: &TypeRef) -> Option<String> {
+    if tr.base != crate::kw::MONEY {
+        return None;
+    }
+    let words: Vec<&String> = tr.args.iter().filter_map(|a| match a {
+        TypeArg::Word(w) => Some(w),
+        _ => None,
+    }).collect();
+    words.get(1).filter(|w| ritsu_units::Tax::parse(w).is_none()).map(|w| w.to_string())
 }
 
 /// The step, when it is written and cannot be read as a value of the type it steps. It fell

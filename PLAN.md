@@ -339,6 +339,7 @@ D.1 でしたこと（2026-10-04）：
 - rulec を替えた。`num::Rat` は `ritsu_units::Rat` を指し、`unit_info` と `unit_offset` は表を引くだけになった。丸めの仕方（`RoundMode` と `round_to`）は rulec の意味なので rulec に残し、`round_to` は rulec が `Rat` に足すトレイト `RoundTo` のメソッドにした（使う六つのファイルが `use` する）。rulec の DESIGN §15.164 に書いた。
 - 確かめたこと：コーパスの 50 本、変異の 109 本、ほかの 16 本の規則について、`check`（英語、日本語、JSON）、`certificate`、`api`、`schema`、`graph` を、コーパスの 50 本についてはさらに `fmt --check`、`vectors`、`coverage`、`doc`（Markdown と HTML、二つの言語、顧客向け）、`gen`、`adapter` を、替える前と後のバイナリで出し、1,782 回とも一字も違わなかった（以下、この 1,782 回を「rulec の出力の突き合わせ」と呼ぶ）。rulec の `tests/units.rs` に二本足した（単位を挙げる文が表のすべての綴りを挙げること、コーパスのどの数の型も表で書けること。206 の数）。
 - 決めたこと（★）：rulec の `Ty` は、中に `Unit` を持たず、書いたとおりの綴りを持ち続ける。`Ty::unit(刻み)` で単位の型にする。DESIGN 5.2 の「D.1 で変えたこと」に理由を書いた。税の語を `incl_tax` と `excl_tax` のほかに書いた型（`money[円, foo]`）を rulec が黙って通すことは、変えなかった（7.6）。
+- D の二つ目の部分で、作者が決めたとおり、税の語を誤った型を rulec が E103 で断るようにした（rulec の §15.169。型を書く六つの場所のどれでも、お金の型の二つ目の語が `incl_tax` でも `excl_tax` でもなければ、その型に印を付けて断る）。新しいコードを作らずに E103 にしたのは、E103 が型の書き方の誤り（読めない刻み、率の入力の刻みが無いこと）も受け持つからである。台帳の E103 の文と `docs/codes.md`・`docs/codes.ja.md` を直した。`tests/units.rs` に一本足した。rulec の出力（1,725 回）と golden は変わらない。
 
 ### D.2 `ritsu-ports`
 

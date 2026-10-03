@@ -674,3 +674,33 @@ fn コーパスのどの数の型も単位の表で書ける() {
     }
     assert!(seen > 150, "{seen} numbers");
 }
+
+/// The tax of a money type is `incl_tax` or `excl_tax`, or not written at all (§15.169). Any other
+/// word passed in silence, as a tax of its own that no table knows; each place a type writes it is
+/// named now, an input's, an output's, a table's column's and a definition's alike.
+#[test]
+fn 税区分はincl_taxかexcl_taxだけ() {
+    let rule = |tax: &str| {
+        let t = if tax.is_empty() { "money[円]".to_string() } else { format!("money[円, {tax}]") };
+        format!(
+            "rule t(t) v1\n\ninputs\n  p(p) : {t}  range >=0円 <=1万円\n\n\
+             outputs\n  o(o) : {t}  round down(1円)\n\n\
+             define 差額(gap) : {t} = p - 100円\n\n\
+             table j(j)\npolicy unique\n| 差額 | -> o(o) : {t} |\n| <5000円 | 100円 |\n| >=5000円 | 0円 |\n"
+        )
+    };
+    for ok in ["incl_tax", "excl_tax", ""] {
+        assert!(check(&rule(ok)).is_empty(), "{ok}: {:?}", check(&rule(ok)));
+    }
+    let said: Vec<(String, String, usize)> = rulec::i18n::with(rulec::i18n::Lang::Ja, || {
+        rulec::check_source(&rule("foo"), "units.rule").iter().map(|d| (d.code.to_string(), d.title.clone(), d.marks.first().map(|m| m.span.line).unwrap_or(0))).collect()
+    });
+    assert_eq!(said.iter().map(|(c, t, l)| (c.as_str(), t.as_str(), *l)).collect::<Vec<_>>(), [
+        ("E103", "税区分 `foo` は incl_tax でも excl_tax でもありません", 4),
+        ("E103", "税区分 `foo` は incl_tax でも excl_tax でもありません", 7),
+        ("E103", "税区分 `foo` は incl_tax でも excl_tax でもありません", 9),
+        ("E103", "税区分 `foo` は incl_tax でも excl_tax でもありません", 13),
+    ]);
+    let en: Vec<String> = rulec::i18n::with(rulec::i18n::Lang::En, || rulec::check_source(&rule("税込"), "units.rule").iter().map(|d| d.title.clone()).collect());
+    assert!(en.iter().all(|t| t == "The tax `税込` is neither incl_tax nor excl_tax") && en.len() == 4, "{en:?}");
+}

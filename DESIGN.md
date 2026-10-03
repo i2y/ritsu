@@ -491,7 +491,7 @@ pub struct Unit { pub dim: Dim, pub unit: String, pub tax: Option<Tax>, pub step
 
 rulec の `Ty::Money`・`Ty::Qty`・`Ty::Rate`・`Ty::Number` は、中に `ritsu_units::Unit` を持つ形にする。振る舞いは変えない（D の段階で、コーパスの golden と証明書が一字も変わらないことを確かめる）。率の刻みは、入力と出力の型として `Rules` の口に出す。dandori は説明の文から刻みを読まなくなる。
 
-**D.1 で変えたこと（★）**：`Ty` の中に `Unit` を持たせるのはやめ、`Ty` は書いたとおりの綴りを持ち続ける（`Ty::Money { cur, tax }`、`Ty::Qty { dim, unit }`）。単位の意味（次元、係数、ずれ）は、どれも `ritsu-units` の表から引く。`Ty` を `Unit` にするのは `Ty::unit(刻み)` で、`Rules` の口はこれで入力と出力の単位を渡す（率には、入力の宣言にある刻みを添える）。理由は二つある。率の刻みは rulec の型ではなく入力の宣言にあり（1.4）、`Ty::Rate` に刻みを入れると、刻みの違う二つの率が違う型になって、rulec の型の決まり（E103 など）が変わる。また、税の区別の無いお金の値（`500円` という書き方）はどちらの区別のお金とも合う（rulec の `unifies`）が、`Unit::same` は区別まで同じものだけを同じとする。`Ty` を `Unit` にすると、rulec の 19 のファイルの 129 か所の `Ty::Money` と `Ty::Qty` を、この違いを保ったまま書き直すことになり、得るものが無い。税の語を `incl_tax` と `excl_tax` のほかに書いた型（`money[円, foo]`）は、rulec がいまも黙って通す。その型には単位が無い（`Ty::unit` が None を返す）。直すかは rulec の決めることとして残した（PLAN 7.6）。
+**D.1 で変えたこと（★）**：`Ty` の中に `Unit` を持たせるのはやめ、`Ty` は書いたとおりの綴りを持ち続ける（`Ty::Money { cur, tax }`、`Ty::Qty { dim, unit }`）。単位の意味（次元、係数、ずれ）は、どれも `ritsu-units` の表から引く。`Ty` を `Unit` にするのは `Ty::unit(刻み)` で、`Rules` の口はこれで入力と出力の単位を渡す（率には、入力の宣言にある刻みを添える）。理由は二つある。率の刻みは rulec の型ではなく入力の宣言にあり（1.4）、`Ty::Rate` に刻みを入れると、刻みの違う二つの率が違う型になって、rulec の型の決まり（E103 など）が変わる。また、税の区別の無いお金の値（`500円` という書き方）はどちらの区別のお金とも合う（rulec の `unifies`）が、`Unit::same` は区別まで同じものだけを同じとする。`Ty` を `Unit` にすると、rulec の 19 のファイルの 129 か所の `Ty::Money` と `Ty::Qty` を、この違いを保ったまま書き直すことになり、得るものが無い。税の語を `incl_tax` と `excl_tax` のほかに書いた型（`money[円, foo]`）は、rulec が黙って通していた。その型には単位が無い（`Ty::unit` が None を返す）。D の二つ目の部分で、rulec がその型を E103 で断るようにした（rulec の §15.169）。
 
 ### 5.3 dandori
 
