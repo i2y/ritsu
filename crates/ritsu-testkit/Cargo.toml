@@ -1,0 +1,11 @@
+[package]
+name = "ritsu-testkit"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "What the tests of ritsu's crates share: directories that remove themselves, finding a tool, running a program with a time limit, golden files, SKIP lines and the test levels, and the PostgreSQL, TigerBeetle, Chrome and Mermaid the tests start"
+publish = false
+
+# Nothing but std (DESIGN 3.1). Every crate takes it as a dev-dependency only.
+[dependencies]

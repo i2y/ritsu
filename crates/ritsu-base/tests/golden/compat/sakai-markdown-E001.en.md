@@ -1,0 +1,68 @@
+<a id="e001"></a>
+
+## E001 — Something cannot be read as a word of the language
+
+**When**: A string not closed, an escape a string does not take, a full-width space, or a character a name cannot have. A name is letters, digits and `_`, and does not start with a digit.
+
+**Fix**: Correct it where it points: close the string with `"` on the same line, and use no escape but `\"` and `\\`.
+
+**Reproduction**: put the files below in one directory, and run `sakai check .` there.
+
+`地図.ctx`:
+
+```ctx
+map 地図(m) v1
+use context "甲.ctx"
+use context "乙.ctx"
+covers "."
+```
+
+`甲.ctx`:
+
+```ctx
+context 甲(a) v1
+description "閉じていない
+owns
+  dir "a"
+```
+
+`乙.ctx`:
+
+```ctx
+context 乙(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  種類 "乙が扱うものの種類"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+See also: [E002](#e002)

@@ -1,0 +1,20 @@
+<a id="e305"></a>
+
+## E305 — The check is over its budget (nothing was checked)
+
+**When**: The input combinations (the days of the date's range times the size of every integer input's range) are more than the budget. It never tries some and passes.
+
+**Fix**: Narrow a range, split the file, or raise the budget with `--budget`.
+
+**Example**:
+
+```cal
+dates t v1
+
+inputs
+  d : date  range >=0001-01-01 <=9999-12-31
+  n : int   range >=1 <=100
+
+date x = d
+  + n days
+```

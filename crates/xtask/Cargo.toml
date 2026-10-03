@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "The work of developing ritsu: running the tests by level and by what changed, gathering their SKIP lines, and holding the crates to the rules of their dependencies"
+publish = false
+
+[dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }

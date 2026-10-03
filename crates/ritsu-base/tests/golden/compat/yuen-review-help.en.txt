@@ -1,0 +1,26 @@
+yuen review — record what a person has looked at: under each chosen link and waiver that is marked, write who looked, when, and the hashes of its ends, and keep what was looked at in reviewed/
+
+Usage:
+  yuen review <path>... [--at <file.req>:<line>...] [--requirement '<name>[ v<n>]'...] [--all] [--by <role>] [--date <YYYY-MM-DD>]
+
+Arguments:
+  <path>...  .req files; a directory stands for every .req under it, in path order. What is given is one project
+
+Flags:
+  --at <file.req>:<line>...         the link or waiver on that line, or on the line of its record: the place a diagnostic of check gives (may be given more than once)
+  --requirement '<name>[ v<n>]'...  every marked link and waiver of that requirement (its name or alias) (may be given more than once)
+  --all                             every marked link and waiver of the project
+  --by <role>                       the role of whoever looked (a declared role); required
+  --date <YYYY-MM-DD>               the day it was looked at; without it, today in the machine's time zone
+  --lang ja|en                      the language of the text; else the YUEN_LANG environment variable, else en (default en)
+  --root <dir>                      the root paths are read from; without it, the nearest directory above the first path given that has a .git (else the directory given)
+  --help                            print this page
+
+Exit codes:
+  0  written (also when nothing chosen was marked, and nothing was written)
+  1  something could not be written (a link whose ends cannot be made, errors in the words or names)
+  2  bad arguments, or a file that cannot be read or written
+
+Examples:
+  $ yuen review tests/fixtures/period --all --by 法務 --date 2026-10-04
+  $ yuen review tests/fixtures/period --at tests/fixtures/period/民法の期間.req:21 --by 開発

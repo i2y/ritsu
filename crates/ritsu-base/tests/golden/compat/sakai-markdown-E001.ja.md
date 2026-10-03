@@ -1,0 +1,68 @@
+<a id="e001"></a>
+
+## E001 — 読めない字句があります
+
+**いつ出るか**: 閉じていない文字列、文字列の中の知らないエスケープ、全角の空白、名前に使えない文字があるとき。名前は文字、数字、`_` で書き、数字では始めません。
+
+**直し方**: 示された位置を直します。文字列は同じ行の `"` で閉じ、エスケープは `\"` と `\\` だけを使います。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `sakai check .` を走らせます。
+
+`地図.ctx`:
+
+```ctx
+map 地図(m) v1
+use context "甲.ctx"
+use context "乙.ctx"
+covers "."
+```
+
+`甲.ctx`:
+
+```ctx
+context 甲(a) v1
+description "閉じていない
+owns
+  dir "a"
+```
+
+`乙.ctx`:
+
+```ctx
+context 乙(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  種類 "乙が扱うものの種類"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+関連: [E002](#e002)

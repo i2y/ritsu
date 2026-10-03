@@ -1,0 +1,17 @@
+koyomi 0.1.0
+
+A small language for closing days, payment days, business days and month arithmetic, checked on every day of its range.
+
+Usage:
+  koyomi check <file.cal>...                   compute on every input of the range, and hold the claims and the examples to it
+  koyomi eval <file.cal> <name>=<value>...     compute every date on one input and show each step; for a calendar, whether a day is open or closed
+  koyomi gen <file.cal>...                     generate TypeScript, Python, Go, Rust and SQL, each with a runner; nothing is generated from a file that does not pass check
+  koyomi vectors <file.cal>                    print the reference interpreter's result for every input of the range as JSON Lines, with the inputs just outside it
+  koyomi doc <file.cal>                        print the page for whoever approves the file (accounting, legal, whoever keeps the calendar): Markdown, or one HTML file
+  koyomi api <file.cal>                        print the functions, their inputs, the calendar, the data range and the sources' digests as JSON, for other tools
+  koyomi source fetch|pin|outdated <file.cal>  handle the copies of the sources: fetch brings them beside the .cal, pin writes their digests into it, outdated asks whether the originals moved on
+  koyomi explain <CODE>                        look a diagnostic code up: when it comes, how to fix it, the smallest reproduction
+
+For one command in detail: `koyomi <cmd> --help` (`koyomi help <cmd>` is the same page).
+Every command takes --lang ja|en (default en; the KOYOMI_LANG environment variable works too).
+Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read

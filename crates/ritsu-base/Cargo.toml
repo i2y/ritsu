@@ -1,0 +1,14 @@
+[package]
+name = "ritsu-base"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "What the seven languages of ritsu share and none of them means: the two languages of the text, diagnostics, the ledger of codes, the command-line table, SHA-256, naming and paths, the copies of sources, the frame of a page, and JSON"
+publish = false
+
+# Nothing but std (DESIGN 3.1, P9): rulec and geas, which depend on nothing, build on this crate.
+[dependencies]
+
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }

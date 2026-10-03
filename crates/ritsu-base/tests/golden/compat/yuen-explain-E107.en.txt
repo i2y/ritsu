@@ -1,0 +1,10 @@
+E107 (error) — A requirement and what meets it read different texts of one article
+
+When: What meets a requirement pins an article the requirement cites, and none of its copies has the text of the requirement's copy: one of them is old.
+
+Fix: Read the diff of the texts, then fetch and pin the older copy again.
+
+Example:
+    (The reproduction needs the suite's tools; it is added when yuen reads them.)
+
+See also: E103

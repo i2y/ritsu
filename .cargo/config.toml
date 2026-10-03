@@ -1,0 +1,4 @@
+# `cargo xtask test` and `cargo xtask deps` (PLAN C.3). Only the alias lives here: the tests set
+# what they need themselves, so cargo run from any directory of the workspace runs them the same.
+[alias]
+xtask = "run --quiet --package xtask --"

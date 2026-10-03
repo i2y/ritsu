@@ -1,0 +1,26 @@
+yuen review — 人が確かめたことを書く。選んだリンクと見送りのうち印の付いたものに、確かめた記録（日付、役割、両端のハッシュ）を書き、確かめたときの中身を reviewed/ に置く
+
+使い方:
+  yuen review <path>... [--at <file.req>:<line>...] [--requirement '<name>[ v<n>]'...] [--all] [--by <role>] [--date <YYYY-MM-DD>]
+
+引数:
+  <path>...  .req のファイル。ディレクトリなら下の .req を全部（パスの順）。渡したものが一つのプロジェクト
+
+フラグ:
+  --at <file.req>:<line>...         その行のリンクか見送り。記録の行の番号でもよく、check の診断の位置をそのまま渡せる（何度でも書ける）
+  --requirement '<name>[ v<n>]'...  その要件の、印の付いたリンクと見送りの全部（名前か別名）（何度でも書ける）
+  --all                             プロジェクトの、印の付いたリンクと見送りの全部
+  --by <role>                       確かめた人の役割（宣言した役割）。要る
+  --date <YYYY-MM-DD>               確かめた日。無ければその日（その機械のタイムゾーン）
+  --lang ja|en                      文面の言語。無ければ環境変数 YUEN_LANG、それも無ければ en（既定 en）
+  --root <dir>                      パスを読むルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（無ければ渡したディレクトリ）
+  --help                            この画面を出す
+
+exit code:
+  0  書いた（印の付いたものが無く、何も書かなかったときも）
+  1  書けないものがある（両端を読めないリンク、構文と名前のエラー）
+  2  引数の誤り、読めないファイル、書けないファイル
+
+例:
+  $ yuen review tests/fixtures/period --all --by 法務 --date 2026-10-04
+  $ yuen review tests/fixtures/period --at tests/fixtures/period/民法の期間.req:21 --by 開発
