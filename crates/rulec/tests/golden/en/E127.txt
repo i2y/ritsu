@@ -1,0 +1,12 @@
+error[E127]: A sequence of calls answers 返金額 >0円 twice
+  --> tests/mutants/m_e127.rule:38 machine 注文
+   |
+38 |   once    返金額 >0円
+   |   ^^^^^^^^^^^^^^^^^^^
+   |
+ Calls (from 受付):
+   1. at 受付, 出来事 = 入金, 支払額 = 1円 → 入金済 (返金額 = 0円, table 遷移 row 1)
+   2. at 入金済, 出来事 = 出荷, 支払額 = 1円 → 出荷済 (返金額 = 0円, table 遷移 row 4)
+   3. at 出荷済, 出来事 = 取消依頼, 支払額 = 1円 → 出荷済 (返金額 = 1円, table 遷移 row 8)
+   4. at 出荷済, 出来事 = 取消依頼, 支払額 = 1円 → 出荷済 (返金額 = 1円, table 遷移 row 8)
+ The line says one case answers 返金額 >0円 at most once. Correct the rows so that the sequence stops short of the second, or drop the `once` line if it is wrong.

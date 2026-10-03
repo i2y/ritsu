@@ -1,0 +1,10 @@
+error[E104]: The output declares no rounding
+  --> tests/mutants/m_e104.rule:21
+   |
+21 |   運賃(fee) : money[円, incl_tax]
+   |               ^^^^^^^^^^^^^^^^^^^ no rounding is declared
+   |
+ Output 運賃 has type money[円, incl_tax].
+ Several witnesses were tried and none produced a fraction in this output (either the amount looked up from the table is emitted as is, or the expression already rounds it).
+ Here the rounding declaration does its second job: it is used to check that the literals in the output cells sit on that grid, so a mistyped digit such as 1451円 is stopped by E106.
+ Hint: add rounding to the output declaration, e.g. round up(10円)

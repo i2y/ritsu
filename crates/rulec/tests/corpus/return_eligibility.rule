@@ -1,0 +1,41 @@
+rule return_eligibility v1
+description "Whether a return is accepted. Written in English, and with no money in it anywhere: the answer is a class"
+
+# A sketch of a shop's own terms, not a transcription. The shape is the point: the answer is
+# one of four words, and every combination of the four inputs reaches exactly one row.
+
+enum category = electronics | clothing | perishable
+enum verdict = accepted | outside_window | condition_failed | not_returnable
+
+inputs
+  item    : category
+  days    : number  range >=0 <=365
+  opened  : bool
+  receipt : bool
+
+outputs
+  answer : verdict
+
+# Written as `policy unique`, so the rows are disjoint and the checker proves that every
+# input reaches exactly one of them. `policy first` would take three rows fewer by letting
+# the refusals at the top swallow the rest — and then which row answers a given case would
+# be a question about the order of the rows rather than about the row itself.
+table decide
+policy unique
+| item            | receipt | days | opened | -> answer : verdict |
+| perishable      | -       | -    | -      | not_returnable      |
+| not: perishable | false   | -    | -      | condition_failed    |
+| electronics     | true    | >14  | -      | outside_window      |
+| electronics     | true    | <=14 | true   | condition_failed    |
+| electronics     | true    | <=14 | false  | accepted            |
+| clothing        | true    | >30  | -      | outside_window      |
+| clothing        | true    | <=30 | -      | accepted            |
+
+examples
+| item        | days | opened | receipt | -> answer        |
+| clothing    | 10   | true   | true    | accepted         |
+| clothing    | 31   | false  | true    | outside_window   |
+| electronics | 3    | true   | true    | condition_failed |
+| electronics | 14   | false  | true    | accepted         |
+| perishable  | 0    | false  | true    | not_returnable   |
+| clothing    | 10   | false  | false   | condition_failed |

@@ -1,0 +1,8 @@
+warning[W111]: Input 重量 is not used by any table
+  --> tests/mutants/m_w111.rule:18
+   |
+18 |   重量(weight)     : mass[g]    range >=1g <=25kg
+   |   ^^^^ appears in no column
+   |
+ A column that should use it may have been left out.
+ If it is meant only as an entry check on its range, add `contract_only` to the declaration (§11 W111).

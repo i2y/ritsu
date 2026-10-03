@@ -1,0 +1,209 @@
+{"in":{"あて先":"北海道","三辺合計":1,"重量":1},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"baseline"}
+{"in":{"あて先":"北海道","三辺合計":60,"重量":1},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"boundary pair: table サイズ判定 row 1 三辺合計 60 inside"}
+{"in":{"あて先":"北海道","三辺合計":61,"重量":1},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"boundary pair: table サイズ判定 row 1 三辺合計 60 outside"}
+{"in":{"あて先":"北海道","三辺合計":80,"重量":1},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"boundary pair: table サイズ判定 row 2 三辺合計 80 inside"}
+{"in":{"あて先":"北海道","三辺合計":81,"重量":1},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"boundary pair: table サイズ判定 row 2 三辺合計 80 outside"}
+{"in":{"あて先":"北海道","三辺合計":100,"重量":1},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"boundary pair: table サイズ判定 row 3 三辺合計 100 inside"}
+{"in":{"あて先":"北海道","三辺合計":101,"重量":1},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"boundary pair: table サイズ判定 row 3 三辺合計 100 outside"}
+{"in":{"あて先":"北海道","三辺合計":120,"重量":1},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"boundary pair: table サイズ判定 row 4 三辺合計 120 inside"}
+{"in":{"あて先":"北海道","三辺合計":121,"重量":1},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"boundary pair: table サイズ判定 row 4 三辺合計 120 outside"}
+{"in":{"あて先":"北海道","三辺合計":140,"重量":1},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"boundary pair: table サイズ判定 row 5 三辺合計 140 inside"}
+{"in":{"あて先":"北海道","三辺合計":141,"重量":1},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"boundary pair: table サイズ判定 row 5 三辺合計 140 outside"}
+{"in":{"あて先":"北海道","三辺合計":160,"重量":1},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"boundary pair: table サイズ判定 row 6 三辺合計 160 inside"}
+{"in":{"あて先":"北海道","三辺合計":161,"重量":1},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"boundary pair: table サイズ判定 row 6 三辺合計 160 outside"}
+{"in":{"あて先":"東京都","三辺合計":1,"重量":1},"out":{"運賃":820},"trace":["table サイズ判定 row 1","table 運賃表 row 1"],"why":"row target: table 運賃表 row 1"}
+{"in":{"あて先":"東京都","三辺合計":61,"重量":1},"out":{"運賃":1130},"trace":["table サイズ判定 row 2","table 運賃表 row 2"],"why":"row target: table 運賃表 row 2"}
+{"in":{"あて先":"東京都","三辺合計":81,"重量":1},"out":{"運賃":1450},"trace":["table サイズ判定 row 3","table 運賃表 row 3"],"why":"row target: table 運賃表 row 3"}
+{"in":{"あて先":"東京都","三辺合計":101,"重量":1},"out":{"運賃":1770},"trace":["table サイズ判定 row 4","table 運賃表 row 4"],"why":"row target: table 運賃表 row 4"}
+{"in":{"あて先":"東京都","三辺合計":121,"重量":1},"out":{"運賃":2120},"trace":["table サイズ判定 row 5","table 運賃表 row 5"],"why":"row target: table 運賃表 row 5"}
+{"in":{"あて先":"東京都","三辺合計":141,"重量":1},"out":{"運賃":2450},"trace":["table サイズ判定 row 6","table 運賃表 row 6"],"why":"row target: table 運賃表 row 6"}
+{"in":{"あて先":"東京都","三辺合計":161,"重量":1},"out":{"運賃":3000},"trace":["table サイズ判定 row 7","table 運賃表 row 7"],"why":"row target: table 運賃表 row 7"}
+{"in":{"あて先":"青森県","三辺合計":1,"重量":1},"out":{"運賃":880},"trace":["table サイズ判定 row 1","table 運賃表 row 8"],"why":"row target: table 運賃表 row 8"}
+{"in":{"あて先":"青森県","三辺合計":61,"重量":1},"out":{"運賃":1200},"trace":["table サイズ判定 row 2","table 運賃表 row 9"],"why":"row target: table 運賃表 row 9"}
+{"in":{"あて先":"青森県","三辺合計":81,"重量":1},"out":{"運賃":1500},"trace":["table サイズ判定 row 3","table 運賃表 row 10"],"why":"row target: table 運賃表 row 10"}
+{"in":{"あて先":"青森県","三辺合計":101,"重量":1},"out":{"運賃":1830},"trace":["table サイズ判定 row 4","table 運賃表 row 11"],"why":"row target: table 運賃表 row 11"}
+{"in":{"あて先":"青森県","三辺合計":121,"重量":1},"out":{"運賃":2170},"trace":["table サイズ判定 row 5","table 運賃表 row 12"],"why":"row target: table 運賃表 row 12"}
+{"in":{"あて先":"青森県","三辺合計":141,"重量":1},"out":{"運賃":2500},"trace":["table サイズ判定 row 6","table 運賃表 row 13"],"why":"row target: table 運賃表 row 13"}
+{"in":{"あて先":"青森県","三辺合計":161,"重量":1},"out":{"運賃":3070},"trace":["table サイズ判定 row 7","table 運賃表 row 14"],"why":"row target: table 運賃表 row 14"}
+{"in":{"あて先":"滋賀県","三辺合計":1,"重量":1},"out":{"運賃":990},"trace":["table サイズ判定 row 1","table 運賃表 row 15"],"why":"row target: table 運賃表 row 15"}
+{"in":{"あて先":"滋賀県","三辺合計":61,"重量":1},"out":{"運賃":1310},"trace":["table サイズ判定 row 2","table 運賃表 row 16"],"why":"row target: table 運賃表 row 16"}
+{"in":{"あて先":"滋賀県","三辺合計":81,"重量":1},"out":{"運賃":1620},"trace":["table サイズ判定 row 3","table 運賃表 row 17"],"why":"row target: table 運賃表 row 17"}
+{"in":{"あて先":"滋賀県","三辺合計":101,"重量":1},"out":{"運賃":1940},"trace":["table サイズ判定 row 4","table 運賃表 row 18"],"why":"row target: table 運賃表 row 18"}
+{"in":{"あて先":"滋賀県","三辺合計":121,"重量":1},"out":{"運賃":2300},"trace":["table サイズ判定 row 5","table 運賃表 row 19"],"why":"row target: table 運賃表 row 19"}
+{"in":{"あて先":"滋賀県","三辺合計":141,"重量":1},"out":{"運賃":2610},"trace":["table サイズ判定 row 6","table 運賃表 row 20"],"why":"row target: table 運賃表 row 20"}
+{"in":{"あて先":"滋賀県","三辺合計":161,"重量":1},"out":{"運賃":3750},"trace":["table サイズ判定 row 7","table 運賃表 row 21"],"why":"row target: table 運賃表 row 21"}
+{"in":{"あて先":"鳥取県","三辺合計":1,"重量":1},"out":{"運賃":1150},"trace":["table サイズ判定 row 1","table 運賃表 row 22"],"why":"row target: table 運賃表 row 22"}
+{"in":{"あて先":"鳥取県","三辺合計":61,"重量":1},"out":{"運賃":1440},"trace":["table サイズ判定 row 2","table 運賃表 row 23"],"why":"row target: table 運賃表 row 23"}
+{"in":{"あて先":"鳥取県","三辺合計":81,"重量":1},"out":{"運賃":1780},"trace":["table サイズ判定 row 3","table 運賃表 row 24"],"why":"row target: table 運賃表 row 24"}
+{"in":{"あて先":"鳥取県","三辺合計":101,"重量":1},"out":{"運賃":2080},"trace":["table サイズ判定 row 4","table 運賃表 row 25"],"why":"row target: table 運賃表 row 25"}
+{"in":{"あて先":"鳥取県","三辺合計":121,"重量":1},"out":{"運賃":2440},"trace":["table サイズ判定 row 5","table 運賃表 row 26"],"why":"row target: table 運賃表 row 26"}
+{"in":{"あて先":"鳥取県","三辺合計":141,"重量":1},"out":{"運賃":2750},"trace":["table サイズ判定 row 6","table 運賃表 row 27"],"why":"row target: table 運賃表 row 27"}
+{"in":{"あて先":"鳥取県","三辺合計":161,"重量":1},"out":{"運賃":3890},"trace":["table サイズ判定 row 7","table 運賃表 row 28"],"why":"row target: table 運賃表 row 28"}
+{"in":{"あて先":"沖縄県","三辺合計":1,"重量":1},"out":{"運賃":1450},"trace":["table サイズ判定 row 1","table 運賃表 row 36"],"why":"row target: table 運賃表 row 36"}
+{"in":{"あて先":"沖縄県","三辺合計":61,"重量":1},"out":{"運賃":1810},"trace":["table サイズ判定 row 2","table 運賃表 row 37"],"why":"row target: table 運賃表 row 37"}
+{"in":{"あて先":"沖縄県","三辺合計":81,"重量":1},"out":{"運賃":2160},"trace":["table サイズ判定 row 3","table 運賃表 row 38"],"why":"row target: table 運賃表 row 38"}
+{"in":{"あて先":"沖縄県","三辺合計":101,"重量":1},"out":{"運賃":2490},"trace":["table サイズ判定 row 4","table 運賃表 row 39"],"why":"row target: table 運賃表 row 39"}
+{"in":{"あて先":"沖縄県","三辺合計":121,"重量":1},"out":{"運賃":2860},"trace":["table サイズ判定 row 5","table 運賃表 row 40"],"why":"row target: table 運賃表 row 40"}
+{"in":{"あて先":"沖縄県","三辺合計":141,"重量":1},"out":{"運賃":3180},"trace":["table サイズ判定 row 6","table 運賃表 row 41"],"why":"row target: table 運賃表 row 41"}
+{"in":{"あて先":"沖縄県","三辺合計":161,"重量":1},"out":{"運賃":4350},"trace":["table サイズ判定 row 7","table 運賃表 row 42"],"why":"row target: table 運賃表 row 42"}
+{"in":{"あて先":"北海道","三辺合計":99,"重量":1},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"boundary: 三辺合計"}
+{"in":{"あて先":"北海道","三辺合計":119,"重量":1},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"boundary: 三辺合計"}
+{"in":{"あて先":"北海道","三辺合計":139,"重量":1},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"boundary: 三辺合計"}
+{"in":{"あて先":"北海道","三辺合計":159,"重量":1},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"boundary: 三辺合計"}
+{"in":{"あて先":"北海道","三辺合計":169,"重量":1},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"boundary: 三辺合計"}
+{"in":{"あて先":"北海道","三辺合計":170,"重量":1},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"boundary: 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":2,"重量":1},"out":{"運賃":880},"trace":["table サイズ判定 row 1","table 運賃表 row 8"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":59,"重量":1},"out":{"運賃":880},"trace":["table サイズ判定 row 1","table 運賃表 row 8"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":60,"重量":1},"out":{"運賃":880},"trace":["table サイズ判定 row 1","table 運賃表 row 8"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":79,"重量":1},"out":{"運賃":1200},"trace":["table サイズ判定 row 2","table 運賃表 row 9"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":80,"重量":1},"out":{"運賃":1200},"trace":["table サイズ判定 row 2","table 運賃表 row 9"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":99,"重量":1},"out":{"運賃":1500},"trace":["table サイズ判定 row 3","table 運賃表 row 10"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":100,"重量":1},"out":{"運賃":1500},"trace":["table サイズ判定 row 3","table 運賃表 row 10"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":119,"重量":1},"out":{"運賃":1830},"trace":["table サイズ判定 row 4","table 運賃表 row 11"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":120,"重量":1},"out":{"運賃":1830},"trace":["table サイズ判定 row 4","table 運賃表 row 11"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":139,"重量":1},"out":{"運賃":2170},"trace":["table サイズ判定 row 5","table 運賃表 row 12"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":140,"重量":1},"out":{"運賃":2170},"trace":["table サイズ判定 row 5","table 運賃表 row 12"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":159,"重量":1},"out":{"運賃":2500},"trace":["table サイズ判定 row 6","table 運賃表 row 13"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":160,"重量":1},"out":{"運賃":2500},"trace":["table サイズ判定 row 6","table 運賃表 row 13"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":169,"重量":1},"out":{"運賃":3070},"trace":["table サイズ判定 row 7","table 運賃表 row 14"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":170,"重量":1},"out":{"運賃":3070},"trace":["table サイズ判定 row 7","table 運賃表 row 14"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":2,"重量":1},"out":{"運賃":820},"trace":["table サイズ判定 row 1","table 運賃表 row 1"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":59,"重量":1},"out":{"運賃":820},"trace":["table サイズ判定 row 1","table 運賃表 row 1"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":60,"重量":1},"out":{"運賃":820},"trace":["table サイズ判定 row 1","table 運賃表 row 1"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":79,"重量":1},"out":{"運賃":1130},"trace":["table サイズ判定 row 2","table 運賃表 row 2"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":80,"重量":1},"out":{"運賃":1130},"trace":["table サイズ判定 row 2","table 運賃表 row 2"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":99,"重量":1},"out":{"運賃":1450},"trace":["table サイズ判定 row 3","table 運賃表 row 3"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":100,"重量":1},"out":{"運賃":1450},"trace":["table サイズ判定 row 3","table 運賃表 row 3"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":119,"重量":1},"out":{"運賃":1770},"trace":["table サイズ判定 row 4","table 運賃表 row 4"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":120,"重量":1},"out":{"運賃":1770},"trace":["table サイズ判定 row 4","table 運賃表 row 4"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":139,"重量":1},"out":{"運賃":2120},"trace":["table サイズ判定 row 5","table 運賃表 row 5"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":140,"重量":1},"out":{"運賃":2120},"trace":["table サイズ判定 row 5","table 運賃表 row 5"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":159,"重量":1},"out":{"運賃":2450},"trace":["table サイズ判定 row 6","table 運賃表 row 6"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":160,"重量":1},"out":{"運賃":2450},"trace":["table サイズ判定 row 6","table 運賃表 row 6"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":169,"重量":1},"out":{"運賃":3000},"trace":["table サイズ判定 row 7","table 運賃表 row 7"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"東京都","三辺合計":170,"重量":1},"out":{"運賃":3000},"trace":["table サイズ判定 row 7","table 運賃表 row 7"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":2,"重量":1},"out":{"運賃":990},"trace":["table サイズ判定 row 1","table 運賃表 row 15"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":59,"重量":1},"out":{"運賃":990},"trace":["table サイズ判定 row 1","table 運賃表 row 15"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":60,"重量":1},"out":{"運賃":990},"trace":["table サイズ判定 row 1","table 運賃表 row 15"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":79,"重量":1},"out":{"運賃":1310},"trace":["table サイズ判定 row 2","table 運賃表 row 16"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":80,"重量":1},"out":{"運賃":1310},"trace":["table サイズ判定 row 2","table 運賃表 row 16"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":99,"重量":1},"out":{"運賃":1620},"trace":["table サイズ判定 row 3","table 運賃表 row 17"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":100,"重量":1},"out":{"運賃":1620},"trace":["table サイズ判定 row 3","table 運賃表 row 17"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":119,"重量":1},"out":{"運賃":1940},"trace":["table サイズ判定 row 4","table 運賃表 row 18"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":120,"重量":1},"out":{"運賃":1940},"trace":["table サイズ判定 row 4","table 運賃表 row 18"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":139,"重量":1},"out":{"運賃":2300},"trace":["table サイズ判定 row 5","table 運賃表 row 19"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":140,"重量":1},"out":{"運賃":2300},"trace":["table サイズ判定 row 5","table 運賃表 row 19"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":159,"重量":1},"out":{"運賃":2610},"trace":["table サイズ判定 row 6","table 運賃表 row 20"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":160,"重量":1},"out":{"運賃":2610},"trace":["table サイズ判定 row 6","table 運賃表 row 20"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":169,"重量":1},"out":{"運賃":3750},"trace":["table サイズ判定 row 7","table 運賃表 row 21"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"滋賀県","三辺合計":170,"重量":1},"out":{"運賃":3750},"trace":["table サイズ判定 row 7","table 運賃表 row 21"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":2,"重量":1},"out":{"運賃":1150},"trace":["table サイズ判定 row 1","table 運賃表 row 22"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":59,"重量":1},"out":{"運賃":1150},"trace":["table サイズ判定 row 1","table 運賃表 row 22"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":60,"重量":1},"out":{"運賃":1150},"trace":["table サイズ判定 row 1","table 運賃表 row 22"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":79,"重量":1},"out":{"運賃":1440},"trace":["table サイズ判定 row 2","table 運賃表 row 23"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":80,"重量":1},"out":{"運賃":1440},"trace":["table サイズ判定 row 2","table 運賃表 row 23"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":99,"重量":1},"out":{"運賃":1780},"trace":["table サイズ判定 row 3","table 運賃表 row 24"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":100,"重量":1},"out":{"運賃":1780},"trace":["table サイズ判定 row 3","table 運賃表 row 24"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":119,"重量":1},"out":{"運賃":2080},"trace":["table サイズ判定 row 4","table 運賃表 row 25"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":120,"重量":1},"out":{"運賃":2080},"trace":["table サイズ判定 row 4","table 運賃表 row 25"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":139,"重量":1},"out":{"運賃":2440},"trace":["table サイズ判定 row 5","table 運賃表 row 26"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":140,"重量":1},"out":{"運賃":2440},"trace":["table サイズ判定 row 5","table 運賃表 row 26"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":159,"重量":1},"out":{"運賃":2750},"trace":["table サイズ判定 row 6","table 運賃表 row 27"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":160,"重量":1},"out":{"運賃":2750},"trace":["table サイズ判定 row 6","table 運賃表 row 27"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":169,"重量":1},"out":{"運賃":3890},"trace":["table サイズ判定 row 7","table 運賃表 row 28"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"鳥取県","三辺合計":170,"重量":1},"out":{"運賃":3890},"trace":["table サイズ判定 row 7","table 運賃表 row 28"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":2,"重量":1},"out":{"運賃":1450},"trace":["table サイズ判定 row 1","table 運賃表 row 36"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":59,"重量":1},"out":{"運賃":1450},"trace":["table サイズ判定 row 1","table 運賃表 row 36"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":60,"重量":1},"out":{"運賃":1450},"trace":["table サイズ判定 row 1","table 運賃表 row 36"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":79,"重量":1},"out":{"運賃":1810},"trace":["table サイズ判定 row 2","table 運賃表 row 37"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":80,"重量":1},"out":{"運賃":1810},"trace":["table サイズ判定 row 2","table 運賃表 row 37"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":99,"重量":1},"out":{"運賃":2160},"trace":["table サイズ判定 row 3","table 運賃表 row 38"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":119,"重量":1},"out":{"運賃":2490},"trace":["table サイズ判定 row 4","table 運賃表 row 39"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":120,"重量":1},"out":{"運賃":2490},"trace":["table サイズ判定 row 4","table 運賃表 row 39"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":139,"重量":1},"out":{"運賃":2860},"trace":["table サイズ判定 row 5","table 運賃表 row 40"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":140,"重量":1},"out":{"運賃":2860},"trace":["table サイズ判定 row 5","table 運賃表 row 40"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":159,"重量":1},"out":{"運賃":3180},"trace":["table サイズ判定 row 6","table 運賃表 row 41"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":160,"重量":1},"out":{"運賃":3180},"trace":["table サイズ判定 row 6","table 運賃表 row 41"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":169,"重量":1},"out":{"運賃":4350},"trace":["table サイズ判定 row 7","table 運賃表 row 42"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"沖縄県","三辺合計":170,"重量":1},"out":{"運賃":4350},"trace":["table サイズ判定 row 7","table 運賃表 row 42"],"why":"pairwise: あて先 × 三辺合計"}
+{"in":{"あて先":"青森県","三辺合計":1,"重量":2},"out":{"運賃":880},"trace":["table サイズ判定 row 1","table 運賃表 row 8"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"青森県","三辺合計":1,"重量":24999},"out":{"運賃":880},"trace":["table サイズ判定 row 1","table 運賃表 row 8"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"青森県","三辺合計":1,"重量":25000},"out":{"運賃":880},"trace":["table サイズ判定 row 1","table 運賃表 row 8"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"東京都","三辺合計":1,"重量":2},"out":{"運賃":820},"trace":["table サイズ判定 row 1","table 運賃表 row 1"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"東京都","三辺合計":1,"重量":24999},"out":{"運賃":820},"trace":["table サイズ判定 row 1","table 運賃表 row 1"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"東京都","三辺合計":1,"重量":25000},"out":{"運賃":820},"trace":["table サイズ判定 row 1","table 運賃表 row 1"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"滋賀県","三辺合計":1,"重量":2},"out":{"運賃":990},"trace":["table サイズ判定 row 1","table 運賃表 row 15"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"滋賀県","三辺合計":1,"重量":24999},"out":{"運賃":990},"trace":["table サイズ判定 row 1","table 運賃表 row 15"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"滋賀県","三辺合計":1,"重量":25000},"out":{"運賃":990},"trace":["table サイズ判定 row 1","table 運賃表 row 15"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"鳥取県","三辺合計":1,"重量":2},"out":{"運賃":1150},"trace":["table サイズ判定 row 1","table 運賃表 row 22"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"鳥取県","三辺合計":1,"重量":24999},"out":{"運賃":1150},"trace":["table サイズ判定 row 1","table 運賃表 row 22"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"鳥取県","三辺合計":1,"重量":25000},"out":{"運賃":1150},"trace":["table サイズ判定 row 1","table 運賃表 row 22"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"沖縄県","三辺合計":1,"重量":2},"out":{"運賃":1450},"trace":["table サイズ判定 row 1","table 運賃表 row 36"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"沖縄県","三辺合計":1,"重量":24999},"out":{"運賃":1450},"trace":["table サイズ判定 row 1","table 運賃表 row 36"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"沖縄県","三辺合計":1,"重量":25000},"out":{"運賃":1450},"trace":["table サイズ判定 row 1","table 運賃表 row 36"],"why":"pairwise: あて先 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":2,"重量":2},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":2,"重量":24999},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":2,"重量":25000},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":59,"重量":2},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":59,"重量":24999},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":59,"重量":25000},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":60,"重量":2},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":60,"重量":24999},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":60,"重量":25000},"out":{"運賃":1410},"trace":["table サイズ判定 row 1","table 運賃表 row 29"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":61,"重量":2},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":61,"重量":24999},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":61,"重量":25000},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":79,"重量":2},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":79,"重量":24999},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":79,"重量":25000},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":80,"重量":2},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":80,"重量":24999},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":80,"重量":25000},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":81,"重量":2},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":81,"重量":24999},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":81,"重量":25000},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":99,"重量":2},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":99,"重量":24999},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":99,"重量":25000},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":100,"重量":2},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":100,"重量":24999},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":100,"重量":25000},"out":{"運賃":2020},"trace":["table サイズ判定 row 3","table 運賃表 row 31"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":101,"重量":2},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":101,"重量":24999},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":101,"重量":25000},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":119,"重量":2},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":119,"重量":24999},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":119,"重量":25000},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":120,"重量":2},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":120,"重量":24999},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":120,"重量":25000},"out":{"運賃":2340},"trace":["table サイズ判定 row 4","table 運賃表 row 32"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":121,"重量":2},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":121,"重量":24999},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":121,"重量":25000},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":139,"重量":2},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":139,"重量":24999},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":139,"重量":25000},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":140,"重量":2},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":140,"重量":24999},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":140,"重量":25000},"out":{"運賃":2680},"trace":["table サイズ判定 row 5","table 運賃表 row 33"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":141,"重量":2},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":141,"重量":24999},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":141,"重量":25000},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":159,"重量":2},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":159,"重量":24999},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":159,"重量":25000},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":160,"重量":2},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":160,"重量":24999},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":160,"重量":25000},"out":{"運賃":3010},"trace":["table サイズ判定 row 6","table 運賃表 row 34"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":161,"重量":2},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":161,"重量":24999},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":161,"重量":25000},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":169,"重量":2},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":169,"重量":24999},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":169,"重量":25000},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":170,"重量":2},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":170,"重量":24999},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"北海道","三辺合計":170,"重量":25000},"out":{"運賃":4140},"trace":["table サイズ判定 row 7","table 運賃表 row 35"],"why":"pairwise: 三辺合計 × 重量"}
+{"in":{"あて先":"東京都","三辺合計":55,"重量":1000},"out":{"運賃":820},"trace":["table サイズ判定 row 1","table 運賃表 row 1"],"why":"example row 1"}
+{"in":{"あて先":"沖縄県","三辺合計":100,"重量":3000},"out":{"運賃":2160},"trace":["table サイズ判定 row 3","table 運賃表 row 38"],"why":"example row 2"}
+{"in":{"あて先":"北海道","三辺合計":61,"重量":20000},"out":{"運賃":1710},"trace":["table サイズ判定 row 2","table 運賃表 row 30"],"why":"example row 3"}

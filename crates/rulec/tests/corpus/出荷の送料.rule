@@ -1,0 +1,57 @@
+rule 出荷の送料(shipment_fee) v1
+description "出荷の要求（.proto）から送料を決める。Protovalidate の注釈と入力の宣言をそろえた例（§15.132、§15.133）"
+
+# 呼び出し側は Connect のサービスで、要求の形は .proto で決まっている。それを借りて、入力が
+# 要求のどこから来るかを書く。生成する shipment_fee_from は、protojson で届いた要求をそのまま読む。
+shape 出荷(shipment) = proto "contracts/shipment.proto" shop.v1.CreateShipmentRequest
+
+enum 地域(region) = honshu(honshu) | hokkaido(hokkaido) | okinawa(okinawa)
+enum 時間帯(window) = morning(morning) | evening(evening)
+
+inputs
+  あて先(region)      : 地域  from 出荷.destination.region
+  割れ物あり(fragile) : bool  from any 出荷.parcels where handling = HANDLING_FRAGILE
+  個数(parcels)       : number  range >=1 <=20  from count 出荷.parcels
+  申告額(declared)    : money[円]  range >=0円 <=100万円  from 出荷.declared_value_jpy
+  時間帯(window)      : 時間帯?  from 出荷.delivery_window
+
+outputs
+  送料(fee) : money[円]  round up(10円)
+
+# 一個あたりの運賃に個数を掛け、割れ物・補償・時間帯指定の加算を足す。
+table 地域別(by_region)
+policy unique
+| あて先   | -> 一個の運賃(per_parcel) : money[円] |
+| honshu   | 800円                                 |
+| hokkaido | 1200円                                |
+| okinawa  | 1500円                                |
+
+table 割れ物加算(fragile_extra)
+policy unique
+| 割れ物あり | -> 割れ物料(fragile_fee) : money[円] |
+| true       | 300円                                |
+| false      | 0円                                  |
+
+table 補償(insurance)
+policy unique
+| 申告額          | -> 補償料(insurance_fee) : money[円] |
+| <=3万円         | 0円                                  |
+| >3万円 <=10万円 | 200円                                |
+| >10万円         | 500円                                |
+
+table 時間帯指定(window_extra)
+policy unique
+| 時間帯           | -> 指定料(window_fee) : money[円] |
+| none             | 0円                               |
+| morning, evening | 100円                             |
+
+define 合計(total) : money[円] = 一個の運賃 × 個数 + 割れ物料 + 補償料 + 指定料
+
+result 送料 = 合計
+
+examples
+| あて先   | 割れ物あり | 個数 | 申告額  | 時間帯  | -> 送料 |
+| honshu   | false      | 1    | 0円     | none    | 800円   |
+| hokkaido | true       | 2    | 5万円   | none    | 2900円  |
+| okinawa  | false      | 3    | 20万円  | evening | 5100円  |
+| honshu   | true       | 20   | 100万円 | morning | 16900円 |

@@ -1,0 +1,101 @@
+Obj(
+    {
+        "code": Str(
+            "E101",
+        ),
+        "column": Int(
+            7,
+        ),
+        "file": Str(
+            "tests/mutants/m_e101.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "add_row",
+                ),
+                "text": Str(
+                    "| 山梨県 | S60 | 820円 |",
+                ),
+            },
+        ),
+        "line": Int(
+            34,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "An input that matches no row: あて先 = 山梨県, サイズ = S60",
+                ),
+                Str(
+                    "hint: add a row that matches this input.",
+                ),
+                Str(
+                    "The shape of the row to add: `| 山梨県 | S60 | 820円 |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            7,
+                        ),
+                        "label": Str(
+                            "the input space is not fully covered",
+                        ),
+                        "length": Int(
+                            9,
+                        ),
+                        "line": Int(
+                            34,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "Completeness gap: some input matches no row",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    7,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e101.rule",
+                ),
+                "line": Int(
+                    34,
+                ),
+                "table": Str(
+                    "運賃表",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "あて先": Str(
+                            "山梨県",
+                        ),
+                        "サイズ": Str(
+                            "S60",
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)

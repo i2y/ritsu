@@ -1,0 +1,32 @@
+rule クーポン併用(coupon_stack) v1
+description "二つの導出が入力を共有する 一意 の表。列ごとのふるいには重なって見え、消去が起きないと決める題材（§6.2、§15.126）"
+
+enum 判定(verdict) = 対象外(no) default | 対象(yes)
+
+inputs
+  合計(total)   : money[円,incl_tax]  range >=0円 <=100万円
+  割引A(disc_a) : money[円,incl_tax]  range >=0円 <=10万円
+  割引B(disc_b) : money[円,incl_tax]  range >=0円 <=10万円
+
+outputs
+  併用可否(verdict) : 判定
+
+# 割引B は 0 円以上なので、残高B は定義から必ず 残高A 以下になる。
+# つまり 残高A <= 1000円 のとき 残高B が 3980円 に届くことはない。
+# 検査は導出を一本ずつ独立に見るので、この結びつきが見えない。下の 行1 と 行2 は
+# そこでは重なって見え、Fourier-Motzkin 消去が起きないと決める（§15.126）。
+derive 残高A(rest_a) : money[円,incl_tax] = 合計 - 割引A            range >=-10万円 <=100万円
+derive 残高B(rest_b) : money[円,incl_tax] = 合計 - 割引A - 割引B    range >=-20万円 <=100万円
+
+table 適用判定(decide)
+policy unique
+| 残高A    | 残高B    | -> 併用可否(verdict) : 判定 |
+| <=1000円 | -        | 対象外                      |
+| -        | >=3980円 | 対象                        |
+| >1000円  | <3980円  | 対象外                      |
+
+examples
+| 合計    | 割引A  | 割引B  | -> 併用可否 |
+| 500円   | 0円    | 0円    | 対象外      |
+| 10000円 | 1000円 | 1000円 | 対象        |
+| 5000円  | 2000円 | 2000円 | 対象外      |

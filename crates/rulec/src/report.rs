@@ -1,0 +1,791 @@
+//! Comparison results and how they are presented (§10.3, §10.4).
+//!
+//! "Rule vs legacy implementation" (verify), "rule vs past observations" (replay) and
+//! "one version of a rule vs another" (diff) differ only in what the rule is compared
+//! against; the shape — **cluster by fired row and report counts, amounts and witnesses**
+//! — is the same. It lives here once and all three use it.
+//!
+//! The denominator of the match rate is always taken from the observed records alone
+//! (§10.3). The whole point of this design is to cut off, at the level of the format, the
+//! temptation to inflate the rate by mixing in filled records, so the place that adds to
+//! the denominator is confined to one spot. On top of that, **the report itself always
+//! records the default values used and the number of filled records per field**. A report
+//! pasted into a PR becomes the record of what justified the fill.
+
+use crate::ast::RuleFile;
+use crate::eval::Val;
+use crate::types::Checked;
+use crate::vectors;
+use std::collections::BTreeMap;
+
+/// A row that fired, as data. The cluster key is built from these and the label is rendered
+/// from them, rather than the other way round: `row_tag` is prose and prose may change (§11
+/// principle 5), so nothing downstream is allowed to take it apart.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Fired {
+    /// One side fired this row (`verify`, `replay`).
+    One { table: String, row: usize },
+    /// How the fired row moved between two versions (`diff`). `None` on a side means that
+    /// version's table did not fire at all.
+    Moved { table: String, from: Option<usize>, to: Option<usize> },
+}
+
+impl Fired {
+    /// The form the text and markdown renderings show.
+    pub fn label(&self) -> String {
+        match self {
+            Fired::One { table, row } => crate::eval::row_tag(table, *row),
+            Fired::Moved { table, from: Some(a), to: Some(b) } if a == b => {
+                crate::eval::row_tag(table, *a)
+            }
+            Fired::Moved { table, from: Some(a), to: Some(b) } => {
+                tr!("{}→行{b}", "{}→row {b}", crate::eval::row_tag(table, *a))
+            }
+            Fired::Moved { table, from: Some(a), to: None } => {
+                tr!("{}（旧のみ）", "{} (old only)", crate::eval::row_tag(table, *a))
+            }
+            Fired::Moved { table, from: None, to: Some(b) } => {
+                tr!("{}（新のみ）", "{} (new only)", crate::eval::row_tag(table, *b))
+            }
+            Fired::Moved { table, .. } => table.clone(),
+        }
+    }
+
+    /// `{"table":…,"row":…}` for one side, `{"table":…,"from":…,"to":…}` for a transition
+    /// (docs/formats.md).
+    pub fn json(&self) -> String {
+        let n = |v: Option<usize>| match v {
+            Some(v) => v.to_string(),
+            None => "null".to_string(),
+        };
+        match self {
+            Fired::One { table, row } => {
+                crate::json::Obj::new().str("table", table).int("row", *row as i128).finish()
+            }
+            Fired::Moved { table, from, to } => crate::json::Obj::new()
+                .str("table", table)
+                .raw("from", n(*from))
+                .raw("to", n(*to))
+                .finish(),
+        }
+    }
+}
+
+pub struct Mismatch {
+    /// Where the record came in, 1-based: the line of the fixtures file for `replay` and
+    /// `diff`, the vector's place in the stream for `verify`. It is what names a record
+    /// when the record carries no `tag` of its own.
+    pub line: usize,
+    /// The record's label (e.g. `order:1234567`). Empty when there is none.
+    pub tag: String,
+    pub input: BTreeMap<String, Val>,
+    /// (output name, our value, the counterpart's value) in declaration order. With several
+    /// outputs, all of them are listed here.
+    pub outs: Vec<(String, Option<Val>, Option<String>)>,
+    pub err: Option<String>,
+    /// The rows that fired. They form the cluster key.
+    pub fired: Vec<Fired>,
+}
+
+impl Mismatch {
+    /// Only the outputs that differ. When the counterpart gave no answer, all of them count
+    /// as differing.
+    pub fn differing(&self, c: &Checked) -> Vec<&(String, Option<Val>, Option<String>)> {
+        self.outs.iter().filter(|(n, a, b)| wire(c, n, a.as_ref()) != *b).collect()
+    }
+}
+
+/// A value in its wire representation. JSON numbers are integers in the canonical unit, and
+/// a rate travels as the number of steps (§10.2), so the conversion needs the name.
+pub fn wire(c: &Checked, name: &str, v: Option<&Val>) -> Option<String> {
+    v.map(|o| match o {
+        Val::Num(r) => format!("{}", crate::types::wire_int(*r, c.wire_scale(name))),
+        Val::Bool(b) => format!("{b}"),
+        other => vectors::show(other),
+    })
+}
+
+pub struct Report {
+    /// Whether there are two or more outputs. Decides whether amount differences carry the
+    /// output name.
+    pub multi: bool,
+    /// Number of observed records compared. Filled records are not counted here (§10.3).
+    pub total: usize,
+    pub agreed: usize,
+    /// Number of records the counterpart could not answer. Excluded from the denominator and
+    /// reported with the reason.
+    pub errored: usize,
+    pub mismatches: Vec<Mismatch>,
+    /// Identity of the counterpart (`legacy/shipping.py@a1b2c3d`, `replay/2025-08.jsonl`,
+    /// `送料@v3`).
+    pub impl_id: String,
+    /// The word that names the counterpart in a witness: verify uses "現行" (the implementation
+    /// running today, whoever wrote it), replay
+    /// "観測" (observed), diff "旧版" (old version).
+    pub theirs: String,
+    /// Filled records: the count per field, and the default values used (§10.3).
+    pub filled: BTreeMap<String, usize>,
+    pub fills_used: BTreeMap<String, String>,
+    pub filled_total: usize,
+    pub filled_agreed: usize,
+    /// Records excluded before the comparison: a stable kind (`missing_field`, `bad_format`),
+    /// the reason as **prose**, and how many. The kind is what `--format json` reports, so a
+    /// caller never has to match on the sentence.
+    pub excluded: Vec<(&'static str, String, usize)>,
+    /// Records whose values agreed but whose recorded rows differ from the rule's (§15.35).
+    /// Only a record that carries a `trace` can land here. They count as matched — the amount
+    /// is right — and are reported apart, clustered by the move.
+    pub moved: Vec<Mismatch>,
+    /// A machine's records read as cases (§15.148). `None` for a rule that is not a machine,
+    /// or records that carry no tag.
+    pub cases: Option<Cases>,
+}
+
+/// A machine's records read as cases (§15.148): the records that share a `tag`, in the order
+/// they came in, are one case's calls. Each case is played again from its first record, the
+/// version carrying its own answer from one call to the next.
+#[derive(Default, Debug, Clone)]
+pub struct Cases {
+    pub total: usize,
+    /// Played through with every call answered as it was before (the record's answer for
+    /// `replay`, the old version's for `diff`).
+    pub followed: usize,
+    /// (tag, line): the first call where the answer parts from before.
+    pub diverged: Vec<(String, usize)>,
+    /// (tag, line): a call the version refuses — a state it no longer has, a value it does not
+    /// take.
+    pub refused: Vec<(String, usize)>,
+    /// (tag, state): the state a case is left in, from which the version reaches no final state.
+    pub stranded: Vec<(String, String)>,
+    /// How many cases end in a final state.
+    pub ended: usize,
+}
+
+impl Report {
+    pub fn new(f: &RuleFile, theirs: &str) -> Report {
+        Report {
+            multi: f.outputs.len() > 1,
+            total: 0,
+            agreed: 0,
+            errored: 0,
+            mismatches: Vec::new(),
+            impl_id: String::new(),
+            theirs: theirs.into(),
+            filled: BTreeMap::new(),
+            fills_used: BTreeMap::new(),
+            filled_total: 0,
+            filled_agreed: 0,
+            excluded: Vec::new(),
+            moved: Vec::new(),
+            cases: None,
+        }
+    }
+    /// The headline match rate is computed from observed records only (§10.3).
+    /// Records the counterpart declared unsupported are excluded from the denominator.
+    pub fn rate(&self) -> f64 {
+        let n = self.total - self.errored;
+        if n == 0 {
+            return 0.0;
+        }
+        self.agreed as f64 / n as f64
+    }
+
+    /// Whether not one record was compared: every one excluded, left unanswered, or none
+    /// there. "No mismatches" over nothing used to end the run with exit 0, so a CI job fed
+    /// records the rule could no longer read stayed green (§15.144).
+    pub fn compared_nothing(&self) -> bool {
+        self.total <= self.errored && self.filled_total == 0
+    }
+
+    /// What to say when records were thrown out for their format and nothing was left: the
+    /// likeliest cause is a step or a unit that changed since they were written (§15.145).
+    fn read_as_hint(&self) -> Option<String> {
+        (self.compared_nothing() && self.excluded.iter().any(|(k, ..)| *k == "bad_format")).then(|| {
+            tr!(
+                "刻みや単位を変える前に書いた記録なら、`--read-as <規則>@<版>` でその版の読み方で読めます。",
+                "If the records were written before a step or a unit changed, `--read-as <rule>@<rev>` reads them the way that version wrote them."
+            )
+        })
+    }
+}
+
+/// Thousands separators. An amount means nothing if the reader cannot count its digits.
+/// The sign is always written (for a difference, the direction is the substance).
+fn group(n: i128) -> String {
+    let d = n.unsigned_abs().to_string();
+    let mut out = String::new();
+    for (i, ch) in d.chars().enumerate() {
+        if i > 0 && (d.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    format!("{}{out}", if n < 0 { "-" } else { "+" })
+}
+
+/// The word after a record count: `件` in Japanese, `record`/`records` in English.
+fn records(n: usize) -> &'static str {
+    if crate::i18n::ja() { "件" } else if n == 1 { "record" } else { "records" }
+}
+
+/// Statistics of Δ within a cluster (§10.4). Always carries the count, the total and the
+/// min/max.
+pub struct Delta {
+    pub n: usize,
+    pub sum: i128,
+    pub lo: i128,
+    pub hi: i128,
+}
+
+impl Delta {
+    fn push(&mut self, d: i128) {
+        if self.n == 0 {
+            self.lo = d;
+            self.hi = d;
+        } else {
+            self.lo = self.lo.min(d);
+            self.hi = self.hi.max(d);
+        }
+        self.n += 1;
+        self.sum += d;
+    }
+    pub fn uniform(&self) -> bool {
+        self.lo == self.hi
+    }
+    /// Folded into one line when every record has the same value. Otherwise the min/max are
+    /// shown, so that the very fact of the spread is visible (this recovers what is given up
+    /// by not splitting the key on the amount; §10.4).
+    fn text(&self) -> String {
+        if self.uniform() {
+            tr!(
+                "差 {} 一様  合計 {}",
+                "difference {} uniform  total {}",
+                group(self.lo),
+                group(self.sum)
+            )
+        } else {
+            tr!(
+                "合計 {}  Δ {}..{}",
+                "total {}  Δ {}..{}",
+                group(self.sum),
+                group(self.lo),
+                group(self.hi)
+            )
+        }
+    }
+}
+
+/// Per cluster: output name → Δ statistics.
+fn deltas(ms: &[&Mismatch], c: &Checked) -> BTreeMap<String, Delta> {
+    let mut out: BTreeMap<String, Delta> = BTreeMap::new();
+    for m in ms {
+        for (n, a, b) in m.differing(c) {
+            let (Some(Val::Num(a)), Some(b)) = (a, b) else { continue };
+            let Ok(b) = b.parse::<i128>() else { continue };
+            // Both sides are wire integers, so a rate's Δ is counted in steps.
+            out.entry(n.clone())
+                .or_insert(Delta { n: 0, sum: 0, lo: 0, hi: 0 })
+                .push(crate::types::wire_int(*a, c.wire_scale(n)) - b);
+        }
+    }
+    out.retain(|_, d| d.n > 0);
+    out
+}
+
+fn money_text(ds: &BTreeMap<String, Delta>, multi: bool) -> String {
+    ds.iter()
+        .map(|(n, d)| {
+            let label = if multi { format!("{n} ") } else { String::new() };
+            format!("  {label}{}", d.text())
+        })
+        .collect()
+}
+
+fn witness(ex: &Mismatch, theirs: &str, c: &Checked) -> String {
+    let inp: Vec<String> =
+        ex.input.iter().map(|(n, v)| format!("{n}={}", vectors::show_named(c, n, v))).collect();
+    let diff: Vec<String> = ex
+        .differing(c)
+        .iter()
+        .filter_map(|(n, a, b)| {
+            let (a, b) = (a.as_ref()?, b.as_ref()?);
+            Some(tr!(
+                "規則 {n}={} / {theirs} {n}={b}",
+                "rule {n}={} / {theirs} {n}={b}",
+                vectors::show_named(c, n, a)
+            ))
+        })
+        .collect();
+    if diff.is_empty() {
+        inp.join(", ")
+    } else {
+        format!("{} → {}", inp.join(", "), diff.join(", "))
+    }
+}
+
+fn cluster(ms: &[Mismatch]) -> BTreeMap<String, Vec<&Mismatch>> {
+    let mut out: BTreeMap<String, Vec<&Mismatch>> = BTreeMap::new();
+    for m in ms {
+        // §10.4: the key is the set of fired rows only; the legacy output is not part of it.
+        // For table-lookup rows the set of rows already fixes the set of amounts, so nothing
+        // would be gained, and for computed outputs the clusters would split once per distinct
+        // value and the summary would die. What the split would show is recovered by the
+        // min/max of Δ.
+        out.entry(key_of(m)).or_default().push(m);
+    }
+    out
+}
+
+fn key_of(m: &Mismatch) -> String {
+    match &m.err {
+        Some(e) => tr!("答えられない: {e}", "could not answer: {e}"),
+        None => m.fired.iter().map(|x| x.label()).collect::<Vec<_>>().join(" / "),
+    }
+}
+
+/// One cluster of mismatches, as data. The three renderings (text, markdown, JSON) are all
+/// built from this, so they cannot drift apart.
+pub struct Cluster<'a> {
+    /// The fired rows joined, as displayed. **Prose.**
+    pub label: String,
+    pub fired: Vec<Fired>,
+    pub count: usize,
+    /// Output name → how far it moved across the cluster.
+    pub deltas: BTreeMap<String, Delta>,
+    /// The record shown as the example.
+    pub example: &'a Mismatch,
+    /// Every record in the cluster, in the order they came in. The example is the first of
+    /// them; a gate that has to act on the records themselves needs all of them.
+    pub members: Vec<&'a Mismatch>,
+    /// The output grid, when every difference in the cluster is below it (§10.4).
+    pub suspect_grid: Option<String>,
+    /// Set when the counterpart declared it could not answer. **Prose.**
+    pub error: Option<String>,
+}
+
+/// Every cluster of mismatches, in the order the renderings show them.
+pub fn clusters<'a>(rep: &'a Report, f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> {
+    build(&rep.mismatches, f, c)
+}
+
+/// The clusters of moved rows (§15.35): the same shape, with nothing in `deltas`.
+pub fn moved_clusters<'a>(rep: &'a Report, f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> {
+    build(&rep.moved, f, c)
+}
+
+fn build<'a>(ms: &'a [Mismatch], f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> {
+    cluster(ms)
+        .into_iter()
+        .map(|(label, ms)| Cluster {
+            label,
+            fired: ms[0].fired.clone(),
+            count: ms.len(),
+            deltas: deltas(&ms, c),
+            suspect_grid: sub_grid(&ms, f, c),
+            error: ms[0].err.clone(),
+            example: ms[0],
+            members: ms,
+        })
+        .collect()
+}
+
+/// The record of fills and exclusions (§10.3). Wherever a number appears, its basis is
+/// shown next to it.
+fn provenance(rep: &Report) -> Vec<String> {
+    let mut o = Vec::new();
+    if rep.errored > 0 {
+        o.push(tr!(
+            "相手が答えられなかった {} 件は、一致率の分母から外しています（§10.3）",
+            "The counterpart could not answer {} of the records; those are excluded from the match-rate denominator (§10.3)",
+            rep.errored
+        ));
+    }
+    for (_, why, n) in &rep.excluded {
+        let unit = records(*n);
+        o.push(tr!("{why}記録を {n} {unit}外しました", "Excluded {n} {unit} ({why})"));
+    }
+    if rep.filled_total > 0 {
+        let by: Vec<String> =
+            rep.filled.iter().map(|(n, k)| tr!("{n} {k} 件", "{n}: {k}")).collect();
+        o.push(tr!(
+            "補った記録 {} 件（{}）。一致 {} 件。見出しの一致率には入れていません",
+            "Filled records: {} ({}); matched {}. Not included in the headline match rate",
+            rep.filled_total,
+            by.join(if crate::i18n::ja() { "、" } else { ", " }),
+            rep.filled_agreed
+        ));
+        let used: Vec<String> =
+            rep.fills_used.iter().map(|(n, v)| format!("{n} = {v}")).collect();
+        if !used.is_empty() {
+            o.push(tr!("使った既定値: {}", "Default values used: {}", used.join(", ")));
+        }
+    }
+    o
+}
+
+/// The §10.4 headline. Not just the count: the total amount that moves is always attached.
+/// "How many records move" and "how much money moves" are different questions, and it is
+/// the latter that sways an approval.
+fn impact(rep: &Report, c: &Checked) -> String {
+    // A record the counterpart could not answer is listed apart and is out of the
+    // denominator, so it is out of the numerator too: otherwise a counterpart that answers
+    // eighteen records and declines the rest is "affected" a thousand percent.
+    let n = rep.total - rep.errored;
+    let all: Vec<&Mismatch> = rep.mismatches.iter().filter(|m| m.err.is_none()).collect();
+    let pct = if n == 0 { 0.0 } else { all.len() as f64 * 100.0 / n as f64 };
+    let money: Vec<String> = deltas(&all, c)
+        .iter()
+        .map(|(name, d)| {
+            let label = if rep.multi { format!("{name} ") } else { String::new() };
+            tr!("  金額 {label}{}", "  amount {label}{}", group(d.sum))
+        })
+        .collect();
+    tr!(
+        "影響 {} 件 ({pct:.3}%){}",
+        "Affected {} ({pct:.3}%){}",
+        all.len(),
+        money.join("")
+    )
+}
+
+/// `terse` leaves the witnesses out (§15.42): the counts and the amounts are the finding, and
+/// the values of a production record are not for a pull request everyone can read.
+pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
+    let mut o = tr!(
+        "照合 {} 件 / 一致 {} ({:.3}%)\n",
+        "Compared {} / matched {} ({:.3}%)\n",
+        rep.total,
+        rep.agreed,
+        rep.rate() * 100.0
+    );
+    if !rep.impl_id.is_empty() {
+        o.push_str(&tr!("相手: {}\n", "Counterpart: {}\n", rep.impl_id));
+    }
+    for l in provenance(rep) {
+        o.push_str(&l);
+        o.push('\n');
+    }
+    if rep.compared_nothing() {
+        o.push_str(&tr!("照合できた記録はありません。\n", "Not one record was compared.\n"));
+        if let Some(h) = rep.read_as_hint() {
+            o.push_str(&h);
+            o.push('\n');
+        }
+    } else if rep.mismatches.is_empty() {
+        o.push_str(&tr!("不一致はありません。\n", "No mismatches.\n"));
+    } else {
+        o.push_str(&format!("\n{}\n", impact(rep, c)));
+        for cl in clusters(rep, f, c) {
+            let money = money_text(&cl.deltas, rep.multi);
+            o.push_str(&format!("  {:<48} {:>5} {}{money}\n", cl.label, cl.count, records(cl.count)));
+            if let Some(q) = &cl.suspect_grid {
+                // §10.4: a cluster made up solely of differences below the output grid is most
+                // likely a difference in rounding convention, not in the values themselves. Flag
+                // it automatically.
+                o.push_str(&tr!(
+                    "    丸め方の違いの疑い（出力の刻み {q} 未満の端数だけ）\n",
+                    "    Suspected rounding difference (only fractions below the output grid {q})\n"
+                ));
+            }
+            if !terse {
+                o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
+            }
+        }
+    }
+    if let Some(cs) = &rep.cases {
+        o.push('\n');
+        o.push_str(&cases_text(cs));
+    }
+    // §15.35: the amount agreed, the row did not. Reported apart from the mismatches, so the
+    // headline stays about values, and clustered by the move so a renumbering reads as one line.
+    if !rep.moved.is_empty() {
+        o.push_str(&tr!(
+            "\n値は同じで、当てはまった行が記録と違う記録 {} 件\n",
+            "\nRecords whose values match but whose rows differ from the record: {}\n",
+            rep.moved.len()
+        ));
+        for cl in moved_clusters(rep, f, c) {
+            o.push_str(&format!("  {:<48} {:>5} {}\n", cl.label, cl.count, records(cl.count)));
+            if !terse {
+                o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
+            }
+        }
+    }
+    o
+}
+
+/// The cases, as lines (§15.148).
+pub fn cases_text(cs: &Cases) -> String {
+    let first = |v: &Vec<(String, usize)>| -> String {
+        v.first().map(|(t, l)| tr!("（例: {t} の {l} 行目）", " (e.g. {t}, line {l})")).unwrap_or_default()
+    };
+    let mut o = tr!(
+        "案件（同じ tag の記録を、一つの案件の呼び出しの並びとして）: {} 件\n",
+        "Cases (the records that share a tag, as one case's calls): {}\n",
+        cs.total
+    );
+    o.push_str(&tr!("  前と同じに進んだ: {} 件\n", "  played as before: {}\n", cs.followed));
+    if !cs.diverged.is_empty() {
+        o.push_str(&tr!("  途中で答えが変わる: {} 件{}\n", "  answered differently partway: {}{}\n", cs.diverged.len(), first(&cs.diverged)));
+    }
+    if !cs.refused.is_empty() {
+        o.push_str(&tr!("  途中で断られる: {} 件{}\n", "  refused partway: {}{}\n", cs.refused.len(), first(&cs.refused)));
+    }
+    if !cs.stranded.is_empty() {
+        let (t, st) = &cs.stranded[0];
+        o.push_str(&tr!(
+            "  終わりの状態に着けなくなる: {} 件（例: {t} は {st} で止まる）\n",
+            "  left where no final state can be reached: {} (e.g. {t} stops at {st})\n",
+            cs.stranded.len()
+        ));
+    }
+    o.push_str(&tr!("  終わりの状態で終わる: {} 件\n", "  ending in a final state: {}\n", cs.ended));
+    o
+}
+
+/// Markdown to paste into a PR (§12). Posting is left to one line of CI; the tool owns only
+/// the formatting.
+pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: bool) -> String {
+    let esc = |s: &str| s.replace('|', "\\|");
+    // With `terse` the witness column is not blanked but absent, so the table stays a table.
+    let ex = |m: &Mismatch| if terse { String::new() } else { format!(" {} |", esc(&witness(m, &rep.theirs, c))) };
+    let mut o = tr!(
+        "### 規則 {} v{} — {title}\n\n",
+        "### Rule {} v{} — {title}\n\n",
+        f.name.text,
+        f.version
+    );
+    o.push_str("| | |\n|---|---:|\n");
+    o.push_str(&tr!(
+        "| 照合（そのままの記録） | {} 件 |\n",
+        "| Compared (observed records) | {} |\n",
+        rep.total - rep.errored
+    ));
+    o.push_str(&tr!(
+        "| 一致 | {} 件 ({:.3}%) |\n",
+        "| Matched | {} ({:.3}%) |\n",
+        rep.agreed,
+        rep.rate() * 100.0
+    ));
+    o.push_str(&tr!("| 不一致 | {} 件 |\n", "| Mismatches | {} |\n", rep.mismatches.len()));
+    if !rep.impl_id.is_empty() {
+        o.push_str(&tr!("| 相手 | `{}` |\n", "| Counterpart | `{}` |\n", esc(&rep.impl_id)));
+    }
+    let prov = provenance(rep);
+    if !prov.is_empty() {
+        o.push('\n');
+        for l in &prov {
+            o.push_str(&format!("- {}\n", esc(l)));
+        }
+    }
+    if rep.compared_nothing() {
+        o.push_str(&tr!("\n照合できた記録はありません。\n", "\nNot one record was compared.\n"));
+        if let Some(h) = rep.read_as_hint() {
+            o.push('\n');
+            o.push_str(&h);
+            o.push('\n');
+        }
+    } else if rep.mismatches.is_empty() {
+        o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
+    } else {
+        o.push_str(&format!("\n**{}**\n", impact(rep, c)));
+        o.push_str(&tr!("\n#### 不一致の内訳\n\n", "\n#### Mismatch breakdown\n\n"));
+        o.push_str(if terse {
+            tr!("| 当てはまった行 | 件数 | 差 |\n|---|---:|---|\n", "| Rows that matched | Count | Difference |\n|---|---:|---|\n")
+        } else {
+            tr!(
+                "| 当てはまった行 | 件数 | 差 | 入力例 |\n|---|---:|---|---|\n",
+                "| Rows that matched | Count | Difference | Witness |\n|---|---:|---|---|\n"
+            )
+        }
+        .as_str());
+        for cl in clusters(rep, f, c) {
+            let mut money = money_text(&cl.deltas, rep.multi).trim().to_string();
+            if let Some(q) = &cl.suspect_grid {
+                money.push_str(&tr!(
+                    "<br>丸め方の違いの疑い（刻み {q} 未満）",
+                    "<br>suspected rounding difference (below grid {q})"
+                ));
+            }
+            o.push_str(&format!("| {} | {} | {} |{}\n", esc(&cl.label), cl.count, esc(&money), ex(cl.example)));
+        }
+    }
+    if !rep.moved.is_empty() {
+        o.push_str(&tr!(
+            "\n#### 行の移動（値は同じ、{} 件）\n\n",
+            "\n#### Moved rows (values match, {})\n\n",
+            rep.moved.len()
+        ));
+        o.push_str(if terse {
+            tr!("| 記録の行 → 規則の行 | 件数 |\n|---|---:|\n", "| Recorded row → rule's row | Count |\n|---|---:|\n")
+        } else {
+            tr!(
+                "| 記録の行 → 規則の行 | 件数 | 入力例 |\n|---|---:|---|\n",
+                "| Recorded row → rule's row | Count | Witness |\n|---|---:|---|\n"
+            )
+        }
+        .as_str());
+        for cl in moved_clusters(rep, f, c) {
+            o.push_str(&format!("| {} | {} |{}\n", esc(&cl.label), cl.count, ex(cl.example)));
+        }
+    }
+    if let Some(cs) = &rep.cases {
+        o.push('\n');
+        for (k, line) in cases_text(cs).lines().enumerate() {
+            o.push_str(&if k == 0 { format!("**{}**\n\n", line.trim()) } else { format!("- {}\n", line.trim()) });
+        }
+    }
+    o
+}
+
+/// `--format json` for `verify`, `replay` and `diff` (docs/formats.md). All three share one
+/// shape, because all three are "the rule against a counterpart".
+pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
+    let pairs = |ps: &[(String, String)]| {
+        let mut o = crate::json::Obj::new();
+        for (n, v) in ps {
+            // A wire value is already the canonical integer, a boolean, or a name. Numbers
+            // and booleans go in bare; anything else is a string.
+            let looks_scalar = v.parse::<i128>().is_ok() || v == "true" || v == "false";
+            o = if looks_scalar { o.raw(n, v) } else { o.str(n, v) };
+        }
+        o.finish()
+    };
+    let one = |cl: &Cluster| {
+            let rows: Vec<String> = cl.fired.iter().map(|x| x.json()).collect();
+            // Every record of the cluster by name, not only the example. A gate that has to
+            // do something with the records — hold a version back, re-quote an order — needs
+            // to name them; counting them is not enough.
+            let members: Vec<String> = cl
+                .members
+                .iter()
+                .map(|m| crate::json::Obj::new().int("line", m.line as i128).str("tag", &m.tag).finish())
+                .collect();
+            let mut delta = crate::json::Obj::new();
+            for (n, d) in &cl.deltas {
+                delta = delta.raw(
+                    n,
+                    crate::json::Obj::new()
+                        .int("min", d.lo)
+                        .int("max", d.hi)
+                        .bool("uniform", d.uniform())
+                        .int("total", d.sum)
+                        .finish(),
+                );
+            }
+            let ex = cl.example;
+            let ins: Vec<(String, String)> =
+                ex.input.iter().map(|(n, v)| (n.clone(), wire(c, n, Some(v)).unwrap_or_default())).collect();
+            let ours: Vec<(String, String)> = ex
+                .differing(c)
+                .iter()
+                .filter_map(|(n, a, _)| Some((n.clone(), wire(c, n, a.as_ref())?)))
+                .collect();
+            let theirs: Vec<(String, String)> = ex
+                .differing(c)
+                .iter()
+                .filter_map(|(n, _, b)| Some((n.clone(), b.clone()?)))
+                .collect();
+            let wit = crate::json::Obj::new()
+                .raw("in", pairs(&ins))
+                .raw("ours", pairs(&ours))
+                .raw("theirs", pairs(&theirs))
+                .finish();
+            crate::json::Obj::new()
+                .raw("rows", crate::json::arr(&rows))
+                .int("count", cl.count as i128)
+                .raw("delta", delta.finish())
+                .raw("witness", wit)
+                .raw("records", format!("[{}]", members.join(",")))
+                .bool("suspect_rounding", cl.suspect_grid.is_some())
+                .opt_str("error", cl.error.as_deref())
+                .finish()
+    };
+    let cls: Vec<String> = clusters(rep, f, c).iter().map(one).collect();
+    let moved: Vec<String> = moved_clusters(rep, f, c).iter().map(one).collect();
+
+    let mut excluded = crate::json::Obj::new();
+    for (kind, _, n) in &rep.excluded {
+        excluded = excluded.int(kind, *n as i128);
+    }
+    let mut by_field = crate::json::Obj::new();
+    for (n, k) in &rep.filled {
+        by_field = by_field.int(n, *k as i128);
+    }
+    let mut defaults = crate::json::Obj::new();
+    for (n, v) in &rep.fills_used {
+        defaults = defaults.str(n, v);
+    }
+    let filled = crate::json::Obj::new()
+        .int("count", rep.filled_total as i128)
+        .raw("by_field", by_field.finish())
+        .raw("defaults", defaults.finish())
+        .finish();
+
+    crate::json::Obj::new()
+        .int("compared", rep.total as i128)
+        .int("matched", rep.agreed as i128)
+        .raw("rate", format!("{:.5}", rep.rate()))
+        .str("counterpart", &rep.impl_id)
+        .int("unanswered", rep.errored as i128)
+        .raw("clusters", crate::json::arr(&cls))
+        .raw("moved", crate::json::arr(&moved))
+        .raw("excluded", excluded.finish())
+        .raw("filled", filled)
+        .raw("cases", match &rep.cases {
+            None => "null".into(),
+            Some(cs) => {
+                let at = |v: &Vec<(String, usize)>| -> String {
+                    crate::json::arr(&v.iter().map(|(t, l)| crate::json::Obj::new().str("tag", t).int("line", *l as i128).finish()).collect::<Vec<_>>())
+                };
+                crate::json::Obj::new()
+                    .int("total", cs.total as i128)
+                    .int("followed", cs.followed as i128)
+                    .raw("diverged", at(&cs.diverged))
+                    .raw("refused", at(&cs.refused))
+                    .raw(
+                        "stranded",
+                        crate::json::arr(&cs.stranded.iter().map(|(t, st)| crate::json::Obj::new().str("tag", t).str("state", st).finish()).collect::<Vec<_>>()),
+                    )
+                    .int("ended", cs.ended as i128)
+                    .finish()
+            }
+        })
+        .finish()
+}
+
+/// §10.4: a suspected rounding difference is when every record in the cluster shows a
+/// "non-zero difference smaller than the output grid". Returns the grid as displayed
+/// (e.g. `10円`). If even one record is at or above the grid, or cannot be compared
+/// numerically, the cluster is not flagged. The decision is a conjunction over the whole
+/// cluster so that values that really differ are never blamed on rounding. With several
+/// outputs, every differing output must be below its grid.
+fn sub_grid(ms: &[&Mismatch], f: &RuleFile, c: &Checked) -> Option<String> {
+    let mut grids: BTreeMap<String, String> = BTreeMap::new();
+    for m in ms {
+        let diff = m.differing(c);
+        if diff.is_empty() {
+            return None;
+        }
+        for (n, a, b) in diff {
+            let od = f.outputs.iter().find(|o| o.name.text == *n)?;
+            let rd = od.rounding.as_ref()?;
+            let ty = c.ty_of(n)?;
+            let q = crate::types::lit_value_in_pub(&rd.grid, &ty)?;
+            if q.num <= 0 {
+                return None;
+            }
+            let (Some(Val::Num(a)), Some(b)) = (a, b) else { return None };
+            let d = crate::types::wire_int(*a, c.wire_scale(n)) - b.parse::<i128>().ok()?;
+            // Compare |d| < q in integers by clearing the denominator.
+            if d == 0 || d.abs() * q.den >= q.num {
+                return None;
+            }
+            grids.insert(n.clone(), rd.grid.raw.clone());
+        }
+    }
+    if grids.is_empty() {
+        return None;
+    }
+    Some(grids.values().cloned().collect::<Vec<_>>().join(" / "))
+}

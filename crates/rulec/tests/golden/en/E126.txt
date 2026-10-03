@@ -1,0 +1,11 @@
+error[E126]: A sequence of calls reaches 出荷済 after 取消
+  --> tests/mutants/m_e126.rule:37 machine 注文
+   |
+37 |   never   出荷済 after 取消
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ Calls (from 受付):
+   1. at 受付, 出来事 = 取消依頼, 支払額 = 0円 → 取消 (table 遷移 row 2)
+   2. at 取消, 出来事 = 入金, 支払額 = 0円 → 入金済 (table 遷移 row 10)
+   3. at 入金済, 出来事 = 出荷, 支払額 = 0円 → 出荷済 (table 遷移 row 4)
+ Every call in it is one the rule takes and answers. Correct the rows that decide where it goes, or, if the claim is wrong as business, drop the `never` line.

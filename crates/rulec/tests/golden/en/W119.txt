@@ -1,0 +1,7 @@
+warning[W119]: Fragment `第92条` of source `措置法` is pinned but not cited
+  --> tests/mutants/m_w119.rule:8 source 措置法
+  |
+8 |   第92条 sha256:0000000000000000
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+ It is what remains after a citation was removed. `rulec source pin` removes it.

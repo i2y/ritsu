@@ -1,0 +1,23 @@
+error[E107]: Call 3 of scenario 取消のあとの入金 does not hold: 次の状態 should be 取消 but came out as 入金済
+  --> tests/mutants/m_e126.rule:50 scenario 取消のあとの入金
+   |
+50 | | 入金     | 3000円 | 取消        | 0円    | false |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ Calls (from 受付):
+   1. at 受付, 出来事 = 入金, 支払額 = 3000円 → 入金済 (table 遷移 row 1)
+   2. at 入金済, 出来事 = 取消依頼, 支払額 = 3000円 → 取消 (table 遷移 row 5)
+   3. at 取消, 出来事 = 入金, 支払額 = 3000円 → 入金済 (table 遷移 row 10)
+ A scenario is executable specification. Fix the table, or fix the scenario if the scenario is what is wrong.
+
+error[E107]: Call 3 of scenario 取消のあとの入金 does not hold: 受理 should be false but came out as true
+  --> tests/mutants/m_e126.rule:50 scenario 取消のあとの入金
+   |
+50 | | 入金     | 3000円 | 取消        | 0円    | false |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ Calls (from 受付):
+   1. at 受付, 出来事 = 入金, 支払額 = 3000円 → 入金済 (table 遷移 row 1)
+   2. at 入金済, 出来事 = 取消依頼, 支払額 = 3000円 → 取消 (table 遷移 row 5)
+   3. at 取消, 出来事 = 入金, 支払額 = 3000円 → 入金済 (table 遷移 row 10)
+ A scenario is executable specification. Fix the table, or fix the scenario if the scenario is what is wrong.

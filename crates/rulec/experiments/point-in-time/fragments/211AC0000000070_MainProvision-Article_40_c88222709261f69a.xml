@@ -1,0 +1,588 @@
+<Article Num="40">
+            <ArticleCaption>（標準報酬月額）</ArticleCaption>
+            <ArticleTitle>第四十条</ArticleTitle>
+            <Paragraph Num="1">
+              <ParagraphNum/>
+              <ParagraphSentence>
+                <Sentence Num="1" WritingMode="vertical">標準報酬月額は、被保険者の報酬月額に基づき、次の等級区分（次項の規定により等級区分の改定が行われたときは、改定後の等級区分）によって定める。</Sentence>
+              </ParagraphSentence>
+              <TableStruct>
+                <Table WritingMode="vertical">
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">標準報酬月額等級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">標準報酬月額</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">報酬月額</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">五八、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六三、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六八、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六三、〇〇〇円以上七三、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">七八、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">七三、〇〇〇円以上八三、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">八八、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">八三、〇〇〇円以上九三、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第五級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">九八、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">九三、〇〇〇円以上一〇一、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第六級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一〇四、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一〇一、〇〇〇円以上一〇七、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第七級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一一〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一〇七、〇〇〇円以上一一四、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第八級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一一八、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一一四、〇〇〇円以上一二二、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第九級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一二六、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一二二、〇〇〇円以上一三〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一〇級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一三四、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一三〇、〇〇〇円以上一三八、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一一級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一四二、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一三八、〇〇〇円以上一四六、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一二級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一五〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一四六、〇〇〇円以上一五五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一三級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一六〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一五五、〇〇〇円以上一六五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一四級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一七〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一六五、〇〇〇円以上一七五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一五級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一八〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一七五、〇〇〇円以上一八五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一六級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一九〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一八五、〇〇〇円以上一九五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一七級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二〇〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一九五、〇〇〇円以上二一〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一八級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二二〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二一〇、〇〇〇円以上二三〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第一九級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二四〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二三〇、〇〇〇円以上二五〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二〇級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二六〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二五〇、〇〇〇円以上二七〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二一級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二八〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二七〇、〇〇〇円以上二九〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二二級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三〇〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">二九〇、〇〇〇円以上三一〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二三級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三二〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三一〇、〇〇〇円以上三三〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二四級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三四〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三三〇、〇〇〇円以上三五〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二五級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三六〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三五〇、〇〇〇円以上三七〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二六級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三八〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三七〇、〇〇〇円以上三九五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二七級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">四一〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">三九五、〇〇〇円以上四二五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二八級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">四四〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">四二五、〇〇〇円以上四五五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第二九級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">四七〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">四五五、〇〇〇円以上四八五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三〇級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">五〇〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">四八五、〇〇〇円以上五一五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三一級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">五三〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">五一五、〇〇〇円以上五四五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三二級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">五六〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">五四五、〇〇〇円以上五七五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三三級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">五九〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">五七五、〇〇〇円以上六〇五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三四級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六二〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六〇五、〇〇〇円以上六三五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三五級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六五〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六三五、〇〇〇円以上六六五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三六級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六八〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六六五、〇〇〇円以上六九五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三七級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">七一〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">六九五、〇〇〇円以上七三〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三八級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">七五〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">七三〇、〇〇〇円以上七七〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第三九級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">七九〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">七七〇、〇〇〇円以上八一〇、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四〇級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">八三〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">八一〇、〇〇〇円以上八五五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四一級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">八八〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">八五五、〇〇〇円以上九〇五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四二級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">九三〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">九〇五、〇〇〇円以上九五五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四三級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">九八〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">九五五、〇〇〇円以上一、〇〇五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四四級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、〇三〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、〇〇五、〇〇〇円以上一、〇五五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四五級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、〇九〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、〇五五、〇〇〇円以上一、一一五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四六級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、一五〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、一一五、〇〇〇円以上一、一七五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四七級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、二一〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、一七五、〇〇〇円以上一、二三五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四八級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、二七〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、二三五、〇〇〇円以上一、二九五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第四九級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、三三〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、二九五、〇〇〇円以上一、三五五、〇〇〇円未満</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">第五〇級</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、三九〇、〇〇〇円</Sentence>
+                    </TableColumn>
+                    <TableColumn BorderBottom="solid" BorderLeft="solid" BorderRight="solid" BorderTop="solid">
+                      <Sentence Num="1" WritingMode="vertical">一、三五五、〇〇〇円以上</Sentence>
+                    </TableColumn>
+                  </TableRow>
+                </Table>
+              </TableStruct>
+            </Paragraph>
+            <Paragraph Num="2">
+              <ParagraphNum>２</ParagraphNum>
+              <ParagraphSentence>
+                <Sentence Function="main" Num="1" WritingMode="vertical">毎年三月三十一日における標準報酬月額等級の最高等級に該当する被保険者数の被保険者総数に占める割合が百分の一・五を超える場合において、その状態が継続すると認められるときは、その年の九月一日から、政令で、当該最高等級の上に更に等級を加える標準報酬月額の等級区分の改定を行うことができる。</Sentence>
+                <Sentence Function="proviso" Num="2" WritingMode="vertical">ただし、その年の三月三十一日において、改定後の標準報酬月額等級の最高等級に該当する被保険者数の同日における被保険者総数に占める割合が百分の〇・五を下回ってはならない。</Sentence>
+              </ParagraphSentence>
+            </Paragraph>
+            <Paragraph Num="3">
+              <ParagraphNum>３</ParagraphNum>
+              <ParagraphSentence>
+                <Sentence Num="1" WritingMode="vertical">厚生労働大臣は、前項の政令の制定又は改正について立案を行う場合には、社会保障審議会の意見を聴くものとする。</Sentence>
+              </ParagraphSentence>
+            </Paragraph>
+          </Article>

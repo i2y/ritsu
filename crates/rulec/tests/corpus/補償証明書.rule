@@ -1,0 +1,42 @@
+rule 補償証明書(compensation) v1
+description "苦情に対して出せる証明書の額。silver か gold の会員、保険加入者、ビジネス搭乗者だけが対象で、欠航の苦情には一人 100 ドル、遅延の苦情で変更か取消を望むなら一人 50 ドル。出典: τ²-bench airline policy（Sierra Research、MIT）の Refunds and Compensation"
+
+enum 会員区分(membership) = regular default | silver | gold
+enum キャビン(cabin) = basic_economy default | economy default | business
+enum 苦情(complaint) = 欠航(cancelled) | 遅延(delayed) | その他(other) default
+
+inputs
+  会員区分(membership)          : 会員区分
+  キャビン(cabin)               : キャビン
+  保険加入(insured)             : bool
+  苦情(complaint)               : 苦情
+  変更か取消を希望(wants_change) : bool
+  乗客数(passengers)            : number  range >=1 <=5
+
+outputs
+  証明書額(amount) : money[USD, excl_tax]  round half_up(1USD)
+
+table 資格(eligibility)
+policy first
+| 会員区分     | 保険加入 | キャビン | -> 資格(eligible) : bool |
+| silver, gold | -        | -        | true                     |
+| -            | true     | -        | true                     |
+| -            | -        | business | true                     |
+| -            | -        | -        | false                    |
+
+table 一人あたり(per_head)
+policy first
+| 資格  | 苦情 | 変更か取消を希望 | -> 単価(each) : money[USD, excl_tax] |
+| false | -    | -                | 0USD                                 |
+| true  | 欠航 | -                | 100USD                               |
+| true  | 遅延 | true             | 50USD                                |
+| -     | -    | -                | 0USD                                 |
+
+define 証明書額(amount) : money[USD, excl_tax] = 単価 × 乗客数
+
+examples
+| 会員区分 | キャビン      | 保険加入 | 苦情 | 変更か取消を希望 | 乗客数 | -> 証明書額 |
+| regular  | economy       | false    | 欠航 | false            | 2      | 0USD        |
+| gold     | basic_economy | false    | 欠航 | false            | 3      | 300USD      |
+| regular  | business      | false    | 遅延 | true             | 1      | 50USD       |
+| regular  | economy       | true     | 遅延 | false            | 4      | 0USD        |

@@ -1,0 +1,60 @@
+<Article Num="86">
+              <ArticleCaption>（基礎控除）</ArticleCaption>
+              <ArticleTitle>第八十六条</ArticleTitle>
+              <Paragraph Num="1">
+                <ParagraphNum/>
+                <ParagraphSentence>
+                  <Sentence Num="1">合計所得金額が二千五百万円以下である居住者については、その者のその年分の総所得金額、退職所得金額又は山林所得金額から次の各号に掲げる場合の区分に応じ当該各号に定める金額を控除する。</Sentence>
+                </ParagraphSentence>
+                <Item Num="1">
+                  <ItemTitle>一</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">その居住者の合計所得金額が二千三百五十万円以下である場合</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">五十八万円</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="2">
+                  <ItemTitle>二</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">その居住者の合計所得金額が二千三百五十万円を超え二千四百万円以下である場合</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">四十八万円</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="3">
+                  <ItemTitle>三</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">その居住者の合計所得金額が二千四百万円を超え二千四百五十万円以下である場合</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">三十二万円</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+                <Item Num="4">
+                  <ItemTitle>四</ItemTitle>
+                  <ItemSentence>
+                    <Column Num="1">
+                      <Sentence Num="1">その居住者の合計所得金額が二千四百五十万円を超え二千五百万円以下である場合</Sentence>
+                    </Column>
+                    <Column Num="2">
+                      <Sentence Num="1">十六万円</Sentence>
+                    </Column>
+                  </ItemSentence>
+                </Item>
+              </Paragraph>
+              <Paragraph Num="2">
+                <ParagraphNum>２</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence Num="1">前項の規定による控除は、基礎控除という。</Sentence>
+                </ParagraphSentence>
+              </Paragraph>
+            </Article>

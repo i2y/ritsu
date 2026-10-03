@@ -1,0 +1,144 @@
+Obj(
+    {
+        "code": Str(
+            "W114",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/mutants/m_w114.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "key": Str(
+            "true|-\u{1}-|true",
+        ),
+        "line": Int(
+            21,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "Overlapping condition: 上 = true and 下 = true",
+                ),
+                Str(
+                    "No input satisfying this condition, definitions included, could be constructed. This is not a proof that none exists.",
+                ),
+                Str(
+                    "If one exists: fix the rows. The outputs differ (true vs false), so a match would be a contradiction.",
+                ),
+                Str(
+                    "If none exists: leave it as is. The generated code gets a guard that, should an input ever match this condition, returns an error instead of silently picking row 1.",
+                ),
+                Str(
+                    "Under check --diff-base, only new instances of this warning are shown.",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            1,
+                        ),
+                        "table": Str(
+                            "判定",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            2,
+                        ),
+                        "table": Str(
+                            "判定",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 1",
+                        ),
+                        "length": Int(
+                            37,
+                        ),
+                        "line": Int(
+                            21,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "row 2",
+                        ),
+                        "length": Int(
+                            37,
+                        ),
+                        "line": Int(
+                            22,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "Unconfirmed overlap: an input may match both row 1 and row 2",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/mutants/m_w114.rule",
+                ),
+                "line": Int(
+                    21,
+                ),
+                "table": Str(
+                    "判定",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "上": Bool(
+                            true,
+                        ),
+                        "下": Bool(
+                            true,
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)

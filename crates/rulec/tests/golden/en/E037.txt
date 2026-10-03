@@ -1,0 +1,8 @@
+error[E037]: Fragment `第91条` of source `措置法` is not pinned
+  --> tests/mutants/m_e037.rule:6 source 措置法
+  |
+6 | source 措置法 = law "332AC0000000026" asof 2026-04-01
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+ Cited by: definition 軽減期間, table 軽減
+ The copy's digest is sha256:85faf53f6f6e8196. To pin it as the one approved, add the following line under the `source` line (`rulec source pin` writes it too).

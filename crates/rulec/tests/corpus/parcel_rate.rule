@@ -1,0 +1,63 @@
+rule parcel_rate v1
+description "A parcel tariff in pounds and inches, written in English. A sketch, not a transcription: the amounts are made up"
+
+# Nothing else in the corpus is priced in USD by weight, and nothing at all reached oz, lb
+# or in — an unexercised unit is an unchecked unit (§15.9).
+
+enum size_class = envelope | small | large
+enum zone = domestic | canada | overseas
+
+group north_america = domestic, canada
+
+inputs
+  weight    : mass[lb]    range >=1lb <=70lb
+  girth     : length[in]  range >=1in <=130in
+  dest      : zone
+  signature : bool
+
+outputs
+  fee : money[USD, incl_tax]  round up(1USD)
+
+# One table decides the class and the next one prices it: what the first produces is a
+# column of the second.
+table size_of
+policy first
+| girth  | -> size : size_class |
+| <=22in | envelope             |
+| <=60in | small                |
+| -      | large                |
+
+table base_rate
+policy unique
+| dest          | size     | weight  | -> base : money[USD, incl_tax] |
+| north_america | envelope | -       | 6USD                           |
+| north_america | small    | <=160oz | 12USD                          |
+| north_america | small    | >160oz  | 18USD                          |
+| north_america | large    | <=160oz | 22USD                          |
+| north_america | large    | >160oz  | 30USD                          |
+| overseas      | envelope | -       | 16USD                          |
+| overseas      | small    | -       | 38USD                          |
+| overseas      | large    | -       | 60USD                          |
+
+# A fuel surcharge is a percentage of the base, which is what the rounding on the output is
+# there to settle: 12USD at 5% is 12.60USD, and up(1USD) makes that 13USD.
+table fuel_rate
+policy unique
+| dest          | -> fuel : rate[step 1%] |
+| north_america | 5%                      |
+| overseas      | 12%                     |
+
+table signature_fee
+policy unique
+| signature | -> extra : money[USD, incl_tax] |
+| true      | 4USD                            |
+| false     | 0USD                            |
+
+result fee = base + base × fuel + extra
+
+examples
+| weight | girth | dest     | signature | -> fee |
+| 5lb    | 10in  | domestic | false     | 7USD   |
+| 5lb    | 40in  | canada   | false     | 13USD  |
+| 20lb   | 40in  | domestic | true      | 23USD  |
+| 5lb    | 10in  | overseas | false     | 18USD  |

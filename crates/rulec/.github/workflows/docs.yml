@@ -1,0 +1,75 @@
+name: docs
+
+# Build the two Zensical sites and deploy them to GitHub Pages as one
+# artifact on every push to main. Pages must be enabled with "GitHub
+# Actions" as the source in the repository settings.
+#
+#   website/docs/     -> https://i2y.github.io/rulec/
+#   website/docs-ja/  -> https://i2y.github.io/rulec/ja/
+#
+# AGENTS.md and docs/ are in the trigger because website/sync.sh copies
+# them in: a change to the canonical document has to reach the site.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "AGENTS.md"
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.12"
+
+      # build.sh runs sync.sh first and then builds both languages in the
+      # one order that works: English cleans build/, Japanese then writes
+      # build/ja. No Rust toolchain is needed — docs/codes.md is already
+      # in the repository and a test holds it to `rulec explain --all`.
+      - name: Build both languages
+        run: |
+          cd website
+          uv venv .venv
+          uv pip install --python .venv/bin/python zensical
+          ./build.sh
+
+      - name: Check the tree is complete
+        run: |
+          test -f website/build/index.html
+          test -f website/build/ja/index.html
+          test -f website/build/codes/index.html
+          test -f website/build/ja/codes/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

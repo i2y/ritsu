@@ -1,0 +1,32 @@
+$ rulec check 給与所得控除の経過措置.rule --lang ja --terse   # 写しが無い
+error[E039]: 出典 `所得税法` の `附則（令和七年三月三一日法律第一三号）第三条` の写しがありません
+  --> 給与所得控除の経過措置.rule:4 出典 所得税法
+details: rulec explain <code>
+
+$ rulec source fetch 給与所得控除の経過措置.rule --lang ja
+所得税法: 附則（令和七年三月三一日法律第一三号）第三条 を取りました（sha256:61ad64afd4584adb）
+revision.txt
+SupplProvision_令和七年三月三一日法律第一三号-Article_3.xml
+
+$ rulec source pin 給与所得控除の経過措置.rule --lang ja
+給与所得控除の経過措置.rule: 出典の宣言がありません
+5:  附則（令和七年三月三一日法律第一三号）第三条 sha256:61ad64afd4584adb
+
+$ rulec check 給与所得控除の経過措置.rule --lang ja
+ok 給与所得控除の経過措置.rule
+
+$ rulec doc 給与所得控除の経過措置.rule --lang ja   # 表の節だけ
+## 表 適用（policy unique）
+
+出典: 所得税法 附則（令和七年三月三一日法律第一三号）第三条（法令 340AC0000000033、2025-12-01 時点。2025-12-01 施行、令和7年法律第13号による改正後）
+
+> （給与所得に関する経過措置）
+> 第三条
+> 新所得税法第二十八条の規定は、令和七年分以後の所得税について適用し、令和六年分以前の所得税については、なお従前の例による。
+> ２
+> 令和七年十二月一日前に同年分の所得税につき所得税法第百二十五条又は第百二十七条の規定による確定申告書を提出した者及び同日前に同年分の所得税につき決定を受けた者は、当該確定申告書に記載された事項又は当該決定に係る事項（これらの事項につき同日前に更正があった場合には、その更正後の事項）につき新所得税法第二十八条の規定の適用により異動を生ずることとなったときは、その異動を生ずることとなった事項について、同日から五年以内に、税務署長に対し、国税通則法第二十三条第一項の更正の請求をすることができる。
+
+
+$ rulec source outdated 給与所得控除の経過措置.rule --lang ja
+error: https://laws.e-gov.go.jp/api/2/law_data/340AC0000000033?asof=2027-04-01&elm=SupplProvision%5B349%5D-Article_3&law_full_text_format=xml を取れません（三度試しました）: curl: (56) The requested URL returned error: 400
+exit=2

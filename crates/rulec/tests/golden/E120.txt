@@ -1,0 +1,7 @@
+error[E120]: `from count` は number を返します
+  --> tests/mutants/m_e120.rule:12
+   |
+12 |   冷蔵あり(cold) : bool    from count 注文.lines
+   |                            ^^^^^^^^^^^^^^^^^^^^^ 入力 冷蔵あり は bool
+   |
+ `count` は並びの件数なので、受ける入力は `number` です。範囲も要ります——数える上限は検査が量化する宇宙でもあるからです。

@@ -1,0 +1,7 @@
+warning[W125]: No sequence of calls reaches state 保留
+  --> tests/mutants/m_w125.rule:32 machine 注文
+   |
+32 | machine 注文(order) over 遷移
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the calls that start at 受付
+   |
+ From 受付 a case reaches 受付 / 入金済 / 取消 / 出荷済 / 配達済. Unless the rows for 保留 are kept for cases moved over from another version, a transition into it is missing.

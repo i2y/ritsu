@@ -1,0 +1,64 @@
+rule ec261 v1
+description "Article 7 of EU air passenger rights Regulation (EC) No 261/2004. The example in English, in EUR and km"
+
+# Published law, transcribed as it stands: the amounts are paragraph 1, the halving is
+# paragraph 2. Distance and whether the flight is intra-EU decide the band, and that one
+# band decides both the amount and the time threshold.
+
+enum band = short | medium | long
+
+inputs
+  distance : length[km]  range >=1km <=20000km
+  intra_eu : bool
+  delay    : duration[h]  range >=0h <=48h
+
+outputs
+  compensation : money[EUR, incl_tax]  round down(1EUR)
+
+# Article 7(1). (a) 1500km or less, (b) intra-EU over 1500km and other flights of 1500 to
+# 3500km, (c) everything else. Whether "between 1500 and 3500 kilometres" takes in either
+# end cannot be read out of the text. Since (a) is "1500 kilometres or less", the lower end
+# is open here — and having to decide it is the point of the tool: undecided, there is no
+# table to write.
+table band_of
+policy unique
+| distance         | intra_eu | -> band : band |
+| <=1500km         | -        | short          |
+| >1500km          | true     | medium         |
+| >1500km <=3500km | false    | medium         |
+| >3500km          | false    | long           |
+
+table amount
+policy unique
+| band   | -> base : money[EUR, incl_tax] |
+| short  | 250EUR                         |
+| medium | 400EUR                         |
+| long   | 600EUR                         |
+
+# Article 7(2). The amount may be halved where the re-routing arrives no later than
+# (a) two hours, (b) three hours, (c) four hours after the scheduled time. The article's
+# (a)(b)(c) restate the distance conditions of paragraph 1 in full, so this table keys on
+# distance too, not on the band. The band would fit in two rows, and would put "which
+# distance gets four hours" one step further from the text.
+table reduction
+policy unique
+| distance         | intra_eu | delay | -> factor : rate[step 50%] |
+| <=1500km         | -        | <=2h  | 50%                        |
+| <=1500km         | -        | >2h   | 100%                       |
+| >1500km          | true     | <=3h  | 50%                        |
+| >1500km          | true     | >3h   | 100%                       |
+| >1500km <=3500km | false    | <=3h  | 50%                        |
+| >1500km <=3500km | false    | >3h   | 100%                       |
+| >3500km          | false    | <=4h  | 50%                        |
+| >3500km          | false    | >4h   | 100%                       |
+
+result compensation = base × factor
+
+examples
+| distance | intra_eu | delay | -> compensation |
+| 900km    | true     | 5h    | 250EUR          |
+| 900km    | true     | 2h    | 125EUR          |
+| 2000km   | true     | 5h    | 400EUR          |
+| 3000km   | false    | 3h    | 200EUR          |
+| 6000km   | false    | 5h    | 600EUR          |
+| 6000km   | false    | 4h    | 300EUR          |

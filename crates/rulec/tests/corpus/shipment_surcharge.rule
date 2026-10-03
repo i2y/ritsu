@@ -1,0 +1,54 @@
+rule shipment_surcharge v1
+description "A surcharge decided from the total weight of a shipment's cartons. A sketch, not a transcription: the amounts are made up"
+
+# Every rule that walks a sequence was written in Japanese, so the elements/sum shape had
+# never been read in English — its diagnostics and its generated code were exercised in one
+# language only. Writing this one found a brand the generators never defined (DESIGN).
+
+enum service = ground | express
+
+inputs
+  svc         : service
+  residential : bool
+
+# One carton. The caller passes as many as the shipment has.
+elements cartons
+  weight : mass[lb]  range >=1lb <=150lb
+
+# What is left after the walk is the total. The range is the universe completeness is
+# checked against, and it is also the door the caller is turned away at.
+sum total over cartons of weight  range >=0lb <=2000lb
+
+outputs
+  surcharge : money[USD, incl_tax]  round up(1USD)
+
+table surcharge_table
+policy unique
+| total   | svc     | residential | -> surcharge(surcharge) : money[USD, incl_tax] |
+| <=150lb | ground  | false       | 0USD                                           |
+| <=150lb | ground  | true        | 4USD                                           |
+| <=150lb | express | -           | 12USD                                          |
+| >150lb  | ground  | -           | 35USD                                          |
+| >150lb  | express | -           | 60USD                                          |
+
+examples
+| cartons | svc     | residential | -> surcharge |
+| two     | ground  | false       | 0USD         |
+| two     | ground  | true        | 4USD         |
+| two     | express | false       | 12USD        |
+| heavy   | ground  | false       | 35USD        |
+| heavy   | express | true        | 60USD        |
+| empty   | ground  | false       | 0USD         |
+
+sequence two
+| weight |
+| 40lb   |
+| 25lb   |
+
+sequence heavy
+| weight |
+| 90lb   |
+| 70lb   |
+
+sequence empty
+| weight |

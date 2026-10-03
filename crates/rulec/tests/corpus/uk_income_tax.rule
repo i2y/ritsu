@@ -1,0 +1,51 @@
+rule uk_income_tax v1
+description "The UK Personal Allowance and the Income Tax band an income falls in, for England, Wales and Northern Ireland. Transcribed from GOV.UK"
+
+source gov = file "sources/uk-income-tax.md" sha256:8aa392743f75ce6f  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:7d9ba57e7bb838a7
+
+enum band = personal_allowance | basic | higher | additional
+
+inputs
+  income : money[GBP]  range >=0GBP <=10000000GBP
+
+outputs
+  allowance : money[GBP]        round down(1GBP)
+  in_band   : band
+  rate      : rate[step 1%]  round down(1%)
+
+# "Your personal allowance goes down by £1 for every £2 that your adjusted net income is
+# above £100,000." Half of the excess, taken off the standard allowance — and because it is
+# £1 per £2, an odd pound is dropped, which is what the rounding on the output settles.
+derive above_100k : money[GBP] = income − 100000GBP           range >=-100000GBP <=9900000GBP
+derive tapered    : money[GBP] = 12570GBP − above_100k × 50%  range >=-4937430GBP <=62570GBP
+
+# The third row could be left to the taper, which reaches zero at £125,140 on its own. It is
+# written out because the page writes it out: "your allowance is zero if your income is
+# £125,140 or above".
+table allowance_of
+policy unique
+| income                | -> allowance : money[GBP] |
+| <=100000GBP           | 12570GBP                  |
+| >100000GBP <125140GBP | tapered                   |
+| >=125140GBP           | 0GBP                      |
+
+# The page writes each band from the first pound that falls in it (£12,571 to £50,270). A
+# pound is the unit here, so "from £12,571" and "above £12,570" are the same set, and the
+# second form is the one the checker reads as adjacent to the row above.
+table band_of  @gov table1
+policy unique
+| income                | -> in_band : band  | rate : rate[step 1%] |
+| <=12570GBP            | personal_allowance | 0%                   |
+| >12570GBP <=50270GBP  | basic              | 20%                  |
+| >50270GBP <=125140GBP | higher             | 40%                  |
+| >125140GBP            | additional         | 45%                  |
+
+examples
+| income    | -> allowance | in_band            | rate |
+| 10000GBP  | 12570GBP     | personal_allowance | 0%   |
+| 30000GBP  | 12570GBP     | basic              | 20%  |
+| 100000GBP | 12570GBP     | higher             | 40%  |
+| 110000GBP | 7570GBP      | higher             | 40%  |
+| 125140GBP | 0GBP         | higher             | 40%  |
+| 200000GBP | 0GBP         | additional         | 45%  |

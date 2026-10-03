@@ -1,0 +1,96 @@
+$ rulec check 束.rule --lang ja
+ok 束.rule
+
+$ rulec coverage 束.rule --lang ja
+束.rule
+ベクタ 58 件
+  行カバー                  6 / 6     満たす
+  境界の両側カバー          6 / 6     満たす
+  隠れ対カバー              0 / 0     満たす
+  丸めの同着カバー          0 / 0     満たす
+  畳み込みの遷移カバー      0 / 0     満たす
+
+$ rulec gen 束.rule --out bundle-out --lang ja && rulec test bundle-out --lang ja   # 修正後
+生成しました: bundle-out/vectors/bundle.expected.jsonl
+ok    bundle (Python) ベクタ 58 件
+ok    bundle (Python, MCP) ベクタ 58 件
+ok    bundle (Python, MCP/HTTP) ベクタ 58 件
+ok    bundle (TypeScript) ベクタ 58 件
+ok    bundle (TypeScript, MCP) ベクタ 58 件
+ok    bundle (TypeScript, MCP/HTTP) ベクタ 58 件
+ok    bundle (JavaScript) ベクタ 58 件
+ok    bundle (JavaScript, MCP) ベクタ 58 件
+ok    bundle (JavaScript, MCP/HTTP) ベクタ 58 件
+ok    bundle (Rust) ベクタ 58 件
+ok    bundle (Rust, Wasm) ベクタ 58 件
+ok    bundle (Ruby) ベクタ 58 件
+ok    bundle (Go) ベクタ 58 件
+ok    bundle (Swift) ベクタ 58 件
+ok    bundle (SQL) ベクタ 58 件
+ok    bundle (Wasm) ベクタ 58 件
+
+25 件すべて一致しました。
+
+$ rulec doc 束.rule --lang ja --audience customer
+<!-- rulec 0.5.0 が 束.rule (sha256:fc7b63fd3ddb) から生成した案内。本物は .rule のほうで、ここを編集しても戻せません。 -->
+# 束
+
+作成日で旧版と新版を呼び分ける。版はファイル、切り替えは表
+
+版 v1
+
+## 税額の決まり方
+
+- **金額**: 0円 〜 100万円
+- **作成日**: 日付
+
+**税額**は金額（円）で、端数は 1円単位で切り捨てます。
+
+## 旧（旧税額.rule の決まりを使う）
+
+「旧税額」の決まりを、次のように読み替えて使います。
+
+- 金額 は 金額 のこと
+- 税額 を 旧税額 とします
+
+### 税額表
+
+| # | 金額 | → 税額（1円単位で切り捨て） |
+|---|---|---|
+| 1 | 10万円以下 | 200円 |
+| 2 | 10万円より大きい | 400円 |
+
+## 新（新税額.rule の決まりを使う）
+
+「新税額」の決まりを、次のように読み替えて使います。
+
+- 金額 は 金額 のこと
+- 税額 を 新税額 とします
+
+### 税額表
+
+| # | 金額 | → 税額（1円単位で切り捨て） |
+|---|---|---|
+| 1 | 10万円以下 | 0円 |
+| 2 | 10万円より大きい | 300円 |
+
+## 選択
+
+| # | 作成日 | → 税額（1円単位で切り捨て） |
+|---|---|---|
+| 1 | 2027-03-31以下 | 旧税額 |
+| 2 | 2027-04-01以上 | 新税額 |
+
+## 境目の例
+
+条件の境目をまたぐと、答えがどう変わるかの例です。
+
+- 金額が 10万円 のとき 税額 200円、100001円 のとき 税額 400円（作成日: 2024-04-01）
+- 作成日が 2027-03-31 のとき 税額 200円、2027-04-01 のとき 税額 0円（金額: 0円）
+
+## 例
+
+| 金額 | 作成日 | → 税額 |
+|---|---|---|
+| 5万円 | 2027-03-31 | 200円 |
+| 5万円 | 2027-04-01 | 0円 |

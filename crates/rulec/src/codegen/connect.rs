@@ -1,0 +1,1635 @@
+//! The rule as one Connect service (§15.112): a `.proto` beside the module, and what stands
+//! between the two — a conversion of twenty-five lines, and a server to try it with.
+//!
+//! `codegen/tool.rs` is the rule as a tool for an agent. This is the other caller: a service
+//! another program calls, over a wire it already speaks. What is generated is three files and
+//! no engine — the `.proto`, which is the whole of the contract; the implementation, which
+//! converts a message into the module's arguments and its answer back; and a runner, so the
+//! service is held to the reference evaluator over the same vectors as everything else.
+//!
+//! Three decisions shape it.
+//!
+//! **The dependency stays outside the decision.** The module `rulec gen` writes has no
+//! imports at all, and nothing here changes that: `connectrpc` is imported by the service
+//! file alone, which a reader can delete without touching the rule. That is also why the
+//! service is generated against the *stubs* — `protoc` reads the `.proto` and writes the
+//! client, the server base and the messages, and what is left for rulec to write is the
+//! conversion.
+//!
+//! **The method has no side effects, and says so.** A rule is a pure function of its inputs,
+//! so `idempotency_level = NO_SIDE_EFFECTS` is not a hint but a fact the checker already
+//! proved: the same inputs give the same answer, forever, for one version of the table.
+//! Connect lets such a method be called with GET, which is what makes an answer cacheable —
+//! and `rulec test` drives both ways, because a transport that changed an answer would be
+//! the one thing worth catching.
+//!
+//! **The rows that matched travel with the answer.** `trace` is the same list the record
+//! function writes, so one call is one fixtures record and `--record` turns a running
+//! service into the file `rulec replay` and `rulec diff` read (§10.3).
+
+use super::{brand_of, pascal, pub_name, wire_of, Gen, Wire};
+use crate::ast::EnumSource;
+use crate::types::Ty;
+use std::path::{Path, PathBuf};
+
+/// The field number of `trace`. It sits far from the outputs so that an output added to a
+/// table later takes the next small number and leaves the trace where it was.
+const TRACE_FIELD: u32 = 100;
+
+/// An enum whose value set a `.proto` outside the rule declares (§15.59).
+struct Foreign {
+    /// The file as the rule cites it, from the rule's directory.
+    file: String,
+    /// The enum's name in that file.
+    sel: String,
+    /// The package the file declares.
+    pkg: Option<String>,
+    /// Where the generated module has the file, and so what the generated `.proto` imports:
+    /// its package as directories, then its name (§15.160).
+    import: String,
+    /// The enum as read, values and numbers.
+    decl: Option<crate::proto::Enum>,
+}
+
+/// One enum that crosses the wire, as the service maps it and `rulec api` describes it.
+struct WireEnum {
+    /// The type as a field names it: `Carrier`, or `shop.v1.MemberTier` for one imported.
+    ty: String,
+    /// For an imported enum, the file as the rule cites it and where the module has it.
+    contract: Option<(String, String)>,
+    /// The name of value 0 when it means "not set", which is no value of the rule's.
+    unset: Option<String>,
+    /// Each value of the rule's: its name here, its name on the wire, and its number.
+    values: Vec<(String, String, i64)>,
+}
+
+/// Where a contract sits in the generated module: its package as directories, then its file
+/// name — where buf's `PACKAGE_DIRECTORY_MATCH` puts it, whatever path the rule reached it by.
+fn import_path(file: &str, pkg: Option<&str>) -> String {
+    let base = Path::new(file).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| file.to_string());
+    match pkg {
+        Some(p) => format!("{}/{base}", p.replace('.', "/")),
+        None => base,
+    }
+}
+
+/// The contracts a rule's `.proto` imports, as files for the module, and what the module
+/// needs from the BSR for the files they import that are not on disk.
+pub struct Contracts {
+    pub files: Vec<(String, String)>,
+    pub deps: BufDeps,
+}
+
+/// The BSR modules the generated module depends on, with their pins, and what could not be
+/// settled (§15.161). One run of `gen` merges every rule's into one `buf.yaml` and one
+/// `buf.lock`: they belong to the directory, and the directory holds every rule's contracts.
+#[derive(Debug, Clone, Default)]
+pub struct BufDeps {
+    /// Module names, `buf.build/<owner>/<repository>`.
+    pub deps: std::collections::BTreeSet<String>,
+    /// Every v2 pin of the `buf.lock` beside a contract: name → (commit, digest, that file).
+    /// A module's own dependencies are pinned there too, which is why all of them are taken.
+    pub pins: std::collections::BTreeMap<String, (String, String, String)>,
+    /// What `gen` says and leaves to buf: a module with no pin, an import in no module.
+    pub notes: Vec<String>,
+}
+
+impl BufDeps {
+    /// Take another rule's in. One module can hold one commit of a dependency, so two
+    /// contracts that pin one at two commits are an error, which names both files.
+    pub fn merge(&mut self, other: BufDeps) -> Result<(), String> {
+        for (name, (commit, digest, from)) in other.pins {
+            match self.pins.get(&name) {
+                Some((c, _, f)) if *c != commit => {
+                    return Err(tr!(
+                        "`{f}` と `{from}` が {name} を違う commit に固定しています（{c} と {commit}）。一つの モジュール に置けるのは一つなので、二つの buf.lock を揃えてください",
+                        "`{f}` and `{from}` pin {name} at two commits ({c} and {commit}); one module holds one, so make the two buf.lock files agree"
+                    ));
+                }
+                Some(_) => {}
+                None => {
+                    self.pins.insert(name, (commit, digest, from));
+                }
+            }
+        }
+        self.deps.extend(other.deps);
+        for n in other.notes {
+            if !self.notes.contains(&n) {
+                self.notes.push(n);
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether every module the generated `buf.yaml` declares has a pin, so that a `buf.lock`
+    /// can be written. buf resolves no dependency without one.
+    pub fn pinned(&self) -> bool {
+        self.deps.iter().all(|d| self.pins.contains_key(d))
+    }
+}
+
+/// The BSR modules most contracts import from, by the path their files are imported under.
+/// A contract's own `buf.yaml` may declare more than it uses; with this, the generated one
+/// declares the module an import comes from, and every module only when the path is not here.
+const KNOWN: &[(&str, &str)] = &[
+    ("buf/validate/", "buf.build/bufbuild/protovalidate"),
+    ("google/api/", "buf.build/googleapis/googleapis"),
+    ("google/type/", "buf.build/googleapis/googleapis"),
+    ("google/rpc/", "buf.build/googleapis/googleapis"),
+    ("google/longrunning/", "buf.build/googleapis/googleapis"),
+    ("validate/", "buf.build/envoyproxy/protoc-gen-validate"),
+    ("protoc-gen-openapiv2/", "buf.build/grpc-ecosystem/grpc-gateway"),
+];
+
+/// The `buf.yaml` a contract is built with: the nearest one above it, as buf finds it.
+fn workspace(contract: &Path) -> Option<PathBuf> {
+    let full = std::fs::canonicalize(contract).ok()?;
+    full.ancestors().skip(1).find(|d| d.join("buf.yaml").is_file()).map(Path::to_path_buf)
+}
+
+/// What the module needs for the imports of its contracts that are on no disk.
+///
+/// They are files of BSR modules, which the contract's own `buf.yaml` declares and its
+/// `buf.lock` pins. Those two are read and carried over; nothing is fetched, so `gen` stays a
+/// function of the files beside the rule. When there is no `buf.yaml`, the module of a path
+/// `KNOWN` names is declared without a pin, and `gen` says to run `buf dep update`.
+fn bsr_deps(elsewhere: &[(PathBuf, String)]) -> BufDeps {
+    let mut out = BufDeps::default();
+    for (contract, imp) in elsewhere {
+        let known = KNOWN.iter().find(|(p, _)| imp.starts_with(p)).map(|(_, m)| m.to_string());
+        let shown = contract.display();
+        let Some(dir) = workspace(contract) else {
+            match known {
+                Some(m) => {
+                    out.notes.push(tr!(
+                        "`{shown}` は {m} の `{imp}` を import していますが、そばに buf.yaml がありません。proto/buf.yaml に {m} を書きましたが、固定する commit が無いので、proto/ で `buf dep update` を走らせてください",
+                        "`{shown}` imports `{imp}` from {m}, and no buf.yaml is beside it. proto/buf.yaml declares {m}, but nothing pins it: run `buf dep update` in proto/"
+                    ));
+                    out.deps.insert(m);
+                }
+                None => out.notes.push(tr!(
+                    "`{shown}` の import `{imp}` は、そばにも buf.yaml の依存にも見つかりません。buf が名指して止まります",
+                    "`{shown}` imports `{imp}`, which is neither beside it nor in a buf.yaml's deps; buf will name it"
+                )),
+            }
+            continue;
+        };
+        let declared = std::fs::read_to_string(dir.join("buf.yaml")).map(|s| crate::proto::buf_deps(&s)).unwrap_or_default();
+        let take: Vec<String> = match known {
+            Some(m) if declared.contains(&m) => vec![m],
+            _ => declared.clone(),
+        };
+        if take.is_empty() {
+            out.notes.push(tr!(
+                "`{shown}` の import `{imp}` は、そばにも {} の依存にも見つかりません。buf が名指して止まります",
+                "`{shown}` imports `{imp}`, which is neither beside it nor among the deps of {}; buf will name it",
+                dir.join("buf.yaml").display()
+            ));
+            continue;
+        }
+        let lock_path = dir.join("buf.lock");
+        let lock = std::fs::read_to_string(&lock_path).map(|s| crate::proto::buf_lock(&s)).ok();
+        match lock {
+            Some((v, pins)) if v == "v2" => {
+                for p in pins {
+                    out.pins.entry(p.name).or_insert((p.commit, p.digest, lock_path.display().to_string()));
+                }
+            }
+            Some(_) => out.notes.push(tr!(
+                "{} は v1 の形で、digest が shake256 です。v2 の モジュール は b5 の digest しか読まないので、引き継げません。そこで `buf config migrate` を走らせるか、proto/ で `buf dep update` を走らせてください",
+                "{} is a v1 lock, digested with shake256, and a v2 module reads only b5 digests, so its pins are not carried over: run `buf config migrate` there, or `buf dep update` in proto/",
+                lock_path.display()
+            )),
+            None => out.notes.push(tr!(
+                "{} がありません。proto/buf.yaml に依存を書きましたが、固定する commit が無いので、そこで `buf dep update` を走らせるか、proto/ で走らせてください",
+                "There is no {}: proto/buf.yaml declares the deps, but nothing pins them. Run `buf dep update` there, or in proto/",
+                lock_path.display()
+            )),
+        }
+        out.deps.extend(take);
+    }
+    out
+}
+
+/// The first line of every generated file, which names the version that wrote it. The two
+/// files that configure the module carry nothing else: they belong to the directory.
+fn plain_header() -> String {
+    format!("# Code generated by rulec {}. DO NOT EDIT.", env!("CARGO_PKG_VERSION"))
+}
+
+/// `proto/buf.yaml`: the module, linted by buf's STANDARD rules, and the BSR modules its
+/// contracts depend on when there are any (§15.161).
+pub fn buf_yaml(deps: &BufDeps) -> String {
+    let mut o = format!("{}\nversion: v2\n", plain_header());
+    if !deps.deps.is_empty() {
+        o.push_str("deps:\n");
+        for d in &deps.deps {
+            o.push_str(&format!("  - {d}\n"));
+        }
+    }
+    o.push_str("lint:\n  use:\n    - STANDARD\nbreaking:\n  use:\n    - FILE\n");
+    o
+}
+
+/// `proto/buf.lock`, when the module has dependencies and every one is pinned: the pins of
+/// the `buf.lock` files beside its contracts, as buf writes them.
+pub fn buf_lock(deps: &BufDeps) -> Option<String> {
+    if deps.deps.is_empty() || !deps.pinned() {
+        return None;
+    }
+    let mut o = format!("{}\nversion: v2\ndeps:\n", plain_header());
+    for (name, (commit, digest, _)) in &deps.pins {
+        o.push_str(&format!("  - name: {name}\n    commit: {commit}\n    digest: {digest}\n"));
+    }
+    Some(o)
+}
+
+/// `proto/buf.gen.yaml`: the stubs, the way connect-python's own documentation asks for
+/// them — buf and two remote plugins (§15.112).
+pub fn buf_gen_yaml() -> String {
+    let note = tr!(
+        "# ローカルだけで作るなら `uv add --dev protoc-gen-py protoc-gen-connectrpc` を入れて、\n  \
+         # この二行を `local: protoc-gen-py` と `local: protoc-gen-connectrpc` にする。\n  \
+         # そのときは py の側に `strategy: all` も足すこと。規則ごとにディレクトリが分かれるので、\n  \
+         # 既定（directory）だとプラグインがディレクトリごとに呼ばれ、同じ __init__.py を何度も書く。",
+        "# To generate entirely locally, `uv add --dev protoc-gen-py protoc-gen-connectrpc`\n  \
+         # and make these two `local: protoc-gen-py` and `local: protoc-gen-connectrpc`.\n  \
+         # Add `strategy: all` to the py one when you do: there is one directory per rule, and\n  \
+         # under the default (directory) buf calls the plugin once per directory, which writes\n  \
+         # the shared __init__.py again each time."
+    );
+    let imports = tr!(
+        "# include_imports：契約が BSR のモジュールから import するファイル（protovalidate の\n    \
+         # validate.proto など）の stub も書く。契約の stub がそれを import する。",
+        "# include_imports: the stubs of the files a contract imports from a BSR module\n    \
+         # (protovalidate's validate.proto, say) are written too; the contract's stub imports them."
+    );
+    format!(
+        "{}\n# cd generated/proto && buf generate\nversion: v2\nplugins:\n  \
+         {note}\n  \
+         - remote: buf.build/bufbuild/py\n    out: ../python/stubs\n    \
+         {imports}\n    include_imports: true\n  \
+         - remote: buf.build/connectrpc/py\n    out: ../python/stubs\n",
+        plain_header()
+    )
+}
+
+/// The directory a file's own imports are followed from: the root of the module it is in,
+/// when the file sits where its import path says, and else the directory it is in.
+fn module_root(disk: &Path, import: &str) -> PathBuf {
+    let up = Path::new(import).components().count();
+    let mut root = disk.to_path_buf();
+    for _ in 0..up {
+        root.pop();
+    }
+    if root.join(import) == disk {
+        root
+    } else {
+        disk.parent().map(|p| p.to_path_buf()).unwrap_or_default()
+    }
+}
+
+impl<'a> Gen<'a> {
+    /// `rulec.<alias>.v<major>`.
+    ///
+    /// The major version alone: the package names the **wire**, and a rule's later versions
+    /// answer the same question in the same shape. What a change to the shape does is exactly
+    /// what `buf breaking` is there to say.
+    pub fn proto_package(&self) -> String {
+        format!("rulec.{}.{}", pub_name(&self.f.name), proto_version(&self.f.version))
+    }
+
+    /// `rulec/<alias>/v<major>/<alias>.proto`.
+    ///
+    /// The path spells the package, which is what buf's `PACKAGE_DIRECTORY_MATCH` asks for, so
+    /// the file can be dropped into a buf module as it stands.
+    pub fn proto_path(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        format!("{}/{alias}.proto", self.proto_package().replace('.', "/"))
+    }
+
+    /// `<Alias>Service` — buf's `SERVICE_SUFFIX`.
+    pub fn proto_service(&self) -> String {
+        format!("{}Service", pascal(&pub_name(&self.f.name)))
+    }
+
+    /// The enum types that actually cross the wire, in the order they are met: the rule's
+    /// inputs, then an element's fields, then its outputs. An enum a table uses only as an
+    /// intermediate column is not on the wire and is not declared.
+    fn wire_enums(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let push = |t: Ty, out: &mut Vec<String>| {
+            let t = if let Ty::Opt(i) = &t { (**i).clone() } else { t };
+            if let Ty::Enum(n) = t {
+                if !out.contains(&n) {
+                    out.push(n);
+                }
+            }
+        };
+        for i in &self.f.inputs {
+            push(self.ty_of(&i.name.text), &mut out);
+        }
+        if let Some(el) = &self.f.elements {
+            for fd in &el.fields {
+                push(self.ty_of(&fd.name.text), &mut out);
+            }
+        }
+        for o in &self.f.outputs {
+            push(self.ty_of(&o.name.text), &mut out);
+        }
+        out
+    }
+
+    /// The directory of the rule, which the files it cites are followed from.
+    fn dir(&self) -> PathBuf {
+        Path::new(&self.path).parent().map(|p| p.to_path_buf()).unwrap_or_default()
+    }
+
+    /// Where an enum's value set is declared, when that is a `.proto` outside this rule
+    /// (§15.59). The generated `.proto` imports it rather than declaring the set twice.
+    fn foreign(&self, ty: &str) -> Option<Foreign> {
+        let im = self
+            .f
+            .enum_imports
+            .iter()
+            .find(|p| p.kind == EnumSource::Proto && p.target.text == ty)?;
+        let text = std::fs::read_to_string(self.dir().join(&im.file)).ok();
+        let pkg = text.as_deref().and_then(crate::proto::package);
+        let decl = text.as_deref().and_then(|s| crate::proto::enums(s).into_iter().find(|e| e.name == im.source));
+        Some(Foreign { file: im.file.clone(), sel: im.source.clone(), import: import_path(&im.file, pkg.as_deref()), pkg, decl })
+    }
+
+    /// One enum on the wire: what a field calls its type, and each value of the rule's with
+    /// the name and the number it travels as.
+    ///
+    /// The rule's own enum is declared in the generated `.proto`, its values numbered from 1
+    /// in the order the rule declares them, with 0 left for "not set". An imported one is the
+    /// contract's: its names and numbers are read from the file, each matched to the rule's
+    /// value by the alias `rulec check` held the two together by.
+    fn wire_enum(&self, ty: &str) -> WireEnum {
+        let values = self.c.enums.get(ty).cloned().unwrap_or_default();
+        match self.foreign(ty) {
+            Some(fr) => {
+                let named = fr.decl.as_ref().map(|d| d.named()).unwrap_or_default();
+                let decl = self.f.enums.iter().find(|e| e.name.text == ty);
+                let values = values
+                    .iter()
+                    .filter_map(|v| {
+                        let n = decl?.values.iter().find(|n| n.text == *v)?;
+                        let ascii = n.ascii.clone().unwrap_or_else(|| n.text.clone());
+                        let (_, pv) = named.iter().find(|(a, _)| *a == ascii)?;
+                        Some((v.clone(), pv.name.clone(), pv.number))
+                    })
+                    .collect();
+                WireEnum {
+                    ty: match &fr.pkg {
+                        Some(p) => format!("{p}.{}", fr.sel),
+                        None => fr.sel.clone(),
+                    },
+                    unset: fr.decl.as_ref().and_then(|d| d.unset()).map(|v| v.name.clone()),
+                    contract: Some((fr.file, fr.import)),
+                    values,
+                }
+            }
+            None => {
+                let name = self.enum_names.get(ty).cloned().unwrap_or_else(|| pascal(ty));
+                let prefix = crate::proto::upper_snake(&name);
+                let values = values
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| {
+                        let al = self.value_names.get(&(ty.to_string(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
+                        (v.clone(), format!("{prefix}_{al}"), i as i64 + 1)
+                    })
+                    .collect();
+                WireEnum { ty: name, contract: None, unset: Some(format!("{prefix}_UNSPECIFIED")), values }
+            }
+        }
+    }
+
+    /// The contracts the generated `.proto` imports, as files to put in the module beside it:
+    /// each at the path it is imported by, byte for byte — the file `rulec check` held the
+    /// rule to — and with it each file it imports in turn that is found where its import path
+    /// says. The well-known types are buf's own. An import found nowhere is a file of a BSR
+    /// module the contract depends on, and what the module needs for it is in `deps` (§15.161).
+    pub fn proto_contracts(&self) -> Contracts {
+        let mut todo: Vec<(PathBuf, String)> = Vec::new();
+        for ty in self.wire_enums() {
+            if let Some(fr) = self.foreign(&ty) {
+                todo.push((self.dir().join(&fr.file), fr.import));
+            }
+        }
+        let mut files: Vec<(String, String)> = Vec::new();
+        let mut elsewhere: Vec<(PathBuf, String)> = Vec::new();
+        while let Some((disk, at)) = todo.pop() {
+            if files.iter().any(|(p, _)| *p == at) {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&disk) else { continue };
+            let root = module_root(&disk, &at);
+            for imp in crate::proto::imports(&text) {
+                let p = root.join(&imp);
+                if imp.starts_with("google/protobuf/") {
+                    continue;
+                }
+                if p.is_file() {
+                    todo.push((p, imp));
+                } else if !elsewhere.iter().any(|(_, i)| *i == imp) {
+                    elsewhere.push((disk.clone(), imp));
+                }
+            }
+            files.push((at, text));
+        }
+        files.sort();
+        Contracts { files, deps: bsr_deps(&elsewhere) }
+    }
+
+    /// The BSR modules this rule's contracts import files from, which `rulec api` names so a
+    /// caller that builds the stubs itself knows the module has dependencies.
+    fn proto_deps(&self) -> Vec<String> {
+        self.proto_contracts().deps.deps.into_iter().collect()
+    }
+
+    /// The type of one value in the `.proto`.
+    fn proto_ty(&self, name: &str, ty: &Ty) -> String {
+        match ty {
+            Ty::Opt(t) => self.proto_ty(name, t),
+            Ty::Enum(n) => match self.foreign(n) {
+                Some(Foreign { sel, pkg: Some(pkg), .. }) => format!("{pkg}.{sel}"),
+                Some(Foreign { sel, pkg: None, .. }) => sel,
+                None => self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n)),
+            },
+            Ty::Bool => "bool".into(),
+            // A date is `YYYY-MM-DD` on this wire as on every other of rulec's (§10.2), and a
+            // string is the one type that says so without a dependency on `google.type`.
+            Ty::Date | Ty::Str => "string".into(),
+            _ => "int64".into(),
+        }
+    }
+
+    /// The comment beside a field: the rule's own name for it, what the number means, and the
+    /// range the generated guard will enforce.
+    fn proto_note(&self, name: &str, ty: &Ty) -> String {
+        let mut s = name.to_string();
+        let inner = if let Ty::Opt(t) = ty { t.as_ref() } else { ty };
+        let unit = crate::verify::wire_unit(name, inner, self.c);
+        if !unit.is_empty() {
+            s.push_str(&tr!("：{unit}", ": {unit}"));
+            let sc = self.c.wire_scale(name);
+            if let (Some(lo), Some(hi)) = self.c.ranges.get(name).copied().unwrap_or((None, None)) {
+                s.push_str(&tr!(
+                    "。{} から {} まで",
+                    ". {} to {}",
+                    crate::types::wire_int(lo, sc),
+                    crate::types::wire_int(hi, sc)
+                ));
+            }
+        }
+        if matches!(inner, Ty::Date) {
+            s.push_str(&tr!("：日付。YYYY-MM-DD", ": a date, YYYY-MM-DD"));
+        }
+        if matches!(ty, Ty::Opt(_)) {
+            s.push_str(&tr!("。無い場合は入れない", ". Leave it unset for none"));
+        }
+        s
+    }
+
+    /// One field line of a message.
+    ///
+    /// The comment is left out when it would only repeat the field's own name, which is what
+    /// happens to every field of a rule written in English that carries no unit. A comment
+    /// that says nothing teaches the reader to skip the ones that do.
+    ///
+    /// `presence` is for a field the caller sends. proto3 reads a field left out as its zero,
+    /// so a request that named nothing would be decided as one that said 0, false and the
+    /// first value; marked `optional`, a field left out is told apart and refused (§15.160).
+    /// What the service answers keeps the plain form: an answer always has every output.
+    fn proto_field(&self, name: &str, alias: &str, ty: &Ty, n: u32, presence: bool) -> String {
+        let label = if presence || matches!(ty, Ty::Opt(_)) { "optional " } else { "" };
+        let note = self.proto_note(name, ty);
+        let comment = if note.eq_ignore_ascii_case(alias) { String::new() } else { format!("  // {note}\n") };
+        format!("{comment}  {label}{} {alias} = {n};\n", self.proto_ty(name, ty))
+    }
+
+    /// `proto/<package as a path>/<alias>.proto`: the whole of what a caller has to agree to.
+    pub fn proto(&self) -> String {
+        let mut o = self.header("//");
+        o.push_str("\nsyntax = \"proto3\";\n\n");
+        o.push_str(&format!("package {};\n", self.proto_package()));
+
+        // An enum whose values are declared elsewhere is imported, not copied: the rule cites
+        // that file and `rulec check` holds the two together (E032), so the service speaks the
+        // contract's own enum rather than a second one that means the same thing.
+        let mut imports: Vec<String> = Vec::new();
+        for ty in self.wire_enums() {
+            if let Some(fr) = self.foreign(&ty) {
+                if !imports.contains(&fr.import) {
+                    imports.push(fr.import);
+                }
+            }
+        }
+        if !imports.is_empty() {
+            o.push('\n');
+            for f in &imports {
+                o.push_str(&format!("import \"{f}\";\n"));
+            }
+        }
+
+        for ty in self.wire_enums() {
+            if self.foreign(&ty).is_some() {
+                continue;
+            }
+            let we = self.wire_enum(&ty);
+            let name = &we.ty;
+            let head = if ty.eq_ignore_ascii_case(name) { String::new() } else { format!("// {ty}\n") };
+            o.push_str(&format!("\n{head}enum {name} {{\n"));
+            // Proto3's zero value is "not set", and it is not one of the rule's values: an
+            // input that arrives as 0 has named nothing, and the service refuses it the way
+            // the module refuses anything else outside the declared domain.
+            if let Some(unset) = &we.unset {
+                o.push_str(&format!("  {unset} = 0;\n"));
+            }
+            for (v, wire, number) in &we.values {
+                let al = self.value_names.get(&(ty.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
+                let note = if v.eq_ignore_ascii_case(&al) { String::new() } else { format!("  // {v}") };
+                o.push_str(&format!("  {wire} = {number};{note}\n"));
+            }
+            o.push_str("}\n");
+        }
+
+        o.push_str(&tr!(
+            "\n// 当てはまった行一つ：表の名前、1 から数えた行番号、ラベルがあればそれ。\n",
+            "\n// A row that matched: the table's name, its 1-based row number, and its label when it has one.\n"
+        ));
+        o.push_str("message Fired {\n  string table = 1;\n  int32 row = 2;\n  string label = 3;\n}\n");
+
+        // The sequence a walk reads is a repeated message of the element's own fields (§15.56).
+        if let Some(el) = &self.f.elements {
+            o.push_str(&tr!(
+                "\n// {} の一件。フィールドの扱いは、下の入力と同じ。\n",
+                "\n// One {}. Its fields are sent the way the inputs below are.\n",
+                el.name.text
+            ));
+            o.push_str("message Element {\n");
+            for (n, fd) in el.fields.iter().enumerate() {
+                o.push_str(&self.proto_field(&fd.name.text, &pub_name(&fd.name), &self.ty_of(&fd.name.text), n as u32 + 1, true));
+            }
+            o.push_str("}\n");
+        }
+
+        o.push_str(&tr!(
+            "\n// 規則 {} v{} の入力。\n\
+             // 省いたフィールドと、0 や false を入れたフィールドを区別するため、どれも optional にしてある。\n\
+             // 規則が要るものを省いたリクエストは invalid_argument で断る。省いてよいものは、注釈にそう書いてある。\n",
+            "\n// The inputs of rule {} v{}.\n\
+             // Every field is optional on the wire, so that one left out is told apart from one set\n\
+             // to zero or false; a request that leaves out one the rule needs is refused with\n\
+             // invalid_argument. The ones that may be left unset say so.\n",
+            self.f.name.text,
+            self.f.version
+        ));
+        o.push_str("message DecideRequest {\n");
+        let mut n = 0u32;
+        for i in &self.f.inputs {
+            n += 1;
+            o.push_str(&self.proto_field(&i.name.text, &pub_name(&i.name), &self.ty_of(&i.name.text), n, true));
+        }
+        if let Some(el) = &self.f.elements {
+            n += 1;
+            o.push_str(&format!(
+                "  // {}\n  repeated Element {} = {n};\n",
+                el.name.text,
+                pub_name(&el.name)
+            ));
+        }
+        o.push_str("}\n");
+
+        o.push_str(&tr!(
+            "\n// 規則 {} v{} が決めたことと、決めた行。\n",
+            "\n// What rule {} v{} decided, and the rows that decided it.\n",
+            self.f.name.text,
+            self.f.version
+        ));
+        o.push_str("message DecideResponse {\n");
+        for (k, out) in self.f.outputs.iter().enumerate() {
+            o.push_str(&self.proto_field(&out.name.text, &pub_name(&out.name), &self.ty_of(&out.name.text), k as u32 + 1, false));
+        }
+        o.push_str(&tr!(
+            "\n  // 当てはまった行。表ごとに一つ、順番に。\n",
+            "\n  // The rows that matched, one per table, in order.\n"
+        ));
+        o.push_str(&format!("  repeated Fired trace = {TRACE_FIELD};\n}}\n"));
+
+        let ins: Vec<String> = self.f.inputs.iter().map(|i| i.name.text.clone()).collect();
+        let outs: Vec<String> = self.f.outputs.iter().map(|x| x.name.text.clone()).collect();
+        let sep = if crate::i18n::ja() { "・" } else { ", " };
+        o.push_str(&tr!(
+            "\n// 規則 {} v{}。\nservice {} {{\n  // {} から {} を決める。\n  // 規則は純関数なので、この手続きには副作用が無く、GET でも呼べる。\n",
+            "\n// Rule {} v{}.\nservice {} {{\n  // Decides {4} from {3}.\n  // The rule is a pure function, so this method has no side effects and can be\n  // called with GET.\n",
+            self.f.name.text,
+            self.f.version,
+            self.proto_service(),
+            ins.join(sep),
+            outs.join(sep)
+        ));
+        o.push_str("  rpc Decide(DecideRequest) returns (DecideResponse) {\n    option idempotency_level = NO_SIDE_EFFECTS;\n  }\n}\n");
+        o
+    }
+}
+
+/// `1` → `v1`. The major version, as a proto package component.
+fn proto_version(v: &str) -> String {
+    let major: String = v.split('.').next().unwrap_or("1").chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    if major.is_empty() {
+        "v1".to_string()
+    } else {
+        format!("v{}", major.to_lowercase())
+    }
+}
+
+impl<'a> Gen<'a> {
+    /// The Python module path of the generated stubs.
+    ///
+    /// They land in a `stubs/` package of their own beside the module rather than loose in
+    /// the same directory, because the plugin writes an `__init__.py` at the root of wherever
+    /// it generates — and an `__init__.py` over rulec's own flat modules would make the
+    /// directory a package, which is not what it is.
+    fn stub_pkg(&self) -> String {
+        format!("stubs.{}", self.proto_package())
+    }
+
+    /// The dict that turns one proto enum value into the module's own, and its reverse when
+    /// the enum is also an output. A value's number is its position, and for an imported
+    /// enum it is the number the contract gave it.
+    fn enum_maps(&self) -> String {
+        let mut o = String::new();
+        let outs: Vec<String> = self
+            .f
+            .outputs
+            .iter()
+            .filter_map(|x| match self.ty_of(&x.name.text) {
+                Ty::Enum(n) => Some(n),
+                Ty::Opt(t) => match *t {
+                    Ty::Enum(n) => Some(n),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        for ty in self.wire_enums() {
+            let cls = self.enum_names.get(&ty).cloned().unwrap_or_else(|| pascal(&ty));
+            // How the enum is spelled in Python. The values are the imported file's when it is
+            // imported, so they are read from the module the plugin wrote for **that** file.
+            let qual: String = match self.foreign(&ty) {
+                Some(fr) => format!("{}.{}", stub_module(&fr.import).1, fr.sel),
+                None => format!("pb.{cls}"),
+            };
+            // Each value is taken by its number, with its name beside it. The plugin names a
+            // member after the value with the enum's prefix taken off, but not always — a name
+            // left with a leading digit keeps the prefix — and a number is what the wire and
+            // the contract agree on in any case.
+            let we = self.wire_enum(&ty);
+            let pairs: Vec<String> = we
+                .values
+                .iter()
+                .map(|(v, wire, number)| {
+                    let al = self.value_names.get(&(ty.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_uppercase());
+                    format!("    {qual}({number}): m.{cls}.{al},  # {wire}\n")
+                })
+                .collect();
+            o.push_str(&format!("ENUM_{}: dict[{qual}, m.{cls}] = {{\n{}}}\n\n", crate::proto::upper_snake(&cls), pairs.concat()));
+            if outs.contains(&ty) {
+                o.push_str(&format!(
+                    "_PB_{0}: dict[m.{cls}, {qual}] = {{v: k for k, v in ENUM_{0}.items()}}\n\n",
+                    crate::proto::upper_snake(&cls)
+                ));
+            }
+        }
+        o
+    }
+
+    /// One input, read off the request message as the module's argument.
+    fn from_request(&self, name: &str, alias: &str, ty: &Ty) -> String {
+        let src = format!("request.{alias}");
+        match ty {
+            Ty::Opt(inner) => {
+                format!("None if not request.has_field({alias:?}) else {}", self.from_request(name, alias, inner))
+            }
+            Ty::Enum(n) => {
+                let cls = self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n));
+                format!("_member({name:?}, {cls:?}, ENUM_{}, {src})", crate::proto::upper_snake(&cls))
+            }
+            Ty::Date => format!("_ord({name:?}, {src})"),
+            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}({src})", brand_of(ty)),
+            _ => src,
+        }
+    }
+
+    /// One output, as a keyword of the response message. An absent optional is `None`, which
+    /// is what protobuf-py reads as "not set".
+    fn into_response(&self, alias: &str, ty: &Ty, expr: &str) -> String {
+        let one = |body: String| format!("        {alias}={body},\n");
+        match ty {
+            Ty::Opt(inner) => {
+                let inner_expr = self.into_response(alias, inner, expr);
+                let body = inner_expr.trim().trim_start_matches(&format!("{alias}=")).trim_end_matches(',').to_string();
+                one(format!("None if {expr} is None else {body}"))
+            }
+            Ty::Enum(n) => {
+                let cls = self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n));
+                one(format!("_PB_{}[{expr}]", crate::proto::upper_snake(&cls)))
+            }
+            Ty::Date => one(format!("_civil({expr})")),
+            _ => one(expr.to_string()),
+        }
+    }
+
+    /// Whether any value on the wire is a date, in either direction.
+    fn has_date(&self, dir: Dir) -> bool {
+        let ins = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| i.name.text.clone())
+            .chain(self.f.elements.iter().flat_map(|el| el.fields.iter().map(|fd| fd.name.text.clone())));
+        let outs = self.f.outputs.iter().map(|o| o.name.text.clone());
+        let names: Vec<String> = match dir {
+            Dir::In => ins.collect(),
+            Dir::Out => outs.collect(),
+        };
+        names.iter().any(|n| matches!(wire_of(&self.ty_of(n)), Wire::Date))
+    }
+
+    /// `python/<alias>_service.py`: the rule behind a Connect endpoint.
+    pub fn py_connect(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let svc = self.proto_service();
+        let mut args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| format!("        {},\n", self.from_request(&i.name.text, &pub_name(&i.name), &self.ty_of(&i.name.text))))
+            .collect();
+        if let Some(el) = &self.f.elements {
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| self.from_request(&fd.name.text, &pub_name(&fd.name), &self.ty_of(&fd.name.text)).replace("request.", "e."))
+                .collect();
+            args.push(format!(
+                "        [m.Element({}) for e in request.{}],\n",
+                fields.join(", "),
+                pub_name(&el.name)
+            ));
+        }
+        // A tuple of one is written on its line, comma and all; the formatter would fold a
+        // three-line one back anyway (§15.105).
+        let args: String = if args.len() == 1 {
+            format!("    args = ({},)\n", args[0].trim().trim_end_matches(','))
+        } else {
+            format!("    args = (\n{}    )\n", args.concat())
+        };
+        // The fields a request has to set (§15.160): every input that is not `T?`, by the
+        // name the message has it under and the rule's own, and the same for one element.
+        let table = |pairs: Vec<(String, String)>| -> String {
+            match pairs.len() {
+                0 => "()".to_string(),
+                1 => format!("(({:?}, {:?}),)", pairs[0].0, pairs[0].1),
+                _ => format!("(\n{})", pairs.iter().map(|(f, n)| format!("    ({f:?}, {n:?}),\n")).collect::<String>()),
+            }
+        };
+        let needed = |names: Vec<&crate::ast::Name>| -> Vec<(String, String)> {
+            names
+                .into_iter()
+                .filter(|n| !matches!(self.ty_of(&n.text), Ty::Opt(_)))
+                .map(|n| (pub_name(n), n.text.clone()))
+                .collect()
+        };
+        let mut fields = format!(
+            "\n\n# {}\nREQUIRED: tuple[tuple[str, str], ...] = {}\n",
+            tr!(
+                "リクエストが必ず入れるフィールドを、メッセージでの名前と規則での名前で。省いたことが分かるように、\n# .proto ではどのフィールドも optional にしてある。",
+                "The fields a request has to set, by the name the message has each under and the\n# rule's own. The .proto marks every field optional, so that one left out is seen."
+            ),
+            table(needed(self.f.inputs.iter().map(|i| &i.name).collect()))
+        );
+        let mut required = "    _required(request, REQUIRED)\n".to_string();
+        if let Some(el) = &self.f.elements {
+            fields.push_str(&format!(
+                "ELEMENT_REQUIRED: tuple[tuple[str, str], ...] = {}\n",
+                table(needed(el.fields.iter().map(|fd| &fd.name).collect()))
+            ));
+            required.push_str(&format!(
+                "    for i, e in enumerate(request.{}):\n        _required(e, ELEMENT_REQUIRED, f\"{}[{{i}}].\")\n",
+                pub_name(&el.name),
+                el.name.text
+            ));
+        }
+        fields.push_str(PY_SERVICE_REQUIRED);
+        let outs: String = if self.f.outputs.len() == 1 {
+            let o = &self.f.outputs[0];
+            self.into_response(&pub_name(&o.name), &self.ty_of(&o.name.text), "out")
+        } else {
+            self.f
+                .outputs
+                .iter()
+                .map(|o| {
+                    let a = pub_name(&o.name);
+                    self.into_response(&a, &self.ty_of(&o.name.text), &format!("out.{a}"))
+                })
+                .collect()
+        };
+        // The stubs of an imported enum live in the module the plugin wrote for **its** file.
+        let mut ext: Vec<String> = Vec::new();
+        for ty in self.wire_enums() {
+            if let Some(fr) = self.foreign(&ty) {
+                let line = stub_module(&fr.import).0;
+                if !ext.contains(&line) {
+                    ext.push(line);
+                }
+            }
+        }
+        let doc = tr!(
+            "規則 {} v{} を、Connect のサービス一つとして出す。\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # 標準ライブラリのサーバで試す\n\nTLS と認証は前に置くこと。このサーバは自分では持たない。\n\n呼ぶ側と交わすのは隣の `.proto` だけで、その stub は buf が書く:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\n決めているのは隣のモジュールで、そちらは何にも依存しない。ここにあるのはワイヤだけである。\n返す値には当てはまった行が付く。一回の呼び出しが記録一件で、--record を付ければ\nその一行がファイルに溜まり、rulec replay と rulec diff がそのまま読む。",
+            "Rule {} v{} as one Connect service.\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # the standard library's server\n\nPut TLS and authentication in front: this server carries neither.\n\nThe only thing a caller agrees to is the `.proto` beside it, whose stubs buf writes:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\nThe deciding is the module next to this file, which depends on nothing; what is here is the\nwire. The answer carries the rows that matched, so one call is one record: with --record that\nline is appended to a file, and rulec replay and rulec diff read it as it stands.",
+            self.f.name.text,
+            self.f.version,
+            alias = alias
+        );
+        PY_SERVICE
+            .replace("@HEADER@", self.header("#").trim_end())
+            .replace("@DOC@", &doc)
+            .replace("@ALIAS@", &alias)
+            .replace("@CLASS@", &pascal(&alias))
+            .replace("@SVC@", &svc)
+            .replace("@PKG@", &self.stub_pkg())
+            .replace("@EXT@", &ext.concat())
+            .replace("@SHA@", &self.src_hash)
+            .replace(
+                "@MEMBER@",
+                &if self.wire_enums().is_empty() {
+                    String::new()
+                } else {
+                    PY_SERVICE_MEMBER.replace("@MAPS@", self.enum_maps().trim_end())
+                },
+            )
+            .replace(
+                "@IMPORTS@",
+                &{
+                    let mut v: Vec<&str> = Vec::new();
+                    if !self.wire_enums().is_empty() {
+                        v.push("import enum\n");
+                    }
+                    if self.has_date(Dir::In) || self.has_date(Dir::Out) {
+                        v.push("import datetime\n");
+                    }
+                    let mut s: Vec<&str> = v.clone();
+                    s.sort_unstable();
+                    s.concat()
+                },
+            )
+            .replace("@TYPEVAR@", if self.wire_enums().is_empty() { "" } else { ", TypeVar" })
+            .replace("@MAPPING@", if self.wire_enums().is_empty() { "" } else { ", Mapping" })
+            .replace("@FIELDS@", &fields)
+            .replace("@REQUIRED@", &required)
+            .replace("@ARGS@", &args)
+            .replace("@OUTS@", &outs)
+            .replace(
+                "@DATES@",
+                if self.has_date(Dir::In) || self.has_date(Dir::Out) { PY_SERVICE_DATES } else { "" },
+            )
+            .replace("@D_CODECS@", &tr!("JSON の読み手は、知らないフィールドと列挙の値を断る。Connect の既定はそれを捨てるので、\n# 綴りを誤った入力が、ゼロ値として判断されてしまう。", "The JSON reader refuses a field or an enum value it does not know. Connect's default\n# drops it, and a misspelt input would then be decided as if it were zero."))
+            .replace("@D_REQUIRED@", &tr!("規則が要るフィールドが省かれていたら断る。proto3 は省かれたフィールドをゼロ値として\n    読むので、これが無いと、何も名指さなかったリクエストが 0 と false を言ったものとして判断される。", "Refuse a request that left out a field the rule needs. proto3 reads a field left out\n    as its zero, so without this a request that named nothing would be decided as 0 and false."))
+            .replace("@M_REQUIRED@", &tr!("設定されていません", "not set"))
+            .replace("@D_SHA@", &tr!("どの版の表が答えたか。答えを保つ呼び出し側のために、返す見出しに入れる。", "Which version of the table answered; it goes in a response header for a caller that keeps the answer."))
+            .replace("@D_MEMBER@", &tr!("列挙の値一つ。契約に無い番号は、呼び出し側の契約違反である。", "One value of an enum. A number the contract does not have is a contract violation by the caller."))
+            .replace("@M_MEMBER@", &tr!("{{ty}} の値ではありません: {{v}}", "not a value of {{ty}}: {{v}}"))
+            .replace("@D_ORD@", &tr!("日付は YYYY-MM-DD の文字列で受け、日数に直す。", "A date arrives as a YYYY-MM-DD string and is read as a day number."))
+            .replace("@M_ORD@", &tr!("日付は YYYY-MM-DD で: {{v!r}}", "not a YYYY-MM-DD date: {{v!r}}"))
+            .replace("@D_CIVIL@", &tr!("日数を YYYY-MM-DD に戻す。", "A day number as YYYY-MM-DD."))
+            .replace("@D_ASYNC@", &tr!("ASGI の側。規則は純関数なので待つものが無く、中身は下の同期の側と同じ一本である。", "The ASGI side. A rule is a pure function with nothing to await, so this and the sync class below are two doors on one body."))
+            .replace("@D_SYNC@", &tr!("WSGI の側。", "The WSGI side."))
+            .replace("@D_CALL@", &tr!("一回の呼び出しが一回の判断で、二つの間に残るものは無い。", "One call is one decision, and nothing is kept between two of them."))
+            .replace("@D_DECIDE@", &tr!("受け取った件に規則を当て、決めた値と決めた行を返す。", "Apply the rule to the case that arrived, and answer with what it decided and the rows that decided it."))
+            .replace("@D_INVALID@", &tr!("宣言した入力の外は、呼び出し側の契約違反である（§8.1）。", "Outside the declared input domain is a contract violation by the caller (§8.1)."))
+            .replace("@D_INTERNAL@", &tr!("静的に証明できなかった重なりに、実際に当たった（W114）。どちらの行を採るかは表が決めることで、\n        # 呼び出し側には直せない。だから 500 で、気づかれるべきものとして返す。", "An overlap the checker could not settle statically was actually hit (W114). Which row wins is\n        # the table's to decide and the caller cannot fix it, so it answers 500: something to notice."))
+            .replace("@D_APP@", &tr!("ASGI アプリとしてのサービス。uvicorn・hypercorn・daphne のどれでも動く。", "The service as an ASGI application, for uvicorn, hypercorn or daphne."))
+            .replace("@D_WSGI@", &tr!("同じサービスの WSGI 版。gunicorn・uWSGI のような同期のサーバ向け。", "The same service as a WSGI application, for a synchronous server such as gunicorn or uWSGI."))
+            .replace("@D_SERVER@", &tr!("WSGI の側を、標準ライブラリのサーバで立てる。uvicorn も gunicorn も入れずに試すためのもので、\n    connectrpc と stub は要る。本番は uvicorn か gunicorn に上の app を渡すこと。番号に 0 を渡すと\n    空いているものが取られる。", "The WSGI side, on the standard library's own server: a way to try it without uvicorn or\n    gunicorn, though connectrpc and the stubs are still needed. In production, hand `app` to\n    uvicorn or `wsgi_app` to gunicorn. A port of 0 takes any free one."))
+            .replace("@D_QUIET@", &tr!("アクセスログは出さない。通信の話であって、この規則が言うことではない。", "No access log: that is the transport talking, not this rule."))
+            .replace("@D_MAIN@", &tr!("引数を読んで待ち受ける。", "Read the arguments and listen."))
+            .replace("@D_LIMITED@", &tr!(
+                "本文の終わりで止まる入力。\n\n    PEP 3333 は、本文の長さで終わる入力をアプリに渡すことをサーバに勧めているが、標準ライブラリの\n    サーバはそうしない。wsgi.input はソケットそのもので、本文の先を読もうとすると、呼び出し側が\n    次を送るまで止まる。呼び出し側は答えを待っているので、何も来ない。本番の WSGI サーバはどれも\n    長さで切っている。標準ライブラリのものを同じ振る舞いにするのが、この一枚である。",
+                "The request body, and not one byte past it.\n\n    PEP 3333 says a server *should* hand the application an input stream that ends at\n    CONTENT_LENGTH, and the standard library's server does not: its wsgi.input is the socket, so\n    a read past the body waits for the caller to send more. The caller is waiting for the answer,\n    so nothing comes. Every production WSGI server limits the stream; this is what makes the\n    standard library's behave like them."))
+            .replace("@D_LIMIT@", &tr!("その入力を渡すだけの包み。", "The wrapper that hands that input over."))
+    }
+}
+
+/// Which way a value crosses the wire.
+#[derive(Clone, Copy)]
+enum Dir {
+    In,
+    Out,
+}
+
+/// `shop/v1/order.proto` → the line importing the module protobuf-py's plugin writes for it,
+/// and the name the service uses it by: `from stubs.shop.v1 import order_pb as
+/// shop_v1_order_pb`.
+///
+/// The plugin writes it into `stubs/` beside this rule's own stubs, and it is imported from
+/// there rather than as a module of its own on the path. The rule's stub imports it relative
+/// to itself, so the two are one module; imported by the bare name, it could only be found
+/// with `stubs/` added to the path, and was then a second copy of the same file.
+fn stub_module(import: &str) -> (String, String) {
+    let dotted = import.trim_end_matches(".proto").replace(['/', '\\'], ".") + "_pb";
+    match dotted.rsplit_once('.') {
+        Some((pkg, base)) => {
+            let flat = dotted.replace('.', "_");
+            (format!("from stubs.{pkg} import {base} as {flat}\n"), flat)
+        }
+        None => (format!("from stubs import {dotted}\n"), dotted),
+    }
+}
+
+/// The one check of a request's fields: each the rule needs is there (§15.160).
+const PY_SERVICE_REQUIRED: &str = r#"
+
+def _required(message: Any, fields: tuple[tuple[str, str], ...], at: str = "") -> None:
+    """@D_REQUIRED@"""
+    for field, name in fields:
+        if not message.has_field(field):
+            raise ConnectError(Code.INVALID_ARGUMENT, f"{at}{name}: @M_REQUIRED@")
+"#;
+
+/// The enum tables and the one reader of them, for a rule that has an enum on the wire.
+const PY_SERVICE_MEMBER: &str = r#"
+E = TypeVar("E", bound=enum.Enum)
+
+@MAPS@
+
+
+def _member(name: str, ty: str, table: Mapping[Any, E], v: int) -> E:
+    """@D_MEMBER@"""
+    try:
+        return table[v]
+    except KeyError:
+        raise ConnectError(Code.INVALID_ARGUMENT, f"{name}: @M_MEMBER@") from None
+"#;
+
+const PY_SERVICE_DATES: &str = r#"
+
+def _ord(name: str, v: str) -> int:
+    """@D_ORD@"""
+    try:
+        y, mo, d = (int(x) for x in v.split("-"))
+        return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days
+    except ValueError:
+        raise ConnectError(Code.INVALID_ARGUMENT, f"{name}: @M_ORD@") from None
+
+
+def _civil(n: int) -> str:
+    """@D_CIVIL@"""
+    return (datetime.date(1970, 1, 1) + datetime.timedelta(days=n)).isoformat()
+"#;
+
+const PY_SERVICE: &str = r#"@HEADER@
+"""@DOC@
+"""
+
+from __future__ import annotations
+
+@IMPORTS@import io
+import sys
+from typing import TYPE_CHECKING, Any@TYPEVAR@
+
+from connectrpc.code import Code
+from connectrpc.codec import proto_binary_codec, proto_json_codec
+from connectrpc.errors import ConnectError
+
+import @ALIAS@ as m
+@EXT@from @PKG@ import @ALIAS@_pb as pb
+from @PKG@.@ALIAS@_connect import (
+    @SVC@,
+    @SVC@ASGIApplication,
+    @SVC@Sync,
+    @SVC@WSGIApplication,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable@MAPPING@
+    from typing import IO
+    from wsgiref.simple_server import WSGIServer
+    from wsgiref.types import StartResponse, WSGIApplication, WSGIEnvironment
+
+    from connectrpc.request import RequestContext
+
+# @D_SHA@
+SOURCE_SHA256 = "@SHA@"
+
+# @D_CODECS@
+CODECS = (proto_binary_codec(), proto_json_codec(ignore_unknown_fields=False))
+@MEMBER@@DATES@@FIELDS@
+
+def decide(
+    request: pb.DecideRequest,
+    ctx: RequestContext[pb.DecideRequest, pb.DecideResponse],
+    record: str | None = None,
+) -> pb.DecideResponse:
+    """@D_DECIDE@"""
+@REQUIRED@@ARGS@    try:
+        out, trace = m.@ALIAS@_traced(*args)
+    except m.RuleInputError as e:
+        # @D_INVALID@
+        raise ConnectError(Code.INVALID_ARGUMENT, str(e)) from None
+    except m.RuleContradictionError as e:
+        # @D_INTERNAL@
+        raise ConnectError(Code.INTERNAL, str(e)) from None
+    ctx.response_headers["rulec-source-sha256"] = SOURCE_SHA256
+    if record is not None:
+        with open(record, "a", encoding="utf-8") as f:
+            f.write(m.@ALIAS@_record(*args, out, trace) + "\n")
+    return pb.DecideResponse(
+@OUTS@        trace=[pb.Fired(table=f.table, row=f.row, label=f.label) for f in trace],
+    )
+
+
+class @CLASS@(@SVC@):
+    """@D_ASYNC@"""
+
+    def __init__(self, record: str | None = None) -> None:
+        self.record = record
+
+    async def decide(
+        self, request: pb.DecideRequest, ctx: RequestContext[pb.DecideRequest, pb.DecideResponse]
+    ) -> pb.DecideResponse:
+        """@D_CALL@"""
+        return decide(request, ctx, self.record)
+
+
+class @CLASS@Sync(@SVC@Sync):
+    """@D_SYNC@"""
+
+    def __init__(self, record: str | None = None) -> None:
+        self.record = record
+
+    def decide(
+        self, request: pb.DecideRequest, ctx: RequestContext[pb.DecideRequest, pb.DecideResponse]
+    ) -> pb.DecideResponse:
+        """@D_CALL@"""
+        return decide(request, ctx, self.record)
+
+
+def application(record: str | None = None) -> @SVC@ASGIApplication:
+    """@D_APP@"""
+    return @SVC@ASGIApplication(@CLASS@(record), codecs=CODECS)
+
+
+def wsgi_application(record: str | None = None) -> @SVC@WSGIApplication:
+    """@D_WSGI@"""
+    return @SVC@WSGIApplication(@CLASS@Sync(record), codecs=CODECS)
+
+
+# uvicorn @ALIAS@_service:app --port 8080
+app = application()
+
+# gunicorn '@ALIAS@_service:wsgi_app'
+wsgi_app = wsgi_application()
+
+
+class _Limited(io.RawIOBase):
+    """@D_LIMITED@"""
+
+    def __init__(self, inner: IO[bytes], left: int) -> None:
+        self._inner, self._left = inner, left
+
+    def read(self, size: int | None = -1) -> bytes:
+        if self._left <= 0:
+            return b""
+        if size is None or size < 0:
+            size = self._left
+        b = self._inner.read(min(size, self._left))
+        self._left -= len(b)
+        return b
+
+    def readline(self, size: int | None = -1) -> bytes:
+        return self.read(size)
+
+
+def _limit(wsgi: WSGIApplication) -> WSGIApplication:
+    """@D_LIMIT@"""
+
+    def wrapped(environ: WSGIEnvironment, start_response: StartResponse) -> Iterable[bytes]:
+        environ["wsgi.input"] = _Limited(environ["wsgi.input"], int(environ.get("CONTENT_LENGTH") or 0))
+        return wsgi(environ, start_response)
+
+    return wrapped
+
+
+def server(host: str, port: int, record: str | None = None) -> WSGIServer:
+    """@D_SERVER@"""
+    from wsgiref.simple_server import WSGIRequestHandler, make_server
+
+    class Quiet(WSGIRequestHandler):
+        def log_message(self, *a: object) -> None:
+            """@D_QUIET@"""
+
+    return make_server(host, port, _limit(wsgi_application(record)), handler_class=Quiet)
+
+
+def main(argv: list[str]) -> None:
+    """@D_MAIN@"""
+    at, record, i = "127.0.0.1:8080", None, 0
+    while i < len(argv):
+        if argv[i] == "--http" and i + 1 < len(argv):
+            at, i = argv[i + 1], i + 2
+        elif argv[i] == "--record" and i + 1 < len(argv):
+            record, i = argv[i + 1], i + 2
+        else:
+            raise SystemExit(f"unknown argument: {argv[i]}")
+    host, _, port = at.rpartition(":")
+    host = host or "127.0.0.1"
+    srv = server(host, int(port), record)
+    # A port of 0 means any free one, so where it is listening is printed as one line.
+    print(f"http://{host}:{srv.server_address[1]}", flush=True)
+    srv.serve_forever()
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+"#;
+
+impl<'a> Gen<'a> {
+    /// One value of the request message, built from a line of the vectors.
+    fn to_request(&self, name: &str, ty: &Ty) -> String {
+        let src = format!("d[{name:?}]");
+        match ty {
+            Ty::Opt(inner) => self.to_request(name, inner),
+            Ty::Enum(n) => {
+                let cls = self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n));
+                format!("_PB_{}[m.{cls}({src})]", crate::proto::upper_snake(&cls))
+            }
+            Ty::Bool => format!("bool({src})"),
+            Ty::Date | Ty::Str => format!("str({src})"),
+            _ => format!("int({src})"),
+        }
+    }
+
+    /// One value of the answer, read back as the module's own, so that the record this
+    /// prints is the record the module would have written.
+    fn from_response(&self, alias: &str, ty: &Ty) -> String {
+        let src = format!("res.{alias}");
+        match ty {
+            Ty::Opt(inner) => format!("(None if not res.has_field({alias:?}) else {})", self.from_response(alias, inner)),
+            Ty::Enum(n) => {
+                let cls = self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n));
+                format!("ENUM_{}[{src}]", crate::proto::upper_snake(&cls))
+            }
+            Ty::Date => format!("_ord({src})"),
+            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}({src})", brand_of(ty)),
+            _ => src,
+        }
+    }
+
+    /// `python/<alias>_connect_runner.py`: the same vectors as the runner beside it, reached
+    /// over the wire.
+    ///
+    /// It exists so that the service is inside the word "proved" like everything else `gen`
+    /// writes: `rulec test` puts every vector through it and holds the record it prints to
+    /// the reference evaluator, byte for byte (§15.112).
+    pub fn py_connect_runner(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let svc = self.proto_service();
+        let mut kw = String::new();
+        for i in &self.f.inputs {
+            let a = pub_name(&i.name);
+            let ty = self.ty_of(&i.name.text);
+            let one = self.to_request(&i.name.text, &ty);
+            if matches!(ty, Ty::Opt(_)) {
+                kw.push_str(&format!("    if d[{:?}] is not None:\n        kw[{a:?}] = {one}\n", i.name.text));
+            } else {
+                kw.push_str(&format!("    kw[{a:?}] = {one}\n"));
+            }
+        }
+        if let Some(el) = &self.f.elements {
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| format!("{}={}", pub_name(&fd.name), self.to_request(&fd.name.text, &self.ty_of(&fd.name.text)).replace("d[", "e[")))
+                .collect();
+            kw.push_str(&format!(
+                "    kw[{:?}] = [pb.Element({}) for e in d[{:?}]]\n",
+                pub_name(&el.name),
+                fields.join(", "),
+                el.name.text
+            ));
+        }
+        // The arguments are read from the same line the request was built from, because the
+        // record names its inputs as the rule does and the message names them by their alias.
+        let mut args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| self.py_read(&self.ty_of(&i.name.text), format!("d[{:?}]", i.name.text)))
+            .collect();
+        let mut prelude = String::new();
+        if let Some(el) = &self.f.elements {
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| self.py_read(&self.ty_of(&fd.name.text), format!("e[{:?}]", fd.name.text)))
+                .collect();
+            prelude = format!("            rows = [m.Element({}) for e in d[{:?}]]\n", fields.join(", "), el.name.text);
+            args.push("rows".to_string());
+        }
+        let out = if self.f.outputs.len() == 1 {
+            let o = &self.f.outputs[0];
+            self.from_response(&pub_name(&o.name), &self.ty_of(&o.name.text))
+        } else {
+            format!(
+                "m.Output({})",
+                self.f
+                    .outputs
+                    .iter()
+                    .map(|o| self.from_response(&pub_name(&o.name), &self.ty_of(&o.name.text)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        // A machine's traces (§15.148): the carried input is the state the service answered
+        // to the call before, read back out of the response as the module's own value.
+        let (mut mhead, mut mline, mut mtail) = (String::new(), "            d = json.loads(line)[\"in\"]\n".to_string(), String::new());
+        if let (Some((en, _, _)), Some((cin, _)), Some(oa)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
+            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
+                args[k] = format!("(state if \"step\" in v else {})", args[k]);
+            }
+            mhead = "        state: m.".to_string() + &cls + " = m.INITIAL\n";
+            mline = format!(
+                "            v = json.loads(line)\n            \
+                 if \"machine\" in v:\n                \
+                     print(json.dumps({{\"initial\": m.INITIAL.value, \"final\": [s.value for s in m.{cls} if m.is_final(s)]}}, ensure_ascii=False, separators=(\",\", \":\")))\n                \
+                     continue\n            \
+                 d = dict(v[\"in\"])\n            \
+                 if v.get(\"step\") == \"start\":\n                \
+                     state = m.{cls}(v[\"state\"])\n            \
+                 if \"step\" in v:\n                \
+                     d[{cin:?}] = state.value\n"
+            );
+            // Read back out of the response the way the record above reads it.
+            let o = self.f.outputs.iter().find(|o| pub_name(&o.name) == oa).expect("the carried output");
+            mtail = format!(
+                "            if \"step\" in v:\n                state = {}\n",
+                self.from_response(&oa, &self.ty_of(&o.name.text))
+            );
+        }
+        let tables: Vec<String> = self
+            .wire_enums()
+            .iter()
+            .map(|ty| format!("ENUM_{}", crate::proto::upper_snake(self.enum_names.get(ty).unwrap_or(ty))))
+            .collect();
+        // `app` is the ASGI application and `server` the standard library's WSGI one: this
+        // runner drives both, because both are generated and a door nobody drove would be a
+        // claim nobody checked.
+        let mut names: Vec<String> = tables.clone();
+        names.push("app".into());
+        names.push("server".into());
+        names.sort();
+        let imports = format!("from {alias}_service import {}", names.join(", "));
+        let reverse: String = tables
+            .iter()
+            .map(|t| format!("_PB_{} = {{v: k for k, v in {t}.items()}}\n", t.trim_start_matches("ENUM_")))
+            .collect();
+        let doc = tr!(
+            "隣の {alias}_runner.py と同じベクタを、Connect 越しに通す。\n\n    python3 {alias}_connect_runner.py [--wsgi] [--get] [--at http://host:port] < vectors.jsonl\n\n--at が無ければ、生成したサービスを空いている番号で立ててそれを呼ぶ。既定は ASGI（uvicorn）で、\n--wsgi なら標準ライブラリのサーバに立てる。出す記録は返ってきたものから組み立てるので、\n隣の runner と食い違えば、それはワイヤが作った差である。--get は同じ呼び出しを GET で行う。\n規則は純関数で、手続きは副作用が無いと宣言してあるから。",
+            "The same vectors as {alias}_runner.py beside it, put through Connect.\n\n    python3 {alias}_connect_runner.py [--wsgi] [--get] [--at http://host:port] < vectors.jsonl\n\nWith no --at it stands the generated service up on a free port and calls that: ASGI under\nuvicorn by default, or the standard library's WSGI server with --wsgi. The record it prints is\nbuilt from what came back, so a difference between this and the runner beside it is a\ndifference the wire made. --get makes the same call with GET, which the method allows because\nthe rule is a pure function.",
+            alias = alias
+        );
+        PY_CONNECT_RUNNER
+            .replace("@HEADER@", self.header("#").trim_end())
+            .replace("@DOC@", &doc)
+            .replace("@ALIAS@", &alias)
+            .replace("@SVC@", &svc)
+            .replace("@PKG@", &self.stub_pkg())
+            .replace("@IMPORTS@", &imports)
+            // Whatever these two blocks hold, what stands before `def _request` is two blank
+            // lines and no more: an empty placeholder used to leave four.
+            .replace(
+                "@PRE@",
+                &{
+                    let mut pre = String::new();
+                    if !reverse.trim().is_empty() {
+                        pre.push('\n');
+                        pre.push_str(reverse.trim_end());
+                        pre.push('\n');
+                    }
+                    if self.has_date(Dir::In) || self.has_date(Dir::Out) {
+                        pre.push_str(PY_RUNNER_DATES);
+                    }
+                    pre
+                },
+            )
+            .replace("@KW@", kw.trim_end())
+            .replace("@PRELUDE@", &prelude)
+            .replace("@STDLIB@", if self.has_date(Dir::In) || self.has_date(Dir::Out) { "import datetime\n" } else { "" })
+            // One argument keeps the comma a tuple of one needs; two or more must not have it.
+            .replace("@ARGS@", &if args.len() == 1 { format!("{},", args[0]) } else { args.join(", ") })
+            .replace("@OUT@", &out)
+            .replace("@MHEAD@", &mhead)
+            .replace("@MLINE@", &mline)
+            .replace("@MTAIL@", &mtail)
+            .replace("@D_REQUEST@", &tr!("ベクタ一行を、リクエストのメッセージにする。", "One line of the vectors as the request message."))
+            .replace("@D_SERVE@", &tr!("WSGI の側を、標準ライブラリのサーバで、この同じプロセスの空いている番号に立てる。", "The WSGI side, on a free port in this same process, served by the standard library."))
+            .replace("@D_ASGI@", &tr!("ASGI の側を uvicorn で立てる。ソケットはこちらで作って渡すので、どの番号になったかが分かる。", "The ASGI side, under uvicorn. The socket is bound here and handed over, so which port it took is known."))
+    }
+}
+
+const PY_RUNNER_DATES: &str = r#"
+
+def _ord(s: str) -> int:
+    y, mo, d = (int(x) for x in s.split("-"))
+    return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days
+"#;
+
+
+const PY_CONNECT_RUNNER: &str = r#"@HEADER@
+"""@DOC@
+"""
+
+from __future__ import annotations
+
+@STDLIB@import json
+import sys
+import threading
+import time
+from typing import Any
+
+import @ALIAS@ as m
+from @PKG@ import @ALIAS@_pb as pb
+from @PKG@.@ALIAS@_connect import @SVC@ClientSync
+@IMPORTS@
+@PRE@
+
+def _request(d: dict[str, Any]) -> pb.DecideRequest:
+    """@D_REQUEST@"""
+    kw: dict[str, Any] = {}
+@KW@
+    return pb.DecideRequest(**kw)
+
+
+def _serve_asgi() -> str:
+    """@D_ASGI@"""
+    import socket
+
+    import uvicorn
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = int(sock.getsockname()[1])
+    srv = uvicorn.Server(uvicorn.Config(app, log_level="error"))
+    threading.Thread(target=lambda: srv.run(sockets=[sock]), daemon=True).start()
+    while not srv.started:
+        time.sleep(0.01)
+    return f"http://127.0.0.1:{port}"
+
+
+def _serve_wsgi() -> str:
+    """@D_SERVE@"""
+    srv = server("127.0.0.1", 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return f"http://127.0.0.1:{srv.server_address[1]}"
+
+
+def main(argv: list[str]) -> None:
+    use_get = "--get" in argv
+    wsgi = "--wsgi" in argv
+    argv = [a for a in argv if a not in ("--get", "--wsgi", "--asgi")]
+    at = argv[argv.index("--at") + 1] if "--at" in argv else (_serve_wsgi() if wsgi else _serve_asgi())
+    with @SVC@ClientSync(at) as client:
+@MHEAD@        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+@MLINE@@PRELUDE@            args = (@ARGS@)
+            res = client.decide(_request(d), use_get=use_get)
+            trace = [m.Fired(f.table, f.row, f.label) for f in res.trace]
+            print(m.@ALIAS@_record(*args, @OUT@, trace))
+@MTAIL@
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+"#;
+
+impl<'a> Gen<'a> {
+    /// The `connect` entry of `rulec api`: the wire a caller needs, without reading the
+    /// `.proto` — the endpoint's path, the two message names, and what each field is called
+    /// there.
+    pub fn api_connect(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let svc = self.proto_service();
+        let pkg = self.proto_package();
+        // `optional` is the rule's `T?`: a value that may be absent. It is not the `.proto`'s
+        // label, which every field a caller sends carries (§15.160). `enum` names the rule's
+        // enum, which is what `enums` is keyed by: one contract's enum may be imported into
+        // two of the rule's, and the type alone would not say which.
+        let field = |name: &str, n: &crate::ast::Name, ty: &Ty| -> String {
+            let inner = if let Ty::Opt(t) = ty { t.as_ref() } else { ty };
+            crate::json::Obj::new()
+                .str("name", name)
+                .str("field", &pub_name(n))
+                .str("type", &self.proto_ty(name, ty))
+                .bool("optional", matches!(ty, Ty::Opt(_)))
+                .opt_str("enum", if let Ty::Enum(e) = inner { Some(e.as_str()) } else { None })
+                .finish()
+        };
+        let mut ins: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| field(&i.name.text, &i.name, &self.ty_of(&i.name.text)))
+            .collect();
+        if let Some(el) = &self.f.elements {
+            ins.push(
+                crate::json::Obj::new()
+                    .str("name", &el.name.text)
+                    .str("field", &pub_name(&el.name))
+                    .str("type", "repeated Element")
+                    .bool("optional", false)
+                    .finish(),
+            );
+        }
+        let elems: Option<String> = self.f.elements.as_ref().map(|el| {
+            crate::json::arr(
+                &el.fields.iter().map(|fd| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text))).collect::<Vec<_>>(),
+            )
+        });
+        let outs: Vec<String> = self
+            .f
+            .outputs
+            .iter()
+            .map(|o| field(&o.name.text, &o.name, &self.ty_of(&o.name.text)))
+            .collect();
+        // Every enum that crosses the wire, with each value's name and number there: what a
+        // caller writing the JSON by hand has to send, and how to read a value 0 that the
+        // answer leaves out. `unset` is the name of value 0 when it means "not set"; when it
+        // is null, value 0 is one of the rule's and appears among the values.
+        let quoted = |s: Option<&str>| s.map(crate::json::quote).unwrap_or_else(|| "null".into());
+        let enums: Vec<String> = self
+            .wire_enums()
+            .iter()
+            .map(|ty| {
+                let we = self.wire_enum(ty);
+                let values: Vec<String> = we
+                    .values
+                    .iter()
+                    .map(|(v, wire, number)| crate::json::Obj::new().str("name", v).str("alias", wire).int("number", *number).finish())
+                    .collect();
+                crate::json::Obj::new()
+                    .str("name", ty)
+                    .str("alias", &we.ty)
+                    .raw(
+                        "contract",
+                        match &we.contract {
+                            Some((file, import)) => crate::json::Obj::new()
+                                .str("file", file)
+                                .str("proto", format!("proto/{import}"))
+                                .finish(),
+                            None => "null".into(),
+                        },
+                    )
+                    .raw("unset", quoted(we.unset.as_deref()))
+                    .raw("values", crate::json::arr(&values))
+                    .finish()
+            })
+            .collect();
+        let python = crate::json::Obj::new()
+            .str("module", &format!("{alias}_service.py"))
+            // Two applications and the two classes behind them: the rule is a pure function,
+            // so the async one and the sync one are two doors on one body.
+            .str("class", &pascal(&alias))
+            .str("sync_class", &format!("{}Sync", pascal(&alias)))
+            .str("asgi", "app")
+            .str("wsgi", "wsgi_app")
+            .str("serve_asgi", &format!("uvicorn {alias}_service:app --port 8080"))
+            .str("serve_wsgi", &format!("gunicorn '{alias}_service:wsgi_app'"))
+            .str("client", &format!("{svc}ClientSync"))
+            .str("runner", &format!("{alias}_connect_runner.py"))
+            .raw("needs", crate::json::strs(&["connectrpc", "buf"]))
+            .finish();
+        crate::json::Obj::new()
+            .str("proto", &format!("proto/{}", self.proto_path()))
+            .str("package", &pkg)
+            .str("service", &svc)
+            .str("method", "Decide")
+            .str("path", &format!("/{pkg}.{svc}/Decide"))
+            .str("request", "DecideRequest")
+            .str("response", "DecideResponse")
+            .str("idempotency_level", "NO_SIDE_EFFECTS")
+            .str("trace", "trace")
+            .str("source_header", "rulec-source-sha256")
+            // buf, configured by the two files beside the `.proto`. protoc has no path here:
+            // the messages are protobuf-py's, whose plugin buf is the way to reach.
+            .str("stubs", "cd proto && buf generate")
+            .str("buf_yaml", "proto/buf.yaml")
+            .str("buf_gen_yaml", "proto/buf.gen.yaml")
+            // The BSR modules this rule's contracts import files from (§15.161). With any, the
+            // module's `buf.yaml` declares them and a `buf.lock` pins them, and the stubs of
+            // their files are written too (`include_imports`).
+            .raw("deps", crate::json::strs(&self.proto_deps()))
+            // Protobuf's own JSON mapping, which is what a caller sees who speaks the wire
+            // by hand rather than through a generated client: names in lowerCamelCase, and an
+            // int64 as a string, because a double cannot hold one.
+            .str("json_names", "lowerCamelCase")
+            .str("json_int64", "string")
+            .raw("request_fields", crate::json::arr(&ins))
+            .raw("element_fields", elems.unwrap_or_else(|| "null".into()))
+            .raw("response_fields", crate::json::arr(&outs))
+            .raw("enums", crate::json::arr(&enums))
+            .raw("python", python)
+            .finish()
+    }
+}
+
+/// `rulec adapter --template connect-python`: the adapter protocol in front of a Connect
+/// service that is already running (§10.1, §15.112).
+///
+/// The counterpart of `verify::template`'s two, for the legacy implementation that is not a
+/// process to start but an endpoint to call. Its messages are the other team's, so the two
+/// places that cannot be written for them are marked: the request their method takes, and
+/// where their answer is. Everything around those — the handshake, the ids, the refusal that
+/// keeps an unanswerable record out of the denominator — is written.
+pub fn template(f: &crate::ast::RuleFile) -> String {
+    let ins: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
+    let out = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+    let sep = if crate::i18n::ja() { "・" } else { ", " };
+    tr!(
+        "# rulec のアダプタのテンプレート（規則 {}）。いま動いているのが Connect のサービスのとき。\n\
+         #\n\
+         #   rulec verify {}.rule --adapter python3 adapter.py https://pricing.internal\n\
+         #\n\
+         # 標準入出力で JSON Lines をやりとりし、受けた入力をそのサービスに投げる。\n\
+         # 要るのは `uv add connectrpc` と、相手の `.proto` から作った stub。\n\
+         # 埋めるのは二か所、相手のメッセージだけである。\n\
+         import json\n\
+         import sys\n\n\
+         from connectrpc.errors import ConnectError\n\n\
+         from their_pb2 import TheirRequest  # TODO: 相手の .proto から生成した stub\n\
+         from their_connect import TheirServiceClientSync  # TODO: 同上\n\n\
+         AT = sys.argv[1] if len(sys.argv) > 1 else \"http://127.0.0.1:8080\"\n\n\
+         sys.stdin.readline()  # 握手\n\
+         print(json.dumps({{\"ok\": True, \"impl\": f\"connect@{{AT}}\"}}), flush=True)\n\n\
+         with TheirServiceClientSync(AT) as client:\n    \
+             for line in sys.stdin:\n        \
+                 line = line.strip()\n        \
+                 if not line:\n            \
+                     continue\n        \
+                 req = json.loads(line)\n        \
+                 d = req[\"in\"]  # 入力は {}。値は宣言した単位の整数、日付は YYYY-MM-DD、列挙はその名前\n\n        \
+                 try:\n            \
+                     # TODO: d から相手のリクエストを組み立てる\n            \
+                     res = client.decide(TheirRequest())\n            \
+                     # TODO: 相手の答えの中で {} に当たるところ\n            \
+                     got = 0\n        \
+                 except ConnectError as e:\n            \
+                     # 答えられないと言った件は一致率の分母から外れる（docs/formats.md）\n            \
+                     print(json.dumps({{\"id\": req[\"id\"], \"err\": str(e)}}, ensure_ascii=False), flush=True)\n            \
+                     continue\n\n        \
+                 print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
+        "# rulec adapter template (rule {}), for a legacy implementation that is a Connect service.\n\
+         #\n\
+         #   rulec verify {}.rule --adapter python3 adapter.py https://pricing.internal\n\
+         #\n\
+         # It exchanges JSON Lines over stdin/stdout and puts each input to that service.\n\
+         # It needs `uv add connectrpc` and the stubs of their own `.proto`.\n\
+         # Two places are left to fill in, and both of them are the other side's messages.\n\
+         import json\n\
+         import sys\n\n\
+         from connectrpc.errors import ConnectError\n\n\
+         from their_pb2 import TheirRequest  # TODO: the stubs of their own .proto\n\
+         from their_connect import TheirServiceClientSync  # TODO: the same\n\n\
+         AT = sys.argv[1] if len(sys.argv) > 1 else \"http://127.0.0.1:8080\"\n\n\
+         sys.stdin.readline()  # handshake\n\
+         print(json.dumps({{\"ok\": True, \"impl\": f\"connect@{{AT}}\"}}), flush=True)\n\n\
+         with TheirServiceClientSync(AT) as client:\n    \
+             for line in sys.stdin:\n        \
+                 line = line.strip()\n        \
+                 if not line:\n            \
+                     continue\n        \
+                 req = json.loads(line)\n        \
+                 d = req[\"in\"]  # inputs: {}. An integer in the declared unit, YYYY-MM-DD for a date, an enum by its name\n\n        \
+                 try:\n            \
+                     # TODO: build their request from d\n            \
+                     res = client.decide(TheirRequest())\n            \
+                     # TODO: where {} is in their answer\n            \
+                     got = 0\n        \
+                 except ConnectError as e:\n            \
+                     # A record they say they cannot answer is left out of the match rate (docs/formats.md)\n            \
+                     print(json.dumps({{\"id\": req[\"id\"], \"err\": str(e)}}, ensure_ascii=False), flush=True)\n            \
+                     continue\n\n        \
+                 print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
+        f.name.text,
+        pub_name(&f.name),
+        ins.join(sep),
+        out,
+        out
+    )
+}

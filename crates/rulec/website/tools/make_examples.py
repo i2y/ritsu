@@ -1,0 +1,881 @@
+#!/usr/bin/env python3
+"""Build the examples page from the corpus, so the sources on the page cannot drift.
+
+Every rule shown here is one of the files the test suite runs: `rulec check` passes on it,
+its examples execute, and the reference evaluator and every generated language agree on it
+byte for byte. Run this after editing a corpus rule or the prose below:
+
+    python3 tools/make_examples.py
+
+The output is committed, so building the site needs no Python.
+"""
+import pathlib
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+CORPUS = ROOT / "tests" / "corpus"
+
+# (file, ja title, ja lede, ja points, en title, en lede, en points)
+EXAMPLES = [
+    (
+        "期間区分.rule",
+        "日付で区分を返す",
+        "いちばん小さい例です。入力は注文日ひとつ、出力は期間の区分ひとつ。行は隣り合う日付の範囲で、隙間なく敷き詰めてあります。",
+        [
+            "日付は**比較と範囲だけ**です。足し算も引き算もありません。",
+            "`<=2026-03-31` と `>=2026-04-01` が隣り合っていることを検査が知っています。内部で日付を通算日として持っているからで、`20260331` のような数で持つと月末と翌月初のあいだに実在しない隙間ができ、偽のエラーが出ます。",
+            "出力が金額ではないので、`round` は要りません。",
+        ],
+        "A date decides which period it is",
+        "The smallest example there is: one input, one output. The rows are adjacent date ranges laid end to end with nothing between them.",
+        [
+            "A date has **comparison and range, and nothing else** — no addition, no subtraction.",
+            "The checker knows `<=2026-03-31` and `>=2026-04-01` are adjacent, because a date is held internally as a day number. Held as `20260331` instead, there would be a phantom gap between the end of one month and the start of the next, and the completeness check would report a hole that is not there.",
+            "The output is not a number, so no `round` is required.",
+        ],
+    ),
+    (
+        "送料.rule",
+        "条件が三つ絡む送料",
+        "設計のスケッチをそのまま規則にしたものです。真偽の定義を表の列に置く形、率の出力、`default` の印、`policy first` の隠れが一度に出てきます。",
+        [
+            "`define … : bool` は**表の列に置ける真偽の名前**です。条件に名前が付くので、表のほうが読みやすくなります。",
+            "`default` は「この値に専用の行は要らない」という宣言です。付けないと「どの行にも現れません」と警告されます。",
+            "`policy first` なので、上の行が下の行を隠します。それが階段として自然な形かどうかを、検査が三つに分けて数えます。",
+        ],
+        "A shipping fee with three conditions crossing",
+        "The design sketch written out as a rule. A boolean definition used as a column, a rate output, the `default` mark and `policy first` shadowing all appear at once.",
+        [
+            "`define … : bool` is **a named boolean you can put in a column**. Naming the condition is what makes the table readable.",
+            "`default` declares that a value needs no row of its own. Without it you get \"appears in no row\".",
+            "Under `policy first` an earlier row hides a later one. The checker sorts those into three kinds and counts them, so the staircase does not drown the one pair that matters.",
+        ],
+    ),
+    (
+        "ゆうパック運賃.rule",
+        "実在の運賃表を写す",
+        "日本郵便の基本運賃表（東京発）です。47 都道府県 × 7 サイズ = 329 通りを、6 つのグループで 42 行に畳んでいます。**このツールの最初の実用価値がここにあります** — 県をひとつ書き落とすと、走らせる前に、その県を名指しして止まります。",
+        [
+            "`group` は列挙の一部に名前を付けたものです。検査のときは必ずもとの値に展開されるので、**グループの分け方が 47 県の過不足ない分割になっているか**まで検査されます。",
+            "`import std/都道府県` で 47 値が入ります（ASCII の別名つき）。",
+            "行が 42 本あっても、`policy unique` なので**並べ替えても意味が変わらない**ことが証明されています。",
+        ],
+        "Transcribing a real published tariff",
+        "Japan Post's base tariff, shipping from Tokyo. 47 prefectures × 7 sizes = 329 combinations, folded into 42 rows by six groups. **This is where the tool first pays for itself**: drop one prefecture and it stops before anything runs, naming that prefecture.",
+        [
+            "A `group` names part of an enum. It is always expanded back to the values for checking, so **whether the grouping is an exact partition of the 47** is checked too.",
+            "`import std/都道府県` brings the 47 values in, each with an ASCII alias.",
+            "42 rows, and `policy unique` still proves **reordering them cannot change the answer**.",
+        ],
+    ),
+    (
+        "クーポン一枚.rule",
+        "出力が二つある",
+        "クーポン 1 枚について、使えるかどうか（可否）と、いくら引くか（素割引）を同時に返します。重ね掛けの順序と反復は呼び出し側の仕事です。",
+        [
+            "**出力は二つ以上書けます。** 二つの表が一つずつ埋め、どちらにも `round` が別々に効きます。",
+            "出力のセルには**値か名前を一つ**だけ書けます。計算は `define` に出します — 表には分岐だけを残すためです。",
+            "一つ前の表の出力（`可否`）を、次の表の列に使っています。上から下への一方通行なので、依存はいつでも目で追えます。",
+        ],
+        "Two outputs at once",
+        "For one coupon: whether it applies, and how much it takes off. Stacking several coupons — the order and the loop — stays with the caller.",
+        [
+            "**There can be two or more outputs.** Two tables fill one each, and each carries its own `round`.",
+            "An output cell holds **one value or one name**. The arithmetic moves to a `define`, so the table keeps the branching and nothing else.",
+            "The first table's output (`可否`) is a column of the second. Items run one way, top to bottom, so the dependencies are always readable off the page.",
+        ],
+    ),
+    (
+        "クーポン割引.rule",
+        "可否と金額を一度に",
+        "同じ題材を別の形で書いたものです。導出（`derive`）で残額を出し、それを表の列に置いています。",
+        [
+            "`derive` は**入力どうしの足し算・引き算だけ**でできた、名前の付いた金額です。数量のまま表の列に置ける唯一の途中の値で、`range` の宣言が要ります。",
+            "宣言した範囲が、実際に起こりうる値を含んでいないと E112 で止まります。範囲は検査が使う「全体集合」だからです。",
+        ],
+        "Eligibility and amount together",
+        "The same subject in another shape: a `derive` computes what is left, and that becomes a column.",
+        [
+            "A `derive` is a named amount built from **additions and subtractions of inputs only**. It is the one intermediate value that can sit in a column as a quantity, and it must declare a `range`.",
+            "If the declared range does not contain the values that can actually occur, E112 stops it — the range is the universe the checks reason over.",
+        ],
+    ),
+    (
+        "クーポン併用.rule",
+        "検査が決められなかったとき",
+        "二つの導出が同じ入力を共有しているため、二つの行が同時に当てはまりうるかを検査が決められません。黙って通すことも、嘘のエラーを出すこともしません。**警告を出し、生成コードに実行時のガードを入れます。**",
+        [
+            "W114 は「証明できなかった」という警告です。重なりが**ある**とも**ない**とも言っていません。",
+            "生成コードには、万一その条件に当てはまる入力が来たとき、黙って先の行を選ばずにエラーを返すガードが入ります。**このガードが動いたなら、重なりは本当にあったということです。**",
+            "静的に決められないことを実行時に持ち越す唯一の場所です。",
+        ],
+        "When the checker could not decide",
+        "Two derived values share an input, so whether two rows can fire together is not decidable here. The tool neither waves it through nor invents an error: **it warns, and puts a runtime guard in the generated code.**",
+        [
+            "W114 says \"not proved\". It does not say the overlap exists, and it does not say it doesn't.",
+            "The generated code refuses to silently pick the earlier row if such an input ever arrives; it raises instead. **If that guard ever fires, the overlap was real.**",
+            "This is the only place where something undecided statically is carried into runtime.",
+        ],
+    ),
+    (
+        "適用順序.rule",
+        "答えが順序",
+        "クーポン二枚のどちらを先に適用するかを返します。並べ替えそのものは呼び出し側がしますが、**比較の基準は規則の中にあります** — そこが承認の対象だからです。",
+        [
+            "返せる答えは金額・可否・区分・順序の四種で、これはその四つめです。",
+            "入力は「二枚ぶんの属性」で、出力は `先` か `後`。一度の判定に収まる形にしてあります。",
+            "日付どうしの比較が出てきます。",
+        ],
+        "The answer is an order",
+        "Which of two coupons applies first. The sorting itself is the caller's loop, but **the comparison lives in the rule**, because that is the part someone has to approve.",
+        [
+            "Of the four kinds of answer — amount, yes/no, class, order — this is the fourth.",
+            "The inputs are the attributes of both coupons and the output is \"first\" or \"second\", which keeps it to one decision.",
+            "Two dates get compared here.",
+        ],
+    ),
+    (
+        "値引の充当.rule",
+        "按分を、一件ずつに割る",
+        "一括の値引きを明細に配り切ります。**1 明細 = 1 回の判定**にしてあり、反復と残額の持ち回りは呼び出し側です。呼ぶ側は明細を順に回して残りを引くだけで、**合計は構成上ぴったり合います**（2,000 通りの明細で確かめました）。",
+        [
+            "「配り方」を決めるのが規則、「配って回る」のが呼び出し側、という切り分けです。",
+            "`min` が使えます。上限で頭打ちにする形は、これで一行に収まります。",
+            "定価の比で割り付ける按分は、この形ではなく `allocate` で書きます（下の「比で配る按分」）。",
+        ],
+        "Apportioning, one line at a time",
+        "Spreading one discount across the lines of an order. **One line is one decision**; the loop and the running remainder stay with the caller, who walks the lines subtracting as it goes. **The total comes out exact by construction** (checked over 2,000 generated sets of lines).",
+        [
+            "The rule decides how to allocate; the caller does the walking.",
+            "`min` is available, so \"up to this line's own value\" fits on one line.",
+            "Splitting by ratio is the other shape, written with `allocate` — \"Apportioning by ratio\" below.",
+        ],
+    ),
+    (
+        "決済手数料.rule",
+        "1% より細かい率",
+        "契約ごとに決まる手数料率から、取引一件の手数料を出します。率の刻みが 0.1% なので、`0.5%` のような値を書けます。",
+        [
+            "`rate[step 0.1%]` は「実行時の値は 0.1% の整数倍」という宣言です。0.5% は 5 刻み、10% は 100 刻みとして運ばれます。",
+            "**刻みの間の値は書けません。** `rate[step 0.1%]` の列に `0.05%` と書くと E114 で止まります。黙って近い刻みに寄せると、表で読める境界と生成コードの境界が食い違うからです。",
+            "率のまま計算して、最後に一度だけ丸めます。途中で丸めないのは、丸め方が業務の判断だからです。",
+        ],
+        "A rate finer than one percent",
+        "A per-contract fee rate turned into the fee on one transaction. The rate moves in tenths of a percent, so `0.5%` is a value you can write.",
+        [
+            "`rate[step 0.1%]` declares that at runtime the value is a whole number of tenths of a percent: 0.5% travels as 5, 10% as 100.",
+            "**A value between two steps cannot be written.** `0.05%` in that column stops at E114 — quietly moving it to the nearest step would put a different boundary in the code than the one on the page.",
+            "The arithmetic stays a rate until the end, where it is rounded exactly once, because where to round is a business decision.",
+        ],
+    ),
+    (
+        "評価ランク.rule",
+        "点数を合算して、達成率でランクを付ける",
+        "お金がまったく出てこない例です。四つの評価項目を重み付きで足し、満点に対する達成率でランクを決めます。「表で書かれてはいないが、書き出せば表と少しの式で足りる」ルールの典型です。",
+        [
+            "`derive` は**入力どうしの足し算・引き算と整数倍**でできた名前です。重み付きの合計はこれで書けます。",
+            "`define 達成率 : rate = 合計点 ÷ 50` と宣言すると、表のセルに `>=90%` と**割合のまま**書けます。無次元の値を率と呼ぶか数と呼ぶかは、宣言する側が決めます。",
+            "**実行時に割り算は起きません。** `>=90%` は生成コードでは `合計点 >= 45` になります。満点が定数なので、境界が定数に畳めるからです。逆に**満点が入力だと書けません** — 変数で割ることになり、E115 で止まります（割合そのものを `rate` の入力で受け取ってください）。",
+        ],
+        "Scores added up, then ranked by how much of the total they reach",
+        "No money anywhere in this one. Four scored criteria are added with weights, and the rank comes from how much of the maximum the total reaches. This is the shape of rule that is *not* written as a table today but becomes one the moment somebody writes it down.",
+        [
+            "A `derive` is a name for **additions, subtractions and integer multiples of the inputs**, which is exactly what a weighted total is.",
+            "Declaring `define 達成率 : rate = 合計点 ÷ 50` lets the cells say `>=90%` — **the threshold stays a proportion on the page**. Whether a dimensionless value is called a rate or a number is the declaration's to say.",
+            "**No division happens at runtime.** `>=90%` compiles to `合計点 >= 45`, because a constant maximum folds the boundary into a constant. A maximum that is an *input* cannot be written: that is division by a variable, and E115 stops it — take the proportion itself as a `rate` input instead.",
+        ],
+    ),
+    (
+        "ポイント付与.rule",
+        "単位のない数を返す",
+        "100 円につき 1 点。金額を金額で割ると単位が消えて、`number`（単位のない整数）になります。",
+        [
+            "`number` は件数・日数・点数のような、**単位を持たない整数**のための型です。",
+            "`税込金額 ÷ 100円` の割り算は**整数を割りません**。内部の刻みを 100 倍するだけなので、1050 円は 10.5 点のまま最後まで運ばれ、`round down(1)` が一度だけ 10 点に落とします。Python の `//` や Go の `/` の切り捨ての向きの違いが入り込む余地がありません。",
+            "割り算は**定数でだけ**書けます。割る数が業務データなら、それは率か定数表として表に現れるはずです。",
+        ],
+        "Returning a number with no unit",
+        "One point per 100 yen. Dividing money by money cancels the unit and leaves a `number` — a whole number carrying none.",
+        [
+            "`number` is the type for **counts, days and scores**: whole numbers with no unit.",
+            "`税込金額 ÷ 100円` **does not divide the integer**. It multiplies the internal step by 100, so 1050 yen stays 10.5 points all the way to the end, where `round down(1)` makes it 10 exactly once. Python's `//` and Go's `/` truncate in different directions; neither gets a say here.",
+            "Division is allowed **by a constant only**. If the divisor is business data, it belongs in the table as a rate or a constant column.",
+        ],
+    ),
+    (
+        "会員特典.rule",
+        "表を三段重ねて、出力を二つ返す",
+        "重量から重さ区分、重さ区分と会員区分から帯、帯と支払額から送料と倍率。前の表が出した値が、そのまま次の表の列になります。返るのは請求額とポイントの二つです。",
+        [
+            "**前の表の出力は、後の表の列にそのまま書けます。** 段数に上限はありません（検査の予算を超えたら E109 で止まります）。`rulec check` が落ちたときの「当てはまった行」も、`表 重さ判定 行2 / 表 帯判定 行4 / 表 送料表 行4` と段の数だけ出ます。",
+            "**一つの表が出力列を複数持てます。** `送料表` は `送料` と `倍率` を同時に出し、下の `define` がその率を使います。率の刻み（`step 10%`）は列に入っても保たれるので、`基本点 × 倍率` は最後に一度だけ丸められます。",
+            "**`derive` が列になります。** `支払額 = 商品合計 − 値引` を宣言してあるので、「値引き後の金額で判定する」が一本の式ではなく `送料表` の一つの列になります。",
+            "**`result` が組み立てるのは最初の出力だけです**（E015）。二つ目からは、その出力と同じ名前の `define` から取ります — ここでは `define 付与点`。`result` を二本書くと E016 で止まります。",
+        ],
+        "Three tables stacked, two outputs returned",
+        "Weight gives a weight class, the class and the membership give a tier, and the tier with the amount payable gives shipping and a multiplier. What one table produces is a column of the next. Two things come back: the amount charged and the points.",
+        [
+            "**A table's output column is a column of any later table.** There is no limit on the depth (past the check's budget it stops at E109). When `rulec check` fails it names the row that fired in each of them: `table 重さ判定 row 2 / table 帯判定 row 4 / table 送料表 row 4`.",
+            "**One table may produce several output columns.** `送料表` produces `送料` and `倍率` at once, and the `define` below it uses that rate. A rate keeps its step (`step 10%`) through the column, so `基本点 × 倍率` is rounded exactly once, at the end.",
+            "**A `derive` can be a column.** Declaring `支払額 = 商品合計 - 値引` turns judging on the amount after the discount into one column of `送料表` rather than one bare line of arithmetic.",
+            "**`result` assembles the first output and nothing else** (E015). The second and later ones are taken from a `define` of the same name - `define 付与点` here. A second `result` line stops at E016.",
+        ],
+    ),
+    (
+        "全国運賃.rule",
+        "並びを順にたどって、一つの答えに畳む",
+        "呼び出し側が運賃行を何件か渡し、規則が上から順に見ていきます。一件ごとの判定は表がして、`fold` がその判定ごとに「次へ」「打ち切り」「これを採る」「持ち越す」を書き分けます。**件数の決まっていない入力を受けられる、ただ一つの形**です。",
+        [
+            "**`elements` が一件ぶんの欄を宣言します。** 書き方は `inputs` と同じで、範囲も単位もそのまま効きます。呼び出し側は、この欄のそろった要素を何件でも渡します。",
+            "**表の検査はいままでどおりです。** 一件の要素が一件の判定なので、完全性も重なりも単位も、これまでと同じように証明されます。上の表は `採用区分` の四つの値を過不足なく出します。",
+            "**`fold` は、判定ごとの行き先を書くところです。** `next`（次へ）、`stop with <値>`（そこで打ち切る）、`take_unique <値>`（一件だけ採る。二件当たれば実行時にエラー）、`keep_max <値> by <鍵>`（鍵がいちばん大きいものを持ち越す）。行き先の無い判定があれば E024 で止まります。",
+            "**要素ゼロ件のときと、最後まで見終えたときの答えは必須です**（E022・E023）。空の並びは必ず来ますし、「持ち越していたものを返す」も書いて初めて決まります（`exhausted -> held`）。",
+            "**例は `sequence` に名前を付けて指します。** 例のセルに書けるのは値一つなので、並びのほうに名前を付けます。行がゼロ本の `sequence` が、要素ゼロ件の例です。",
+            "**SQL と NumPy には生成しません。** 一つの問い合わせには、行から行へ値を持ち越して途中で打ち切る場所がないからです。NumPy のほうは、要素から要素へ状態を運ぶ走査が列の演算ではないからです。ほかの対象には出て、参照評価器と一致することを毎回確かめています。",
+        ],
+        "A sequence walked into one answer",
+        "The caller passes the rows of a tariff sheet and the rule walks them in order. A table judges one element at a time, and `fold` says what each verdict does: go on, halt, take this one, hold the best so far. It is **the one shape that takes a number of things that is not fixed**.",
+        [
+            "**`elements` declares what one element carries.** The fields are declared exactly like `inputs`, ranges and units included, and the caller passes any number of elements with those fields filled in.",
+            "**The table's own checks are unchanged.** One element is one case, so completeness, overlap and units are proved over it as they always were: the four rows above cover `採用区分` exactly.",
+            "**The fold gives every verdict somewhere to go** — `next`, `stop with <value>`, `take_unique <value>` (a second element that also takes is a run-time error), `keep_max <value> by <key>`. A verdict with no arm stops at E024.",
+            "**The answer for no elements, and for a walk that reached the end, are both required** (E022, E023). An empty sequence always turns up, and answering with what is held is a choice made by writing it (`exhausted -> held`).",
+            "**An example names a `sequence`.** A cell holds one value, so the list is written under a name and the example points at it; a `sequence` with no rows is the example for a sequence with nothing in it.",
+            "**SQL and NumPy are the two targets that do not get it.** One query has no place to carry a value from row to row and stop partway, and a walk that carries state from element to element is not a column operation. Every other target is generated, and agrees with the reference evaluator on every commit.",
+        ],
+    ),
+    (
+        "納入先照合.rule",
+        "並びを数えて、その数で判定する",
+        "請求書の宛名を、取引先台帳の候補と一件ずつ照合します。判定するのは表で、`count` がその判定に当てはまった件数を数え、**次の表がその数で手続きを決めます**。「一件なら自動、複数なら目視」を、人が数えてから渡すのではなく、規則の中で決められます。",
+        [
+            "**`count` は歩いたあとに残る数です。** `count 一致数(hits) over 候補 where 照合結果 = 一致` は、要素ごとの判定が `一致` だった件数。そこから先は `number` の値なので、表の列に置けます。",
+            "**数を判定に変えるのは、ふつうの表です。** `0` / `1` / `>=2` の境界に穴や重なりがあれば、いつもどおり検査が止めます。数えることと、数から決めることが、別々に検査に掛かります。",
+            "**範囲は二つの意味を持ちます**（`range >=0 <=50`）。完全性の検査が見る全体集合であり、**並びの長さの上限**でもあります。51 件渡すと、生成コードが入口で断ります — 範囲外の数を断るのと同じことです。",
+            "**数えるのは `count`、足すのは `sum` です**（下の「明細を足し上げる」）。平均は書けません——件数で割るのは変数で割ることなので、呼び出す手前で出します。",
+            "**`fold` と `count` は一緒に書けません**（E031）。どちらも同じ並びの終わり方で、`fold` は途中で打ち切れるからです。",
+        ],
+        "Counting a sequence, and deciding from the count",
+        "An invoice's name is matched against the supplier ledger, one candidate at a time. A table judges each candidate, `count` counts the ones it called a match, and **the next table decides what to do with that number**. \"One means automatic, more than one means look at it\" is decided inside the rule rather than by whoever counted before calling it.",
+        [
+            "**A count is what the walk leaves behind.** `count 一致数(hits) over 候補 where 照合結果 = 一致` is how many elements the per-element table judged `一致`. From there it is a `number`, so it can be a column.",
+            "**What turns the number into a decision is an ordinary table.** A gap or an overlap in the `0` / `1` / `>=2` boundaries stops the check as it always would. Counting and deciding are checked separately.",
+            "**The range says two things** (`range >=0 <=50`): the universe the completeness check quantifies over, and **the cap on the sequence**. Pass 51 candidates and the generated code refuses at the door — the same answer a number outside its range gets.",
+            "**A count counts and a `sum` adds one column up** — \"Adding the lines up\" below. An average does not follow: dividing by the count is dividing by a variable, so compute one before the call.",
+            "**A `fold` and a `count` cannot share a rule** (E031): two endings for the same walk, and a fold may stop partway.",
+        ],
+    ),
+    (
+        "買物かごの送料.rule",
+        "明細を足し上げる",
+        "「合計 5,000 円以上で送料無料」。何件あるか分からない明細を歩いて金額を足し、その合計で送料を決めます。`count` が件数を残すのと同じ場所に、`sum` は額を残します。",
+        [
+            "**`sum 合計(total) over 明細 of 金額` が残すのは一つの額です。** そこから先はふつうの列なので、`>=5000円` が軸の境目になり、完全性も重なりもいつもどおり止まります。",
+            "**足す列は負になれません**（E029）。走っている途中の合計が上がる一方だから、宣言範囲を出た瞬間に入口が断れて、長さの分からない並びについても int64 の主張が本当になります。差を取りたいなら、非負の列を二つ足して引きます。",
+            "**平均は書けません。** 件数で割るのは変数で割ることだからです（E115）。呼び出す手前で出して、値として渡します。",
+        ],
+        "Adding the lines up",
+        "\"Free shipping over 5,000 yen.\" The rule walks however many lines it is given, adds the amounts, and decides the fee from the total. Where `count` leaves a number behind, `sum` leaves an amount.",
+        [
+            "**`sum 合計(total) over 明細 of 金額` leaves one amount behind.** From there it is an ordinary column, so `>=5000円` becomes a boundary and completeness and overlap are checked as they always are.",
+            "**The summed column cannot go negative** (E029). The running total then only rises, so the entry guard can refuse the moment it leaves the declared range — which is what keeps the int64 claim true of a sequence whose length nothing caps. For a difference, sum two non-negative columns and subtract.",
+            "**An average does not follow**: dividing by the count is dividing by a variable (E115). Work it out before the call and pass it in.",
+        ],
+    ),
+    (
+        "品番の扱い.rule",
+        "品番の頭で振り分ける",
+        "SKU の前置きで冷凍・冷蔵・常温を決めます。文字列の列に書けるのは前方一致だけで、それ以外は書けません。",
+        [
+            "**前置きの集合は有限に切れます。** 文字列の全体は無限でも、その列のセルが名指す前置きから作られる分割は有限なので、§6.2 の仕組みがそのまま動きます — 穴があれば、それを起こす文字列がそのまま返ってきます。",
+            "**比べるのはバイトです。** 大文字小文字も Unicode 正規化もしません。そうしないと 12 言語が同じ答えを返しません。",
+            "**等号も集合も書けません**（E110）。値が数えられるなら `enum` のほうが向いています。部分一致と正規表現はありません。",
+        ],
+        "Sorting by the head of a part number",
+        "The prefix of an SKU decides frozen, chilled or ambient. A `string` column takes a prefix test and nothing else.",
+        [
+            "**A set of prefixes cuts the strings into finitely many classes.** The strings themselves are unbounded, but the partition the column's own cells name is finite, so §6.2's machinery works unchanged — and a witness for a hole comes back as a string you can paste.",
+            "**Comparison is by bytes.** No case folding and no Unicode normalisation: without that, twelve languages would not give one answer.",
+            "**Equality and sets are refused** (E110). Where the values can be enumerated an `enum` fits better. No substring match, no regular expressions.",
+        ],
+    ),
+    (
+        "比例配分.rule",
+        "比で配る按分",
+        "値引き総額を、明細に定価の比で割り付けます。上の「一件ずつに割る」が順に充てていく形なら、こちらは**比で配る**形です。一行ぶんは「ここまでの配分」から「直前までの配分」を引いた差になります。",
+        [
+            "**`allocate(配る額, 累計, 全体)` は、定数でないもので割れる唯一の場所です。** 答えは `配る額 × 累計 ÷ 全体` を下に丸めた値で、単位の整数になります。",
+            "**差にすると、配った合計が総額にぴったり一致します。** 隣り合う行で同じ値が足されて引かれるので、端数は最後の行に寄ります。`proofs/` に定理があります（`runTotal_exact`）。",
+            "**`constraint 累計 <= 全体` が要ります**（E117）。これが無いと配る分が配る額を超えることがあり、区間も二つの範囲の積になってしまいます。制約は二行に分けて書いても、つながって効きます。",
+        ],
+        "Apportioning by ratio",
+        "One discount spread over the lines of an order in the ratio of their list prices. Where \"one line at a time\" above fills each line in turn, this one **splits by ratio**: a line's share is the share up to it minus the share up to the line before.",
+        [
+            "**`allocate(<amount>, <running total>, <whole>)` is the one place a rule divides by something that is not a constant.** The answer is `<amount> × <running total> ÷ <whole>` rounded down to a whole unit.",
+            "**Taking the difference makes the parts add up to the amount exactly.** Neighbouring lines add and subtract the same value, so the odd yen lands on the last line. `proofs/` states and proves it (`runTotal_exact`).",
+            "**A `constraint` that the running total stays within the whole is required** (E117). Without it a share can exceed the amount being handed out, and the interval becomes the product of two ranges. Chains count, so it can be written as two lines.",
+        ],
+    ),
+    (
+        "注文の送料.rule",
+        "呼び出し側の注文から入力を取る（JSON Schema）",
+        "注文オブジェクトから送料を決めます。呼び出し側はもう JSON Schema で注文の形を決めているので、それを `shape` で借り、入力ごとにその中のどこから来るかを `from` で書きます。表そのものは、ほかの例と同じ平たい入力の表です。",
+        [
+            "**`from` の形は四つです。** フィールドの値（`from 注文.shipping.zone`）、要素のどれかが当てはまるか（`from any 注文.lines where chilled = true`）、全部が当てはまるか（`from all …`）、何件あるか（`from count 注文.lines`）。結合や量化のネストは書けません。",
+            "**`rulec gen` は `order_shipping_from(order)` も書きます。** 注文オブジェクトをそのまま渡すと、入力を取り出して規則を呼びます。この関数が出るのは、読み込んだ JSON を連想配列のまま使うことの多い Python・TypeScript・JavaScript・Ruby・PHP です。Go・Swift・Java・Rust・SQL・NumPy・Wasm には出ません。",
+            "**パスは `rulec check` のたびに契約に照らされます。** 契約に無いフィールドを名指しすれば E121 で、どこまで届いたかと、そこにあったフィールドを言います。型が合わなければ E120 です。",
+            "**契約の検証も、入力の宣言と突き合わせます。** 契約は `lines` を 1〜50 件（`minItems`・`maxItems`）に限っていて、規則の `明細数` の `range >=1 <=50` と同じです。`maxItems` を消すと、51 件の注文は契約を通るのに規則は断るので、E122 で止まります。`fix.text` は契約に書き足すキーワード（`\"minItems\": 1, \"maxItems\": 50`）そのものです。",
+            "**表の検査には触れません。** 射影から出てくるのはただのスカラーの入力で、完全性も重なりも、`from` が無いときと同じに決まります。",
+        ],
+        "Inputs taken from the caller's order (JSON Schema)",
+        "The shipping fee, decided from an order object. The caller already describes its orders with a JSON Schema, so the rule borrows it with `shape` and says, for each input, where in it the value stands, with `from`. The table itself is a table of flat inputs like any other.",
+        [
+            "**`from` comes in four shapes.** The value of a field (`from 注文.shipping.zone`), whether some element passes a test (`from any 注文.lines where chilled = true`), whether every one does (`from all …`), and how many there are (`from count 注文.lines`). A join or a nested quantifier cannot be written.",
+            "**`rulec gen` also writes `order_shipping_from(order)`.** Hand it the order object as it is, and it reads the inputs out and calls the rule. It is written for Python, TypeScript, JavaScript, Ruby and PHP, where parsed JSON is usually used as it comes, as a plain map; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.",
+            "**Every `rulec check` holds the paths to the contract.** A field the contract does not have is E121, which says how far the path got and which fields were there; a type that does not fit is E120.",
+            "**The contract's validation is held to the inputs' declarations too.** The contract keeps `lines` to 1 to 50 elements (`minItems`, `maxItems`), the same as the `range >=1 <=50` of `明細数`. Take `maxItems` away and an order of 51 lines passes the contract but not the rule, which stops at E122; `fix.text` is the keyword to write back into the contract (`\"minItems\": 1, \"maxItems\": 50`).",
+            "**No check of the table changes.** What comes out of a projection is a scalar input like any other, and completeness and overlap are decided as they would be without `from`.",
+        ],
+    ),
+    (
+        "出荷の送料.rule",
+        "Connect のリクエストから入力を取る（.proto と Protovalidate）",
+        "出荷のリクエストから送料を決めます。リクエストの形は `.proto` で決まっていて、フィールドには Protovalidate の注釈が付いています。規則はその `.proto` を借り、入力の宣言を注釈とそろえてあります。",
+        [
+            "**生成する `shipment_fee_from` は、protojson の JSON をそのまま読みます。** フィールドは lowerCamelCase の名前（`declaredValueJpy`）でも `.proto` に書いた名前（`declared_value_jpy`）でも読み、省かれたフィールドは proto の既定値として読みます。int64 は文字列で届いても、数として読みます。",
+            "**`optional` のフィールドは `T?` の入力で受けます。** `delivery_window` は送られないことがあるので `時間帯?` にして、無いとき（`none`）の行を表に書いています。",
+            "**列挙のフィールドは、`where` で値の名前を比べます。** `handling` は `.proto` の列挙で、protojson は値の名前（`HANDLING_FRAGILE`）を運びます。番号 0 の値（`HANDLING_STANDARD`）のときはフィールドごと省かれますが、そのときも `HANDLING_STANDARD` として読みます。",
+            "**注釈と宣言がそろっているので、`check` は通ります。** `destination` から `required = true` を外すと、リクエストは `destination` を省けるようになり、そのとき `region` は `\"\"` として届きます。`地域` は `\"\"` を受け付けないので E122 で止まり、`fix.text` は `[(buf.validate.field).required = true]` です。",
+        ],
+        "Inputs taken from a Connect request (.proto and Protovalidate)",
+        "The shipping fee, decided from a shipment request. The request is described by a `.proto`, and its fields carry Protovalidate's rules. The rule borrows that `.proto`, and its inputs are declared to agree with the rules.",
+        [
+            "**The generated `shipment_fee_from` reads the JSON protojson writes, as it is.** A field is read under its lowerCamelCase name (`declaredValueJpy`) or under the name the `.proto` gives it (`declared_value_jpy`); a field left out is read as its proto default; an int64 that arrives as a string is read as the number it is.",
+            "**An `optional` field is taken by an optional input.** `delivery_window` may not be sent, so the input is `時間帯?`, and the table has a row for when it is missing (`none`).",
+            "**A `where` on an enum field compares the value's name.** `handling` is an enum of the `.proto`, and protojson carries the value's name (`HANDLING_FRAGILE`). At the value numbered 0 (`HANDLING_STANDARD`) the field is left out altogether, and it is read as `HANDLING_STANDARD` all the same.",
+            "**The rules and the declarations agree, so `check` passes.** Take `required = true` off `destination` and a request may leave it out, in which case `region` arrives as `\"\"`. `地域` does not take `\"\"`, so the check stops at E122, with `[(buf.validate.field).required = true]` as `fix.text`.",
+        ],
+    ),
+    (
+        "速達の見積.rule",
+        "契約がフィールドのあいだに置く条件（CEL）",
+        "見積のリクエストから運賃を決めます。リクエストを検証する `.proto` は、Protovalidate の CEL で二つのことを約束しています。速達は 5kg まで、申告額は補償額を超えない、の二つです。規則はその約束に乗って書いてあります。",
+        [
+            "**`constraint 申告額 <= 補償額` は、契約が約束しているから書けます。** 補償料の表には、申告額が補償額を超える行がありません。制約があるので、完全性の検査はその組み合わせに行を求めません。契約の CEL（`this.declared_jpy <= this.cover_jpy`）が同じことを約束しているので、`check` は通ります。制約を `<` にすると、契約は申告額と補償額が等しいリクエストを通すので E123 で止まり、そのリクエストを例に出します。",
+            "**5kg を超える速達の行は書いていません。** 契約の `!this.express || this.weight_g <= 5000` が、そのリクエストを通さないからです。書き足すと、その行は W124 になります。セルを一つずつ見れば契約の通す値なのに、組み合わせとしては通らない行だからです。",
+            "**CEL は、読める部分を読みます。** 整数の一次式の比較、`in`、`size()`、`has()`、`&&`・`||`・`!`・`? :` です。剰余や文字列の関数のように読めない部分は真として扱うので、見逃すことはありません。",
+        ],
+        "Conditions a contract places across its fields (CEL)",
+        "The fee, decided from a quote request. The `.proto` the request is validated against promises two things in Protovalidate's CEL: express takes a parcel of up to 5 kg, and the declared value never exceeds the cover. The rule is written on those promises.",
+        [
+            "**`constraint 申告額 <= 補償額` can be written because the contract promises it.** The insurance table has no row where the declared value exceeds the cover: with the constraint, the completeness check does not ask for one. The contract's CEL (`this.declared_jpy <= this.cover_jpy`) promises the same, so `check` passes. Make the constraint `<` and the contract lets through a request whose declared value equals the cover: the check stops at E123, with that request as the example.",
+            "**There is no row for express above 5 kg.** The contract's `!this.express || this.weight_g <= 5000` never lets such a request through. Add one and it is W124: each cell alone asks for values the contract lets through, and the combination never passes.",
+            "**Of CEL, what can be read is read.** Comparisons of whole-number sums, `in`, `size()`, `has()`, `&&`, `||`, `!` and `? :`. A part that cannot be read, such as a remainder or a string function, is taken as true, so nothing is missed.",
+        ],
+    ),
+    (
+        "注文の状態.rule",
+        "続いていく注文の、一回のイベント（machine）",
+        "通販の注文が、入金・出荷・配達・取消依頼のイベントでどの状態に移り、いくら返金するかを決めます。状態は呼び出す側が持ちます（データベースの注文の行など）。規則は今の状態と一つのイベントを受け取って次の状態を返す純関数のままで、`machine` の節が、その関数を何回続けて呼んでも崩れないことを言います。",
+        [
+            "**意味として新しいのは `carry 状態 -> 次の状態` の一行だけです。** この呼び出しが返した `次の状態` を、次の呼び出しでは `状態` として渡す、という宣言です。表はふつうの表で、完全性の検査が「出荷のあとに取消依頼が来たら」の行を求めます。出力のセルの `状態` は、状態をそのまま返すという意味です。",
+            "**`held 支払額` は、呼び出す側が守る約束です。** 一つの注文は、どの呼び出しにも同じ支払額を渡します。`constraint` が起きない組み合わせを言うのと同じように、主張はこの約束を守る呼び出しの並びについてのものになり、途中で支払額を変える並びが反例に出ることはありません。",
+            "**`final`・`never`・`once` は、呼び出しのあらゆる並びについての主張です。** 最後の行を、取消のあとに届いた入金で注文を `入金済` に戻す行に書き換えると、`check` は三つのエラーで止まります。終わったはずの `取消` から出ていく（E124）、取消依頼・入金・出荷の三回で `取消` のあとに `出荷済` に着く（E126）、四回の呼び出しで二度返金する（E127）。どれも、崩す最短の呼び出しの並びつきです。一行ずつ読めば、どの行ももっともらしく見えます。",
+            "**`scenario` は、何回かの呼び出しにわたる例です。** 持ち越す `状態` の列はありません。一行目は `initial` の `受付` から始まり、二行目からは一つ前が答えた状態から始まります。",
+            "**生成コードには、始まりの状態と、終わったかどうかの判定が付きます**（Python なら `INITIAL` と `is_final`）。ベクタには呼び出しの並びが加わり、`rulec test` は各言語に、自分が返した状態をそのまま次の呼び出しへ渡させて照合します。",
+            "**改定の差分は、処理中の案件の言葉で出ます。** 二つの版の `rulec diff` は、違う答えを返す最短の呼び出しの並びと、改定のあとで終わりの状態に行けなくなる状態を言います。`replay` は、過去のログを `tag` ごとに一つの案件として、新しい版に通し直します。",
+        ],
+        "One event in an order that goes on (machine)",
+        "Where an online order moves on an event — payment, shipment, delivery, a cancel request — and how much is refunded. The state lives with the caller, in the order's row of a database. The rule stays a pure function that takes the state and one event and answers the next state; the `machine` section says that calling it again and again cannot break.",
+        [
+            "**`carry 状態 -> 次の状態` is the one line with new meaning.** It declares that the `次の状態` a call answers is passed as `状態` to the next one. The table is an ordinary table, and completeness asks for the row about a cancel request that arrives after shipment. `状態` in an output cell hands the state back as it was.",
+            "**`held 支払額` is a promise the caller keeps.** One order passes the same paid amount on every call. As `constraint` says which combinations do not happen, the claims are then about the sequences of calls that keep the promise, and one that changes the amount halfway is never offered as a counterexample.",
+            "**`final`, `never` and `once` are claims about every sequence of calls.** Rewrite the last row so that a payment arriving after cancellation puts the order back to `入金済`, and `check` stops with three errors: the ended `取消` has a way out (E124), a cancel request, a payment and a shipment reach `出荷済` after `取消` (E126), and four calls refund twice (E127) — each with the shortest sequence of calls that breaks it. Read one row at a time, every row looks reasonable.",
+            "**A `scenario` is an example that runs for several calls.** It has no column for the carried `状態`: the first call starts in `initial`, `受付`, and each later one where the call before it ended.",
+            "**The generated code gets the initial state and a test for a final one** (`INITIAL` and `is_final` in Python). The vectors get sequences of calls, and `rulec test` has each language hand the state it answered to its own next call.",
+            "**A revision is compared in terms of the cases in progress.** `rulec diff` between two versions gives the shortest sequence of calls the two answer differently, and the states from which a case can no longer finish. `replay` plays a log's records through the new version one case at a time, a case being the records that share a `tag`.",
+        ],
+    ),
+    (
+        "payment_intent.rule",
+        "Stripe の PaymentIntent の状態（machine）",
+        "Stripe のドキュメントから、PaymentIntent の状態が confirm・認証・capture・cancel と、あとで届く支払いの結果でどう移るかを書き写したものです。事業者の API の仕様を写した例で、状態は Stripe の七つをそのまま使っています。",
+        [
+            "**ドキュメントが決めていない組み合わせが、行として出てきます。** 表の完全性が、状態とイベントの組み合わせを全部埋めさせるからです。`requires_action` で支払い方法を付け直したときなど、どのページにも書いていないものは仮に決め、行末に assumed と書いてあります。人が Stripe に確かめるのは、その行です。",
+            "**ページどうしの読みの違いは、表の上の注記にあります。** 3D セキュアのページは、認証のあとカードでも `processing` に移ると書きます。ライフサイクルのページは、`processing` をあとで結果が分かる支払い方法のときだけの状態としています。表は後者に従っています。",
+            "**二つの列挙が同じ名前の値を持っています。** `capture_method` と `confirmation_method` は、どちらも `automatic` と `manual` を持ちます。値は、書かれた列の列挙で読みます。",
+            "**値は予約語と同じ綴りでも書けます。** 資金の状態の `held`（与信で押さえた資金）は、`machine` の節の `held` と同じ綴りです。値は行の頭に来ないので、取り違えられることがありません。",
+            "**主張は四つで、どれも成り立ちます。** `succeeded` と `canceled` で終わる、`canceled` のあとに `succeeded` に着かない、`funds captured` は一回まで、どの状態からでも終われる。例は、ドキュメントに書かれている六つの流れ（3D セキュア、与信と確定、与信の有効期限切れ、口座振替の失敗など）です。",
+        ],
+        "A Stripe PaymentIntent's status (machine)",
+        "Transcribed from Stripe's documentation: where a PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. A company's API written down as a rule; the seven statuses are Stripe's own.",
+        [
+            "**The combinations the documentation leaves open come out as rows.** Completeness asks for every status and every event. Where no page says — a payment method attached again in `requires_action`, for one — the row is a guess, marked `assumed` at its end. Those are the rows to ask Stripe about.",
+            "**Where two pages read differently, the note above the table says so.** The 3D Secure page has a PaymentIntent move to `processing` after authentication, card or not; the lifecycle page keeps `processing` for payment methods that confirm later. The table follows the second.",
+            "**Two enums have values of the same name.** `capture_method` and `confirmation_method` both have `automatic` and `manual`. A value is read in the enum of the column it is written in.",
+            "**A value may be spelled like a reserved word.** The `held` of `funds` — money an authorization holds — is spelled like the `held` line of the `machine` section. A value never starts a line, so the two are never confused.",
+            "**Four claims, and all of them hold**: a case ends in `succeeded` or `canceled`, never reaches `succeeded` after `canceled`, captures funds at most once, and can finish from every state it reaches. The scenarios are six flows the documentation describes: 3D Secure, an authorization and its capture, an authorization that runs out, a bank debit that fails, and more.",
+        ],
+    ),
+    (
+        "return_eligibility.rule",
+        "返品できるかどうかを英語で書く",
+        "金額がどこにも出てこない例を、名前もセルも英語で書いたものです。答えは四つの語のどれか一つで、入力の組み合わせはどれもちょうど一行に当たります。お店の規約を想定した作り物で、どこかの規約の転記ではありません。",
+        [
+            "**答えが金額でない規則も、形は同じです。** 出力は列挙の値で、丸めの宣言は要りません。",
+            "**`policy unique` で書いてあります。** 行が重ならないように書くと、どの入力もちょうど一行に当たることを検査が証明します。`policy first` なら三行減らせますが、そのぶん「どの行が答えたのか」が行の並び順の話になります。",
+            "**`not:` は列挙の値そのものにも使えます。** `not: perishable` は「生鮮以外」で、グループを作らなくても書けます。",
+        ],
+        "Whether a return is accepted, in English",
+        "A rule with no money in it anywhere, written in English throughout. The answer is one of four words, and every combination of the inputs reaches exactly one row. It is a sketch of a shop's own terms, not a transcription of anyone's.",
+        [
+            "**A rule whose answer is not an amount has the same shape as one whose answer is.** The output is a value of an enum, so no rounding is declared.",
+            "**It is written as `policy unique`.** Keep the rows disjoint and the checker proves that every input reaches exactly one of them. `policy first` would take three rows fewer by letting the refusals at the top swallow the rest — and then which row answered a case would be a question about the order of the rows rather than about the row.",
+            "**`not:` works on a value of an enum, not only on a group.** `not: perishable` says what it says without a `group` being declared for it.",
+        ],
+    ),
+    (
+        "parcel_rate.rule",
+        "ポンドとインチの運賃表",
+        "英語で書いた運賃表です。重さはポンド、寸法はインチ、金額は USD。これも作り物で、金額は架空のものです。コーパスでヤード・ポンド法の単位を使っているのはこの規則だけです。",
+        [
+            "**ヤード・ポンド法の単位も、ほかの単位と同じに扱えます。** `mass[lb]` の入力を、行では `160oz` と書いて引いています（16oz = 1lb）。単位は型の一部なので、`in` の列に `cm` と書けば E103 で止まります。",
+            "**表を積んでいます。** 上の表が出す `size` が、下の表の列になります。寸法から区分を決める表と、区分から値段を決める表を分けて書けるということです。",
+            "**丸めの宣言が効くのはこういうところです。** 基本料に 5% を掛けると 12.60USD のような端数が出ます。`up(1USD)` と書いてあるので 13USD になりますが、どちらに寄せるかは商売の決めごとで、ツールの側では決めません。",
+        ],
+        "A parcel tariff in pounds and inches",
+        "A tariff written in English: pounds for the weight, inches for the size, USD for the money. A sketch as well — the amounts are made up. It is the one rule in the corpus that reaches the imperial units.",
+        [
+            "**Imperial units are units like any other.** The input is `mass[lb]` and the rows draw on it in `160oz` (16oz to the pound). The unit is part of the type, so `cm` in a column of `in` stops at E103.",
+            "**The tables are stacked.** What the first table produces — `size` — is a column of the second, which is what lets \"size from the dimensions\" and \"price from the size\" be two tables rather than one wide one.",
+            "**This is where the rounding declaration earns its keep.** Five percent of a 12USD base is 12.60USD. `up(1USD)` makes that 13USD — and which way it should go is a business decision, which is why the tool will not make it for you.",
+        ],
+    ),
+    (
+        "ec261.rule",
+        "EU 旅客権利規則を英語で書く",
+        "名前もセルも英語なので、ASCII 別名が一つも出てきません。金額は EUR、距離は km です。公開されている法令（(EC) No 261/2004 第 7 条）をそのまま写したもので、条文そのものが決定表の形をしています。",
+        [
+            "**ASCII の名前には別名が要りません。** 漢字は Go の公開識別子になれないので `運賃(fee)` のような別名が要りますが、`distance` にはその必要がありません。英語で書けば、カッコはどこにも出てきません。",
+            "**通貨どうしは換算されません。** `money[EUR]` の列に `100円` を書くと E103 で止まります。為替レートはこのツールの中に無く、あってはいけないものだからです（[単位の一覧](reference.md)）。",
+            "**条文が決めていないことを、表が決めさせます。** 第 7 条 1 項の (b) は「between 1500 and 3500 kilometres」で、両端を含むかが読めません。(a) が「1500km 以下」なので下端は開く、とここで決めています。決めなければ抜けか重なりで止まるので、**あいまいなまま先へは進めません**。",
+            "**同じ条件を二度書くほうが正しいこともあります。** 5 割引きの閾値（2 / 3 / 4 時間）は帯で引けば二列で済みますが、条文の 2 項は距離の条件を丸ごと書き直しています。ここでも距離で引いたのは、そのほうが原文と行が一対一で並ぶからです。",
+        ],
+        "A rule written in English — EU air passenger rights",
+        "Names and cells are English, so not one ASCII alias appears. The money is EUR and the distance is km. It is a transcription of published law — Article 7 of Regulation (EC) No 261/2004 — whose text is already shaped like a decision table.",
+        [
+            "**An ASCII name needs no alias.** A kanji cannot begin an exported Go identifier, which is why `運賃(fee)` carries one; `distance` does not. Write the rule in English and there are no parentheses anywhere.",
+            "**Two currencies never convert.** `100円` in a `money[EUR]` column stops at E103. There is no exchange rate in this tool and there must not be one ([the units](reference.md)).",
+            "**What the text leaves open, the table makes you decide.** Article 7(1)(b) says \"between 1500 and 3500 kilometres\" and does not say whether either end is included. Since (a) is \"1500 kilometres or less\", the lower end is open here — and that is a decision, made in the open. Leave it undecided and the checker stops with a gap or an overlap.",
+            "**Sometimes writing the same condition twice is the faithful thing.** The 50% reduction thresholds could be keyed on the band in two columns, but Article 7(2) restates the distance conditions in full. Keying them on distance keeps the rows one-for-one with the text.",
+        ],
+    ),
+    (
+        "uk_minimum_wage.rule",
+        "最低賃金と、それを上書きする例外",
+        "2026 年 4 月からの英国の最低賃金です。GOV.UK は年齢帯ごとの時給を並べ、そのあとに「見習いはこの額」という例外を書いています。だから表も二つで、二つめが一つめを上書きします。",
+        [
+            "**本則と例外は、一枚の広い表ではなく二枚の表です。** `overrides by_age` が「見習いの行が優先する」と宣言し、検査は二つをひとつの集合として完全性と重なりに掛けます。例外が本則に穴を空けることはできません。",
+            "**文書は規則の隣に置いて、digest で留めてあります。** `source gov = file \"…\" sha256:…` と、表に付けた `@gov table1` です。ここから先は、写しに無い時給を書くと E116 で止まります。",
+            "**見習いの一文が二行になっているのは、条件が二つだからです。** 「19 歳未満」と「19 歳以上で見習い一年目」を、ページが書いているとおりに二行で書いています。",
+        ],
+        "A minimum wage, and the exception that overrides it",
+        "The UK hourly minimum wage from 1 April 2026, transcribed from GOV.UK. The page states a rate for each age band and then states the apprentice rate as an exception to it, so this is two tables, the second overriding the first.",
+        [
+            "**A main rule and its exception are two tables, not one wider one.** `overrides by_age` says the apprentice rows take precedence, and the checker puts both through completeness and overlap **as one set** — so the exception cannot leave a hole in the rule it overrides.",
+            "**The document sits beside the rule, pinned.** `source gov = file \"…\" sha256:…`, and `@gov table1` on each table. From then on an hourly rate that the copy does not show fails (E116).",
+            "**The apprentice sentence is two rows because it is two conditions.** \"aged under 19\" and \"aged 19 or over and in the first year of their apprenticeship\" — written as the page writes them rather than folded into one.",
+        ],
+    ),
+    (
+        "uk_income_tax.rule",
+        "逓減する控除と、その上の税率帯",
+        "英国の個人控除（Personal Allowance）と、所得がどの税率帯に入るかです。控除は 10 万ポンドを超えた分 2 ポンドにつき 1 ポンドずつ減ります。これは行ではなく計算なので、`derive` に書いて、それを行が名前で呼びます。",
+        [
+            "**行には計算した値の名前を書けます。** `allowance_of` の真ん中の行が `tapered` という `derive` を指しています。上下の行は、ページが書いている二つの金額そのものです。",
+            "**「2 ポンドにつき 1 ポンド」は率の掛け算で、端数は丸めの宣言が決めます。** 出力に書いた `round down(1GBP)` がそれで、宣言は省けません。",
+            "**ページの「£12,571 から」は、ここでは「£12,570 を超える」と書いてあります。** 単位がポンドなので同じ集合ですが、後者のほうが上の行と隣り合っていることを検査が読み取れます。",
+        ],
+        "A personal allowance that tapers, and the band above it",
+        "The UK Personal Allowance and the Income Tax band an income falls in, transcribed from GOV.UK for 2026-27. The allowance goes down by £1 for every £2 above £100,000 — arithmetic rather than a row, so it is a `derive` that a row names.",
+        [
+            "**A row may hold the name of a computed value.** The middle row of `allowance_of` holds `tapered`, a `derive`; the rows on either side hold the two amounts the page states outright.",
+            "**£1 for every £2 is a multiplication by a rate, and the odd pound is the rounding.** `round down(1GBP)` on the output settles it, and the declaration cannot be left out.",
+            "**A band the page writes as \"£12,571 to £50,270\" is written here as \"above £12,570\".** A pound is the unit, so the two are the same set — and the second is the one the checker reads as adjacent to the row above it, with nothing in between.",
+        ],
+    ),
+    (
+        "us_income_tax.rule",
+        "米国の連邦所得税を、段ごとに",
+        "2025 年分、単身者の連邦所得税です。IRS の税率表（Rev. Proc. 2024-40）からの転記で、日本の速算表と形は同じ — 段と、税率と、そこから足し始める金額。",
+        [
+            "**「$X plus Y% of the excess over $Z」は、三つの列と二行の計算になります。** base・rate・floor をそのまま写し、`excess` と `tax` を `define` で書いています。控除額ひとつに畳むと、出典が印刷していない数が出てくるので、そうしていません。",
+            "**最初の段にだけ出典が付いていません。** ページは「10% of the taxable income」と書くだけで金額を書いていないので、その行の二つのゼロは規則側の書き方です。出典は表ではなく行に付けてあり、行の出典は「その行がどこから来たか」だけを言います。",
+            "**ドルではなくセントです。** $1,192.50 は整数のドルではないので `money[USDc]` で数えます。単位は型の一部なので、ドルとセントが取り違えられることもありません。",
+        ],
+        "The US federal income tax, bracket by bracket",
+        "The 2025 tax of an unmarried individual, transcribed from the IRS rate tables (Rev. Proc. 2024-40). Japan's own quick table and this one are the same shape in different clothes: a bracket, a rate, and an amount to start from.",
+        [
+            "**\"$X plus Y% of the excess over $Z\" is three columns and two lines of arithmetic.** base, rate and floor are transcribed as they stand; `excess` and `tax` are `define`s. Folding them into one deduction — the form Japan's quick table uses — would put a number in the rule that the source does not print.",
+            "**The first bracket carries no citation, deliberately.** The page states it as \"10% of the taxable income\", with no amount in it, so that row's two zeros are this rule's way of writing that. The citation sits on the rows rather than on the table, and a row's citation says only where that row came from.",
+            "**Cents, not dollars.** `money[USDc]` counts cents, because $1,192.50 is not a whole dollar. The unit is part of the type, so dollars and cents cannot be taken for one another.",
+        ],
+    ),
+    (
+        "osha_extinguisher.rule",
+        "米国の連邦規則から、条ひとつ",
+        "消火器まで何フィート歩くことになるか。29 CFR 1910.157(d) の転記で、条文は eCFR から日付を指定して取ってきた写しに留めてあります。日本の法令を e-Gov に留めるのと同じ仕組みが、そのまま英語圏の法令で動きます。",
+        [
+            "**法令データベースは `law` の後の語で選びます。** `law ecfr \"29 CFR 1910\"` の `ecfr` がそれで、省略すると e-Gov です。id は title と part、引くのは section ひとつです。",
+            "**語として読めない箇所は引用符で囲みます。** `@osha \"§1910.157\"` のように。写しは `sources/law/29-CFR-1910@2026-01-01/1910.157.xml` に置かれ、`rulec source pin` がそのハッシュを書きます。",
+            "**`rulec source outdated` が改正を教えます。** eCFR はその section の改正日を返し、体裁だけの直しかどうかも言うので、本文が動いたときだけ読み直しになります。",
+            "**単位はフィートです。** 条文が「75 feet (22.9 m)」と書くので `length[ft]` で写しました。換算はしません。",
+        ],
+        "One section of the US Code of Federal Regulations",
+        "How far an employee may have to walk to a fire extinguisher, transcribed from 29 CFR 1910.157(d). The section is pinned to a copy the eCFR served for a date — the machinery that holds the Japanese rules to e-Gov, working for a statute written in English.",
+        [
+            "**The database is the word after `law`.** `law ecfr \"29 CFR 1910\"` reads the eCFR; left out, it is e-Gov. The id is a title and a part, and what a citation adds is one section.",
+            "**A fragment the language cannot read as one word is quoted.** `@osha \"§1910.157\"`, in the citation and on the pin line alike. The copy lands in `sources/law/29-CFR-1910@2026-01-01/1910.157.xml`, and `rulec source pin` writes its digest.",
+            "**`rulec source outdated` asks the eCFR about that very section.** It answers with the amendment dates and whether each was substantive, so a re-issue that only moved the markup does not send anyone back to the text.",
+            "**The unit is feet**, because the section is: \"75 feet (22.9 m)\". A length is one integer in its declared unit, and there is no conversion to decide.",
+        ],
+    ),
+    (
+        "uk_stamp_duty.rule",
+        "英国の印紙税、本則と軽減",
+        "住宅の売買にかかる SDLT が、どの税率帯に入るか。GOV.UK からの転記で、**本則の表と、初めて家を買う人の軽減の表**という形が `印紙税の本則と軽減.rule` とそのまま重なります。",
+        [
+            "**軽減は途中で切れます。** 「£500,000 を超えると使えない」と書いてあるので、軽減の表は £500,000 までしか行を持ちません。その上では本則がそのまま顔を出します。`overrides` が「一部だけを覆う表」であるというのは、こういうことです。",
+            "**最初の行にだけ出典が付いていません。** ページはその帯を「Zero」と書くだけで率を書いていないので、`0%` は規則側の書き方です。",
+            "**第二の住宅の 5% は文章です。** 表ではないので、その行は文書を丸ごと引用しています（`@gov`）。帯の率と足し合わせていないのは、税額そのものが帯ごとの積み上げで、ページがその合計を表にしていないからです。",
+        ],
+        "A stamp duty, and the relief that overrides it",
+        "Which SDLT band a residential purchase falls in, transcribed from GOV.UK. A main table and a relief for first-time buyers — the same shape as Japan's own stamp duty rule, in another country's words.",
+        [
+            "**The relief runs out.** The page says it cannot be claimed over £500,000, so the relief table has no rows above that and the main rule shows through on its own. That is what `overrides` on a table covering part of the input space means.",
+            "**Only the first row carries no citation.** The page writes that band as \"Zero\" rather than as a percentage, so `0%` is this rule's way of writing it.",
+            "**The 5% on a second home is a sentence, not a table**, so that table cites the document whole. It is not added to the band here: the tax itself is worked out slice by slice, and the page tabulates no such total.",
+        ],
+    ),
+    (
+        "osha_noise.rule",
+        "騒音にどれだけさらしてよいか",
+        "29 CFR 1910.95 の Table G-16。dBA の水準ごとに一日の許容時間が決まります。条文は eCFR から日付を指定して取ってきた写しに留めてあります。",
+        [
+            "**表に無い水準をどう読むかは、こちらで決めています。** 91 dBA は 92 dBA の行として読む — つまり短いほうの時間を採ります。附録は許容時間が式で計算されると書いていますが、その式は文書の中では画像で、写しの文字には出てきません。逆に丸めると式より長くさらしてよいことになるので、そちらには倒しません。",
+            "**音は比較と範囲だけの型です。** `sound[dB]` は足し算ができません。デシベルは対数なので、二つ足しても二つぶんの音にならないからです。",
+            "**時間は分で持っています。** 表に 1½ 時間と ¼ 時間があるので、時間単位では整数になりません。`duration[min]` なら 90 分・15 分とそのまま書けます。",
+        ],
+        "How long anyone may be exposed to noise",
+        "Table G-16 of 29 CFR 1910.95: a permitted duration for each sound level. The section is pinned to a copy the eCFR served for a date.",
+        [
+            "**How to read a level the table does not list is decided here.** 91 dBA is given the 92 dBA row — the shorter of the two durations. The appendix says the reference duration is computed by a formula, but the formula is a picture in the document and no text of it comes out of the copy; rounding the other way would permit longer exposure than the formula does.",
+            "**Sound is a type with comparison and range and nothing else.** Decibels do not add: two of them summed are not two sounds\' worth.",
+            "**The duration is held in minutes**, because the table has 1½ hours and ¼ hour in it. `duration[min]` writes those as 90 and 15 with nothing left over.",
+        ],
+    ),
+    (
+        "osha_excavation.rule",
+        "掘削に防護が要るかどうか",
+        "29 CFR 1926.652(a)(1)。同じ title の別の part なので、出典も別に宣言しています。答えは金額ではなく「要る／要らない」です。",
+        [
+            "**例外は二つで、片方は条件が二つあります。** 岩盤だけを掘るとき、または「5 フィート未満で、資格のある者が見て崩落の兆候が無いとき」。後者が二列になっているのは、条文がそう書いているからです。",
+            "**「調べていない」は「調べて何も無かった」ではありません。** だから入力は調査の結果であって、調査をしたかどうかではありません。調べていない現場は、兆候ありの行に落ちます。",
+            "**フィートで書いてあります。** 条文が「5 feet (1.52m)」と書くので、そのまま `length[ft]` です。",
+        ],
+        "Whether an excavation needs protection from cave-ins",
+        "29 CFR 1926.652(a)(1). Another part of the same title, and so a source of its own. The answer is not an amount but a word: required, or not.",
+        [
+            "**There are two exceptions, and one of them is two conditions.** Stable rock throughout; or less than five feet deep **and** an examination by a competent person giving no indication of a potential cave-in. The second takes two columns because the section takes two clauses.",
+            "**\"Not examined\" is not \"examined and found nothing\".** So the input is the examination\'s answer rather than whether one was made, and a site nobody looked at falls into the row that requires the system.",
+            "**It is written in feet**, because the section is: \"5 feet (1.52m)\".",
+        ],
+    ),
+    (
+        "paypal_fee.rule",
+        "PayPal の決済手数料",
+        "米国の PayPal Checkout の手数料です。公開されている料金表からの転記で、法令ではなく事業者の規約を写した例。`決済手数料.rule` の英語圏版にあたります。",
+        [
+            "**率と定額の両方が出典から来ています。** 3.49% と 0.49 ドル。合計の率（4.99%）はページに無いので、こちらでも作りません。国際取引の 1.5% は別の行です。",
+            "**丸めの向きは仮置きです。** セント未満が出るのにページが何も言っていないので、`half_up` と書いたうえで「これは決め事の置き場所だ」と注に書いてあります。決めるのは人です。",
+            "**セントで数えています。** `money[USDc]` はセントの整数で、$0.49 は 49USDc。ドルとセントが取り違えられることはありません。",
+        ],
+        "What PayPal takes from one payment",
+        "The PayPal Checkout fee on a payment in the United States, transcribed from the published merchant fees. Not a statute but a company\'s own terms — the English counterpart of the Japanese payment-fee rule.",
+        [
+            "**Both the rate and the fixed fee come from the source**: 3.49% and 0.49 USD. The combined rate for an international payment (4.99%) is not printed there, so it is not written here either; the 1.5% is a row of its own.",
+            "**The rounding direction is a placeholder.** The fee has fractions of a cent in it and the page says nothing about them, so the rule declares `half_up` and says in a comment that this is where a decision has to go. A person makes it.",
+            "**It counts in cents.** `money[USDc]` is an integer number of cents, and $0.49 is `49USDc`, so dollars and cents cannot be taken for one another.",
+        ],
+    ),
+    (
+        "領収書の印紙税.rule",
+        "領収書の印紙税",
+        "国税庁タックスアンサー No.7141 の第17号文書（売上代金に係る金銭又は有価証券の受取書）の税額表です。受取金額のほかに、金額の記載があるか、営業に関するものかで決まります。",
+        [
+            "**非課税は 0 円の行です。** 5 万円未満と、営業に関しないものは非課税で、表はそれを `0円` の行として持ちます。「課税されない」も規則の答えのひとつです。",
+            "**金額の記載が無いものは金額を見ません。** `金額の記載あり` が false の行は受取金額の列が `-` で、いくらでも 200 円です。三つの入力のどの組み合わせもちょうど一行に当たることを、検査が証明しています。",
+        ],
+        "Stamp duty on a receipt",
+        "The table for document type 17 (a receipt for the proceeds of a sale) from NTA tax answer No.7141. Besides the amount received, whether an amount is stated and whether the receipt is in the course of business decide it.",
+        [
+            "**Exempt is a row of 0 yen.** Under 50,000 yen, and receipts not in the course of business, are exempt, and the table holds that as `0円` rows: \"not taxed\" is an answer of the rule too.",
+            "**A receipt with no amount stated does not look at the amount.** The row with `金額の記載あり` false has `-` in the amount column and is 200 yen whatever the amount. The checker proves that every combination of the three inputs hits exactly one row.",
+        ],
+    ),
+    (
+        "所得税.rule",
+        "所得税の速算表",
+        "国税庁タックスアンサー No.2260 の速算表です。課税される所得金額の段ごとに税率と控除額があり、`課税所得 × 税率 − 控除額` で所得税が出ます。復興特別所得税はその 2.1% です。",
+        [
+            "**一つの表が率と金額を同時に出します。** 税率の列は `rate[step 1%]`、控除額の列は `money[円]` で、`define` がその二つを掛けて引きます。ページの計算例（7,000,000円 × 0.23 − 636,000円 = 974,000円）が、そのまま `examples` の行です。",
+            "**段の境目は「次の段の始まり未満」で書いています。** ページは「1,000円 から 1,949,000円まで」「1,950,000円 から」と書きますが、課税所得は 1,000円 単位なので同じことです。整数の全体で完全性を証明するには、隙間の無い書き方のほうが要ります。",
+            "**書いていないことは仮置きと明記します。** 復興特別所得税に 1 円未満の端数が出たときの扱いは、このページにはありません。`round down` に仮置きして、宣言の横のコメントに出典が無いことを残しています。承認する人は `rulec doc` でそれを読みます。",
+        ],
+        "The income-tax bracket table",
+        "The quick-calculation table of NTA tax answer No.2260. Each bracket of taxable income carries a rate and a deduction, and `taxable × rate − deduction` is the tax; the reconstruction surtax is 2.1% of it.",
+        [
+            "**One table produces a rate and an amount at once.** The rate column is `rate[step 1%]`, the deduction column `money[円]`, and a `define` multiplies and subtracts. The page's own worked example (7,000,000 × 0.23 − 636,000 = 974,000 yen) is an `examples` row as it stands.",
+            "**Bracket edges are written as \"below the start of the next bracket\".** The page says \"from 1,000 to 1,949,000 yen\" and \"from 1,950,000 yen\"; since taxable income is in units of 1,000 yen those are the same thing, and completeness over all the integers needs the form with no gap.",
+            "**What the page does not say is marked as a placeholder.** How a fraction of a yen in the surtax is settled is not on this page. The rule says `round down` and keeps, in the comment beside the declaration, that the source is silent — which is what `rulec doc` shows the approver.",
+        ],
+    ),
+    (
+        "印紙税.rule",
+        "契約書の印紙税と、期限つきの軽減税率",
+        "不動産の譲渡に関する契約書（第1号文書）の印紙税額です。本則（No.7140）と、令和9年3月31日までに作成された契約書の軽減税率（No.7108）を一つの表に持ちます。作成日が入力です。",
+        [
+            "**期限のある特例は、日付の定義と一つの列になります。** `define 軽減期間 = 作成日 <= 2027-03-31` を列に置き、軽減の行は `true`、本則の行は `false`、期間によらない行は `-` です。`policy unique` なので、どの契約金額もどの作成日も、ちょうど一行に当たることが証明されています。",
+            "**軽減の対象外は本則の行が受けます。** 軽減は契約金額が 10 万円を超えるものだけなので、1 万円未満（非課税）と 10 万円以下の行は、期間の列が `-` です。",
+            "**この規則がジェネレーターの欠陥を一つ見つけました。** 定義の中の日付リテラルが、全言語で 0 として生成されていました。参照評価器は正しく読んでいたので、`rulec test` の突き合わせで食い違いとして出ました。",
+        ],
+        "Stamp duty on a contract, with a reduced rate that expires",
+        "The stamp duty on a contract for the transfer of real estate (document type 1). The standard amounts (No.7140) and the reduced amounts for contracts made up to 31 March 2027 (No.7108) sit in one table, with the date of the contract as an input.",
+        [
+            "**A time-limited exception is a date definition and one column.** `define 軽減期間 = 作成日 <= 2027-03-31` goes into a column: `true` on the reduced rows, `false` on the standard ones, `-` where the period does not matter. Under `policy unique` every amount on every date is proved to hit exactly one row.",
+            "**What the reduction does not cover, the standard rows take.** The reduction applies only above 100,000 yen, so the exempt row (under 10,000 yen) and the row up to 100,000 yen have `-` in the period column.",
+            "**This rule found a defect in the generator.** A date literal inside a definition was generated as 0 in every language. The reference evaluator read the date, so the disagreement showed up in `rulec test`.",
+        ],
+    ),
+    (
+        "厚生年金保険料.rule",
+        "厚生年金保険料の等級表",
+        "日本年金機構の厚生年金保険料額表（令和8年度版）です。32 等級で、料率は一般の被保険者なら 18.3% ですが、厚生年金基金の加入員は基金ごとに違うので入力にしてあります。",
+        [
+            "**健康保険料と同じ形です。** 表が 50 等級から 32 等級になり、上限が 650,000 円になるだけで、折半と二つの端数処理はそのままです。同じ形の規則は、同じ形に写せます。",
+            "**この表では二つの端数処理が同じ答えになります。** 18.3% × 標準報酬月額は必ず偶数の円なので、折半額に端数が出ません。規則には二つの丸め方が書いてありますが、この料率では表に現れない、ということまで `examples` が示しています。",
+            "**印刷された 32 等級すべてと突き合わせてあります。** 表の折半額を写した記録（`tests/oracle/`）に `rulec replay` を当て、全件一致することをテストが確かめます。",
+            "**写し元の Excel に縛ってあります。** `source` が日本年金機構の保険料額表（`.xlsx`）そのものを指し、`@機構 表1` がその一枚目のシートを引きます。`rulec source fetch` がシートを取り出して規則の隣に置き、以後 `rulec check` は、**この表の 32 個の標準報酬月額がその写しに出てくる値であること**を確かめます（E116）。`470000円` を `480000円` と写せば、刻みにも載っていて抜けも重なりもないのに、そこだけが落ちます。",
+        ],
+        "The employees' pension grade table",
+        "The premium table for employees' pension from 日本年金機構 (fiscal 2026 edition): 32 grades, and a rate that is 18.3% for ordinary insured people but varies by fund for members of a pension fund, so the rate is an input.",
+        [
+            "**The same shape as the health-insurance rule.** Fifty grades become thirty-two and the ceiling is 650,000 yen; the halving and the two ways of settling the sen are unchanged. Rules of one shape transcribe into rules of one shape.",
+            "**Here the two ways agree.** 18.3% of a standard remuneration is always an even number of yen, so the half has no fraction. The rule states both roundings; the `examples` show that at this rate the difference never appears.",
+            "**All 32 printed grades are held to the rule.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over them and requires every one to agree.",
+            "**And the table is held to the workbook it came from.** The `source` line points at 日本年金機構's own `.xlsx` and `@機構 表1` cites its first sheet; `rulec source fetch` takes that sheet out and keeps it beside the rule, and every `rulec check` then requires **each of the 32 standard remunerations to be a value that copy shows** (E116). Write `470000円` as `480000円` and it fails there alone — on the rounding grid, no gap, no overlap.",
+        ],
+    ),
+    (
+        "健康保険料.rule",
+        "保険料額表を写して、二つの端数処理を出す",
+        "協会けんぽの保険料額表（東京支部、令和8年3月分から）です。報酬月額から 50 等級の標準報酬月額を引き、料率を掛けて折半します。円未満の端数は、給与から控除するときと現金で納めるときで丸め方が違います。この表を写すために `half_down` が言語に入りました。",
+        [
+            "**同じ折半額から、丸め方の違う二つの出力を返します。** 表の注記は、給与から控除するなら「50銭以下は切り捨て、50銭を超える場合は切り上げ」、現金で納めるなら「50銭未満は切り捨て、50銭以上は切り上げ」と書いています。後者は `half_up`、前者は `half_down` です。折半額が 6,599.5 円の等級で、二つの出力は 1 円違います。",
+            "**料率は入力です。** 都道府県ごと、年度ごとに変わるものを規則に焼き込むと、改定のたびに表を書き換えることになります。`derive` で健康保険料率と介護保険料率を足し、介護保険第2号被保険者かどうかで、表が使う率を選びます。",
+            "**表の全等級と突き合わせてあります。** 印刷された折半額を写した記録（`tests/oracle/`）に `rulec replay` を当て、100 件すべてで一致することをテストが確かめます。",
+        ],
+        "A premium table, with two ways to settle the sen",
+        "The 協会けんぽ premium table (Tokyo branch, from March 2026). Monthly pay picks one of 50 grades of standard remuneration, the rate is applied and the amount halved. Fractions of a yen are settled two different ways — one when the premium is deducted from salary, another when it is paid in cash — and transcribing this table is what put `half_down` into the language.",
+        [
+            "**Two outputs from one halved amount, rounded two ways.** The table's notes say: deducted from salary, half a yen or less is dropped and more than half is carried up; paid in cash, less than half is dropped and half or more is carried up. The second is `half_up`; the first is `half_down`. At the grade whose half is 6,599.5 yen the two outputs differ by one yen.",
+            "**The rates are inputs.** They change by prefecture and by year; baking them into the rule would mean rewriting the table at every revision. A `derive` adds the care-insurance rate to the health-insurance rate, and a table picks which applies by whether the person is a category-2 care insured.",
+            "**Every grade is held to the printed table.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over all 100 of them and requires every one to agree.",
+        ],
+    ),
+    (
+        "印紙税の本則と軽減.rule",
+        "本則と特例を二つの表に分け、出典に縛る",
+        "上の印紙税と同じ決まりを、印紙税法の別表第一（本則）と、租税特別措置法第 91 条（軽減）の二つの表に分け、非課税の決まりを節にしたものです。それぞれの表が自分の出典を引用し、出典は政府の法令データベース（e-Gov 法令検索）から取った条文の写しのハッシュに縛られています。",
+        [
+            "**`overrides 本則` が、特例を本則に優先させます。** 一つの表に `軽減期間` の列を足す代わりに、原文ごとに表を分けて、どちらが勝つかを一行で書きます。検査は二つの表をまとめて、完全性と重なりを見ます。",
+            "**非課税の決まりは `clause` です。** 別表第一では、非課税の物件は課税物件の表の外の欄に書かれているので、表の行にはせず文のまま書いています。",
+            "**`source` と `@` が出典を縛ります。** `rulec source fetch` が e-Gov から別表第一と第 91 条の写しを取り、`rulec source pin` がハッシュを書きます。条文が変われば、その箇所を引用している表を名指しして止まります（E038）。",
+            "**行のラベル**（`r1` …）は、記録に出る名前であり、`overrides 本則:r3` のように行を指す名前です。",
+        ],
+        "A main rule and a reduced rate as two tables, held to their sources",
+        "The stamp duty rule above, split into the main table (Appendix Table 1 of the Stamp Tax Act) and the reduced-rate table (Article 91 of the Special Taxation Measures Act), with the exemption as a clause. Each table cites its own source, and each source is held to the digest of a copy of the text fetched from e-Gov, the Japanese government's statute database.",
+        [
+            "**`overrides 本則` makes the exception take precedence over the main rule.** Instead of adding a `軽減期間` column to one table, the tables follow the documents, and one line says which wins. The checks judge completeness and overlaps over the two together.",
+            "**The exemption is a `clause`.** In the appendix table it sits in the column of exempt documents, not in the table of taxable ones, so it is written as a sentence rather than a row.",
+            "**`source` and `@` hold the rule to its documents.** `rulec source fetch` brings copies of the appendix table and Article 91 from e-Gov, `rulec source pin` writes their digests. When the text changes, the check stops and names the tables that cite that place (E038).",
+            "**Row labels** (`r1` …) are the names the trace reports and the names `overrides 本則:r3` points at.",
+        ],
+    ),
+    (
+        "送料のただし書.rule",
+        "ただし書を、文のまま書く",
+        "運賃表が基本運賃を決め、送料は二つの節で決まります。本文の「通常」と、会員の 3,900 円以上の注文を無料にするただし書です。ただし書は条件が列に並ばないので、表ではなく `clause` で書いています。",
+        [
+            "**`clause` は一行の表です。** `when` に条件、`then` に値。検査も生成も記録も表と同じで、記録には `{\"table\":\"無料\",\"row\":1}` と出ます。",
+            "**`overrides 通常` で、ただし書が本文に優先します。** 承認用の資料は「節 無料 は 節 通常 に優先する。交わる 1 対のすべてで、無料の行は通常の行に収まる（例外）」と書きます。",
+            "**別名の無い群**（`group 遠隔地 = 北海道, 沖縄県`）も書けます。生成コードでは `g1` のような番号つきの名前になります。",
+        ],
+        "A proviso written as a sentence",
+        "A tariff table decides the base fee, and two clauses decide the shipping fee: the main text (\"regular\") and the proviso that makes a member's order of 3,900 yen or more free. The proviso's conditions do not line up as columns, so it is a `clause`, not a table.",
+        [
+            "**A `clause` is a one-row table.** The condition under `when`, the value under `then`; checked, generated and traced like a table, firing as `{\"table\":\"無料\",\"row\":1}`.",
+            "**`overrides 通常` makes the proviso take precedence over the main text.** The approver's page says \"clause 無料 takes precedence over clause 通常; in the 1 pair that meets, its row lies inside the other's (an exception)\".",
+            "**A group without an alias** (`group 遠隔地 = 北海道, 沖縄県`) is allowed; the generated identifiers number it.",
+        ],
+    ),
+    (
+        "退職手当.rule",
+        "準用される側の規則",
+        "次の例が準用する元の規則です。勤続年数と退職事由で支給月数を決め、自己都合退職の減額の節が本則に優先します。実在の法令ではなく、設計文書の例を規則にしたものです。",
+        [
+            "**この規則は単独で検査され、単独で生成できます。** 準用する側は、このファイルのハッシュを見出しに書いて縛ります。",
+            "**`減額` の節は、準用する側が `except` で外せます。** 「第 20 条（第 2 項を除く。）の規定は…準用する」の形です。",
+        ],
+        "The rule the next one applies",
+        "The rule applied by the next example. Years of service and the reason for leaving decide the number of months paid, and a clause reducing the allowance on voluntary resignation takes precedence over the main rule. It is a sketch from the design document, not a real statute.",
+        [
+            "**It is checked and generated on its own.** The rule that applies it writes this file's digest in its heading and is held to it.",
+            "**The `減額` clause can be left out by the applying rule with `except`** — \"Article 20 (excluding paragraph 2) applies\".",
+        ],
+    ),
+    (
+        "非常勤退職手当.rule",
+        "ほかの規則を読み替えて準用する",
+        "上の退職手当の規則を、非常勤職員に準用します。「勤続年数」を「在職期間」と、「退職事由」を「任期終了事由」と読み替え、減額の節は準用しません。",
+        [
+            "**読み替えは `<元の規則の入力> = <この規則の値>` です。** 列挙どうしは `with 任期満了 -> 定年, 辞職 -> 自己都合` で値を対応づけます。",
+            "**渡す値が元の規則の範囲に収まることを check が確かめます（E043）。** 在職期間は 1〜3 年で、勤続年数の 1〜40 年に収まります。0 から書けば、その値を例に挙げて止まります。",
+            "**元の規則の表は、この規則の中に展開されて検査・生成されます。** 記録は `{\"table\":\"退職手当:支給表\",\"row\":1,\"label\":\"短期\"}` と、元の表の名前で返ります。勤続年数 10 年以上の行はこの規則では当たらないので、エラーにはせず、承認用の資料に「この準用では当たらない行」として挙がります。",
+            "**元の規則が変われば E040 で止まります。** `rulec diff` で何件いくら動くかを見て、それでよければ `rulec source pin` でハッシュを書き直します。",
+        ],
+        "Applying another rule with its terms read differently",
+        "The retirement allowance rule above, applied to part-time staff: \"years of service\" is read as \"period in office\", \"reason for leaving\" as \"how the term ended\", and the reduction clause is not applied.",
+        [
+            "**A substitution is `<input of the applied rule> = <value of this rule>`.** Two enums are matched value by value: `with 任期満了 -> 定年, 辞職 -> 自己都合`.",
+            "**The check proves that what is passed stays inside the applied rule's ranges (E043).** The period in office is 1 to 3 years, inside the 1 to 40 of years of service; declared from 0, the check stops with that value as the example.",
+            "**The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{\"table\":\"退職手当:支給表\",\"row\":1,\"label\":\"短期\"}`. The rows for ten years of service and more are never reached here; they are not errors, and the approver's page lists them as unused by this apply.",
+            "**When the applied rule changes, E040 stops the check.** `rulec diff` shows how many answers move and by how much; once accepted, `rulec source pin` writes the new digest.",
+        ],
+    ),
+(
+        "保存基準.rule",
+        "温度と容量で、貼る表示を決める",
+        "食品の保存基準を写したものです。摂氏の温度、ミリリットルの容量、そして「まだ決まっていない」を持てる列が一度に出てきます。",
+        [
+            "**温度は比べるだけの型です。** `℃` は 0 が「無い」を意味しない目盛りなので、足し算も倍にすることもできません。書けるのは比較と `range` だけで、`気温 - 気温` は E048 で止まります。",
+            "**`区分?` は、値がまだ無いことを持てる列です。** セルの `none` でだけ受けられて、式には出てきません。null を算術から締め出すために、表で場合分けさせる形になっています。",
+            "**出力は文字列でもかまいません。** 貼る表示のように、そのまま人が読む値です。ただし文字列は表の入力の列にはできません（E110）——分岐を決める値は列挙にします。",
+        ],
+        "A temperature and a volume decide the label",
+        "A transcription of a food storage standard. A temperature in degrees Celsius, a volume in millilitres, and a column that is allowed to hold \"not decided yet\", all in one rule.",
+        [
+            "**A temperature is a scale to compare against, and nothing more.** A ℃ has a displaced zero, so it can be neither added nor doubled; comparison and `range` are all there is, and `気温 - 気温` stops at E048.",
+            "**`区分?` is a column that may hold nothing.** Only the cell `none` accepts it, and it never appears in an expression — null is kept out of arithmetic by making the table branch on it.",
+            "**An output may be a string**, such as the label a person reads. A string cannot be a table's *input* column (E110): a value that decides a branch belongs in an enum.",
+        ],
+    ),
+    (
+        "事務所の衛生基準.rule",
+        "面積と騒音と残業から、措置と負担を決める",
+        "事務所衛生基準規則と騒音障害防止のスケッチです。面積・音量・時間という三つの次元と、入力どうしの関係の宣言が出てきます。",
+        [
+            "**`constraint 占有面積 <= 床面積` は、呼び出し側が守ると約束した関係です。** 検査はその外側に行を求めず、診断が返す入力は必ず実在しうる一件になり、生成コードは違反する入力を入口で断ります。",
+            "**面積は長さの積ではなく、独立した次元です。** `縦 × 横` は E103 で止まります——このツールは次元解析をしないので、積を入れる次元を黙って作ることはしません。",
+            "**音量の dB も比べるだけです。** 対数の目盛りなので、二つ足しても音が二つ分にはなりません。",
+            "**`round half_even` は五つの丸めのうちの一つです。** 同点を偶数側へ寄せる、会計でよく使われる向きです。",
+        ],
+        "Area, noise and overtime decide the measure and the cost",
+        "A sketch of Japan's office hygiene rules and its noise-exposure guidance. Three dimensions — area, sound and time — and a declared relation between two inputs.",
+        [
+            "**`constraint 占有面積 <= 床面積` is a relation the caller guarantees.** Completeness then demands no row outside it, every witness becomes a case somebody could really send, and the generated code refuses a violating input at the door.",
+            "**An area is a dimension of its own, not the product of two lengths.** `縦 × 横` is E103: this tool does no dimensional analysis, and will not invent a dimension to hold a product.",
+            "**A sound level is another scale to compare against.** It is logarithmic, so adding two decibels is not two sounds' worth.",
+            "**`round half_even` is one of the five roundings**, the one that sends a tie to the even side — the direction accounting usually asks for.",
+        ],
+    ),
+]
+# The contract a projection reads from, shown under the rule: the path the rule's `shape` line
+# names, beside the corpus rule, and the language of its fence. What the page shows is the file
+# `rulec check` read.
+CONTRACTS = {
+    "注文の送料.rule": ("contracts/order.schema.json", "json"),
+    "出荷の送料.rule": ("contracts/shipment.proto", "proto"),
+    "速達の見積.rule": ("contracts/quote.proto", "proto"),
+}
+
+JA_HEAD = """# 例で見る
+
+ここにあるのは全部、**このリポジトリのテストが毎回走らせている規則**です。`rulec check` を通り、書いてある例が実行され、参照評価器と生成したどの言語も同じ答えを返すことまで確かめられています。そのままコピーして動かせます。
+
+小さいものから順に並べてあります。
+
+"""
+
+EN_HEAD = """# Examples
+
+Every rule on this page is **one the repository's tests run on every commit**: it passes
+`rulec check`, its own examples execute, and the reference evaluator and every generated
+language are held to the same answers byte for byte. Copy any of them and it works.
+
+They are ordered smallest first.
+
+**Eleven are written in English throughout** — [whether a return is
+accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
+inches](#a-parcel-tariff-in-pounds-and-inches), [Article 7 of Regulation (EC) No
+261/2004](#a-rule-written-in-english--eu-air-passenger-rights), [the UK minimum
+wage](#a-minimum-wage-and-the-exception-that-overrides-it), [the UK personal
+allowance](#a-personal-allowance-that-tapers-and-the-band-above-it), [the US federal income
+tax](#the-us-federal-income-tax-bracket-by-bracket), [one section of the
+CFR](#one-section-of-the-us-code-of-federal-regulations) and the four after it. The rest are
+transcriptions of Japanese published terms and statutes, left in the language they were
+published in: the keywords are English in every one of them, and what a transcription is here
+to show is the shape of the rule rather than the words in its cells.
+
+"""
+
+JA_TAIL = """---
+
+[ルール(.rule)を書く](tour.md){ .md-button .md-button--primary }
+[文法](reference.md){ .md-button }
+"""
+
+EN_TAIL = """---
+
+[Write a rule (.rule)](tour.md){ .md-button .md-button--primary }
+[Grammar](reference.md){ .md-button }
+"""
+
+
+def page(head, tail, title_i, lede_i, points_i, shows, reads):
+    out = [head]
+    for e in EXAMPLES:
+        src = (CORPUS / e[0]).read_text(encoding="utf-8").rstrip("\n")
+        out.append(f"## {e[title_i]}\n\n{e[lede_i]}\n\n```rule\n{src}\n```\n\n")
+        if e[0] in CONTRACTS:
+            path, fence = CONTRACTS[e[0]]
+            body = (CORPUS / path).read_text(encoding="utf-8").rstrip("\n")
+            out.append(f"{reads.format(path=path)}\n\n```{fence}\n{body}\n```\n\n")
+        out.append(f"**{shows}**\n\n")
+        out.append("".join(f"- {p}\n" for p in e[points_i]))
+        out.append("\n")
+    out.append(tail)
+    return "".join(out)
+
+
+def main():
+    (ROOT / "website" / "docs-ja" / "examples.md").write_text(
+        page(JA_HEAD, JA_TAIL, 1, 2, 3, "この例が見せていること", "規則が読む契約（`{path}`）:"), encoding="utf-8"
+    )
+    (ROOT / "website" / "docs" / "examples.md").write_text(
+        page(EN_HEAD, EN_TAIL, 4, 5, 6, "What this one shows", "The contract it reads (`{path}`):"), encoding="utf-8"
+    )
+    print(f"wrote examples.md (en + ja): {len(EXAMPLES)} rules")
+
+
+if __name__ == "__main__":
+    main()

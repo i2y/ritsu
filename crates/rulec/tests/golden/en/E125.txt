@@ -1,0 +1,10 @@
+error[E125]: A case that reaches 取消 can never get to a final state
+  --> tests/mutants/m_e125.rule:35 machine 注文
+   |
+35 |   final   配達済
+   |   ^^^^^^^^^^^^^^ 配達済 cannot be reached
+   |
+ Calls (from 受付):
+   1. at 受付, 出来事 = 取消依頼, 支払額 = 0円 → 取消 (table 遷移 row 2)
+ From 取消 a case can only get to 取消, none of them final. A case that goes there never ends.
+ Add a row that moves on to a final state, or, if a case rightly ends here, add it to `final`.

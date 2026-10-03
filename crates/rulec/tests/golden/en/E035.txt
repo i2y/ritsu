@@ -1,0 +1,7 @@
+error[E035]: The target `本則の表` of `overrides` does not exist
+  --> tests/mutants/m_e035.rule:41 table 軽減
+   |
+41 | overrides 本則の表
+   |           ^^^^^^^^ no table of this name is declared above
+   |
+ A target is a table declared above this one, or one of its rows (`table:label`). The exception is written after what it excepts.

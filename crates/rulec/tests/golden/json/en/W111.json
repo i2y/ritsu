@@ -1,0 +1,84 @@
+Obj(
+    {
+        "code": Str(
+            "W111",
+        ),
+        "column": Int(
+            3,
+        ),
+        "file": Str(
+            "tests/mutants/m_w111.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "mark_contract_only",
+                ),
+                "text": Str(
+                    "contract_only",
+                ),
+            },
+        ),
+        "line": Int(
+            18,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "A column that should use it may have been left out.",
+                ),
+                Str(
+                    "If it is meant only as an entry check on its range, add `contract_only` to the declaration (§11 W111).",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            3,
+                        ),
+                        "label": Str(
+                            "appears in no column",
+                        ),
+                        "length": Int(
+                            6,
+                        ),
+                        "line": Int(
+                            18,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "Input 重量 is not used by any table",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    3,
+                ),
+                "file": Str(
+                    "tests/mutants/m_w111.rule",
+                ),
+                "line": Int(
+                    18,
+                ),
+            },
+        ),
+        "witness": Obj(
+            {},
+        ),
+    },
+)

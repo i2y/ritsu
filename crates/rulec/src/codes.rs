@@ -1,0 +1,2198 @@
+//! The ledger of every diagnostic code (§11).
+//!
+//! §11 principle 5 makes the code and the JSON shape a stable API while the prose may
+//! improve. That only holds if there is **one** place that knows the ledger, so this file
+//! is it: `rulec explain` renders from here, `docs/codes.md` and `docs/codes.ja.md` are
+//! that rendering checked in, and the tests refuse a code that the checker emits but the
+//! ledger does not carry.
+//!
+//! Every entry carries a runnable `example`. A test feeds each one to `check_source` and
+//! requires the code to come out, so an example cannot rot into a lie while the prose
+//! around it still reads well.
+
+use crate::diag::Severity;
+use crate::json;
+
+pub struct Entry {
+    pub code: &'static str,
+    pub severity: Severity,
+    /// One line in business words — the same sentence shape the diagnostic itself uses,
+    /// with the row numbers and names left out.
+    pub title: String,
+    /// What has to be true for this to be printed.
+    pub when: String,
+    /// How to get rid of it, down to the rewritten form (§11 principle 3).
+    pub fix: String,
+    /// The smallest `.rule` that produces it.
+    pub example: &'static str,
+    /// Only E109 needs this: with the default budget the example would have to be enormous,
+    /// so it is reproduced with a budget this small.
+    pub budget: Option<i64>,
+    /// What has to sit next to the example for it to reproduce, as (name, contents). Only the
+    /// codes about `import proto` need it: their smallest reproduction is two files, and one
+    /// of them is not a rule (§15.59). The test writes them beside the example and runs it
+    /// there, so a companion cannot rot any more than the example can.
+    pub files: &'static [(&'static str, &'static str)],
+    pub related: &'static [&'static str],
+}
+
+fn e(
+    code: &'static str,
+    severity: Severity,
+    title: String,
+    when: String,
+    fix: String,
+    example: &'static str,
+    related: &'static [&'static str],
+) -> Entry {
+    Entry { code, severity, title, when, fix, example, budget: None, files: &[], related }
+}
+
+fn err(
+    code: &'static str,
+    title: String,
+    when: String,
+    fix: String,
+    example: &'static str,
+    related: &'static [&'static str],
+) -> Entry {
+    e(code, Severity::Error, title, when, fix, example, related)
+}
+
+impl Entry {
+    /// Only E109 uses this (see the field).
+    fn with_budget(mut self, b: i64) -> Entry {
+        self.budget = Some(b);
+        self
+    }
+
+    /// Only the `import proto` codes use this (see the field).
+    fn with_files(mut self, fs: &'static [(&'static str, &'static str)]) -> Entry {
+        self.files = fs;
+        self
+    }
+}
+
+fn warn(
+    code: &'static str,
+    title: String,
+    when: String,
+    fix: String,
+    example: &'static str,
+    related: &'static [&'static str],
+) -> Entry {
+    e(code, Severity::Warning, title, when, fix, example, related)
+}
+
+// ── The examples ─────────────────────────────────────────────────────────
+//
+// Kept as constants so the ledger below reads as prose. Each one is the smallest file
+// that reaches the code, and a test runs every one of them.
+
+const X_E001: &str = "rule t(t) v1\ndescription \"unterminated\n";
+const X_E002: &str = "rule t(t) v1\n\ninputs\n  %x(x) : bool\n";
+const X_E003: &str = "inputs\n  x(x) : bool\n";
+const X_E004: &str = "rule t(t) v1\n\n= 1\n";
+const X_E005: &str = "rule t(t) v1\n\nfoo bar\n";
+const X_E006: &str = "rule t(t) v1\n\nenum k(k) a(a) | b(b)\n";
+const X_E007: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy any\n| x | -> r(r) : bool |\n| - | true           |\n";
+const X_E008: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| x | -> r(r) : bool |\n|   | true           |\n";
+const X_E009: &str = "rule t(t) v1\n\nenum range(kind) = a(a) | b(b)\n";
+const X_E010: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10kg\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| w         | -> r(r) : bool |\n\
+                      | 0g..1000g | true           |\n| >1000g    | false          |\n";
+const X_E011: &str = "rule t(t) v1\n\ninputs\n  重量 : bool\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| 重量 | -> r(r) : bool |\n| -    | true           |\n";
+const X_E012: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| y | -> r(r) : bool |\n| - | true           |\n";
+const X_E013: &str = "rule t(t) v1\n\nimport std/nope\n";
+
+/// The `.proto` that E032 and E033 are read against. Two values and proto3's zero value,
+/// which is "not set" and not a value a table answers for.
+const TIER_PROTO: &[(&str, &str)] = &[(
+    "tier.proto",
+    "syntax = \"proto3\";\n\nenum Tier {\n  TIER_UNSPECIFIED = 0;\n  TIER_ONE = 1;\n  TIER_TWO = 2;\n}\n",
+)];
+
+const X_E032: &str = "rule t(t) v1\n\nimport proto \"tier.proto\" Tier -> v\n\
+                      enum v(v) = one(one)\n\n\
+                      inputs\n  x(x) : v\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| x   | -> r(r) : bool |\n| one | true           |\n";
+
+const X_E033: &str = "rule t(t) v1\n\nimport proto \"tier.proto\" Tier -> v\n\
+                      enum v(v) = one(one) | two(two)\n\n\
+                      inputs\n  x(x) : v\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy first\n| x   | -> r(r) : bool |\n| one | true           |\n| -   | false          |\n";
+const X_E014: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n  \
+                      r(r) : rate[step 1%]  range >=0% <=100%\n\n\
+                      outputs\n  o(o) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy first\n| r    | -> o(o) : money[円, incl_tax] |\n\
+                      | <=5% | 0円                           |\n| -    | p × r                         |\n";
+
+const X_E015: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
+                      outputs\n  a(a) : money[円, incl_tax]  round down(1円)\n  \
+                      b(b) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円                         |\n\n\
+                      result b = p\n";
+const X_E016: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
+                      outputs\n  a(a) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円                         |\n\n\
+                      result a = p\nresult a = p + 100円\n";
+
+const X_E017: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n  \
+                      b(b) : number  range >=0 <=10\n\nconstraint a\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| a | -> r(r) : bool |\n| - | true           |\n";
+const X_E018: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n\n\
+                      constraint a <= r\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| a | -> r(r) : bool |\n| - | true           |\n";
+const X_E019: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n  \
+                      b(b) : number  range >=0 <=10\n\nconstraint a <= b\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| a | b | -> r(r) : bool |\n| - | - | true           |\n\n\
+                      examples\n| a | b | -> r |\n| 5 | 1 | true |\n";
+
+/// A rule that walks a sequence: an element decides a verdict, and the fold reduces the
+/// column of verdicts. The three examples below bend one thing each.
+#[allow(dead_code)]
+const FOLD_HEAD: &str = "rule t(t) v1\n\n\
+                      enum v(v) = a(a) | b(b)\n\n\
+                      elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+                      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
+                      fold d over xs\n";
+const X_E022: &str = const_str_e022();
+const X_E023: &str = const_str_e023();
+const X_E024: &str = const_str_e024();
+const X_E025: &str = const_str_e025();
+const fn const_str_e022() -> &'static str {
+    // Every arm and `exhausted`, but no `empty`.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  exhausted -> held\n"
+}
+
+const fn const_str_e023() -> &'static str {
+    // Every arm and `empty`, but no `exhausted`.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n"
+}
+
+const fn const_str_e024() -> &'static str {
+    // Both answers, but the verdict `b` has no arm.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
+     fold d over xs\n  a -> next\n  empty -> 0円\n  exhausted -> held\n"
+}
+
+const fn const_str_e025() -> &'static str {
+    // Examples for a rule that walks a sequence, with no column saying which one.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
+     examples\n| -> r |\n| 0円  |\n"
+}
+
+const fn const_str_e026() -> &'static str {
+    // A sequence whose column is not a field of an element.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
+     sequence s(s)\n| m   |\n| 3円 |\n"
+}
+
+const fn const_str_e027() -> &'static str {
+    // An example naming a sequence nobody wrote.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
+     examples\n| xs   | -> r |\n| nope | 0円  |\n"
+}
+
+const fn const_str_w116() -> &'static str {
+    // A sequence written and never named.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
+     fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0円\n  exhausted -> held\n\n\
+     sequence s(s)\n| k   |\n| 3円 |\n"
+}
+
+const X_E026: &str = const_str_e026();
+const X_E027: &str = const_str_e027();
+const X_E034: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)\n   | a     | -> x  |\nr1 | true  | true  |\nr1 | false | false |\n";
+const X_E035: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)\noverrides 無い表\n| a     | -> x  |\n| true  | true  |\n| false | false |\n";
+const X_E036: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
+table 甲(ko)\n| a | -> x |\n| - | true |\n\ntable 乙(otsu)\noverrides 甲\n| a | -> y |\n| - | true |\n";
+const X_E045: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
+table 甲(ko)\n| a | -> x | y    |\n| - | true | true |\n\ntable 乙(otsu)\noverrides 甲\n| a    | -> x  |\n| true | false |\n";
+const X_W117: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 甲(ko)\n   | a     | -> x  |\nr1 | true  | true  |\nr2 | false | false |\n\n\
+table 乙(otsu)\noverrides 甲:r1, 甲:r2\n| a    | -> x  |\n| true | false |\n";
+const X_E046: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+clause 例外(exception) -> x\n  then true\n";
+const X_E047: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円, incl_tax]  range >=0円 <=10000円 incl_tax\n\n\
+outputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_E049: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=5000円\n\n\
+outputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a         | -> x  |\n| <=1,000円 | true  |\n| >1,000円  | false |\n";
+const X_E048: &str = "rule t(t) v1\n\ninputs\n  甲(a) : temperature[℃]  range >=0℃ <=40℃\n  \
+乙(b) : temperature[℃]  range >=0℃ <=40℃\n\noutputs\n  x(x) : bool\n\n\
+derive 差(gap) : temperature[℃] = 甲 - 乙  range >=-40℃ <=40℃\n\n\
+table 表(t1)\npolicy unique\n| 差 | -> x |\n| -  | true |\n";
+/// A copy of one fragment of a law, beside the examples that cite it. Its digest is what the
+/// examples pin (or fail to).
+const ARTICLE_1: &[(&str, &str)] = &[(
+    "sources/law/000AC0000000001@2026-04-01/MainProvision-Article_1.xml",
+    "<Article Num=\"1\"><ArticleTitle>第一条</ArticleTitle><Paragraph Num=\"1\"><ParagraphNum/><ParagraphSentence><Sentence>甲は、乙とする。</Sentence></ParagraphSentence></Paragraph></Article>\n",
+)];
+/// The document of the E116 and W120 examples, and the copy of its table: two files, because
+/// the smallest reproduction of "the row and the copy disagree" needs a copy to disagree with
+/// (§15.82).
+const TARIFF_DOC: &[(&str, &str)] = &[
+    ("料金表.md", "# 料金表\n\n| あて先 | 運賃 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n"),
+    ("料金表.md.fragments/表1.tsv", "あて先\t運賃\n近畿\t990円\n関東\t880円\n"),
+];
+const X_E116: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a     | -> x  |\n| true  | 990円 |\n| false | 890円 |\n";
+const X_W120: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a | -> x  |\n| - | 990円 |\n";
+/// The document of the E119 example, and the copy of its table. A second document, because
+/// the boundary check needs a table that cuts a number line and the E116 one lists a price
+/// per destination (§15.124).
+const SIZE_DOC: &[(&str, &str)] = &[
+    ("寸法表.md", "# 寸法表\n\n| サイズ | 運賃 |\n|---|---|\n| 60cmまで | 1410円 |\n| 60cmを超え80cm以下 | 1710円 |\n"),
+    ("寸法表.md.fragments/表1.tsv", "サイズ\t運賃\n60cmまで\t1410円\n60cmを超え80cm以下\t1710円\n"),
+];
+const X_E119: &str = "rule t(t) v1\n\nsource 寸法表 = file \"寸法表.md\" sha256:a19333e262c10371\n  表1 sha256:a5c05813ad703b8e\n\ninputs\n  a(a) : length[cm]  range >=1cm <=80cm\n\noutputs\n  x(x) : money[円]  round up(10円)\n\ntable 表(t1)  @寸法表 表1\npolicy unique\n| a             | -> x   |\n| <60cm         | 1410円 |\n| >=60cm <=80cm | 1710円 |\n";
+/// The contract of the `shape` examples: one object with one collection in it, which is
+/// what a path and a walk both need (§15.125).
+const SHAPE_DOC: &[(&str, &str)] = &[("order.json", "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"category\":{\"type\":\"string\"}}}}}}}}\n")];
+const X_E120: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool  from count order.lines\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_E121: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool  from order.nope\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_W122: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+/// The contract of the E122 and W123 examples: a collection of at most ten, always there. What
+/// the two compare is what the contract lets through against what the input takes (§15.132).
+const LINES_DOC: &[(&str, &str)] = &[("order.json", "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"array\",\"maxItems\":10,\"items\":{\"type\":\"object\"}}},\"required\":[\"lines\"]}}}\n")];
+const X_E122: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : number  range >=0 <=5  from count order.lines\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+/// A `.proto` whose message relates two of its fields, and leaves two others unrelated.
+const QUOTE_PROTO: &[(&str, &str)] = &[(
+    "quote.proto",
+    "syntax = \"proto3\";\npackage shop.v1;\n\nmessage Quote {\n  option (buf.validate.message).cel = {id: \"express_cap\", expression: \"!this.express || this.weight_g <= 5000\"};\n  int64 min_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];\n  int64 max_g = 2 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];\n  int64 weight_g = 3 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];\n  bool express = 4;\n}\n",
+)];
+const X_E123: &str = "rule t(t) v1\n\nshape 見積(q) = proto \"quote.proto\" shop.v1.Quote\n\ninputs\n  最小(min_g) : mass[g]  range >=1g <=30kg  from 見積.min_g\n  最大(max_g) : mass[g]  range >=1g <=30kg  from 見積.max_g\n\nconstraint 最小 <= 最大\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| 最小 | -> x |\n| -    | true |\n";
+const X_W124: &str = "rule t(t) v1\n\nshape 見積(q) = proto \"quote.proto\" shop.v1.Quote\n\ninputs\n  重さ(weight) : mass[g]  range >=1g <=30kg  from 見積.weight_g\n  急ぎ(express) : bool  from 見積.express\n\noutputs\n  料金(fee) : money[円]  round up(10円)\n\ntable 料金表(fees)\npolicy first\n| 急ぎ  | 重さ | -> 料金 |\n| true  | >5kg | 3000円  |\n| true  | -    | 1500円  |\n| false | -    | 800円   |\n";
+const X_W123: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : number  range >=0 <=20  from count order.lines\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a    | -> x  |\n| <=10 | true  |\n| >10  | false |\n";
+const X_E037: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
+const X_E038: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n  第1条 sha256:0000000000000000\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
+const X_E039: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)  @法 第2条\n| a | -> x |\n| - | true |\n";
+const X_W119: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n  第1条 sha256:ce31217424a10206\n  第2条 sha256:0000000000000000\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
+/// The rules the `apply` examples apply, beside them: one that passes check, one whose input
+/// is an enum, and one with a hole.
+const CALLEE: &[(&str, &str)] = &[("呼び先.rule", "rule 呼び先(callee) v1\n\ninputs\n  a(a) : number  range >=1 <=10\n\noutputs\n  x(x) : number  round down(1)\n\ntable 表(t)\npolicy unique\n   | a   | -> x |\n小 | <=5 | 1    |\n大 | >5  | 2    |\n")];
+const ENUM_CALLEE: &[(&str, &str)] = &[("区分の呼び先.rule", "rule 区分の呼び先(enum_callee) v1\n\nenum 区分(kind) = 甲(a) | 乙(b)\n\ninputs\n  a(a) : 区分\n\noutputs\n  x(x) : number  round down(1)\n\ntable 表(t)\npolicy unique\n| a  | -> x |\n| 甲 | 1    |\n| 乙 | 2    |\n")];
+const BROKEN_CALLEE: &[(&str, &str)] = &[("壊れた呼び先.rule", "rule 壊れた呼び先(broken) v1\n\ninputs\n  a(a) : number  range >=1 <=10\n\noutputs\n  x(x) : number  round down(1)\n\ntable 表(t)\npolicy unique\n| a   | -> x |\n| <=5 | 1    |\n")];
+const X_E040: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\"\n  a = n\n  x -> y\n";
+const X_E041: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:369102b8f803dc28\n  b = n\n  x -> y\n";
+const X_E042: &str = "rule t(t) v1\n\nenum 種別(kind) = 甲(a) | 乙(b) | 丙(c)\n\ninputs\n  k(k) : 種別\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"区分の呼び先.rule\" sha256:2e6f2e04c21cdbb3\n  a = k\n  x -> y\n";
+const X_E043: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:369102b8f803dc28\n  a = n\n  x -> y\n";
+const X_E044: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"壊れた呼び先.rule\" sha256:c4f9eba5b2949205\n  a = n\n  x -> y\n";
+const X_W118: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:369102b8f803dc28\n  a = n\n  x -> y\n\nclause 特例(special) -> 呼:x\n  when always\n  then 3\n  overrides 呼:表\n";
+const X_W116: &str = const_str_w116();
+
+const fn const_str_w115() -> &'static str {
+    // `b` is in the enum but no row produces it, and the fold still waits for it.
+    "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+     elements xs(xs)\n  k(k) : money[円, incl_tax]  range >=0円 <=10円\n\n\
+     outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+     table j(j)\npolicy unique\n| k | -> d(d) : v |\n| - | a           |\n\n\
+     fold d over xs\n  a -> take_first k\n  b -> next\n  empty -> 0円\n  exhausted -> held\n"
+}
+const X_W115: &str = const_str_w115();
+
+const X_E020: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
+                      elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
+                      elements ys(ys)\n  m(m) : number  range >=0 <=10\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true           |\n";
+const X_E021: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
+                      elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true           |\n\n\
+                      fold r\n  empty -> false\n";
+
+const X_E028: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
+                      elements xs(xs)\n  b(b) : bool\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      count h(h) where b  range >=0 <=10\n\n\
+                      table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true           |\n";
+const X_E029: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n  ok(ok) : bool\n\n\
+                      elements xs(xs)\n  b(b) : bool\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      count h(h) over xs where ok  range >=0 <=10\n\n\
+                      table j(j)\npolicy unique\n| h | -> r(r) : bool |\n| - | true           |\n";
+const X_E030: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
+                      elements xs(xs)\n  b(b) : bool\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      count h(h) over xs where b\n\n\
+                      table j(j)\npolicy unique\n| h | -> r(r) : bool |\n| - | true           |\n";
+const X_E031: &str = "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
+                      elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
+                      outputs\n  r(r) : number  round down(1)\n\n\
+                      table j(j)\npolicy unique\n| k   | -> d(d) : v |\n| <=5 | a           |\n| >5  | b           |\n\n\
+                      count h(h) over xs where d = a  range >=0 <=10\n\n\
+                      fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0\n  exhausted -> held\n";
+const X_E101: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
+                      inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
+                      | a | true           |\n| b | false          |\n";
+const X_E102: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10kg\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy first\n| w       | -> r(r) : bool |\n\
+                      | -       | true           |\n| <=1000g | false          |\n";
+const X_E103: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10kg\n  \
+                      p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
+                      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| w | -> r(r) : money[円, incl_tax] |\n| - | 100円                         |\n\n\
+                      result r = p + w\n";
+const X_E104: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
+                      outputs\n  r(r) : money[円, incl_tax]\n\n\
+                      table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
+                      | true  | 100円                         |\n| false | 200円                         |\n";
+const X_E105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
+                      inputs\n  x(x) : k\n  y(y) : bool\n\n\
+                      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| x | y     | -> r(r) : money[円, incl_tax] |\n\
+                      | a | -     | 100円                         |\n| - | true  | 200円                         |\n| b | false | 300円                         |\n";
+const X_E106: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
+                      outputs\n  r(r) : money[円, incl_tax]  round up(10円)\n\n\
+                      table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
+                      | true  | 1451円                        |\n| false | 1000円                        |\n";
+const X_E107: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
+                      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
+                      | true  | 100円                         |\n| false | 200円                         |\n\n\
+                      examples\n| x    | -> r  |\n| true | 200円 |\n";
+const X_E108: &str = "rule t(t) v1\n\n\
+                      inputs\n  p(p) : money[円, incl_tax]  range >=0円 <=100000000000000000円\n  \
+                      q(q) : rate[step 1%]  range >=0% <=100%\n\n\
+                      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+                      define off(off) : money[円, incl_tax] = p × q\n\n\
+                      table j(j)\npolicy unique\n| off | -> r(r) : money[円, incl_tax] |\n| -   | 0円                           |\n";
+const X_E109: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
+                      inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
+                      | a | true           |\n| b | false          |\n| c | true           |\n";
+const X_E110: &str = "rule t(t) v1\n\ninputs\n  s(s) : string?\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| s               | -> r(r) : bool |\n| starts_with \"a\" | true           |\n";
+const X_E111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
+                      outputs\n  ok(ok) : bool\n  fee(fee) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy unique\n| x     | -> ok(ok) : bool | fee(fee) : money[円, incl_tax] |\n\
+                      | true  | true             | 100円                          |\n| false | false            | 0円                            |\n\n\
+                      examples\n| x    | -> ok |\n| true | true  |\n";
+const X_E112: &str = "rule t(t) v1\n\n\
+                      inputs\n  a(a) : money[円, incl_tax]  range >=0円 <=100万円\n  \
+                      b(b) : money[円, incl_tax]  range >=0円 <=100万円\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      derive gap(gap) : money[円, incl_tax] = a - b  range >=0円 <=100万円\n\n\
+                      table j(j)\npolicy unique\n| gap   | -> r(r) : bool |\n\
+                      | <=0円 | false          |\n| >0円  | true           |\n";
+const X_E113: &str = "rule t(t) v1\n\n\
+                      inputs\n  a(a) : money[円, incl_tax]  range >=0円 <=100万円\n  \
+                      b(b) : money[円, incl_tax]  range >=0円 <=100万円\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      define bigger(bigger) : bool = a >= b\n\n\
+                      table j(j)\npolicy unique\n| bigger | -> r(r) : bool |\n\
+                      | true   | true           |\n| false  | false          |\n";
+const X_E114: &str = "rule t(t) v1\n\ninputs\n  r(r) : rate[step 1%]  range >=0% <=100%\n\n\
+                      outputs\n  o(o) : bool\n\n\
+                      table j(j)\npolicy first\n| r      | -> o(o) : bool |\n\
+                      | <=0.5% | true           |\n| -      | false          |\n";
+const X_E115: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n  \
+                      d(d) : number  range >=1 <=100\n\n\
+                      outputs\n  o(o) : bool\n\n\
+                      define r(r) : number = n \u{00f7} d\n\n\
+                      table j(j)\npolicy first\n| r | -> o(o) : bool |\n| - | true           |\n";
+
+const X_E117: &str = "rule t(t) v1\n\ninputs\n  \u{5024}\u{5f15}\u{304d}(off) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
+                      \u{3053}\u{3053}\u{307e}\u{3067}(upto) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
+                      \u{5408}\u{8a08}(base) : money[\u{5186}]  range >=1\u{5186} <=1000\u{5186}\n\n\
+                      outputs\n  o(o) : money[\u{5186}]  round down(1\u{5186})\n\n\
+                      derive \u{914d}\u{5206}(share) : money[\u{5186}] = allocate(\u{5024}\u{5f15}\u{304d}, \u{3053}\u{3053}\u{307e}\u{3067}, \u{5408}\u{8a08})  range >=0\u{5186} <=1000\u{5186}\n\n\
+                      result o = \u{914d}\u{5206}\n";
+
+const X_E118: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n  \
+                      d(d) : number  range >=1 <=100\n\n\
+                      outputs\n  o(o) : number  round down(1)\n\n\
+                      define r(r) : number = min(n, d, n)\n\n\
+                      result o = r\n";
+
+const X_W121: &str = "rule t(t) v1\n\ninputs\n  \u{7a2e}\u{5225}(type) : number  range >=0 <=10\n\n\
+                      outputs\n  o(o) : number  round down(1)\n\n\
+                      table j(j)\npolicy first\n| \u{7a2e}\u{5225} | -> o(o) : number |\n\
+                      | >=5  | 1                |\n| -    | 0                |\n";
+
+const X_W105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
+                      inputs\n  x(x) : k\n  y(y) : bool\n\n\
+                      outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
+                      table j(j)\npolicy first\n| x | y    | -> r(r) : money[円, incl_tax] |\n\
+                      | a | -    | 100円                         |\n| - | true | 200円                         |\n| - | -    | 300円                         |\n";
+const X_W110: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
+                      inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy first\n| x | -> r(r) : bool |\n\
+                      | a | true           |\n| b | false          |\n";
+const X_W111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n  w(w) : mass[g]  range >=0g <=10kg\n\n\
+                      outputs\n  r(r) : bool\n\n\
+                      table j(j)\npolicy unique\n| x     | -> r(r) : bool |\n\
+                      | true  | true           |\n| false | false          |\n";
+const X_W114: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=10万円\n\noutputs\n  r(r) : bool\n\nderive 倍(d) : money[円] = a + a  range >=0円 <=20万円\n\ndefine 上(up) : bool = 倍 >= 5円\ndefine 下(dn) : bool = 倍 <= 5円\n\ntable j(j)\npolicy unique\n| 上    | 下    | -> r(r) : bool |\n| true  | -     | true           |\n| -     | true  | false          |\n| false | false | false          |\n";
+
+// A state machine (§15.148): three states, two events, one table of transitions.
+const X_E050: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n";
+const X_E051: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   zz -> nx\n  initial a\n";
+const X_E052: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   d\n";
+const X_E053: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  once    nx c\n";
+const X_E054: &str = "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n\nelements xs(xs)\n  w(w) : money[円, incl_tax]  range >=0円 <=10円\n\noutputs\n  r(r) : money[円, incl_tax]  round down(1円)\n  nx(nx) : s\n\ntable j(j)\npolicy unique\n| w     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\ntable m(m)\npolicy unique\n| st | -> nx(nx) : s |\n| p  | q             |\n| q  | q             |\n\nfold d over xs\n  a -> next\n  b -> take_first w\n  empty -> 0円\n  exhausted -> held\n\nmachine k(k) over m\n  carry   st -> nx\n  initial p\n";
+const X_E055: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n\nscenario s(s)\n| x    | -> r  |\n| true | false |\n";
+/// E056: a `held` line naming an output.
+const X_E056: &str = "rule t(t) v1\n\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n  x(x)   : bool\n\noutputs\n  nx(nx) : s\n  r(r)   : bool\n\ntable m(m)\npolicy unique\n| st | x     | -> nx(nx) : s | r(r) : bool |\n| p  | true  | q             | true        |\n| p  | false | p             | false       |\n| q  | -     | q             | false       |\n\nmachine k(k) over m\n  carry   st -> nx\n  held    r\n  initial p\n  final   q\n";
+/// E058: a `derive` line with nothing after the word — the line that used to hang the parser.
+const X_E058: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  r(r) : bool\n\nderive\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n";
+/// E059: two values with no operator between them, which used to read as the first alone.
+const X_E059: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=100\u{5186}\n  b(b) : money[\u{5186}]  range >=0\u{5186} <=100\u{5186}\n\noutputs\n  o(o) : money[\u{5186}]  round down(1\u{5186})\n\ndefine s(s) : money[\u{5186}] = a b\n\nresult o = s\n";
+/// E060: a rounding grid of zero, which passed and divided by zero in the generated code.
+const X_E060: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=100\u{5186}\n\noutputs\n  o(o) : money[\u{5186}]  round up(0\u{5186})\n\nresult o = a\n";
+/// E061: a range whose ends are the wrong way round, which passed with nothing in it.
+const X_E061: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=10\u{5186} <=0\u{5186}\n\noutputs\n  o(o) : money[\u{5186}]  round down(1\u{5186})\n\nresult o = a\n";
+/// E062: a date with the shape of one and no such day, which the checker counted on from.
+const X_E062: &str = "rule t(t) v1\n\ninputs\n  d(d) : date  range >=2026-01-01 <=2026-12-31\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| d            | -> r(r) : bool |\n| <=2026-02-30 | true           |\n| >2026-02-30  | false          |\n";
+/// E063: a comparison with something after it, which used to read as the comparison alone.
+const X_E063: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a             | -> r(r) : bool |\n| <=100\u{5186} + 1\u{5186} | true           |\n| >100\u{5186}        | false          |\n";
+/// E064: a row one cell short of its header, which used to be read as it stood.
+const X_E064: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  |\n| false | true           |\n";
+/// E057: an input with a name and nothing after it.
+const X_E057: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n  b(b)\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n";
+const X_E124: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   b, c\n";
+const X_E125: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c) | d(d)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | d             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n| d  | -   | d             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n";
+const X_E126: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n  never   c after b\n";
+const X_E127: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n  f(f) : bool\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s | f(f) : bool |\n| a  | fwd | b             | false       |\n| a  | rev | a             | false       |\n| b  | fwd | c             | false       |\n| b  | rev | a             | true        |\n| c  | -   | c             | false       |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n  once    f true\n";
+const X_E128: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n";
+const X_W125: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c) | d(d)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n| d  | -   | d             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n";
+const X_W126: &str = X_W125;
+const X_W127: &str = "rule t(t) v1\n\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n  a(a) : money[円]  range >=0円 <=10万円\n\noutputs\n  nx(nx) : s\n\nderive 倍(d) : money[円] = a + a  range >=0円 <=20万円\n\ndefine 上(up) : bool = 倍 >= 5円\ndefine 下(dn) : bool = 倍 <= 5円\n\ntable m(m)\npolicy first\n| st | 上   | 下   | -> nx(nx) : s |\n| p  | true | true | q             |\n| -  | -    | -    | st            |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial p\n";
+
+// ── The ledger ───────────────────────────────────────────────────────────
+
+/// Every code, in ledger order: syntax and names first (E001–E013), then the table checks
+/// (E101–E113), then the warnings. There are no vacant numbers left.
+pub fn ledger() -> Vec<Entry> {
+    vec![
+        err(
+            "E001",
+            tr!("文字列が閉じていません", "Unterminated string"),
+            tr!(
+                "`\"` で開いた文字列が、その行のうちに閉じていないとき。セルの中にも `description` にも改行は書けません。",
+                "A string opened with `\"` is not closed on the same line. Neither a cell nor a `description` may contain a line break."
+            ),
+            tr!(
+                "その行のうちに `\"` を閉じてください。長い説明は一行に収めるか、`#` のコメントに移します。",
+                "Close the `\"` on the same line. A long description either fits on one line or moves into a `#` comment."
+            ),
+            X_E001,
+            &["E002"],
+        ),
+        err(
+            "E002",
+            tr!("読めない文字があります", "Unreadable character"),
+            tr!(
+                "名前の位置に、文字でも `_` でもない文字（記号や制御文字）があるとき。括弧に入れた別名が名前になっていないとき（`六十(60)`）も同じです。打ち間違いが黙って名前になったり、別名が黙って消えたりするのを防ぐための検査です。",
+                "A character that is neither a letter nor `_` appears where a name is expected — an alias in parentheses that is not a name (`六十(60)`) included. The check exists so that a typo does not quietly become a name, nor an alias quietly go missing."
+            ),
+            tr!(
+                "その文字を消してください。名前は文字か `_` で始まります（`@x(x)` なら `x(x)`、`六十(60)` なら `六十(size_60)`）。",
+                "Delete the character. A name starts with a letter or `_` (`@x(x)` becomes `x(x)`, and `六十(60)` becomes `六十(size_60)`)."
+            ),
+            X_E002,
+            &["E001", "E009"],
+        ),
+        err(
+            "E003",
+            tr!("ファイルが `rule` の行で始まっていません", "The file does not start with a `rule` line"),
+            tr!(
+                "一つの `.rule` は一つの規則で、先頭行が規則名と版です。空行とコメントより前に他の宣言があるとき、または `rule` の行に名前が無いとき。名前の無い `rule` の行は、いままで何も言われずに、中身の無い規則として検査を通っていました。",
+                "One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it, or the `rule` line has no name — a file whose `rule` line had none used to pass the check as a rule with nothing in it."
+            ),
+            tr!(
+                "先頭に `rule 規則名(alias) v1` の一行を足してください。",
+                "Add `rule 規則名(alias) v1` as the first line."
+            ),
+            X_E003,
+            &["E004", "E011"],
+        ),
+        err(
+            "E004",
+            tr!("行の先頭に語がありません", "The line does not start with a word"),
+            tr!(
+                "表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。",
+                "A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared."
+            ),
+            tr!(
+                "行頭に宣言の語を書いてください（`{}`）。表の行なら `|` で始めます。",
+                "Start the line with a declaring word (`{}`). A table row starts with `|`.",
+                crate::kw::line_heads()
+            ),
+            X_E004,
+            &["E003", "E005"],
+        ),
+        err(
+            "E005",
+            tr!("この位置に書けない語です", "A word that cannot appear at this position"),
+            tr!(
+                "行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです（§1.1）。",
+                "The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1)."
+            ),
+            tr!(
+                "`{}` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。",
+                "Correct it to one of `{}`. Business words belong in names and cells, not at the head of a line.",
+                crate::kw::line_heads()
+            ),
+            X_E005,
+            &["E004", "E009"],
+        ),
+        err(
+            "E006",
+            tr!("宣言に `=` がありません", "The declaration has no `=`"),
+            tr!(
+                "`enum` `group` `derive` `define` `result` は、名前と中身を `=` で分けます。その `=` が無いとき。",
+                "`enum`, `group`, `derive`, `define` and `result` separate the name from the body with `=`. It is missing."
+            ),
+            tr!(
+                "`=` を入れてください。例: `enum k(k) = a(a) | b(b)`。",
+                "Insert the `=`, e.g. `enum k(k) = a(a) | b(b)`."
+            ),
+            X_E006,
+            &["E005"],
+        ),
+        err(
+            "E007",
+            tr!("そういう方式はありません", "No such policy"),
+            tr!(
+                "`policy` の後ろが {} 以外のとき。DMN の Any / Priority / Collect は採っていません（§4）。",
+                "The word after `policy` is not {}. DMN's Any, Priority and Collect are not adopted (§4).",
+                crate::kw::policies()
+            ),
+            tr!(
+                "`policy unique`（重なりはすべてエラー）か `policy first`（先に書いた行が勝つ）に直してください。",
+                "Write either `policy unique` (every overlap is an error) or `policy first` (the earlier row wins)."
+            ),
+            X_E007,
+            &["W110", "E105", "W105"],
+        ),
+        err(
+            "E008",
+            tr!("空のセルがあります", "Empty cell"),
+            tr!(
+                "表のセルが空白だけのとき。**空欄は書き忘れと区別がつかない**ので構文エラーにしています（§3）。",
+                "A cell of a table holds only whitespace. **A blank is indistinguishable from a forgotten entry**, so it is a syntax error (§3)."
+            ),
+            tr!(
+                "任意の値のつもりなら `-` と書いてください。値を書き忘れていたなら、その値を書きます。",
+                "If any value is meant, write `-`. If a value was forgotten, write the value."
+            ),
+            X_E008,
+            &["E101"],
+        ),
+        err(
+            "E009",
+            tr!("宣言の名前が予約語と衝突しています", "A declared name collides with a reserved word"),
+            tr!(
+                "宣言した名前（や別名）が語彙の語と同じとき。行指向のパーサがその行をセクションの始まりと読んで、宣言を黙って捨てる事故を防ぎます。列挙の値は行の頭に来ないので、値の位置で別の意味に読まれる 11 語（`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`）のときだけです（§15.150）。",
+                "A declared name (or alias) is the same as a word of the vocabulary. Otherwise the line-oriented parser reads the line as the start of a section and drops the declaration silently. An enum value never starts a line, so for a value it is only the eleven words its own position reads as something else (`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`) (§15.150)."
+            ),
+            tr!(
+                "名前を変えてください（`enum range(kind)` なら `enum 範囲区分(range_kind)`）。予約語は `src/kw.rs` の表ひとつで決まっています。",
+                "Rename it (`enum range(kind)` becomes `enum 範囲区分(range_kind)`). The reserved words are fixed by the one table in `src/kw.rs`."
+            ),
+            X_E009,
+            &["E005", "E011"],
+        ),
+        err(
+            "E010",
+            tr!("`..` を使った範囲記法は書けません", "The `..` range notation is not allowed"),
+            tr!(
+                "セルに `0g..1000g` のような `..` があるとき。「1000g まで」が両端を含むのか含まないのかが、書いてある字から読めないためです（§3.1）。",
+                "A cell contains `..`, as in `0g..1000g`. Whether \"up to 1000g\" includes the endpoint cannot be read off the text (§3.1)."
+            ),
+            tr!(
+                "比較演算子で書き直してください。`0g..1000g` は `<=1000g` か `<1000g` のどちらかです。両端を決めたいなら `>=0g <=1000g` と並記します。",
+                "Rewrite it with comparison operators: `0g..1000g` is either `<=1000g` or `<1000g`. To fix both ends, write `>=0g <=1000g`."
+            ),
+            X_E010,
+            &["E105", "E101"],
+        ),
+        err(
+            "E011",
+            tr!("公開される名前に ASCII の別名がありません", "A public name has no ASCII alias"),
+            tr!(
+                "規則名・入力・出力に、**ASCII でない名前**が付いていて括弧の中の別名も無いとき。別名は生成コードの公開名になります（漢字は大文字を持てず、Go の公開識別子になれません）。名前がもとから ASCII なら、それ自身が公開名になるので別名は要りません。",
+                "The rule name, an input or an output has a **non-ASCII name** and no alias in parentheses. The alias becomes the public name in the generated code (a kanji has no uppercase and cannot begin an exported Go identifier). A name that is already ASCII is its own public name and needs no alias."
+            ),
+            tr!(
+                "括弧で別名を足してください（`重量 : bool` なら `重量(weight) : bool`）。導出・定義・グループ・表の別名は任意で、書けば生成コードがその名前を使い、書かなければ宣言した名前をそのまま使います。",
+                "Add the alias in parentheses (`重量 : bool` becomes `重量(weight) : bool`). On a derived value, a definition, a group or a table the alias is optional: write one and the generated code uses it, leave it out and the declared name is used as it stands."
+            ),
+            X_E011,
+            &["E009", "E012"],
+        ),
+        err(
+            "E012",
+            tr!("宣言されていない名前です", "The name is not declared"),
+            tr!(
+                "表の列や式が、どこにも宣言されていない名前を指しているとき。前方参照は書けないので、名前はそれを使う行より上で宣言します。",
+                "A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it."
+            ),
+            tr!(
+                "綴りを宣言に合わせるか、その入力・導出・定義を上に宣言してください。",
+                "Match the spelling to the declaration, or declare the input, derived value or definition above."
+            ),
+            X_E012,
+            &["E011", "E013"],
+        ),
+        err(
+            "E013",
+            tr!("取込先がありません", "No such import"),
+            tr!(
+                "`import` の先が無いとき。取込先は三つあります。組み込みの名前空間（いまは `std/都道府県`、47 値）、`.proto` の列挙（`import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`）、JSON Schema の列挙（`import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`、OpenAPI も同じ）です。あとの二つは、ファイルを読めないとき、その列挙がファイルに無いとき、行の形が違うときに出ます。YAML は読まないので、JSON にしたものを指してください。",
+                "The target of `import` is not there. There are three kinds: the built-in namespace (`std/都道府県`, 47 values, is the only one for now), an enum in a `.proto` (`import proto \"<file>\" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema \"<file>\" \"<pointer>\" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it."
+            ),
+            tr!(
+                "`import std/都道府県` に直すか、その列挙を `enum` でこのファイルに書いてください。ファイルから取り込むなら、パスは規則ファイルのある場所からたどるので、そこからの相対で書きます。JSON Schema のポインタは `#/components/schemas/<名前>` の形で、届かなかったときは、そこにある鍵が並びます。",
+                "Correct it to `import std/都道府県`, or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there."
+            ),
+            X_E013,
+            &["E012", "E032"],
+        ),
+        err(
+            "E014",
+            tr!("出力のセルに式は書けません", "An output cell cannot hold an expression"),
+            tr!(
+                "表の `->` から右のセルに語が二つ以上あるとき。書けるのは値一つか名前一つだけです（§3.2）。読み飛ばして最初の語だけを採ると、かけ算が黙って消えた生成コードが出ます。",
+                "A cell to the right of `->` holds two or more words. Only one value or one name may be written there (§3.2). Taking just the first word and skipping the rest would emit generated code with the multiplication silently dropped."
+            ),
+            tr!(
+                "計算に名前を付けて `define` の行へ出し、表にはその名前だけを書いてください（`| - | 率割引 |`）。表は分岐だけを持ちます。",
+                "Give the calculation a name on a `define` line and leave only that name in the table (`| - | 率割引 |`). A table holds the branching and nothing else."
+            ),
+            X_E014,
+            &["E008", "E012"],
+        ),
+        err(
+            "E015",
+            tr!("`result` が書けるのは最初の出力だけです", "`result` can only assemble the first output"),
+            tr!(
+                "`result` が二つ目以降の出力を名指ししたとき。`result` は最初の出力を組み立てるための書き方で、評価器も生成コードもそこにしか当てません（§1.2）。名指しが効かないまま通っていたので、`number` が `money` の枠に入っても E103 が出ませんでした。",
+                "A `result` names an output other than the first. `result` is sugar for the first output, and both the evaluator and the generated code apply it only there (§1.2). The name used to be ignored, so a `number` could land in a `money` slot without an E103."
+            ),
+            tr!(
+                "その出力と同じ名前の `define` を書いてください（`define 付与点(pts) : number = 基本点 × 倍率`）。出力は宣言順に、同じ名前の束縛から取られます。`result` で組み立てたいなら、その出力を `outputs` の先頭へ移します。",
+                "Write a `define` of the same name as that output (`define 付与点(pts) : number = 基本点 × 倍率`); outputs are taken, in declaration order, from the binding of their own name. To assemble it with `result` instead, move that output to the top of `outputs`."
+            ),
+            X_E015,
+            &["E016", "E103"],
+        ),
+        err(
+            "E016",
+            tr!("`result` は一つしか書けません", "There can be only one `result`"),
+            tr!(
+                "一つのファイルに `result` の行が二本以上あるとき。組み立てられるのは最初の出力だけなので、二本目は一本目を置き換えるだけになります。以前はそれが黙って起きていました。",
+                "A file has more than one `result` line. Only the first output can be assembled, so a second `result` merely replaces the first — which it used to do in silence."
+            ),
+            tr!(
+                "一本だけ残してください。ほかの出力は、その出力と同じ名前の `define` から取ります。",
+                "Keep one. The other outputs are taken from a `define` of the same name as the output."
+            ),
+            X_E016,
+            &["E015"],
+        ),
+        err(
+            "E017",
+            tr!("`constraint` の形が違います", "A `constraint` is not shaped like this"),
+            tr!(
+                "`constraint` の行が「入力 比較 入力」になっていないとき。比較が無い、片側が名前一つでない、のどちらかです。",
+                "A `constraint` line is not `input comparison input`: either there is no comparison, or a side is not a single name."
+            ),
+            tr!(
+                "`constraint <入力> <= <入力>` の形にしてください。比較は `<=` `<` `>=` `>` の四つです。`A = B` を言いたいなら、`A <= B` と `A >= B` の二行に分けます。",
+                "Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. For `A = B`, write the two lines `A <= B` and `A >= B`."
+            ),
+            X_E017,
+            &["E018"],
+        ),
+        err(
+            "E018",
+            tr!("`constraint` は入力どうしの関係です", "A `constraint` relates two inputs"),
+            tr!(
+                "`constraint` の片側が入力でないか、順序の無い型のとき。制約は「呼び出し側が渡す値の組み合わせのうち、どれが起きるか」を言うものなので、両側とも `inputs` の名前で、金額・数量・率・number・日付のいずれかです。",
+                "A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date."
+            ),
+            tr!(
+                "両側を `inputs` の名前にしてください。導出や定義は入力から計算されるので、関係は元の入力どうしで書きます。列挙や真偽に大小はありません。",
+                "Name inputs on both sides. A derived or defined value is computed from inputs, so write the relation between those inputs; an enum and a boolean have no order."
+            ),
+            X_E018,
+            &["E017", "W111"],
+        ),
+        err(
+            "E019",
+            tr!("例が、生成コードが入口で断る入力です", "An example is an input the generated code refuses at its door"),
+            tr!(
+                "例の入力が `constraint` を満たしていないとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で断ります。答えを主張できない入力です。範囲の外の例は、いままで検査を通り、その例から作ったベクタが生成コードに断られていました。",
+                "An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range used to pass the check, and the vector made from it was then refused by the generated code."
+            ),
+            tr!(
+                "例の値を直してください。その値や組み合わせが本当に来るなら、範囲を広げるか、制約を消します。",
+                "Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint."
+            ),
+            X_E019,
+            &["E017", "E018", "E101"],
+        ),
+        err(
+            "E020",
+            tr!("`elements` の宣言が正しくありません", "The `elements` declaration is not right"),
+            tr!(
+                "`elements` に名前が無いか、二本あるとき。規則がたどる並びは一つで、その一要素ぶんのフィールドをそこに書きます（§15.56）。",
+                "An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there (§15.56)."
+            ),
+            tr!(
+                "`elements 運賃行(fee_rows)` の形にして、続く行に一要素ぶんのフィールドを `inputs` と同じように書いてください。並びが二つ要るなら、それは別の規則です。",
+                "Write `elements 運賃行(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules."
+            ),
+            X_E020,
+            &["E021"],
+        ),
+        err(
+            "E021",
+            tr!("`fold` の書き方が正しくありません", "The `fold` is not written correctly"),
+            tr!(
+                "`fold <判定の列> over <並びの名前>` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。",
+                "The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum."
+            ),
+            tr!(
+                "見出しと行き先を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです（§15.56）。",
+                "Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose (§15.56)."
+            ),
+            X_E021,
+            &["E020", "E022", "E023", "E024"],
+        ),
+        err(
+            "E022",
+            tr!("要素がゼロ件のときの答えが宣言されていません", "The answer for a sequence with no elements is not declared"),
+            tr!(
+                "`fold` に `empty -> <値>` が無いとき。空の並びは必ず来ます。手で書いたループがいちばんよく落とすのがこの場合で、たいていは最初の要素をそのまま読んで落ちます。",
+                "A `fold` has no `empty -> <value>`. An empty sequence always turns up, and it is the case a hand-written loop most often forgets — usually by reading the first element and falling over."
+            ),
+            tr!(
+                "`empty -> <値>` を足してください。何を返すかは業務の判断で、ツールが決められることではありません。",
+                "Add `empty -> <value>`. What to answer is a business decision, and not one the tool can make."
+            ),
+            X_E022,
+            &["E023", "E024"],
+        ),
+        err(
+            "E023",
+            tr!("最後まで見終えたときの答えが宣言されていません", "The answer for a walk that reached the end is not declared"),
+            tr!(
+                "`fold` に `exhausted -> <値>` が無いとき。どの要素も打ち切らずに並びが尽きた場合の答えです。保持していた暫定の値をそのまま返すつもりでも、それは書いて初めて決まります。",
+                "A `fold` has no `exhausted -> <value>`: the answer when the sequence ran out and no element ended the walk. Answering with the value that was held is a choice, and it is made by writing it."
+            ),
+            tr!(
+                "`exhausted -> <値>` を足してください。保持しているものを返すなら `exhausted -> held` です。",
+                "Add `exhausted -> <value>`; to answer with what is held, that is `exhausted -> held`."
+            ),
+            X_E023,
+            &["E022", "E024"],
+        ),
+        err(
+            "E024",
+            tr!("行き先の無い判定があります", "Some verdict has no arm"),
+            tr!(
+                "表が出しうる判定のどれかに、`fold` の行き先が無いとき。その判定の要素が来たら、次にどうするかが決まっていません。表の完全性と同じ検査を、畳み込みの側に当てたものです（§15.56）。",
+                "A verdict the table can produce has no arm in the `fold`: when an element lands on it, the walk has no move. It is the table's own completeness check, applied to the fold (§15.56)."
+            ),
+            tr!(
+                "行き先を足すか、表がその値を出さないようにしてください。逆に、どの要素も辿り着けない判定に行き先があるときは W115 が出ます。",
+                "Add the arm, or stop the table producing that value. The other direction — an arm for a verdict nothing can reach — is W115."
+            ),
+            X_E024,
+            &["E022", "E023", "W115"],
+        ),
+        err(
+            "E025",
+            tr!("例に並びの列がありません", "The examples have no column for the sequence"),
+            tr!(
+                "並びをたどる規則に `examples` があるのに、`elements` の名前の列が見出しに無いとき。どの並びをたどるかが決まっていない例は、答えの決まっていない例です（§15.56）。",
+                "A rule that walks a sequence has `examples`, but the header has no column named after its `elements`. An example that does not say which sequence it walks is an example with no answer (§15.56)."
+            ),
+            tr!(
+                "`sequence <名前>` で並びを書き、例の見出しに並びの列を足して、その名前をセルに書いてください。行がゼロ本の `sequence` は、要素ゼロ件の例になります。",
+                "Write the list with `sequence <name>`, add a column for the sequence to the examples header, and name it in the cell. A `sequence` with no rows is the example for a sequence with nothing in it."
+            ),
+            X_E025,
+            &["E026", "E027"],
+        ),
+        err(
+            "E026",
+            tr!("`sequence` の書き方が正しくありません", "The `sequence` is not written correctly"),
+            tr!(
+                "`sequence` のフィールドが `elements` のフィールドとそろっていないとき——余分なフィールドがある、フィールドが足りない、`->` がある、たどる並びそのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）。",
+                "The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`)."
+            ),
+            tr!(
+                "`elements` のフィールドをそのまま見出しにして、一行に一件ぶんの値を書いてください。これは表ではなく、実際に渡す値の並びです。",
+                "Make the header the fields of `elements` as they are, and write one element's values per row. This is not a table: it is the list of values as they would really be passed."
+            ),
+            X_E026,
+            &["E025", "E020"],
+        ),
+        err(
+            "E027",
+            tr!("例が指す並びがありません", "The example names a sequence that is not there"),
+            tr!(
+                "例の並びの列に書かれた名前の `sequence` が無いとき、またはその列に名前でないもの（数や範囲）が書かれているとき。",
+                "The cell in the sequence column names a `sequence` that is not declared, or holds something that is not a name at all."
+            ),
+            tr!(
+                "その名前で `sequence` を書くか、セルを、書いてある `sequence` の名前に直してください。",
+                "Write a `sequence` under that name, or correct the cell to one that is written."
+            ),
+            X_E027,
+            &["E025", "E026"],
+        ),
+        err(
+            "E028",
+            tr!("`count` の書き方が正しくありません", "The `count` is not written correctly"),
+            tr!(
+                "`count <名前>(<別名>) over <並びの名前> where <列> = <値>` になっていないとき。`over` が無い、`where` が無い、指した並びが `elements` で宣言されていない、`=` の右に値が無い（§15.58）。",
+                "The line is not `count <name>(<alias>) over <sequence> where <column> = <value>`: no `over`, no `where`, a sequence that `elements` does not declare, or an `=` with nothing on its right (§15.58)."
+            ),
+            tr!(
+                "上の形に直してください。`= <値>` は、真偽の列を数えるときだけ省けます。",
+                "Write it in that shape. The `= <value>` may be left out only for a bool column."
+            ),
+            X_E028,
+            &["E029", "E030", "E020"],
+        ),
+        err(
+            "E029",
+            tr!("この列は数えられません", "This column cannot be counted"),
+            tr!(
+                "`where` が指す列が、要素ごとに決まる値でないとき（入力や導出は一件の呼び出しに一つしかないので、数えても 0 か 1 です）。値が有限の集合でないとき。書いた値がその列挙にないとき。列挙の列なのに `= <値>` が無いとき（§15.58）。",
+                "The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum\'s; or an enum column was given no `= <value>` (§15.58)."
+            ),
+            tr!(
+                "要素のフィールドか、要素ごとの表が出した列を指してください。判定を表に書けば、その分類そのものも完全性の検査に掛かります。",
+                "Name a field of an element, or a column a per-element table produces. Writing the classification as a table is what puts the classification itself under the completeness check."
+            ),
+            X_E029,
+            &["E028", "E012"],
+        ),
+        err(
+            "E030",
+            tr!("`count` に範囲が要ります", "A `count` needs a range"),
+            tr!(
+                "`count` の行に `range >=0 <=<上限>` が無いか、上限が無いか、下限が負のとき。範囲は二つの意味を持ちます——数えた結果を列に使ったときに完全性の検査が見る全体集合と、**並びの長さの上限**です（§15.58）。",
+                "The `count` line has no `range >=0 <=<max>`, or no upper bound, or a negative lower one. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence** (§15.58)."
+            ),
+            tr!(
+                "`range >=0 <=100` の形で書いてください。生成コードは、この上限より長い並びを入口で断ります。数値の入力と同じで、宣言の外は黙って通しません。",
+                "Write it as `range >=0 <=100`. The generated code refuses a longer sequence at the door, the way it refuses a number outside its range."
+            ),
+            X_E030,
+            &["E028", "E112"],
+        ),
+        err(
+            "E031",
+            tr!("`fold` と `count` は一緒に書けません", "A rule cannot have both a `fold` and a `count`"),
+            tr!(
+                "一つの規則に `fold` と `count` の両方があるとき。どちらも同じ並びの終わり方で、`fold` は途中で打ち切れるので、止まった歩きの数え上げが何を意味するかが決まりません（§15.58）。",
+                "One rule has both. They are two endings for the same walk, and a `fold` can stop partway: what a count means on a walk that stopped is not decided (§15.58)."
+            ),
+            tr!(
+                "数えるなら `fold` を消して、数えた結果を表で判定してください。畳むなら `count` を消してください。",
+                "To count, drop the `fold` and let a table judge the count. To fold, drop the `count`."
+            ),
+            X_E031,
+            &["E021", "E029"],
+        ),
+        err(
+            "E032",
+            tr!("取り込んだ列挙と宣言がずれています", "The declared enum and the imported one disagree"),
+            tr!(
+                "`import proto` や `import jsonschema` が名指しした列挙の値と、この規則の `enum` の別名がそろっていないとき。どちら側にしか無い値も、名前で出ます。増えるのはたいてい proto の側で、**互換な変更として通ってしまう、規則の外での変更です**（§15.59）。",
+                "The values of the enum named by `import proto` or `import jsonschema` and the ASCII aliases of the rule's `enum` are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule** (§15.59)."
+            ),
+            tr!(
+                "増えた値をこの規則の `enum` に足してください。日本語の名前は proto に入っていないので、そこは自分で決めます。消えた値なら、この規則からも消します。値を足すと、次はその値に行が要るかを表が問います（E033）。",
+                "Add the new value to the rule's `enum`. The proto has no Japanese in it, so the name is yours to decide. A value the contract dropped goes from the rule too. Once it is added, the table asks whether it needs a row (E033)."
+            ),
+            X_E032,
+            &["E013", "E033", "E101"],
+        )
+        .with_files(TIER_PROTO),
+        err(
+            "E033",
+            tr!("取り込んだ列挙の値に、行も `default` もありません", "A value of an imported enum has neither a row nor `default`"),
+            tr!(
+                "取り込んだ列挙の値が、どの行にも現れず、`default` も付いていないとき。自分で書いた値なら書き忘れの警告（W111）ですが、契約から来た値は**外の変更がまだ誰にも読まれていない**という意味なので、止めます。既定の行がある表では完全性検査が通ってしまい、新しい値に既定の額が黙って当たります（§15.59）。",
+                "A value of an imported enum appears in no row and is not marked `default`. For a value you wrote yourself that is a forgotten line (W111); for a value that came through the contract it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default amount (§15.59)."
+            ),
+            tr!(
+                "その値の行を表に足すか、値の宣言に `default` を付けてください。`default` は「既定の行に落ちるのが意図です」という宣言で、額を決めた人がいることの印になります。",
+                "Add a row for it, or mark the value `default` in the declaration. `default` is a signature saying that falling through to the default row is what is meant — that someone decided the amount."
+            ),
+            X_E033,
+            &["E032", "W111", "E101"],
+        )
+        .with_files(TIER_PROTO),
+        err(
+            "E034",
+            tr!("行ラベルが二度あります", "A row label appears twice"),
+            tr!(
+                "同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは `overrides` の行、記録の trace、後の版が行を指す名前なので、一つの表の中で一意でなければなりません。",
+                "Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table."
+            ),
+            tr!("どちらかのラベルを変えてください。", "Change one of the two labels."),
+            X_E034,
+            &["E009", "E035"],
+        ),
+        err(
+            "E035",
+            tr!("`overrides` の指す先がありません", "The target of `overrides` does not exist"),
+            tr!(
+                "`overrides` が名指した表が無いか、この表より後ろで宣言されているか、`表:行ラベル` の行にそのラベルが無いとき。行の書き方が読めないときも同じです。例外は本文の後に書くので、指す先はいつも上にあります。",
+                "An `overrides` line names a table that does not exist, or one declared below this table, or a row label (`table:label`) the table has no row of. A line whose shape cannot be read is reported the same way. The exception is written after what it excepts, so a target is always above."
+            ),
+            tr!(
+                "上で宣言した表か、その行（行の先頭にラベルを書き、`表:ラベル` で指す）を名指してください。優先する側を後に書きます。",
+                "Name a table declared above, or one of its rows (label the row at its head and write `table:label`). Write the side that takes precedence later."
+            ),
+            X_E035,
+            &["E034", "E036"],
+        ),
+        err(
+            "E036",
+            tr!("`overrides` の相手が同じ出力を定めていません", "The target of `overrides` does not define the same output"),
+            tr!(
+                "`overrides` の指す表が、この表とは別の出力を定めているとき。優先の順序は、同じ出力を定める定義のあいだにだけあります。",
+                "The table an `overrides` line names defines a different output from this table. Precedence exists only between definitions of the same output."
+            ),
+            tr!(
+                "同じ出力を定める表を指すか、この表の出力列をその相手と揃えてください。",
+                "Name a table that defines the same output, or make this table's output column the same one."
+            ),
+            X_E036,
+            &["E035", "E045"],
+        ),
+        err(
+            "E037",
+            tr!("引用した箇所のハッシュが固定されていません", "A cited fragment is not pinned"),
+            tr!(
+                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。法令を箇所無しで `@法` とだけ引用したとき、箇所の書き方や、引用・宣言の形が読めないときも同じです（隣に置いたファイルは `@郵便` と丸ごと引用できます）。文書から引けるのは表なので、引用箇所は `表3`（文書順に三つめの表）か `table3` と書きます。それ以外の書き方は読めません（§15.82）。語として読めない箇所は `\"` で囲みます（`@osha \"§1910.157\"`）。ハッシュが無いと、写しが改訂されても check は何も言えません（§15.68）。",
+                "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). A document's fragments are its tables, so `表3` (the third table in document order) and `table3` are the only names read (§15.82). A fragment the language cannot read as one word is quoted (`@osha \"§1910.157\"`). Without a pin, a revised copy passes check in silence (§15.68)."
+            ),
+            tr!(
+                "原文を読んで写した行が正しいことを確かめたら、`fix.text` の行を貼るか `rulec source pin <file.rule>` を実行して、いまの写しのハッシュを書き込んでください。",
+                "Once the transcribed rows are checked against the document, paste the `fix.text` line or run `rulec source pin <file.rule>` to pin the copy's digest."
+            ),
+            X_E037,
+            &["E038", "E039", "W119"],
+        )
+        .with_files(ARTICLE_1),
+        err(
+            "E038",
+            tr!("引用した箇所が変わっています", "A source fragment has changed"),
+            tr!(
+                "規則に書いてあるハッシュと、規則の隣にある写しのハッシュが違うとき。写しを取り直した PR で落ちます。その箇所を引用している表・節・行を名指しするので、読み直すのはそこだけで済みます。",
+                "The pinned digest differs from the digest of the copy beside the rule. It fails in the pull request that refreshed the copy, and names the tables, clauses and rows that cite the fragment, which is all there is to reread."
+            ),
+            tr!(
+                "写しの差分を読み、写した行がまだ正しければ `fix.text` のとおりハッシュの行を書き換えてください（`rulec source pin` でも書けます）。行が変わるなら、先に行を直します。",
+                "Read the copy's diff; if the transcribed rows still hold, rewrite the pin line as `fix.text` says (`rulec source pin` writes it too). If the rows have to change, change them first."
+            ),
+            X_E038,
+            &["E037", "E039"],
+        )
+        .with_files(ARTICLE_1),
+        err(
+            "E039",
+            tr!("出典の写しがありません", "There is no copy of a source"),
+            tr!(
+                "引用した箇所の写しが規則の隣に無いとき（法令なら `sources/law/<法令ID>@<日付>/<要素>.xml`、文書の表なら文書の隣の `料金表.md.fragments/表3.tsv`）、または `file` の出典そのものが読めないとき。check は通信もしませんし、文書の中身も見ません。写しが無ければ照合できません。",
+                "The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `料金表.md.fragments/表3.tsv` beside the document for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare."
+            ),
+            tr!(
+                "`rulec source fetch <file.rule>` が、政府の法令データベース（e-Gov 法令検索）から引用箇所を取り、文書からは引いた表を取り出して、規則の隣に置きます。写しは git に入れてください。",
+                "`rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, and takes the cited tables out of a document, into the copies beside the rule. Commit the copies."
+            ),
+            X_E039,
+            &["E037", "E038"],
+        ),
+        err(
+            "E040",
+            tr!("準用する元の規則が、書いてあるハッシュと違います", "The callee differs from its pinned digest"),
+            tr!(
+                "`apply` の見出しに `sha256:…` が無いとき、または書いてあるハッシュと、いま隣にある元の規則のファイルのハッシュが違うとき。元の規則が改正されれば、それを準用するこの規則の答えも変わっています。ハッシュを書いておかないと、その変化を誰も承認しないまま通ってしまいます（§15.69）。",
+                "The `apply` heading carries no `sha256:…`, or the digest it carries differs from the digest of the callee file beside the rule. When the callee is amended, the answers of the rule that applies it change too; without a pin, that change passes with nobody approving it (§15.69)."
+            ),
+            tr!(
+                "`rulec diff <古い版> <新しい版>` でこの規則の答えが何件いくら動くかを見て、それでよければ、見出しを `fix.text` のとおり書き換えるか `rulec source pin <file.rule>` を実行してハッシュを書き直してください。",
+                "See with `rulec diff <old> <new>` how many answers of this rule move and by how much; once the movement is approved, rewrite the heading as `fix.text` says or run `rulec source pin <file.rule>` to pin the callee again."
+            ),
+            X_E040,
+            &["E037", "E038", "E044"],
+        )
+        .with_files(CALLEE),
+        err(
+            "E041",
+            tr!("準用の読み替えが元の規則と合いません", "The bindings of an apply do not match the callee"),
+            tr!(
+                "元の規則の入力に読み替えの無いものがあるとき、元の規則に無い入力や出力を名指ししたとき、元の規則の出力に付けた名前がこの規則に既にあるとき、`apply` の下の行の形が読めないとき。読み替えは元の規則の入力を一つ残らず書くものなので、足りなければ「読み替えが書いてない」のと同じです（§15.69）。",
+                "A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten (§15.69)."
+            ),
+            tr!(
+                "元の規則の入力を一つずつ `<元の規則の入力> = <この規則の値>` で読み替え、出力は `<元の規則の出力> -> <名前>` で名前を付けてください。元の規則の入力と出力の名前は文面に並びます。",
+                "Bind each callee input with one `<callee input> = <value>` line, and rename an output with `<callee output> -> <name>`. The callee's input and output names are listed in the message."
+            ),
+            X_E041,
+            &["E040", "E042", "E043"],
+        )
+        .with_files(CALLEE),
+        err(
+            "E042",
+            tr!("読み替えの型が合いません", "A binding does not agree in type"),
+            tr!(
+                "読み替えた値の型が、元の規則の入力の型と違うとき（単位・税区分・列挙と数）。列挙どうしでは、この規則の列挙の値にあたる元の規則の値が無いとき（同じ綴りの値はそのまま対応します）、`with` にどちらにも無い値を書いたとき、リテラルが元の規則の型の値でないときも同じです。",
+                "The type of a bound value differs from the callee input's (unit, tax kind, an enum against a number). Between two enums: a value of this rule's enum stands for no value of the callee's (values spelled the same on both sides map by themselves), a `with` names a value neither side has, or a literal is not a value of the callee's type."
+            ),
+            tr!(
+                "型を合わせてください。列挙は `<入力> = <値> with <この規則の値> -> <元の規則の値>, …` で、この規則の列挙の値を全部対応づけます。「『退職』とあるのは『任期の終了』と読み替える」を、そのまま書く形です。",
+                "Make the types agree. For enums, `<input> = <value> with <this rule's value> -> <callee's value>, …` maps every value of this rule's enum; that is the shape of \"'retirement' is read as 'end of term'\"."
+            ),
+            X_E042,
+            &["E041", "E043"],
+        )
+        .with_files(ENUM_CALLEE),
+        err(
+            "E043",
+            tr!("渡す値が元の規則の範囲か制約に収まりません", "A value passed leaves the callee's range or constraint"),
+            tr!(
+                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（はみ出す値を一つ例に挙げます）、または元の規則の `constraint` がこの規則の宣言から導けないとき。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです（§15.69）。",
+                "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval (§15.69)."
+            ),
+            tr!(
+                "この規則の入力の範囲を元の規則の範囲まで狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。制約なら、同じ関係を `constraint` で宣言してください。",
+                "Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For a constraint, declare the same relation with `constraint`."
+            ),
+            X_E043,
+            &["E041", "E042", "E101"],
+        )
+        .with_files(CALLEE),
+        err(
+            "E044",
+            tr!("その規則は準用できません", "That rule cannot be applied"),
+            tr!(
+                "元の規則が読めないとき、元の規則が `check` を通らないとき（出たコードを添えます）、元の規則自身が `apply` を持つとき、元の規則が並びを順に見ていく規則（`elements`、`fold`、`count`）のとき、元の規則の表や節が元の規則自身の列挙を出力に持つとき。通らない規則を準用しても通らない規則になるだけで、準用の準用は一段に書き直してから書きます。",
+                "The callee cannot be read, does not pass `check` (the codes are listed), itself has an `apply`, walks a sequence (`elements`, `fold`, `count`), or has a table or clause that produces one of its own enums. A broken rule expanded is a broken rule, and a provision applied through another is written flattened to one level."
+            ),
+            tr!(
+                "先に元の規則を直してください。`apply` を持つ規則や、並びを順に見ていく規則を準用するなら、その中身をこの規則に書き写してください。",
+                "Fix the callee first. To apply a rule that itself applies another or walks a sequence, write its expansion into this rule."
+            ),
+            X_E044,
+            &["E040", "E041"],
+        )
+        .with_files(BROKEN_CALLEE),
+        err(
+            "E045",
+            tr!("出力を共有する表に、出力の列が二つ以上あります", "A table that shares an output has two or more output columns"),
+            tr!(
+                "ある出力を二つ以上の表が定めていて（または `overrides` で結ばれていて）、そのうちの表に出力の列が二つ以上あるとき。行が二つの出力の定義を束ねていると、一方だけが上書きされたときにもう一方の値の出どころが決まらず、生成コードでは同じ行の条件を二度書くことになります。",
+                "An output is defined by two or more tables (or tables are joined by `overrides`), and one of them has two or more output columns. A row that bundles two definitions leaves the other value's origin undecided when only one is overridden, and the generated code would have to write the row's condition twice."
+            ),
+            tr!("二つ目の出力を、別の表に分けてください。", "Move the second output to a table of its own."),
+            X_E045,
+            &["E036", "E105"],
+        ),
+        err(
+            "E046",
+            tr!("`clause` の形が読めません", "A `clause` is not shaped like this"),
+            tr!(
+                "`clause` の見出しに名前か `->` か出力が無いとき、`when` か `then` の行が無いか二度あるとき、`when` の条件が `<列> <セル> and …` の形でないとき（列が無い、同じ列が二度ある、条件が無い）。節は一行の表なので、条件と値が一つずつ要ります。",
+                "The `clause` heading lacks a name, the `->` or the output; the `when` or `then` line is missing or appears twice; or the `when` condition is not `<column> <cell> and …` (a part without a column, a column twice, a column without a condition). A clause is a one-row table, so it needs exactly one condition and one value."
+            ),
+            tr!(
+                "`clause <名前>(<別名>) -> <出力>` の下に `when <列> <セル> and …`（条件が無ければ `when always`）と `then <値>` を一行ずつ書いてください。優先する相手があれば `overrides <相手>` を足します。",
+                "Under `clause <name>(<alias>) -> <output>`, write one `when <column> <cell> and …` line (`when always` when there is no condition) and one `then <value>` line. Add `overrides <target>` when it takes precedence over something."
+            ),
+            X_E046,
+            &["E008", "E035", "E045"],
+        ),
+        err(
+            "E047",
+            tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"),
+            tr!(
+                "入力・出力・`derive`・`count` の宣言の行に、`range`・`round`・`contract_only` のどれにも属さない語が残っているとき。このツールは行から欲しい語を探して残りを踏み越える読み方をするので、こうした語はいままで黙って捨てられていました。範囲の後ろに書いた税区分（`range >=0円 <=10000円 incl_tax`）も、単位が単位として読めずに余った分も、どちらも通っていました。範囲は完全性検査が量化する全体集合で、生成コードの入口ガードでもあるので、境界が一つ落ちたまま「完全」と答えることになります。",
+                "A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0円 <=10000円 incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered \"complete\" with one side missing."
+            ),
+            tr!(
+                "その語を消すか、宣言の一部として正しい形に直してください。税区分や刻みは型の括弧の中（`money[円, incl_tax]`、`rate[step 0.1%]`）で、範囲は `range >=<値> <=<値>`、丸めは `round <向き>(<格子>)` です。",
+                "Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[円, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`."
+            ),
+            X_E047,
+            &["E011", "E103", "E104"],
+        ),
+        err(
+            "E049",
+            tr!("桁区切りのカンマは書けません", "A thousands separator cannot be written"),
+            tr!(
+                "数を `1,000` や `1,949,000円` のように、1〜3 桁のあとに `,` と 3 桁の組を続けて書いたとき。`,` はセルの中で集合の要素を区切る記号なので、そのままでは二つ以上の値に読まれます。いままでは黙ってそう読んでいて、数の列の `<=1,000` は `<=1` として検査を通り、金額の列では `1` に単位が無いという的外れな E103 で止まっていました。文書の数字をそのまま写すと、ここに当たります。",
+                "A number is written as a document writes it, one to three digits followed by `,` and groups of three: `1,000`, `1,949,000円`. Inside a cell `,` separates the members of a set, so as it stands the figure reads as more than one value. It used to be read that way without a word: `<=1,000` in a column of numbers passed the check as `<=1`, and in a column of money it stopped at an E103 about `1` having no unit. Copying a document's figures as they stand lands here."
+            ),
+            tr!(
+                "カンマを外して `1000` と書いてください。桁を区切りたいときは `1_000` と書けます。`fix.text` が書き直したリテラルです。",
+                "Take the commas out and write `1000`; to group the digits, write `1_000`. `fix.text` is the literal rewritten."
+            ),
+            X_E049,
+            &["E014", "E103"],
+        ),
+        err(
+            "E048",
+            tr!("この型には足し算も掛け算もありません", "This type has no arithmetic"),
+            tr!(
+                "順序はあるが演算の無い型を、`+ - × ÷` のどれかに使ったとき。`date`、`temperature[℃]`・`temperature[℉]`、`sound[dB]` の三つがそれです。℃ は 0 が「無い」を意味しない目盛りなので `気温 × 2` に意味が無く、dB は対数なので二つ足しても音が二つ分にはならず、日付は暦日なので引き算の結果を入れる型がありません。どれも規則の中では閾値としてしか現れないので、比較と `range` だけを残して演算を落としています。",
+                "A type that is ordered but has no arithmetic is used with `+ - × ÷`. There are three: `date`, `temperature[℃]`/`temperature[℉]`, and `sound[dB]`. A ℃ has a displaced zero, so `気温 × 2` means nothing; a decibel is a logarithm, so adding two of them is not two sounds' worth; and a date is a calendar day, with no type to hold the result of subtracting one. All three appear in rules only as thresholds, so comparison and `range` are kept and the arithmetic is dropped."
+            ),
+            tr!(
+                "閾値として比べるか、`range` に書いてください。差や倍率そのものが業務ルールなら、計算した結果を入力として受け取るか、表で引きます。二つの日付のあいだの日数は、呼び出し側で数えて `number` か `duration` として渡します。",
+                "Compare it against a threshold, or write it in a `range`. Where a difference or a multiple is itself the rule, take the computed value as an input, or look it up in a table. The days between two dates are counted on the calling side and passed in as a `number` or a `duration`."
+            ),
+            X_E048,
+            &["E103", "E112", "E115"],
+        ),
+        err(
+            "E050",
+            tr!("`machine` の節の形が違います", "The `machine` section is not shaped right"),
+            tr!(
+                "`machine` の見出しに名前か `over <表>` が無いとき、`carry` か `initial` の行が無いか二行あるとき、`machine` の中に `carry`・`initial`・`final`・`never`・`once` のほかの行があるとき、規則に `machine` が二つあるとき（§15.148）。",
+                "The `machine` heading lacks a name or `over <table>`; the `carry` or `initial` line is missing or written twice; a line under `machine` is not `carry`, `initial`, `final`, `never` or `once`; or the rule has two `machine` sections (§15.148)."
+            ),
+            tr!(
+                "形は `machine <名前>(<ascii>) over <表>` と、その下の `carry <入力> -> <出力>` と `initial <状態>`（どちらも必須）、`final <状態>, …`、`never <状態>, … after <状態>, …`、`once <出力> <セル>`（どれも任意）です。二つの状態を一緒に持ち越すなら、その組を一つの列挙にしてください。",
+                "The shape is `machine <name>(<ascii>) over <table>`, then `carry <input> -> <output>` and `initial <state>` (both required), and `final <state>, …`, `never <state>, … after <state>, …` and `once <output> <cell>` (all optional). To carry two states together, make the pair one enum."
+            ),
+            X_E050,
+            &["E051", "E052", "E053"],
+        ),
+        err(
+            "E051",
+            tr!("`carry` か `over` が宣言と噛み合いません", "`carry` or `over` does not fit the declarations"),
+            tr!(
+                "`carry` の左が入力でないとき、右が出力でないとき、二つが同じ列挙でないとき、`over` の表が無いとき、その表が持ち越す出力を決めていないとき。状態が有限個の値の列挙だから、呼び出しの並びについての主張が決まります。",
+                "The left of `carry` is not an input, the right is not an output, the two are not of one enum, the `over` table does not exist, or it does not decide the carried output. It is because the state is an enum of finitely many values that the claims about sequences of calls are decidable."
+            ),
+            tr!(
+                "状態の入力と状態の出力を同じ列挙で宣言して `carry <入力> -> <出力>` と書き、`over` には、持ち越す出力を出力の列に持つ表の名前を書いてください。",
+                "Declare the state as an input and an output of one enum, write `carry <input> -> <output>`, and name after `over` the table that has the carried output as an output column."
+            ),
+            X_E051,
+            &["E050", "E052"],
+        ),
+        err(
+            "E052",
+            tr!("ステートマシンが名指しした状態が噛み合いません", "A state the machine names does not fit"),
+            tr!(
+                "`initial`・`final`・`never` の行に、持ち越す状態の列挙に無い値があるとき。または `never` の両側に同じ状態があるとき。その状態に留まる一回の呼び出しで破れるので、言いたいことになりません。",
+                "An `initial`, `final` or `never` line names a value the enum of the carried state does not have, or `never` names one state on both sides — which the first call that stays in it breaks, so it cannot be what anyone means."
+            ),
+            tr!(
+                "列挙の値の綴りで書いてください。`never` の両側には、別の状態を書きます。",
+                "Spell the value as the enum does. Write different states on the two sides of `never`."
+            ),
+            X_E052,
+            &["E050", "E126"],
+        ),
+        err(
+            "E053",
+            tr!("`once` の行が宣言と噛み合いません", "The `once` line does not fit the declarations"),
+            tr!(
+                "`once` の出力が宣言されていないとき、持ち越す状態の出力であるとき、セルが `-` のとき。状態は、留まる呼び出しのたびに同じ値を返すので、`once` で数えると留まるだけで破れます。セルは出力の型に照らして、表のセルと同じ検査を受けます（E103 など）。",
+                "The output of `once` is not declared, is the carried state, or the cell is `-`. A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. The cell is held to the output's type exactly as a table's cell is (E103 and the rest)."
+            ),
+            tr!(
+                "`once <出力> <セル>` の出力には、持ち越す状態ではない出力を書きます（`once 返金額 >0円`）。状態について言うなら `never … after …` を使ってください。",
+                "Name an output other than the carried state (`once 返金額 >0円`). Say it about states with `never … after …`."
+            ),
+            X_E053,
+            &["E127", "E103"],
+        ),
+        err(
+            "E054",
+            tr!("並びを畳む規則は、ステートマシンの一歩になれません", "A rule that folds a sequence cannot be the step of a machine"),
+            tr!(
+                "`fold` のある規則に `machine` を書いたとき。答えが並び全体で決まるので、入力を決まった数の列の区画に分けられず、一回の呼び出しの行き先を数え上げられません。`diff` が同じ規則を断るのと同じ理由です。",
+                "A rule with a `fold` has a `machine`. Its answer depends on the whole sequence, so the inputs do not cut into finitely many columns and the transitions of one call cannot be counted — the reason `diff` refuses the same rule."
+            ),
+            tr!(
+                "並びは呼び出す側で読み、見つけたもの（件数や合計）を入力として渡してください。`count` と `sum` で数える規則は、ステートマシンの一歩になれます。",
+                "Read the sequence on the calling side and pass what it found (a count, a total) as an input. A rule that counts with `count` or `sum` can be the step of a machine."
+            ),
+            X_E054,
+            &["E050", "E028"],
+        ),
+        err(
+            "E055",
+            tr!("`scenario` の形が違います", "A `scenario` is not shaped right"),
+            tr!(
+                "`machine` の無い規則に `scenario` を書いたとき、名前が無いか二つが同じ名前のとき、行が無いとき、持ち越す入力の列があるとき、ほかの入力の列が足りないとき。一行目の呼び出しは `initial` の状態から、二行目からは一つ前の呼び出しが返した状態から始まるので、持ち越す入力には列がありません。",
+                "A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for the carried input; or it lacks a column for another input. The first call starts from the `initial` state and every later one from the state the call before it answered, so the carried input has no column."
+            ),
+            tr!(
+                "`scenario <名前>(<ascii>)` の直下に表を書きます。見出しは、持ち越す入力のほかのすべての入力、`->`、すべての出力です。持ち越す状態が無いなら、一行ずつの `examples` で書けます。",
+                "Write the table right under `scenario <name>(<ascii>)`. The header is every input but the carried one, then `->`, then every output. With no state carried from one call to the next, write the rows as `examples`."
+            ),
+            X_E055,
+            &["E107", "E111", "E050"],
+        ),
+        err(
+            "E056",
+            tr!("`held` の行が宣言と噛み合いません", "The `held` line does not fit the declarations"),
+            tr!(
+                "`held` に、入力でない名前か、持ち越す入力か、同じ名前を二度書いたとき。`held` は、一つの案件が最初の呼び出しから最後の呼び出しまで同じ値で渡す入力を言います（注文の金額、申し込んだ人の区分）。検査は、そういう入力を呼び出しごとに変えた並びを反例にしなくなります。",
+                "`held` names something that is not an input, the carried input, or one name twice. `held` says which inputs one case passes with the same value on every call, from its first to its last — the amount of an order, the class of the person who applied — and the check then stops offering sequences of calls that change one of them as counterexamples."
+            ),
+            tr!(
+                "入力の名前を書いてください。持ち越す入力は呼び出しのたびに一つ前の答えで入れ替わるので、`held` にはなりません。",
+                "Name inputs. The carried input is replaced by the answer of the call before on every call, so it cannot be `held`."
+            ),
+            X_E056,
+            &["E050", "E051", "W126"],
+        ),
+        err(
+            "E057",
+            tr!("宣言に型がありません", "The declaration has no type"),
+            tr!(
+                "`inputs`・`outputs`・`elements` の行、または `define`・`derive` の行に、名前だけがあって型が無いとき。この行は、いままで黙って捨てられていました。規則は書いた人の思うより入力が一つ少ないまま検査を通り、例やベクタがその名前を渡すと、知らない名前として断られていました。",
+                "A line under `inputs`, `outputs` or `elements`, or a `define` or `derive` line, has a name and no type. Such a line used to be dropped in silence: the rule passed the check with one input fewer than its author wrote, and an example or a record that named it was then refused for a name nobody declared."
+            ),
+            tr!(
+                "`<名前>(<別名>) : <型>` の形で型を書いてください（`: money[円, incl_tax]`、`: 都道府県`、`: bool`）。数の型なら `range` も要ります。",
+                "Write the type as `<name>(<alias>) : <type>` (`: money[円, incl_tax]`, `: 都道府県`, `: bool`). A numeric type needs a `range` too."
+            ),
+            X_E057,
+            &["E011", "E047", "E012"],
+        ),
+        err(
+            "E058",
+            tr!("宣言の行を読めません", "A declaration line cannot be read"),
+            tr!(
+                "`define`・`derive`・`result`・`enum`・`group`・`table` のような宣言の語で始まる行を、その宣言として読めないとき。名前が無い、`=` の前に余分な語がある、などです。こういう行は、いままで何も言われずに捨てられていました。`derive` の行は捨てられもせず、検査が終わらなくなっていました。",
+                "A line that starts with a declaring word — `define`, `derive`, `result`, `enum`, `group`, `table` and the like — cannot be read as that declaration: it has no name, something stands before its `=`, and so on. Such a line used to be dropped with nothing said, and a `derive` line was not even dropped: the check never finished."
+            ),
+            tr!(
+                "診断の注記にある形に書き直してください（`define 大口(bulk) : bool = 注文金額 >= 3万円`）。どの宣言の形も docs/reference.md にあります。",
+                "Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30000円`). Every declaration's shape is in docs/reference.md."
+            ),
+            X_E058,
+            &["E006", "E057", "E059", "E005"],
+        ),
+        err(
+            "E059",
+            tr!("式を読めません", "The expression cannot be read"),
+            tr!(
+                "`=` などの右に書いた式を、最後の語まで読めないとき。演算子の右が空（`x +`）、`(` が閉じていない、値が二つ演算子なしで並んでいる（`金額 税`）、符号が数にくっついている（`金額 -100円`）、などです。いままでは読めたところまでを式にして、残りを黙って捨てていました。`金額 税` は `金額` と読まれて検査を通り、`x +` は宣言ごと消えていました。",
+                "An expression — on the right of `=`, of `->` in a `fold`, and so on — cannot be read to its last token: nothing on the right of an operator (`x +`), a `(` never closed, two values with no operator between them (`amount tax`), a sign stuck to a number (`amount -100円`). What could be read used to become the expression and the rest was dropped: `amount tax` passed the check as `amount`, and `x +` took its whole declaration with it."
+            ),
+            tr!(
+                "抜けている演算子や括弧を補ってください。引くときは `金額 - 100円` のように、記号の後ろを空けます。記号と数字がくっついていると、負の数として読まれます。",
+                "Supply the missing operator or parenthesis. To subtract, leave a space after the sign, as in `amount - 100円`: a sign touching the digits makes a negative number."
+            ),
+            X_E059,
+            &["E058", "E118", "E115"],
+        ),
+        err(
+            "E060",
+            tr!("刻みが正の値ではありません", "A step is not positive"),
+            tr!(
+                "型の刻み（`rate[step 0%]`）、出力の丸めの刻み（`round up(0円)`）、式の中の丸めの刻み（`down(x, 0円)`）が 0 か負の数のとき。刻み 0 の丸めは検査を通り、生成コードの中で 0 で割って、実行時に止まっていました（Python なら ZeroDivisionError）。刻み 0 の型は、黙って刻み 1 として読まれていました。",
+                "The step of a type (`rate[step 0%]`), the rounding grid of an output (`round up(0円)`) or of a rounding call (`down(x, 0円)`) is zero or negative. A grid of zero passed the check and the generated code divided by it at run time (Python stopped with ZeroDivisionError); a step of zero was quietly read as a step of one."
+            ),
+            tr!(
+                "0 より大きい刻みを書いてください（`round up(1円)`、`rate[step 0.1%]`）。",
+                "Write a step greater than zero (`round up(1円)`, `rate[step 0.1%]`)."
+            ),
+            X_E060,
+            &["E104", "E114", "E106"],
+        ),
+        err(
+            "E061",
+            tr!("範囲が空です", "The range is empty"),
+            tr!(
+                "`range` に入る値が一つも無いとき。下の端が上の端を超えている（`range >=10円 <=0円`）か、両端が同じ値で片方が `>` か `<` のときです。こういう範囲は、いままで何も言われずに通っていました。完全性の証明は何も無い集合について「漏れなし」と答え、生成コードの入口はどの呼び出しも断っていました。",
+                "No value lies in a `range`: the lower end is past the upper one (`range >=10円 <=0円`), or the two are equal and one of them is `>` or `<`. Such a range used to pass with nothing said: the completeness proof answered \"complete\" over nothing, and the generated code's entry refused every call."
+            ),
+            tr!(
+                "書き間違えた端を直してください（`range >=0円 <=10円`）。",
+                "Correct the end that was mistyped (`range >=0円 <=10円`)."
+            ),
+            X_E061,
+            &["E112", "E103", "E060"],
+        ),
+        err(
+            "E062",
+            tr!("ありえない日付です", "There is no such date"),
+            tr!(
+                "日付の形（`2026-04-01`）をしているのに、月が 1〜12 の外か、日がその月の日数を超えるとき（`2026-02-30`、`2026-01-99`）。こういう日付は、いままで形だけを見て読まれていました。検査器は日の通し番号として数え（1 月 99 日は 4 月 9 日）、生成した Python は実行時に止まり、JavaScript の `Date` は黙って次の月へ繰り越すので、言語ごとに答えが割れていました。",
+                "A literal has the shape of a date (`2026-04-01`) but no such day: the month is outside 1 to 12, or the day is past the end of its month (`2026-02-30`, `2026-01-99`). Such a date used to be read by its shape alone: the checker counted on from the first of the month (January 99th was April 9th), the generated Python stopped at run time, and JavaScript's `Date` would have rolled it over quietly, so the languages disagreed."
+            ),
+            tr!(
+                "ある日付に直してください。月末を言いたいなら、その月の最後の日を書きます（`2026-02-28`）。",
+                "Write a day that exists. For the end of a month, write its last day (`2026-02-28`)."
+            ),
+            X_E062,
+            &["E002", "E103"],
+        ),
+        err(
+            "E063",
+            tr!("セルを読めません", "The cell cannot be read"),
+            tr!(
+                "表・例・並びのセルに、セルとして読めない語があるとき。比較の後ろの余分な語（`<=0円 + false`）、値の後ろの語（`false 0円`）、値でない語（`+`）、見出しの列に名前が無い、などです。いままでは読めたところまでをセルにして、残りを捨てていました。読めないセルは丸ごと捨てていたので、後ろのセルが一つずつ左の列へずれていました。",
+                "A cell of a table, of the examples or of a sequence holds something a cell cannot: words after a comparison (`<=0円 + false`), a word after a value (`false 0円`), a word that is no value (`+`), a header column with no name. What could be read used to become the cell and the rest was dropped, and a cell that could not be read at all was dropped whole, so every cell after it moved one column to the left."
+            ),
+            tr!(
+                "セルに書けるのは、値一つ、`-`、`none`、比較、コンマで区切った値の集合、`not:` と集合、`starts_with` と文字列です。一つの列に二つの条件を書くなら、比較を並べます（`>=1 <10`）。",
+                "A cell holds one value, `-`, `none`, a comparison, a set of values separated by commas, `not:` with a set, or `starts_with` with a string. Two conditions on one column are two comparisons side by side (`>=1 <10`)."
+            ),
+            X_E063,
+            &["E008", "E010", "E014", "E064"],
+        ),
+        err(
+            "E064",
+            tr!("行が見出しと合いません", "The row does not fit the header"),
+            tr!(
+                "表・並び・手順の例・例の行のセルの数が、見出しの列の数と違うとき。または、最後の `|` の後ろに語があるとき（行を閉じる `|` の書き忘れ）。いままでは、閉じていない行の最後のセルが黙って捨てられ、セルの数の合わない行もそのまま読まれていました。参照評価器と生成コードがその行を別々に読み、答えが割れていました。例の表では、見出しに出力の列が無いか行の期待値が足りなければ E111、並びの列が無ければ E025 が、どの列かを先に言います。",
+                "A row of a table, of a sequence, of a scenario or of the examples has a different number of cells from the header's columns, or words follow its last `|` — the closing bar was left off. The last cell of such a row used to be dropped with nothing said, and a row whose cells did not match was read as it stood; the reference evaluator and the generated code then read the row two different ways and answered differently. In the examples, a header without a column for an output, or a row short of an expected value, is E111, and a header without the sequence's column is E025: each names the column first."
+            ),
+            tr!(
+                "一つの列に一つのセルを書き、行を `|` で閉じてください。どの値でもよい列には `-` を書きます。",
+                "Write one cell per column and close the row with `|`. A column that takes any value gets `-`."
+            ),
+            X_E064,
+            &["E063", "E008", "E111"],
+        ),
+        err(
+            "E101",
+            tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
+            tr!(
+                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です（§4）。当てはまらない入力の具体例が必ず付きます。",
+                "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required (§4). A concrete input that matches no row is always attached."
+            ),
+            tr!(
+                "それを起こす入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足します。値に専用の行が要らないなら、列挙の宣言に `default` を付けます。",
+                "Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration."
+            ),
+            X_E101,
+            &["E102", "E105", "W111"],
+        ),
+        err(
+            "E102",
+            tr!("どの入力にも当てはまらない行があります", "Unreachable row: the row never matches"),
+            tr!(
+                "先行する行にすべて覆われているか、上流の表が決して出さない値を名指ししているとき。形は二つあり、文面が原因を書き分けます。",
+                "Every input the row would take is already taken by an earlier row, or the row names a value that the upstream table never produces. The two forms are told apart in the wording."
+            ),
+            tr!(
+                "その行が新しい仕様なら、覆っている行より上へ移してください。不要なら削除します。上流が出さない値を指しているなら、上流の表にその値を出す行を足すか、この行を消します。",
+                "If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row."
+            ),
+            X_E102,
+            &["E101", "W105", "W110"],
+        ),
+        err(
+            "E103",
+            tr!("単位の混同: 型の違う値を混ぜています", "Unit mismatch: values of different types are being mixed"),
+            tr!(
+                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です（§2.3）。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときもこれです。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。列の列挙に無い値や群をセルに書いたときもこれで、出力のセルと、二つの列挙の値を混ぜた群も含みます（§15.150）。",
+                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums (§15.150)."
+            ),
+            tr!(
+                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書きます。刻みなら、型と同じ単位で書きます（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。",
+                "Move one side into a table. \"A surcharge that depends on weight\" is `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`)."
+            ),
+            X_E103,
+            &["E108", "E112"],
+        ),
+        err(
+            "E104",
+            tr!("数値の出力に丸めの宣言がありません", "A numeric output declares no rounding"),
+            tr!(
+                "数量・金額・率の出力に `round` が無いとき。端数がどう決まるかを宣言しないと、生成コードが黙って決めてしまいます。式が端数を生む場合は、丸め方で円がいくら動くかを数字で見せます。",
+                "A quantity, money or rate output has no `round`. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer."
+            ),
+            tr!(
+                "出力の宣言に丸めを書いてください。例: `round up(10円)`。向きは五種（`up` `down` `half_up` `half_down` `half_even`）で、負の側まで固定されています（§7.3）。",
+                "Add rounding to the output declaration, e.g. `round up(10円)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well (§7.3)."
+            ),
+            X_E104,
+            &["E106", "E103"],
+        ),
+        err(
+            "E105",
+            tr!("行の重なり: 同じ入力が二つ以上の行に当てはまります", "Overlapping rows: the same input matches two or more rows"),
+            tr!(
+                "`policy unique` の表で、両方に当てはまる入力を実際に構成できたとき。構成できなかった重なりは W114 に落ちます。上の表が同時には出さない値の組でしか重ならない対は、重なりとして報告しません（E102 がそういう行を死んだ行と呼ぶのと同じ読みです）。",
+                "In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead. A pair that meets only on a combination the tables above never produce together is not reported, which is the reading that also lets E102 call such a row dead."
+            ),
+            tr!(
+                "出力が違うなら、どちらが正しいか決めて行を直してください。順序に意味を持たせたいなら `policy first` を宣言します。出力まで同じなら、片方を削ります。",
+                "If the outputs differ, decide which is right and fix the rows; to let the order decide, declare `policy first`. If even the outputs agree, delete one of the rows."
+            ),
+            X_E105,
+            &["W105", "W114", "E102"],
+        ),
+        err(
+            "E106",
+            tr!("出力のリテラルが丸めの刻みに載っていません", "An output literal is not on the rounding grid"),
+            tr!(
+                "出力セルに書かれたリテラルが、宣言した丸めの刻みの倍数でないとき。`round up(10円)` の表に `1451円` があるような、桁の打ち間違いをここで落とします（§7.2）。",
+                "A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451円` in a table rounded `up(10円)` — is stopped (§7.2)."
+            ),
+            tr!(
+                "リテラルを刻みに載せてください（`1451円` は `1450円` か `1460円`）。その額が本当に正しいなら、丸めの刻みのほうを直します。",
+                "Put the literal on the grid (`1451円` becomes `1450円` or `1460円`). If the amount really is right, change the grid instead."
+            ),
+            X_E106,
+            &["E104"],
+        ),
+        err(
+            "E107",
+            tr!("例の期待値と一致しません", "An example does not match"),
+            tr!(
+                "`examples` の行を参照評価器で走らせた結果が、書かれた期待値と違うとき。**どの表のどの行に当てはまったか**が付きます。`examples` は実行される仕様です。",
+                "Running a row of `examples` through the reference evaluator gives something other than the value written. **Which row of which table fired** is attached. `examples` is an executable specification."
+            ),
+            tr!(
+                "表が正しいなら期待値を直してください。期待値が業務の真実なら、当てはまった行のほうを直します。どちらを直すかは、出典（規約、Excel、いま動いている実装）が決めます。",
+                "If the table is right, fix the expected value. If the expected value is the business truth, fix the row that fired. Which one to fix is settled by the source: the written rule, the spreadsheet, or the legacy implementation."
+            ),
+            X_E107,
+            &["E111", "E105"],
+        ),
+        err(
+            "E108",
+            tr!("中間値が int64 に収まることを証明できません", "Cannot prove an intermediate value fits in int64"),
+            tr!(
+                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。",
+                "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value."
+            ),
+            tr!(
+                "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは円が動く業務の判断なので、ツールは勝手に決めません（§7.1）。",
+                "Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it (§7.1)."
+            ),
+            X_E108,
+            &["E112", "E103"],
+        ),
+        err(
+            "E109",
+            tr!("検査の予算を超えたので、完全性を証明できませんでした", "The check exceeded its budget, so completeness could not be proven"),
+            tr!(
+                "領域検査が訪れたノード数が `--budget` を超えたとき。**証明できなかったことを緑にはしない**ので、警告ではなくエラーです。",
+                "The region check visited more nodes than `--budget` allows. Failing to prove something is never green here, so this is an error and not a warning."
+            ),
+            tr!(
+                "表を分けて列の数を減らすか、`--budget` を上げてください。列の積が効くので、一つの表に列を積むより、表を一列につないでいくほうが安く済みます（§5.1）。",
+                "Split the table to reduce the number of columns, or raise `--budget`. The cost is the product of the columns, so chaining tables in a linear pipeline is cheaper than piling columns into one table (§5.1)."
+            ),
+            X_E109,
+            &["E101", "W114"],
+        )
+        .with_budget(1),
+        err(
+            "E110",
+            tr!("検査できない型の列があります", "A column has a type the check cannot handle"),
+            tr!(
+                "その列の型を、区画の計算ができる形に落とせないとき。**これが出たら rulec 自身のバグです。** 表の検査が黙って素通りするのを防ぐための内部の検査で、日付と optional で二度起きた同じ種類の事故を、まとめて塞いだものです（§6.3）。",
+                "The column's type cannot be lowered into the region IR. **Seeing this is a bug in rulec itself.** It is the internal breakwater that stops a table from being skipped silently, put in after the same accident happened twice, with dates and with optional (§6.3)."
+            ),
+            tr!(
+                "その列を、いま検査できる型（真偽・列挙・数量・金額・率・日付・optional）に直してください。そのうえで報告してください — 素通りより止まるほうが正しいという判断でこの検査があります。",
+                "Change the column to a type the check handles today (bool, enum, quantity, money, rate, date, optional). Then report it: this check exists because stopping is better than passing silently."
+            ),
+            X_E110,
+            &["E101", "E105"],
+        ),
+        err(
+            "E111",
+            tr!("例に出力の列がありません", "The examples have no column for an output"),
+            tr!(
+                "`examples` が、宣言した出力の一部しか書いていないとき。実装どうしの照合は、生成物が揃って同じ誤りを持つと緑のままなので、**それを破れるのは人の書いた期待値だけ**です。実際に複数出力の丸めが、どの言語でも揃って抜けたことがあります。",
+                "`examples` writes only some of the declared outputs. Agreement across the implementations stays green when they all carry the same mistake, so **only a human-written expectation can break it**. Rounding for multiple outputs really did go missing in every one at once."
+            ),
+            tr!(
+                "欠けている出力の列を `examples` に足してください。出力が二つ以上あるときは、二列目以降に `->` を書いても書かなくても構いません。",
+                "Add the missing output column to `examples`. With two or more outputs, writing `->` before the later columns is optional."
+            ),
+            X_E111,
+            &["E107"],
+        ),
+        err(
+            "E112",
+            tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of a derived value does not contain the values it can reach"),
+            tr!(
+                "入力の範囲から計算した「実際に取りうる値」が、導出に宣言した `range` からはみ出すとき。範囲が狭いと、完全性検査が実際に起きる値を見ないまま「完全」と答えます。",
+                "The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers \"complete\" without ever looking at values that really occur."
+            ),
+            tr!(
+                "文面が示す範囲まで `range` を広げてください（`range >=-110万円 <=100万円` の形で書いてあります）。起こりえない分まで広げても、検査がそこを自分で外すので害はありません。",
+                "Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-110万円 <=100万円`). Widening past what is reachable costs nothing: the check sifts the infeasible part out."
+            ),
+            X_E112,
+            &["E108", "E101"],
+        ),
+        err(
+            "E113",
+            tr!("真偽定義の条件が、書ける二つの形のどちらでもありません", "The condition of a boolean definition is neither of the two allowed forms"),
+            tr!(
+                "`define … : bool` の条件が、「入力か導出の値ひとつを定数と比べる」形でも、「引き算で差を取れない型どうしの比較」（日付どうしなど）でもないとき。数値どうしを直接比べたときがこれに当たります（§5.3）。",
+                "The condition of `define … : bool` is neither one input or derived value compared with a constant, nor a comparison of two values whose difference cannot be subtracted (two dates, say). Comparing two numbers directly is the usual case (§5.3)."
+            ),
+            tr!(
+                "差を導出として宣言してから定数と比べてください。`define bigger : bool = a >= b` は `derive gap(gap) : money[円, incl_tax] = a - b  range …` を足して `| gap | >=0円 |` と書き換えます。そのほうが厳密に解析できます。",
+                "Declare the difference as a derived value and compare that against a constant. `define bigger : bool = a >= b` becomes `derive gap(gap) : money[円, incl_tax] = a - b  range …` and the cell `>=0円`. The analysis is exact that way."
+            ),
+            X_E113,
+            &["E112", "E103"],
+        ),
+        err(
+            "E114",
+            tr!("値が宣言した刻みに載っていません", "A value does not sit on the declared step"),
+            tr!(
+                "`rate[step 1%]` の列に `0.5%` のように、宣言した刻みの整数倍でない値が書かれたとき。実行時の値はその刻みの整数一本なので（§2.1）、この値には表し方がありません。率の出力の丸めの刻みが、出力の宣言した刻みの整数倍でないとき（`rate[step 1%]` に `round down(0.5%)`）も同じです。答えは丸めの刻みに載り、呼び出し側へは宣言した刻みの整数で渡すので、表せない答えが出ます（§15.144）。",
+                "A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step (§2.1), so this one has no representation. The same holds for the rounding grid of a rate output that is not a whole number of the step the output declares (`rate[step 1%]` with `round down(0.5%)`): every answer sits on the grid and is handed over as a whole number of the step, so some answers could not be written (§15.144)."
+            ),
+            tr!(
+                "刻みに載る値に直すか、型の刻みを細かくしてください（`rate[step 0.1%]`）。黙って近い刻みに寄せると、表で読める境界と生成コードの境界が食い違います。丸めの刻みなら、刻みを丸めに合わせるか、丸めの刻みを刻みの整数倍にしてください。",
+                "Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code. For a rounding grid, declare the step the rounding needs, or round to a whole number of the step."
+            ),
+            X_E114,
+            &["E103", "E106"],
+        ),
+        err(
+            "E115",
+            tr!("割る数が正の定数ではありません", "The divisor is not a positive constant"),
+            tr!(
+                "`÷` の右が、正の整数の定数でも、同じ単位の正の金額・数量の定数でもないとき。変数、0、負の数、小数がこれに当たります（§2.3）。",
+                "The right of `÷` is neither a positive whole constant nor a positive constant amount or quantity in the same unit: a variable, zero, a negative number or a fraction (§2.3)."
+            ),
+            tr!(
+                "割る数が業務のデータなら、率として入力に取るか、定数を引く表として書いてください。刻みが静的に決まらないと生成コードは言語の除算に頼ることになり、Python は −∞ 方向、Go は 0 方向に丸めて答えが食い違います（§7.1）。",
+                "If the divisor is business data, take it as a rate input or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree (§7.1)."
+            ),
+            X_E115,
+            &["E103", "E108"],
+        ),
+        err(
+            "E116",
+            tr!("行の金額が、引いた写しに無いか、別の見出しの下にあります", "A row's amount is not in the copy it cites, or is under another heading there"),
+            tr!(
+                "行の出力の値が、その行（またはその表）が `@出典 表1` で引いている写しのどこにも出てこないとき（§15.82）。行のセルの語（`関東`）と一字一句同じ見出しが写しにあれば、その見出しの行と列の中だけを探します。隣の行の金額は写しのどこかにはあるので、表全体を探したのでは取り違えを見逃すからです（§15.143）。比べるのは金額だけです。閾値は写すときに書き換わります（`1,949,000円まで` は `<=1949000円` になる）が、金額は書き換わらないからです。写しの `5/1,000` や `1,000分の5` は 0.5% と読みます。写しは `rulec source fetch` が文書から取り出したもので、check が見るのはその写しであって文書そのものではありません。",
+                "The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Where the copy has a heading that says exactly a word of the row's cells (`関東`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up (§15.143). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. A copy's `5/1,000` or `1,000分の5` reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself."
+            ),
+            tr!(
+                "写しを読み直して金額を直してください。別の見出しの下にあると言われたら、行を取り違えています。一桁の打ち間違いなら、たいてい同時に W120 が出て、どの値が使われずに残っているかを言います。値が別のところ（後の通知、正誤表、人の回答）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。`rulec doc` がそのコメントを承認する人に見せます。",
+                "Reread the copy and correct the amount. When it is said to be under another heading, the rows were mixed up. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows to the approver."
+            ),
+            X_E116,
+            &["W120", "E038", "E107"],
+        )
+        .with_files(TARIFF_DOC),
+        err(
+            "E117",
+            tr!("配分の前提が揃っていません", "A share without what a share needs"),
+            tr!(
+                "`allocate(配る額, 累計, 全体)` の三つが配分の形になっていないとき。三つとも範囲を宣言した名前で、配る額と累計は負になれず、全体は正で、累計が全体を超えないと `constraint` が言っていなければなりません（§15.102）。",
+                "The three of `allocate(<amount>, <running total>, <whole>)` are not the shape a share needs. All three are names with declared ranges, the amount and the running total cannot be negative, the whole is positive, and a `constraint` says the running total never passes the whole (§15.102)."
+            ),
+            tr!(
+                "足りないものを書いてください。`constraint 累計 <= 全体` がないと、配る分が配る額を超えることがあり、明細の合計が総額に一致しません。負が混じると、下に丸めるのか零へ丸めるのかで言語ごとに答えが割れます（§7.1）。",
+                "Write what is missing. Without `constraint <running total> <= <whole>` a share can exceed the amount being handed out and the lines no longer add up to the total. Below zero the targets disagree about which way to round (§7.1)."
+            ),
+            X_E117,
+            &["E115", "E108"],
+        ),
+        err(
+            "E118",
+            tr!("呼び出しの形が違います", "The call is not written correctly"),
+            tr!(
+                "無い関数を呼んでいるか、引数の数が合わないとき。書けるのは `min(a, b)` `max(a, b)` `allocate(配る額, 累計, 全体)` と丸めの五つ（`down(x, 1円)` など）だけです（§2.3）。",
+                "A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1円)` and the rest) (§2.3)."
+            ),
+            tr!(
+                "綴りと引数の数を見てください。多い引数は黙って捨てられ、少なければ答えが決まりません——どちらも §15.102 までは素通りしていて、ジェネレーターのほうで初めて行き止まりになっていました。",
+                "Check the spelling and the count. A spare argument is dropped on the floor and a missing one leaves no answer — both passed unnoticed until §15.102, and only the generator ran out of cases."
+            ),
+            X_E118,
+            &["E103", "E115"],
+        ),
+        err(
+            "E120",
+            tr!("`from` が入力の型と合いません", "A `from` does not fit the input's type"),
+            tr!(
+                "`from` の返すものが、それを受ける入力の型と合わないとき（§15.125）。`any` と `all` は `bool` を、`count` は `number` を返します。パスの先にあるものの型が入力と合わないとき（契約が文字列と言っているフィールドを `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値がフィールドの型と合わないときも、これです。契約は値がどう運ばれるかを言うので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で来ます。",
+                "What a `from` yields does not fit the input that takes it (§15.125). `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
+            ),
+            tr!(
+                "型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けます。値そのものが欲しいなら `from <shape の名前>.<フィールド>` です。`where` の値に単位は書けません——契約に単位は無く、目盛りの違う数どうしを黙って比べることになるからです。",
+                "Correct the type or the `from`. A count is taken by a `number` input with a range, whether the elements passed by a `bool`, and the value itself by `from <shape>.<field>`. A `where` value carries no unit: a contract has none, and comparing a scaled number with a raw one is the thing this must not do quietly."
+            ),
+            X_E120,
+            &["E121", "W122", "E103"],
+        )
+        .with_files(SHAPE_DOC),
+        err(
+            "E121",
+            tr!("`from` のパスが契約にありません", "The contract has no such path"),
+            tr!(
+                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき（§15.125）。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` の見るフィールドが要素に無いときの三つです。どこまで届いたかと、そこにあったフィールドの名前を出します。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
+                "A `from` path is not in the contract of the `shape` it starts at (§15.125). Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin."
+            ),
+            tr!(
+                "綴りを直すか、契約のほうが動いたのならパスを書き直してください。**これが出るのが目的です**——契約がフィールドの名前を変えたとき、手書きのつなぎのコードなら実行時まで気づかず、ここなら生成の前に止まります。",
+                "Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here."
+            ),
+            X_E121,
+            &["E120", "W122", "E032"],
+        )
+        .with_files(SHAPE_DOC),
+        err(
+            "E119",
+            tr!("行の境界が、引いた写しと反対側です", "A row's boundary falls on the other side from the copy it cites"),
+            tr!(
+                "引用のある行の閾値が、境界の値を写しと反対の側に入れているとき（§15.124）。閾値は写すときに書き換わる（`1,949,000円まで` は `<=1949000円` になる）ので文字としては比べられず、比べているのは**境界の値がどちらに入るか**だけです。写しの「60cm以下」と「60cmを超え」はどちらも 60cm を小さいほうに入れ、`<=60cm` と `>60cm` も同じことを言います。写しに境界の語が無いとき（`18 to 20`、`60〜80`）、語が数と別の列にあるとき（保険料額表の「円以上／円未満」）、同じ数を写しが両側に置いているときは、何も言いません。",
+                "A threshold of a row that cites puts its boundary value on the other side from the copy (§15.124). A threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `60cm以下` and `60cmを超え` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60〜80`), with the word in another column (`円以上` over its own column, as an insurance premium table writes it), or with words on both sides, is left alone."
+            ),
+            tr!(
+                "写しを読み直して直してください。`fix.text` はこのセルの境界の側だけを入れ替えた形です——向きは表の幾何であって写しが決めることではないので、`<` と `<=` の入れ替えしか書きません。一つの境界を写し間違えると、それを分け合う二つの行の両方が出ます。境界が別のところ（後の通知、本文の但し書き）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
+                "Reread the copy and correct it. `fix.text` is this cell with that one boundary's side swapped and nothing else: the direction is the table's geometry, not the copy's to decide, so only `<` and `<=` are exchanged. One boundary mistranscribed is reported on both of the rows that share it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from."
+            ),
+            X_E119,
+            &["E116", "W120", "E105"],
+        )
+        .with_files(SIZE_DOC),
+        warn(
+            "W122",
+            tr!("その `shape` を使っている入力がありません", "No input is projected from that shape"),
+            tr!(
+                "`shape` を宣言しているのに、`from <その名前>.…` と書いた入力が一つも無いとき（§15.125）。契約は読まれますが、何も確かめていません。",
+                "A `shape` is declared and no input says `from <that name>.…` (§15.125). The contract is read and holds nothing."
+            ),
+            tr!(
+                "使うか、消してください。読まれているだけの契約は、次に読む人に「ここは契約に縛られている」と思わせます。縛られているのは `from` を書いた入力だけです。",
+                "Use it or delete it. A contract that is only read makes the next reader believe this rule is held to it; what is held to it is the inputs that say `from`."
+            ),
+            X_W122,
+            &["E121", "W111"],
+        )
+        .with_files(SHAPE_DOC),
+        err(
+            "E122",
+            tr!("契約が通す値を、規則が断ります", "The contract lets through a value the rule refuses"),
+            tr!(
+                "`from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき（§15.132）。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、\"\"、0 件）として届きます。`.proto` の文字列から読む日付は、\"\" を通すかどうかを見ます（§15.133）。フィールドをまたぐ条件（CEL の式、`oneof`、JSON Schema の `allOf`・`anyOf`・`oneOf`・`not`・`if`）が一つのフィールドの幅を狭めていれば、それも読みます（§15.140）。JSON Schema の型に null があるのに、入力が省略できないときも、これです。読めない規則（剰余や文字列の関数を使う CEL など）は、無いものとして扱います。契約を実際より広く読むので、要らないところで言うことはあっても、見逃すことはありません。",
+                "A value read with `from` can pass the contract's validation and still be refused by the input's declaration (§15.132). What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, \"\", no elements) with no rule applied; a date read from a `.proto` string is held to whether \"\" passes (§15.133). A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field (§15.140), and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken."
+            ),
+            tr!(
+                "どちらを直すかは人が決めます。その値が来ないはずなら、契約を狭めてください。`fix.text` が、契約に書く注釈そのものです（`narrow_contract`）。来るのなら、規則の範囲を広げるか列挙に値を足して、その値の答えを決めてください。`where` で絞った件数の下限のように契約に書けない前提もあり、そのときは `fix.kind` が `none` です。読む値が無いことがあるなら、入力を `T?` にしてください。無いときは none として読みます。",
+                "Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none."
+            ),
+            X_E122,
+            &["W123", "E123", "E121", "E032"],
+        )
+        .with_files(LINES_DOC),
+        warn(
+            "W123",
+            tr!("行が、契約の通さない値でしか当たりません", "A row is reached only by values the contract does not let through"),
+            tr!(
+                "行のセルが `from` で読む入力を試していて、そのセルが受け付ける値を、契約の検証が一つも通さないとき（§15.132）。契約を通ったものしか来ないので、その行に当たるリクエストやメッセージはありません。比べるのは入力そのものの列だけで、そこから導いた値の列は見ません。",
+                "A cell of a row tests an input read with `from`, and nothing the cell accepts passes the contract's validation (§15.132). Only what passed the contract arrives, so no request or message reaches the row. Only a column of the input itself is compared; a column derived from it is not."
+            ),
+            tr!(
+                "契約がこの先も広がらないなら、行を消して、入力の範囲を契約に合わせてください。広がる予定があって残しているのなら、そのままで構いません。CI の `check --diff-base` は、新しく生じたものだけを報告します。",
+                "If the contract will not widen, delete the row and bring the input's range in line with the contract. If the row is kept for a widening that is planned, leave it: `check --diff-base` in CI reports only the ones that are new."
+            ),
+            X_W123,
+            &["E122", "W124", "E102", "W111"],
+        )
+        .with_files(LINES_DOC),
+        err(
+            "E123",
+            tr!("契約が、規則の `constraint` を破る組み合わせを通します", "The contract lets through a combination the rule's `constraint` refuses"),
+            tr!(
+                "`constraint` の両側が、同じ `shape` から `from` で読む入力で、契約の検証を通るリクエストのなかに、両方の値が入力の範囲に入っているのに `constraint` を満たさないものがあるとき（§15.140）。契約がフィールドのあいだに置く条件（`.proto` のメッセージの CEL、`oneof`、JSON Schema の組み合わせ）を読んだうえで、それでも破る組み合わせが残るかを確かめます。見つかれば、その値を例に出します。読めない規則は無いものとして扱うので、見逃すことはありません。",
+                "Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken (§15.140). The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed."
+            ),
+            tr!(
+                "どちらを直すかは人が決めます。その組み合わせが来ないはずなら、契約で約束してください。`.proto` なら、`fix.text` がメッセージに書く `(buf.validate.message).cel` です（`narrow_contract`）。JSON Schema には二つのフィールドの値を比べる書き方がないので、`fix.kind` は `none` です。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。",
+                "Which side to change is a person's decision. If the combination cannot occur, promise it in the contract: for a `.proto`, `fix.text` is the `(buf.validate.message).cel` to write on the message (`narrow_contract`). JSON Schema has no way to compare the values of two fields, so there `fix.kind` is `none`. If it can occur, take the `constraint` off and decide in the tables what the rule answers for it."
+            ),
+            X_E123,
+            &["E122", "W124", "E018"],
+        )
+        .with_files(QUOTE_PROTO),
+        warn(
+            "W124",
+            tr!("行が、契約の通さない組み合わせでしか当たりません", "A row is reached only by a combination the contract does not let through"),
+            tr!(
+                "行のセルが、同じ `shape` から `from` で読む二つ以上の入力を試していて、セルを一つずつ見れば契約の通す値なのに、契約がフィールドのあいだに置く条件のもとでは、その組み合わせが一つも通らないとき（§15.140）。たとえば CEL の `this.min <= this.max` のもとで「最小が 20kg を超え、最大が 10kg 以下」を求める行や、一つの `oneof` の二つのメンバーをどちらも 0 でないとする行です。ほかの列のセルは見ないので、当たると言いすぎることはあっても、当たらないと言いすぎることはありません。",
+                "A row's cells test two or more inputs read with `from` from the same `shape`, each cell alone asks for values the contract lets through, and under the conditions the contract places across its fields no combination of them passes (§15.140): a row asking for a minimum above 20kg and a maximum of at most 10kg under the CEL `this.min <= this.max`, or a row asking for two members of one `oneof` to be both non-zero. The cells on other columns are left out, so this may call a row reachable that is not, never the other way round."
+            ),
+            tr!(
+                "契約がこの先も変わらないなら、行を消してください。変わる予定があって残しているのなら、そのままで構いません。CI の `check --diff-base` は、新しく生じたものだけを報告します。",
+                "If the contract will not change, delete the row. If the row is kept for a change that is planned, leave it: `check --diff-base` in CI reports only the ones that are new."
+            ),
+            X_W124,
+            &["W123", "E123", "E102"],
+        )
+        .with_files(QUOTE_PROTO),
+        err(
+            "E124",
+            tr!("終わりの状態から出る遷移があります", "A final state has a way out"),
+            tr!(
+                "`final` に書いた状態から、別の状態へ移る呼び出しがあるとき（§15.148）。終わったはずの案件がまた動くことになります。その状態に着くまでの最短の呼び出しと、出ていく一回が `witness.trace` に付きます。",
+                "A call moves a case out of a state the `final` line names (§15.148): a case that had ended is set going again. The shortest sequence of calls to that state, and the call that leaves it, come with it as `witness.trace`."
+            ),
+            tr!(
+                "その行で状態を留めるか、その状態を `final` から外してください。どちらが正しいかは業務の判断です。",
+                "Keep the state where it is on that row, or take it off the `final` line. Which of the two is right is the business's to say."
+            ),
+            X_E124,
+            &["E125", "E126"],
+        ),
+        err(
+            "E125",
+            tr!("着いたら終われない状態があります", "A case can reach a state it can never finish from"),
+            tr!(
+                "`initial` から着ける状態のうち、終わりの状態でなく、そこからどの終わりの状態にも着けないものがあるとき。ワークフローネットの健全性でいう「必ず終われる」が破れている形です。そこに着くまでの最短の呼び出しが付きます。",
+                "A state a case can reach from `initial` is not final, and no final state can be reached from it: the \"option to complete\" of workflow-net soundness is broken. The shortest sequence of calls that gets there comes with it."
+            ),
+            tr!(
+                "終わりの状態へ移る行を足すか、そこで終わるのが正しいなら、その状態を `final` に加えてください。",
+                "Add a row that moves on to a final state, or, if a case rightly ends there, add the state to `final`."
+            ),
+            X_E125,
+            &["E124", "W125"],
+        ),
+        err(
+            "E126",
+            tr!("`never` の主張が破れています", "A `never` line is broken"),
+            tr!(
+                "`never A after B` について、`initial` から B を通ったあとで A に着く呼び出しの並びがあるとき。いちばん短いものが付き、そのどの呼び出しも、規則が受け付けて答えを返す入力です。",
+                "For `never A after B`, some sequence of calls from `initial` reaches A after it has been in B. The shortest one comes with it, and every call in it is an input the rule takes and answers."
+            ),
+            tr!(
+                "行き先を決める行を直すか、主張が業務として誤りなら `never` の行を消してください。",
+                "Correct the rows that decide where a case goes, or drop the `never` line if the claim is wrong as business."
+            ),
+            X_E126,
+            &["E052", "E124"],
+        ),
+        err(
+            "E127",
+            tr!("`once` の主張が破れています", "A `once` line is broken"),
+            tr!(
+                "`once <出力> <セル>` について、一件の案件の中で、出力がセルに当てはまる呼び出しが二回ある並びがあるとき。二重の返金、二重の付与の形です。いちばん短いものが付きます。",
+                "For `once <output> <cell>`, one case has two calls whose output the cell accepts: a refund paid twice, a point granted twice. The shortest such sequence comes with it."
+            ),
+            tr!(
+                "二回目に至る並びを断つ行を足すか（返金を済ませた状態から前へ戻らない、など）、宣言が誤りなら `once` の行を消してください。",
+                "Add the row that cuts the sequence short before the second call (a case that has been refunded does not go back, say), or drop the `once` line if it is wrong."
+            ),
+            X_E127,
+            &["E053", "E126"],
+        ),
+        err(
+            "E128",
+            tr!("ステートマシンの主張を検査できませんでした", "The machine's claims could not be checked"),
+            tr!(
+                "入力の区画の数が予算（`--budget` を 50 で割った数）を超えたとき、または規則の答えが決まった数の列で区切れないとき。証明できなかった主張を緑にはしないので、警告ではなくエラーです。",
+                "The inputs cut into more cells than the budget allows (`--budget` divided by 50), or the rule's answer does not cut into finitely many columns. A claim that was not proven is never green, so this is an error and not a warning."
+            ),
+            tr!(
+                "`--budget` を上げるか、遷移を決める表の列を減らしてください。列の積が効くので、表を一列につないでいくほうが安く済みます（§5.1）。",
+                "Raise `--budget`, or give the table that decides the transitions fewer columns. The cost is the product of the columns, so a chain of tables is cheaper than one wide one (§5.1)."
+            ),
+            X_E128,
+            &["E109", "W127"],
+        )
+        .with_budget(100),
+        warn(
+            "W125",
+            tr!("どの手順でも着かない状態があります", "No sequence of calls reaches a state"),
+            tr!(
+                "持ち越す状態の列挙に、`initial` から始まる呼び出しの並びでは着かない値があるとき。",
+                "The enum of the carried state has a value that no sequence of calls from `initial` reaches."
+            ),
+            tr!(
+                "その状態へ移る遷移を足すか、要らなければ列挙から消してください。ほかの版から移ってくる案件のために残しているのなら、このままで構いません（移行は `diff` が見ます）。",
+                "Add the transition into it, or drop it from the enum. If it is kept for cases moved over from another version, leave it: `diff` looks at the move."
+            ),
+            X_W125,
+            &["W126", "E125"],
+        ),
+        warn(
+            "W126",
+            tr!("案件が着ける状態からは使われない遷移があります", "A transition is never taken from a state a case can reach"),
+            tr!(
+                "遷移を決める表の行が、`initial` から着けない状態のときにしか当てはまらないとき。W125 と一緒に出ます。",
+                "A row of the table that decides the transitions applies only in states no sequence of calls from `initial` reaches. It comes with W125."
+            ),
+            tr!(
+                "着けない状態へ移る遷移を足すか、行を消してください。",
+                "Add the transition into the state it needs, or drop the row."
+            ),
+            X_W126,
+            &["W125", "E102"],
+        ),
+        warn(
+            "W127",
+            tr!("ステートマシンの主張を決めきれませんでした", "A claim of the machine could not be settled"),
+            tr!(
+                "主張が、答えを出す入力を作れず、起こらないとも示せなかった区画に左右されるとき。導出どうしが入力を共有していて、解が有理数にしか無い形がここに残ります（W114 と同じ場所です）。決めきれなかったことを、成り立つとは言いません。",
+                "A claim turns on a cell for which no input was built and none was shown impossible. Derived values that share an input, with a solution only among the rationals, are what is left here — the place W114 is about. What was not settled is not said to hold."
+            ),
+            tr!(
+                "その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。",
+                "If no input really falls in the cell, write the condition over whole numbers (`a >= 3円` for `倍 >= 5円`). If one does, write it down as an example or a scenario."
+            ),
+            X_W127,
+            &["W114", "E128"],
+        ),
+        warn(
+            "W105",
+            tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),
+            tr!(
+                "`policy first` の表で、一部だけ重なっていて出力が違う行の対があるとき。階段状の隠れと、答えが同じ隠れは件数の注記に畳まれ、ここに一覧されるのは要確認の対だけです（§4）。",
+                "In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed (§4)."
+            ),
+            tr!(
+                "意図どおりならこのままで構いません（CI の `check --diff-base` は新たに生じた対だけを報告します）。後の行を優先したいなら、その行を先の行より上へ移してください。全対を見るには `--show-shadow` を付けます。",
+                "If it is intended, leave it: `check --diff-base` in CI reports only newly created pairs. To let the later row win, move it above the earlier one. `--show-shadow` lists every pair."
+            ),
+            X_W105,
+            &["E105", "W110", "E102"],
+        ),
+        warn(
+            "W110",
+            tr!("重なりのない `first` です", "A `first` table with no overlaps"),
+            tr!(
+                "`policy first` なのに、どの二行も重ならないとき。順序に意味が無いので、`unique` のほうが強い保証になります。",
+                "The table is `policy first`, yet no two rows overlap. The order carries no meaning, and `unique` is the stronger guarantee."
+            ),
+            tr!(
+                "`policy unique` に変えてください。並べ替えても意味が変わらないことが、以後の検査で守られます。",
+                "Change it to `policy unique`. From then on, the check guarantees that reordering the rows cannot change the meaning."
+            ),
+            X_W110,
+            &["W105", "E105"],
+        ),
+        warn(
+            "W111",
+            tr!("使われていない宣言があります", "A declaration is never used"),
+            tr!(
+                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れのしるしであることも、意図した契約であることもあります。`import` で持ち込んだ型の値は対象外です。",
+                "An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way."
+            ),
+            tr!(
+                "入力が範囲の入口検査としてだけ効いているなら、宣言に `contract_only` を付けて黙らせてください。列挙の値が既定行に吸われるのが正しいなら、値の宣言に `default` を付けます。どちらでもないなら、その列を表に足すか、宣言を消します。",
+                "If the input serves only as a range check at the entry, mark the declaration `contract_only`. If an enum value is meant to fall through to the default row, mark the value `default`. Otherwise either add the column to a table, or delete the declaration."
+            ),
+            X_W111,
+            &["E101", "E012"],
+        ),
+        warn(
+            "W116",
+            tr!("どの例も使っていない `sequence` です", "No example uses this sequence"),
+            tr!(
+                "`sequence` を書いたのに、どの例もその名前を書いていないとき。並びは例から名指しされて初めて走るので、走っていない並びです（§15.56）。",
+                "A `sequence` is written and no example names it. A sequence runs only when an example names it, so this one never runs (§15.56)."
+            ),
+            tr!(
+                "その並びをたどる例を足すか、並びのほうを消してください。書いたのに使っていないのは、たいてい例を書き忘れた跡です。",
+                "Add the example that walks it, or drop the sequence. Written and unused is usually the trace of an example left unwritten."
+            ),
+            X_W116,
+            &["E027", "W111"],
+        ),
+        warn(
+            "W119",
+            tr!("ハッシュを書いた箇所が引用されていません", "A pinned fragment is not cited"),
+            tr!(
+                "`source` の下にハッシュの行があるのに、その箇所を引用する `@` が規則のどこにも無いとき。引用を消したあとの残りです。",
+                "A pin line sits under a `source` line, but no `@` in the rule cites that fragment. It is what remains after a citation was removed."
+            ),
+            tr!("その行を消してください。`rulec source pin` が消します。", "Remove the pin line; `rulec source pin` does."),
+            X_W119,
+            &["E037"],
+        )
+        .with_files(ARTICLE_1),
+        warn(
+            "W120",
+            tr!("写しの値を、どの行も使っていません", "The copy states a value no row uses"),
+            tr!(
+                "表が `@出典 表1` で丸ごと引いている写しに、数だけでできたセルがあって、その値をどの行も使っていないとき（§15.82）。行を一本落としても完全性検査には出ません——落ちた行の入力は、残った行のどれかに当てはまってしまうからです。数だけのセルしか見ないので、`2026年4月1日改定` のような文は金額として数えません。`<=3kg` の一行で写しの `1kg`・`2kg`・`3kg` をまとめて写した場合も出ません。",
+                "A cell of the copy a table cites whole with `@source 表1` is nothing but a number, and no row uses that value (§15.82). A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `2026年4月1日改定` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them."
+            ),
+            tr!(
+                "写しと見比べて、落とした行がないか確かめてください。改定で行が増えたのなら、その行をここに写します。引用した表のうち一部だけを写したのなら（発地ごとの運賃表から、一つの発地だけを写したときなど）、引用を `table` の行から、写した行それぞれの末尾へ移してください。行の引用は「この行はここから来た」としか言わないので、残りは問われなくなり、金額の突き合わせ（E116）は残ります。",
+                "Compare the table with the copy and check that no row was left out; if a revision added a row, transcribe it. If the table transcribes only part of the fragment — one origin of a tariff sheet that lists several — move the citation from the `table` line onto the end of each row that came from it. A row's citation says only where that row came from, so the rest goes unasked while the amounts are still held to the copy (E116)."
+            ),
+            X_W120,
+            &["E116", "W119"],
+        )
+        .with_files(TARIFF_DOC),
+        warn(
+            "W118",
+            tr!("準用した表の行が、この規則ではどれも当たりません", "No row of an applied table is reached in this apply"),
+            tr!(
+                "準用した表か節の**全行**が、この規則では当たらないとき。読み替えた値がその表の条件に届かないか、この規則のほかの定義（`overrides 準用名:表` で優先する節など）が全部先に取っています。一部の行が当たらないだけなら何も言いません。元の規則の表はこの規則より広い範囲に書かれているのが普通で、そうした行は `doc` が「この準用では当たらない行」として挙げます（§15.69）。",
+                "**Every** row of an applied table or clause is unreachable in this rule: what is bound never reaches its conditions, or other definitions of this rule (a clause with `overrides apply:table`, say) take precedence over all of it. Rows unreachable one by one draw no word: a callee's table is usually written for a wider range than this rule's, and `doc` lists those rows as unused by this apply (§15.69)."
+            ),
+
+            tr!(
+                "その表がこの準用に要らないなら `except <表>` で外してください。要るはずなら、読み替えか `with` の値の対応を見直してください。",
+                "If this apply does not need the table, leave it out with `except <table>`. If it should be used, look at the bindings and the `with` mapping."
+            ),
+            X_W118,
+            &["E102", "W117"],
+        )
+        .with_files(CALLEE),
+        warn(
+            "W117",
+            tr!("効かない例外です", "An exception with no effect"),
+            tr!(
+                "`overrides` で優先すると書いた相手の行と、この表の行が一つも交わらないとき。優先は、両方に当てはまる入力があるときにどちらが勝つかを決めるものなので、交わらなければ何も決めていません。ただし書が本文の一部を切り出す形になっていない、という転記の誤りの徴候です。",
+                "No row of this table meets a row of what its `overrides` line names. Precedence decides which wins when an input matches both, so with no meeting rows the line decides nothing. It is the usual sign of a proviso transcribed so that it no longer carves out part of the main rule."
+            ),
+            tr!(
+                "原文と見比べて、この表の行の条件か相手の行の条件を直してください。本当に交わらないなら、`overrides` の行を消します。",
+                "Compare with the source and fix the conditions of this table's rows or of the target's. If they really never meet, drop the `overrides` line."
+            ),
+            X_W117,
+            &["E035", "E105"],
+        ),
+        warn(
+            "W121",
+            tr!("別名が生成先の言葉とぶつかります", "An alias collides with a word in a target language"),
+            tr!(
+                "ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき（§15.103）。別名はそのまま関数・引数・型・メンバの名前になります。規則の別名は、モジュールやパッケージの名前にもなります。そこで標準ライブラリと同じ名前だと、生成したモジュールがぶつかります（§15.149）。",
+                "An ASCII alias is a keyword of one of the targets, or a name that language already uses (§15.103). An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there (§15.149)."
+            ),
+            tr!(
+                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記が言います。引数やローカル変数の名前は、その本体の外までは隠しません。だからそこで出るのは予約語のときだけです。使わない生成先なら、このままで構いません。",
+                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it."
+            ),
+            X_W121,
+            &["E009", "E011"],
+        ),
+        warn(
+            "W115",
+            tr!("どの要素もこの判定にはなりません", "No element can land on this verdict"),
+            tr!(
+                "`fold` にその判定の行き先があるのに、表のどの行もその判定を出さないとき。E024 の裏返しで、こちらは穴ではなく届かない行き先です。書き忘れではなく、表のほうが変わった跡であることが多い（§15.56）。",
+                "A `fold` has an arm for a verdict no row produces. It is the other side of E024: not a hole but an arm nothing reaches, and more often the trace of a table that changed than of an arm written by mistake (§15.56)."
+            ),
+            tr!(
+                "表の行を見直すか、その行き先を消してください。どちらが正しいかは表のほうを読まないと決まりません。",
+                "Look again at the table's rows, or drop the arm. Which of the two is right is decided by reading the table, not this message."
+            ),
+            X_W115,
+            &["E024"],
+        ),
+        warn(
+            "W114",
+            tr!("未確認の重なり: 両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both rows"),
+            tr!(
+                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出が入力を共有する形（§15.126）と、真偽の `define` の中の閾値（§15.127）は、消去が決めるようになったのでここには落ちてきません。残るのは、消去が有理数の上で解いているために決まらない形です——上の例の `倍` は必ず偶数なので `5円` ちょうどにはなりませんが、有理数には `2.5円` があります。予算（400 本）を超えた系と、単位をまたぐ系も同じで、どれも「証明できなかった」であって「起こりうる」ではありません。",
+                "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input (§15.126) and the thresholds inside a boolean `define` (§15.127) no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `倍` above is always even and never exactly `5円`, but `2.5円` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible."
+            ),
+            tr!(
+                "その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当てはまれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当てはまる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",
+                "If an order satisfying both conditions can exist, fix the rows: the outputs differ, so a match is a contradiction. If none can exist, leave it — the generated code carries a guard that returns an error rather than silently picking the earlier row."
+            ),
+            X_W114,
+            &["E105", "W105", "E109"],
+        ),
+    ]
+}
+
+pub fn find(code: &str) -> Option<Entry> {
+    let up = code.to_ascii_uppercase();
+    ledger().into_iter().find(|e| e.code == up)
+}
+
+fn severity_word(s: Severity) -> &'static str {
+    match s {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+    }
+}
+
+/// Indent every line of a block by two spaces, so an example reads as one unit in a terminal.
+fn indent(s: &str) -> String {
+    s.lines().map(|l| if l.is_empty() { String::from("\n") } else { format!("  {l}\n") }).collect()
+}
+
+/// `rulec explain <CODE>` — the shape a terminal reads.
+pub fn render_text(e: &Entry) -> String {
+    let mut o = format!("{}[{}]: {}\n", severity_word(e.severity), e.code, e.title);
+    o.push_str(&tr!("\nいつ出るか\n", "\nWhen\n"));
+    o.push_str(&indent(&e.when));
+    o.push_str(&tr!("\n直し方\n", "\nFix\n"));
+    o.push_str(&indent(&e.fix));
+    o.push_str(&match e.budget {
+        Some(b) => tr!("\n最小の再現（`--budget {b}` で）\n", "\nSmallest reproduction (with `--budget {b}`)\n"),
+        None => tr!("\n最小の再現\n", "\nSmallest reproduction\n"),
+    });
+    o.push_str(&indent(e.example));
+    for (name, text) in e.files {
+        o.push_str(&tr!("\n隣に置くファイル `{name}`\n", "\nThe file `{name}` beside it\n"));
+        o.push_str(&indent(text));
+    }
+    if !e.related.is_empty() {
+        o.push_str(&tr!("\n関係するコード: {}\n", "\nRelated codes: {}\n", e.related.join(" ")));
+    }
+    o
+}
+
+/// `rulec explain <CODE> --format markdown`.
+pub fn render_markdown(e: &Entry) -> String {
+    // The heading is the code alone, so that its anchor is `#e101` both on
+    // GitHub and on the rendered site — the `related` links below point at it.
+    let mut o = format!("## {}\n\n", e.code);
+    o.push_str(&format!("`{}` — **{}**\n\n", severity_word(e.severity), e.title));
+    o.push_str(&tr!("**いつ出るか。** {}\n\n", "**When.** {}\n\n", e.when));
+    o.push_str(&tr!("**直し方。** {}\n\n", "**Fix.** {}\n\n", e.fix));
+    o.push_str(&match e.budget {
+        Some(b) => tr!("**最小の再現**（`--budget {b}` で）:\n\n", "**Smallest reproduction** (with `--budget {b}`):\n\n"),
+        None => tr!("**最小の再現**:\n\n", "**Smallest reproduction**:\n\n"),
+    });
+    // Tagged, so that the site colours it; a reader of the plain file sees the tag and
+    // nothing else changes.
+    o.push_str("```rule\n");
+    o.push_str(e.example);
+    o.push_str("```\n");
+    for (name, text) in e.files {
+        o.push_str(&tr!("\n隣に置く `{name}`:\n\n", "\nWith `{name}` beside it:\n\n"));
+        o.push_str("```proto\n");
+        o.push_str(text);
+        o.push_str("```\n");
+    }
+    if !e.related.is_empty() {
+        let links: Vec<String> =
+            e.related.iter().map(|c| format!("[{c}](#{})", c.to_ascii_lowercase())).collect();
+        o.push_str(&tr!("\n関係するコード: {}\n", "\nRelated codes: {}\n", links.join(", ")));
+    }
+    o
+}
+
+/// `rulec explain <CODE> --format json`. Language independent in its keys; the prose
+/// fields follow `--lang`.
+pub fn render_json(e: &Entry) -> String {
+    json::Obj::new()
+        .str("code", e.code)
+        .str("severity", severity_word(e.severity))
+        .str("title", &e.title)
+        .str("when", &e.when)
+        .str("fix", &e.fix)
+        .str("example", e.example)
+        .opt_raw("budget", e.budget.map(|b| b.to_string()))
+        .raw(
+            "files",
+            format!(
+                "[{}]",
+                e.files
+                    .iter()
+                    .map(|(n, t)| json::Obj::new().str("name", n).str("text", t).finish())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+        )
+        .raw("related", json::strs(e.related))
+        .str("lang", crate::i18n::current().code())
+        .finish()
+}
+
+/// `rulec explain --all --format markdown`. This **is** `docs/codes.md`; a test holds the
+/// checked-in file to it, the same way `gen --check` holds the generated code.
+pub fn markdown_all() -> String {
+    let all = ledger();
+    let mut o = tr!(
+        "<!-- `rulec explain --all --format markdown --lang ja` の出力です。手で編集しないでください。 -->\n\n",
+        "<!-- Output of `rulec explain --all --format markdown --lang en`. Do not edit by hand. -->\n\n"
+    );
+    o.push_str(&tr!("# rulec の診断\n\n", "# rulec diagnostics\n\n"));
+    o.push_str(&tr!(
+        "rulec が出しうるコードの全部と、いつ出るか、どう直すか。コードと JSON の形は安定 API で、文面だけが良くなります（DESIGN §11 原則 5）。一件だけ読むには `rulec explain E101`。\n\n",
+        "Every code rulec can print, what makes it appear, and how to fix it. The code and the JSON shape are a stable API; only the prose improves (DESIGN §11 principle 5). For one of them: `rulec explain E101`.\n\n"
+    ));
+    o.push_str(&tr!(
+        "| コード | 種別 | 見出し |\n|---|---|---|\n",
+        "| Code | Severity | Title |\n|---|---|---|\n"
+    ));
+    for e in &all {
+        o.push_str(&format!(
+            "| [{}](#{}) | {} | {} |\n",
+            e.code,
+            e.code.to_ascii_lowercase(),
+            severity_word(e.severity),
+            e.title
+        ));
+    }
+    for e in &all {
+        o.push('\n');
+        o.push_str(&render_markdown(e));
+    }
+    o
+}
+
+/// `rulec explain --all --format json`: one object per line, so it streams like the
+/// diagnostics themselves.
+pub fn json_all() -> String {
+    ledger().iter().map(|e| format!("{}\n", render_json(e))).collect()
+}
+
+/// `rulec explain --all` in text.
+pub fn text_all() -> String {
+    ledger().iter().map(|e| format!("{}\n", render_text(e))).collect::<Vec<_>>().join("")
+}

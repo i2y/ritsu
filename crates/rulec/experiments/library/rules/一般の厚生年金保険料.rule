@@ -1,0 +1,24 @@
+rule 一般の厚生年金保険料(pension_premium_general) v1
+description "厚生年金基金に入っていない一般の被保険者の厚生年金保険料。料率は法定の 18.3% で固定し、等級と折半と端数は 厚生年金保険料.rule を準用する"
+
+source 厚生年金保険法 = law "329AC0000000115" asof 2026-04-01
+  第81条 sha256:04a8bef2caf62fa2
+
+inputs
+  報酬月額(monthly) : money[円]  range >=0円 <=1000万円
+
+outputs
+  標準報酬月額(std)  : money[円]  round down(1円)
+  給与控除額(deduct) : money[円]  round half_down(1円)
+  現金納付額(cash)   : money[円]  round half_up(1円)
+
+apply 保険料(premium) = "厚生年金保険料.rule" sha256:dc3d941fe531de44  # 料率は第81条第4項の千分の百八十三（平成29年9月から固定）
+  報酬月額 = 報酬月額
+  料率 = 18.3%
+
+define 法定料率(statutory_rate) : rate[step 0.1%] = 18.3%  @厚生年金保険法 第81条
+
+examples
+| 報酬月額 | -> 標準報酬月額 | 給与控除額 | 現金納付額 |
+| 250000円 | 260000円        | 23790円    | 23790円    |
+| 700000円 | 650000円        | 59475円    | 59475円    |

@@ -1,0 +1,7 @@
+warning[W117]: An exception with no effect: no row of table 軽減 meets a row of table 本則 row 1 (記載なし)
+  --> tests/mutants/m_w117.rule:41 table 軽減
+   |
+41 | overrides 本則, 本則:記載なし
+   |                 ^^^^^^^^^^^^^
+   |
+ `overrides` decides which wins when an input matches both. No rows meet, so the line decides nothing. That is the usual sign of a proviso transcribed so that it no longer carves out part of the main rule.

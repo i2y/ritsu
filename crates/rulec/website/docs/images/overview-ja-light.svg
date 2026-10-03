@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1122 368" role="img" aria-label="表を書く。rulec は一行を入力の組み合わせの一区画にして並べ、隙間も重なりも無いことを計算で証明する。抜けがあれば、それを起こす入力（あて先 = 遠隔地, 重量 = 2001g）が返ってきて、行を足してもう一度。運賃がいくらかだけは人が決める。証明できた表からだけ、依存ゼロの Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy が出る。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<defs>
+<marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
+<marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
+<marker id="head-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#9c6508"/></marker>
+</defs>
+<path d="M20,20 H244 L256,32 V224 H20 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M244,20 V32 H256 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="29" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">表</text>
+<text x="247" y="42" font-size="9.5" font-weight="400" text-anchor="end" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">.rule</text>
+<text x="29" y="60" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">業務の人が読んで、承認する</text>
+<text x="29" y="82" font-size="11" font-weight="400" text-anchor="start" fill="#5b6478">あて先</text>
+<text x="101" y="82" font-size="11" font-weight="400" text-anchor="start" fill="#5b6478">重量</text>
+<text x="247" y="82" font-size="11" font-weight="400" text-anchor="end" fill="#5b6478">→ 運賃</text>
+<line x1="29" y1="88" x2="247" y2="88" stroke="#cdd3e2"/>
+<text x="29" y="104" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">近畿圏</text>
+<text x="101" y="104" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">&lt;=2kg</text>
+<text x="247" y="104" font-size="12" font-weight="400" text-anchor="end" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">800円</text>
+<text x="29" y="123" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">近畿圏</text>
+<text x="101" y="123" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">&gt;2kg &lt;=5kg</text>
+<text x="247" y="123" font-size="12" font-weight="400" text-anchor="end" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">1000円</text>
+<text x="29" y="142" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">近畿圏</text>
+<text x="101" y="142" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">&gt;5kg</text>
+<text x="247" y="142" font-size="12" font-weight="400" text-anchor="end" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">1300円</text>
+<text x="29" y="161" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">遠隔地</text>
+<text x="101" y="161" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">&lt;=2kg</text>
+<text x="247" y="161" font-size="12" font-weight="400" text-anchor="end" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">1200円</text>
+<text x="29" y="180" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">遠隔地</text>
+<text x="101" y="180" font-size="12" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">&gt;5kg</text>
+<text x="247" y="180" font-size="12" font-weight="400" text-anchor="end" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">2000円</text>
+<rect x="24" y="191" width="228" height="18" rx="3" fill="none" stroke="#9c6508" stroke-width="1" stroke-dasharray="3 2.5"/>
+<text x="29" y="204" font-size="12" font-weight="400" text-anchor="start" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">遠隔地</text>
+<text x="101" y="204" font-size="12" font-weight="400" text-anchor="start" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">&gt;2kg &lt;=5kg</text>
+<text x="247" y="204" font-size="12" font-weight="600" text-anchor="end" fill="#9c6508" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">?円</text>
+<clipPath id="clip-rulec"><rect x="338" y="20" width="314" height="236" rx="10"/></clipPath>
+<rect x="338" y="20" width="314" height="236" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
+<rect x="338" y="20" width="314" height="5" fill="#4457d8" clip-path="url(#clip-rulec)"/>
+<text x="495.0" y="63" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">rulec</text>
+<text x="495.0" y="92" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">一行が、入力の組み合わせの一区画になる</text>
+<text x="495.0" y="111" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">隙間も重なりも、目ではなく計算で見つける</text>
+<rect x="400" y="128" width="240" height="100" fill="#f5f6fa" stroke="#cdd3e2"/>
+<rect x="400.0" y="128.0" width="48.0" height="50.0" fill="#4457d8" fill-opacity="0.16" stroke="#4457d8" stroke-opacity="0.7"/>
+<text x="424.0" y="157.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">800円</text>
+<rect x="448.0" y="128.0" width="72.0" height="50.0" fill="#4457d8" fill-opacity="0.16" stroke="#4457d8" stroke-opacity="0.7"/>
+<text x="484.0" y="157.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">1000円</text>
+<rect x="520.0" y="128.0" width="120.0" height="50.0" fill="#4457d8" fill-opacity="0.16" stroke="#4457d8" stroke-opacity="0.7"/>
+<text x="580.0" y="157.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">1300円</text>
+<rect x="400.0" y="178.0" width="48.0" height="50.0" fill="#4457d8" fill-opacity="0.16" stroke="#4457d8" stroke-opacity="0.7"/>
+<text x="424.0" y="207.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">1200円</text>
+<rect x="520.0" y="178.0" width="120.0" height="50.0" fill="#4457d8" fill-opacity="0.16" stroke="#4457d8" stroke-opacity="0.7"/>
+<text x="580.0" y="207.0" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">2000円</text>
+<rect x="450.0" y="180.0" width="68.0" height="46.0" rx="3" fill="none" stroke="#9c6508" stroke-width="1" stroke-dasharray="3 2.5"/>
+<text x="392" y="157.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#5b6478">近畿圏</text>
+<text x="392" y="207.0" font-size="10.5" font-weight="400" text-anchor="end" fill="#5b6478">遠隔地</text>
+<text x="445.0" y="242" font-size="10.5" font-weight="400" text-anchor="end" fill="#5b6478">2kg</text>
+<text x="517.0" y="242" font-size="10.5" font-weight="400" text-anchor="end" fill="#5b6478">5kg</text>
+<text x="637.0" y="242" font-size="10.5" font-weight="400" text-anchor="end" fill="#5b6478">10kg</text>
+<circle cx="458.5" cy="203.0" r="4.5" fill="#9c6508" stroke="#ffffff" stroke-width="1.5"/>
+<path d="M750,36 H1090 L1102,48 V272 H750 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M1090,36 V48 H1102 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M742,28 H1082 L1094,40 V264 H742 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M1082,28 V40 H1094 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M734,20 H1074 L1086,32 V256 H734 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M1074,20 V32 H1086 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="743" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">生成コード</text>
+<text x="1077" y="42" font-size="9.5" font-weight="400" text-anchor="end" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">.py</text>
+<text x="743" y="58" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">Python・TypeScript・JavaScript・Rust・Ruby</text>
+<text x="743" y="73" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">PHP・Go・Swift・Java・SQL・Wasm</text>
+<text x="743" y="90" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">def fee(dest: Zone, weight: Gram) -&gt; YenInclTax:</text>
+<text x="743" y="105" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="743" y="120" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 800</text>
+<text x="743" y="135" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="743" y="150" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 1000</text>
+<text x="743" y="165" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    ...</text>
+<text x="743" y="180" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">        fee = 1300</text>
+<text x="743" y="195" font-size="10" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" xml:space="preserve" style="white-space:pre">    return YenInclTax(_round_up(fee, 10)), trace</text>
+<text x="743" y="235" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">依存ゼロ・エンジンなし</text>
+<text x="743" y="250" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">どれも同じ答え</text>
+<path d="M323.5,286 H581.5 L593.5,298 V348 H323.5 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
+<path d="M581.5,286 V298 H593.5 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
+<text x="332.5" y="308" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">当てはまらない例</text>
+<text x="584.5" y="308" font-size="9.5" font-weight="400" text-anchor="end" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">E101</text>
+<text x="332.5" y="326" font-size="11" font-weight="400" text-anchor="start" fill="#10131a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">あて先 = 遠隔地, 重量 = 2001g</text>
+<text x="332.5" y="341" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">運賃はいくら？ それだけは人が決める</text>
+<line x1="256" y1="72" x2="338" y2="72" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
+<text x="297.0" y="63" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec check</text>
+<line x1="652" y1="72" x2="734" y2="72" stroke="#8b94ab" stroke-width="1.8" marker-end="url(#head-neutral)"/>
+<text x="693.0" y="63" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec gen</text>
+<text x="693.0" y="90" font-size="10.5" font-weight="400" text-anchor="middle" fill="#5b6478">通ったら</text>
+<line x1="458.5" y1="210.0" x2="458.5" y2="286" stroke="#9c6508" stroke-width="1.8" marker-end="url(#head-human)"/>
+<text x="466.5" y="275.0" font-size="11" font-weight="400" text-anchor="start" fill="#9c6508">それを起こす入力</text>
+<path d="M323.5,317.0 H150.0 A12,12 0 0 1 138.0,305.0 V224" fill="none" stroke="#9c6508" stroke-width="1.8" marker-end="url(#head-human)"/>
+<text x="146.0" y="274.5" font-size="11" font-weight="400" text-anchor="start" fill="#9c6508">行を足して、もう一度</text>
+</svg>

@@ -1,0 +1,43 @@
+rule 送料(shipping_fee) v4
+description "設計文書 §1.2 のスケッチを規則にしたもの。真偽定義を列に使う正常系と、率の出力、default の印、policy first の要確認 1 対が出てくる"
+
+import std/都道府県
+
+enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) default | プラチナ(platinum)
+group 遠隔地(remote) = 北海道, 沖縄県
+
+inputs
+  届け先(dest)    : 都道府県
+  重量(weight)    : mass[g]        range >=1g <=40kg
+  注文金額(total) : money[円, incl_tax]  range >=0円 <=1000万円
+  会員(member)    : 会員区分
+
+outputs
+  送料(fee) : money[円, incl_tax]  round up(10円)
+
+# 真偽の定義。条件は入力ひとつを見るだけなので、展開すれば区画の足し合わせになる（§5.3、§6.2）
+define 大口(bulk) : bool = 注文金額 >= 3万円
+
+table 基本送料(base_fee)
+policy unique
+| 届け先      | 重量    | -> 基本送料(base) : money[円, incl_tax] |
+| 遠隔地      | <=2000g | 1200円                                  |
+| 遠隔地      | >2000g  | 1800円                                  |
+| not: 遠隔地 | <=2000g | 800円                                   |
+| not: 遠隔地 | >2000g  | 1100円                                  |
+
+table 負担判定(payer)
+policy first
+| 大口 | 会員     | -> 負担率(pay_rate) : rate |
+| true | -        | 0%                         |
+| -    | プラチナ | 50%                        |
+| -    | -        | 100%                       |
+
+result 送料 = 基本送料 × 負担率
+
+examples
+| 届け先 | 重量  | 注文金額 | 会員     | -> 送料 |
+| 沖縄県 | 2500g | 40000円  | 一般     | 0円     |
+| 東京都 | 1999g | 12000円  | プラチナ | 400円   |
+| 北海道 | 500g  | 5000円   | 一般     | 1200円  |
+overrides 運賃表

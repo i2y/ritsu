@@ -1,0 +1,76 @@
+<Article Num="89">
+              <ArticleCaption>（税率）</ArticleCaption>
+              <ArticleTitle>第八十九条</ArticleTitle>
+              <Paragraph Num="1">
+                <ParagraphNum/>
+                <ParagraphSentence>
+                  <Sentence>居住者に対して課する所得税の額は、その年分の課税総所得金額又は課税退職所得金額をそれぞれ次の表の上欄に掲げる金額に区分してそれぞれの金額に同表の下欄に掲げる税率を乗じて計算した金額を合計した金額と、その年分の課税山林所得金額の五分の一に相当する金額を同表の上欄に掲げる金額に区分してそれぞれの金額に同表の下欄に掲げる税率を乗じて計算した金額を合計した金額に五を乗じて計算した金額との合計額とする。</Sentence>
+                </ParagraphSentence>
+                <TableStruct>
+                  <Table>
+                    <TableRow>
+                      <TableColumn BorderBottom="none">
+                        <Sentence>百九十五万円以下の金額</Sentence>
+                      </TableColumn>
+                      <TableColumn BorderBottom="none">
+                        <Sentence>百分の五</Sentence>
+                      </TableColumn>
+                    </TableRow>
+                    <TableRow>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>百九十五万円を超え三百三十万円以下の金額</Sentence>
+                      </TableColumn>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>百分の十</Sentence>
+                      </TableColumn>
+                    </TableRow>
+                    <TableRow>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>三百三十万円を超え六百九十五万円以下の金額</Sentence>
+                      </TableColumn>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>百分の二十</Sentence>
+                      </TableColumn>
+                    </TableRow>
+                    <TableRow>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>六百九十五万円を超え九百万円以下の金額</Sentence>
+                      </TableColumn>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>百分の二十三</Sentence>
+                      </TableColumn>
+                    </TableRow>
+                    <TableRow>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>九百万円を超え千八百万円以下の金額</Sentence>
+                      </TableColumn>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>百分の三十三</Sentence>
+                      </TableColumn>
+                    </TableRow>
+                    <TableRow>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>千八百万円を超え四千万円以下の金額</Sentence>
+                      </TableColumn>
+                      <TableColumn BorderBottom="none" BorderTop="none">
+                        <Sentence>百分の四十</Sentence>
+                      </TableColumn>
+                    </TableRow>
+                    <TableRow>
+                      <TableColumn BorderTop="none">
+                        <Sentence>四千万円を超える金額</Sentence>
+                      </TableColumn>
+                      <TableColumn BorderTop="none">
+                        <Sentence>百分の四十五</Sentence>
+                      </TableColumn>
+                    </TableRow>
+                  </Table>
+                </TableStruct>
+              </Paragraph>
+              <Paragraph Num="2">
+                <ParagraphNum>２</ParagraphNum>
+                <ParagraphSentence>
+                  <Sentence>課税総所得金額、課税退職所得金額又は課税山林所得金額は、それぞれ、総所得金額、退職所得金額又は山林所得金額から前章第四節（所得控除）の規定による控除をした残額とする。</Sentence>
+                </ParagraphSentence>
+              </Paragraph>
+            </Article>

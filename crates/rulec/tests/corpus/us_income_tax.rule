@@ -1,0 +1,40 @@
+rule us_income_tax v1
+description "The 2025 federal income tax of an unmarried individual, transcribed from the IRS rate table. The English counterpart of 所得税.rule"
+
+source irs = file "sources/us-tax-rate-tables.md" sha256:0abe29cfe35eeb22  # Rev. Proc. 2024-40, a US government work
+  table1 sha256:94648a4eb1ff7b80
+
+inputs
+  taxable : money[USDc]  range >=0USDc <=100000000000USDc  # up to a billion dollars, in cents
+
+outputs
+  tax : money[USDc]  round down(1USDc)
+
+# The table states each bracket as "$X plus Y% of the excess over $Z", so all three of X, Y
+# and Z are transcribed and the arithmetic is written out below. Folding them into one
+# deduction — the form Japan's own quick table uses — would be a number the source does not
+# print, and E116 would be right to stop it.
+#
+# The citation sits on the rows rather than on the table: the first bracket is stated as
+# "10% of the taxable income", with no amount in it, so its two zeros are this rule's way of
+# writing that and not something the copy shows.
+table brackets
+policy unique
+| taxable                      | -> base : money[USDc] | rate : rate[step 1%] | floor : money[USDc] |
+| <=1192500USDc                | 0USDc                 | 10%                  | 0USDc               |
+| >1192500USDc <=4847500USDc   | 119250USDc            | 12%                  | 1192500USDc         |  @irs table1
+| >4847500USDc <=10335000USDc  | 557850USDc            | 22%                  | 4847500USDc         |  @irs table1
+| >10335000USDc <=19730000USDc | 1765100USDc           | 24%                  | 10335000USDc        |  @irs table1
+| >19730000USDc <=25052500USDc | 4019900USDc           | 32%                  | 19730000USDc        |  @irs table1
+| >25052500USDc <=62635000USDc | 5723100USDc           | 35%                  | 25052500USDc        |  @irs table1
+| >62635000USDc                | 18876975USDc          | 37%                  | 62635000USDc        |  @irs table1
+
+define excess : money[USDc] = taxable − floor
+define tax    : money[USDc] = base + excess × rate
+
+examples
+| taxable       | -> tax       |
+| 1000000USDc   | 100000USDc   |  # $10,000, all of it in the first bracket
+| 1192500USDc   | 119250USDc   |  # the top of the first bracket, which is the second one's base
+| 5000000USDc   | 591400USDc   |  # $50,000: $5,578.50 + 22% of $1,525
+| 100000000USDc | 32702025USDc |  # $1,000,000: $188,769.75 + 37% of $373,650

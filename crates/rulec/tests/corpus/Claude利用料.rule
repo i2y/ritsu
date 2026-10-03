@@ -1,0 +1,79 @@
+rule Claude利用料(claude_usage_fee) v1
+description "Claude API の期間合計の利用料。モデルとトークンの種類で百万トークンあたりの単価が決まり、バッチと米国内推論の倍率を掛け、トークン数を掛けて金額が出る。出典: platform.claude.com/docs/en/about-claude/pricing（2026-09-19 に転記）"
+
+# モデルは閉じた集合。新しいモデルを足すと、単価表に行が無い限り E033 で止まる。
+enum モデル(model) = Fable5_1(fable_5_1) | Fable5(fable_5) | Opus5(opus_5) | Opus4_8(opus_4_8) | Opus4_7(opus_4_7) | Opus4_6(opus_4_6) | Opus4_5(opus_4_5) | Sonnet5(sonnet_5) | Sonnet4_6(sonnet_4_6) | Sonnet4_5(sonnet_4_5) | Haiku4_5(haiku_4_5)
+enum 種類(kind) = 入力(input) | 出力(output) | キャッシュ書込5分(cache_write_5m) | キャッシュ書込1時間(cache_write_1h) | キャッシュ読出(cache_read)
+
+group Opus帯(opus_tier)      = Opus5, Opus4_8, Opus4_7, Opus4_6, Opus4_5
+group Sonnet旧帯(sonnet_old) = Sonnet4_6, Sonnet4_5
+
+inputs
+  モデル(model)      : モデル
+  種類(kind)         : 種類
+  バッチ(batch)      : bool
+  米国内推論(us_geo) : bool
+  トークン数(tokens) : number  range >=0 <=100億
+
+outputs
+  利用料(fee) : money[USDc, excl_tax]  round half_up(1USDc)
+
+# 単価は百万トークンあたり。ページの表をそのまま写している。
+table 単価表(unit_price)
+policy unique
+| モデル     | 種類                | -> 単価(price) : money[USDc, excl_tax] |
+| Fable5_1   | 入力                | 10USD                                  |
+| Fable5_1   | 出力                | 50USD                                  |
+| Fable5_1   | キャッシュ書込5分   | 1250USDc                               |
+| Fable5_1   | キャッシュ書込1時間 | 20USD                                  |
+| Fable5_1   | キャッシュ読出      | 25USDc                                 |
+| Fable5     | 入力                | 10USD                                  |
+| Fable5     | 出力                | 50USD                                  |
+| Fable5     | キャッシュ書込5分   | 1250USDc                               |
+| Fable5     | キャッシュ書込1時間 | 20USD                                  |
+| Fable5     | キャッシュ読出      | 1USD                                   |
+| Opus帯     | 入力                | 5USD                                   |
+| Opus帯     | 出力                | 25USD                                  |
+| Opus帯     | キャッシュ書込5分   | 625USDc                                |
+| Opus帯     | キャッシュ書込1時間 | 10USD                                  |
+| Opus帯     | キャッシュ読出      | 50USDc                                 |
+| Sonnet5    | 入力                | 2USD                                   |
+| Sonnet5    | 出力                | 10USD                                  |
+| Sonnet5    | キャッシュ書込5分   | 250USDc                                |
+| Sonnet5    | キャッシュ書込1時間 | 4USD                                   |
+| Sonnet5    | キャッシュ読出      | 20USDc                                 |
+| Sonnet旧帯 | 入力                | 3USD                                   |
+| Sonnet旧帯 | 出力                | 15USD                                  |
+| Sonnet旧帯 | キャッシュ書込5分   | 375USDc                                |
+| Sonnet旧帯 | キャッシュ書込1時間 | 6USD                                   |
+| Sonnet旧帯 | キャッシュ読出      | 30USDc                                 |
+| Haiku4_5   | 入力                | 1USD                                   |
+| Haiku4_5   | 出力                | 5USD                                   |
+| Haiku4_5   | キャッシュ書込5分   | 125USDc                                |
+| Haiku4_5   | キャッシュ書込1時間 | 2USD                                   |
+| Haiku4_5   | キャッシュ読出      | 10USDc                                 |
+
+# バッチは入力・出力・キャッシュのすべてに半額で効く（ページの「multipliers stack」）。
+table バッチ割引(batch_discount)
+policy unique
+| バッチ | -> バッチ率(batch_rate) : rate[step 10%] |
+| true   | 50%                                      |
+| false  | 100%                                     |
+
+# inference_geo を us にすると 4.6 以降のモデルで全区分に 1.1 倍。
+table 地域倍率(geo_multiplier)
+policy unique
+| 米国内推論 | -> 地域率(geo_rate) : rate[step 10%] |
+| true       | 110%                                 |
+| false      | 100%                                 |
+
+define 適用単価(applied) : money[USDc, excl_tax] = 単価 × バッチ率 × 地域率
+define 利用料(fee) : money[USDc, excl_tax] = トークン数 × 適用単価 ÷ 100万
+
+examples
+| モデル   | 種類           | バッチ | 米国内推論 | トークン数 | -> 利用料 |
+| Opus5    | 入力           | false  | false      | 100万      | 5USD      |
+| Sonnet5  | 出力           | true   | false      | 100万      | 5USD      |
+| Fable5_1 | キャッシュ読出 | false  | true       | 100万      | 28USDc    |
+| Haiku4_5 | 入力           | false  | false      | 3700       | 0USDc     |
+| Opus5    | 出力           | true   | true       | 15000      | 21USDc    |

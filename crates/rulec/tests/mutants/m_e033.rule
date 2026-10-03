@@ -1,0 +1,17 @@
+rule 配送料金(delivery_fee) v1
+description "増えた値を規則に書いたが、どの行も名指さず default も付けていない（E033）"
+
+import proto "contracts/order.proto" MemberTier -> 会員区分
+enum 会員区分(tier) = basic | gold | platinum
+
+inputs
+  会員(m) : 会員区分
+
+outputs
+  送料(fee) : money[円, incl_tax]  round up(10円)
+
+table 送料表(fee_table)
+policy first
+| 会員 | -> 送料(fee) : money[円, incl_tax] |
+| gold | 0円                                |
+| -    | 500円                              |

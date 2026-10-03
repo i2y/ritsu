@@ -1,0 +1,83 @@
+<Article Num="28">
+                <ArticleCaption>（給与所得）</ArticleCaption>
+                <ArticleTitle>第二十八条</ArticleTitle>
+                <Paragraph Num="1">
+                  <ParagraphNum/>
+                  <ParagraphSentence>
+                    <Sentence>給与所得とは、俸給、給料、賃金、歳費及び賞与並びにこれらの性質を有する給与（以下この条において「給与等」という。）に係る所得をいう。</Sentence>
+                  </ParagraphSentence>
+                </Paragraph>
+                <Paragraph Num="2">
+                  <ParagraphNum>２</ParagraphNum>
+                  <ParagraphSentence>
+                    <Sentence>給与所得の金額は、その年中の給与等の収入金額から給与所得控除額を控除した残額とする。</Sentence>
+                  </ParagraphSentence>
+                </Paragraph>
+                <Paragraph Num="3">
+                  <ParagraphNum>３</ParagraphNum>
+                  <ParagraphSentence>
+                    <Sentence>前項に規定する給与所得控除額は、次の各号に掲げる場合の区分に応じ当該各号に定める金額とする。</Sentence>
+                  </ParagraphSentence>
+                  <Item Num="1">
+                    <ItemTitle>一</ItemTitle>
+                    <ItemSentence>
+                      <Column Num="1">
+                        <Sentence>前項に規定する収入金額が百八十万円以下である場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence>当該収入金額の百分の四十に相当する金額（当該金額が六十五万円に満たない場合には、六十五万円）</Sentence>
+                      </Column>
+                    </ItemSentence>
+                  </Item>
+                  <Item Num="2">
+                    <ItemTitle>二</ItemTitle>
+                    <ItemSentence>
+                      <Column Num="1">
+                        <Sentence>前項に規定する収入金額が百八十万円を超え三百六十万円以下である場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence>七十二万円と当該収入金額から百八十万円を控除した金額の百分の三十に相当する金額との合計額</Sentence>
+                      </Column>
+                    </ItemSentence>
+                  </Item>
+                  <Item Num="3">
+                    <ItemTitle>三</ItemTitle>
+                    <ItemSentence>
+                      <Column Num="1">
+                        <Sentence>前項に規定する収入金額が三百六十万円を超え六百六十万円以下である場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence>百二十六万円と当該収入金額から三百六十万円を控除した金額の百分の二十に相当する金額との合計額</Sentence>
+                      </Column>
+                    </ItemSentence>
+                  </Item>
+                  <Item Num="4">
+                    <ItemTitle>四</ItemTitle>
+                    <ItemSentence>
+                      <Column Num="1">
+                        <Sentence>前項に規定する収入金額が六百六十万円を超え千万円以下である場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence>百八十六万円と当該収入金額から六百六十万円を控除した金額の百分の十に相当する金額との合計額</Sentence>
+                      </Column>
+                    </ItemSentence>
+                  </Item>
+                  <Item Num="5">
+                    <ItemTitle>五</ItemTitle>
+                    <ItemSentence>
+                      <Column Num="1">
+                        <Sentence>前項に規定する収入金額が千万円を超える場合</Sentence>
+                      </Column>
+                      <Column Num="2">
+                        <Sentence>二百二十万円</Sentence>
+                      </Column>
+                    </ItemSentence>
+                  </Item>
+                </Paragraph>
+                <Paragraph Num="4">
+                  <ParagraphNum>４</ParagraphNum>
+                  <ParagraphSentence>
+                    <Sentence>その年中の給与等の収入金額が六百六十万円未満である場合には、当該給与等に係る給与所得の金額は、前二項の規定にかかわらず、当該収入金額を別表第五の給与等の金額として、同表により当該金額に応じて求めた同表の給与所得控除後の給与等の金額に相当する金額とする。</Sentence>
+                  </ParagraphSentence>
+                </Paragraph>
+              </Article>

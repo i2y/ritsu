@@ -1,0 +1,7 @@
+error[E042]: A binding does not agree in type
+  --> tests/mutants/m_e042.rule:16 apply 退職手当
+   |
+16 |   退職事由 = 任期終了事由 with 任期満了 -> 定年
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ The values `辞職` of 終了事由 stand for no value of the callee. Map every value with `with <value> -> <value>` (a value spelled the same on both sides needs no entry).

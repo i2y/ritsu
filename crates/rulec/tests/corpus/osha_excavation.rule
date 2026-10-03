@@ -1,0 +1,37 @@
+rule osha_excavation v1
+description "Whether an excavation needs a protective system against cave-ins, from 29 CFR 1926.652(a)(1)"
+
+# A second part of the same title, and so a source of its own: the id names the part, and
+# `rulec source fetch` brings the section from the eCFR as of the date on the line.
+source osha = law ecfr "29 CFR 1926" asof 2026-01-01
+  "§1926.652" sha256:088a630a1ae9a4d7
+
+enum verdict = required | not_required
+
+# The section gives two exceptions. One is that the excavation "are made entirely in stable
+# rock". The other is two conditions at once: less than five feet deep, **and** an
+# examination by a competent person giving "no indication of a potential cave-in". What the
+# rule asks for is the examination's answer, not whether one was made — no examination is not
+# the same as one that found nothing, and the row for it is the one that requires the system.
+inputs
+  depth              : length[ft]  range >=1ft <=30ft
+  stable_rock        : bool
+  cave_in_indication : bool
+
+outputs
+  protection : verdict
+
+table needed  @osha "§1926.652"
+policy unique
+| stable_rock | depth | cave_in_indication | -> protection : verdict |
+| true        | -     | -                  | not_required            |
+| false       | <5ft  | false              | not_required            |
+| false       | <5ft  | true               | required                |
+| false       | >=5ft | -                  | required                |
+
+examples
+| depth | stable_rock | cave_in_indication | -> protection |
+| 4ft   | false       | false              | not_required  |
+| 4ft   | false       | true               | required      |
+| 5ft   | false       | false              | required      |
+| 12ft  | true        | true               | not_required  |

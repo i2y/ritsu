@@ -1,0 +1,7 @@
+error[E046]: A `clause` is not shaped like this
+  --> tests/mutants/m_e046.rule:30
+   |
+30 | clause 無料(free) -> 送料  # 出典: 第3条第2項ただし書
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^ there is no `when` line
+   |
+ The shape is `clause <name>(<alias>) -> <output>`, then one `when <column> <cell> and …` line (`when always` when there is no condition), one `then <value>` line, and optionally `overrides <target>`.

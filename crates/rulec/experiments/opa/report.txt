@@ -1,0 +1,35 @@
+rulec 0.6.0
+Version: 1.20.2 Rego Version: v1 
+date 2026-09-19
+
+1. integers
+   int64 max round trip      9223372036854775807
+   123456789 * 987654321     121932631112635269   exact: 121932631112635269
+   floor((2^53+1) / 1)       9007199254740993   float64 would give 9007199254740992
+   floor(int64max/10)*10     9223372036854775800
+   int64max % 10             7
+
+2. the five modes, over the vectors rulec generates for them
+   cases        270
+   answered     270
+   mismatches   0
+
+3. the five modes, stressed to int64 (|x| up to 9223372036854775807, grids 1..1000000007)
+   cases        27005
+   answered     27005
+   mismatches   0
+
+4. one whole rule (ec261), over the vectors rulec generates for it
+   vectors      94
+   answered     94
+   mismatches   []
+   guard        {"error": "distance が範囲の外です: 0"}
+                {"compensation": 250}
+
+5. the division transcribed literally
+   (7/2)*2                   7   truncating would give 6
+   naive vs the 94 vectors   0 mismatches — the rule's own vectors do not catch it
+   scale 100, value 12345    {"correct": 123, "naive": 123.45}
+
+6. a value no row names
+   _base("xl")               undefined   — no value at all, not an error

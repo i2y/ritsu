@@ -1,0 +1,125 @@
+<Article Num="160">
+          <ArticleCaption>（保険料率）</ArticleCaption>
+          <ArticleTitle>第百六十条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphNum/>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">協会が管掌する健康保険の被保険者に関する一般保険料率は、千分の三十から千分の百三十までの範囲内において、支部被保険者（各支部の都道府県に所在する適用事業所に使用される被保険者及び当該都道府県の区域内に住所又は居所を有する任意継続被保険者をいう。以下同じ。）を単位として協会が決定するものとする。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="2">
+            <ParagraphNum>２</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">前項の規定により支部被保険者を単位として決定する一般保険料率（以下「都道府県単位保険料率」という。）は、当該支部被保険者に適用する。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="3">
+            <ParagraphNum>３</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">都道府県単位保険料率は、支部被保険者を単位として、次に掲げる額に照らし、毎事業年度において財政の均衡を保つことができるものとなるよう、政令で定めるところにより算定するものとする。</Sentence>
+            </ParagraphSentence>
+            <Item Num="1">
+              <ItemTitle>一</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">第五十二条第一号に掲げる療養の給付その他の厚生労働省令で定める保険給付（以下この項及び次項において「療養の給付等」という。）のうち、当該支部被保険者に係るものに要する費用の額（当該支部被保険者に係る療養の給付等に関する第百五十三条第一項の規定による国庫補助の額を除く。）に次項の規定に基づく調整を行うことにより得られると見込まれる額</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="2">
+              <ItemTitle>二</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">保険給付（支部被保険者に係る療養の給付等を除く。）、前期高齢者納付金等及び後期高齢者支援金等に要する費用の予想額（第百五十三条及び第百五十四条の規定による国庫補助の額（前号の国庫補助の額を除く。）並びに第百七十三条の規定による拠出金の額を除く。）に総報酬按分率（当該都道府県の支部被保険者の総報酬額（標準報酬月額及び標準賞与額の合計額をいう。以下同じ。）の総額を協会が管掌する健康保険の被保険者の総報酬額の総額で除して得た率をいう。）を乗じて得た額</Sentence>
+              </ItemSentence>
+            </Item>
+            <Item Num="3">
+              <ItemTitle>三</ItemTitle>
+              <ItemSentence>
+                <Sentence Num="1" WritingMode="vertical">保健事業及び福祉事業に要する費用の額（第百五十四条の二の規定による国庫補助の額を除く。）並びに健康保険事業の事務の執行に要する費用及び次条の規定による準備金の積立ての予定額（第百五十一条の規定による国庫負担金の額を除く。）のうち当該支部被保険者が分担すべき額として協会が定める額</Sentence>
+              </ItemSentence>
+            </Item>
+          </Paragraph>
+          <Paragraph Num="4">
+            <ParagraphNum>４</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">協会は、支部被保険者及びその被扶養者の年齢階級別の分布状況と協会が管掌する健康保険の被保険者及びその被扶養者の年齢階級別の分布状況との差異によって生ずる療養の給付等に要する費用の額の負担の不均衡並びに支部被保険者の総報酬額の平均額と協会が管掌する健康保険の被保険者の総報酬額の平均額との差異によって生ずる財政力の不均衡を是正するため、政令で定めるところにより、支部被保険者を単位とする健康保険の財政の調整を行うものとする。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="5">
+            <ParagraphNum>５</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">協会は、二年ごとに、翌事業年度以降の五年間についての協会が管掌する健康保険の被保険者数及び総報酬額の見通し並びに保険給付に要する費用の額、保険料の額（各事業年度において財政の均衡を保つことができる保険料率の水準を含む。）その他の健康保険事業の収支の見通しを作成し、公表するものとする。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="6">
+            <ParagraphNum>６</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">協会が都道府県単位保険料率を変更しようとするときは、あらかじめ、理事長が当該変更に係る都道府県に所在する支部の支部長の意見を聴いた上で、運営委員会の議を経なければならない。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="7">
+            <ParagraphNum>７</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">支部長は、前項の意見を求められた場合のほか、都道府県単位保険料率の変更が必要と認める場合には、あらかじめ、当該支部に設けられた評議会の意見を聴いた上で、理事長に対し、当該都道府県単位保険料率の変更について意見の申出を行うものとする。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="8">
+            <ParagraphNum>８</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">協会が都道府県単位保険料率を変更しようとするときは、理事長は、その変更について厚生労働大臣の認可を受けなければならない。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="9">
+            <ParagraphNum>９</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">厚生労働大臣は、前項の認可をしたときは、遅滞なく、その旨を告示しなければならない。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="10">
+            <ParagraphNum>１０</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">厚生労働大臣は、都道府県単位保険料率が、当該都道府県における健康保険事業の収支の均衡を図る上で不適当であり、協会が管掌する健康保険の事業の健全な運営に支障があると認めるときは、協会に対し、相当の期間を定めて、当該都道府県単位保険料率の変更の認可を申請すべきことを命ずることができる。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="11">
+            <ParagraphNum>１１</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">厚生労働大臣は、協会が前項の期間内に同項の申請をしないときは、社会保障審議会の議を経て、当該都道府県単位保険料率を変更することができる。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="12">
+            <ParagraphNum>１２</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">第九項の規定は、前項の規定により行う都道府県単位保険料率の変更について準用する。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="13">
+            <ParagraphNum>１３</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">第一項及び第八項の規定は、健康保険組合が管掌する健康保険の一般保険料率について準用する。</Sentence>
+              <Sentence Num="2" WritingMode="vertical">この場合において、第一項中「支部被保険者（各支部の都道府県に所在する適用事業所に使用される被保険者及び当該都道府県の区域内に住所又は居所を有する任意継続被保険者をいう。以下同じ。）を単位として協会が決定するものとする」とあるのは「決定するものとする」と、第八項中「都道府県単位保険料率」とあるのは「健康保険組合が管掌する健康保険の一般保険料率」と読み替えるものとする。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="14">
+            <ParagraphNum>１４</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">特定保険料率は、各年度において保険者が納付すべき前期高齢者納付金等の額及び後期高齢者支援金等の額（協会が管掌する健康保険及び日雇特例被保険者の保険においては、その額から第百五十三条及び第百五十四条の規定による国庫補助額を控除した額）の合算額（前期高齢者交付金がある場合には、これを控除した額）を当該年度における当該保険者が管掌する被保険者の総報酬額の総額の見込額で除して得た率を基準として、保険者が定める。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="15">
+            <ParagraphNum>１５</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">基本保険料率は、一般保険料率から特定保険料率を控除した率を基準として、保険者が定める。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="16">
+            <ParagraphNum>１６</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">介護保険料率は、各年度において保険者が納付すべき介護納付金（日雇特例被保険者に係るものを除く。）の額（協会が管掌する健康保険においては、その額から第百五十三条第二項の規定による国庫補助額を控除した額）を当該年度における当該保険者が管掌する介護保険第二号被保険者である被保険者の総報酬額の総額の見込額で除して得た率を基準として、保険者が定める。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="17">
+            <ParagraphNum>１７</ParagraphNum>
+            <ParagraphSentence>
+              <Sentence Num="1" WritingMode="vertical">協会は、第十四項及び第十五項の規定により基本保険料率及び特定保険料率を定め、又は前項の規定により介護保険料率を定めたときは、遅滞なく、その旨を厚生労働大臣に通知しなければならない。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+        </Article>

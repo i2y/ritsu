@@ -1,0 +1,57 @@
+$ rulec check 厚生年金の上限改定.rule --lang ja
+ok 厚生年金の上限改定.rule
+
+$ rulec coverage 厚生年金の上限改定.rule --lang ja
+厚生年金の上限改定.rule
+ベクタ 307 件
+  行カバー                 15 / 15    満たす
+  境界の両側カバー         46 / 46    満たす
+  隠れ対カバー              0 / 0     満たす
+  丸めの同着カバー          0 / 0     満たす
+  畳み込みの遷移カバー      0 / 0     満たす
+
+$ rulec gen 厚生年金の上限改定.rule --out fold-out --lang ja && rulec test fold-out --lang ja
+生成しました: fold-out/vectors/grade_stages.expected.jsonl
+ok    grade_stages (Python) ベクタ 307 件
+ok    grade_stages (Python, MCP) ベクタ 307 件
+ok    grade_stages (Python, MCP/HTTP) ベクタ 307 件
+ok    grade_stages (TypeScript) ベクタ 307 件
+ok    grade_stages (TypeScript, MCP) ベクタ 307 件
+ok    grade_stages (TypeScript, MCP/HTTP) ベクタ 307 件
+ok    grade_stages (JavaScript) ベクタ 307 件
+ok    grade_stages (JavaScript, MCP) ベクタ 307 件
+ok    grade_stages (JavaScript, MCP/HTTP) ベクタ 307 件
+ok    grade_stages (Rust) ベクタ 307 件
+ok    grade_stages (Rust, Wasm) ベクタ 307 件
+ok    grade_stages (Ruby) ベクタ 307 件
+ok    grade_stages (Go) ベクタ 307 件
+ok    grade_stages (Swift) ベクタ 307 件
+ok    grade_stages (SQL) ベクタ 307 件
+ok    grade_stages (Wasm) ベクタ 307 件
+
+25 件すべて一致しました。
+
+$ 2028 年の期間の行を消す（E101）
+error[E101]: 完全性の欠落: どの行にも当てはまらない入力があります
+  --> 隙間.rule:11 表 共通
+  その入力: 月分 = 2028-09-01, 報酬月額 = 605000
+details: rulec explain <code>
+
+$ 月分の範囲を 2029-08-31 で切る（E102）
+error[E102]: 表 上限 行10 はどの入力にも当てはまりません
+  --> 死.rule:28 表 上限
+error[E102]: 表 上限 行11 はどの入力にも当てはまりません
+  --> 死.rule:29 表 上限
+error[E102]: 表 上限 行12 はどの入力にも当てはまりません
+  --> 死.rule:30 表 上限
+error[E102]: 表 上限 行13 はどの入力にも当てはまりません
+  --> 死.rule:31 表 上限
+error[E102]: 表 上限 行14 はどの入力にも当てはまりません
+  --> 死.rule:32 表 上限
+details: rulec explain <code>
+
+$ 2028 年の期間の始まりを一日早める（E105）
+error[E105]: 行の重なり: 同じ入力が 表 上限 行3 と 表 上限 行6 の両方に当てはまります
+  --> 重なり.rule:24 表 上限
+  その入力: 月分 = 2028-08-31, 報酬月額 = 605000
+details: rulec explain <code>

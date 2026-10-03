@@ -1,0 +1,84 @@
+Obj(
+    {
+        "code": Str(
+            "E112",
+        ),
+        "column": Int(
+            85,
+        ),
+        "file": Str(
+            "tests/mutants/m_e112.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "widen_range",
+                ),
+                "text": Str(
+                    "range >=-100万円 <=1000万円",
+                ),
+            },
+        ),
+        "line": Int(
+            24,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur.",
+                ),
+                Str(
+                    "Hint: widen the range to >=-100万円 <=1000万円. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [],
+        ),
+        "severity": Str(
+            "error",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            85,
+                        ),
+                        "label": Str(
+                            "the reachable interval is >=-100万円 <=1000万円",
+                        ),
+                        "length": Int(
+                            25,
+                        ),
+                        "line": Int(
+                            24,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "The range of the derived value does not contain the values it can actually reach",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    85,
+                ),
+                "file": Str(
+                    "tests/mutants/m_e112.rule",
+                ),
+                "line": Int(
+                    24,
+                ),
+            },
+        ),
+        "witness": Obj(
+            {},
+        ),
+    },
+)

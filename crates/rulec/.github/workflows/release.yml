@@ -1,0 +1,226 @@
+name: release
+
+# A tag `v*` builds one binary per platform (static on Linux; on macOS linked only to
+# the system library), checks that the tag is the
+# crate's own version, and publishes the archives with their SHA-256 sums as a
+# GitHub Release (DESIGN §12, §15.42). `action.yml` at the root of the
+# repository installs one of them onto a runner, and the install page says
+# which lines to run by hand.
+#
+# The same binaries reach the package managers (DESIGN §15.158). The Linux ones go out
+# as a .deb and an .rpm as well, beside the archives and in the same SHA256SUMS. Once the
+# release is up, the Homebrew formula is written from that SHA256SUMS, audited, installed
+# and tested by brew on macOS and on Linux, and only then pushed to the tap. The job that
+# publishes the crate to crates.io is at the end, commented out while crates.io is on hold.
+#
+#   rulec-v0.9.0-x86_64-unknown-linux-musl.tar.gz
+#   rulec-v0.9.0-aarch64-unknown-linux-musl.tar.gz
+#   rulec-v0.9.0-x86_64-apple-darwin.tar.gz
+#   rulec-v0.9.0-aarch64-apple-darwin.tar.gz
+#   rulec_0.9.0-1_amd64.deb      rulec-0.9.0-1.x86_64.rpm
+#   rulec_0.9.0-1_arm64.deb      rulec-0.9.0-1.aarch64.rpm
+#   SHA256SUMS
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl,  runner: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04-arm }
+          - { target: x86_64-apple-darwin,        runner: macos-15-intel }
+          - { target: aarch64-apple-darwin,       runner: macos-latest }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # A release named v0.9.0 that says `rulec 0.9.0` would mislead everyone
+      # who runs `--version`, so the tag has to be the version in Cargo.toml.
+      - name: The tag is the crate's version
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "::error::tag $GITHUB_REF_NAME, but Cargo.toml says $v"; exit 1; }
+
+      - name: Add the target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: musl linker
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q musl-tools
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      # Not the test suite — that needs six toolchains — but the binary has to
+      # start, and the corpus has to check clean with it.
+      - name: The binary runs and the corpus checks clean
+        run: |
+          bin=target/${{ matrix.target }}/release/rulec
+          "$bin" --version
+          "$bin" check tests/corpus/
+
+      - name: Archive
+        run: |
+          mkdir -p dist
+          tar -czf "dist/rulec-$GITHUB_REF_NAME-${{ matrix.target }}.tar.gz" -C target/${{ matrix.target }}/release rulec
+
+      # The same binary as a .deb and an .rpm, each installed on Debian and on Fedora,
+      # run and removed again before it is kept.
+      - name: The Linux packages
+        if: runner.os == 'Linux'
+        run: sh packaging/linux.sh "${GITHUB_REF_NAME#v}" ${{ matrix.target }} target/${{ matrix.target }}/release/rulec dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rulec-${{ github.ref_name }}-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: cd dist && sha256sum rulec-*.tar.gz rulec_*.deb rulec-*.rpm | tee SHA256SUMS
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "rulec $GITHUB_REF_NAME" \
+            --notes "One static binary per platform, no runtime; on Linux also as a .deb and an .rpm. Verify a download against SHA256SUMS before running it; the install page says how." \
+            dist/rulec-*.tar.gz dist/rulec_*.deb dist/rulec-*.rpm dist/SHA256SUMS
+
+  # The formula is written once, from the SHA256SUMS that was just published, so it points at
+  # these very archives; the jobs below test that file and push that file.
+  formula:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The formula, from the published sums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
+          sh packaging/homebrew.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/SHA256SUMS" > rulec.rb
+          cat rulec.rb
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: formula
+          path: rulec.rb
+          if-no-files-found: error
+
+  # brew has to take the formula as a user's brew would — audit it, download the archive and
+  # hold it to the sum, install it and run the formula's own test — on both systems it
+  # serves, before the tap is touched.
+  homebrew:
+    needs: formula
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: formula
+
+      - name: brew audits, installs and tests it
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          # On the Linux runner brew is installed but not on the path.
+          if [ "$RUNNER_OS" = Linux ]; then eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"; fi
+          brew tap-new --no-git i2y/tap
+          cp rulec.rb "$(brew --repository i2y/tap)/Formula/rulec.rb"
+          brew audit --strict --online --formula i2y/tap/rulec
+          brew install --formula i2y/tap/rulec
+          brew test i2y/tap/rulec
+          test "$(rulec --version)" = "rulec ${GITHUB_REF_NAME#v}"
+
+  # The tap is i2y/homebrew-tap, which holds more than rulec. The key is a deploy key of
+  # that repository alone, so this job can write there and nowhere else.
+  tap:
+    needs: homebrew
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: formula
+          path: ${{ runner.temp }}
+
+      - uses: actions/checkout@v7
+        with:
+          repository: i2y/homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_KEY }}
+
+      - name: Push the formula
+        run: |
+          set -eu
+          mkdir -p Formula
+          cp "$RUNNER_TEMP/rulec.rb" Formula/rulec.rb
+          git add Formula/rulec.rb
+          if git diff --cached --quiet; then echo "the tap already has rulec $GITHUB_REF_NAME"; exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "Update rulec to $GITHUB_REF_NAME"
+          git push origin HEAD:main
+
+  # crates.io is on hold (DESIGN §15.158): the crate is ready to go, but its first version
+  # has to be published by hand, and that has not been done. Uncomment this job once it has.
+  #
+  # # crates.io gives this job a token of thirty minutes for the one publish (trusted
+  # # publishing), so none is stored here. crates.io takes the first version of a crate only
+  # # by hand; a version that is already there is left alone.
+  # crates:
+  #   needs: publish
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #     id-token: write
+  #   steps:
+  #     - uses: actions/checkout@v7
+  #
+  #     - name: Is this version on crates.io already?
+  #       id: have
+  #       run: |
+  #         code=$(curl -s -o /dev/null -w '%{http_code}' -A 'rulec release (https://github.com/i2y/rulec)' \
+  #           "https://crates.io/api/v1/crates/rulec/${GITHUB_REF_NAME#v}")
+  #         case "$code" in
+  #           200) echo "::notice::rulec ${GITHUB_REF_NAME#v} is on crates.io already"; echo "publish=false" >> "$GITHUB_OUTPUT" ;;
+  #           404) echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+  #           *) echo "::error::crates.io answered $code"; exit 1 ;;
+  #         esac
+  #
+  #     - uses: rust-lang/crates-io-auth-action@v1
+  #       if: steps.have.outputs.publish == 'true'
+  #       id: auth
+  #
+  #     - name: Publish
+  #       if: steps.have.outputs.publish == 'true'
+  #       run: cargo publish --locked
+  #       env:
+  #         CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

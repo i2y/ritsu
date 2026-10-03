@@ -1,0 +1,41 @@
+[package]
+name = "rulec"
+version = "0.22.1"
+description = "A little language for business rules: each rule is proved free of gaps and contradictions before it compiles to plain code in twelve languages."
+license = "MIT OR Apache-2.0"
+edition = "2024"
+repository = "https://github.com/i2y/rulec"
+homepage = "https://i2y.github.io/rulec/"
+documentation = "https://i2y.github.io/rulec/"
+readme = "README.md"
+keywords = ["business-rules", "decision-table", "dsl", "codegen", "verification"]
+categories = ["command-line-utilities", "compilers", "development-tools"]
+# What crates.io receives: the sources, the documents `rulec mcp` serves, and the licenses.
+# The tests, the site and DESIGN.md stay in the repository (DESIGN §15.158).
+include = [
+    "/src/",
+    "/AGENTS.md",
+    "/docs/reference.md",
+    "/docs/formats.md",
+    "/docs/generated-code.md",
+    "/docs/backends.md",
+    "/docs/compatibility.md",
+    "/README.md",
+    "/LICENSE-MIT",
+    "/LICENSE-APACHE",
+]
+
+[dependencies]
+
+# `cargo binstall rulec` takes the release archive instead of building. Linux has only the
+# static musl binaries, which run on a glibc system as well.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ archive-suffix }"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-x86_64-unknown-linux-musl{ archive-suffix }"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-aarch64-unknown-linux-musl{ archive-suffix }"

@@ -1,0 +1,45 @@
+rule 全国運賃(freight) v1
+description "呼び出し側が渡す運賃行を順に見て、一つの運賃に畳む。並びをたどる規則の例"
+
+enum 採用区分(verdict) = スキップ(skip) | 打ち切り(halt) | 確定(take) | 持ち越し(hold)
+enum ゾーン区分(zone) = 近畿圏(kinki) | 遠隔地(remote)
+
+# 一件ぶんの欄。呼び出し側はこの欄のそろった要素を何件でも渡す
+elements 運賃行(freight_rows)
+  行ゾーン(row_zone) : ゾーン区分
+  閾値(threshold)    : money[円, incl_tax]  range >=0円 <=100万g
+  行運賃(row_fee)    : money[円, incl_tax]  range >=0円 <=10万円
+
+outputs
+  運賃(fee) : money[円, incl_tax]  round up(1円)
+
+# 一件の要素に対する判定。表の検査はいままでどおり効く（この四行で 採用区分 を覆いきる）
+table 行判定(row_of)
+policy unique
+| 行ゾーン | 閾値     | -> 採用(verdict) : 採用区分 |
+| 近畿圏   | <=1000円 | 確定                        |
+| 近畿圏   | >1000円  | 持ち越し                    |
+| 遠隔地   | <=1000円 | スキップ                    |
+| 遠隔地   | >1000円  | 打ち切り                    |
+
+# 判定ごとの行き先。どの判定にも行き先が要る（E024）
+fold 採用 over 運賃行
+  スキップ  -> next
+  打ち切り  -> stop with 0円
+  確定      -> take_unique 行運賃
+  持ち越し  -> keep_max 行運賃 by 閾値
+  empty     -> 0円
+  exhausted -> held
+
+sequence 近い一件(near)
+| 行ゾーン | 閾値   | 行運賃 |
+| 近畿圏   | 500円  | 800円  |
+| 近畿圏   | 2000円 | 1500円 |
+
+sequence 空(none)
+| 行ゾーン | 閾値 | 行運賃 |
+
+examples
+| 運賃行   | -> 運賃 |
+| 近い一件 | 800円   |
+| 空       | 0円     |

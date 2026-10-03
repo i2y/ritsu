@@ -1,0 +1,29 @@
+# The table on the front page's opening diagram (tools/make_overview.py).
+# Its last row is the one the picture shows as missing: without that row,
+# rulec check reports the witness the picture shows; with it, rulec gen
+# writes the code on the right-hand sheet. The amount in that row is a
+# placeholder, which is the point - the tool never invents one.
+#
+# The weights are the same numbers as overview-ja.rule, because the two
+# languages draw the same boxes on the same plane; only the words differ.
+
+rule Fee(fee) v1
+
+enum Zone(zone) = Domestic(domestic) | Overseas(overseas)
+
+inputs
+  Destination(dest) : Zone
+  Weight(weight)    : mass[g]  range >=1g <=10kg
+
+outputs
+  Fee(fee) : money[USD, incl_tax]  round up(1USD)
+
+table FeeTable(fee_table)
+policy unique
+| Destination | Weight     | -> Fee(fee) : money[USD, incl_tax] |
+| Domestic    | <=2kg      | 8USD                               |
+| Domestic    | >2kg <=5kg | 10USD                              |
+| Domestic    | >5kg       | 13USD                              |
+| Overseas    | <=2kg      | 12USD                              |
+| Overseas    | >5kg       | 20USD                              |
+| Overseas    | >2kg <=5kg | 15USD                              |
