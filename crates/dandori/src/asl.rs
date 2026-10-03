@@ -1128,17 +1128,15 @@ fn url_value(url: &str, args: &[(String, TExpr)]) -> Value {
 /// Python rulec generated, JSON out.
 pub fn lambda_handler(m: &Model, r: usize) -> (String, String) {
     let ru = &m.rules[r];
-    let py = &ru.info.api["python"];
-    let module = py["module"].as_str().unwrap_or("rule");
-    let function = py["function"].as_str().unwrap_or("rule");
-    let enums: Vec<String> = py["enums"].as_array().map(|a| a.iter().map(|e| e["alias"].as_str().unwrap_or("").to_string()).collect()).unwrap_or_default();
-    let is_enum = |ty: &str| enums.iter().any(|a| a == ty);
+    let py = &ru.info.python;
+    let module = py.module.as_str();
+    let function = py.function.as_str();
+    let is_enum = |ty: &str| py.enums.iter().any(|e| e.alias == ty);
     let mut imports: BTreeSet<String> = BTreeSet::new();
     imports.insert(function.to_string());
     let mut call_args = Vec::new();
-    for p in py["params"].as_array().unwrap_or(&vec![]) {
-        let name = p["name"].as_str().unwrap_or("");
-        let ty = p["type"].as_str().unwrap_or("");
+    for p in &py.params {
+        let (name, ty) = (p.name.as_str(), p.ty.as_str());
         let get = format!("event[{}]", py_str(name));
         if is_enum(ty) {
             imports.insert(ty.to_string());
@@ -1152,11 +1150,9 @@ pub fn lambda_handler(m: &Model, r: usize) -> (String, String) {
         }
     }
     let mut outs = Vec::new();
-    let outputs = py["outputs"].as_array().cloned().unwrap_or_default();
-    for o in &outputs {
-        let name = o["name"].as_str().unwrap_or("");
-        let alias = o["alias"].as_str().unwrap_or("");
-        let ty = o["type"].as_str().unwrap_or("");
+    let outputs = &py.outputs;
+    for o in outputs {
+        let (name, alias, ty) = (o.name.as_str(), o.alias.as_str(), o.ty.as_str());
         // with one output, the rule's function answers that value itself, not a record of outputs
         let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
         let v = if is_enum(ty) {

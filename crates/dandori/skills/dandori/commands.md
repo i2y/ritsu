@@ -10,6 +10,9 @@ dandori <command> --help
 dandori --version
 ```
 
+A workflow that uses rules runs as `ritsu dandori <command>`, which reads the rules in the same
+process ([Install](https://i2y.github.io/dandori/install/)); the `dandori` command alone checks and builds a workflow without rules.
+
 | Command | What it does |
 |---|---|
 | `check` | Checks one or more `.flow` files: types, every arm, every state a case can be left in, retries. Prints the diagnostics, each with the run that gets there, and `ok` for a file that passes. |
@@ -30,7 +33,6 @@ dandori --version
 | `--lang ja` or `--lang en` | the language of the messages; else `DANDORI_LANG`, then `RITSU_LANG`, else English |
 | `--help` | what the command takes, its exit codes and examples (`dandori help <command>` is the same page); `dandori --help` lists the commands |
 | `--version` | `dandori --version` prints the version |
-| `DANDORI_RULEC` | the rulec binary, run only for a workflow that uses rules; else `rulec` on the PATH |
 
 ## Exit codes
 

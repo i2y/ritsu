@@ -1399,6 +1399,8 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 同じとき（ritsu の PLAN の D.10）、ritsu-proto が読めない `.proto` を言う文の日本語を直した。期待したものが語のとき、英語のまま日本語に混ぜていた（「a name が要るところに `{` があります」）のを、日本語の語にした（「名前が要るところに `{` があります」）。E106 の文に出る。英語の文と、記号を期待するときの文（「`;` が要るところに `}` があります」）は変わらない。sakai の golden は変わらず、ritsu-proto の `tests/golden/sakai.txt` の一行が変わった。コマンドの振る舞いは、ほかに変えていない（205 回の出力が一字も違わない）。
 
+段階 D の二つ目の部分で、例が一式から写したものをそれぞれのツールの `check` で確かめるテスト（`what_was_copied_passes_the_suite`）は、dandori のワークフローを `ritsu dandori check` で確かめるようにした。dandori のクレートのバイナリは、ritsu の D.3 から規則を読まない（ritsu の DESIGN 2.3。規則を使うワークフローは `ritsu dandori` で走らせる）からである。ツールの場所は `SAKAI_DANDORI` に代えて `SAKAI_RITSU`（無ければワークスペースの `target/debug/ritsu`、次に PATH）から読む。sakai のコマンドの振る舞いは変わらない。
+
 ## 13. 捨てたもの
 
 ここまでの節に書いたもののほかに、次を捨てた。

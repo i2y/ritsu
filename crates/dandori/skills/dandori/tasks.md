@@ -237,12 +237,12 @@ error[E007]: tests/fixtures/rule_connect.flow:6:3: the rule is already called an
      6 |   connect "https://rules.example.com"
 ```
 
-dandori reads the service as it reads the rest of the rule, from `rulec api`, and not from the `.proto`
-that `rulec gen` writes: the path of the method, the fields of its request and its response, and what
+dandori reads the service as it reads the rest of the rule, from what rulec says of it, and not from
+the `.proto` that `rulec gen` writes: the path of the method, the fields of its request and its response, and what
 the service calls the values of each enum. A call is a POST of the URL and the path, with the header
 `Connect-Protocol-Version: 1` and a JSON body written as protobuf's JSON writes it. Field names are in
 lowerCamelCase, a number is a decimal string (rulec's numbers are 64-bit integers), and an enum's value
-is the `.proto`'s name for it, as `rulec api` gives it (`CARRIER_NEXTDAY` for `next_day`). Every input
+is the `.proto`'s name for it, as rulec gives it (`CARRIER_NEXTDAY` for `next_day`). Every input
 is written out, at its zero value too (`false`, `"0"`): the service tells an input left out from one set
 to zero. This is what the service `rulec gen` writes for the urgency rule is sent, and what it answers:
 
@@ -296,7 +296,7 @@ enum Status {
 }
 ```
 
-So dandori reads these names from `rulec api` rather than building them from the enum's name. The service
+So dandori reads these names from rulec rather than building them from the enum's name. The service
 leaves out of its answer an enum at value 0, as it leaves out any zero value, and when value 0 is a value
 of the rule's, dandori reads the answer without it as that value. Sent, `ACTIVE` is written out like any
 other value. The rule of `tests/fixtures/rules/account_fee.rule` takes this enum, and its service answers
@@ -315,16 +315,6 @@ rulec-source-sha256: bdb2f090c3a1a0c471d0b94dd4f23db7aa7a4d9bd8c23bdd786effd3b0d
 {"trace":[{"table":"手数料表","row":1}]}
 ```
 
-`rulec api` says these names (`connect.enums`) from rulec 0.22.0; 0.21.2 and before do not. With those,
-a rule whose enum is a contract's cannot be called at its service, and `check` says so; a rule's own
-enums are still called, by the names those rulecs give them:
-
-```text
-error[E005]: tests/flows/connect_rules_contract.flow:4:10: could not read the rule `../fixtures/rules/account_fee.rule`
-     4 | use rule 手数料 from "../fixtures/rules/account_fee.rule"
-  = the enum `口座の状態` of the rule is a contract's (`Status`), and this rulec's `rulec api` does not say what the rule's service calls its values; `connect` needs rulec 0.22.0 or later, whose `rulec api` says them (`connect.enums`)
-```
-
 ### What the service refuses
 
 A service written by rulec 0.22.0 or later refuses, with `invalid_argument` (400), an input
@@ -337,7 +327,8 @@ left out as its zero value, and read a name their enum does not have as its valu
 only when value 0 says that nothing was set.
 
 A rule that walks a list of elements (`elements` in the rule) is not called at all, at its service or by
-its code: dandori does not pass a rule a list yet (E005).
+its code: dandori does not pass a rule a list yet (E005). Nor is a rule with an input or an output that
+may be none (`T?`): the code dandori writes passes a rule no null, and reads none from it, yet (E005).
 
 The order example for AWS calls its urgency rule this way
 ([order.flow](https://github.com/i2y/dandori/blob/main/examples/order/aws/order.flow)), and the tests

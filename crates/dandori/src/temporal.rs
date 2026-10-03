@@ -844,17 +844,13 @@ pub(crate) fn connect_rules(m: &Model) -> Vec<usize> {
 /// A rule's arguments as the TypeScript of its activity takes them: an enum's value is a string, a
 /// number with a unit a number. The same as rules.ts, for a rule whose code goes with the workflow.
 fn rule_arg_types(ru: &RuleUse) -> Vec<String> {
-    let ts = &ru.info.api["typescript"];
-    let enums: Vec<String> = ts["enums"].as_array().unwrap_or(&vec![]).iter().map(|e| e["alias"].as_str().unwrap_or("").to_string()).collect();
-    ts["params"]
-        .as_array()
-        .unwrap_or(&vec![])
+    let ts = &ru.info.typescript;
+    ts.params
         .iter()
         .map(|p| {
-            let name = p["name"].as_str().unwrap_or("");
-            let ty = p["type"].as_str().unwrap_or("");
-            let t = if enums.iter().any(|x| x == ty) || ty == "string" { "string" } else if ty == "boolean" { "boolean" } else { "number" };
-            format!("{}: {t}", q(name))
+            let ty = p.ty.as_str();
+            let t = if ts.enums.iter().any(|e| e.alias == ty) || ty == "string" { "string" } else if ty == "boolean" { "boolean" } else { "number" };
+            format!("{}: {t}", q(&p.name))
         })
         .collect()
 }
@@ -970,19 +966,19 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     // one import a module: two rules of the flow may be the same rule
     let mut imports: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for r in called {
-        let ts = &m.rules[*r].info.api["typescript"];
-        let module = ts["module"].as_str().unwrap_or("rule").trim_end_matches(".ts").to_string();
+        let ts = &m.rules[*r].info.typescript;
+        let module = ts.module.trim_end_matches(".ts").to_string();
         let names = imports.entry(module).or_default();
-        names.insert(ts["function"].as_str().unwrap_or("rule").to_string());
-        let enum_aliases: Vec<&str> = ts["enums"].as_array().map(|a| a.iter().filter_map(|e| e["alias"].as_str()).collect()).unwrap_or_default();
+        names.insert(ts.function.clone());
+        let enum_aliases: Vec<&str> = ts.enums.iter().map(|e| e.alias.as_str()).collect();
         for alias in &enum_aliases {
-            if ts["params"].as_array().unwrap_or(&vec![]).iter().any(|p| p["type"].as_str() == Some(alias)) {
+            if ts.params.iter().any(|p| p.ty == *alias) {
                 names.insert(format!("parse{alias}"));
             }
         }
         // a number with a unit is a bigint with a brand, which rulec's own runner makes by `as`
-        for p in ts["params"].as_array().unwrap_or(&vec![]) {
-            let ty = p["type"].as_str().unwrap_or("");
+        for p in &ts.params {
+            let ty = p.ty.as_str();
             if !["boolean", "string", "bigint"].contains(&ty) && !enum_aliases.contains(&ty) {
                 names.insert(format!("type {ty}"));
             }
@@ -994,15 +990,14 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     rules_ts.push_str("\nexport const rules = {\n");
     for r in called {
         let ru = &m.rules[*r];
-        let ts = &ru.info.api["typescript"];
-        let enum_aliases: Vec<String> = ts["enums"].as_array().unwrap_or(&vec![]).iter().map(|e| e["alias"].as_str().unwrap_or("").to_string()).collect();
+        let ts = &ru.info.typescript;
+        let enum_aliases: Vec<&str> = ts.enums.iter().map(|e| e.alias.as_str()).collect();
         let mut args = Vec::new();
         let mut arg_types = Vec::new();
-        for p in ts["params"].as_array().unwrap_or(&vec![]) {
-            let name = p["name"].as_str().unwrap_or("");
-            let ty = p["type"].as_str().unwrap_or("");
+        for p in &ts.params {
+            let (name, ty) = (p.name.as_str(), p.ty.as_str());
             let get = format!("args[{}]", q(name));
-            if enum_aliases.iter().any(|x| x == ty) {
+            if enum_aliases.contains(&ty) {
                 args.push(format!("parse{ty}(String({get}))"));
                 arg_types.push(format!("{}: string", q(name)));
             } else if ty == "boolean" {
@@ -1020,21 +1015,19 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
             }
         }
         let mut outs = Vec::new();
-        let outputs = ts["outputs"].as_array().cloned().unwrap_or_default();
-        for o in &outputs {
-            let name = o["name"].as_str().unwrap_or("");
-            let alias = o["alias"].as_str().unwrap_or("");
-            let ty = o["type"].as_str().unwrap_or("");
+        let outputs = &ts.outputs;
+        for o in outputs {
+            let (name, alias, ty) = (o.name.as_str(), o.alias.as_str(), o.ty.as_str());
             // with one output, the rule's function answers that value itself, not a record of outputs
             let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
-            let v = if enum_aliases.iter().any(|e| e == ty) || ty == "boolean" || ty == "string" { x } else { format!("Number({x})") };
+            let v = if enum_aliases.contains(&ty) || ty == "boolean" || ty == "string" { x } else { format!("Number({x})") };
             outs.push(format!("{}: {v}", q(name)));
         }
         rules_ts.push_str(&format!(
             "  async {}(args: {{ {} }}): Promise<Record<string, unknown>> {{\n    const out = {}({});\n    return {{ {} }};\n  }},\n",
             render::rule_activity(&ru.name),
             arg_types.join("; "),
-            ts["function"].as_str().unwrap_or("rule"),
+            ts.function,
             args.join(", "),
             outs.join(", ")
         ));

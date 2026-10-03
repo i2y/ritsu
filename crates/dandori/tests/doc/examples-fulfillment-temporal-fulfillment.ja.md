@@ -114,7 +114,7 @@ flowchart TD
 <details>
 <summary><code>urgency</code> · urgency v1 · <code>../../order/rules/urgency.rule</code></summary>
 
-<!-- rulec 0.22.0 が urgency.rule (sha256:5ff6efc93a9b) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.22.1 が urgency.rule (sha256:5ff6efc93a9b) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
 # 規則 urgency v1
 
 Whether an order goes out in a hurry, and by which carrier: a member's always does, and anyone else's from 30,000 yen. Written for the example

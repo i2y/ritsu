@@ -72,7 +72,8 @@ C で作るもの：E104、E105、N101、E405、E501、E502、および rulec �
 | 変数 | 意味 | 既定 |
 |---|---|---|
 | `SAKAI_LANG` | 文面の言語 | 英語 |
-| `SAKAI_RULEC`、`SAKAI_KOYOMI`、`SAKAI_CHOBO`、`SAKAI_DANDORI` | 一式のツール（`check` も使う） | PATH の `rulec` など |
+| `SAKAI_RULEC`、`SAKAI_KOYOMI`、`SAKAI_CHOBO` | 一式のツール（`check` も使う） | PATH の `rulec` など |
+| `SAKAI_RITSU` | dandori のワークフローを確かめる `ritsu dandori`（テスト。ritsu の D の二つ目の部分から。前は `SAKAI_DANDORI`） | ワークスペースの `target/debug/ritsu`、次に PATH の `ritsu` |
 | `SAKAI_BLESS` | golden を書き直す（テスト） | |
 | `SAKAI_BUF` | proto の読み手の比べ合わせ（テスト） | PATH の `buf` |
 | `SAKAI_LINT_IMPORTS` | import-linter（テスト） | `tools/.venv/bin/lint-imports` |

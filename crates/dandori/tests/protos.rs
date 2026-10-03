@@ -1,12 +1,13 @@
 //! A `.proto` as the contract of a flow: the types a flow makes of it (DESIGN 1.12) are what the
 //! description says, and a task is held to the same description by the same table.
 //!
-//! The first tests read the `.proto`s of tests/fixtures/protos and need no rulec and no other tool.
-//! The last two are about the `.proto` rulec writes for a rule (DESIGN 1.13): that the names dandori
-//! builds from `rulec api` are the ones in it, and that the service rulec writes answers what
-//! dandori sends it. They need rulec; the second also needs buf and tools/connect/.venv, and says
-//! `SKIP: dandori: …` when one is not there (read the output with `-- --nocapture`), or when
-//! `RITSU_TEST_LEVEL` leaves the tools out.
+//! The first tests read the `.proto`s of tests/fixtures/protos and need no other tool. The last two
+//! are about the `.proto` rulec writes for a rule (DESIGN 1.13): that the names dandori reads of the
+//! rule's service are the ones in it, and that the service rulec writes answers what dandori sends
+//! it. The rules are read through rulec's own answer to ritsu's port of rules, and the code rulec
+//! generates is made by rulec's library, in this process; the second also needs buf and
+//! tools/connect/.venv, and says `SKIP: dandori: …` when one is not there (read the output with
+//! `-- --nocapture`), or when `RITSU_TEST_LEVEL` leaves the tools out.
 
 use dandori::apis::{self, Api, ApiDoc, ApiKind};
 use dandori::model::{Model, Range, RecordOrigin, RuleConnect, Ty};
@@ -252,20 +253,42 @@ fn a_proto_with_an_import_that_is_not_there_is_read_all_the_same() {
 // ---------------------------------------------------------------------------
 // The `.proto` and the service rulec writes for a rule
 
-fn rulec_bin() -> String {
-    std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".into())
+/// Run `f` reading the rules through rulec's own answer to the port, as `ritsu dandori` reads them.
+/// One engine a thread keeps the rules it checked.
+fn with_rules<R>(f: impl FnOnce() -> R) -> R {
+    thread_local! {
+        static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::new());
+    }
+    let rules: std::rc::Rc<dyn ritsu_ports::Rules> = RULEC.with(|r| r.clone());
+    dandori::sources::with_rules(rules, f)
 }
 
-fn rulec_available() -> bool {
-    Command::new(rulec_bin()).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
+/// What `rulec gen <rule> --out <out>` writes, by rulec's library.
+fn rulec_gen(rule: &Path, out: &Path) {
+    let (mut said, mut err) = (Vec::new(), Vec::new());
+    let code = rulec::codegen::generate(&[rule.to_str().unwrap()], out.to_str().unwrap(), false, false, &mut said, &mut err);
+    assert_eq!(code, 0, "rulec gen failed: {}{}", String::from_utf8_lossy(&said), String::from_utf8_lossy(&err));
 }
 
-/// Whether the rulec at hand says, in `rulec api`, what a rule's service calls the values of its
-/// enums (`connect.enums`): rulec 0.22.0 does. 0.21.2 did not, and its services took a field they did
-/// not know and an input left out (DESIGN 1.13).
-fn rulec_names_enums() -> bool {
-    let out = Command::new(rulec_bin()).arg("api").arg(root().join("examples/order/rules/urgency.rule")).output();
-    out.ok().and_then(|o| serde_json::from_slice::<Value>(&o.stdout).ok()).is_some_and(|v| v["connect"]["enums"].is_array())
+/// The rule, checked by rulec's library.
+fn rulec_checked(rule: &Path) -> (String, String, rulec::ast::RuleFile, rulec::types::Checked) {
+    let path = rule.to_str().unwrap().to_string();
+    let src = std::fs::read_to_string(rule).unwrap();
+    assert!(!rulec::has_error(&rulec::report(&src, &path).diags), "{path} does not pass check");
+    let (f, c) = rulec::prepare(&src, &path).unwrap();
+    (path, src, f, c)
+}
+
+/// What `rulec vectors <rule>` prints: a vector a line, each read.
+fn rulec_vectors(rule: &Path) -> Vec<Value> {
+    let (_, _, f, c) = rulec_checked(rule);
+    rulec::vectors::generate(&f, &c).iter().map(|v| serde_json::from_str(&rulec::vectors::to_json(&f, &c, v)).unwrap()).collect()
+}
+
+/// Where `rulec gen` writes the `.proto` of the rule's service, under its output directory.
+fn rulec_proto(rule: &Path) -> String {
+    let (path, src, f, c) = rulec_checked(rule);
+    format!("proto/{}", rulec::codegen::Gen::new(&f, &c, &src, &path).proto_path())
 }
 
 /// The rules of the examples, which the flows of the examples and of tests/flows call, and the two of
@@ -281,7 +304,7 @@ fn rule_files() -> Vec<PathBuf> {
         }
     }
     out.extend(std::fs::read_dir(root().join("tests/fixtures/rules")).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "rule")));
-    out.retain(|p| dandori::rulec::load(p).is_ok_and(|info| info.walks.is_none()));
+    out.retain(|p| with_rules(|| dandori::rulec::load(p)).is_ok_and(|info| info.walks.is_none()));
     out.sort();
     out
 }
@@ -301,48 +324,32 @@ fn scratch(name: &str) -> PathBuf {
 /// the flow does not pass check.
 fn connect_of(rule: &Path, base: &str) -> Result<(RuleConnect, dandori::rulec::RuleInfo), Vec<dandori::diag::Diag>> {
     let text = format!("workflow probe v1\n\nuse rule r from \"{}\"\n  connect \"{base}\"\n\nflow\n  pass\n", rule.display());
-    let checked = dandori::check::check_source(&text, &root().join("tests/fixtures/probe.flow"));
+    let checked = with_rules(|| dandori::check::check_source(&text, &root().join("tests/fixtures/probe.flow")));
     let Some(m) = checked.model else { return Err(checked.diags) };
     let r = m.rules.into_iter().next().expect("a rule");
     Ok((r.connect.expect("a rule at its service"), r.info))
 }
 
-/// `connect_of`, or None after a SKIP line when the rulec at hand does not say what the service calls
-/// the values of a contract's enum, which a rule that has one needs to be called at its service (E005).
-fn connect_or_skip(rule: &Path, base: &str, names: bool) -> Option<(RuleConnect, dandori::rulec::RuleInfo)> {
-    match connect_of(rule, base) {
-        Ok(c) => Some(c),
-        Err(diags) => {
-            let unnamed = diags.iter().any(|d| d.code == "E005" && d.notes.iter().any(|n| n.en.contains("`connect.enums`")));
-            if unnamed && !names {
-                skip(&format!("{}: its enum is a contract's, and this rulec's `rulec api` does not say what the rule's service calls the values (`connect.enums`)", rule.strip_prefix(root()).unwrap_or(rule).display()));
-                return None;
-            }
-            panic!("{}: the flow that calls it at its service does not pass check: {:?}", rule.display(), diags.iter().map(|d| (&d.code, &d.en, &d.notes)).collect::<Vec<_>>());
-        }
-    }
+/// `connect_of`, which passes check for every rule of `rule_files`.
+fn connect_at(rule: &Path, base: &str) -> (RuleConnect, dandori::rulec::RuleInfo) {
+    connect_of(rule, base).unwrap_or_else(|diags| panic!("{}: the flow that calls it at its service does not pass check: {:?}", rule.display(), diags.iter().map(|d| (&d.code, &d.en, &d.notes)).collect::<Vec<_>>()))
 }
 
-/// What dandori reads from `rulec api` for a rule called at its service — the path, the fields of the
-/// request and the response by their JSON names and kinds, the names of the enums' values and of
-/// value 0, the zero values — is what the `.proto` rulec writes for the same rule says. The `.proto`
-/// of a contract the rule imports is where `rulec gen` copies it (`proto/shop/v1/order.proto`, by its
-/// package), and is read from there as an import. A change of how rulec names them shows here.
+/// What dandori reads of a rule called at its service — the path, the fields of the request and the
+/// response by their JSON names and kinds, the names of the enums' values and of value 0, the zero
+/// values — is what the `.proto` rulec writes for the same rule says. The `.proto` of a contract the
+/// rule imports is where `rulec gen` copies it (`proto/shop/v1/order.proto`, by its package), and is
+/// read from there as an import. A change of how rulec names them shows here.
 #[test]
 fn rulec_gen_writes_the_names_dandori_builds() {
-    if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
-        return;
-    }
     use dandori::proto::PType;
     use dandori::rulec::WireKind;
-    let names = rulec_names_enums();
     let mut checked = 0;
     for rule in rule_files() {
-        let Some((c, info)) = connect_or_skip(&rule, "https://rules.example.com", names) else { continue };
+        let (c, info) = connect_at(&rule, "https://rules.example.com");
         let out = scratch("gen");
-        let gen = Command::new(rulec_bin()).arg("gen").arg(&rule).arg("--out").arg(&out).output().unwrap();
-        assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
-        let written = info.api["connect"]["proto"].as_str().expect("rulec api names the .proto");
+        rulec_gen(&rule, &out);
+        let written = rulec_proto(&rule);
         let pf = dandori::proto::load(&out.join(written)).unwrap_or_else(|e| panic!("{}: {e}", rule.display()));
         let name = rule.file_name().unwrap().to_string_lossy().to_string();
         assert!(pf.unread.is_empty(), "{name}: the .proto rulec writes imports what it does not write: {:?}", pf.unread);
@@ -398,7 +405,7 @@ fn rulec_gen_writes_the_names_dandori_builds() {
         checked += 1;
     }
     assert!(checked >= 11, "the examples' rules: {checked}");
-    eprintln!("the names dandori reads from rulec api are in the .proto rulec writes, for {checked} rule(s)");
+    eprintln!("the names dandori reads of the rules' services are in the .proto rulec writes, for {checked} rule(s)");
 }
 
 /// A running service of a rule, killed when it goes out of scope.
@@ -431,14 +438,11 @@ fn at_zero(f: &dandori::rulec::WireField, v: &Value) -> bool {
 /// `render::rule_read` reads of the answer is the vector's output, an enum the answer leaves out at a
 /// value 0 that is the rule's among it. An answer carries the version of the table that decided it in
 /// `rulec-source-sha256`. The service refuses with `invalid_argument` (400) an input outside the
-/// rule's range and a name its enum does not have, and, written by a rulec that names the enums of its
-/// service, a field it does not know and an input left out. Only the code and the status are looked
-/// at: the messages are connectrpc's and protobuf's, and may change with their versions.
+/// rule's range, a name its enum does not have, a field it does not know and an input left out. Only
+/// the code and the status are looked at: the messages are connectrpc's and protobuf's, and may change
+/// with their versions.
 #[test]
 fn rule_services_answer_as_dandori_reads_them() {
-    if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
-        return;
-    }
     let venv = root().join("tools/connect/.venv/bin");
     if !ready(Need::Python, || venv.join("python").exists() && venv.join("protoc-gen-py").exists(), "tools/connect/.venv is missing; make it as tools/connect/requirements.txt says") {
         return;
@@ -451,22 +455,13 @@ fn rule_services_answer_as_dandori_reads_them() {
         skip("buf is not installed; it writes the stubs the service imports");
         return;
     };
-    let names = rulec_names_enums();
-    if !names {
-        skip("this rulec's `rulec api` does not name the enums of a rule's service, and the services it writes take a field they do not know and an input left out; those two refusals are not asked for");
-    }
     let (mut rules, mut sent, mut zeros) = (0, 0, 0);
     // the requests refused, by what is wrong with them: above a range, a name, a field, an input left out
     let mut refused = [0; 4];
     for rule in rule_files() {
         let name = rule.file_name().unwrap().to_string_lossy().to_string();
-        // a rule whose enum is a contract's, with a rulec that does not say its names, is not called
-        if connect_or_skip(&rule, "http://127.0.0.1", names).is_none() {
-            continue;
-        }
         let out = scratch("service");
-        let gen = Command::new(rulec_bin()).arg("gen").arg(&rule).arg("--out").arg(&out).output().unwrap();
-        assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
+        rulec_gen(&rule, &out);
         // the stubs, by buf, with the plugins of the venv in place of the ones buf fetches
         let template = format!(
             "version: v2\nplugins:\n  - local: {0}/protoc-gen-py\n    out: ../python/stubs\n    strategy: all\n  - local: {0}/protoc-gen-connectrpc\n    out: ../python/stubs\n    strategy: all\n",
@@ -492,9 +487,8 @@ fn rule_services_answer_as_dandori_reads_them() {
         let base = first.trim().to_string();
         assert!(base.starts_with("http://127.0.0.1:"), "{name}: the service says where it is on its first line, not {first:?}");
 
-        let (c, info) = connect_of(&rule, &base).unwrap();
-        let vectors = Command::new(rulec_bin()).arg("vectors").arg(&rule).output().unwrap();
-        let lines: Vec<Value> = String::from_utf8_lossy(&vectors.stdout).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        let (c, info) = connect_at(&rule, &base);
+        let lines: Vec<Value> = rulec_vectors(&rule);
         // what is sent: each vector's input as dandori writes it
         let mut bodies: Vec<Value> = lines.iter().map(|l| dandori::render::rule_request(&c, l["in"].as_object().unwrap())).collect();
         // and what the service refuses, each made from the first of them: (what it is, the body)
@@ -510,14 +504,12 @@ fn rule_services_answer_as_dandori_reads_them() {
             body.insert(f.json.clone(), json!("DANDORI_NOT_A_VALUE"));
             wrong.push((1, format!("`{}` has a name its enum does not have", f.json), Value::Object(body)));
         }
-        if names {
-            let mut body = one.clone();
-            body.insert("dandoriNotAField".into(), json!(true));
-            wrong.push((2, "`dandoriNotAField` is no field of the request".into(), Value::Object(body)));
-            let mut body = one.clone();
-            body.remove(&c.request[0].json);
-            wrong.push((3, format!("the input `{}` is left out", c.request[0].name), Value::Object(body)));
-        }
+        let mut body = one.clone();
+        body.insert("dandoriNotAField".into(), json!(true));
+        wrong.push((2, "`dandoriNotAField` is no field of the request".into(), Value::Object(body)));
+        let mut body = one.clone();
+        body.remove(&c.request[0].json);
+        wrong.push((3, format!("the input `{}` is left out", c.request[0].name), Value::Object(body)));
         bodies.extend(wrong.iter().map(|(_, _, b)| b.clone()));
         let dir = scratch("post");
         std::fs::write(dir.join("requests.json"), serde_json::to_string(&json!({ "url": c.url, "bodies": bodies })).unwrap()).unwrap();
@@ -670,9 +662,6 @@ fn plain(v: &Value) -> Value {
 /// them in.
 #[test]
 fn protobuf_reads_what_the_services_carry() {
-    if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
-        return;
-    }
     if !need(Need::Protoc) {
         return;
     }
@@ -688,7 +677,7 @@ fn protobuf_reads_what_the_services_carry() {
     let (mut read, mut inputs_back) = (0, 0);
     for f in service_flows() {
         let name = f.strip_prefix(root()).unwrap().display().to_string();
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = with_rules(|| dandori::check::check_file(&f)).unwrap();
         let m = checked.model.unwrap_or_else(|| panic!("{name} does not pass check"));
         let s = m.service.clone().expect("a flow that implements a service");
         let dir = scratch("carry");

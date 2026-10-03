@@ -423,7 +423,8 @@ fn rule_path(i: &Input, r: &RuleUse) -> String {
 /// Markdown, or the page on which whoever approves the rule tries a case. rulec draws its rules;
 /// the page shows them as it drew them.
 fn rule_docs<'a>(i: &Input<'a>, html: bool) -> Vec<(&'a RuleUse, Result<String, String>)> {
-    i.m.rules.iter().map(|r| (r, crate::sources::rulec_doc(&r.info.path, html, i.lang))).collect()
+    let said = |s: Vec<ritsu_ports::Said>| crate::sources::said_notes(&s).iter().map(|t| t.get(i.lang).to_string()).collect::<Vec<_>>().join("\n");
+    i.m.rules.iter().map(|r| (r, crate::sources::rule_doc(&r.info.path, html, i.lang).map_err(said))).collect()
 }
 
 fn retry_text(r: &Retry) -> String {

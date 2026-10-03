@@ -1,4 +1,4 @@
-//! The first pass: read the rules through rulec, resolve every name, type every value,
+//! The first pass: read the rules through ritsu's port of rules, resolve every name, type every value,
 //! and turn the statements into the checked tree of `model`. The run-dependent checks
 //! (states of cases, assignment, exhaustiveness, exits) are the second pass, in `flow`.
 
@@ -233,11 +233,10 @@ impl<'a> Lowerer<'a> {
             let path = base.join(&u.path);
             let info = match rulec::load(&path) {
                 Ok(i) => i,
-                Err(msg) => {
-                    self.push(
-                        e("E005", *sp, tr!("規則 `{}` を読めませんでした", "could not read the rule `{}`", u.path))
-                            .note(Text::same(msg)),
-                    );
+                Err(said) => {
+                    // what rulec says of the rule instead, or what the port this dandori runs with says
+                    let d = e("E005", *sp, tr!("規則 `{}` を読めませんでした", "could not read the rule `{}`", u.path));
+                    self.push(crate::sources::said_notes(&said).into_iter().fold(d, Diag::note));
                     continue;
                 }
             };
@@ -247,6 +246,16 @@ impl<'a> Lowerer<'a> {
                 self.push(
                     e("E005", *sp, tr!("規則 `{}` を読めませんでした", "could not read the rule `{}`", u.path)).note(
                         tr!("この規則は要素の並び（`{list}`）をたどります。dandori はまだ、規則に並びを渡せません", "the rule walks a list of elements (`{list}`), and dandori does not pass a rule a list yet"),
+                    ),
+                );
+                continue;
+            }
+            // a rule an input or an output of which may be `none`, which the code that goes with the
+            // workflow neither passes to the rule's own nor reads from it yet
+            if let Some(name) = info.optional.first() {
+                self.push(
+                    e("E005", *sp, tr!("規則 `{}` を読めませんでした", "could not read the rule `{}`", u.path)).note(
+                        tr!("この規則の `{name}` は無いことがあります（`T?`）。dandori はまだ、無いことがある値を規則とやりとりできません", "the rule's `{name}` may be none (`T?`), and dandori does not pass a rule, or read from one, a value that may be absent yet"),
                     ),
                 );
                 continue;
@@ -277,9 +286,9 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// What `connect` under `use rule` says: the service's URL, and what `rulec api` says of its
-    /// request and its response. The ways of calling that do not go together are E007, each at the
-    /// second to say it.
+    /// What `connect` under `use rule` says: the service's URL, and what rulec says of its request
+    /// and its response. The ways of calling that do not go together are E007, each at the second
+    /// to say it.
     fn rule_connect(&mut self, u: &syntax::UseRule, info: &rulec::RuleInfo) -> Option<RuleConnect> {
         if let (Some((_, lsp)), Some((_, csp))) = (&u.lambda, &u.connect) {
             let (first, second) = if (lsp.line, lsp.col) < (csp.line, csp.col) { (lsp, csp) } else { (csp, lsp) };
@@ -305,16 +314,15 @@ impl<'a> Lowerer<'a> {
             ));
             return None;
         }
-        match rulec::connect_shape(&info.api) {
+        match rulec::connect_shape(info) {
             Ok(shape) => {
                 let zeros = rule_zeros(&shape.response);
                 let base = url.trim_end_matches('/').to_string();
                 Some(RuleConnect { url: format!("{base}{}", shape.path), base, request: shape.request, response: shape.response, zeros })
             }
-            Err((en, ja)) => {
+            Err(why) => {
                 // the rule is read, but its service is not: what `connect` calls cannot be said
-                // (src/rulec.rs still says it English first, until stage D)
-                self.push(e("E005", u.name.1, tr!("規則 `{}` を読めませんでした", "could not read the rule `{}`", u.path)).note(Text::new(ja, en)));
+                self.push(e("E005", u.name.1, tr!("規則 `{}` を読めませんでした", "could not read the rule `{}`", u.path)).note(why));
                 None
             }
         }

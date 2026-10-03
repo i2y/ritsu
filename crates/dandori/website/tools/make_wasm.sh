@@ -12,15 +12,18 @@
 # whether to install anything, and a check of one flow takes milliseconds either way.
 #
 # A panic's message names the file it is in, and a dependency's file is where Cargo keeps it on
-# this machine; --remap-path-prefix writes that as /cargo, so the file names no one's home.
+# this machine; --remap-path-prefix writes that as /cargo, so the file names no one's home. The crates
+# of ritsu's workspace are named from the workspace's root (crates/dandori/src/…), and so is the
+# directory Cargo builds in (the workspace's target/, or CARGO_TARGET_DIR).
 set -eu
 cd "$(dirname "$0")/.."
 target=wasm32-unknown-unknown
 rustup target list --installed | grep -qx "$target" || rustup target add "$target"
 cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+built="${CARGO_TARGET_DIR:-$(cd ../../.. && pwd)/target}"
 RUSTFLAGS="-C opt-level=z -C codegen-units=1 -C strip=symbols --remap-path-prefix=$cargo_home=/cargo" \
   cargo rustc --manifest-path ../Cargo.toml --lib --release --target "$target" --crate-type cdylib
 mkdir -p docs/playground
-cp "../target/$target/release/dandori.wasm" docs/playground/dandori.wasm
+cp "$built/$target/release/dandori.wasm" docs/playground/dandori.wasm
 chmod 644 docs/playground/dandori.wasm
 ls -l docs/playground/dandori.wasm

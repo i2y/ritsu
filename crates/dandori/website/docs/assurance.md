@@ -124,7 +124,7 @@ run again, at most twice, and the test says so.
   enum at value 0, when value 0 is one of the rule's values), with an enum left out whose value 0 is
   none of them, with a number outside its range, with a body of the wrong shape, and with a failure.
   Every platform must read the answer back as the rule's record, or end the call as the reference does.
-- What dandori reads from `rulec api` for a rule's service (the path, the fields of the request and the
+- What dandori reads of a rule's service, through ritsu's port of rules (the path, the fields of the request and the
   response by their JSON names and kinds, each enum's values and its value 0, and the zero values the
   response leaves out) is compared with the `.proto` that `rulec gen` writes for the same rule, read by
   dandori's own reader, for every rule of the examples, and for two whose enum is a `.proto`'s
@@ -134,13 +134,11 @@ run again, at most twice, and the test says so.
   server, with the stubs that buf writes with the plugins of `tools/connect/.venv`), and every vector
   `rulec vectors` writes is sent to it as dandori writes a request, every input written out. What
   dandori reads of the answer must be the vector's output, and the header `rulec-source-sha256` of an
-  answer must be the rule's `source_sha256`. An input above a range, a name no value of the enum has, a
+  answer must be the rule's SHA-256. An input above a range, a name no value of the enum has, a
   field the request does not have and a request without one of its inputs must each be refused with
   `invalid_argument` and the status 400. The 350 vectors of the 13 rules were sent, 114 of them with an
   input at its zero value, and the services refused 9 inputs above a range, 11 names, 13 fields and 13
-  requests without an input. With rulec 0.21.2 and before, whose `rulec api` does not say what a service
-  calls the values of its enums, the two rules of `.proto` enums are skipped, and so are the field and
-  the input left out, which the services of those rulecs do not refuse.
+  requests without an input.
 - What a service answers is read as the rule's record in five places: the reference interpreter, the
   TypeScript, the Python and the Go that dandori writes, and the JSONata of the state machine. 200
   answers of four rules must be read alike in all five, among them the ones a service would not write: a number
@@ -237,17 +235,16 @@ $ npm install --prefix tools/mermaid
 $ (cd tools/temporal-go && go mod download)   # Go 1.25 or later; go fetches the Go 1.26 the Temporal SDK asks for
 $ sh tools/argo/setup.sh        # a kind cluster with Argo Workflows (docker, kind 0.33+, kubectl)
 $ docker pull localstack/localstack:4.14.0
-$ DANDORI_RULEC=/path/to/rulec cargo test
+$ cargo test
 ```
 
-Run the tests with rulec 0.22.0 or later. The golden files of `dandori doc`, the pages of the site's
-examples and the playground's `presets.json` hold what rulec prints for the rules, `rulec doc` among it,
-and its version number is in that. With rulec 0.21.2 or before, three tests fail on that alone: the two
-that compare `dandori doc` with those files, and the one that compares the playground's answers with
-the command's. The tests that need `connect.enums`, which 0.22.0 is the first to print, print a `SKIP:`
-line.
+The rules are read through rulec's own answer to ritsu's port of rules, in the tests' process, and the
+code `rulec gen` writes for them is made by rulec's library, so the tests need no rulec binary. The
+golden files of `dandori doc`, the pages of the site's examples and the playground's `presets.json` hold
+what rulec draws for the rules, `rulec doc` among it, and its version is in that: they are recorded
+anew when the version changes.
 
-A test that cannot find rulec, Node, the tools, buf, protoc, the cluster, the `argo` command, the image of
+A test that cannot find Node, the tools, buf, protoc, the cluster, the `argo` command, the image of
 LocalStack or Chrome prints a `SKIP:` line and passes, so read the output with `-- --nocapture`. The whole
 `cargo test` takes six to seven minutes; `tools/argo/setup.sh` sets Argo's controller up for it, to
 look at a workflow again a second after a change rather than ten, on the node image of kind 0.33.0.

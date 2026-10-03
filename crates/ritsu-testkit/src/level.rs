@@ -3,7 +3,7 @@
 //! | level | what runs |
 //! |---|---|
 //! | `fast` | nothing but cargo (git may be used, and curl, to ask a server the test itself started) |
-//! | `tools` | the tools installed on the machine: compilers and checkers of generated code, PostgreSQL, TigerBeetle, Chrome, Mermaid, xmllint, Lean, the linters, pixie's greeter, the binaries of the other languages a test runs (rulec 0.22.0 for dandori's; rulec, koyomi, chobo and dandori for sakai's) |
+//! | `tools` | the tools installed on the machine: compilers and checkers of generated code, PostgreSQL, TigerBeetle, Chrome, Mermaid, xmllint, Lean, the linters, pixie's greeter, the binaries of the other languages a test runs (rulec, koyomi, chobo and dandori for sakai's) |
 //! | `platforms` | services and clusters a test starts, and the network: Temporal, Argo on kind, LocalStack, Ollama, TypeSafe, e-Gov and the eCFR, Kani |
 //!
 //! `RITSU_TEST_LEVEL` names the highest level to run; a test that needs a higher one prints a
@@ -73,9 +73,6 @@ pub enum Need {
     Lean,
     /// sakai's import-linter, dependency-cruiser, ArchUnit, Context Mapper, go-arch-lint.
     Linters,
-    /// The rulec binary dandori's tests read a flow's rules with (`DANDORI_RULEC`), until dandori
-    /// reads them in the same process (PLAN D.3).
-    Rulec,
     /// The binaries of rulec, koyomi, chobo and dandori, which sakai's tests check the files its
     /// example copied from them with (`SAKAI_RULEC` and the like), until sakai reads them in
     /// the same process (PLAN D.8).
@@ -119,7 +116,6 @@ impl Need {
             Need::Xmllint => "xmllint",
             Need::Lean => "lean",
             Need::Linters => "linters",
-            Need::Rulec => "rulec",
             Need::Suite => "rulec, koyomi, chobo and dandori",
             Need::Pixie => "pixie's greeter",
             Need::Temporal => "temporal",

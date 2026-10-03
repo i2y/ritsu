@@ -2321,7 +2321,7 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
     t.push_str("// own (rulec/go/<package>), which your go.mod requires and replaces with that directory:\n//\n");
     let mut packages = BTreeSet::new();
     for r in called {
-        packages.insert(m.rules[*r].info.api["go"]["package"].as_str().unwrap_or("rule").to_string());
+        packages.insert(m.rules[*r].info.go.module.clone());
     }
     for p in &packages {
         t.push_str(&format!("//\trequire {p} v0.0.0\n//\treplace {p} => ./<this package's directory>/rulec/go/{p}\n"));
@@ -2338,16 +2338,13 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
     t.push_str("}\n");
     for r in called {
         let ru = &m.rules[*r];
-        let go = &ru.info.api["go"];
-        let pkgname = go["package"].as_str().unwrap_or("rule");
-        let enums: Vec<&str> = go["enums"].as_array().map(|a| a.iter().filter_map(|e| e["alias"].as_str()).collect()).unwrap_or_default();
-        let is_enum = |ty: &str| enums.contains(&ty);
+        let go = &ru.info.go;
+        let pkgname = go.module.as_str();
+        let is_enum = |ty: &str| go.enums.iter().any(|e| e.alias == ty);
         let mut body = Vec::new();
         let mut fields = Vec::new();
-        for (i, f) in go["input_fields"].as_array().cloned().unwrap_or_default().iter().enumerate() {
-            let name = f["name"].as_str().unwrap_or("");
-            let alias = f["alias"].as_str().unwrap_or("");
-            let ty = f["type"].as_str().unwrap_or("");
+        for (i, f) in go.params.iter().enumerate() {
+            let (name, alias, ty) = (f.name.as_str(), f.alias.as_str(), f.ty.as_str());
             let get = format!("args[{}]", q(name));
             let v = if is_enum(ty) {
                 let x = format!("dd_in{i}");
@@ -2368,12 +2365,10 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
             };
             fields.push(format!("{alias}: {v}"));
         }
-        let outputs = go["output_fields"].as_array().cloned().unwrap_or_default();
+        let outputs = &go.outputs;
         let mut outs = Vec::new();
-        for o in &outputs {
-            let name = o["name"].as_str().unwrap_or("");
-            let alias = o["alias"].as_str().unwrap_or("");
-            let ty = o["type"].as_str().unwrap_or("");
+        for o in outputs {
+            let (name, alias, ty) = (o.name.as_str(), o.alias.as_str(), o.ty.as_str());
             // with one output, the rule's function answers that value itself, not a record of outputs
             let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
             let v = if is_enum(ty) {
@@ -2391,8 +2386,8 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
         }
         t.push_str(&format!(
             "\tout, err := {pkgname}.{}({pkgname}.{}{{{}}})\n\tif err != nil {{\n\t\treturn nil, err\n\t}}\n\treturn map[string]any{{{}}}, nil\n}}\n",
-            go["func"].as_str().unwrap_or("Rule"),
-            go["input_type"].as_str().unwrap_or("Input"),
+            go.function,
+            go.input_type,
             fields.join(", "),
             outs.join(", ")
         ));

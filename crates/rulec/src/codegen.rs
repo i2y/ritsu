@@ -10595,3 +10595,224 @@ impl<'a> Gen<'a> {
         o
     }
 }
+
+/// `rulec gen`: §8.4, the generated files are committed to git, and `--check` in CI verifies that
+/// they match a fresh generation. What it prints goes to `out` and `err`, and the answer is its exit
+/// code. A program that holds rulec as a library and needs a rule's generated code calls this, as
+/// the command does (dandori's tests build their workflows against it, ritsu's DESIGN 3.3).
+pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out: &mut dyn std::io::Write, err: &mut dyn std::io::Write) -> u8 {
+    let mut st = Emitted::default();
+    // The contracts copied into the module so far, and the rule each came with: two rules
+    // may import the same one, but not two different files under one path.
+    let mut contracts: std::collections::BTreeMap<String, (String, String)> = std::collections::BTreeMap::new();
+    // What the module needs from the BSR, over every rule of the run (§15.161).
+    let mut module_deps = crate::codegen::BufDeps::default();
+    for path in files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            let _ = writeln!(err, "{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
+            return 2;
+        };
+        // Nothing is generated from a rule that does not pass (README, AGENTS.md, the
+        // generate page). `prepare` only gets as far as the types, so the checks the tables
+        // themselves carry — completeness, overlap, dead rows, overflow and the examples —
+        // are run here, the way `doc` runs them (§1.6).
+        let rep = crate::report(&src, path);
+        if crate::has_error(&rep.diags) {
+            let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+            let _ = write!(out, "{}", crate::findings_text(&rep.diags, &lines));
+            let _ = writeln!(err, "{}", tr!("error: `{path}` は検査を通っていないので生成しません", "error: `{path}` does not pass check, so nothing is generated"));
+            return 1;
+        }
+        let (f, c) = match crate::prepare(&src, path) {
+            Ok(v) => v,
+            Err(ds) => {
+                let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+                let _ = write!(out, "{}", crate::findings_text(&ds, &lines));
+                let _ = writeln!(err, "{}", tr!("error: `{path}` は検査を通っていないので生成しません", "error: `{path}` does not pass check, so nothing is generated"));
+                return 1;
+            }
+        };
+        let g = crate::codegen::Gen::new(&f, &c, &src, path);
+        let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
+        let pkg = crate::backend::go_package(&alias);
+        // Also emit the vectors and the expected values. Of the three uses in §9.3, the
+        // cross-language agreement test and the golden files run on these.
+        let suite = crate::vectors::suite(&f, &c);
+        let vs = &suite.vectors;
+        let vec_body: String =
+            vs.iter().map(|v| crate::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
+        let exp_body: String =
+            vs.iter().map(|v| crate::vectors::expected_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n";
+        // Every backend says which files it writes (src/backend.rs). The list used to be
+        // here, spelled out per language, which is one of the seven places a new target had
+        // to be added by hand.
+        let mut targets: Vec<(String, String)> = Vec::new();
+        for b in crate::backend::ALL {
+            // A walk is written only by the backends that can write one (§15.56). A file that
+            // cannot run is worse than a missing one, so the rest are named and skipped.
+            if f.elements.is_some() && !b.folds {
+                if !json {
+                    let _ = writeln!(out,
+                        "{}",
+                        tr!(
+                            "{}: この言語には並びをたどる規則を生成しません（DESIGN §15.56）",
+                            "{}: a rule that walks a sequence is not generated for this target (DESIGN §15.56)",
+                            b.name
+                        )
+                    );
+                }
+                continue;
+            }
+            // The same rule for a table whose column is a `string` (§15.101).
+            let text_column = f.items.iter().any(|it| match it {
+                crate::ast::Item::Table(t) => t
+                    .inputs
+                    .iter()
+                    .any(|(n, _)| matches!(c.ty_of(n), Some(crate::types::Ty::Str))),
+                _ => false,
+            });
+            if !b.texts && text_column {
+                if !json {
+                    let _ = writeln!(out,
+                        "{}",
+                        tr!(
+                            "{}: この言語には文字列の列を持つ表を生成しません（DESIGN §15.101）",
+                            "{}: a table with a column of strings is not generated for this target (DESIGN §15.101)",
+                            b.name
+                        )
+                    );
+                }
+                continue;
+            }
+            for (rel, body) in (b.files)(&g, &alias, &pkg) {
+                targets.push((format!("{out_dir}/{rel}"), body));
+            }
+        }
+        // The wire of the rule as a service (§15.112). It is one file for every language,
+        // not one per backend, so it is pushed here rather than from the registry: the
+        // `.proto` is the contract, and a contract does not come in twelve copies.
+        targets.push((format!("{out_dir}/proto/{}", g.proto_path()), g.proto()));
+        // The contracts that `.proto` imports an enum from, so that the module builds as it
+        // stands (§15.160): each the file `check` held the rule to, copied byte for byte to
+        // the path the import names. What they import from the BSR goes into the module's
+        // `buf.yaml` and `buf.lock`, written once below.
+        let found = g.proto_contracts();
+        if let Err(e) = module_deps.merge(found.deps) {
+            let _ = writeln!(err, "error: {e}");
+            return 1;
+        }
+        for (rel, body) in found.files {
+            let p = format!("{out_dir}/proto/{rel}");
+            if let Some((_, from)) = contracts.get(&p).filter(|(prev, _)| *prev != body) {
+                let _ = writeln!(err,
+                    "{}",
+                    tr!(
+                        "error: `{from}` と `{path}` が、違う内容の契約を同じ `proto/{rel}` として取り込んでいます",
+                        "error: `{from}` and `{path}` import two different contracts as the same `proto/{rel}`"
+                    )
+                );
+                return 1;
+            }
+            contracts.insert(p.clone(), (body.clone(), path.to_string()));
+            targets.push((p, body));
+        }
+        targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
+        targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
+        // The cases the reference evaluator refuses, where there are any. They have no
+        // expected record — refusing is the expectation — so they get a file of their own
+        // and `rulec test` holds every generated language to raising on them (§15.56).
+        if !suite.refused.is_empty() {
+            let body: String = suite
+                .refused
+                .iter()
+                .map(|v| crate::vectors::refused_json(&f, &c, v))
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n";
+            targets.push((format!("{out_dir}/vectors/{alias}.refused.jsonl"), body));
+        }
+        // The sequences of calls a machine is played through (§15.148): each runner passes
+        // the state its own language answered to the next call, and prints its constants
+        // first, so the traces hold the hand-over and `INITIAL` / the final states as well.
+        if let Some(t) = crate::vectors::machine_traces(&f, &c) {
+            targets.push((format!("{out_dir}/vectors/{alias}.traces.jsonl"), crate::vectors::traces_json(&f, &c, &t)));
+            targets.push((
+                format!("{out_dir}/vectors/{alias}.traces.expected.jsonl"),
+                crate::vectors::traces_expected_json(&f, &c, &t),
+            ));
+        }
+        if let Some(code) = emit(targets, check_only, json, &mut st, out, err) {
+            return code;
+        }
+    }
+    // The directory the `.proto` files land in is a buf module, configured the way
+    // connect-python's own documentation configures one, so that `buf lint` and `buf generate`
+    // work in it as it stands. Its configuration belongs to the directory, not to a rule, and
+    // is written once: the BSR modules the contracts of every rule depend on, and their pins
+    // when the `buf.lock` files beside the contracts give every one (§15.161).
+    for n in &module_deps.notes {
+        let _ = writeln!(err, "{}", tr!("注意: {n}", "warning: {n}"));
+    }
+    let mut module = vec![
+        (format!("{out_dir}/proto/buf.yaml"), crate::codegen::buf_yaml(&module_deps)),
+        (format!("{out_dir}/proto/buf.gen.yaml"), crate::codegen::buf_gen_yaml()),
+    ];
+    if let Some(lock) = crate::codegen::buf_lock(&module_deps) {
+        module.push((format!("{out_dir}/proto/buf.lock"), lock));
+    }
+    if let Some(code) = emit(module, check_only, json, &mut st, out, err) {
+        return code;
+    }
+    if json {
+        let _ = writeln!(out,
+            "{}",
+            crate::json::Obj::new()
+                .raw("written", crate::json::strs(&st.written))
+                .raw("stale", crate::json::strs(&st.stale))
+                .raw("missing", crate::json::strs(&st.missing))
+                .finish()
+        );
+    }
+    st.dirty
+}
+
+
+/// What `generate` wrote, found stale or found missing, and its exit code so far.
+#[derive(Default)]
+struct Emitted {
+    dirty: u8,
+    written: Vec<String>,
+    stale: Vec<String>,
+    missing: Vec<String>,
+}
+
+/// Writes what changed, or under `--check` says what is stale. `Some` is the exit code of a write
+/// that failed.
+fn emit(targets: Vec<(String, String)>, check_only: bool, json: bool, st: &mut Emitted, out: &mut dyn std::io::Write, err: &mut dyn std::io::Write) -> Option<u8> {
+    for (p, body) in targets {
+        let existing = std::fs::read_to_string(&p).ok();
+        if existing.as_deref() == Some(body.as_str()) {
+            continue;
+        }
+        if check_only {
+            if existing.is_none() { st.missing.push(p.clone()) } else { st.stale.push(p.clone()) }
+            if !json {
+                let _ = writeln!(out, "{}", tr!("生成物が古いか手で編集されています: {p}", "generated file is stale or hand-edited: {p}"));
+            }
+            st.dirty = 1;
+            continue;
+        }
+        if let Some(dir) = std::path::Path::new(&p).parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if std::fs::write(&p, &body).is_err() {
+            let _ = writeln!(err, "{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
+            return Some(2);
+        }
+        st.written.push(p.clone());
+        if !json {
+            let _ = writeln!(out, "{}", tr!("生成しました: {p}", "generated: {p}"));
+        }
+    }
+    None
+}

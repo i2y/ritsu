@@ -692,15 +692,12 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
     // one import a module: two rules of the flow may be the same rule
     let mut imports: std::collections::BTreeMap<String, BTreeSet<String>> = std::collections::BTreeMap::new();
     for r in called {
-        let py = &m.rules[*r].info.api["python"];
-        let module = py["module"].as_str().unwrap_or("rule");
-        let names = imports.entry(module.to_string()).or_default();
-        names.insert(py["function"].as_str().unwrap_or("rule").to_string());
-        let enums: Vec<String> = py["enums"].as_array().map(|a| a.iter().map(|e| e["alias"].as_str().unwrap_or("").to_string()).collect()).unwrap_or_default();
-        for p in py["params"].as_array().unwrap_or(&vec![]) {
-            let ty = p["type"].as_str().unwrap_or("");
-            if enums.iter().any(|e| e == ty) {
-                names.insert(ty.to_string());
+        let py = &m.rules[*r].info.python;
+        let names = imports.entry(py.module.clone()).or_default();
+        names.insert(py.function.clone());
+        for p in &py.params {
+            if py.enums.iter().any(|e| e.alias == p.ty) {
+                names.insert(p.ty.clone());
             }
         }
     }
@@ -710,13 +707,11 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
     let mut acts = Vec::new();
     for r in called {
         let ru = &m.rules[*r];
-        let py = &ru.info.api["python"];
-        let enums: Vec<String> = py["enums"].as_array().map(|a| a.iter().map(|e| e["alias"].as_str().unwrap_or("").to_string()).collect()).unwrap_or_default();
-        let is_enum = |ty: &str| enums.iter().any(|a| a == ty);
+        let py = &ru.info.python;
+        let is_enum = |ty: &str| py.enums.iter().any(|e| e.alias == ty);
         let mut args = Vec::new();
-        for p in py["params"].as_array().unwrap_or(&vec![]) {
-            let name = p["name"].as_str().unwrap_or("");
-            let ty = p["type"].as_str().unwrap_or("");
+        for p in &py.params {
+            let (name, ty) = (p.name.as_str(), p.ty.as_str());
             let get = format!("args[{}]", q(name));
             if is_enum(ty) {
                 args.push(format!("{ty}({get})"));
@@ -729,11 +724,9 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
             }
         }
         let mut outs = Vec::new();
-        let outputs = py["outputs"].as_array().cloned().unwrap_or_default();
-        for o in &outputs {
-            let name = o["name"].as_str().unwrap_or("");
-            let alias = o["alias"].as_str().unwrap_or("");
-            let ty = o["type"].as_str().unwrap_or("");
+        let outputs = &py.outputs;
+        for o in outputs {
+            let (name, alias, ty) = (o.name.as_str(), o.alias.as_str(), o.ty.as_str());
             // with one output, the rule's function answers that value itself, not a record of outputs
             let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
             let v = if is_enum(ty) {
@@ -751,7 +744,7 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
             "\n\n{decorator}async def {act}(args: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"The rule {} v{}.\"\"\"\n    out = {}({})\n    return {{\n{}\n    }}\n",
             ru.info.rule,
             ru.info.version,
-            py["function"].as_str().unwrap_or("rule"),
+            py.function,
             args.join(", "),
             outs.join("\n")
         ));

@@ -2,9 +2,9 @@
 //
 // Nothing is sent anywhere. The flow typed here goes to the module in this page, and the answers
 // come back from it. What a flow reads besides itself (its rules, the descriptions of the APIs it
-// calls, a child flow) comes from presets.json: the files of the examples, and what rulec printed
-// for their rules, recorded from the repository by tests/playground.rs. A page can run no rulec,
-// so a flow here calls the examples' rules as they are.
+// calls, a child flow) comes from presets.json: the files of the examples, and what rulec answered
+// for their rules (their facts, and the pages rulec doc draws), recorded from the repository by
+// tests/playground.rs. A page can run no rulec, so a flow here calls the examples' rules as they are.
 //
 // One convention crosses the boundary, the one rulec's playground keeps: every buffer begins
 // with its own length as a little-endian u32. `put` writes one, `take` reads one and frees it.

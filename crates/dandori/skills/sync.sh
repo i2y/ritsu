@@ -27,6 +27,7 @@ page() {
       -e 's|](\.\./services\.md)|](services.md)|g' \
       -e "s|](assurance\.md)|]($site/assurance/)|g" \
       -e "s|](install\.md)|]($site/install/)|g" \
+      -e "s|](\.\./install\.md)|]($site/install/)|g" \
       -e "s|](doc/|]($site/doc/|g" \
       "$1" | cat -s > "$2"
 }

@@ -10,8 +10,8 @@ name: tools
 #
 # The crates run in three groups side by side, each on a runner of its own with what it needs:
 # rulec (the twelve languages it writes, a PostgreSQL server, Lean), dandori (the SDKs and
-# runners under its tools/, and rulec 0.22.0, which its tests read rules with until PLAN D.3),
-# and the other five languages with the base layer, the test kit and xtask.
+# runners under its tools/; its tests read the rules through rulec's library, PLAN D.3) with
+# ritsu, and the other five languages with the base layer, the test kit and xtask.
 
 on:
   push:
@@ -48,9 +48,9 @@ jobs:
           - group: rulec
             crates: -p rulec
           - group: dandori
-            crates: -p dandori
+            crates: -p dandori -p ritsu
           - group: the others
-            crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p ritsu-base -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
+            crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p ritsu-base -p ritsu-units -p ritsu-ports -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
 
     # `rulec test` runs the generated SQL against a real PostgreSQL, because the query and the
     # function beside it are two doors on one rule and only a server can open the second. The
@@ -212,20 +212,6 @@ jobs:
           unzip -q "$d/protoc.zip" -d "$d"
           echo "$d/bin" >> "$GITHUB_PATH"
 
-      # dandori's golden files were taken with rulec 0.22.0 (PLAN 7.2): the release binary, held
-      # to the checksum its release published.
-      - name: "dandori: rulec 0.22.0"
-        if: matrix.group == 'dandori'
-        run: |
-          set -eu
-          d="$RUNNER_TEMP/rulec-0.22.0"
-          mkdir -p "$d"
-          curl -fsSL -o "$d/rulec.tar.gz" https://github.com/i2y/rulec/releases/download/v0.22.0/rulec-v0.22.0-x86_64-unknown-linux-musl.tar.gz
-          echo "cc49d5a44f84d94ecd3bdd8e1562cd0dce4270b47013365334c29dd4a85f3f56  $d/rulec.tar.gz" | sha256sum -c -
-          tar xzf "$d/rulec.tar.gz" -C "$d"
-          "$d/rulec" --version
-          echo "DANDORI_RULEC=$d/rulec" >> "$GITHUB_ENV"
-
       # --- koyomi, chobo, geas, yuen, sakai, and the test kit's own tests.
       - name: "PostgreSQL 18's programs, for the throwaway clusters the tests start"
         if: matrix.group == 'the others'
@@ -294,7 +280,7 @@ jobs:
             protoc-gen-py --version && protoc-gen-connectrpc --version
             psql -c 'select version()'
           fi
-          if [ "${{ matrix.group }}" = dandori ]; then "$DANDORI_RULEC" --version && protoc --version; fi
+          if [ "${{ matrix.group }}" = dandori ]; then protoc --version; fi
           if [ "${{ matrix.group }}" = "the others" ]; then
             "$RITSU_PG_BIN/postgres" --version && "$RITSU_TIGERBEETLE" version && xmllint --version
           fi
@@ -306,11 +292,12 @@ jobs:
           crates/dandori/website/sync.sh
 
       # sakai's tests check what its example copied from rulec, koyomi, chobo and dandori with
-      # each one's own `check`: the workspace's binaries.
+      # each one's own `check`: the workspace's binaries (dandori's as `ritsu dandori`, which reads
+      # the rules a workflow uses).
       - name: Build
         run: |
           cargo build --workspace --locked
-          for t in rulec koyomi chobo dandori; do
+          for t in rulec koyomi chobo ritsu; do
             echo "SAKAI_$(echo "$t" | tr a-z A-Z)=$GITHUB_WORKSPACE/target/debug/$t" >> "$GITHUB_ENV"
           done
 

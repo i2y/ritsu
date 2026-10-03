@@ -195,7 +195,7 @@ use rule urgency from "../rules/urgency.rule"
 
 </div>
 
-dandori は、規則のほかの情報と同じように、サービスについても `rulec api` だけを読みます。`rulec gen` が書く `.proto` は読みません。読むのは、メソッドのパス、リクエストとレスポンスのフィールド、列挙の値ごとにサービスが使う名前です。呼び出しは、URL とパスに `Connect-Protocol-Version: 1` のヘッダを付けた POST で、本文は protobuf の JSON の形で書いた JSON です。フィールド名は lowerCamelCase、数は十進の文字列（rulec の数は 64 ビットの整数です）、列挙の値は `rulec api` が言う `.proto` での名前です（`next_day` なら `CARRIER_NEXTDAY`）。入力は、ゼロ値（`false` や `"0"`）でも省かずに書きます。サービスは、省いた入力とゼロ値を区別するからです。急ぎの規則のために `rulec gen` が書いたサービスに、実際に送ったものと、返ってきたものは次のとおりです。
+dandori は、規則のほかの情報と同じように、サービスについても rulec が言うことだけを読みます。`rulec gen` が書く `.proto` は読みません。読むのは、メソッドのパス、リクエストとレスポンスのフィールド、列挙の値ごとにサービスが使う名前です。呼び出しは、URL とパスに `Connect-Protocol-Version: 1` のヘッダを付けた POST で、本文は protobuf の JSON の形で書いた JSON です。フィールド名は lowerCamelCase、数は十進の文字列（rulec の数は 64 ビットの整数です）、列挙の値は rulec が言う `.proto` での名前です（`next_day` なら `CARRIER_NEXTDAY`）。入力は、ゼロ値（`false` や `"0"`）でも省かずに書きます。サービスは、省いた入力とゼロ値を区別するからです。急ぎの規則のために `rulec gen` が書いたサービスに、実際に送ったものと、返ってきたものは次のとおりです。
 
 ```text
 POST /rulec.urgency.v1.UrgencyService/Decide
@@ -233,7 +233,7 @@ enum Status {
 }
 ```
 
-そのため dandori は、この名前を列挙の名前から組み立てずに、`rulec api` から読みます。サービスは、0 番の値の列挙を、ほかのゼロ値と同じくレスポンスから省きます。0 番が規則の値なら、dandori は、列挙の無いレスポンスをその値として読みます。送るときは、`ACTIVE` もほかの値と同じく名前を書きます。`tests/fixtures/rules/account_fee.rule` の規則はこの列挙を取り込んでいて、そのサービスは、状態が `ACTIVE` のままで手数料の掛からない結果を、当たった行だけで返します。
+そのため dandori は、この名前を列挙の名前から組み立てずに、rulec から読みます。サービスは、0 番の値の列挙を、ほかのゼロ値と同じくレスポンスから省きます。0 番が規則の値なら、dandori は、列挙の無いレスポンスをその値として読みます。送るときは、`ACTIVE` もほかの値と同じく名前を書きます。`tests/fixtures/rules/account_fee.rule` の規則はこの列挙を取り込んでいて、そのサービスは、状態が `ACTIVE` のままで手数料の掛からない結果を、当たった行だけで返します。
 
 ```text
 POST /rulec.account_fee.v1.AccountFeeService/Decide
@@ -248,23 +248,11 @@ rulec-source-sha256: bdb2f090c3a1a0c471d0b94dd4f23db7aa7a4d9bd8c23bdd786effd3b0d
 {"trace":[{"table":"手数料表","row":1}]}
 ```
 
-`rulec api` が `connect.enums` でこの名前を言うのは rulec 0.22.0 からで、0.21.2 までの rulec は言いません。その rulec では、契約から列挙を取り込んだ規則をサービスで呼べず、`check` がそう言います。規則自身の列挙は、その rulec が付ける名前で、いままでどおり呼べます。
-
-<div class="dd-term" markdown>
-
-```text
-エラー[E005]: tests/flows/connect_rules_contract.flow:4:10: 規則 `../fixtures/rules/account_fee.rule` を読めませんでした
-     4 | use rule 手数料 from "../fixtures/rules/account_fee.rule"
-  = 規則の列挙 `口座の状態` は契約（`Status`）から取り込んだものですが、この rulec の `rulec api` は、規則のサービスがその値を何と呼ぶかを言いません。`connect` で呼ぶには、rulec 0.22.0 以降が要ります（`rulec api` の `connect.enums` がそれを言います）
-```
-
-</div>
-
 ### サービスが断るもの
 
 rulec 0.22.0 以降が書くサービスは、範囲の外の入力、列挙に無い名前、リクエストに無いフィールド、入力を省いたリクエストを、`invalid_argument`（400）で断ります。dandori は、検査したのと同じ規則で動くサービスには、どれも送りません。入力の名前や列挙の値を変えた別のバージョンの規則で動くサービスは、ゼロ値で判断せずに呼び出しを断ります。呼び出しは、200 以外のステータスのときと同じく失敗します。rulec 0.21.2 が書くサービスは、知らないフィールドを読み飛ばし、省いた入力をゼロ値として読み、列挙に無い名前を 0 番の値として読みます。最後のものを断るのは、0 番が「何も設定されていない」を意味する列挙のときだけです。
 
-要素の並びをたどる規則（規則の `elements`）は、サービスでも、規則のコードを同梱しても呼べません。dandori はまだ、規則に並びを渡せないからです（E005）。
+要素の並びをたどる規則（規則の `elements`）は、サービスでも、規則のコードを同梱しても呼べません。dandori はまだ、規則に並びを渡せないからです（E005）。無いことがある入力か出力（`T?`）を持つ規則も呼べません。dandori が書くコードは、まだ規則に null を渡さず、規則の null も読まないからです（E005）。
 
 AWS 向けの注文の例は、急ぎの規則をこの形で呼びます（[order.flow](https://github.com/i2y/dandori/blob/main/examples/order/aws/order.flow)）。`rulec gen` が書くサービスに、dandori が送るものを実際に送って確かめるテストもあります（[どうやって確かめているか](assurance.md)）。
 

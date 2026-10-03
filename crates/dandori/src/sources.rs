@@ -1,16 +1,22 @@
 //! Where dandori reads what a `.flow` names: the child `.flow`s it runs, the descriptions of the
-//! APIs it calls, and the rules, through what rulec's command line prints for them. The command
-//! reads them from the disk and runs rulec. The playground in the browser can do neither, so it
-//! reads them from a bundle recorded beforehand: the files the examples read, and what rulec
-//! printed for their rules. rulec is still read only through its command line; the bundle holds
-//! that output as rulec printed it.
+//! APIs it calls, and the rules, through ritsu's port of rules (`ritsu_ports::Rules`, ritsu's
+//! DESIGN 3.2). dandori holds no rulec: the program that runs it hands it the port.
+//!
+//! - `Disk`: the disk, and the port it is handed. `ritsu dandori` and the tests hand it rulec's own
+//!   answer (`rulec::ports::Engine`); the dandori binary of this crate hands it `NoRules`, which
+//!   reads no rule and says to run the flow with `ritsu dandori` (ritsu's DESIGN 2.3).
+//! - `Playground`: the page in the browser, which can neither read the disk nor hold rulec. It
+//!   reads a bundle recorded beforehand: the files the examples read, and what rulec answered for
+//!   their rules (`Recorded`, which answers the port from the record).
+//! - `Recorder`: the disk and a port, keeping what was read, to record the bundle.
 
 use crate::diag::Lang;
+use ritsu_base::text::Text;
+use ritsu_ports::{Answer, DaySet, Precondition, RuleError, RuleFacts, Rules, Said, Values};
 use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
 use std::rc::Rc;
 
 pub trait Sources {
@@ -18,11 +24,8 @@ pub trait Sources {
     fn read(&self, path: &Path) -> Result<String, String>;
     /// One name for a file however the path to it is written, to tell a flow that runs itself.
     fn canonical(&self, path: &Path) -> PathBuf;
-    /// What `rulec <cmd> <rule>` prints, read as JSON.
-    fn rulec(&self, cmd: &str, rule: &Path) -> Result<Value, String>;
-    /// What `rulec doc` renders for a rule, in a language: Markdown, or with `html` the page on
-    /// which whoever approves the rule tries a case. It is shown as rulec wrote it.
-    fn rulec_doc(&self, rule: &Path, html: bool, lang: Lang) -> Result<String, String>;
+    /// The port the rules are read through.
+    fn rules(&self) -> &dyn Rules;
 }
 
 thread_local! {
@@ -42,9 +45,14 @@ pub fn with<R>(s: Rc<dyn Sources>, f: impl FnOnce() -> R) -> R {
     f()
 }
 
-/// What is read from now: the disk and rulec, unless `with` says otherwise.
+/// Run `f` reading the disk, and the rules through `rules`.
+pub fn with_rules<R>(rules: Rc<dyn Rules>, f: impl FnOnce() -> R) -> R {
+    with(Rc::new(Disk::new(rules)), f)
+}
+
+/// What is read from now: the disk with no rules, unless `with` says otherwise.
 fn current() -> Rc<dyn Sources> {
-    CURRENT.with(|c| c.borrow().clone()).unwrap_or_else(|| Rc::new(Disk))
+    CURRENT.with(|c| c.borrow().clone()).unwrap_or_else(|| Rc::new(Disk::new(Rc::new(NoRules))))
 }
 
 pub fn read(path: &Path) -> Result<String, String> {
@@ -55,15 +63,37 @@ pub fn canonical(path: &Path) -> PathBuf {
     current().canonical(path)
 }
 
-pub fn rulec(cmd: &str, rule: &Path) -> Result<Value, String> {
-    current().rulec(cmd, rule)
+/// What rulec knows of a rule, or what is said instead.
+pub fn rule(path: &Path) -> Result<RuleFacts, Vec<Said>> {
+    current().rules().facts(path)
 }
 
-pub fn rulec_doc(rule: &Path, html: bool, lang: Lang) -> Result<String, String> {
-    current().rulec_doc(rule, html, lang)
+/// The page `rulec doc` draws for a rule, in a language: Markdown, or with `html` the page on which
+/// whoever approves the rule tries a case. It names the file alone, not where this machine keeps
+/// it, and is shown as rulec drew it.
+pub fn rule_doc(path: &Path, html: bool, lang: Lang) -> Result<String, Vec<Said>> {
+    let shown = path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+    current().rules().doc(path, &shown, html, lang)
 }
 
-/// `rulec doc` as it is run, which is also how a bundle names what it printed.
+/// What was said of a rule, as notes of the diagnostic that names it: each thing rulec says, with
+/// its code and where it is.
+pub fn said_notes(said: &[Said]) -> Vec<Text> {
+    said.iter()
+        .map(|s| {
+            let at = match s.line {
+                Some(l) => Text::new(format!("{} の {l} 行目", s.file), format!("{}, line {l}", s.file)),
+                None => Text::same(s.file.clone()),
+            };
+            match s.code.as_str() {
+                "" => s.message.clone(),
+                code => Text::new(format!("{code}: {}（{}）", s.message.ja, at.ja), format!("{code}: {} ({})", s.message.en, at.en)),
+            }
+        })
+        .collect()
+}
+
+/// `rulec doc` as it is run, which is also how a bundle names what it drew.
 pub fn doc_command(html: bool, lang: Lang) -> String {
     let lang = if lang == Lang::Ja { "ja" } else { "en" };
     if html {
@@ -73,13 +103,16 @@ pub fn doc_command(html: bool, lang: Lang) -> String {
     }
 }
 
-/// The rulec to run: `DANDORI_RULEC`, else `rulec` on the PATH.
-pub fn rulec_binary() -> String {
-    std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".to_string())
+/// The disk, and the port of rules the program that runs dandori hands over.
+pub struct Disk {
+    rules: Rc<dyn Rules>,
 }
 
-/// The disk, and rulec run as a process.
-pub struct Disk;
+impl Disk {
+    pub fn new(rules: Rc<dyn Rules>) -> Disk {
+        Disk { rules }
+    }
+}
 
 impl Sources for Disk {
     fn read(&self, path: &Path) -> Result<String, String> {
@@ -90,48 +123,46 @@ impl Sources for Disk {
         path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
     }
 
-    fn rulec(&self, cmd: &str, rule: &Path) -> Result<Value, String> {
-        let bin = rulec_binary();
-        let out = Command::new(&bin).arg(cmd).arg(rule).output().map_err(|e| format!("could not run `{bin}`: {e}"))?;
-        if !out.status.success() {
-            let mut msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            if msg.is_empty() {
-                msg = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            }
-            let first: Vec<&str> = msg.lines().take(6).collect();
-            return Err(format!("`rulec {cmd}` failed:\n{}", first.join("\n")));
-        }
-        serde_json::from_slice(&out.stdout).map_err(|e| format!("`rulec {cmd}` did not print JSON: {e}"))
+    fn rules(&self) -> &dyn Rules {
+        &*self.rules
+    }
+}
+
+/// The port of the dandori binary of this crate, which holds no rulec (ritsu's DESIGN 2.3): every
+/// question about a rule is answered with what to run instead. A flow that uses no rule never asks.
+pub struct NoRules;
+
+fn no_rules(rule: &Path) -> Vec<Said> {
+    vec![Said {
+        code: String::new(),
+        file: rule.display().to_string(),
+        line: None,
+        message: ritsu_base::tr!(
+            "この dandori は規則を読めません。規則を使うワークフローは `ritsu dandori …` で走らせてください",
+            "this dandori does not read rules; run a workflow that uses rules with `ritsu dandori …`"
+        ),
+    }]
+}
+
+impl Rules for NoRules {
+    fn facts(&self, rule: &Path) -> Result<RuleFacts, Vec<Said>> {
+        Err(no_rules(rule))
     }
 
-    /// rulec runs in the rule's directory and is given the file's name, so that what it writes
-    /// names the file alone and not where this machine keeps it.
-    fn rulec_doc(&self, rule: &Path, html: bool, lang: Lang) -> Result<String, String> {
-        let bin = rulec_binary();
-        // a relative path to rulec is from here, not from the rule's directory
-        let program = match std::path::PathBuf::from(&bin) {
-            p if p.is_relative() && p.components().count() > 1 => std::env::current_dir().map(|d| d.join(&p)).unwrap_or(p),
-            p => p,
-        };
-        let dir = rule.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
-        let file = rule.file_name().ok_or_else(|| format!("{} names no file", rule.display()))?;
-        let command = doc_command(html, lang);
-        let out = Command::new(&program)
-            .current_dir(dir)
-            .args(command.split(' ').take(1))
-            .arg(file)
-            .args(command.split(' ').skip(1))
-            .output()
-            .map_err(|e| format!("could not run `{bin}`: {e}"))?;
-        if !out.status.success() {
-            let mut msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            if msg.is_empty() {
-                msg = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            }
-            let first: Vec<&str> = msg.lines().take(6).collect();
-            return Err(format!("`rulec doc` failed:\n{}", first.join("\n")));
-        }
-        String::from_utf8(out.stdout).map_err(|e| format!("`rulec doc` did not print text: {e}"))
+    fn preconditions_hold(&self, rule: &Path, _: &[(String, Option<i128>, Option<i128>)]) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+        Err(no_rules(rule))
+    }
+
+    fn checked_over(&self, rule: &Path, _: &str, _: &DaySet) -> Result<Answer<Text>, Vec<Said>> {
+        Err(no_rules(rule))
+    }
+
+    fn eval(&self, rule: &Path, _: &Values) -> Result<Values, RuleError> {
+        Err(RuleError::Unread(no_rules(rule)))
+    }
+
+    fn doc(&self, rule: &Path, _: &str, _: bool, _: Lang) -> Result<String, Vec<Said>> {
+        Err(no_rules(rule))
     }
 }
 
@@ -161,30 +192,87 @@ pub fn key(path: &Path) -> String {
     }
 }
 
-/// Files, and what rulec printed for the rules among them, by their paths from one directory.
+/// What rulec answered for rules, by their paths from one directory: each rule's facts, and the
+/// pages `rulec doc` drew for it, by the command that draws them (`doc --format html --lang en`).
+/// It answers the port from the record, and says it has nothing else.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Recorded {
+    pub facts: BTreeMap<String, RuleFacts>,
+    pub pages: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+impl Recorded {
+    fn missing(&self, rule: &Path) -> Vec<Said> {
+        let message = ritsu_base::tr!("このページでは rulec を動かせないので、読めるのは例の規則だけです", "this page does not run rulec, and reads the rules of the examples only");
+        vec![Said { code: String::new(), file: key(rule), line: None, message }]
+    }
+}
+
+impl Rules for Recorded {
+    fn facts(&self, rule: &Path) -> Result<RuleFacts, Vec<Said>> {
+        self.facts.get(&key(rule)).cloned().ok_or_else(|| self.missing(rule))
+    }
+
+    fn preconditions_hold(&self, rule: &Path, _: &[(String, Option<i128>, Option<i128>)]) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+        Err(self.missing(rule))
+    }
+
+    fn checked_over(&self, rule: &Path, _: &str, _: &DaySet) -> Result<Answer<Text>, Vec<Said>> {
+        Err(self.missing(rule))
+    }
+
+    fn eval(&self, rule: &Path, _: &Values) -> Result<Values, RuleError> {
+        Err(RuleError::Unread(self.missing(rule)))
+    }
+
+    fn doc(&self, rule: &Path, _: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>> {
+        let cmd = doc_command(html, lang);
+        self.pages.get(&key(rule)).and_then(|p| p.get(&cmd)).cloned().ok_or_else(|| self.missing(rule))
+    }
+}
+
+/// Files, and what rulec answered for the rules among them, by their paths from one directory.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Bundle {
     pub files: BTreeMap<String, String>,
-    /// for each rule, what each command printed: JSON, or for `rulec doc` the text
-    pub rulec: BTreeMap<String, BTreeMap<String, Value>>,
+    pub rules: Recorded,
 }
 
 impl Bundle {
-    /// `{"files": {path: text}, "rulec": {path: {command: output}}}`
+    /// `{"files": {path: text}, "rules": {path: {"facts": facts, "doc …": page}}}`
     pub fn to_json(&self) -> Value {
-        json!({ "files": self.files, "rulec": self.rulec })
+        let mut rules = serde_json::Map::new();
+        let paths: std::collections::BTreeSet<&String> = self.rules.facts.keys().chain(self.rules.pages.keys()).collect();
+        for p in paths {
+            let mut one = serde_json::Map::new();
+            if let Some(f) = self.rules.facts.get(p) {
+                one.insert("facts".into(), crate::record::facts_to_json(f));
+            }
+            for (cmd, page) in self.rules.pages.get(p).into_iter().flatten() {
+                one.insert(cmd.clone(), json!(page));
+            }
+            rules.insert(p.clone(), Value::Object(one));
+        }
+        json!({ "files": self.files, "rules": rules })
     }
 
     pub fn from_json(v: &Value) -> Result<Bundle, String> {
         let files = v["files"].as_object().ok_or("the bundle has no `files`")?;
-        let rulec = v["rulec"].as_object().ok_or("the bundle has no `rulec`")?;
+        let rules = v["rules"].as_object().ok_or("the bundle has no `rules`")?;
         let mut b = Bundle::default();
         for (path, text) in files {
             b.files.insert(path.clone(), text.as_str().ok_or_else(|| format!("the file {path} is not text"))?.to_string());
         }
-        for (path, outputs) in rulec {
-            let outputs = outputs.as_object().ok_or_else(|| format!("what rulec printed for {path} is not an object"))?;
-            b.rulec.insert(path.clone(), outputs.iter().map(|(cmd, out)| (cmd.clone(), out.clone())).collect());
+        for (path, one) in rules {
+            let one = one.as_object().ok_or_else(|| format!("what rulec answered for {path} is not an object"))?;
+            for (k, x) in one {
+                if k == "facts" {
+                    b.rules.facts.insert(path.clone(), crate::record::facts_from_json(x).map_err(|e| format!("the facts of {path}: {e}"))?);
+                } else {
+                    let page = x.as_str().ok_or_else(|| format!("what `rulec {k}` drew for {path} is not text"))?;
+                    b.rules.pages.entry(path.clone()).or_default().insert(k.clone(), page.to_string());
+                }
+            }
         }
         Ok(b)
     }
@@ -216,63 +304,91 @@ impl Sources for Playground {
         PathBuf::from(key(path))
     }
 
-    fn rulec(&self, cmd: &str, rule: &Path) -> Result<Value, String> {
-        match self.bundle.rulec.get(&key(rule)).and_then(|outputs| outputs.get(cmd)) {
-            Some(v) => Ok(v.clone()),
-            None => Err(match self.lang {
-                Lang::En => format!("this page does not run rulec, and has what `rulec {cmd}` printed for the rules of the examples only"),
-                Lang::Ja => format!("このページでは rulec を動かせません。`rulec {cmd}` の出力があるのは例の規則だけです"),
-            }),
-        }
-    }
-
-    fn rulec_doc(&self, rule: &Path, html: bool, lang: Lang) -> Result<String, String> {
-        match self.rulec(&doc_command(html, lang), rule)? {
-            Value::String(text) => Ok(text),
-            _ => Err(format!("what `rulec doc` printed for {} is not text", key(rule))),
-        }
+    fn rules(&self) -> &dyn Rules {
+        &self.bundle.rules
     }
 }
 
-/// The disk and rulec, keeping what was read by its path from `root`: the bundle of what the
+/// The disk and a port, keeping what was read by its path from `root`: the bundle of what the
 /// command read, for the playground to read the same.
 pub struct Recorder {
     root: String,
     pub got: RefCell<Bundle>,
+    rules: Recording,
+}
+
+/// A port that answers as another does, and keeps what it answered (a rule's facts, and the pages
+/// drawn), by the path from the recorder's root.
+struct Recording {
+    root: String,
+    inner: Rc<dyn Rules>,
+    got: RefCell<Recorded>,
+}
+
+impl Recording {
+    fn rel(&self, path: &Path) -> String {
+        rel(&self.root, path)
+    }
+}
+
+fn rel(root: &str, path: &Path) -> String {
+    let k = key(path);
+    k.strip_prefix(&format!("{root}/")).map(str::to_string).unwrap_or(k)
+}
+
+impl Rules for Recording {
+    fn facts(&self, rule: &Path) -> Result<RuleFacts, Vec<Said>> {
+        let f = self.inner.facts(rule)?;
+        self.got.borrow_mut().facts.insert(self.rel(rule), f.clone());
+        Ok(f)
+    }
+
+    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+        self.inner.preconditions_hold(rule, ranges)
+    }
+
+    fn checked_over(&self, rule: &Path, input: &str, days: &DaySet) -> Result<Answer<Text>, Vec<Said>> {
+        self.inner.checked_over(rule, input, days)
+    }
+
+    fn eval(&self, rule: &Path, inputs: &Values) -> Result<Values, RuleError> {
+        self.inner.eval(rule, inputs)
+    }
+
+    fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>> {
+        let page = self.inner.doc(rule, shown, html, lang)?;
+        self.got.borrow_mut().pages.entry(self.rel(rule)).or_default().insert(doc_command(html, lang), page.clone());
+        Ok(page)
+    }
 }
 
 impl Recorder {
-    pub fn new(root: &Path) -> Recorder {
-        Recorder { root: key(root), got: RefCell::new(Bundle::default()) }
+    pub fn new(root: &Path, rules: Rc<dyn Rules>) -> Recorder {
+        let root = key(root);
+        Recorder { root: root.clone(), got: RefCell::new(Bundle::default()), rules: Recording { root, inner: rules, got: RefCell::new(Recorded::default()) } }
     }
 
-    fn rel(&self, path: &Path) -> String {
-        let k = key(path);
-        k.strip_prefix(&format!("{}/", self.root)).map(str::to_string).unwrap_or(k)
+    /// What was read, the rules' answers with it.
+    pub fn bundle(&self) -> Bundle {
+        let mut b = self.got.borrow().clone();
+        b.rules = self.rules.got.borrow().clone();
+        b
     }
 }
 
 impl Sources for Recorder {
     fn read(&self, path: &Path) -> Result<String, String> {
-        let text = Disk.read(path)?;
-        self.got.borrow_mut().files.insert(self.rel(path), text.clone());
+        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        self.got.borrow_mut().files.insert(rel(&self.root, path), text.clone());
         Ok(text)
     }
 
     fn canonical(&self, path: &Path) -> PathBuf {
-        Disk.canonical(path)
+        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
     }
 
-    fn rulec(&self, cmd: &str, rule: &Path) -> Result<Value, String> {
-        let out = Disk.rulec(cmd, rule)?;
-        self.got.borrow_mut().rulec.entry(self.rel(rule)).or_default().insert(cmd.to_string(), out.clone());
-        Ok(out)
-    }
-
-    fn rulec_doc(&self, rule: &Path, html: bool, lang: Lang) -> Result<String, String> {
-        let out = Disk.rulec_doc(rule, html, lang)?;
-        self.got.borrow_mut().rulec.entry(self.rel(rule)).or_default().insert(doc_command(html, lang), Value::String(out.clone()));
-        Ok(out)
+    fn rules(&self) -> &dyn Rules {
+        &self.rules
     }
 }
 

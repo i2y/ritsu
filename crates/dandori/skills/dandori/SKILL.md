@@ -37,7 +37,9 @@ people:
 
 Everything is reachable from the command line: `dandori --help` lists the commands, and
 `dandori check --format json` gives the diagnostics as data (§5). There is no step where you have
-to read dandori's source.
+to read dandori's source. For a workflow that uses rules, run every command as `ritsu dandori
+<command>` (`ritsu dandori check …`): it reads the rules in the same process, and the `dandori`
+binary alone says to run it that way (E005).
 
 ## 1. The loop
 
@@ -147,15 +149,14 @@ workflow <name> v<N> [implements <api>.<Service>]
                                           read by use proto (services.md)
 description "<text>"
 kind standard | express                   Step Functions; an Express workflow has limits (E031)
-use rule <name> from "<file.rule>"        a rulec rule, read through rulec; under it,
+use rule <name> from "<file.rule>"        a rulec rule, read by rulec; under it,
                                           lambda "<function>" (Step Functions, durable functions)
                                           or connect "<url>" (the rule's Connect service, which
                                           every platform calls; Step Functions also needs
                                           connection "<EventBridge connection>"),
                                           and local (a local activity on Temporal). A rule that
                                           walks a list cannot be used (E005), nor one with an
-                                          enum from a .proto at its service, unless `rulec api`
-                                          says connect.enums (rulec 0.22.0 and later do)
+                                          input or an output that may be none (T?)
 use openapi|smithy|proto <name> from "<file>"   an API description; under it, url "<base>"
                                           (a proto needs one to `connect` to it)
 enum <Name> = <value> | <value> | …
@@ -377,7 +378,8 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 - The exit code is 0 when there is no error (warnings may be), 1 when there is, and 2 for bad
   arguments or a file that cannot be read.
 - `--lang ja`, or `DANDORI_LANG=ja`, gives the messages in Japanese.
-- `DANDORI_RULEC` names the rulec binary; it is run only for a workflow that uses rules.
+- A workflow that uses rules runs as `ritsu dandori <command>`, which reads the rules in the same
+  process; the `dandori` binary alone reads no rule.
 
 ## 6. Platforms
 

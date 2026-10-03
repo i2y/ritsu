@@ -29,15 +29,12 @@ fn the_example_passes_check() {
     assert_eq!(c.crossings[0].allowed, Some(sakai::refs::Allowed::Upstream(0)));
 }
 
-/// `<tool> check <file>` in the file's directory, with the file's name only, as DESIGN 4.1 says
-/// the suite's tools are run.
-fn suite_check(tool: &str, file: &str, envs: &[(&str, &str)]) -> common::Ran {
+/// `<tool> [<lead>...] check <file>` in the file's directory, with the file's name only, as
+/// DESIGN 4.1 says the suite's tools are run.
+fn suite_check(tool: &str, lead: &[&str], file: &str) -> common::Ran {
     let p = Path::new(common::EXAMPLE).join(file);
     let mut cmd = Command::new(tool);
-    cmd.arg("check").arg(p.file_name().unwrap()).current_dir(p.parent().unwrap());
-    for (k, v) in envs {
-        cmd.env(k, v);
-    }
+    cmd.args(lead).arg("check").arg(p.file_name().unwrap()).current_dir(p.parent().unwrap());
     common::run(&mut cmd, Duration::from_secs(120))
 }
 
@@ -48,7 +45,6 @@ fn what_was_copied_passes_the_suite() {
     }
     let mut failures = Vec::new();
     let mut ran = 0;
-    let rulec = common::suite("rulec");
     let jobs: [(&str, &[&str]); 4] = [
         ("rulec", &["billing/rules/決済手数料.rule", "billing/rules/出荷の送料.rule", "billing/rules/請求の要否.rule", "delivery/rules/出荷の急ぎ.rule"]),
         ("koyomi", &["calendars/東京の営業日.cal", "billing/支払条件.cal", "delivery/出荷日.cal"]),
@@ -56,21 +52,19 @@ fn what_was_copied_passes_the_suite() {
         ("dandori", &["ordering/受注.flow", "delivery/配送の手配.flow"]),
     ];
     for (name, files) in jobs {
-        let Some(tool) = common::suite(name) else {
-            common::skip(&format!("{name} is not there (SAKAI_{} or the PATH); the copies of its files are not checked", name.to_uppercase()));
+        // dandori reads the rules a workflow uses in the same process, as `ritsu dandori`: the
+        // binary of dandori's own crate reads none (ritsu's DESIGN 2.3, 8.6).
+        let (tool, lead): (Option<String>, &[&str]) = match name {
+            "dandori" => (common::ritsu(), &["dandori"]),
+            _ => (common::suite(name), &[]),
+        };
+        let Some(tool) = tool else {
+            let var = if name == "dandori" { "SAKAI_RITSU".to_string() } else { format!("SAKAI_{}", name.to_uppercase()) };
+            common::skip(&format!("{name} is not there ({var} or the PATH); the copies of its files are not checked"));
             continue;
         };
-        // dandori reads the rules a workflow uses with rulec.
-        let envs: Vec<(&str, &str)> = match (&rulec, name) {
-            (Some(r), "dandori") => vec![("DANDORI_RULEC", r.as_str())],
-            _ => vec![],
-        };
-        if name == "dandori" && rulec.is_none() {
-            common::skip("rulec is not there, which dandori reads the rules with; the workflows are not checked");
-            continue;
-        }
         for f in files {
-            let r = suite_check(&tool, f, &envs);
+            let r = suite_check(&tool, lead, f);
             ran += 1;
             if !r.ok {
                 failures.push(format!("{name} check {f}:\n{}{}", r.stdout, r.stderr));

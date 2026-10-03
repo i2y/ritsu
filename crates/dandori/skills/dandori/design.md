@@ -1,7 +1,7 @@
 # Design
 
-A `.flow` is parsed, its names and types are resolved (a rule's from what `rulec schema`,
-`rulec certificate` and `rulec api` print), and the typed tree it becomes is checked along the flow:
+A `.flow` is parsed, its names and types are resolved (a rule's from what rulec hands over through
+ritsu's port of rules), and the typed tree it becomes is checked along the flow:
 the states of its cases, what is given a value where, every arm, every way out. The reference
 interpreter runs it, the scenarios play it, and five generators build it.
 
@@ -26,8 +26,9 @@ the workflow and the states of its cases.
   together for a task, or an order number into a message, decides nothing, so it is allowed. What
   compares or computes is a rule, where rulec proves it complete, or a task: an API, an agent, Jev,
   your own code.
-- **P2. dandori stays outside rulec.** It reads only the JSON rulec's command line prints, and rulec
-  does not know dandori.
+- **P2. dandori stays outside rulec.** It reads a rule only through ritsu's port of rules, where rulec
+  hands over what it knows of the rule as types; whoever runs dandori hands it the port (`ritsu dandori`
+  hands it rulec), and rulec does not know dandori.
 - **P3. One reference interpreter says what a `.flow` means,** and what each platform runs is held to
   it.
 - **P4. A loop says how many times it may go round,** and there is no recursion, so the length of a

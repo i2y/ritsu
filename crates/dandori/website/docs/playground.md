@@ -26,10 +26,10 @@ flow you type stays in the browser.
 <script src="playground/playground.js" defer></script>
 
 A flow here reads what the examples read, from the paths they give: their rules, the descriptions of
-their APIs, and fulfillment's child flow. A page cannot run rulec, so it carries what rulec printed
-for the examples' rules, and what `rulec doc` renders for them, recorded from the repository. The
-tests hold that record to what rulec prints now, and what this page answers to what the command
-answers ([How it is checked](assurance.md)).
+their APIs, and fulfillment's child flow. A page cannot run rulec, so it carries what rulec answered
+for the examples' rules (what it knows of each, and the page `rulec doc` renders for it), recorded
+from the repository. The tests hold that record to what rulec answers now, and what this page answers
+to what the command answers ([How it is checked](assurance.md)).
 
 ## What to try
 

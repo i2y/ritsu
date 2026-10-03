@@ -10,6 +10,8 @@ dandori <command> --help
 dandori --version
 ```
 
+規則を使うワークフローは、`ritsu dandori <コマンド>` で走らせます。規則を同じプロセスの中で読みます（[インストール](../install.md)）。`dandori` のコマンドだけでは、規則を使わないワークフローを検査し、ビルドします。
+
 | コマンド | すること |
 |---|---|
 | `check` | 一つ以上の `.flow` を検査する。型、すべての分岐、案件が残りうる状態、リトライを見て、診断をそこへ至る実行の例付きで出す。通ったファイルには `ok` と出す |
@@ -30,7 +32,6 @@ dandori --version
 | `--lang ja` か `--lang en` | メッセージの言語。無ければ `DANDORI_LANG`、次に `RITSU_LANG`、どちらも無ければ英語 |
 | `--help` | そのコマンドが受け取るもの、終了コード、例を出す（`dandori help <command>` も同じページ）。`dandori --help` はコマンドの一覧を出す |
 | `--version` | `dandori --version` はバージョンを出す |
-| `DANDORI_RULEC` | rulec の実行ファイル。規則を使うワークフローのときだけ動かす。無ければ PATH の `rulec` |
 
 ## 終了コード
 

@@ -404,7 +404,7 @@ impl<'a> Flow<'a> {
         out.insert(mc.initial, base);
         let mut work = vec![mc.initial];
         let events: Vec<(usize, usize, String)> = (0..mc.axes.len())
-            .filter(|a| *a != mc.state_axis && !case.held.iter().any(|(h, _)| h == a))
+            .filter(|a| !mc.is_state_axis(*a) && !case.held.iter().any(|(h, _)| h == a))
             .flat_map(|a| mc.axes[a].coords.iter().enumerate().map(move |(ci, v)| (a, ci, v.clone())))
             .collect();
         while let Some(s) = work.pop() {

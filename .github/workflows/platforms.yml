@@ -94,16 +94,6 @@ jobs:
       - name: "dandori: the Go modules of tools/temporal-go"
         run: cd crates/dandori/tools/temporal-go && go mod download
 
-      - name: "dandori: rulec 0.22.0"
-        run: |
-          set -eu
-          d="$RUNNER_TEMP/rulec-0.22.0"
-          mkdir -p "$d"
-          curl -fsSL -o "$d/rulec.tar.gz" https://github.com/i2y/rulec/releases/download/v0.22.0/rulec-v0.22.0-x86_64-unknown-linux-musl.tar.gz
-          echo "cc49d5a44f84d94ecd3bdd8e1562cd0dce4270b47013365334c29dd4a85f3f56  $d/rulec.tar.gz" | sha256sum -c -
-          tar xzf "$d/rulec.tar.gz" -C "$d"
-          echo "DANDORI_RULEC=$d/rulec" >> "$GITHUB_ENV"
-
       # --- The platforms. Argo: kind 0.33 (for the node image tools/argo/setup.sh pins; built
       # by Go, whose checksum database holds the module to its release), the argo CLI held to
       # its release's checksum, and the cluster setup.sh makes. LocalStack: its image, which the

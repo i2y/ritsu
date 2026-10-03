@@ -8,12 +8,18 @@ repository = "https://github.com/i2y/dandori"
 
 [dependencies]
 # ritsu's base layer (ritsu's DESIGN 3.1): the two languages of the text, the command-line
-# table, the words the generated code will not take as names, and the reader of `.proto` files.
+# table, the words the generated code will not take as names, the reader of `.proto` files,
+# the port a rule is read through (whoever runs dandori hands it rulec's answer), and the units.
 ritsu-base = { path = "../ritsu-base" }
 ritsu-emit = { path = "../ritsu-emit" }
+ritsu-ports = { path = "../ritsu-ports" }
 ritsu-proto = { path = "../ritsu-proto" }
+ritsu-units = { path = "../ritsu-units" }
 # float_roundtrip: a number another language wrote reads back as the same double
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
+# The tests read the rules through rulec's own answer to the port, as `ritsu dandori` does
+# (ritsu's DESIGN 3.3): a test may hold the crate that answers, the library never does.
+rulec = { path = "../rulec" }

@@ -1,11 +1,21 @@
-//! The commands and their flags, in one table (ritsu's DESIGN 4.4): `--help` is drawn from it,
+//! The `dandori` command: [`run`] takes the words of a command line, the port the rules are read
+//! through, and where to print, and answers the exit code (ritsu's DESIGN 3.3). The dandori binary
+//! of this crate runs it with a port that reads no rule; `ritsu dandori` runs it with rulec's.
+//!
+//! The commands and their flags are in one table (ritsu's DESIGN 4.4): `--help` is drawn from it,
 //! each command's page too (`dandori <cmd> --help`), and the command line is read against it.
 //! An unknown flag, a value outside a closed set, a flag without its value and a flag given
 //! twice stop the run with exit 2, so a flag cannot be taken and quietly do nothing. The table
 //! is dandori's; how it is drawn and read is ritsu-base's ([`ritsu_base::cli`]).
 
-use crate::commands::TARGETS;
+use crate::check;
+use crate::commands::{self, TARGETS};
+use crate::diag::{self, Lang, Text};
 use ritsu_base::cli::{flag, help_flag, lang_flag, Cmd, Flag, Reading, Table};
+use ritsu_ports::Rules;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 pub use ritsu_base::cli::Args;
 
@@ -135,11 +145,352 @@ pub fn table() -> Table {
                 "Every command takes --lang ja|en (default en; the DANDORI_LANG or RITSU_LANG environment variable works too)."
             ),
             tr!(
-                "規則は rulec で読みます。DANDORI_RULEC が rulec の実行ファイルを指し、無ければ PATH の rulec を使います。",
-                "The rules are read with rulec: DANDORI_RULEC names the binary, else `rulec` on the PATH."
+                "規則を使うワークフローは `ritsu dandori` で走らせます。規則を同じプロセスの中で読みます。",
+                "A workflow that uses rules runs as `ritsu dandori`, which reads the rules in the same process."
             ),
             tr!("exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル", "Exit codes: 0 notes only / 1 errors found / 2 bad arguments or an unreadable file"),
         ],
         reading: Reading::default(),
+    }
+}
+
+/// What one command line asked for, as the commands below read it.
+struct Asked {
+    files: Vec<PathBuf>,
+    format_json: bool,
+    format_html: bool,
+    lang: Lang,
+    target: Option<String>,
+    out: Option<PathBuf>,
+    scenario: Option<PathBuf>,
+}
+
+impl Asked {
+    fn from(a: &Args, lang: Lang) -> Asked {
+        Asked {
+            files: a.pos.iter().map(PathBuf::from).collect(),
+            format_json: a.get("--format") == Some("json"),
+            format_html: a.get("--format") == Some("html"),
+            lang,
+            target: a.get("--target").map(str::to_string),
+            out: a.get("--out").map(PathBuf::from),
+            scenario: a.get("--scenario").map(PathBuf::from),
+        }
+    }
+}
+
+fn refuse(msg: Text, lang: Lang, err: &mut dyn Write) -> u8 {
+    let head = if lang == Lang::Ja { "エラー" } else { "error" };
+    let _ = writeln!(err, "{head}: {}", msg.get(lang));
+    2
+}
+
+/// `--lang ja`, `--lang=ja`, anywhere on the line: decided before anything is printed.
+fn lang_asked(args: &[String]) -> Option<String> {
+    for (i, a) in args.iter().enumerate() {
+        if a == "--lang" {
+            return args.get(i + 1).cloned();
+        }
+        if let Some(v) = a.strip_prefix("--lang=") {
+            return Some(v.to_string());
+        }
+    }
+    None
+}
+
+/// The `dandori` command, run on `args` (the words after the program's name), reading the rules
+/// through `rules`, printing to `out` and `err`; the exit code. The dandori binary of this crate
+/// hands it a port that reads no rule (crate::sources::NoRules); `ritsu dandori` and the tests hand
+/// it rulec's own answer (ritsu's DESIGN 3.3).
+pub fn run(args: &[String], rules: Rc<dyn Rules>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    crate::sources::with_rules(rules, || run_here(args, out, err))
+}
+
+fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let lang = Lang::pick(lang_asked(args).as_deref(), "DANDORI_LANG");
+    let table = table();
+    let Some(first) = args.first() else {
+        let _ = write!(err, "{}", table.help_all(lang));
+        return 2;
+    };
+    match first.as_str() {
+        "--help" | "-h" => {
+            let _ = write!(out, "{}", table.help_all(lang));
+            return 0;
+        }
+        "--version" | "-V" => {
+            let _ = writeln!(out, "dandori {}", env!("CARGO_PKG_VERSION"));
+            return 0;
+        }
+        "help" => {
+            let mut rest = Vec::new();
+            let mut i = 1;
+            while i < args.len() {
+                if args[i] == "--lang" {
+                    i += 2;
+                    continue;
+                }
+                if !args[i].starts_with("--lang=") {
+                    rest.push(args[i].clone());
+                }
+                i += 1;
+            }
+            return match rest.first() {
+                None => {
+                    let _ = write!(out, "{}", table.help_all(lang));
+                    0
+                }
+                Some(n) => match table.command(n) {
+                    Some(c) => {
+                        let _ = write!(out, "{}", table.help_cmd(c, lang));
+                        0
+                    }
+                    None => refuse(tr!("`{n}` というコマンドはありません。`dandori --help` を読んでください", "there is no command `{n}`; run `dandori --help`"), lang, err),
+                },
+            };
+        }
+        _ => {}
+    }
+    let Some(cmd) = table.command(first) else {
+        return refuse(tr!("`{first}` というコマンドはありません。`dandori --help` を読んでください", "there is no command `{first}`; run `dandori --help`"), lang, err);
+    };
+    let parsed = match table.parse(cmd, &args[1..]) {
+        Ok(a) => a,
+        Err(e) => return refuse(e, lang, err),
+    };
+    if parsed.has("--help") {
+        let _ = write!(out, "{}", table.help_cmd(cmd, lang));
+        return 0;
+    }
+    let a = Asked::from(&parsed, lang);
+    match cmd.name {
+        "check" => cmd_check(&a, out, err),
+        "build" => cmd_build(&a, out, err),
+        "run" => cmd_run(&a, out, err),
+        "scenarios" => cmd_scenarios(&a, out, err),
+        "doc" => cmd_doc(&a, out, err),
+        _ => unreachable!("every command in the table is dispatched"),
+    }
+}
+
+/// The line `dandori <cmd> --help` begins its usage with, for a command given the wrong number
+/// of files.
+fn usage(name: &str) -> String {
+    let table = table();
+    table.command(name).map(|c| table.usage_line(c)).unwrap_or_default()
+}
+
+/// Check one file and print its diagnostics; the model when it passes.
+fn load(path: &Path, a: &Asked, print_ok: bool, out: &mut dyn Write, err: &mut dyn Write) -> Result<Option<crate::model::Model>, u8> {
+    let (src, checked) = match check::check_file(path) {
+        Ok(x) => x,
+        Err(msg) => {
+            let _ = writeln!(err, "{msg}");
+            return Err(2);
+        }
+    };
+    let file = path.display().to_string();
+    if a.format_json {
+        let v: Vec<_> = checked.diags.iter().map(|d| d.to_json(a.lang)).collect();
+        let _ = writeln!(out, "{}", serde_json::to_string_pretty(&serde_json::json!({ "file": file, "diagnostics": v })).unwrap());
+    } else {
+        let _ = write!(err, "{}", commands::render(&checked.diags, &file, &src, a.lang));
+        if print_ok && checked.model.is_some() {
+            let _ = write!(err, "{}", commands::passed(&file, checked.diags.len(), a.lang));
+        }
+    }
+    if diag::has_errors(&checked.diags) {
+        return Err(1);
+    }
+    Ok(checked.model)
+}
+
+fn cmd_check(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    if a.files.is_empty() {
+        let _ = writeln!(err, "{}", usage("check"));
+        return 2;
+    }
+    let mut worst = 0;
+    for f in &a.files {
+        if let Err(c) = load(f, a, true, out, err) {
+            worst = worst.max(c);
+        }
+    }
+    worst
+}
+
+fn cmd_build(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let file = match a.files.as_slice() {
+        [f] => f.clone(),
+        _ => {
+            let _ = writeln!(err, "{}", usage("build"));
+            return 2;
+        }
+    };
+    let model = match load(&file, a, false, out, err) {
+        Ok(Some(m)) => m,
+        Ok(None) => return 1,
+        Err(c) => return c,
+    };
+    let dir = a.out.clone().unwrap_or_else(|| PathBuf::from("out"));
+    let Some(files) = a.target.as_deref().and_then(|t| commands::build(&model, t)) else {
+        let _ = writeln!(err, "--target takes asl, temporal, temporal-python, temporal-go, durable, argo or pydantic-graph");
+        return 2;
+    };
+    let files = match files {
+        Ok(f) => f,
+        Err(diags) => {
+            let src = crate::sources::read(&file).unwrap_or_default();
+            let _ = write!(err, "{}", commands::render(&diags, &file.display().to_string(), &src, a.lang));
+            return 1;
+        }
+    };
+    for (name, text) in files {
+        let p = dir.join(&name);
+        if let Some(parent) = p.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                let _ = writeln!(err, "cannot create {}: {e}", parent.display());
+                return 2;
+            }
+        }
+        if let Err(e) = std::fs::write(&p, text) {
+            let _ = writeln!(err, "cannot write {}: {e}", p.display());
+            return 2;
+        }
+        let _ = writeln!(out, "{}", p.display());
+    }
+    0
+}
+
+fn cmd_run(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let file = match a.files.as_slice() {
+        [f] => f.clone(),
+        _ => {
+            let _ = writeln!(err, "{}", usage("run"));
+            return 2;
+        }
+    };
+    let model = match load(&file, a, false, out, err) {
+        Ok(Some(m)) => m,
+        Ok(None) => return 1,
+        Err(c) => return c,
+    };
+    let sc = match &a.scenario {
+        Some(p) => match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string())) {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = writeln!(err, "cannot read the scenario: {e}");
+                return 2;
+            }
+        },
+        None => {
+            let _ = writeln!(err, "--scenario <file.json> is required");
+            return 2;
+        }
+    };
+    let view = match a.target.as_deref() {
+        None | Some("reference") | Some("asl") => crate::render::View::Asl,
+        // the three SDKs put the same names on the wire
+        Some("temporal") | Some("temporal-python") | Some("temporal-go") => crate::render::View::Temporal,
+        Some("durable") => crate::render::View::Durable,
+        Some("argo") => crate::render::View::Argo,
+        Some("pydantic-graph") => crate::render::View::Graph,
+        Some(o) => {
+            let _ = writeln!(err, "unknown target {o}");
+            return 2;
+        }
+    };
+    match crate::interp::run(&model, &sc, view) {
+        Ok(trace) => {
+            let _ = writeln!(out, "{}", serde_json::to_string_pretty(&trace).unwrap());
+            0
+        }
+        Err(e) => {
+            let _ = writeln!(err, "{e}");
+            1
+        }
+    }
+}
+
+fn cmd_scenarios(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let file = match a.files.as_slice() {
+        [f] => f.clone(),
+        _ => {
+            let _ = writeln!(err, "{}", usage("scenarios"));
+            return 2;
+        }
+    };
+    let model = match load(&file, a, false, out, err) {
+        Ok(Some(m)) => m,
+        Ok(None) => return 1,
+        Err(c) => return c,
+    };
+    let list = crate::scenarios::generate(&model);
+    match &a.out {
+        Some(dir) => {
+            if let Err(e) = std::fs::create_dir_all(dir) {
+                let _ = writeln!(err, "cannot create {}: {e}", dir.display());
+                return 2;
+            }
+            for (i, s) in list.iter().enumerate() {
+                let p = dir.join(format!("{:03}.json", i + 1));
+                if let Err(e) = std::fs::write(&p, serde_json::to_string_pretty(s).unwrap()) {
+                    let _ = writeln!(err, "cannot write {}: {e}", p.display());
+                    return 2;
+                }
+            }
+            let _ = writeln!(err, "{} scenario(s) written to {}", list.len(), dir.display());
+        }
+        None => {
+            let _ = writeln!(out, "{}", serde_json::to_string_pretty(&list).unwrap());
+        }
+    }
+    0
+}
+
+fn cmd_doc(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let file = match a.files.as_slice() {
+        [f] => f.clone(),
+        _ => {
+            let _ = writeln!(err, "{}", usage("doc"));
+            return 2;
+        }
+    };
+    let (src, drawn) = match check::drawable(&file) {
+        Ok(x) => x,
+        Err(msg) => {
+            let _ = writeln!(err, "{msg}");
+            return 2;
+        }
+    };
+    let shown = file.display().to_string();
+    let _ = write!(err, "{}", commands::render(&drawn.diags, &shown, &src, a.lang));
+    // a workflow whose names or types do not resolve has nothing to draw
+    let Some(model) = &drawn.model else { return 1 };
+    let input = crate::doc::Input { m: model, src: &src, file: &shown, facts: &drawn.facts, diags: &drawn.diags, lang: a.lang };
+    let page = if a.format_html { crate::doc::html(&input) } else { crate::doc::markdown(&input) };
+    match &a.out {
+        Some(dir) => {
+            if let Err(e) = std::fs::create_dir_all(dir) {
+                let _ = writeln!(err, "cannot create {}: {e}", dir.display());
+                return 2;
+            }
+            let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| model.name.clone());
+            let p = dir.join(format!("{stem}.{}", if a.format_html { "html" } else { "md" }));
+            if let Err(e) = std::fs::write(&p, page) {
+                let _ = writeln!(err, "cannot write {}: {e}", p.display());
+                return 2;
+            }
+            let _ = writeln!(out, "{}", p.display());
+        }
+        None => {
+            let _ = write!(out, "{page}");
+        }
+    }
+    // the page is written even so: the runs of the errors are on it
+    if diag::has_errors(&drawn.diags) {
+        1
+    } else {
+        0
     }
 }

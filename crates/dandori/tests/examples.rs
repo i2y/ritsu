@@ -2,13 +2,13 @@
 //! files; and on every scenario `scenarios` finds, the generated state machine, run by
 //! tools/asl-run.mjs with JSONata 2.0.6, does exactly what the reference interpreter does.
 //!
-//! The rules are read with rulec (`DANDORI_RULEC`, else `rulec` on the PATH), and the
-//! state machines are run with Node and the packages in tools/ (`npm install --prefix
-//! tools`). A test that cannot find them says so and skips; read the skip lines
-//! (`SKIP: dandori: …`). `RITSU_TEST_LEVEL` picks the level a run goes up to (ritsu's DESIGN
-//! 10.2): `tools` leaves out what needs Temporal, LocalStack, Argo on kind, Ollama or TypeSafe,
-//! and `fast` everything that needs rulec, Node, Python or Go too. `DANDORI_BLESS=1` (or
-//! `RITSU_BLESS=1`) rewrites the golden files.
+//! The rules are read through rulec's own answer to ritsu's port of rules, in this process (ritsu's
+//! DESIGN 3.3), and the code rulec generates for them is made by rulec's library. The state
+//! machines are run with Node and the packages in tools/ (`npm install --prefix tools`). A test
+//! that cannot find them says so and skips; read the skip lines (`SKIP: dandori: …`).
+//! `RITSU_TEST_LEVEL` picks the level a run goes up to (ritsu's DESIGN 10.2): `tools` leaves out what
+//! needs Temporal, LocalStack, Argo on kind, Ollama or TypeSafe, and `fast` everything that needs
+//! Node, Python or Go too. `DANDORI_BLESS=1` (or `RITSU_BLESS=1`) rewrites the golden files.
 
 use dandori::diag::Lang;
 use dandori::interp::CallInfo;
@@ -23,21 +23,39 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn rulec_available() -> bool {
-    let bin = std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".into());
-    Command::new(&bin).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
+/// Run `f` reading the rules through rulec's own answer to the port, as `ritsu dandori` reads them.
+/// One engine a thread keeps the rules it checked.
+fn with_rules<R>(f: impl FnOnce() -> R) -> R {
+    thread_local! {
+        static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::new());
+    }
+    let rules: std::rc::Rc<dyn ritsu_ports::Rules> = RULEC.with(|r| r.clone());
+    dandori::sources::with_rules(rules, f)
+}
+
+/// `dandori::check::check_file`, with the rules read through rulec.
+fn check_file(f: &Path) -> Result<(String, dandori::check::Checked), String> {
+    with_rules(|| dandori::check::check_file(f))
+}
+
+/// What `rulec gen <rule> --out <out>` writes, by rulec's library.
+fn rulec_gen(rule: &Path, out: &Path) {
+    let (mut said, mut err) = (Vec::new(), Vec::new());
+    let code = rulec::codegen::generate(&[rule.to_str().unwrap()], out.to_str().unwrap(), false, false, &mut said, &mut err);
+    assert_eq!(code, 0, "rulec gen failed: {}{}", String::from_utf8_lossy(&said), String::from_utf8_lossy(&err));
+}
+
+/// What `rulec vectors <rule>` prints: a vector a line, by rulec's library.
+fn rulec_vectors(rule: &Path) -> String {
+    let path = rule.to_str().unwrap();
+    let src = std::fs::read_to_string(rule).unwrap();
+    assert!(!rulec::has_error(&rulec::report(&src, path).diags), "{path} does not pass check");
+    let (f, c) = rulec::prepare(&src, path).unwrap();
+    rulec::vectors::generate(&f, &c).iter().map(|v| rulec::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n"
 }
 
 fn node_available() -> bool {
     root().join("tools/node_modules/jsonata").exists() && Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
-}
-
-macro_rules! need_rulec {
-    () => {
-        if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
-            return;
-        }
-    };
 }
 
 macro_rules! need_node {
@@ -69,41 +87,14 @@ fn flows(dir: &Path) -> Vec<PathBuf> {
 
 /// The flows every platform runs: the examples, and the ones in tests/flows that exercise
 /// the corners of the language. `DANDORI_FLOW=<part of a path>` runs only the flows whose
-/// path has it, to look at one flow on a slow platform. A flow that needs a rulec the one at hand
-/// is not is left out, with a SKIP line (`NAMED_ENUMS`).
+/// path has it, to look at one flow on a slow platform.
 fn runnable() -> Vec<PathBuf> {
     let mut out = flows(&root().join("examples"));
     out.extend(flows(&root().join("tests/flows")));
     if let Ok(part) = std::env::var("DANDORI_FLOW") {
         out.retain(|f| rel(f).contains(&part));
     }
-    if !rulec_names_enums() {
-        out.retain(|f| {
-            let keep = !NAMED_ENUMS.contains(&rel(f).as_str());
-            if !keep {
-                skip(&format!("{}: it calls at its service a rule whose enum is a contract's, and this rulec's `rulec api` does not say what the service calls the values (`connect.enums`)", rel(f)));
-            }
-            keep
-        });
-    }
     out
-}
-
-/// The flows that call, at its Connect service, a rule whose enum is a contract's (`import proto`):
-/// with a rulec whose `rulec api` does not say what the service calls the enum's values
-/// (`connect.enums`), `check` refuses them (E005, DESIGN 1.13), and the tests leave them out.
-const NAMED_ENUMS: [&str; 1] = ["tests/flows/connect_rules_contract.flow"];
-
-/// Whether the rulec at hand says, in `rulec api`, what a rule's service calls the values of its
-/// enums (`connect.enums`): rulec 0.22.0 does, and 0.21.2 and before do not. The field is asked
-/// for, not the version. Asked once.
-fn rulec_names_enums() -> bool {
-    static NAMES: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *NAMES.get_or_init(|| {
-        let bin = std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".into());
-        let out = Command::new(&bin).arg("api").arg(root().join("examples/order/rules/urgency.rule")).output();
-        out.ok().and_then(|o| serde_json::from_slice::<Value>(&o.stdout).ok()).is_some_and(|v| v["connect"]["enums"].is_array())
-    })
 }
 
 /// The platforms a version of an example is written for, from its directory: `temporal/`,
@@ -178,9 +169,8 @@ fn norm(v: &Value) -> Value {
 
 #[test]
 fn examples_pass_check() {
-    need_rulec!();
     for f in flows(&root().join("examples")) {
-        let (src, checked) = dandori::check::check_file(&f).unwrap();
+        let (src, checked) = check_file(&f).unwrap();
         let text: String = checked.diags.iter().map(|d| d.render(&rel(&f), &src, Lang::En)).collect();
         assert!(checked.model.is_some(), "{} does not pass check:\n{text}", rel(&f));
         assert!(checked.diags.is_empty(), "{} has warnings:\n{text}", rel(&f));
@@ -189,10 +179,9 @@ fn examples_pass_check() {
 
 #[test]
 fn diagnostics_match_the_golden_files() {
-    need_rulec!();
     let mut failures = Vec::new();
     for f in flows(&root().join("tests/fixtures")) {
-        let (src, checked) = dandori::check::check_file(&f).unwrap();
+        let (src, checked) = check_file(&f).unwrap();
         // a fixture that passes check has its builds' refusals (E050) in the golden file too
         let refusals: Vec<(&str, Vec<dandori::diag::Diag>)> = match &checked.model {
             Some(m) => [
@@ -224,33 +213,6 @@ fn diagnostics_match_the_golden_files() {
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
 
-/// What `check` says of a flow that calls at its service a rule whose enum is a contract's, when rulec
-/// does not say what the service calls the enum's values (`connect.enums`): E005 (DESIGN 1.13). What
-/// such a rulec printed for the rule is kept in tests/fixtures/unnamed_enums/rulec.json, as `check`
-/// asked for it from the repository's root (`rulec schema|certificate|api` on the rule, by rulec
-/// 0.21.2, which did not name them), so the diagnostics are the same whatever rulec is at hand, and
-/// need none. `DANDORI_BLESS=1` rewrites the golden files beside it.
-#[test]
-fn a_rulec_that_does_not_name_the_enums_has_a_contracts_refused() {
-    let dir = root().join("tests/fixtures/unnamed_enums");
-    let recorded: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("rulec.json")).unwrap()).unwrap();
-    let bundle = std::rc::Rc::new(dandori::sources::Bundle::from_json(&recorded).unwrap());
-    let path = "tests/flows/connect_rules_contract.flow";
-    let text = std::fs::read_to_string(root().join(path)).unwrap();
-    let mut failures = Vec::new();
-    for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
-        let sources = std::rc::Rc::new(dandori::sources::Playground { bundle: bundle.clone(), path: path.into(), text: text.clone(), lang });
-        let checked = dandori::sources::with(sources, || dandori::check::check_source(&text, Path::new(path)));
-        assert!(checked.model.is_none() && checked.diags.iter().all(|d| d.code == "E005"), "{path} is refused with E005 alone: {:?}", checked.diags.iter().map(|d| (&d.code, &d.en)).collect::<Vec<_>>());
-        let said: String = checked.diags.iter().map(|d| d.render(path, &text, lang)).collect();
-        let golden = dir.join(format!("connect_rules_contract.{tag}.txt"));
-        if let Err(e) = ritsu_testkit::golden::check(&golden, &said) {
-            failures.push(format!("{path} ({tag}): {e}"));
-        }
-    }
-    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
-}
-
 /// Every HTTP Task of a state machine, in a Map's or a Parallel's states too.
 fn http_tasks(v: &Value, each: &mut impl FnMut(&Value)) {
     match v {
@@ -267,11 +229,10 @@ fn http_tasks(v: &Value, each: &mut impl FnMut(&Value)) {
 
 #[test]
 fn asl_runs_as_the_reference_says() {
-    need_rulec!();
     need_node!();
     let mut compared = 0;
     for f in runnable_on(Platform::StepFunctions) {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let files = match dandori::asl::build(&m) {
             Ok(files) => files,
@@ -413,7 +374,6 @@ fn localstack_runs_as_the_reference_says() {
     if !need(Need::LocalStack) {
         return;
     }
-    need_rulec!();
     need_node!();
     if let Err(why) = localstack_ready() {
         skip(&format!("{why}"));
@@ -422,7 +382,7 @@ fn localstack_runs_as_the_reference_says() {
     let mut flows = Vec::new();
     let mut compared = Vec::new();
     for f in runnable_on(Platform::StepFunctions) {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the flows pass check");
         let files = match dandori::asl::build(&m) {
             Ok(files) => files,
@@ -594,7 +554,6 @@ fn temporal_runs_as_the_reference_says() {
     if !need(Need::Temporal) {
         return;
     }
-    need_rulec!();
     if !temporal_available() {
         skip("tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
         return;
@@ -613,7 +572,6 @@ fn temporal_python_runs_as_the_reference_says() {
     if !need(Need::Temporal) {
         return;
     }
-    need_rulec!();
     if temporal_python().is_none() {
         skip("tools/temporal-python/.venv is missing; make it as tools/temporal-python/requirements.txt says");
         return;
@@ -734,11 +692,11 @@ fn go_runner() -> Option<&'static GoRunner> {
         };
         // every flow, the versions for the other platforms too, whose default Transport the checks send through
         for f in runnable() {
-            let (_, checked) = dandori::check::check_file(&f).unwrap();
+            let (_, checked) = check_file(&f).unwrap();
             add(rel(&f), &checked.model.expect("the examples pass check"), "full", &mut entries);
         }
         // the parent and the child of tests/children, as they are
-        let (_, checked) = dandori::check::check_file(&root().join("tests/children/受付.flow")).unwrap();
+        let (_, checked) = check_file(&root().join("tests/children/受付.flow")).unwrap();
         let parent = checked.model.expect("the flow passes check");
         let child = parent.tasks.iter().find_map(|t| t.flow.as_ref()).expect("a task runs a .flow").model.clone();
         add("children/parent".into(), &parent, "none", &mut entries);
@@ -752,7 +710,7 @@ fn go_runner() -> Option<&'static GoRunner> {
             std::fs::create_dir_all(&d).unwrap();
             let f = d.join("approvals.flow");
             std::fs::write(&f, flow).unwrap();
-            let (_, checked) = dandori::check::check_file(&f).unwrap();
+            let (_, checked) = check_file(&f).unwrap();
             add(format!("versions/{name}"), &checked.model.unwrap(), "continue", &mut entries);
         }
         let manifest = dir.join("manifest.json");
@@ -783,7 +741,6 @@ fn temporal_go_runs_as_the_reference_says() {
     if !need(Need::Temporal) {
         return;
     }
-    need_rulec!();
     if go_runner().is_none() {
         return;
     }
@@ -812,7 +769,6 @@ fn temporal_activities_run_in_the_other_language() {
     if !need(Need::Temporal) {
         return;
     }
-    need_rulec!();
     if !temporal_available() || temporal_python().is_none() {
         skip("tools/temporal/node_modules or tools/temporal-python/.venv is missing");
         return;
@@ -822,7 +778,7 @@ fn temporal_activities_run_in_the_other_language() {
     let flows: Vec<PathBuf> = runnable_on(Platform::Temporal)
         .into_iter()
         .filter(|f| {
-            let (_, checked) = dandori::check::check_file(f).unwrap();
+            let (_, checked) = check_file(f).unwrap();
             let m = checked.model.expect("the examples pass check");
             if m.rules.iter().any(|r| r.local) {
                 eprintln!("{}: not with the other language's activities (a rule that says `local` runs in the workflow's worker)", rel(f));
@@ -853,7 +809,7 @@ fn temporal_activities_run_in_the_other_language() {
 /// One flow on Temporal, its workflow in `wf`; with `acts`, its activities in that other language,
 /// served by that language's runner.
 fn temporal_one(f: &Path, wf: Sdk, acts: Option<Sdk>) {
-    let (_, checked) = dandori::check::check_file(f).unwrap();
+    let (_, checked) = check_file(f).unwrap();
     let m = checked.model.expect("the examples pass check");
     let lang = match acts {
         None => format!("{}-", wf.short()),
@@ -1034,7 +990,6 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
     if !need(Need::Temporal) {
         return;
     }
-    need_rulec!();
     if !temporal_available() {
         skip("tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
         return;
@@ -1057,7 +1012,7 @@ fn temporal_worker_versioning_keeps_a_run_on_its_build() {
             std::fs::create_dir_all(&d).unwrap();
             let f = d.join("approvals.flow");
             std::fs::write(&f, flow).unwrap();
-            let (_, checked) = dandori::check::check_file(&f).unwrap();
+            let (_, checked) = check_file(&f).unwrap();
             let m = checked.model.unwrap();
             let files = lang.build(&m).unwrap();
             for (n, t) in &files {
@@ -1105,7 +1060,6 @@ fn temporal_runs_a_flow_as_its_child() {
     if !need(Need::Temporal) {
         return;
     }
-    need_rulec!();
     let python = temporal_python();
     if !temporal_available() || python.is_none() {
         skip("tools/temporal/node_modules or tools/temporal-python/.venv is missing");
@@ -1114,7 +1068,7 @@ fn temporal_runs_a_flow_as_its_child() {
     let python = python.unwrap();
     let go = go_runner();
     let f = root().join("tests/children/受付.flow");
-    let (_, checked) = dandori::check::check_file(&f).unwrap();
+    let (_, checked) = check_file(&f).unwrap();
     let pm = checked.model.expect("the flow passes check");
     let task = pm.tasks.iter().find(|t| t.flow.is_some()).expect("a task runs a .flow");
     let cm = task.flow.as_ref().unwrap().model.clone();
@@ -1394,7 +1348,6 @@ fn wire_cases(m: &Model) -> Vec<Value> {
 /// so Go's JSON, query and form are held to theirs as values and as pairs. Nothing leaves the machine.
 #[test]
 fn default_transports_send_what_the_calls_say() {
-    need_rulec!();
     need_node!();
     let wire = root().join("tools/wire");
     let python = wire.join(".venv/bin/python");
@@ -1417,7 +1370,7 @@ fn default_transports_send_what_the_calls_say() {
     let mut tally: std::collections::BTreeMap<String, (usize, usize)> = std::collections::BTreeMap::new();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         for f in runnable() {
-            let (_, got) = dandori::check::check_file(&f).unwrap();
+            let (_, got) = check_file(&f).unwrap();
             let m = got.model.expect("the flows pass check");
             let cases = wire_cases(&m);
             if cases.is_empty() {
@@ -1617,7 +1570,9 @@ fn default_transports_send_what_the_calls_say() {
 /// are going on need the version of the `.flow` raised, or Worker Deployment Versioning.
 #[test]
 fn temporal_replays_the_recorded_histories() {
-    need_rulec!();
+    if !need(Need::Node) {
+        return;
+    }
     let python = temporal_python();
     if !temporal_available() || python.is_none() {
         skip("tools/temporal/node_modules or tools/temporal-python/.venv is missing");
@@ -1627,7 +1582,7 @@ fn temporal_replays_the_recorded_histories() {
     let mut replayed = 0;
     for r in RECORDED {
         let f = root().join(r);
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the flows pass check");
         for lang in [Sdk::Ts, Sdk::Py, Sdk::Go] {
             if lang == Sdk::Go && go.is_none() {
@@ -1668,7 +1623,9 @@ fn temporal_replays_the_recorded_histories() {
 /// the agents' SDKs) are declared as modules of any type.
 #[test]
 fn generated_typescript_type_checks() {
-    need_rulec!();
+    if !need(Need::Node) {
+        return;
+    }
     let tsc = root().join("tools/temporal/node_modules/.bin/tsc");
     if !tsc.exists() {
         skip("TypeScript is not in tools/temporal/node_modules; run `npm install --prefix tools/temporal`");
@@ -1678,7 +1635,7 @@ fn generated_typescript_type_checks() {
     let shims = "declare module \"@anthropic-ai/sdk\";\ndeclare module \"openai\";\ndeclare module \"@openai/agents\";\ndeclare module \"@aws-sdk/*\";\n";
     let mut checked = 0;
     for f in runnable() {
-        let (_, c) = dandori::check::check_file(&f).unwrap();
+        let (_, c) = check_file(&f).unwrap();
         let m = c.model.expect("the flows pass check");
         let builds = [
             ("temporal", dandori::temporal::build(&m), "tools/temporal/node_modules", false),
@@ -1703,8 +1660,7 @@ fn generated_typescript_type_checks() {
             let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
             if target != "durable" {
                 for r in &called {
-                    let gen = Command::new(rulec_bin()).arg("gen").arg(&m.rules[*r].info.path).arg("--out").arg(code.join("rulec")).output().unwrap();
-                    assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
+                    rulec_gen(&m.rules[*r].info.path, &code.join("rulec"));
                 }
             }
             let link = code.join("node_modules");
@@ -1725,10 +1681,6 @@ fn generated_typescript_type_checks() {
         }
     }
     eprintln!("type-checked the TypeScript of {checked} build(s) with tsc --strict");
-}
-
-fn rulec_bin() -> String {
-    std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".into())
 }
 
 /// A Go module of the Go that dandori writes for flows, with the rules as rulec generates them: the
@@ -1753,11 +1705,11 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
     let tools = root().join("tools/temporal-go");
     let mut modules: Vec<(GoModule, std::collections::BTreeMap<String, PathBuf>)> = Vec::new();
     for f in flows {
-        let (_, checked) = dandori::check::check_file(f).unwrap();
+        let (_, checked) = check_file(f).unwrap();
         let m = checked.model.expect("the flows pass check");
         let Ok(files) = dandori::temporal_go::build(&m) else { continue };
         let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
-        let rules: Vec<(String, PathBuf)> = called.iter().map(|r| (m.rules[*r].info.api["go"]["package"].as_str().unwrap().to_string(), m.rules[*r].info.path.clone())).collect();
+        let rules: Vec<(String, PathBuf)> = called.iter().map(|r| (m.rules[*r].info.go.module.clone(), m.rules[*r].info.path.clone())).collect();
         // the first module whose rules of these names are these rules
         let at = modules.iter().position(|(_, by)| rules.iter().all(|(p, path)| by.get(p).is_none_or(|x| x == path))).unwrap_or_else(|| {
             let dir = scratch(&format!("go-{name}-{}", modules.len()));
@@ -1778,18 +1730,16 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
         let mut vectors = Vec::new();
         for r in &called {
             let ru = &m.rules[*r];
-            let p = ru.info.api["go"]["package"].as_str().unwrap().to_string();
+            let p = ru.info.go.module.clone();
             if !by.contains_key(&p) {
-                let gen = Command::new(rulec_bin()).arg("gen").arg(&ru.info.path).arg("--out").arg(module.dir.join("rulec")).output().unwrap();
-                assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
+                rulec_gen(&ru.info.path, &module.dir.join("rulec"));
                 let mut gomod = std::fs::read_to_string(module.dir.join("go.mod")).unwrap();
                 gomod.push_str(&format!("\nrequire {p} v0.0.0\n\nreplace {p} => ./rulec/go/{p}\n"));
                 std::fs::write(module.dir.join("go.mod"), gomod).unwrap();
                 by.insert(p.clone(), ru.info.path.clone());
             }
             let file = module.dir.join(format!("vectors-{}.jsonl", dandori::render::ident(&ru.name)));
-            let out = Command::new(rulec_bin()).arg("vectors").arg(&ru.info.path).output().unwrap();
-            std::fs::write(&file, &out.stdout).unwrap();
+            std::fs::write(&file, rulec_vectors(&ru.info.path)).unwrap();
             vectors.push((dandori::render::rule_activity(&ru.name), file));
         }
         let import = format!("gocheck/flows/{k}/{}", dandori::temporal_go::package(&m));
@@ -1812,7 +1762,9 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
 /// and is as gofmt writes it.
 #[test]
 fn generated_go_vets() {
-    need_rulec!();
+    if !need(Need::Go) {
+        return;
+    }
     if !Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false) || !root().join("tools/temporal-go/go.mod").exists() {
         skip("go or tools/temporal-go is missing; the Go that dandori writes is not vetted");
         return;
@@ -1833,11 +1785,13 @@ fn generated_go_vets() {
 /// rule as rulec says.
 #[test]
 fn rule_glue_answers_the_rulec_vectors() {
-    need_rulec!();
+    if !need(Need::Python) {
+        return;
+    }
     let python = Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
     let node = Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
     for f in flows(&root().join("examples")) {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let ts_files = dandori::temporal::build(&m).unwrap();
         // every rule the flow calls, whether or not Step Functions can run the flow; a rule that is
@@ -1850,11 +1804,10 @@ fn rule_glue_answers_the_rulec_vectors() {
             }
             let (hname, htext) = &dandori::asl::lambda_handler(&m, ri);
             let dir = scratch(&format!("glue-{}", dandori::render::ident(&r.name)));
-            let gen = Command::new(rulec_bin()).arg("gen").arg(&r.info.path).arg("--out").arg(dir.join("rulec")).output().unwrap();
-            assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
-            let vectors = Command::new(rulec_bin()).arg("vectors").arg(&r.info.path).output().unwrap();
-            std::fs::write(dir.join("vectors.jsonl"), &vectors.stdout).unwrap();
-            let expected: Vec<Value> = String::from_utf8_lossy(&vectors.stdout).lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect();
+            rulec_gen(&r.info.path, &dir.join("rulec"));
+            let vectors = rulec_vectors(&r.info.path);
+            std::fs::write(dir.join("vectors.jsonl"), &vectors).unwrap();
+            let expected: Vec<Value> = vectors.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect();
 
             if python {
                 let hfile = dir.join(Path::new(hname).file_name().unwrap());
@@ -1957,7 +1910,6 @@ fn rule_glue_answers_the_rulec_vectors() {
 /// contract's with a value of its own at 0, which an answer that leaves it out has.
 #[test]
 fn a_rules_answer_is_read_alike_by_the_reference_typescript_python_go_and_jsonata() {
-    need_rulec!();
     need_node!();
     if !Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
         skip("python3 is missing; io.py's reading of a rule's answer is not run");
@@ -1966,11 +1918,7 @@ fn a_rules_answer_is_read_alike_by_the_reference_typescript_python_go_and_jsonat
     use dandori::rulec::WireKind;
     let mut models = Vec::new();
     for f in ["tests/flows/connect_rules.flow", "tests/flows/connect_rules_contract.flow"] {
-        if !rulec_names_enums() && NAMED_ENUMS.contains(&f) {
-            skip(&format!("{f}: this rulec's `rulec api` does not say what the service of its rule calls the values (`connect.enums`)"));
-            continue;
-        }
-        let (_, checked) = dandori::check::check_file(&root().join(f)).unwrap();
+        let (_, checked) = check_file(&root().join(f)).unwrap();
         models.push(checked.model.expect("the flows pass check"));
     }
     // io.ts and io.py are the same for every flow
@@ -2078,7 +2026,9 @@ fn pydantic_graph_python() -> Option<PathBuf> {
 
 #[test]
 fn pydantic_graph_runs_as_the_reference_says() {
-    need_rulec!();
+    if !need(Need::Python) {
+        return;
+    }
     let python = match pydantic_graph_python() {
         Some(p) => p,
         None => {
@@ -2087,7 +2037,7 @@ fn pydantic_graph_runs_as_the_reference_says() {
         }
     };
     for f in runnable_on(Platform::Graph) {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let dir = scratch(&format!("pydantic-graph-{}", key(&f)));
         let files = match dandori::pydantic_graph::build(&m) {
@@ -2146,7 +2096,9 @@ fn pydantic_graph_runs_as_the_reference_says() {
 /// Anthropic's Go SDK, and each must get the very request Step Functions sends, once.
 #[test]
 fn agents_sdk_is_asked_what_step_functions_asks() {
-    need_rulec!();
+    if !need(Need::Node) {
+        return;
+    }
     let node = root().join("tools/agents/node_modules/@openai/agents").exists()
         && root().join("tools/agents/node_modules/@anthropic-ai/sdk").exists()
         && Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
@@ -2158,7 +2110,7 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
         skip("tools/agents/.venv is missing; make it as tools/agents/requirements.txt says");
     }
     for f in runnable() {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         if !m.tasks.iter().any(|t| matches!(t.via(Platform::Temporal), Some(Via::Agent { .. }))) {
             continue;
@@ -2340,7 +2292,6 @@ fn open_responses_agents_answer_on_ollama() {
     if !need(Need::Ollama) {
         return;
     }
-    need_rulec!();
     let base = std::env::var("DANDORI_OLLAMA").unwrap_or_else(|_| "http://127.0.0.1:11434".into());
     let get = |path: &str| -> Option<Value> {
         let out = Command::new("curl").args(["-s", "-m", "3", &format!("{base}{path}")]).output().ok()?;
@@ -2375,7 +2326,7 @@ fn open_responses_agents_answer_on_ollama() {
     let python = root().join("tools/agents/.venv/bin/python");
     let mut sent = 0;
     for f in runnable() {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the flows pass check");
         // the first answered call of each agent on a server of Open Responses, sent to Ollama
         let mut cases = Vec::new();
@@ -2465,7 +2416,6 @@ fn jev_tasks_answer_on_typesafe() {
     if !need(Need::TypeSafe) {
         return;
     }
-    need_rulec!();
     if std::env::var("TYPESAFE_API_KEY").map_or(true, |k| k.is_empty()) {
         skip("TYPESAFE_API_KEY is not set; the Jev tasks are not sent to TypeSafe");
         return;
@@ -2473,7 +2423,7 @@ fn jev_tasks_answer_on_typesafe() {
     let python = Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success());
     let mut sent = 0;
     for f in runnable() {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the flows pass check");
         // the first call of each Jev task, as the scenarios make it
         let mut cases = Vec::new();
@@ -2571,7 +2521,9 @@ fn jev_tasks_answer_on_typesafe() {
 /// pydantic-graph — answers every vector rulec generates for each rule the flow calls.
 #[test]
 fn python_rules_answer_the_rulec_vectors() {
-    need_rulec!();
+    if !need(Need::Python) {
+        return;
+    }
     let python = match temporal_python() {
         Some(p) => p,
         None => {
@@ -2580,7 +2532,7 @@ fn python_rules_answer_the_rulec_vectors() {
         }
     };
     for f in flows(&root().join("examples")) {
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         // a version of an example written for one platform may not build for the other
         for (label, built) in [("Temporal", dandori::temporal_py::build(&m)), ("pydantic-graph", dandori::pydantic_graph::build(&m))] {
@@ -2599,14 +2551,13 @@ fn python_rules_answer_the_rulec_vectors() {
             called.sort();
             called.dedup();
             for r in &called {
-                let gen = Command::new(rulec_bin()).arg("gen").arg(&m.rules[*r].info.path).arg("--out").arg(pkg.join("rulec")).output().unwrap();
-                assert!(gen.status.success(), "rulec gen failed: {}", String::from_utf8_lossy(&gen.stderr));
+                rulec_gen(&m.rules[*r].info.path, &pkg.join("rulec"));
             }
             for r in &called {
                 let ru = &m.rules[*r];
-                let vectors = Command::new(rulec_bin()).arg("vectors").arg(&ru.info.path).output().unwrap();
-                std::fs::write(dir.join("vectors.jsonl"), &vectors.stdout).unwrap();
-                let expected: Vec<Value> = String::from_utf8_lossy(&vectors.stdout).lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect();
+                let vectors = rulec_vectors(&ru.info.path);
+                std::fs::write(dir.join("vectors.jsonl"), &vectors).unwrap();
+                let expected: Vec<Value> = vectors.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect();
                 let script = format!(
                     "import asyncio, json, sys\nsys.path.insert(0, '.')\nimport glue.rules as R\nf = getattr(R, {})\nasync def main():\n    return [await f(json.loads(l)['in']) for l in open('vectors.jsonl', encoding='utf-8')]\nprint(json.dumps(asyncio.run(main()), ensure_ascii=False))\n",
                     serde_json::to_string(&dandori::render::rule_activity(&ru.name)).unwrap()
@@ -2627,7 +2578,9 @@ fn durable_available() -> bool {
 
 #[test]
 fn durable_runs_as_the_reference_says() {
-    need_rulec!();
+    if !need(Need::Node) {
+        return;
+    }
     if !durable_available() {
         skip("tools/durable/node_modules is missing; run `npm install --prefix tools/durable`");
         return;
@@ -2644,7 +2597,7 @@ fn durable_runs_as_the_reference_says() {
 fn durable_one(f: &Path) {
     {
         let f = f.to_path_buf();
-        let (_, checked) = dandori::check::check_file(&f).unwrap();
+        let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the examples pass check");
         let dir = scratch(&format!("durable-{}", key(&f)));
         let files = match dandori::temporal::build_flavor(&m, dandori::temporal::Flavor::Durable) {
@@ -2752,7 +2705,7 @@ fn with_argo_slot<T>(f: impl FnOnce() -> T) -> T {
 /// Make a flow ready for Argo (its scenarios, the reference's runs, the build) and run the runner
 /// on it, when a slot is free, to its end; None for a flow that is not for Argo.
 fn ready_on_argo(f: PathBuf) -> Option<ArgoFlow> {
-    let (_, checked) = dandori::check::check_file(&f).unwrap();
+    let (_, checked) = check_file(&f).unwrap();
     let m = checked.model.expect("the flows pass check");
     let files = match dandori::argo::build(&m) {
         Ok(files) => files,
@@ -2814,7 +2767,6 @@ fn argo_runs_as_the_reference_says() {
     if !need(Need::Argo) {
         return;
     }
-    need_rulec!();
     if let Err(why) = argo_ready() {
         skip(&format!("{why}"));
         return;

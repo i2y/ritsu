@@ -1,0 +1,18 @@
+[package]
+name = "ritsu"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "The one command of ritsu: the languages run with every port joined, so that what one language checks, the next reads as it is"
+publish = false
+
+# An entry may depend on every layer (DESIGN 3.1). In stage D it holds dandori and rulec only: the
+# least of `ritsu <language>` that runs a workflow reading its rules in the same process (DESIGN 8.6).
+[dependencies]
+ritsu-base = { path = "../ritsu-base" }
+dandori = { path = "../dandori" }
+rulec = { path = "../rulec" }
+
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }

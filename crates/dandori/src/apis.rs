@@ -1057,6 +1057,20 @@ pub fn made_fields(pf: &ProtoFile, msg: &str) -> Vec<MadeField> {
         .collect()
 }
 
+/// `MemberTier` → `MEMBER_TIER`: an enum's name as buf's lint wants it in front of its values'
+/// (`MEMBER_TIER_GOLD`). A capital that is not the first letter and does not follow an underscore
+/// starts a new word.
+pub fn upper_snake(camel: &str) -> String {
+    let mut out = String::new();
+    for (i, ch) in camel.chars().enumerate() {
+        if ch.is_ascii_uppercase() && i > 0 && !out.ends_with('_') {
+            out.push('_');
+        }
+        out.push(ch.to_ascii_uppercase());
+    }
+    out
+}
+
 /// The values of the enum `en` (full name) as a flow has them, which are their names in the `.proto`.
 /// The zero value is left out when its name says nothing was set: with the enum's own name
 /// (`Stock` is `STOCK_`) taken off the front, it is `unspecified` in any case. A zero value with
@@ -1064,7 +1078,7 @@ pub fn made_fields(pf: &ProtoFile, msg: &str) -> Vec<MadeField> {
 pub fn made_enum_values(pf: &ProtoFile, en: &str) -> Vec<String> {
     let values = pf.enums.get(en).cloned().unwrap_or_default();
     let simple = en.rsplit('.').next().unwrap_or(en);
-    let prefix = format!("{}_", crate::rulec::upper_snake(simple));
+    let prefix = format!("{}_", upper_snake(simple));
     values.into_iter().enumerate().filter(|(i, v)| !(*i == 0 && v.strip_prefix(&prefix).unwrap_or(v).eq_ignore_ascii_case("unspecified"))).map(|(_, v)| v).collect()
 }
 
@@ -1258,6 +1272,13 @@ mod tests {
 
     fn range(lo: Option<i64>, hi: Option<i64>) -> Option<Range> {
         Some(Range { lo, hi })
+    }
+
+    #[test]
+    fn upper_snake_is_bufs_spelling() {
+        assert_eq!(upper_snake("Carrier"), "CARRIER");
+        assert_eq!(upper_snake("MemberTier"), "MEMBER_TIER");
+        assert_eq!(upper_snake("CaptureMethod"), "CAPTURE_METHOD");
     }
 
     #[test]

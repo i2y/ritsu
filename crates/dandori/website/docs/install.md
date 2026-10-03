@@ -1,64 +1,63 @@
 # Install
 
-dandori is one binary. It needs rulec only for a workflow that uses rules (`use rule`); a workflow
-without them is checked, built and played without rulec, and its output has nothing of rulec's.
+dandori is one of the languages of ritsu, and is built in ritsu's workspace. A workflow that uses
+rules (`use rule`) runs as `ritsu dandori`, which reads the rules with rulec in the same process; a
+workflow without them also runs with the `dandori` command alone, and its output has nothing of
+rulec's.
 
 To try it before installing anything, open [Try it in the browser](playground.md): dandori runs in the
 page.
 
-## dandori
+## ritsu
 
-Build it from a clone with a recent stable Rust. Its one dependency is serde_json.
+Build it from a clone with a recent stable Rust. Its one outside dependency is serde_json.
 
 ```console
-$ git clone https://github.com/i2y/dandori
-$ cd dandori
-$ cargo install --path .
+$ git clone https://github.com/i2y/ritsu
+$ cd ritsu
+$ cargo install --path crates/ritsu
 ```
+
+`ritsu dandori <command>` is dandori's command, with the rules read by rulec: `ritsu dandori check`,
+`ritsu dandori build`, and the rest. `cargo install --path crates/dandori` installs `dandori` alone,
+for workflows without rules; given one that uses rules, it says to run it with `ritsu dandori`.
 
 ## rulec
 
-For a workflow that uses rules, dandori runs rulec to read them, and `rulec gen` writes the code of
-each rule, which the generated code calls, and a Connect service for it, which a workflow can call
-instead. dandori finds rulec through `DANDORI_RULEC`, else on the PATH. With Homebrew, on macOS or Linux:
+`rulec gen` writes the code of each rule, which the generated code calls, and a Connect service for
+it, which a workflow can call instead. Install rulec from the same clone:
 
 ```console
-$ brew install i2y/tap/rulec
+$ cargo install --path crates/rulec
 ```
-
-Or take a binary from rulec's [releases](https://github.com/i2y/rulec/releases). dandori is tested
-with rulec 0.22.0. rulec 0.21.2 and before do not say, in `rulec api`, what a rule's service calls the
-values of an enum the rule takes from a `.proto` (0.22.0 is the first to), so with them dandori calls
-such a rule with its code but not at its service (E005;
-[An enum from a contract](tasks.md#an-enum-from-a-contract)).
 
 Without rules, a workflow gives up two things. Its branches can only match what its tasks answer (an
 enum, a bool, a value that may be absent), since a `.flow` neither compares nor computes: comparing
 an amount or a date is left to a task, such as an API, an agent or your own code, and nothing proves
 the decision has no gaps. And it has
 no cases, since a case follows a rule's state machine, so the checks of cases (E013, E020 to E022,
-E030, W101 to W103) have nothing to look at. The review example (`examples/review`) is written without
-rules: the task that scores an application answers `approve`, `reject` or `hold`, and the flow
-matches that.
+E030, W101 to W103) have nothing to look at. The child flow of the fulfillment example
+(`examples/fulfillment/arrange_delivery.flow`) is written without rules: it branches on the carrier
+it is given, an enum among its inputs.
 
 ## Check that it works
 
-Check one of the examples, then build it:
+In `crates/dandori`, check one of the examples, then build it:
 
 ```console
-$ dandori check examples/hotel/temporal/hotel.flow
+$ ritsu dandori check examples/hotel/temporal/hotel.flow
 examples/hotel/temporal/hotel.flow: ok
-$ dandori build examples/hotel/temporal/hotel.flow --target temporal --out out/hotel
+$ ritsu dandori build examples/hotel/temporal/hotel.flow --target temporal --out out/hotel
 ```
 
-The hotel booking uses rules. Without rulec, check the review example instead:
+The hotel booking uses rules. With `dandori` alone, check a flow without rules instead:
 
 ```console
-$ dandori check examples/review/temporal/review.flow
-examples/review/temporal/review.flow: ok
+$ dandori check examples/fulfillment/arrange_delivery.flow
+examples/fulfillment/arrange_delivery.flow: ok
 ```
 
-`--lang ja` (or `DANDORI_LANG=ja`) prints the checker's messages in Japanese.
+`--lang ja` (or `DANDORI_LANG=ja`, or `RITSU_LANG=ja`) prints the checker's messages in Japanese.
 
 ## The agent skill
 
@@ -72,7 +71,7 @@ $ cp -r skills/dandori ~/.claude/skills/                  # every project on thi
 $ cp -r skills/dandori <your-project>/.claude/skills/     # one project, committed with it
 ```
 
-The skill runs `dandori` from the PATH, and `rulec` for a workflow that uses rules.
+The skill runs `ritsu dandori` from the PATH for a workflow that uses rules, and `dandori` alone for one without.
 
 ## What the output needs
 

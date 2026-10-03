@@ -2,7 +2,8 @@
 //! checked before it runs — types, every arm of every match, every state a case can be
 //! left in — and compiled to AWS Step Functions (ASL with JSONata), to Temporal
 //! (TypeScript or Python), to AWS Lambda durable functions (TypeScript), to Argo Workflows
-//! (a WorkflowTemplate) and to pydantic-graph (Python). The rules themselves are written in rulec and read through its CLI.
+//! (a WorkflowTemplate) and to pydantic-graph (Python). The rules themselves are written in rulec and
+//! read through ritsu's port of rules, which whoever runs dandori hands it (`cli::run`; sources).
 //! Compiled to wasm32, the same library runs the playground on the site (playground, wasm).
 
 #[macro_use]
@@ -27,6 +28,7 @@ pub mod playground;
 pub mod proto;
 pub mod pydantic_graph;
 pub mod ranges;
+pub mod record;
 pub mod render;
 pub mod rulec;
 pub mod scenarios;

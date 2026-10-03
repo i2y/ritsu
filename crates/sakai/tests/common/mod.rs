@@ -186,10 +186,16 @@ pub fn go_arch_lint() -> Option<String> {
     program("GO_ARCH_LINT", "tools/go/bin/go-arch-lint", "go-arch-lint", &["version"])
 }
 
-/// A tool of the suite (rulec, koyomi, chobo, dandori): `RITSU_<NAME>` or `SAKAI_<NAME>`, else
+/// A tool of the suite (rulec, koyomi, chobo): `RITSU_<NAME>` or `SAKAI_<NAME>`, else
 /// the PATH.
 pub fn suite(name: &str) -> Option<String> {
     program(&name.to_uppercase(), "", name, &["--version"])
+}
+
+/// `ritsu`, which runs dandori with the rules a workflow uses read in the same process: `RITSU_RITSU`
+/// or `SAKAI_RITSU`, else the workspace's build of it, else the PATH.
+pub fn ritsu() -> Option<String> {
+    program("RITSU", "../../target/debug/ritsu", "ritsu", &["--version"])
 }
 
 /// The codes of the diagnostics a run printed, in order: `error[E501]: …` gives `E501`.

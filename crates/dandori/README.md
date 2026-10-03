@@ -89,23 +89,23 @@ it. Every loop has a bound, so a run's history has one too.
 
 ## Install
 
+dandori is one of the languages of [ritsu](https://github.com/i2y/ritsu), and is built in its
+workspace:
+
 ```console
-$ git clone https://github.com/i2y/dandori
-$ cd dandori
-$ cargo install --path .
+$ git clone https://github.com/i2y/ritsu
+$ cd ritsu
+$ cargo install --path crates/ritsu
 ```
 
-dandori builds with a recent stable Rust, and its one dependency is serde_json.
-
-rulec is needed only for a workflow that uses rules (`use rule`): dandori reads them through rulec,
-found through `DANDORI_RULEC`, else on the PATH, and `rulec gen` writes the code of each rule, and a Connect
-service for it that a workflow can call instead. Install it with `brew install i2y/tap/rulec`, or take a
-binary from its
-[releases](https://github.com/i2y/rulec/releases); dandori is tested with rulec 0.22.0. A rule whose enum
-comes from a `.proto` is called at its service only with rulec 0.22.0 or later, the first whose `rulec api`
-says what the service calls the enum's values.
-A workflow without rules is checked and built without rulec, but its branches can only match what
-its tasks answer, and it has no cases, since a case follows a rule's state machine.
+`ritsu dandori <command>` runs dandori with the rules a workflow uses (`use rule`) read by rulec in
+the same process. `rulec gen` writes the code of each rule, and a Connect service for it that a
+workflow can call instead; install rulec from the same workspace with `cargo install --path
+crates/rulec`. `cargo install --path crates/dandori` installs the `dandori` command alone: it checks
+and builds a workflow without rules as `ritsu dandori` does, and tells you to run one that uses rules
+with `ritsu dandori`. dandori builds with a recent stable Rust, and its one outside dependency is
+serde_json. A workflow without rules has no cases, since a case follows a rule's state machine, and
+its branches can only match what its tasks answer.
 
 ## For AI agents
 
@@ -126,7 +126,8 @@ dandori <command> --help
 dandori --version
 ```
 
-`dandori <command> --help` prints what one command takes, and what its exit codes mean. `--lang ja`
+For a workflow that uses rules, run each as `ritsu dandori <command>`. `dandori <command> --help`
+prints what one command takes, and what its exit codes mean. `--lang ja`
 prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`). `build` refuses what its platform cannot do (E050),
 and a workflow whose one run can outgrow the platform (E040). `doc` draws the workflow for the
 person who reviews it: Mermaid charts that GitHub draws in a pull request, with tables of every

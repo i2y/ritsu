@@ -211,19 +211,19 @@ fn ready_asks_the_level_then_the_machine() {
         let fast = std::env::var("RITSU_TEST_LEVEL").as_deref() == Ok("fast");
         let mut asked = false;
         let went = level::ready(
-            Need::Rulec,
+            Need::Suite,
             || {
                 asked = true;
                 false
             },
-            "no rulec here",
+            "no binaries of the suite here",
         );
         assert!(!went);
         assert_eq!(asked, !fast, "at the fast level the machine is not asked");
         assert_eq!(level::ready(Need::Pixie, || true, "not said"), !fast);
         return;
     }
-    for n in [Need::Rulec, Need::Suite, Need::Pixie] {
+    for n in [Need::Suite, Need::Pixie] {
         assert_eq!(n.level(), Level::Tools, "{n:?}");
     }
     let t = TempDir::new("readylog");

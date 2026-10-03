@@ -2,11 +2,12 @@
 //! the rest read from a bundle recorded from the examples (crate::sources). Each answers with what
 //! the command prints for that file, word for word, and what it writes; and `rules` shows the rules
 //! the flow calls. The page runs this compiled to wasm32 (crate::wasm), and tests/playground.rs
-//! holds the two to the binary.
+//! holds the two to the command as `ritsu dandori` runs it.
 //!
 //! Each answer is made by a function that reads from whatever crate::sources reads from now (the
-//! `*_here` ones): the page reads the bundle, and the tests read the disk and rulec through the
-//! same functions, to record the bundle and to hold it to what they read.
+//! `*_here` ones): the page reads the bundle (the files, and what rulec answered for the rules),
+//! and the tests read the disk and rulec's port through the same functions, to record the bundle
+//! and to hold it to what they read.
 
 use crate::commands;
 use crate::diag::{Diag, Lang, Severity};
@@ -134,7 +135,7 @@ pub fn rules_here(r: &Request) -> Value {
         .iter()
         .flat_map(|m| &m.rules)
         .map(|ru| {
-            let page = sources::rulec_doc(&ru.info.path, true, r.lang);
+            let page = sources::rule_doc(&ru.info.path, true, r.lang).map_err(|s| sources::said_notes(&s).iter().map(|t| t.get(r.lang).to_string()).collect::<Vec<_>>().join("\n"));
             json!({
                 "name": ru.name,
                 "rule": ru.info.rule,

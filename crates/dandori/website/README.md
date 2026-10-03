@@ -43,11 +43,11 @@ other by hand.
 - `tools/flowlexer.py`'s `KEYWORDS` are `src/syntax.rs`'s, word for word.
 
 `tests/playground.rs` holds the playground to the tool: `presets.json` to what checking the examples
-reads now (with rulec), what the page answers from it to what the command prints and writes, the
+reads now (with rulec's library), what the page answers from it to what the command prints and writes, the
 committed `dandori.wasm` to the library, through node, and the page to what it should show, in
 Chrome.
 
-`tests/doc.rs` (which needs rulec, and Chrome for two of its tests) holds `docs/doc` and
+`tests/doc.rs` (which needs Chrome for two of its tests) holds `docs/doc` and
 `docs-ja/doc` to what `dandori doc --format html` writes for the examples now; after a change to
 `doc`, `DANDORI_BLESS=1 cargo test --test doc` writes them anew.
 
@@ -85,7 +85,7 @@ $ .venv/bin/python tools/make_overview.py
 
 `playground.md` in each language runs dandori in the page: `docs/playground/dandori.wasm` is the
 library compiled to wasm32 (`src/wasm.rs`), and `docs/playground/presets.json` holds what the
-examples read, their files and what rulec printed for their rules (`rulec doc` among it, and the
+examples read, their files and what rulec answered for their rules (`rulec doc` among it, and the
 rules' own text for the rules tab), since a page can neither read files nor run rulec. `sync.sh`
 copies the four files into `docs-ja/playground`.
 
@@ -93,7 +93,7 @@ Both are committed, so building the site needs no Rust and no rulec, and both go
 
 ```console
 $ tools/make_wasm.sh                                   # after a change to what check, build or doc answers
-$ DANDORI_BLESS=1 cargo test --test playground         # after a change to an example or a rule (needs rulec)
+$ DANDORI_BLESS=1 cargo test --test playground         # after a change to an example or a rule
 ```
 
 `make_wasm.sh` adds the `wasm32-unknown-unknown` target to rustup when it is missing. The module is

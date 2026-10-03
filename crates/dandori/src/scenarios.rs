@@ -849,7 +849,7 @@ impl<'a> Ex<'a> {
         while i < out.len() {
             let s = out[i];
             for a in 0..mc.axes.len() {
-                if a == mc.state_axis || case.held.iter().any(|(h, _)| *h == a) {
+                if mc.is_state_axis(a) || case.held.iter().any(|(h, _)| *h == a) {
                     continue;
                 }
                 for ci in 0..mc.axes[a].coords.len() {

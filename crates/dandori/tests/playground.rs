@@ -2,8 +2,9 @@
 //! the command reads, the module it runs answers what the binary answers, and the page starts in
 //! Chrome and shows what `check` prints.
 //!
-//! Two of its files are committed products: presets.json, recorded from the examples here (with
-//! rulec; `DANDORI_BLESS=1` records it anew), and dandori.wasm, built by
+//! Two of its files are committed products: presets.json, recorded from the examples here (the
+//! files they read, and what rulec answered for their rules through ritsu's port of rules, read in
+//! this process; `DANDORI_BLESS=1` records it anew), and dandori.wasm, built by
 //! website/tools/make_wasm.sh. Both can go stale, and these tests are what says so. Node drives
 //! the module, and Chrome the page (ritsu-testkit's: `RITSU_CHROME` or `DANDORI_CHROME`, else where
 //! macOS keeps it, else on the PATH). A test that cannot find what it needs prints `SKIP:
@@ -17,6 +18,7 @@ use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use ritsu_testkit::{need, ready, skip, Need, TempDir};
+use ritsu_ports::Rules;
 use std::process::Command;
 use std::rc::Rc;
 use std::time::Duration;
@@ -33,9 +35,13 @@ fn site() -> PathBuf {
     root().join("website/docs/playground")
 }
 
-fn rulec_available() -> bool {
-    let bin = std::env::var("DANDORI_RULEC").unwrap_or_else(|_| "rulec".into());
-    Command::new(&bin).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
+/// rulec's own answer to ritsu's port of rules, one a thread: what `ritsu dandori` reads the rules
+/// through, and what the bundle records.
+fn rulec() -> Rc<dyn Rules> {
+    thread_local! {
+        static RULEC: Rc<rulec::ports::Engine> = Rc::new(rulec::ports::Engine::new());
+    }
+    RULEC.with(|r| r.clone())
 }
 
 fn node_available() -> bool {
@@ -52,14 +58,6 @@ fn chrome() -> Option<PathBuf> {
         skip("Chrome is not found; set DANDORI_CHROME to run this test");
     }
     found
-}
-
-macro_rules! need_rulec {
-    () => {
-        if !ready(Need::Rulec, rulec_available, "rulec is not on the PATH; set DANDORI_RULEC to run this test") {
-            return;
-        }
-    };
 }
 
 fn lang(tag: &str) -> Lang {
@@ -121,12 +119,12 @@ fn target_for(path: &str, m: Option<&dandori::model::Model>) -> &'static str {
 }
 
 /// What presets.json holds: the flows the page opens, and every file the page reads of them with
-/// what rulec printed for their rules, by their paths from the repository's root. What the page
-/// reads is read here by the same functions: checking a flow reads the rules and the APIs it names
-/// and its child flows; drawing it, what `rulec doc` renders for its rules in the page's language;
-/// the rules tab, the rules' files.
+/// what rulec answered for their rules (their facts, and the pages `rulec doc` draws for them), by
+/// their paths from the repository's root. What the page reads is read here by the same functions:
+/// checking a flow reads the rules and the APIs it names and its child flows; drawing it, the page
+/// `rulec doc` draws for its rules in the page's language; the rules tab, the rules' files.
 fn record() -> String {
-    let rec = Rc::new(Recorder::new(&root()));
+    let rec = Rc::new(Recorder::new(&root(), rulec()));
     let mut flows = serde_json::Map::new();
     sources::with(rec.clone(), || {
         for (tag, list) in presets() {
@@ -142,13 +140,14 @@ fn record() -> String {
             flows.insert(tag.to_string(), Value::Array(entries));
         }
     });
-    let got = rec.got.borrow().clone();
-    let v = json!({ "flows": flows, "files": got.files, "rulec": got.rulec });
+    let got = rec.bundle().to_json();
+    let v = json!({ "flows": flows, "files": got["files"], "rules": got["rules"] });
     laid_out(&v, 3, 0) + "\n"
 }
 
 /// JSON laid out to a depth, with each value below it on one line: a flow the page opens, a file,
-/// and what one command of rulec printed for a rule. A change to one of them is a change of a line.
+/// and a rule's facts or a page `rulec doc` drew for it. A change to one of them is a change of a
+/// line.
 fn laid_out(v: &Value, depth: usize, indent: usize) -> String {
     let (pad, end) = ("  ".repeat(indent + 1), "  ".repeat(indent));
     match v {
@@ -187,38 +186,29 @@ fn every_example_is_a_preset() {
     }
 }
 
-/// Whether what rulec printed in a presets.json says what a rule's service calls the values of its
-/// enums (`connect.enums` in `rulec api`), which rulec 0.22.0 does and 0.21.2 and before do not.
-fn names_enums(presets: &str) -> bool {
-    serde_json::from_str::<Value>(presets).ok().is_some_and(|v| v["rulec"].as_object().is_some_and(|r| r.values().any(|o| o["api"]["connect"]["enums"].is_array())))
-}
-
 #[test]
 fn presets_are_what_the_examples_read() {
-    need_rulec!();
     let now = record();
     let file = site().join("presets.json");
     let was = std::fs::read_to_string(&file).unwrap_or_default();
-    // the presets are recorded with the rulec the site is built with; one that says less is not held to them, nor writes them
-    if was != now && names_enums(&was) && !names_enums(&now) {
-        skip("website/docs/playground/presets.json was recorded with a rulec whose `rulec api` says what a rule's service calls the values of its enums (`connect.enums`), and this one does not; it is held to the presets, and records them anew, only with such a rulec");
-        return;
-    }
     if ritsu_testkit::golden::bless() {
         std::fs::write(&file, &now).unwrap();
         return;
     }
     assert!(was == now, "website/docs/playground/presets.json is not what the examples read now; record it anew with DANDORI_BLESS=1 cargo test --test playground");
     let v: Value = serde_json::from_str(&now).unwrap();
-    for k in v["files"].as_object().unwrap().keys().chain(v["rulec"].as_object().unwrap().keys()) {
+    for k in v["files"].as_object().unwrap().keys().chain(v["rules"].as_object().unwrap().keys()) {
         assert!(!k.starts_with('/') && !k.starts_with(".."), "presets.json names a file outside the repository: {k}");
     }
 }
 
-/// The binary, run from the repository's root on the file as it is committed.
+/// The command, as `ritsu dandori` runs it (with rulec's port, ritsu's DESIGN 3.3), from the
+/// repository's root (where the tests run) on the file as it is committed.
 fn dandori(args: &[&str]) -> (i32, String, String) {
-    let o = Command::new(env!("CARGO_BIN_EXE_dandori")).current_dir(root()).args(args).output().expect("could not run dandori");
-    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+    let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = dandori::cli::run(&args, rulec(), &mut out, &mut err);
+    (code as i32, String::from_utf8_lossy(&out).into_owned(), String::from_utf8_lossy(&err).into_owned())
 }
 
 /// The files under a directory, by their paths from it.
@@ -244,7 +234,6 @@ fn written(dir: &Path) -> Vec<(String, String)> {
 /// page and the Markdown `doc` writes.
 #[test]
 fn the_bundle_answers_as_the_command_does() {
-    need_rulec!();
     // presets.json is being recorded anew by the test beside this one, and this one may read it before
     if ritsu_testkit::golden::bless() {
         skip("presets.json is being recorded anew; run this test again without DANDORI_BLESS");
@@ -292,7 +281,7 @@ fn the_bundle_answers_as_the_command_does() {
                         differs(&mut failures, "doc --format html", &page, &got["html"]);
                         differs(&mut failures, "doc", &md, &got["markdown"]);
                         // the rules tab has no command: it reads the disk and rulec as the page reads the bundle
-                        let disk = sources::with(Rc::new(sources::Disk), || playground::rules_here(&r));
+                        let disk = sources::with_rules(rulec(), || playground::rules_here(&r));
                         let got = playground::rules(&bundle, &r);
                         if disk != got {
                             failures.push(format!("{path} ({tag}), the rules:\n--- the disk\n{disk:#}\n--- the page\n{got:#}"));

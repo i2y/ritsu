@@ -180,7 +180,7 @@ $ rulec certificate rate.rule
 
 **境目のためのコードと、止めている作業。**
 
-- dandori の `src/rulec.rs`（678 行）は、規則ごとに rulec を三回（`schema`、`certificate`、`api`）子プロセスで走らせ、JSON を読む。ブラウザで試すページでは rulec を走らせられないので、`src/sources.rs`（292 行）が、記録しておいた rulec の出力を返す。
+- dandori の `src/rulec.rs`（678 行）は、規則ごとに rulec を三回（`schema`、`certificate`、`api`）子プロセスで走らせ、JSON を読む。ブラウザで試すページでは rulec を走らせられないので、`src/sources.rs`（292 行）が、記録しておいた rulec の出力を返す。（D の二つ目の部分で、どちらも規則の口に替えた。3.2、PLAN の D.3）
 - yuen は、rulec、koyomi の日付、geas、dandori の成果物を、ファイルの単位でしか名指せない（yuen の DESIGN 3.2）。JSON が、表や日付の関数の一つ一つの定義を出さないからである。
 - sakai は、dandori の参照を確かめられず、N101 で「確かめていない」と言う（sakai の DESIGN 4.7）。
 - yuen の段階 C の「一式の読み込み」（yuen の PLAN の C.1〜C.9）と、sakai の段階 C の C.1〜C.5 は、この処理系の形が決まるまで止めてある。
@@ -236,7 +236,7 @@ ritsu/
 - 言語のクレートは、いまの `[[bin]]`（`rulec` など）を残す。開発と、そのクレートのテストが使う。
 - すべての言語をつなぐバイナリは `crates/ritsu` の `ritsu` だけである。
 - リリースで配るのは `ritsu` 一つで、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai` はそれを指すリンクにする。リンクの名前で呼ばれたら、その言語のコマンドとして、すべての口をつないで動く（8.2）。Cargo のバイナリの名前は、ワークスペースの中で重ならない（言語のクレートの `rulec` と、リリースのリンクの `rulec` は、作られる場所が違う）。
-- 受け取る側（dandori、yuen、sakai）のクレートのバイナリは、D の段階からほかの言語を読めない（ほかの言語のクレートに依存しないため）。ほかの言語を読むところに来たら、`ritsu <言語>` で走らせるよう言う診断を出す。dandori のクレートのバイナリは、規則を使わないフローならいまと同じに動く。
+- 受け取る側（dandori、yuen、sakai）のクレートのバイナリは、D の段階からほかの言語を読めない（ほかの言語のクレートに依存しないため）。ほかの言語を読むところに来たら、`ritsu <言語>` で走らせるよう言う診断を出す。dandori のクレートのバイナリは、規則を使わないフローならいまと同じに動く。D の二つ目の部分で dandori をそうした。規則を読む口に、何も読まない口（`dandori::sources::NoRules`）を渡し、`use rule` のところで E005 が `ritsu dandori …` で走らせるよう言う。`ritsu dandori` は、D で先に作った入口の最小の形にある（8.6）。
 
 ## 3. 依存の決まり
 
@@ -299,7 +299,7 @@ pub trait Items { fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, 
 pub trait References { fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>>; } // Reference { line, target, how }
 ```
 
-`RuleFacts` は、dandori の `src/rulec.rs` がいま三つの JSON から組み立てている `RuleInfo`（入力と出力の `Column`、列挙、`Machine`、前提、`walks`）を、単位の型（5 章）の付いた形にしたものである。D の段階では、例のすべての規則について、型の付いた呼び出しで得た事実と、いまの JSON から読んだ事実が同じになることを一度確かめてから、JSON の読み手を消す。
+`RuleFacts` は、dandori の `src/rulec.rs` がいま三つの JSON から組み立てている `RuleInfo`（入力と出力の `Column`、列挙、`Machine`、前提、`walks`）を、単位の型（5 章）の付いた形にしたものである。D の段階では、例のすべての規則について、型の付いた呼び出しで得た事実と、いまの JSON から読んだ事実が同じになることを一度確かめてから、JSON の読み手を消す。D の二つ目の部分でそうした。rulec のコーパスの 50 本と dandori の 14 本の規則で、dandori が読む 1,939 の項目を突き合わせ、違った 7 か所は、どれも JSON の側の読み違えだった（規則がたどる並びを入力に数えて文字列と読んだこと 5 本、無いことがある入力を文字列と読んだこと 2 本）。ステートマシンの状態の軸（口では `Option`）は、dandori も `Option` で持ち、None は「表が状態を読まないので、どの状態からも同じ行が当てはまる」と読む（前の dandori は null を最初の軸と読み違えていた）。くわしくは PLAN の D.3。
 
 **段階 D の最初の部分で作った形**（PLAN の D.2）。スケッチから変えたのは次のことである。
 
@@ -326,6 +326,8 @@ pub trait References { fn references(&self, root: &Path, file: &str) -> Result<V
 受け取る側のクレートのテストは、出す側のクレートを `[dev-dependencies]` に持ち、本物の実装をつないで走らせてよい。口のトレイトは出す側が実装するので（3.2）、つなぎ方は一か所にしか無い。出す側は受け取る側に依存しないので、依存は輪にならない。
 
 受け取る側のクレートのテストのうち、いまバイナリを走らせて規則などを読むもの（dandori の `tests/examples.rs` など）は、D の段階で、CLI を関数として呼ぶ形（`dandori::cli::run(引数, 口, 標準出力, 標準エラー)`）に替える。すべてをつないだバイナリを走らせるテストは、`crates/ritsu/tests/` に置く。
+
+D の二つ目の部分で、dandori をそうした。dandori のテストは rulec を `[dev-dependencies]` に持ち、規則を `rulec::ports::Engine` から同じプロセスの中で読む。ライブラリを呼ぶテストは、読む口をスレッドに置いて（`dandori::sources::with_rules`）呼び、バイナリを走らせていたテストは `dandori::cli::run` を呼ぶ。テストが要る `rulec gen` の出力は、rulec の `gen` の本体をライブラリに移した `rulec::codegen::generate`（コマンドと同じ関数。出力は変わらない）で作り、`rulec vectors` の出力は `rulec::vectors` で作る。規則を読むだけのテストは、rulec のバイナリが要らなくなったので `fast` の段でも走る。
 
 土台の層の `ritsu-proto` と `ritsu-emit` のテストは、言語の側が移るまでのあいだだけ、rulec（`ritsu-proto` は dandori も）を `[dev-dependencies]` に持ち、言語のいまの読み手と表を、土台のものと生のまま比べる（C.9、C.10）。決まり 2 の例外で、移したあとに残しておく理由は無い。言語の側が土台のものを使うようになるとき（表は C.11、読み手は D.10）に、比べる部分とその dev-dependency を消し、golden と比べるテストだけを残す。そのままにすると依存が輪になり、比べる相手も土台のものになって、比べる意味が無くなる。`cargo xtask deps` は dev-dependency を決まり 1〜3 の外に置くので、この例外はこの節で守る。
 
@@ -759,6 +761,26 @@ JSON は一つのオブジェクトにする。
 
 `rulec schema|certificate|api|graph|vectors`、`koyomi api|vectors`、`chobo api`、geas の `--json` と `map` の記録、`yuen api`、`sakai api` は、これまでどおり出す（P6）。ritsu の中ではこれらを読まない（口を通す）が、外のツールとエージェントが読む。プロジェクト全体の中のものと参照を一つの JSON で出すコマンド（`ritsu index`）は、外のツールが要るとわかってから足す（15 章）。
 
+### 8.6 段階 D の最小の入口（`ritsu dandori`）
+
+D.3 で、dandori のクレートは rulec を読まなくなり、そのバイナリは規則を読めなくなった（2.3）。`ritsu` の入口は E で作る予定だったので、そのままでは、D の残りと E のあいだ、規則を使うワークフローを手で走らせる手段が無い。困るのは次のところである。
+
+- 例を走らせる手順。dandori の README とサイトの入れ方のページは、`dandori check examples/hotel/temporal/hotel.flow` を走らせ、例の多くは規則を使う。
+- `dandori doc` で、規則のページを埋め込んだ図を描くこと。
+- コマンドの出力を、替える前と後のバイナリで突き合わせること（D の各部分の確かめ）。
+
+ブラウザで試すページは困らない。wasm のモジュールは初めから rulec を持たず、規則の答えを記録して持つからである（D.3 で、記録を口の答えにした）。
+
+**決定（★）**：入口の最小の形を D で先に作る。`crates/ritsu` のバイナリ `ritsu` が持つのは、`ritsu dandori <引数>…`（dandori のコマンドを、rulec の規則の口をつないで走らせる）と、`--help`、`--version` だけである。ほかの言語の名前（`ritsu rulec` など）には、まだ無いと言って 2 で終わる。それらの言語は、これまでどおり自分のクレートのバイナリで動く（rulec・koyomi・chobo・geas はほかの言語を読まない。yuen と sakai がほかの言語を子プロセスで呼ぶところは、D.7 と D.8 で口に替える）。`ritsu check`、`ritsu run`、`ritsu gen`、`ritsu explain`、すべての言語の `ritsu <言語>`、リンクの名前で呼ばれたときの振る舞い（2.3）は、E で作る。
+
+待つ費用が大きく、作る費用が小さいからである。待てば、規則を使う例をコマンドで走らせる手段が E まで無く、README に書ける手順も無い。作るのは、dandori のコマンドを関数（`dandori::cli::run`）にしたので、引数を渡すだけで済む（`src/main.rs` は 90 行）。入口は何に依存してもよく（3.1）、`cargo xtask deps` も通る。テストは `crates/ritsu/tests/dandori.rs` に置いた（すべてをつないだバイナリを走らせるテストの置き場所。3.3）。規則を使うフローを `ritsu dandori check` と `doc` が読むこと（英語と日本語）と、`ritsu` が持たないコマンドに 2 で終わることを見る。
+
+捨てたもの：
+
+- **E まで待つこと**：上の理由。
+- **dandori のクレートのバイナリに rulec を入れること**：依存の決まりの 1（言語のクレートはほかの言語のクレートに依存しない）を破る。
+- **テストのための小さなバイナリを別に作ること**：README の手順は、使う人が走らせられるものでなければならない。
+
 ## 9. 生成
 
 ### 9.1 生成器は言語ごとのまま
@@ -891,7 +913,7 @@ dandori の重いテストには、原因を突き止めていない揺れがあ
 - `cargo xtask test --changed <リビジョン>` は、変わったファイルのクレートと、それに依存する（どの種類の依存でも）クレートを回す。クレートの外のファイル（根の `Cargo.toml` など）が変われば全部を回す。文書だけの変更を見分けて文書のテストだけを回すことは、まだしない（そのクレートのテストを全部回す）。
 - `cargo xtask deps` は、`cargo metadata` の宣言した依存を 3.1 の表と突き合わせ、破った依存を名指して exit 1 で終わる。表に無いクレートと、`ritsu-testkit` を `[dependencies]` に置いたクレートも名指す。
 - C の二つ目の部分で、koyomi・chobo・geas・yuen・sakai のテストの共通部分をこれに替えた。足したのは `TempDir::exists`（chobo）だけである。各クレートの `tests/common` には、そのクレートだけのもの（例や変異の並べ方、外のツールの既定の場所）が残る。ツールの変数は、`RITSU_<ツール>` のあとに、いままでの `<クレート>_<ツール>` も読む。
-- C.11 で rulec と dandori のテストもこれに替えた。足したのは、段を聞いてから機械を聞く `ready(要るもの, 見つかるか, 理由)`（rulec と dandori のテストは、ツールが無いかだけを聞いていた）と、`Need::Rulec`（dandori のテストが規則を読む rulec 0.22.0。D.3 まで）である。C.12 で、`Need::Suite`（sakai のテストが例の写しを確かめる rulec・koyomi・chobo・dandori のバイナリ。D.8 まで）と `Need::Pixie`（geas のテストが動かす pixie の greeter）を足した（下）。三つとも tools の段である。rulec のテストは、PostgreSQL を `PG*` の環境変数で受け取る形のまま、SKIP と段を替えた（PLAN の C.11）。一時ディレクトリは、C のあとの片づけで `TempDir` に替えた（PLAN の 7.5）。
+- C.11 で rulec と dandori のテストもこれに替えた。足したのは、段を聞いてから機械を聞く `ready(要るもの, 見つかるか, 理由)`（rulec と dandori のテストは、ツールが無いかだけを聞いていた）と、`Need::Rulec`（dandori のテストが規則を読む rulec 0.22.0。D.3 で消した）である。C.12 で、`Need::Suite`（sakai のテストが例の写しを確かめる rulec・koyomi・chobo・dandori のバイナリ。D.8 まで）と `Need::Pixie`（geas のテストが動かす pixie の greeter）を足した（下）。三つとも tools の段である。rulec のテストは、PostgreSQL を `PG*` の環境変数で受け取る形のまま、SKIP と段を替えた（PLAN の C.11）。一時ディレクトリは、C のあとの片づけで `TempDir` に替えた（PLAN の 7.5）。
 - C.12 で、まっさらに取り出した木を、外のツールを呼ぶと記録を残して失敗するコマンドを PATH の先頭に置いて `cargo xtask test --level fast` で回し、段を聞かずにツールを呼ぶテストを探した。geas の五か所（例を Python・Node・Go・rustc で走らせるもの、Go のサービスを SIGTERM で止めるもの、`explain` の再現、W061、pixie の greeter）と sakai の一か所（`what_was_copied_passes_the_suite`）が見つかり、段を聞くようにした。いまは、fast の段で呼ぶのは cargo と git と、テストが立てたサーバーへの curl だけである。
 - C のあとの片づけで、テストが子に渡す TMPDIR を一時ディレクトリの下に作る `tmp::tmpdir_in` を足した。rulec のテストは、`rulec test` を走らせるときと swiftc を呼ぶときにこれを渡す（swiftc は `--version` に答えると、ほとんど毎回、空の `TemporaryDirectory.*` を TMPDIR に残す）。Chrome には、一時ディレクトリをプロファイルの下に向けて渡す。止められた Chrome がシングルトンのソケットのディレクトリ（`com.google.Chrome.*`）を OS の一時ディレクトリに残さないためで、macOS の Chrome はその場所を `MAC_CHROMIUM_TMPDIR` から、ほかの Chrome は `TMPDIR` から読む。
 - 根から `cargo test --workspace` を回すときの `--skip` は、ワークスペースのすべてのテストの名前に効く。dandori の重い段を外す `--skip argo` は `cargo` を含む名前にも当たるので、そういう名前のテストを作らない（xtask のテストの名前を一度直した）。
