@@ -1,0 +1,4 @@
+warning[W401]: ctx/在庫.ctx:17:3: The term 棚 crosses no boundary
+    17 |   棚 "倉庫で品を置く場所"
+  = A glossary holds only the words that cross a boundary: a term that `means` an element of the context's published language, takes another's with `as`, is what an anticorruption layer maps to, or meets a word of the same name crossing from upstream.
+基本.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)

@@ -1,0 +1,6 @@
+error[E202]: proto/shop/ordering/v1/fulfillment_lite.proto:6:1: The file proto/shop/ordering/v1/fulfillment_lite.proto of 受注 imports proto/warehouse/internal/v1/ledger.proto, which is inside 在庫
+     6 | import "warehouse/internal/v1/ledger.proto";
+  = The file proto/warehouse/internal/v1/ledger.proto is in no published language of 在庫; across a boundary only the published languages and a shared kernel can be referred to.
+  involved:
+      受注  proto/shop/ordering/v1/fulfillment_lite.proto:6   import "warehouse/internal/v1/ledger.proto"
+      在庫  proto "proto/warehouse/internal/v1/ledger.proto"  a file inside 在庫

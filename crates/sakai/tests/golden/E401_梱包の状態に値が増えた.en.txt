@@ -1,0 +1,8 @@
+error[E401]: contexts/配送.ctx:33:3: The anticorruption layer of 配送 maps no value for PACKING_STATUS_DAMAGED of 在庫's enum warehouse.v1.PackingStatus
+    33 |   enum PackingStatus -> 出荷の可否
+  = PACKING_STATUS_DAMAGED is the value at proto/warehouse/v1/stock.proto:43.
+  = Every value of the upstream enum gets a value of the downstream or refuse; when the upstream adds a value, the check fails until someone decides what it becomes.
+  = The line, fixed: PACKING_STATUS_DAMAGED -> refuse "…"
+  involved:
+      配送  contexts/配送.ctx:29                                       upstream 在庫 anticorruption layer
+      在庫  proto "proto/warehouse/v1/stock.proto" enum PackingStatus  4 values, 1 of them unmapped

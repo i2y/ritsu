@@ -1,0 +1,6 @@
+error[E102]: ctx/請求.ctx:6:69: Both 受注 and 請求 own dir "proto/shop/common", at the same depth
+     6 |   dir "../proto/shop/billing", "../proto/billing", "../py/billing", "../proto/shop/common"
+  = An artifact belongs to the context of the deepest entry that holds it; two entries at the same depth leave it undecided.
+  involved:
+      受注  ctx/受注.ctx:6  dir "proto/shop/common"
+      請求  ctx/請求.ctx:6  dir "proto/shop/common"

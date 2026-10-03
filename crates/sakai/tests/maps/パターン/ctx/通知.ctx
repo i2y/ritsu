@@ -1,0 +1,8 @@
+context 通知(notices) v1
+description "見積の期限が近い客に知らせる"
+owner "営業チーム"
+
+owns
+  dir "../proto/notices"
+
+partnership with 見積

@@ -1,0 +1,13 @@
+error[E307]: ctx/受注.ctx:21:1: The shared kernel is written on 受注's side only
+    21 | shared kernel with 在庫
+  = A shared kernel is held by two teams together; write `shared kernel with 受注` in 在庫's file too, with the same entries.
+  involved:
+      受注  ctx/受注.ctx:21  shared kernel with 在庫
+error[E201]: proto/warehouse/v1/stock.proto:5:1: The file proto/warehouse/v1/stock.proto of 在庫 imports proto/shop/common/v1/money.proto of 受注, which 在庫 has no relationship with
+     5 | import "shop/common/v1/money.proto";
+  = 受注 is downstream of 在庫, the other way round: an upstream relationship lets the downstream refer to the upstream.
+  = The shared kernel of the two is written on 受注's side only (E307 is told too).
+  = A reference across the boundary needs a relationship: upstream and downstream (the downstream writes `upstream`), a partnership, or a shared kernel.
+  involved:
+      在庫  proto/warehouse/v1/stock.proto:5          import "shop/common/v1/money.proto"
+      受注  proto "proto/shop/common/v1/money.proto"  a file inside 受注

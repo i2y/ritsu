@@ -1,0 +1,3 @@
+error[E305]: ctx/見積.ctx:17:13: A relationship that is not an anticorruption layer has a mapping or a `layer`
+    17 |   layer dir "../proto/quotes/kernel"
+  = Only an anticorruption layer has mappings and a layer; add `, anticorruption layer` to the role.

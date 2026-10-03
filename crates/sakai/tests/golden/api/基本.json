@@ -1,0 +1,598 @@
+{
+  "sakai": "0.1.0",
+  "map": {
+    "name": "基本",
+    "alias": "basic",
+    "version": "1",
+    "file": "基本.ctx",
+    "source_sha256": "0a5af23692d634805c9b0291804b16fe1969a029f72d98374aa31f82baece8c9",
+    "description": "注文を受け、在庫を押さえ、請求するかを決める"
+  },
+  "covers": [
+    "."
+  ],
+  "except": [],
+  "contexts": [
+    {
+      "name": "受注",
+      "alias": "ordering",
+      "version": "1",
+      "file": "ctx/受注.ctx",
+      "source_sha256": "37984ebc653577075d7fe377eb73e65a70f8e07713ec682b4a3c12ed86541e3a",
+      "description": "注文を受け付け、在庫を押さえ、届くまでを見届ける",
+      "owner": "受注チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/shop/ordering"
+        },
+        {
+          "dir": "proto/shop/common"
+        },
+        {
+          "dir": "py/ordering"
+        }
+      ],
+      "published": [
+        {
+          "package": "shop.ordering.v1",
+          "from": [
+            {
+              "text": "proto \"proto/shop/ordering/v1/order.proto\"",
+              "tool": "proto",
+              "path": "proto/shop/ordering/v1/order.proto",
+              "items": []
+            },
+            {
+              "text": "proto \"proto/shop/ordering/v1/fulfillment_lite.proto\"",
+              "tool": "proto",
+              "path": "proto/shop/ordering/v1/fulfillment_lite.proto",
+              "items": []
+            }
+          ],
+          "services": [
+            "OrderService"
+          ],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "注文",
+          "definition": "客が確定させた購入の申し込み。取り消されても消えない",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/shop/ordering/v1/order.proto\" message Order",
+              "tool": "proto",
+              "path": "proto/shop/ordering/v1/order.proto",
+              "items": [
+                [
+                  "message",
+                  "Order"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        },
+        {
+          "name": "キャンセル",
+          "definition": "出荷の前に、客の申し出で注文を取り消すこと",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus value ORDER_STATUS_CANCELLED",
+              "tool": "proto",
+              "path": "proto/shop/ordering/v1/order.proto",
+              "items": [
+                [
+                  "enum",
+                  "OrderStatus"
+                ],
+                [
+                  "value",
+                  "ORDER_STATUS_CANCELLED"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "在庫",
+      "alias": "inventory",
+      "version": "1",
+      "file": "ctx/在庫.ctx",
+      "source_sha256": "bed43a885e7b668427cd5f188da900959b99aea221c8525dde6f1014bb6f3b84",
+      "description": "倉庫の棚にある数を持ち、注文の一行ごとに押さえ、梱包の進みを答える",
+      "owner": "倉庫チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/warehouse"
+        },
+        {
+          "dir": "py/inventory"
+        }
+      ],
+      "published": [
+        {
+          "package": "warehouse.v1",
+          "from": [
+            {
+              "text": "proto \"proto/warehouse/v1/stock.proto\"",
+              "tool": "proto",
+              "path": "proto/warehouse/v1/stock.proto",
+              "items": []
+            }
+          ],
+          "services": [
+            "StockService",
+            "PackingService"
+          ],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "引当",
+          "definition": "注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/warehouse/v1/stock.proto\" message ReserveResponse",
+              "tool": "proto",
+              "path": "proto/warehouse/v1/stock.proto",
+              "items": [
+                [
+                  "message",
+                  "ReserveResponse"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        },
+        {
+          "name": "梱包の状態",
+          "definition": "注文の品を箱に詰め終えたか。詰める途中で欠品が分かることがある",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/warehouse/v1/stock.proto\" enum PackingStatus",
+              "tool": "proto",
+              "path": "proto/warehouse/v1/stock.proto",
+              "items": [
+                [
+                  "enum",
+                  "PackingStatus"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "請求",
+      "alias": "billing",
+      "version": "1",
+      "file": "ctx/請求.ctx",
+      "source_sha256": "590cde5e21af1f44147e0858aa5ea00732f9811b3a37da6c87e1a3b82ad3f3da",
+      "description": "注文に請求するか、待つか、請求しないかを決める",
+      "owner": "経理チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/shop/billing"
+        },
+        {
+          "dir": "proto/billing"
+        },
+        {
+          "dir": "py/billing"
+        }
+      ],
+      "published": [
+        {
+          "package": "shop.billing.v1",
+          "from": [
+            {
+              "text": "proto \"proto/shop/billing/v1/billing.proto\"",
+              "tool": "proto",
+              "path": "proto/shop/billing/v1/billing.proto",
+              "items": []
+            }
+          ],
+          "services": [],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "キャンセル",
+          "definition": "請求を確定したあとに請求を取り消し、返金すること",
+          "also": [],
+          "means": [],
+          "as": null
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "upstream_downstream",
+      "upstream": "在庫",
+      "downstream": "受注",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "conformist"
+        ]
+      },
+      "through": [
+        "warehouse.v1"
+      ],
+      "layer": [],
+      "enums": [],
+      "terms": [],
+      "declared": [
+        "ctx/受注.ctx:18"
+      ]
+    },
+    {
+      "kind": "shared_kernel",
+      "between": [
+        "受注",
+        "在庫"
+      ],
+      "sides": [
+        {
+          "context": "受注",
+          "items": [
+            {
+              "name": {
+                "text": "proto \"proto/shop/common/v1/money.proto\"",
+                "tool": "proto",
+                "path": "proto/shop/common/v1/money.proto",
+                "items": []
+              }
+            }
+          ]
+        },
+        {
+          "context": "在庫",
+          "items": [
+            {
+              "name": {
+                "text": "proto \"proto/shop/common/v1/money.proto\"",
+                "tool": "proto",
+                "path": "proto/shop/common/v1/money.proto",
+                "items": []
+              }
+            }
+          ]
+        }
+      ],
+      "declared": [
+        "ctx/受注.ctx:21",
+        "ctx/在庫.ctx:18"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "受注",
+      "downstream": "請求",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "anticorruption_layer"
+        ]
+      },
+      "through": [
+        "shop.ordering.v1"
+      ],
+      "layer": [
+        {
+          "dir": "proto/billing/acl"
+        }
+      ],
+      "enums": [
+        {
+          "from": {
+            "text": "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus",
+            "tool": "proto",
+            "path": "proto/shop/ordering/v1/order.proto",
+            "items": [
+              [
+                "enum",
+                "OrderStatus"
+              ]
+            ]
+          },
+          "to": {
+            "text": "proto \"proto/shop/billing/v1/billing.proto\" enum BillingStatus",
+            "tool": "proto",
+            "path": "proto/shop/billing/v1/billing.proto",
+            "items": [
+              [
+                "enum",
+                "BillingStatus"
+              ]
+            ]
+          },
+          "checked": true,
+          "values": [
+            {
+              "from": "ORDER_STATUS_RECEIVED",
+              "to": "BILLING_STATUS_WAIT"
+            },
+            {
+              "from": "ORDER_STATUS_PAID",
+              "to": "BILLING_STATUS_BILL"
+            },
+            {
+              "from": "ORDER_STATUS_SHIPPED",
+              "to": "BILLING_STATUS_BILL"
+            },
+            {
+              "from": "ORDER_STATUS_CANCELLED",
+              "to": "BILLING_STATUS_SKIP"
+            }
+          ]
+        }
+      ],
+      "terms": [],
+      "declared": [
+        "ctx/請求.ctx:14"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "name": {
+        "text": "proto \"proto/billing/acl/v1/order_view.proto\"",
+        "tool": "proto",
+        "path": "proto/billing/acl/v1/order_view.proto",
+        "items": []
+      },
+      "context": "請求",
+      "by": "ctx/請求.ctx:6",
+      "sha256": "39e90d262543c1ec"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/shop/billing/v1/billing.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/billing/v1/billing.proto",
+        "items": []
+      },
+      "context": "請求",
+      "by": "ctx/請求.ctx:6",
+      "sha256": "2f0a1c2c615b7b46"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/shop/common/v1/money.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/common/v1/money.proto",
+        "items": []
+      },
+      "context": "受注",
+      "by": "ctx/受注.ctx:6",
+      "sha256": "73d9a34f39edc716"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/shop/ordering/v1/fulfillment_lite.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/ordering/v1/fulfillment_lite.proto",
+        "items": []
+      },
+      "context": "受注",
+      "by": "ctx/受注.ctx:6",
+      "sha256": "bbcc96aa176788ab"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/shop/ordering/v1/order.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/ordering/v1/order.proto",
+        "items": []
+      },
+      "context": "受注",
+      "by": "ctx/受注.ctx:6",
+      "sha256": "c549f915096d84e3"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/warehouse/v1/stock.proto\"",
+        "tool": "proto",
+        "path": "proto/warehouse/v1/stock.proto",
+        "items": []
+      },
+      "context": "在庫",
+      "by": "ctx/在庫.ctx:6",
+      "sha256": "558cf64487ed8c33"
+    },
+    {
+      "name": {
+        "text": "file \"py/billing/invoice.py\"",
+        "tool": "file",
+        "path": "py/billing/invoice.py",
+        "items": []
+      },
+      "context": "請求",
+      "by": "ctx/請求.ctx:6",
+      "sha256": "0c250e42d3cf383f"
+    },
+    {
+      "name": {
+        "text": "file \"py/inventory/service.py\"",
+        "tool": "file",
+        "path": "py/inventory/service.py",
+        "items": []
+      },
+      "context": "在庫",
+      "by": "ctx/在庫.ctx:6",
+      "sha256": "44c905d0178ffed8"
+    },
+    {
+      "name": {
+        "text": "file \"py/ordering/fulfill.py\"",
+        "tool": "file",
+        "path": "py/ordering/fulfill.py",
+        "items": []
+      },
+      "context": "受注",
+      "by": "ctx/受注.ctx:6",
+      "sha256": "6107334cb426a50b"
+    }
+  ],
+  "crossings": [
+    {
+      "from": {
+        "text": "proto \"proto/billing/acl/v1/order_view.proto\"",
+        "tool": "proto",
+        "path": "proto/billing/acl/v1/order_view.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/shop/ordering/v1/order.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/ordering/v1/order.proto",
+        "items": []
+      },
+      "from_context": "請求",
+      "to_context": "受注",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus",
+          "tool": "proto",
+          "path": "proto/shop/ordering/v1/order.proto",
+          "items": [
+            [
+              "enum",
+              "OrderStatus"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "anticorruption_layer"
+        ],
+        "declared": "ctx/請求.ctx:14"
+      }
+    },
+    {
+      "from": {
+        "text": "proto \"proto/shop/ordering/v1/fulfillment_lite.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/ordering/v1/fulfillment_lite.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/warehouse/v1/stock.proto\"",
+        "tool": "proto",
+        "path": "proto/warehouse/v1/stock.proto",
+        "items": []
+      },
+      "from_context": "受注",
+      "to_context": "在庫",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/warehouse/v1/stock.proto\" message ReserveResponse",
+          "tool": "proto",
+          "path": "proto/warehouse/v1/stock.proto",
+          "items": [
+            [
+              "message",
+              "ReserveResponse"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/warehouse/v1/stock.proto\" enum Stock",
+          "tool": "proto",
+          "path": "proto/warehouse/v1/stock.proto",
+          "items": [
+            [
+              "enum",
+              "Stock"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/shop/common/v1/money.proto\" message Money",
+          "tool": "proto",
+          "path": "proto/shop/common/v1/money.proto",
+          "items": [
+            [
+              "message",
+              "Money"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "ctx/受注.ctx:18"
+      }
+    },
+    {
+      "from": {
+        "text": "proto \"proto/warehouse/v1/stock.proto\"",
+        "tool": "proto",
+        "path": "proto/warehouse/v1/stock.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/shop/common/v1/money.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/common/v1/money.proto",
+        "items": []
+      },
+      "from_context": "在庫",
+      "to_context": "受注",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/shop/common/v1/money.proto\" message Money",
+          "tool": "proto",
+          "path": "proto/shop/common/v1/money.proto",
+          "items": [
+            [
+              "message",
+              "Money"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "shared_kernel",
+        "declared": "ctx/在庫.ctx:18"
+      }
+    }
+  ],
+  "not_checked": []
+}

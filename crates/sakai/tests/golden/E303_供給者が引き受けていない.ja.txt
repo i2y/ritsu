@@ -1,0 +1,4 @@
+エラー[E303]: ctx/見積.ctx:15:1: 「見積」は「料金」の顧客だと書いていますが、「料金」の側に `downstream 見積 supplier` がありません
+    15 | upstream 料金 customer
+  = 顧客／供給者は二つのチームの合意なので、両方のファイルに書きます。
+  = 直した行: downstream 見積 supplier

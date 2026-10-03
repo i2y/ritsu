@@ -1,0 +1,6 @@
+エラー[E102]: ctx/請求.ctx:6:69: dir "proto/shop/common" を、「受注」と「請求」の二つのコンテキストが同じ深さで持っています
+     6 |   dir "../proto/shop/billing", "../proto/billing", "../py/billing", "../proto/shop/common"
+  = 成果物は、それを含むいちばん深い項のコンテキストに属します。同じ深さの項が二つあると、どちらのものか決められません。
+  関わるもの:
+      受注  ctx/受注.ctx:6  dir "proto/shop/common"
+      請求  ctx/請求.ctx:6  dir "proto/shop/common"

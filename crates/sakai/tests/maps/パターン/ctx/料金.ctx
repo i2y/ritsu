@@ -1,0 +1,18 @@
+context 料金(pricing) v1
+description "プランごとの月の料金を決める"
+owner "料金チーム"
+
+owns
+  dir "../proto/pricing"
+
+published language pricing.v1
+  proto "../proto/pricing/v1/price.proto"
+  open host service PricingService
+
+terms
+  プラン "月ごとの料金の決め方"
+    means enum Plan
+
+# 見積と契約の二つの顧客を引き受ける。
+downstream 見積 supplier
+downstream 契約 supplier

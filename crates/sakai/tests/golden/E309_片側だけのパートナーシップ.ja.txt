@@ -1,0 +1,11 @@
+エラー[E309]: ctx/見積.ctx:18:1: パートナーシップが「見積」の側にしか書かれていません
+    18 | partnership with 通知
+  = パートナーシップは二つのチームの合意なので、「通知」のファイルにも `partnership with 見積` を書きます。
+  = 直した行: partnership with 見積
+エラー[E201]: proto/notices/v1/notice.proto:5:1: 「通知」の proto/notices/v1/notice.proto が、関係の無い「見積」の proto/quotes/v1/estimate.proto を import しています
+     5 | import "quotes/v1/estimate.proto";
+  = 二つのあいだのパートナーシップは、片側にしか書かれていません（E309 も出ています）。
+  = 境界を越えて参照するには、上流と下流（下流が `upstream` を書く）、パートナーシップ、共有カーネルのどれかの関係が要ります。
+  関わるもの:
+      通知  proto/notices/v1/notice.proto:5         import "quotes/v1/estimate.proto"
+      見積  proto "proto/quotes/v1/estimate.proto"  公表された言語 quotes.v1 のファイル

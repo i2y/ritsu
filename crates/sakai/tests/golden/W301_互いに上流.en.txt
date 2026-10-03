@@ -1,0 +1,7 @@
+warning[W301]: ctx/受注.ctx:18:1: Following the upstreams comes back where it started: 受注 → 在庫 → 受注
+    18 | upstream 在庫 conformist
+  = Contexts upstream of each other are each dragged along by the other's changes; consider one direction, or a partnership.
+  involved:
+      受注  ctx/受注.ctx:18  upstream 在庫 conformist
+      在庫  ctx/在庫.ctx:18  upstream 受注 conformist
+基本.ctx: ok — 3 contexts, 4 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)

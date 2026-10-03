@@ -1,0 +1,3 @@
+error[E410]: ctx/請求.ctx:13:9: 請求 has no relationship with 在庫, so the term 引当 cannot be taken with `as`
+    13 |   引当 as 在庫.引当
+  = `as` takes a term, with its meaning, from a context there is a relationship with.

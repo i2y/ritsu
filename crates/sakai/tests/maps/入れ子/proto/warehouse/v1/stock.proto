@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package warehouse.v1;
+
+message Stock {
+  int32 count = 1;
+}

@@ -1,0 +1,63 @@
+/* `sakai export cml --lang ja` が 通販.ctx から書いた。直すときは .ctx を直して書き直す。 */
+ContextMap shop {
+  type = SYSTEM_LANDSCAPE
+  state = AS_IS
+  contains ordering, inventory, delivery, billing, reviews
+
+  // 「受注」は「在庫」に順応する
+  ordering [D,CF]<-[U,OHS,PL] inventory {
+    implementationTechnology = "Connect: warehouse.v1.StockService, warehouse.v1.PackingService"
+  }
+
+  // 「受注」と「配送」のパートナーシップ
+  ordering [P]<->[P] delivery
+
+  // 「配送」は「在庫」のモデルを腐敗防止層で読み替える
+  delivery [D,ACL]<-[U,OHS,PL] inventory {
+    implementationTechnology = "Connect: warehouse.v1.StockService, warehouse.v1.PackingService"
+  }
+
+  // 「配送」と「請求」の共有カーネル
+  delivery [SK]<->[SK] billing
+
+  // 「請求」は「受注」のモデルを腐敗防止層で読み替える
+  billing [D,ACL]<-[U,OHS,PL] ordering {
+    implementationTechnology = "Connect: shop.ordering.v1.OrderService, shop.ordering.v1.FulfillmentService"
+  }
+
+  // 「請求」は「配送」の顧客で、「配送」はそれを供給者として引き受ける
+  billing [D,C]<-[U,S,PL] delivery {
+    implementationTechnology = "Connect: shop.delivery.v1.DeliveryService"
+  }
+
+  // 「レビュー」(reviews) と「請求」(billing) は別々の道（CML には書く形が無い）
+}
+
+// 「受注」(ordering)。持ち主: 受注チーム
+BoundedContext ordering {
+  domainVisionStatement = "注文を受け付け、在庫を押さえ、配送に渡し、届くまでを見届ける"
+  responsibilities = "注文", "キャンセル"
+}
+
+// 「在庫」(inventory)。持ち主: 倉庫チーム
+BoundedContext inventory {
+  domainVisionStatement = "倉庫の棚にある数を持ち、注文の一行ごとに押さえ、梱包の進みを答える"
+  responsibilities = "引当", "在庫切れ", "梱包の状態"
+}
+
+// 「配送」(delivery)。持ち主: 配送チーム
+BoundedContext delivery {
+  domainVisionStatement = "出荷の日を決め、運び方を選び、荷物を届ける手配をする"
+  responsibilities = "出荷", "割れ物", "急ぎ"
+}
+
+// 「請求」(billing)。持ち主: 経理チーム
+BoundedContext billing {
+  domainVisionStatement = "注文に請求するかを決め、手数料と送料を出し、支払の期日を決める"
+  responsibilities = "手数料", "キャンセル"
+}
+
+// 「レビュー」(reviews)。持ち主: 受注チーム
+BoundedContext reviews {
+  domainVisionStatement = "買った人の感想を集めて見せる。請求とは何もやりとりしない"
+}

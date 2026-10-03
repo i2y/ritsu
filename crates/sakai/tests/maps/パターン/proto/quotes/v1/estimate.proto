@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package quotes.v1;
+
+import "pricing/v1/price.proto";
+import "quotes/kernel/units.proto";
+
+// 見積の公表された言語。料金の顧客なので、料金の型をそのまま使う。
+message Estimate {
+  pricing.v1.Quote quote = 1;
+  kernel.Days valid_for = 2;
+}

@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package warehouse.v2;
+
+message Reservation {
+  string sku = 1;
+}

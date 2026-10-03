@@ -1,0 +1,6 @@
+error[E307]: ctx/在庫.ctx:18:1: The shared kernel of 受注 and 在庫 lists different things on each side
+    18 | shared kernel with 受注
+  = Only on 在庫's side: dir "py/inventory"
+  involved:
+      受注  ctx/受注.ctx:21  shared kernel with 在庫
+      在庫  ctx/在庫.ctx:18  shared kernel with 受注

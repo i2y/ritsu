@@ -1,0 +1,4 @@
+warning[W402]: ctx/請求.ctx:18:5: The value 0, ORDER_STATUS_UNSPECIFIED, says nothing is set and needs no mapping
+    18 |     ORDER_STATUS_UNSPECIFIED -> BILLING_STATUS_WAIT
+  = A value 0 whose name, without the enum's prefix, is unspecified marks that nothing is set; rulec's `import proto` and dandori's types from a .proto leave it out the same way.
+基本.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)

@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package notices.v1;
+
+import "quotes/v1/estimate.proto";
+
+// 見積とパートナーなので、見積の公表された言語を使う。
+message Notice {
+  quotes.v1.Estimate estimate = 1;
+}

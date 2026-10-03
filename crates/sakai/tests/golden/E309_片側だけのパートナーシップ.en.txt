@@ -1,0 +1,11 @@
+error[E309]: ctx/見積.ctx:18:1: The partnership is written on 見積's side only
+    18 | partnership with 通知
+  = A partnership is an agreement of two teams; write `partnership with 見積` in 通知's file too.
+  = The line, fixed: partnership with 見積
+error[E201]: proto/notices/v1/notice.proto:5:1: The file proto/notices/v1/notice.proto of 通知 imports proto/quotes/v1/estimate.proto of 見積, which 通知 has no relationship with
+     5 | import "quotes/v1/estimate.proto";
+  = The partnership of the two is written on one side only (E309 is told too).
+  = A reference across the boundary needs a relationship: upstream and downstream (the downstream writes `upstream`), a partnership, or a shared kernel.
+  involved:
+      通知  proto/notices/v1/notice.proto:5         import "quotes/v1/estimate.proto"
+      見積  proto "proto/quotes/v1/estimate.proto"  a file of the published language quotes.v1

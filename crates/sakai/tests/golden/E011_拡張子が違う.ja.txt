@@ -1,0 +1,2 @@
+エラー[E011]: ctx/受注.ctx:22:9: rulec の成果物は .rule のファイルです（"../proto/shop/common/v1/money.proto"）
+    22 |   rulec "../proto/shop/common/v1/money.proto"

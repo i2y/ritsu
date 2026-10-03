@@ -1,0 +1,2 @@
+error[E409]: ctx/請求.ctx:22:8: 発送 of the `term` mapping is not in 受注's glossary
+    22 |   term 発送 -> キャンセル

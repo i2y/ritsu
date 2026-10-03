@@ -1,0 +1,10 @@
+{
+  "name": "sakai-tools",
+  "private": true,
+  "description": "The JavaScript and TypeScript tools sakai's tests run: dependency-cruiser 16.10.4, the last line that runs on node 23, and TypeScript 5.9.3, under 6 as dependency-cruiser 16 needs (DESIGN 7.3). Install with `npm ci --prefix tools`.",
+  "license": "MIT OR Apache-2.0",
+  "devDependencies": {
+    "dependency-cruiser": "16.10.4",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package audit.v1;
+
+// 監査の記録。見積のものは何も読まない。
+message Record {
+  string contract_id = 1;
+}

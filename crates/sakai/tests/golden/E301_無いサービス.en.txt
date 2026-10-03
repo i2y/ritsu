@@ -1,0 +1,3 @@
+error[E301]: ctx/在庫.ctx:10:51: The open host service ShelfService is not in the proto files of the published language warehouse.v1
+    10 |   open host service StockService, PackingService, ShelfService
+  = Its proto files have the services StockService, PackingService.

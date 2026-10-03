@@ -1,0 +1,8 @@
+error[E401]: ctx/請求.ctx:17:3: The anticorruption layer of 請求 maps no value for ORDER_STATUS_RETURNED of 受注's enum shop.ordering.v1.OrderStatus
+    17 |   enum OrderStatus -> enum BillingStatus
+  = ORDER_STATUS_RETURNED is the value at proto/shop/ordering/v1/order.proto:16.
+  = Every value of the upstream enum gets a value of the downstream or refuse; when the upstream adds a value, the check fails until someone decides what it becomes.
+  = The line, fixed: ORDER_STATUS_RETURNED -> refuse "…"
+  involved:
+      請求  ctx/請求.ctx:14                                              upstream 受注 anticorruption layer
+      受注  proto "proto/shop/ordering/v1/order.proto" enum OrderStatus  5 values, 1 of them unmapped

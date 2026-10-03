@@ -1,0 +1,6 @@
+error[E206]: proto/audit/v1/record.proto:5:1: The file proto/audit/v1/record.proto of 監査 imports proto/quotes/v1/estimate.proto of 見積, and the two go separate ways
+     5 | import "quotes/v1/estimate.proto";
+  = Separate ways is the decision that nothing between the two refers to the other; if the reference is needed, write a relationship instead.
+  involved:
+      監査  proto/audit/v1/record.proto:5           import "quotes/v1/estimate.proto"
+      見積  proto "proto/quotes/v1/estimate.proto"  a file of the published language quotes.v1

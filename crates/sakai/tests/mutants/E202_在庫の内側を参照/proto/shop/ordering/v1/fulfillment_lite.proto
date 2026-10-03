@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package shop.ordering.v1;
+
+import "warehouse/v1/stock.proto";
+import "warehouse/internal/v1/ledger.proto";
+
+// 受注の公表された言語が、在庫の型をそのまま使う（受注は在庫の順応者）。
+message FulfillResponse {
+  repeated warehouse.v1.ReserveResponse reservations = 1;
+  repeated warehouse.internal.v1.Shelf shelves = 2;
+}

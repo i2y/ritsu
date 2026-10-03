@@ -1,0 +1,27 @@
+# 写した元: chobo の examples/inventory/inventory.ja.book（変えていない）
+# 注文のために在庫を押さえる。30 分のうちに出荷するか、キャンセルする
+book 在庫の引当 v1
+description "SKU ごとの在庫。入荷で増え、注文のために 30 分押さえ、出荷で確定し、キャンセルで取り消す。返品は棚に戻す"
+
+unit 個
+
+account 在庫(sku: string) : 個
+  description "倉庫の棚にある数"
+  at least 0 refused as 在庫切れ
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 入荷(納品書: string, sku: string, 数: 個)
+  key 納品書, sku
+  move 数 from 仕入先 to 在庫(sku)
+
+transfer 引当(注文: string, sku: string, 数: 個)
+  description "出荷で確定し、キャンセルで取り消す"
+  key 注文, sku
+  pending expires after 30 minutes
+  move 数 from 在庫(sku) to 客
+
+transfer 返品(返品番号: string, sku: string, 数: 個)
+  description "客から返ってきた品を棚に戻す"
+  key 返品番号, sku
+  move 数 from 客 to 在庫(sku)

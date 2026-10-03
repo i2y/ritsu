@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package contracts.v1;
+
+import "contracts/kernel/units.proto";
+
+// 契約の公表された言語。料金の型は出さず、自分の区分に読み替える。
+enum ContractClass {
+  CONTRACT_CLASS_UNSPECIFIED = 0;
+  CONTRACT_CLASS_STANDARD = 1;
+  CONTRACT_CLASS_PREMIUM = 2;
+}
+
+message Contract {
+  ContractClass class = 1;
+  kernel.Days term = 2;
+}

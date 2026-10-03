@@ -1,0 +1,16 @@
+# 在庫の内側のディレクトリの中に、在庫の公表された言語から生成したコードがある地図。受注は在庫に
+# 順応し、生成したコードは import してよいが、それを囲む在庫の内側は import できない。
+map 入れ子(nested) v1
+description "在庫の内側の中に、公表された言語から生成したコードがある"
+
+use context "ctx/在庫.ctx"
+use context "ctx/受注.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"
+code typescript "ts"
+code java "java/src/main/java"
+  test "java/src/test/java"
+code go "go"

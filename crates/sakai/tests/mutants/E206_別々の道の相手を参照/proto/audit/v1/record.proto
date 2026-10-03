@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package audit.v1;
+
+import "quotes/v1/estimate.proto";
+
+// 監査の記録。見積のものは何も読まない。
+message Record {
+  string contract_id = 1;
+  quotes.v1.Estimate estimate = 2;
+}

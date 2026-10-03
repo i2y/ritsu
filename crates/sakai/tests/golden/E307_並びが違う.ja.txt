@@ -1,0 +1,6 @@
+エラー[E307]: ctx/在庫.ctx:18:1: 「受注」と「在庫」の共有カーネルの並びが、両側で違います
+    18 | shared kernel with 受注
+  = 「在庫」の側にだけあるもの: dir "py/inventory"
+  関わるもの:
+      受注  ctx/受注.ctx:21  shared kernel with 在庫
+      在庫  ctx/在庫.ctx:18  shared kernel with 受注

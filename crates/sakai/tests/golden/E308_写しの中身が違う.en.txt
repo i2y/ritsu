@@ -1,0 +1,7 @@
+error[E308]: ctx/契約.ctx:23:1: The copies of the shared kernel of 見積 and 契約 differ
+    23 | shared kernel with 見積
+  = No copy on 契約's side has the bytes of 見積's proto "proto/quotes/kernel/units.proto" (契約 has proto "proto/contracts/kernel/units.proto").
+  = When each side keeps a copy, the copies are kept the same.
+  involved:
+      見積  ctx/見積.ctx:21  shared kernel with 契約
+      契約  ctx/契約.ctx:23  shared kernel with 見積

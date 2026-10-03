@@ -1,0 +1,3 @@
+error[E403]: ctx/請求.ctx:19:31: The mapping maps to BILLING_STATUS_CHARGE, which is not a value of the target enum shop.billing.v1.BillingStatus
+    19 |     ORDER_STATUS_PAID      -> BILLING_STATUS_CHARGE
+  = The values of shop.billing.v1.BillingStatus are BILLING_STATUS_UNSPECIFIED, BILLING_STATUS_WAIT, BILLING_STATUS_BILL, BILLING_STATUS_SKIP.

@@ -1,0 +1,13 @@
+# 顧客と供給者、顧客と腐敗防止層、パートナーシップ、別々の道、写しを両側に置く共有カーネルが、
+# どれも通る地図。
+map パターン(patterns) v1
+description "料金を決め、見積を出し、契約を結び、知らせ、監査する"
+
+use context "ctx/料金.ctx"
+use context "ctx/見積.ctx"
+use context "ctx/契約.ctx"
+use context "ctx/通知.ctx"
+use context "ctx/監査.ctx"
+
+covers "."
+proto root "proto"

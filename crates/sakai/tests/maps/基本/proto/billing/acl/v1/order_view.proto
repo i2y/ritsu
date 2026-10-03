@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package billing.acl.v1;
+
+import "shop/ordering/v1/order.proto";
+
+// 請求の腐敗防止層の中で、受注の注文の状態を受け取る。
+message OrderView {
+  shop.ordering.v1.OrderStatus status = 1;
+}

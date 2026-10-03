@@ -1,0 +1,3 @@
+error[E306]: ctx/見積.ctx:15:13: Conformist and customer cannot go together
+    15 | upstream 料金 customer, conformist
+  = A conformist takes the upstream's model as it is; that rules out a customer, who can move the upstream, and a layer that maps the upstream's model.

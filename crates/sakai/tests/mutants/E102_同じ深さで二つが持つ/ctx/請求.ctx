@@ -1,0 +1,21 @@
+context 請求(billing) v1
+description "注文に請求するか、待つか、請求しないかを決める"
+owner "経理チーム"
+
+owns
+  dir "../proto/shop/billing", "../proto/billing", "../py/billing", "../proto/shop/common"
+
+published language shop.billing.v1
+  proto "../proto/shop/billing/v1/billing.proto"
+
+terms
+  キャンセル "請求を確定したあとに請求を取り消し、返金すること"
+
+upstream 受注 anticorruption layer
+  through shop.ordering.v1
+  layer dir "../proto/billing/acl"
+  enum OrderStatus -> enum BillingStatus
+    ORDER_STATUS_RECEIVED  -> BILLING_STATUS_WAIT
+    ORDER_STATUS_PAID      -> BILLING_STATUS_BILL
+    ORDER_STATUS_SHIPPED   -> BILLING_STATUS_BILL
+    ORDER_STATUS_CANCELLED -> BILLING_STATUS_SKIP

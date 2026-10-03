@@ -1,0 +1,2 @@
+エラー[E106]: proto/shop/billing/v1/billing.proto:11:1: proto/shop/billing/v1/billing.proto を読めません: `;` が要るところに `}` があります
+    11 | }

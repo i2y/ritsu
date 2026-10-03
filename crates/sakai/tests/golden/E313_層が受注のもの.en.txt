@@ -1,0 +1,3 @@
+error[E313]: ctx/請求.ctx:16:37: The layer's dir "proto/shop/ordering" is not 請求's (it is 受注's)
+    16 |   layer dir "../proto/billing/acl", "../proto/shop/ordering"
+  = An anticorruption layer is on the downstream's side: a directory or file of the downstream.

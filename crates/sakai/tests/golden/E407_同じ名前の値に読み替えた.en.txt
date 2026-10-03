@@ -1,0 +1,7 @@
+error[E407]: ctx/請求.ctx:21:31: 受注's term キャンセル is mapped to キャンセル, the name of 請求's word of another meaning
+    21 |     ORDER_STATUS_CANCELLED -> キャンセル
+  = 請求's キャンセル is "請求を確定したあとに請求を取り消し、返金すること", which is not what 受注's キャンセル means.
+  = Give what it is mapped to another name.
+  involved:
+      受注  ctx/受注.ctx:15  キャンセル "出荷の前に、客の申し出で注文を取り消すこと"
+      請求  ctx/請求.ctx:12  キャンセル "請求を確定したあとに請求を取り消し、返金すること"

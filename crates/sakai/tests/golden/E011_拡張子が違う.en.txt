@@ -1,0 +1,2 @@
+error[E011]: ctx/受注.ctx:22:9: A rulec artifact is a .rule file ("../proto/shop/common/v1/money.proto")
+    22 |   rulec "../proto/shop/common/v1/money.proto"

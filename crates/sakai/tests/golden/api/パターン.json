@@ -1,0 +1,612 @@
+{
+  "sakai": "0.1.0",
+  "map": {
+    "name": "パターン",
+    "alias": "patterns",
+    "version": "1",
+    "file": "パターン.ctx",
+    "source_sha256": "79ae26949d9f9fb8a2e1c69b95b13df3e68c7817e80520c28dc5460370b0058d",
+    "description": "料金を決め、見積を出し、契約を結び、知らせ、監査する"
+  },
+  "covers": [
+    "."
+  ],
+  "except": [],
+  "contexts": [
+    {
+      "name": "料金",
+      "alias": "pricing",
+      "version": "1",
+      "file": "ctx/料金.ctx",
+      "source_sha256": "e8f2672fccd3a22433f4a31961fb9ccd39b1b009992b9939440b7ddaf9c3be38",
+      "description": "プランごとの月の料金を決める",
+      "owner": "料金チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/pricing"
+        }
+      ],
+      "published": [
+        {
+          "package": "pricing.v1",
+          "from": [
+            {
+              "text": "proto \"proto/pricing/v1/price.proto\"",
+              "tool": "proto",
+              "path": "proto/pricing/v1/price.proto",
+              "items": []
+            }
+          ],
+          "services": [
+            "PricingService"
+          ],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "プラン",
+          "definition": "月ごとの料金の決め方",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+              "tool": "proto",
+              "path": "proto/pricing/v1/price.proto",
+              "items": [
+                [
+                  "enum",
+                  "Plan"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "見積",
+      "alias": "quotes",
+      "version": "1",
+      "file": "ctx/見積.ctx",
+      "source_sha256": "99e0d8a8671be48367841b2032bee79ff63d1fccbe9fb1d652532be27db0eab0",
+      "description": "客に、期限つきの見積を出す",
+      "owner": "営業チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/quotes"
+        }
+      ],
+      "published": [
+        {
+          "package": "quotes.v1",
+          "from": [
+            {
+              "text": "proto \"proto/quotes/v1/estimate.proto\"",
+              "tool": "proto",
+              "path": "proto/quotes/v1/estimate.proto",
+              "items": []
+            }
+          ],
+          "services": [],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "見積書",
+          "definition": "客に出す、期限つきの料金の見込み",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/quotes/v1/estimate.proto\" message Estimate",
+              "tool": "proto",
+              "path": "proto/quotes/v1/estimate.proto",
+              "items": [
+                [
+                  "message",
+                  "Estimate"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "契約",
+      "alias": "contracts",
+      "version": "1",
+      "file": "ctx/契約.ctx",
+      "source_sha256": "139d412b1ca12a23bf016ec7ad2d3df791a0cfc9ad83194a4bbc74d7fa2e91f0",
+      "description": "客と契約を結び、契約の区分を持つ",
+      "owner": "契約チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/contracts"
+        }
+      ],
+      "published": [
+        {
+          "package": "contracts.v1",
+          "from": [
+            {
+              "text": "proto \"proto/contracts/v1/contract.proto\"",
+              "tool": "proto",
+              "path": "proto/contracts/v1/contract.proto",
+              "items": []
+            }
+          ],
+          "services": [],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "契約の区分",
+          "definition": "契約ごとに決まる、料金の扱い",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/contracts/v1/contract.proto\" enum ContractClass",
+              "tool": "proto",
+              "path": "proto/contracts/v1/contract.proto",
+              "items": [
+                [
+                  "enum",
+                  "ContractClass"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "通知",
+      "alias": "notices",
+      "version": "1",
+      "file": "ctx/通知.ctx",
+      "source_sha256": "d00a8fc05d7f08ba9324c1101102abc2e7f7f3d1b7ecc22b0eb7119f144dc46f",
+      "description": "見積の期限が近い客に知らせる",
+      "owner": "営業チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/notices"
+        }
+      ],
+      "published": [],
+      "terms": []
+    },
+    {
+      "name": "監査",
+      "alias": "audit",
+      "version": "1",
+      "file": "ctx/監査.ctx",
+      "source_sha256": "e91c53cc035871da26a764971851257d6c89d1798393fd5afbb0f96c021135ce",
+      "description": "契約の記録を残す。見積とは何もやりとりしない",
+      "owner": "監査チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/audit"
+        }
+      ],
+      "published": [],
+      "terms": []
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "upstream_downstream",
+      "upstream": "料金",
+      "downstream": "見積",
+      "roles": {
+        "upstream": [
+          "supplier",
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "customer"
+        ]
+      },
+      "through": [
+        "pricing.v1"
+      ],
+      "layer": [],
+      "enums": [],
+      "terms": [],
+      "declared": [
+        "ctx/見積.ctx:15",
+        "ctx/料金.ctx:17"
+      ]
+    },
+    {
+      "kind": "partnership",
+      "between": [
+        "見積",
+        "通知"
+      ],
+      "declared": [
+        "ctx/見積.ctx:18",
+        "ctx/通知.ctx:8"
+      ]
+    },
+    {
+      "kind": "shared_kernel",
+      "between": [
+        "見積",
+        "契約"
+      ],
+      "sides": [
+        {
+          "context": "見積",
+          "items": [
+            {
+              "name": {
+                "text": "proto \"proto/quotes/kernel/units.proto\"",
+                "tool": "proto",
+                "path": "proto/quotes/kernel/units.proto",
+                "items": []
+              }
+            }
+          ]
+        },
+        {
+          "context": "契約",
+          "items": [
+            {
+              "name": {
+                "text": "proto \"proto/contracts/kernel/units.proto\"",
+                "tool": "proto",
+                "path": "proto/contracts/kernel/units.proto",
+                "items": []
+              }
+            }
+          ]
+        }
+      ],
+      "declared": [
+        "ctx/見積.ctx:21",
+        "ctx/契約.ctx:23"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "料金",
+      "downstream": "契約",
+      "roles": {
+        "upstream": [
+          "supplier",
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "customer",
+          "anticorruption_layer"
+        ]
+      },
+      "through": [
+        "pricing.v1"
+      ],
+      "layer": [
+        {
+          "dir": "proto/contracts/acl"
+        }
+      ],
+      "enums": [
+        {
+          "from": {
+            "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+            "tool": "proto",
+            "path": "proto/pricing/v1/price.proto",
+            "items": [
+              [
+                "enum",
+                "Plan"
+              ]
+            ]
+          },
+          "to": {
+            "text": "proto \"proto/contracts/v1/contract.proto\" enum ContractClass",
+            "tool": "proto",
+            "path": "proto/contracts/v1/contract.proto",
+            "items": [
+              [
+                "enum",
+                "ContractClass"
+              ]
+            ]
+          },
+          "checked": true,
+          "values": [
+            {
+              "from": "PLAN_FREE",
+              "refuse": "無料のプランでは契約を結ばない"
+            },
+            {
+              "from": "PLAN_BASIC",
+              "to": "CONTRACT_CLASS_STANDARD"
+            },
+            {
+              "from": "PLAN_PRO",
+              "to": "CONTRACT_CLASS_PREMIUM"
+            }
+          ]
+        }
+      ],
+      "terms": [],
+      "declared": [
+        "ctx/契約.ctx:15",
+        "ctx/料金.ctx:18"
+      ]
+    },
+    {
+      "kind": "separate_ways",
+      "between": [
+        "監査",
+        "見積"
+      ],
+      "declared": [
+        "ctx/監査.ctx:8"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "name": {
+        "text": "proto \"proto/audit/v1/record.proto\"",
+        "tool": "proto",
+        "path": "proto/audit/v1/record.proto",
+        "items": []
+      },
+      "context": "監査",
+      "by": "ctx/監査.ctx:6",
+      "sha256": "6be5262e1c9ce6f6"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/contracts/acl/v1/plan_view.proto\"",
+        "tool": "proto",
+        "path": "proto/contracts/acl/v1/plan_view.proto",
+        "items": []
+      },
+      "context": "契約",
+      "by": "ctx/契約.ctx:6",
+      "sha256": "dce168434b857b9f"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/contracts/kernel/units.proto\"",
+        "tool": "proto",
+        "path": "proto/contracts/kernel/units.proto",
+        "items": []
+      },
+      "context": "契約",
+      "by": "ctx/契約.ctx:6",
+      "sha256": "da5f95d1dce75ba1"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/contracts/v1/contract.proto\"",
+        "tool": "proto",
+        "path": "proto/contracts/v1/contract.proto",
+        "items": []
+      },
+      "context": "契約",
+      "by": "ctx/契約.ctx:6",
+      "sha256": "65117113b89bed77"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/notices/v1/notice.proto\"",
+        "tool": "proto",
+        "path": "proto/notices/v1/notice.proto",
+        "items": []
+      },
+      "context": "通知",
+      "by": "ctx/通知.ctx:6",
+      "sha256": "60ddd39db9fcdf58"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/pricing/v1/price.proto\"",
+        "tool": "proto",
+        "path": "proto/pricing/v1/price.proto",
+        "items": []
+      },
+      "context": "料金",
+      "by": "ctx/料金.ctx:6",
+      "sha256": "64eff9665ad866de"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/quotes/kernel/units.proto\"",
+        "tool": "proto",
+        "path": "proto/quotes/kernel/units.proto",
+        "items": []
+      },
+      "context": "見積",
+      "by": "ctx/見積.ctx:6",
+      "sha256": "da5f95d1dce75ba1"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/quotes/v1/estimate.proto\"",
+        "tool": "proto",
+        "path": "proto/quotes/v1/estimate.proto",
+        "items": []
+      },
+      "context": "見積",
+      "by": "ctx/見積.ctx:6",
+      "sha256": "87e24397ac48c502"
+    }
+  ],
+  "crossings": [
+    {
+      "from": {
+        "text": "proto \"proto/contracts/acl/v1/plan_view.proto\"",
+        "tool": "proto",
+        "path": "proto/contracts/acl/v1/plan_view.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/pricing/v1/price.proto\"",
+        "tool": "proto",
+        "path": "proto/pricing/v1/price.proto",
+        "items": []
+      },
+      "from_context": "契約",
+      "to_context": "料金",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "enum",
+              "Plan"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "customer",
+          "anticorruption_layer"
+        ],
+        "declared": "ctx/契約.ctx:15"
+      }
+    },
+    {
+      "from": {
+        "text": "proto \"proto/notices/v1/notice.proto\"",
+        "tool": "proto",
+        "path": "proto/notices/v1/notice.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/quotes/v1/estimate.proto\"",
+        "tool": "proto",
+        "path": "proto/quotes/v1/estimate.proto",
+        "items": []
+      },
+      "from_context": "通知",
+      "to_context": "見積",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/quotes/v1/estimate.proto\" message Estimate",
+          "tool": "proto",
+          "path": "proto/quotes/v1/estimate.proto",
+          "items": [
+            [
+              "message",
+              "Estimate"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" message Quote",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "message",
+              "Quote"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "enum",
+              "Plan"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/quotes/kernel/units.proto\" message Days",
+          "tool": "proto",
+          "path": "proto/quotes/kernel/units.proto",
+          "items": [
+            [
+              "message",
+              "Days"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "partnership",
+        "declared": "ctx/通知.ctx:8"
+      }
+    },
+    {
+      "from": {
+        "text": "proto \"proto/quotes/v1/estimate.proto\"",
+        "tool": "proto",
+        "path": "proto/quotes/v1/estimate.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/pricing/v1/price.proto\"",
+        "tool": "proto",
+        "path": "proto/pricing/v1/price.proto",
+        "items": []
+      },
+      "from_context": "見積",
+      "to_context": "料金",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" message Quote",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "message",
+              "Quote"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "enum",
+              "Plan"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "customer"
+        ],
+        "declared": "ctx/見積.ctx:15"
+      }
+    }
+  ],
+  "not_checked": []
+}

@@ -1,0 +1,10 @@
+== examples/通販 1_在庫の内側
+error sakai-inventory: ordering/bad_internals.ts → inventory/ledger.ts
+== examples/通販 2_層の外から受注の公表された言語
+error sakai-ordering-pl-shop.ordering.v1: billing/bad_outside_layer.ts → shop/ordering/v1/order_pb.ts
+== examples/通販 3_共有カーネルを外から
+error sakai-billing-kernel-delivery: ordering/bad_kernel.ts → calendars/tokyo.ts
+== examples/通販 4_別々の道の相手
+error sakai-billing: reviews/bad_separate.ts → billing/invoice.ts
+== tests/maps/入れ子 1_生成したコードを囲む内側
+error sakai-inventory: ordering/bad.ts → warehouse/ledger.ts

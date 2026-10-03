@@ -1,0 +1,3 @@
+error[E001]: ctx/在庫.ctx:2:13: A string is not closed
+     2 | description "倉庫の棚にある数を持ち、注文の一行ごとに押さえ、梱包の進みを答える
+  = A string is closed with `"` on the same line.
