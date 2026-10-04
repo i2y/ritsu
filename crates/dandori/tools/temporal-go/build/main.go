@@ -147,7 +147,8 @@ func build(out, manifestFile string) error {
 				return err
 			}
 		}
-		flows = append(flows, flowRef{Key: e.Key, Alias: fmt.Sprintf("f%d", i), Import: "temporalgo/flows/" + dir})
+		_, books := files["io_books.go"]
+		flows = append(flows, flowRef{Key: e.Key, Alias: fmt.Sprintf("f%d", i), Import: "temporalgo/flows/" + dir, Books: books})
 	}
 	var main strings.Builder
 	if err := mainTemplate.Execute(&main, map[string]any{"Flows": flows, "Timeout": timeout}); err != nil {
@@ -177,6 +178,8 @@ type flowRef struct {
 	Key    string
 	Alias  string
 	Import string
+	// the package runs the operations of books (io_books.go)
+	Books bool
 }
 
 // safe is a key made into a directory name that an import path can hold: ASCII letters and
@@ -234,6 +237,8 @@ const (
 	// every wait of the workflow goes through ddSeconds
 	secondsMarker = "return time.Duration(n * float64(time.Second))"
 	secondsShort  = "return time.Duration(math.Min(n, 0.01) * float64(time.Second))"
+	nowMarker     = `return workflow.Now(ctx).UTC().Format("2006-01-02T15:04:05Z")`
+	nowFixed      = `return "2026-03-31T15:30:00Z"`
 	continueAt    = "const ddContinueAt = 10000"
 	continueSoon  = "const ddContinueAt = 1"
 	// an event's wait is not a timer to shorten to nothing: the runner has to see it, and send the event
@@ -296,6 +301,8 @@ func patch(files map[string]string, e entry, timeout int) error {
 		}
 		rt = strings.Replace(rt, p.marker, p.by, 1)
 	}
+	// the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
+	rt = strings.Replace(rt, nowMarker, nowFixed, 1)
 	files["runtime.go"] = withMath(rt)
 	// the rules are stand-ins here, so the build needs none of rulec's packages
 	if rules, ok := files["rules.go"]; ok {
@@ -419,7 +426,12 @@ func (a {{.Alias}}Transport) AWS(ctx context.Context, service, action string, in
 func (a {{.Alias}}Transport) Agent(ctx context.Context, call {{.Alias}}.AgentCall) (any, error) {
 	return a.t.Agent(ctx, harness.AgentCall(call))
 }
-
+{{if .Books}}
+func (a {{.Alias}}Transport) Book(ctx context.Context, call {{.Alias}}.BookCall) ({{.Alias}}.BookResult, error) {
+	r, err := a.t.(harness.BookRunner).Book(ctx, harness.BookCall(call))
+	return {{.Alias}}.BookResult(r), err
+}
+{{end}}
 func {{.Alias}}TransportOf(t harness.Transport) {{.Alias}}.Transport {
 	if t == nil {
 		return nil

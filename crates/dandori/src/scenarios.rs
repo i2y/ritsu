@@ -177,6 +177,12 @@ pub fn generate(m: &Model) -> Vec<Value> {
             out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": run["answers"], "covers": ["input:left out"] }));
         }
     }
+    // the moment `now` reads, which the runners give the platforms' clocks
+    if m.uses_now() {
+        for sc in out.iter_mut() {
+            sc["now"] = json!(render::SCENARIO_NOW);
+        }
+    }
     out
 }
 
@@ -286,6 +292,11 @@ impl<'a> Ex<'a> {
                 json!(format!("{name}-{}", self.made_values))
             }
             Ty::Timestamp => json!("2026-10-01T10:00:00Z"),
+            // a day of its own for each value, as a string is
+            Ty::Date => {
+                self.made_values += 1;
+                json!(format!("2026-{:02}-{:02}", 1 + (self.made_values / 28) % 12, 1 + self.made_values % 28))
+            }
             Ty::Int | Ty::Num(_) => self.number(rg),
             // an array, so that the targets show they keep a `json` value that is one as one item
             Ty::Json => {
@@ -943,10 +954,13 @@ impl<'a> Ex<'a> {
                             let mut fixed = m.cases[c].held.clone();
                             fixed.push(fx);
                             let mut seen = BTreeSet::new();
+                            // a book's hold is refused with the reason its row gives, when the task declares it
+                                            let reason_ix = mc.decides.iter().position(|d| d == "reason");
                             for real in self.closure(c, now) {
                                 for o in mc.outcomes(real, &fixed) {
                                     if self.refused(c, &o) {
-                                        if let Some(err) = &task.refused_as {
+                                        let book_reason = task.book().and(reason_ix).and_then(|i| o.produces.get(i).cloned().flatten()).filter(|r| task.error(r).is_some());
+                                        if let Some(err) = task.refused_as.as_ref().or(book_reason.as_ref()) {
                                             if seen.insert(format!("refused@{}", mc.states[real])) {
                                                 ways.push((format!("refused:{}", mc.states[real]), Way::Err(err.clone(), Some(real))));
                                             }
@@ -1020,14 +1034,20 @@ impl<'a> Ex<'a> {
                 ways.push(("recased".into(), Way::Recased(st)));
             }
         }
-        if let (Some(c), Some((_, allowed))) = (case, m.monitors.get(&s.site)) {
+        // a book's operation is answered by chobo's client with done, done before or a refusal, and
+        // the code dandori writes makes the hold of it: its state and shape are always what they must be
+        let book = matches!(callee, Callee::Task(t) if m.tasks[*t].book().is_some());
+        if let (true, Some(st)) = (book, first_ok) {
+            ways.push(("done before".into(), Way::Ok(st)));
+        }
+        if let (Some(c), Some((_, allowed)), false) = (case, m.monitors.get(&s.site), book) {
             let mc = m.machine(c);
             if let Some(st) = (0..mc.states.len()).find(|x| !allowed.contains(&mc.states[*x])) {
                 ways.push(("unexpected state".into(), Way::Unexpected(st)));
             }
         }
         // an answer that does not fit is one the workflow reads: not for a task that answers nothing, or anything
-        if target.is_some() && !matches!(result_ty, None | Some(Ty::Json)) {
+        if target.is_some() && !matches!(result_ty, None | Some(Ty::Json)) && !book {
             ways.push(("malformed".into(), Way::Malformed));
         }
         // a number out of its range; not in Jev's answer, whose numbers are how sure it is
@@ -1091,9 +1111,12 @@ impl<'a> Ex<'a> {
         };
         // an answer, which for a Jev task becomes Jev's response once its value is chosen, and for a
         // rule at its service the body the service writes
+        let done = if label == "done before" { "done_before" } else { "done" };
         let ok = |v: &Value| match (jev_task, service) {
             (Some(t), _) => json!({ "ok": v, "jev": t }),
             (None, Some((r, _))) => json!({ "ok": v, "rule": r }),
+            // what chobo's client answers; the hold is made of it and the arguments
+            (None, None) if book => json!({ "ok": { "result": done } }),
             (None, None) => json!({ "ok": v }),
         };
         match way {

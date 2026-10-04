@@ -1,0 +1,9 @@
+dates 壊れた(broken_dates) v1
+description "koyomi の検査を通らない日付のファイル：入力に別名が無い"
+use calendar "../calendars/オフセット無し.cal"
+
+inputs
+  起点 : date  range >=2026-01-01 <=2026-12-31
+
+date 期日(due) = 起点
+  + 30 days

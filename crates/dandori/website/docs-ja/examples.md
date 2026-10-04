@@ -1,6 +1,6 @@
 # 例で見る
 
-例は五つあり、それぞれに Temporal 版、AWS 版、pydantic-graph 版の三つがあります。流れはどれも同じで、タスクの呼び出し方と、外からの通知の受け取り方だけを、プラットフォームのやり方に合わせています。dandori の主なプラットフォームは Temporal なので、最初に読むなら Temporal 版がおすすめです。Temporal 版は `dandori doc` で図にもしてあり、シナリオごとに実行の通るところが光るページで見られます（[ワークフローを図にする](diagrams.md)）。
+例は六つあります。五つには、それぞれ Temporal 版、AWS 版、pydantic-graph 版の三つがあります。流れはどれも同じで、タスクの呼び出し方と、外からの通知の受け取り方だけを、プラットフォームのやり方に合わせています。dandori の主なプラットフォームは Temporal なので、最初に読むなら Temporal 版がおすすめです。六つ目の請求は一つだけ書いてあり、どのプラットフォームでもそのまま動きます。Temporal 版と請求は `dandori doc` で図にもしてあり、シナリオごとに実行の通るところが光るページで見られます（[ワークフローを図にする](diagrams.md)）。
 
 どの版にも、同じディレクトリに日本語版（`<名前>.ja.flow`。引当と発送の子は `arrange_delivery.ja.flow`）があります。API の記述が決めている名前（Stripe のフィールドと状態、倉庫の `.proto`、SNS と SQS の API）のほかは、すべて日本語の名前で書いています。引当と発送の日本語版は、JSON での名前を日本語にした別のサービス（`fulfillment.ja.proto`）を実装します。日本語の規則は、各例の `rules/` に英語の規則と並べて置いてあります。このサイトの図は、日本語版から描いています。
 
@@ -11,6 +11,7 @@
 | 注文の明細を並べて引き当て、梱包し、配達する。`.proto` のサービスを実装するワークフローで（[サービスを実装する](services.md)）、倉庫は Connect で呼び、レスポンスの型はその `.proto` から作り、配達はすべてのプラットフォーム向けに一度だけ書いた子の `.flow`（[arrange_delivery](https://github.com/i2y/dandori/blob/main/examples/fulfillment/arrange_delivery.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/fulfillment/arrange_delivery.ja.flow)） | [temporal](https://github.com/i2y/dandori/blob/main/examples/fulfillment/temporal/fulfillment.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/fulfillment/temporal/fulfillment.ja.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/fulfillment/aws/fulfillment.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/fulfillment/aws/fulfillment.ja.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/fulfillment/pydantic-graph/fulfillment.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/fulfillment/pydantic-graph/fulfillment.ja.flow) | [ページ](doc/fulfillment.html) |
 | 問い合わせの種類を [Jev](jev.md) が選び（Jev が確信を持てないときはエージェントが読んだ種類を使う）、規則が振り分け、エージェントが返事の下書きを書く | [temporal](https://github.com/i2y/dandori/blob/main/examples/inquiry/temporal/inquiry.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/inquiry/temporal/inquiry.ja.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/inquiry/aws/inquiry.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/inquiry/aws/inquiry.ja.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/inquiry/pydantic-graph/inquiry.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/inquiry/pydantic-graph/inquiry.ja.flow) | [ページ](doc/inquiry.html) |
 | 申し込みの審査。[Jev](jev.md) が採点し、規則がその確信度を量って、足りなければ人の承認に回す。[Argo Workflows 版](https://github.com/i2y/dandori/blob/main/examples/review/argo/review.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/review/argo/review.ja.flow)もある | [temporal](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.ja.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/review/aws/review.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/review/aws/review.ja.flow)（Lambda durable functions） | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/review/pydantic-graph/review.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/review/pydantic-graph/review.ja.flow) | [ページ](doc/review.html) |
+| 請求。注文の品を支払期日まで在庫から押さえ、支払われたら出荷し、支払われなければ戻す。在庫は chobo の帳簿、期日は koyomi の日付（[日付と帳簿](dates-and-books.md)） | [invoice](https://github.com/i2y/dandori/blob/main/examples/invoice/invoice.flow)・[日本語](https://github.com/i2y/dandori/blob/main/examples/invoice/invoice.ja.flow)。どのプラットフォームでも同じもの | 同じ | 同じ | [ページ](doc/invoice.html) |
 
 ## 版ごとの違い
 
@@ -22,8 +23,8 @@
 
 **pydantic-graph 版**では、グラフは入力を受け取った Python のプロセスの中で動きます。HTTP の API、エージェント、Jev への呼び出しは生成した関数が受け持ち、規則も同じプロセスの中で動きます。それ以外は自分で書く関数です。コールバックへの応答も、同じプロセスの中で返します（`Deps.callbacks`）。待っているあいだも、プロセスは生きていなければなりません。プロセスが落ちれば、その実行も失われます。
 
-各例のディレクトリのすぐ下には、それぞれの版のディレクトリと並べて、どのプラットフォームでもそのまま動くフローだけを置いています。引当と発送の子がそれで、呼び出しはどれも HTTP なので、dandori がどのプラットフォーム向けにも呼び出しのコードを生成できます。規則（`rules/`）と API の記述（`specs/`）は、版のあいだで共有しています。
+各例のディレクトリのすぐ下には、それぞれの版のディレクトリと並べて、どのプラットフォームでもそのまま動くフローだけを置いています。引当と発送の子がそれで、呼び出しはどれも HTTP なので、dandori がどのプラットフォーム向けにも呼び出しのコードを生成できます。規則（`rules/`）と API の記述（`specs/`）は、版のあいだで共有しています。請求には版がありません。呼び出しは HTTP の API と日付と帳簿の操作で、dandori がどのプラットフォーム向けにも書けるので、一つのフローを、日付のファイル、そのカレンダー、帳簿（`dates/`、`calendars/`、`books/`）と一緒にディレクトリに置いています。
 
 ## テスト用のフロー
 
-[tests/flows](https://github.com/i2y/dandori/tree/main/tests/flows) のフローは、言語の細かいところまで試すためのものです。`json` に入れたリスト、並列の中の並列、あらゆる型の応答を返すエージェント、あらゆる種類の質問と確信度を扱う Jev、タイムアウトする呼び出し、ローカルの規則、Connect のゼロ値、イベント、ゼロ値を省いたリクエストを受け取るサービスの実装などを扱います。名前はわざと日本語で書いてあり、ASCII でない名前が、五つのプラットフォームで識別子やキー、URL のパスとしてそのまま通ることを確かめています。
+[tests/flows](https://github.com/i2y/dandori/tree/main/tests/flows) のフローは、言語の細かいところまで試すためのものです。`json` に入れたリスト、並列の中の並列、あらゆる型の応答を返すエージェント、あらゆる種類の質問と確信度を扱う Jev、タイムアウトする呼び出し、ローカルの規則、Connect のゼロ値、イベント、ゼロ値を省いたリクエストを受け取るサービスの実装、日付と帳簿（一つのファイルの二つの日付をローカルアクティビティで呼ぶ、`now`、すぐに確定する振替、押さえた分の一部の確定）などを扱います。名前はわざと日本語で書いてあり、ASCII でない名前が、五つのプラットフォームで識別子やキー、URL のパスとしてそのまま通ることを確かめています。

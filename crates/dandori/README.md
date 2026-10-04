@@ -17,6 +17,10 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
   it is, your own code, a person's approval. A decision that must
   have no gaps can be a table in [rulec](https://github.com/i2y/rulec), which proves it complete
   and free of overlaps, and a rule's state machine can be the type of the thing a workflow drives.
+- **Due dates and stock come from outside too.** A due date can be a date of koyomi's, checked on
+  every day of its range, and stock a book of chobo's, whose bounds hold in every write. A workflow
+  calls a date as it calls a rule, holds, posts and voids stock as tasks, and follows a hold as a
+  case whose expiry the checker counts.
 
 **Documentation: <https://i2y.github.io/dandori/>**, in English and Japanese. The pages are also
 readable here, in [website/docs](website/docs) and [website/docs-ja](website/docs-ja).
@@ -98,8 +102,8 @@ $ cd ritsu
 $ cargo install --path crates/ritsu
 ```
 
-`ritsu dandori <command>` runs dandori with the rules a workflow uses (`use rule`) read by rulec in
-the same process. `rulec gen` writes the code of each rule, and a Connect service for it that a
+`ritsu dandori <command>` runs dandori with the rules a workflow uses (`use rule`) read by rulec, and
+its dates files and books (`use dates`, `use book`) read by koyomi and chobo, in the same process. `rulec gen` writes the code of each rule, and a Connect service for it that a
 workflow can call instead; install rulec from the same workspace with `cargo install --path
 crates/rulec`. `cargo install --path crates/dandori` installs the `dandori` command alone: it checks
 and builds a workflow without rules as `ritsu dandori` does, and tells you to run one that uses rules
@@ -142,7 +146,7 @@ it calls come with it, as `rulec doc` renders them for whoever approves them.
 | `temporal` | the workflow, its activities, a worker and a client, in TypeScript |
 | `temporal-python` | the same in Python, named alike, so a worker in one language can serve another |
 | `temporal-go` | the same in Go, as one package, named alike too |
-| `asl` | the state machine, in ASL with JSONata, and a Lambda handler for every rule it calls by Lambda |
+| `asl` | the state machine, in ASL with JSONata, and a Lambda handler for every rule and date it calls by Lambda and every book it runs operations on |
 | `durable` | a Lambda durable function in TypeScript |
 | `argo` | a WorkflowTemplate, and the caller image that makes its calls |
 | `pydantic-graph` | a graph that runs in your own Python process |
@@ -152,13 +156,17 @@ it calls come with it, as `rulec doc` renders them for whoever approves them.
 
 ## Examples
 
-[examples/](examples/) has five, each written for Temporal, for AWS and for pydantic-graph: a hotel
-booking held to Stripe's OpenAPI document; an order in a warehouse's system, whose AWS version
+[examples/](examples/) has six. Five are each written for Temporal, for AWS and for pydantic-graph: a
+hotel booking held to Stripe's OpenAPI document; an order in a warehouse's system, whose AWS version
 calls a rule at the rule's own Connect service; the fulfillment of an order, with a child flow, which
 implements a service of a `.proto` and takes the types of the warehouse's answers from the
 warehouse's `.proto`; an inquiry sorted by Jev and read and answered by agents; and an application
-scored by Jev and, when a rule says so, approved by a person. Every version has a Japanese twin
-beside it (`hotel.ja.flow`), with Japanese names everywhere but where an API description fixes them.
+scored by Jev and, when a rule says so, approved by a person. The sixth, an invoice, is written once
+for every platform: it holds an order's goods in a book of chobo's until the payment is due by a date
+of koyomi's, then ships them once paid or puts them back
+([Dates and books](https://i2y.github.io/dandori/dates-and-books/)). Every example has a Japanese
+twin beside it (`hotel.ja.flow`), with Japanese names everywhere but where an API description fixes
+them.
 [Examples](https://i2y.github.io/dandori/examples/) says how the versions differ.
 
 ## How it is checked
@@ -169,7 +177,9 @@ and on LocalStack's Step Functions, the Temporal workflow in TypeScript, in Pyth
 Temporal CLI's dev server, the durable function in the SDK's local test runner, the
 WorkflowTemplate on Argo Workflows in a kind cluster, and the graph with pydantic-graph. Each must
 make the same calls, with the same arguments and idempotency keys, and end the same way. The page
-on the site that runs dandori in the browser must answer every example as the command does.
+on the site that runs dandori in the browser must answer every example as the command does. The
+operations of books that the runs make also go through the code dandori writes to chobo's clients,
+on PostgreSQL and TigerBeetle, and must answer what chobo's reference interpreter answers.
 [How it is checked](https://i2y.github.io/dandori/assurance/) tells the rest, and how to run the
 tests.
 
@@ -184,7 +194,9 @@ streams, the clients of a service a workflow implements written, for the languag
 build for, by a plugin of protoc, cases the workflow holds itself, a rule that walks a list of elements, a rule's preconditions
 checked at the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
 Cloud (the tests run on the Temporal CLI's dev server), the caller image run against real Lambda,
-HTTP and AWS endpoints from Argo, and agents run against OpenAI and Anthropic themselves. The
+HTTP and AWS endpoints from Argo, agents run against OpenAI and Anthropic themselves, and the checks
+that cross into koyomi and chobo: a hold's expiry against the waits before it is posted, and the days
+a workflow passes against a dates file's range. The
 design, the decisions and what is left are in [DESIGN.md](DESIGN.md), in Japanese; its principles
 are on [Design](https://i2y.github.io/dandori/design/).
 

@@ -331,7 +331,8 @@ export async function play(def, run, execution = "test") {
     }
   }
 
-  const context = { Execution: { Name: execution }, Task: { Token: "token" } };
+  // `now` reads the moment the state was entered: the scenarios' moment here (dandori's render::SCENARIO_NOW)
+  const context = { Execution: { Name: execution }, Task: { Token: "token" }, State: { EnteredTime: "2026-03-31T15:30:00.000Z" } };
   try {
     await runStates(def.States, def.StartAt, run.input, context, true);
   } catch (e) {

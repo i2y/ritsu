@@ -93,6 +93,8 @@ const activitiesBy = serving ? null : JSON.parse(process.env.DANDORI_ACTIVITIES_
  */
 const TIMEOUT_SECONDS = Number(process.env.DANDORI_TEMPORAL_TIMEOUT ?? 20);
 const TIMEOUT = `${TIMEOUT_SECONDS} seconds`;
+/** The moment `now` reads in every scenario (dandori's render::SCENARIO_NOW). */
+const SCENARIO_NOW = "2026-03-31T15:30:00Z";
 /** How long an event is waited for here, at most: long enough for the runner to see the wait and send it. */
 const EVENT_MS = 5000;
 /** How long a stand-in that the scenario times out keeps its activity busy: until the server has timed it out. */
@@ -126,6 +128,8 @@ for (const f of fs.readdirSync(dir)) {
     const eventWait = "got = await condition(() => events.has(name), ms(seconds));";
     if (!text.includes(eventWait)) throw new Error("runtime.ts has no event's wait to shorten");
     text = text.replace(eventWait, `got = await condition(() => events.has(name), Math.min(seconds * 1000, ${EVENT_MS}));`);
+    // the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
+    text = text.replace('return new Date(Date.now()).toISOString().slice(0, 19) + "Z";', `return ${JSON.stringify(SCENARIO_NOW)};`);
   }
   fs.writeFileSync(path.join(work, f), text);
 }

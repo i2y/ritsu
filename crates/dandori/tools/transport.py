@@ -1,5 +1,5 @@
 # A Transport for the Python dandori writes (for Temporal and for pydantic-graph), in place of
-# Lambda, HTTP, the AWS APIs and OpenAI's agents: every call goes to `run.take(call,
+# Lambda, HTTP, the AWS APIs, OpenAI's agents and chobo's clients of the books: every call goes to `run.take(call,
 # callback_id)` as Step Functions would send it (an agent's, as the generated code hands it
 # over), which writes it down and gives the scenario's answer. The Python twin of
 # transport.mjs, shared by temporal-python/run.py and pydantic-graph/run.py.
@@ -97,5 +97,16 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
             if "ok" in ans:
                 return {"answer": ans["ok"]}
             raise RuntimeError("scripted")
+
+        async def book(self, call: dict[str, Any]) -> dict[str, Any]:
+            # what chobo's client would answer: done (or done before), a refusal with its reason, or a failure raised
+            ans = run.take(call, None)
+            if held(ans):
+                return await run.hold(ans)
+            if "ok" in ans:
+                return ans["ok"]
+            if ans["error"] in ("failure", "timeout"):
+                raise RuntimeError("scripted")
+            return {"result": "refused", "reason": ans["error"]}
 
     return StandIn()

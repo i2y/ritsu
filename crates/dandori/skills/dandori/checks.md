@@ -46,6 +46,12 @@ handled (E022). When the workflow ends, every case it started is in a final stat
 hands it over with `fail … leaving` (E020). An error nothing handles can leave a case unfinished too
 (W101), which `on failure` settles.
 
+**Dates and books.** A date is given what its inputs take: a day, or a time when its calendar says
+its UTC offset (E003). A task that runs an operation of a book takes what the operation takes,
+answers the hold, and declares only reasons the book can refuse with (E016, E007). A hold followed as
+a case can expire on the other side before it is posted, and each reason the book can refuse with
+there must be handled (E022). [Dates and books](dates-and-books.md)
+
 **Retries.** A call that changes something on the other side and is retried without an idempotency
 `key` could change it twice (E030; W030 when it only may change something). A task that starts a
 case without a `key` is a warning (W103).

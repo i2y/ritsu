@@ -134,6 +134,8 @@ pub fn rules_here(r: &Request) -> Value {
         .model
         .iter()
         .flat_map(|m| &m.rules)
+        // the rules alone: a date of a dates file and a book's hold have no page of rulec's
+        .filter(|ru| ru.is_rule())
         .map(|ru| {
             let page = sources::rule_doc(&ru.info.path, true, r.lang).map_err(|s| sources::said_notes(&s).iter().map(|t| t.get(r.lang).to_string()).collect::<Vec<_>>().join("\n"));
             json!({

@@ -1,0 +1,5 @@
+calendar 平日(weekdays_tokyo) v1
+description "日本時間で月曜から金曜まで営業する。祝日の表は持たない"
+offset +09:00
+
+closed weekly sat, sun

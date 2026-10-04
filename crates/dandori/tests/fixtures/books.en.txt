@@ -1,0 +1,43 @@
+error[E005]: tests/fixtures/books.flow:6:10: could not read the book `books/無い.book`
+     6 | use book 無い from "books/無い.book"
+  = cannot read `books/無い.book`: No such file or directory (os error 2)
+error[E005]: tests/fixtures/books.flow:7:10: could not read the book `books/壊れた.book`
+     7 | use book 壊れた from "books/壊れた.book"
+  = E020: the account `棚` has no bound; give it `at least` or `at most`, or mark it `outside` if it stands for the world outside the book (books/壊れた.book, line 6)
+  = E002: no account `倉` is declared (books/壊れた.book, line 11)
+error[E006]: tests/fixtures/books.flow:8:10: `倉庫` is used twice (rules, dates files and books share names)
+     8 | use book 倉庫 from "../flows/books/倉庫.book"
+error[E002]: tests/fixtures/books.flow:19:8: there is no book `棚卸し`; name one read by `use book`
+    19 |   book 棚卸し.引当.hold
+error[E002]: tests/fixtures/books.flow:22:11: the book `倉庫` has no transfer `廃棄` (入荷, 引当)
+    22 |   book 倉庫.廃棄.do
+error[E007]: tests/fixtures/books.flow:25:14: `入荷` is a transfer done at once; its operation is do
+    25 |   book 倉庫.入荷.hold
+error[E007]: tests/fixtures/books.flow:28:14: `引当` is a transfer that holds first; its operations are hold, post and void
+    28 |   book 倉庫.引当.do
+error[E007]: tests/fixtures/books.flow:32:3: an operation of a book is done once for the key the book gives it; leave out `key`
+    32 |   key 便
+error[E007]: tests/fixtures/books.flow:33:10: an error of a book's operation is the name of the reason the book refuses it with; leave out `= …`
+    33 |   errors 足りない = 409
+error[E016]: tests/fixtures/books.flow:35:1: the book takes `数` as `int`, but the task's parameter is `string`
+    35 | task 引き当てる(注文: string, sku: string, 数: string) -> 注文
+error[E016]: tests/fixtures/books.flow:35:1: `引当.hold` answers the hold, `倉庫.引当`, not `注文`
+    35 | task 引き当てる(注文: string, sku: string, 数: string) -> 注文
+error[E016]: tests/fixtures/books.flow:40:1: `引当.hold` takes `sku`; give the task that parameter
+    40 | task 一つだけ渡す(注文: string) -> 倉庫.引当
+error[E016]: tests/fixtures/books.flow:40:1: `引当.hold` takes `数`; give the task that parameter
+    40 | task 一つだけ渡す(注文: string) -> 倉庫.引当
+error[E016]: tests/fixtures/books.flow:44:1: `引当.void` takes no `色`
+    44 | task 色も渡す(注文: string, sku: string, 色: string) -> 倉庫.引当
+error[E016]: tests/fixtures/books.flow:48:1: `入荷.do` answers nothing; leave out `->`
+    48 | task 入荷を返す(便: string, sku: string, 数: int) -> 倉庫.引当
+error[E008]: tests/fixtures/books.flow:53:3: what `引当.post` does to the hold is `sends post`
+    53 |   sends void
+error[E007]: tests/fixtures/books.flow:58:14: a book refuses with a reason for each state of the hold; leave out `refused as`, and declare the reasons in `errors`
+    58 |   refused as 断られた
+error[E008]: tests/fixtures/books.flow:62:3: what `引当.hold` does to the hold is `starts 倉庫.引当`
+    62 |   sends post
+error[E008]: tests/fixtures/books.flow:75:12: what happens to a hold on its own is `expire`, of a transfer whose holds expire
+    75 |   external post
+error[E008]: tests/fixtures/books.flow:76:16: a hold is refused by the book, with a reason for each state; leave out `refused when`
+    76 |   refused when refused = true

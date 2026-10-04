@@ -61,7 +61,7 @@ pub(crate) fn q(s: &str) -> String {
 pub(crate) fn py_type(m: &Model, t: &Ty) -> String {
     match t {
         Ty::Int | Ty::Num(_) => "int".into(),
-        Ty::Str | Ty::Timestamp => "str".into(),
+        Ty::Str | Ty::Timestamp | Ty::Date => "str".into(),
         Ty::Bool => "bool".into(),
         Ty::Enum(e) => format!("T.{}", type_name(&m.enums[*e].name)),
         Ty::Record(r) => format!("T.{}", type_name(&m.records[*r].name)),
@@ -81,6 +81,7 @@ pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, d
         },
         Ty::Str => format!("isinstance({x}, str)"),
         Ty::Timestamp => format!("(isinstance({x}, str) and {p}TIMESTAMP.match({x}) is not None)"),
+        Ty::Date => format!("(isinstance({x}, str) and {p}DATE.match({x}) is not None)"),
         Ty::Bool => format!("isinstance({x}, bool)"),
         Ty::Enum(e) => format!("({x} in {p}{}_values)", type_name(&m.enums[*e].name)),
         Ty::Record(r) => format!("{p}is_{}({x})", type_name(&m.records[*r].name)),
@@ -111,6 +112,9 @@ pub(crate) fn types_file(m: &Model, header: &str) -> String {
     t.push_str(&format!("# The records and enums of {} v{}, and a check for each.\n\n", m.name, m.version));
     t.push_str("from __future__ import annotations\n\nimport re\nfrom typing import Any, Literal, NotRequired, TypedDict\n\n");
     t.push_str(&format!("TIMESTAMP = re.compile(r\"{}\")\n\n\n", render::TIMESTAMP_RE.replace("\\\\", "\\")));
+    if m.uses_dates() {
+        t.push_str(&format!("DATE = re.compile(r\"{}\")\n\n\n", render::DATE_RE));
+    }
     t.push_str("def is_int(v: Any) -> bool:\n    \"\"\"An integer, as JSON carries it: a float with nothing after the point is one too.\"\"\"\n");
     t.push_str("    return (isinstance(v, int) and not isinstance(v, bool)) or (isinstance(v, float) and v.is_integer())\n\n\n");
     for e in &enums {
@@ -200,8 +204,8 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         (format!("{dir}/__init__.py"), format!("{header}# {} v{}: the workflow for Temporal's Python SDK. See workflow.py.\n", m.name, m.version)),
         (format!("{dir}/types.py"), types_file(m, &header)),
         (format!("{dir}/activities.py"), tasks_file(m, &header)),
-        (format!("{dir}/io.py"), format!("{header}{}", io_py())),
-        (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}")),
+        (format!("{dir}/io.py"), format!("{header}{}", io_py(m))),
+        (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}{}", if m.uses_now() { NOW_PY } else { "" })),
         (format!("{dir}/workflow.py"), wf),
     ];
     if !called.is_empty() {
@@ -542,6 +546,27 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
                 ")".into(),
             ]
         }
+        Some(Via::Book(b)) => {
+            // the book's operation, on chobo's client through the transport; a refusal is the declared error its reason names
+            let f = &m.books[b.book].facts;
+            let names = task.errors.iter().map(|e| format!("{}: {}", q(&e.name), q(&e.name))).collect::<Vec<_>>().join(", ");
+            let tr = f.transfers.iter().find(|t| t.name == b.transfer);
+            let amounts: Vec<String> = tr.map(|t| t.params.iter().filter(|p| p.unit.is_some()).map(|p| p.name.clone()).collect()).unwrap_or_default();
+            let (call_args, call_amounts): (Vec<&(String, Ty)>, Vec<&(String, Ty)>) = task.params.iter().partition(|(p, _)| !(b.op == "post" && amounts.contains(p)));
+            let pick = |ps: &[&(String, Ty)]| ps.iter().map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect::<Vec<_>>().join(", ");
+            let mut call = format!("\"book\": {}, \"transfer\": {}, \"op\": {}, \"args\": {{{}}}", q(&f.name), q(&b.transfer), q(&b.op), pick(&call_args));
+            if !call_amounts.is_empty() {
+                call.push_str(&format!(", \"amounts\": {{{}}}", pick(&call_amounts)));
+            }
+            let keys: Vec<String> = tr.map(|t| t.params.iter().filter(|p| t.key.contains(&p.name)).map(|p| q(&p.name)).collect()).unwrap_or_default();
+            let state = match (b.op.as_str(), &task.result) {
+                (_, None) | ("do", _) => "None".to_string(),
+                ("hold", _) => q("held"),
+                ("post", _) => q("posted"),
+                _ => q("voided"),
+            };
+            vec![format!("return io.booked(await t.book({{{call}}}), {{{names}}}, fail, args, [{}], {state})", keys.join(", "))]
+        }
         _ => vec!["raise NotImplementedError".into()],
     }
 }
@@ -669,7 +694,7 @@ pub(crate) fn rule_doc(m: &Model, r: usize) -> String {
     let ru = &m.rules[r];
     let params: Vec<String> = ru.info.inputs.iter().map(|c| format!("{}: {}", q(&c.name), match &c.ty {
         crate::rulec::RType::Bool => "bool".to_string(),
-        crate::rulec::RType::Str | crate::rulec::RType::Enum(_) => "str".to_string(),
+        crate::rulec::RType::Str | crate::rulec::RType::Date | crate::rulec::RType::Enum(_) => "str".to_string(),
         crate::rulec::RType::Num { .. } => "int".to_string(),
     })).collect();
     format!("The rule {} v{}, called at its Connect service. args: {{{}}}. Answers the record of its outputs.", ru.info.rule, ru.info.version, params.join(", "))
@@ -688,19 +713,48 @@ pub const AROUND_RULES: &[&str] = &["Any", "activity", "rules", "args", "out", "
 /// activities, or as plain functions.
 pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, activities: bool) -> String {
     let mut t = header.to_string();
+    let dates = called.iter().any(|r| m.rules[*r].date().is_some());
+    let rules = called.iter().any(|r| m.rules[*r].is_rule());
+    let what = match (rules, dates) {
+        (true, false) => "rules",
+        (false, _) => "dates",
+        (true, true) => "rules and the dates",
+    };
+    let made = match (rules, dates) {
+        (true, false) => "the Python rulec generates",
+        (false, _) => "the Python koyomi generates",
+        (true, true) => "the Python rulec and koyomi generate",
+    };
     if activities {
-        t.push_str("# The rules the workflow calls, as activities around the Python rulec generates.\n");
+        t.push_str(&format!("# The {what} the workflow calls, as activities around {made}.\n"));
     } else {
-        t.push_str("# The rules the graph calls, as functions around the Python rulec generates.\n");
+        t.push_str(&format!("# The {what} the graph calls, as functions around {made}.\n"));
     }
-    t.push_str("# `rulec gen <rule> --out <this package>/rulec` writes the modules these imports read.\n\n");
-    t.push_str("from __future__ import annotations\n\nfrom typing import Any\n\n");
+    if rules {
+        t.push_str("# `rulec gen <rule> --out <this package>/rulec` writes the modules these imports read.\n");
+    }
+    if dates {
+        t.push_str("# `koyomi gen <file.cal> --out <this package>/koyomi` writes the modules of the dates.\n");
+    }
+    t.push_str("\nfrom __future__ import annotations\n\n");
+    if dates {
+        t.push_str("import datetime\n");
+    }
+    t.push_str("from typing import Any\n\n");
     if activities {
         t.push_str("from temporalio import activity\n\n");
     }
     // one import a module: two rules of the flow may be the same rule
     let mut imports: std::collections::BTreeMap<String, BTreeSet<String>> = std::collections::BTreeMap::new();
     for r in called {
+        if let Some(d) = m.rules[*r].date() {
+            let names = imports.entry(format!("koyomi.python.{}", d.file_alias)).or_default();
+            names.insert(d.alias.clone());
+            if d.at {
+                names.insert(format!("{}_at", d.alias));
+            }
+            continue;
+        }
         let py = &m.rules[*r].info.python;
         let names = imports.entry(py.module.clone()).or_default();
         names.insert(py.function.clone());
@@ -713,11 +767,39 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
     // two rules' enums of one name are two classes, so the second goes by another name
     let (lines, local) = crate::temporal::import_names(&imports, |_| None);
     for (module, names) in lines {
-        t.push_str(&format!("from .rulec.python.{module} import {}\n", names.join(", ")));
+        // a module of koyomi's is named by its path; one of rulec's by its name
+        let path = if module.contains('.') { module.clone() } else { format!("rulec.python.{module}") };
+        t.push_str(&format!("from .{path} import {}\n", names.join(", ")));
+    }
+    if dates {
+        t.push_str(crate::asl::PY_DAY.trim_end());
+        t.push('\n');
     }
     let mut acts = Vec::new();
     for r in called {
         let ru = &m.rules[*r];
+        if let Some(d) = ru.date() {
+            // koyomi's function for the date: its inputs by position, a day as datetime.date
+            let module = format!("koyomi.python.{}", d.file_alias);
+            let name_of = |n: &str| local.get(&(module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
+            let args = crate::asl::date_py_args(d, |n| format!("args[{}]", q(n)));
+            let mut outs = vec![format!("\"day\": {}(*a).isoformat()", name_of(&d.alias))];
+            if d.at {
+                outs.push(format!("\"at\": {}(*a)", name_of(&format!("{}_at", d.alias))));
+            }
+            let act = render::rule_activity(&ru.name);
+            let decorator = if activities { format!("@activity.defn(name={})\n", q(&act)) } else { String::new() };
+            t.push_str(&format!(
+                "\n\n{decorator}async def {act}(args: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"The date {} of the dates file {} v{}.\"\"\"\n    a = ({},)\n    return {{{}}}\n",
+                d.date,
+                ru.info.rule,
+                ru.info.version,
+                args.join(", "),
+                outs.join(", ")
+            ));
+            acts.push(act);
+            continue;
+        }
         let py = &ru.info.python;
         let name_of = |n: &str| local.get(&(py.module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
         let is_enum = |ty: &str| py.enums.iter().any(|e| e.alias == ty);
@@ -767,9 +849,58 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
 }
 
 /// io.py, with the numbers every target sends put in.
-pub(crate) fn io_py() -> String {
-    IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string())
+pub(crate) fn io_py(m: &Model) -> String {
+    let io = IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string());
+    let books = crate::asl::used_books(m);
+    if books.is_empty() {
+        return io;
+    }
+    // the books' operations: on chobo's Python client, which the transport is given
+    let mut names = String::from("# How chobo's Python client names each transfer of a book and its parameters, by the book's name.\nBOOKS: dict[str, Any] = {\n");
+    for b in &books {
+        let bu = &m.books[*b];
+        names.push_str(&format!("    {}: {},\n", q(&bu.facts.name), crate::asl::book_py_names(bu).replace('\n', "\n    ")));
+    }
+    names.push_str("}\n\n\n");
+    io.replace("class Transport(Protocol):", &format!("{names}class Transport(Protocol):"))
+        .replace(
+            "    async def agent(self, call: AgentCall) -> Any:\n        \"\"\"Run an agent once; the answer is the JSON it gave, as `schema` says. A refusal raises.\"\"\"\n        ...\n",
+            "    async def agent(self, call: AgentCall) -> Any:\n        \"\"\"Run an agent once; the answer is the JSON it gave, as `schema` says. A refusal raises.\"\"\"\n        ...\n\n    async def book(self, call: dict[str, Any]) -> dict[str, Any]:\n        \"\"\"Run an operation of a book of chobo's (do, hold, post or void) on chobo's client: {\"book\", \"transfer\",\n        \"op\", \"args\", \"amounts\"?}, by the book's names; the answer is {\"result\", \"reason\"?}, a refusal too.\"\"\"\n        ...\n",
+        )
+        .replace("        typesafe: dict[str, Any] | None = None,\n    ) -> None:", "        typesafe: dict[str, Any] | None = None,\n        books: dict[str, Any] | None = None,\n    ) -> None:")
+        .replace("TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY.\"\"\"\n        self._headers = headers", "TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY. `books`: the books the tasks run\n        operations on, by the book's name: the value chobo's Python client makes (`tigerbeetle(client)` or\n        `postgres(connection)`).\"\"\"\n        self._books = books or {}\n        self._headers = headers")
+        .replace("    def _client(self, service: str) -> Any:", &format!("{BOOK_PY}    def _client(self, service: str) -> Any:"))
+        .replace("    typesafe: dict[str, Any] | None = None,\n) -> Transport:\n    return DefaultTransport(headers, aws, agents, claude, typesafe)", "    typesafe: dict[str, Any] | None = None,\n    books: dict[str, Any] | None = None,\n) -> Transport:\n    return DefaultTransport(headers, aws, agents, claude, typesafe, books)")
+        + crate::asl::PY_BOOK_RUN
+        + BOOKED_PY
 }
+
+/// The default transport's `book`: the call on chobo's client, in a thread (the client blocks).
+const BOOK_PY: &str = r#"    async def book(self, call: dict[str, Any]) -> dict[str, Any]:
+        b = self._books.get(call["book"])
+        if b is None:
+            raise RuntimeError(f"no client for the book {call['book']!r}: give the transport books={{{call['book']!r}: …}}, the value chobo's Python client makes")
+        return await asyncio.to_thread(_book_run, b, BOOKS[call["book"]], call)
+
+"#;
+
+/// How a task reads a book's answer.
+const BOOKED_PY: &str = r#"
+
+def booked(r: dict[str, Any], names: dict[str, str], fail: Callable[[str, str], Exception], args: dict[str, Any], keys: list[str], state: str | None) -> Any:
+    """A book's answer as a task's: the hold (the arguments that are its key, `keys`, and its state
+    now, `state`) when the operation is done, now or before; nothing for a transfer done at once
+    (`state` None); or the declared error a refusal's reason names (`names`), else a failure."""
+    if r["result"] == "refused":
+        reason = str(r.get("reason"))
+        kind = names.get(reason)
+        raise fail(kind if kind is not None else f"Dandori.Failure.{reason}", reason)
+    if state is None:
+        return None
+    out = {k: args.get(k) for k in keys}
+    out["state"] = state
+    return out
+"#;
 
 const IO: &str = r#"# How the tasks that say `lambda`, `http`, `aws`, `agent` or `jev` reach the other side. They go
 # through a Transport, so that the credentials, the clients and a test's stand-in are yours to
@@ -1261,6 +1392,15 @@ def jev(body: Any, t: JevTask, fail: Callable[[str, str], Exception]) -> Any:
     return out
 "#;
 
+/// `now` on Temporal: the workflow's clock, which a replay reads again the same.
+const NOW_PY: &str = r#"
+
+def now() -> str:
+    """`now`: the moment, by the workflow's clock, which a replay reads again the same; to the
+    second, in UTC."""
+    return workflow.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+"#;
+
 const RUNTIME: &str = r#"# What the generated workflow code shares. It runs inside the workflow, so it uses nothing
 # but temporalio.workflow and what the workflow sandbox lets through.
 
@@ -1576,6 +1716,7 @@ impl<'a> Gen<'a> {
             TExpr::Bool(b) => if *b { "True".into() } else { "False".into() },
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "None".into(),
+            TExpr::Now => "dd.now()".into(),
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
                 for (i, f) in fields.iter().enumerate() {

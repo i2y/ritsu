@@ -1,7 +1,8 @@
 # Design
 
 A `.flow` is parsed, its names and types are resolved (a rule's from what rulec hands over through
-ritsu's port of rules), and the typed tree it becomes is checked along the flow:
+ritsu's port of rules, a dates file's and a book's from what koyomi and chobo hand over through the
+ports of dates and books), and the typed tree it becomes is checked along the flow:
 the states of its cases, what is given a value where, every arm, every way out. The reference
 interpreter runs it, the scenarios play it, and five generators build it.
 
@@ -28,7 +29,8 @@ the workflow and the states of its cases.
   your own code.
 - **P2. dandori stays outside rulec.** It reads a rule only through ritsu's port of rules, where rulec
   hands over what it knows of the rule as types; whoever runs dandori hands it the port (`ritsu dandori`
-  hands it rulec), and rulec does not know dandori.
+  hands it rulec), and rulec does not know dandori. A dates file of koyomi's and a book of chobo's are
+  read the same way, through the ports of dates and books.
 - **P3. One reference interpreter says what a `.flow` means,** and what each platform runs is held to
   it.
 - **P4. A loop says how many times it may go round,** and there is no recursion, so the length of a

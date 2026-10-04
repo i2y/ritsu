@@ -1,0 +1,4 @@
+calendar オフセット無し(no_offset) v1
+description "UTC オフセットを言わないカレンダー。土日を休む"
+
+closed weekly sat, sun

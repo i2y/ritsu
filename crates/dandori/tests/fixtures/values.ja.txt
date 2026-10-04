@@ -1,6 +1,6 @@
 エラー[E002]: tests/fixtures/values.flow:13:9: 型 `mony[円]` はありません
     13 |   点   : mony[円]
-  = 型は int・string・bool・timestamp・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
 エラー[E003]: tests/fixtures/values.flow:14:8: リストのリストは書けません。内側のリストはレコードに入れてください
     14 |   履歴 : list[list[string]]
 エラー[E003]: tests/fixtures/values.flow:20:16: 範囲を書けるのは数（`int` か単位の付いた数）で、これは `string` です

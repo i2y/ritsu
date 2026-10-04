@@ -1,10 +1,15 @@
-//! The facts of a rule as JSON, for the bundle the playground reads (crate::sources::Bundle): what
-//! rulec answered through ritsu's port of rules, written down by the tests that record the bundle
-//! and read back in the browser, where there is no rulec. The form is dandori's own; it holds every
-//! field of `ritsu_ports::RuleFacts`, and a unit as rulec spells it (`money[JPY, incl_tax]`,
-//! `rate[step 0.1%]`), which reads back as the same unit.
+//! The facts of a rule, of a dates file and of a book as JSON, for the bundle the playground reads
+//! (crate::sources::Bundle): what rulec, koyomi and chobo answered through ritsu's ports, written
+//! down by the tests that record the bundle and read back in the browser, where none of them runs.
+//! The form is dandori's own; it holds every field of `ritsu_ports::RuleFacts`, `DateFacts` and
+//! `BookFacts`, and a unit as rulec spells it (`money[JPY, incl_tax]`, `rate[step 0.1%]`), which
+//! reads back as the same unit; a book's count of things with a name and nothing else
+//! (`unit pcs`) is `{"count": "pcs"}`.
 
-use ritsu_ports::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, Param, Precondition, RuleEnum, RuleFacts, WireEnum, WireField};
+use ritsu_ports::{
+    Account, Axis, BookClient, BookFacts, BookUnit, Bound, Call, CallEnum, ClientTransfer, Column, ColumnType, Connect, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, EnumValue, Expiry, Machine,
+    MachineRow, Move, MoveAmount, MoveRef, Param, Precondition, RuleEnum, RuleFacts, Transfer, TransferParam, WireEnum, WireField,
+};
 use serde_json::{json, Map, Value};
 
 /// A whole number of the wire: a JSON number when it fits in 64 bits, else its digits as a string.
@@ -58,25 +63,27 @@ fn call(c: &Call) -> Value {
     })
 }
 
+fn machine(m: &Machine) -> Value {
+    json!({
+        "name": m.name,
+        "carry_in": m.carry_in,
+        "carry_out": m.carry_out,
+        "state_enum": m.state_enum,
+        "states": m.states,
+        "initial": m.initial,
+        "finals": m.finals,
+        "held": m.held,
+        "policy": m.policy,
+        "axes": m.axes.iter().map(|a| json!({ "column": a.column, "coords": a.coords })).collect::<Vec<_>>(),
+        "state_axis": m.state_axis,
+        "decides": m.decides,
+        "rows": m.rows.iter().map(|r| json!({ "row": r.row, "accepts": r.accepts, "to": r.to, "produces": r.produces })).collect::<Vec<_>>(),
+    })
+}
+
 /// The facts as the bundle holds them.
 pub fn facts_to_json(f: &RuleFacts) -> Value {
-    let machine = f.machine.as_ref().map(|m| {
-        json!({
-            "name": m.name,
-            "carry_in": m.carry_in,
-            "carry_out": m.carry_out,
-            "state_enum": m.state_enum,
-            "states": m.states,
-            "initial": m.initial,
-            "finals": m.finals,
-            "held": m.held,
-            "policy": m.policy,
-            "axes": m.axes.iter().map(|a| json!({ "column": a.column, "coords": a.coords })).collect::<Vec<_>>(),
-            "state_axis": m.state_axis,
-            "decides": m.decides,
-            "rows": m.rows.iter().map(|r| json!({ "row": r.row, "accepts": r.accepts, "to": r.to, "produces": r.produces })).collect::<Vec<_>>(),
-        })
-    });
+    let machine = f.machine.as_ref().map(machine);
     let preconditions: Vec<Value> = f
         .preconditions
         .iter()
@@ -113,6 +120,67 @@ pub fn facts_to_json(f: &RuleFacts) -> Value {
         "typescript": call(&f.typescript),
         "python": call(&f.python),
         "go": call(&f.go),
+    })
+}
+
+/// What koyomi knows of a dates file, as the bundle holds it.
+pub fn dates_to_json(f: &DateFacts) -> Value {
+    json!({
+        "name": f.name,
+        "alias": f.alias,
+        "version": f.version,
+        "sha256": f.sha256,
+        "inputs": f.inputs.iter().map(|i| json!({ "name": i.name, "alias": i.alias, "kind": if i.kind == DateKind::Date { "date" } else { "int" }, "min": i.min, "max": i.max })).collect::<Vec<_>>(),
+        "functions": f.functions.iter().map(|d| json!({ "name": d.name, "alias": d.alias, "params": d.params, "at": d.at })).collect::<Vec<_>>(),
+        "calendar": f.calendar.as_ref().map(|c| json!({ "name": c.name, "data": [c.data.0, c.data.1], "offset": c.offset })),
+        "claims": f.claims.iter().map(|(n, t)| json!([n, t])).collect::<Vec<_>>(),
+    })
+}
+
+fn unit(u: &ritsu_units::Unit) -> Value {
+    match &u.dim {
+        ritsu_units::Dim::Count(n) => json!({ "count": n }),
+        _ => json!(u.to_string()),
+    }
+}
+
+fn client(c: &BookClient) -> Value {
+    json!({ "module": c.module, "transfers": c.transfers.iter().map(|t| json!({ "member": t.member, "params": t.params })).collect::<Vec<_>>() })
+}
+
+/// What chobo knows of a book, as the bundle holds it.
+pub fn book_to_json(f: &BookFacts) -> Value {
+    let bound = |b: &Option<Bound>| b.as_ref().map(|b| json!({ "value": int(b.value), "refusal": b.refusal }));
+    let at = |r: &MoveRef| json!({ "account": r.account, "args": r.args.iter().map(|a| match a { Ok(p) => json!({ "param": p }), Err(l) => json!({ "literal": l }) }).collect::<Vec<_>>() });
+    let transfers: Vec<Value> = f
+        .transfers
+        .iter()
+        .map(|t| {
+            json!({
+                "name": t.name,
+                "params": t.params.iter().map(|p| json!({ "name": p.name, "unit": p.unit })).collect::<Vec<_>>(),
+                "key": t.key,
+                "pending": t.pending.map(|e| match e { Expiry::After(s) => json!({ "after": s }), Expiry::Never => json!("never") }),
+                "moves": t.moves.iter().map(|m| json!({
+                    "amount": match &m.amount { MoveAmount::Param(p) => json!({ "param": p }), MoveAmount::Literal(v) => json!({ "literal": int(*v) }) },
+                    "from": at(&m.from),
+                    "to": at(&m.to),
+                })).collect::<Vec<_>>(),
+                "refusals": t.refusals.iter().map(|(op, rs)| json!([op, rs])).collect::<Vec<_>>(),
+                "machine": t.machine.as_ref().map(machine),
+            })
+        })
+        .collect();
+    json!({
+        "name": f.name,
+        "version": f.version,
+        "sha256": f.sha256,
+        "units": f.units.iter().map(|u| json!({ "name": u.name, "scale": u.scale, "unit": unit(&u.unit) })).collect::<Vec<_>>(),
+        "accounts": f.accounts.iter().map(|a| json!({ "name": a.name, "params": a.params, "unit": a.unit, "outside": a.outside, "lower": bound(&a.lower), "upper": bound(&a.upper) })).collect::<Vec<_>>(),
+        "transfers": transfers,
+        "typescript": client(&f.typescript),
+        "python": client(&f.python),
+        "go": client(&f.go),
     })
 }
 
@@ -330,5 +398,147 @@ pub fn facts_from_json(v: &Value) -> R<RuleFacts> {
         typescript: read_call(&v["typescript"])?,
         python: read_call(&v["python"])?,
         go: read_call(&v["go"])?,
+    })
+}
+
+fn whole(v: &Value, k: &str) -> R<i64> {
+    v[k].as_i64().ok_or_else(|| format!("`{k}` is not a whole number"))
+}
+
+/// The facts of a dates file the bundle holds, read back.
+pub fn dates_from_json(v: &Value) -> R<DateFacts> {
+    obj(v, "the facts of the dates file")?;
+    let inputs = arr(v, "inputs")?
+        .iter()
+        .map(|i| {
+            let kind = match text(i, "kind")?.as_str() {
+                "date" => DateKind::Date,
+                "int" => DateKind::Int,
+                k => return Err(format!("`{k}` is not a kind of input")),
+            };
+            Ok(DateInput { name: text(i, "name")?, alias: text(i, "alias")?, kind, min: whole(i, "min")?, max: whole(i, "max")? })
+        })
+        .collect::<R<_>>()?;
+    let functions = arr(v, "functions")?
+        .iter()
+        .map(|d| {
+            let at = match &d["at"] {
+                Value::Null => None,
+                x => Some(x.as_u64().ok_or_else(|| format!("{x} is not a time of day"))? as u32),
+            };
+            Ok(DateFunction { name: text(d, "name")?, alias: text(d, "alias")?, params: texts(d, "params")?, at })
+        })
+        .collect::<R<_>>()?;
+    let calendar = match &v["calendar"] {
+        Value::Null => None,
+        c => {
+            let data = match c["data"].as_array().map(|a| a.as_slice()) {
+                Some([a, b]) => (a.as_i64().ok_or("the calendar's data is not two days")?, b.as_i64().ok_or("the calendar's data is not two days")?),
+                _ => return Err("the calendar's data is not two days".into()),
+            };
+            let offset = match &c["offset"] {
+                Value::Null => None,
+                x => Some(x.as_i64().ok_or_else(|| format!("{x} is not an offset"))? as i32),
+            };
+            Some(DateCalendar { name: text(c, "name")?, data, offset })
+        }
+    };
+    Ok(DateFacts {
+        name: text(v, "name")?,
+        alias: text(v, "alias")?,
+        version: text(v, "version")?,
+        sha256: text(v, "sha256")?,
+        inputs,
+        functions,
+        calendar,
+        claims: arr(v, "claims")?.iter().map(pair).collect::<R<_>>()?,
+    })
+}
+
+fn read_unit(v: &Value) -> R<ritsu_units::Unit> {
+    match v {
+        Value::Object(o) if o.contains_key("count") => Ok(ritsu_units::Unit::count(&text(v, "count")?)),
+        Value::String(u) => ritsu_units::Unit::parse(u).map_err(|e| format!("the unit `{u}`: {}", e.text().en)),
+        _ => Err(format!("{v} is not a unit")),
+    }
+}
+
+fn read_client(v: &Value) -> R<BookClient> {
+    let transfers = arr(v, "transfers")?.iter().map(|t| Ok(ClientTransfer { member: text(t, "member")?, params: texts(t, "params")? })).collect::<R<_>>()?;
+    Ok(BookClient { module: text(v, "module")?, transfers })
+}
+
+/// The facts of a book the bundle holds, read back.
+pub fn book_from_json(v: &Value) -> R<BookFacts> {
+    obj(v, "the facts of the book")?;
+    let bound = |b: &Value| -> R<Option<Bound>> {
+        match b {
+            Value::Null => Ok(None),
+            x => Ok(Some(Bound { value: read_int(&x["value"])?, refusal: text(x, "refusal")? })),
+        }
+    };
+    let at = |r: &Value| -> R<MoveRef> {
+        let args = arr(r, "args")?
+            .iter()
+            .map(|a| match (&a["param"], &a["literal"]) {
+                (Value::String(p), _) => Ok(Ok(p.clone())),
+                (_, Value::String(l)) => Ok(Err(l.clone())),
+                _ => Err(format!("{a} is neither a parameter nor a literal")),
+            })
+            .collect::<R<_>>()?;
+        Ok(MoveRef { account: text(r, "account")?, args })
+    };
+    let units = arr(v, "units")?
+        .iter()
+        .map(|u| Ok(BookUnit { name: text(u, "name")?, scale: u["scale"].as_u64().ok_or("a unit's scale is not a whole number")? as u32, unit: read_unit(&u["unit"])? }))
+        .collect::<R<_>>()?;
+    let accounts = arr(v, "accounts")?
+        .iter()
+        .map(|a| Ok(Account { name: text(a, "name")?, params: texts(a, "params")?, unit: text(a, "unit")?, outside: flag(a, "outside")?, lower: bound(&a["lower"])?, upper: bound(&a["upper"])? }))
+        .collect::<R<_>>()?;
+    let transfers = arr(v, "transfers")?
+        .iter()
+        .map(|t| {
+            let params = arr(t, "params")?.iter().map(|p| Ok(TransferParam { name: text(p, "name")?, unit: opt_text(p, "unit")? })).collect::<R<_>>()?;
+            let pending = match &t["pending"] {
+                Value::Null => None,
+                Value::String(s) if s == "never" => Some(Expiry::Never),
+                x => Some(Expiry::After(x["after"].as_u64().ok_or_else(|| format!("{x} is not an expiry"))?)),
+            };
+            let moves = arr(t, "moves")?
+                .iter()
+                .map(|m| {
+                    let amount = match (&m["amount"]["param"], &m["amount"]["literal"]) {
+                        (Value::String(p), _) => MoveAmount::Param(p.clone()),
+                        (_, Value::Null) => return Err(format!("{} is not an amount", m["amount"])),
+                        (_, l) => MoveAmount::Literal(read_int(l)?),
+                    };
+                    Ok(Move { amount, from: at(&m["from"])?, to: at(&m["to"])? })
+                })
+                .collect::<R<_>>()?;
+            let refusals = arr(t, "refusals")?
+                .iter()
+                .map(|r| match r.as_array().map(|a| a.as_slice()) {
+                    Some([Value::String(op), rs]) => Ok((op.clone(), rs.as_array().ok_or("the reasons are not a list")?.iter().map(|x| x.as_str().map(String::from).ok_or("a reason is not text".to_string())).collect::<R<_>>()?)),
+                    _ => Err(format!("{r} is not an operation and its reasons")),
+                })
+                .collect::<R<_>>()?;
+            let machine = match &t["machine"] {
+                Value::Null => None,
+                x => Some(read_machine(x)?),
+            };
+            Ok(Transfer { name: text(t, "name")?, params, key: texts(t, "key")?, pending, moves, refusals, machine })
+        })
+        .collect::<R<_>>()?;
+    Ok(BookFacts {
+        name: text(v, "name")?,
+        version: v["version"].as_u64().ok_or("the book's version is not a whole number")? as u32,
+        sha256: text(v, "sha256")?,
+        units,
+        accounts,
+        transfers,
+        typescript: read_client(&v["typescript"])?,
+        python: read_client(&v["python"])?,
+        go: read_client(&v["go"])?,
     })
 }

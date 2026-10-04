@@ -26,9 +26,10 @@ flow you type stays in the browser.
 <script src="playground/playground.js" defer></script>
 
 A flow here reads what the examples read, from the paths they give: their rules, the descriptions of
-their APIs, and fulfillment's child flow. A page cannot run rulec, so it carries what rulec answered
-for the examples' rules (what it knows of each, and the page `rulec doc` renders for it), recorded
-from the repository. The tests hold that record to what rulec answers now, and what this page answers
+their APIs, fulfillment's child flow, and the dates file and the book of invoice. A page cannot run
+rulec, koyomi or chobo, so it carries what rulec answered for the examples' rules (what it knows of
+each, and the page `rulec doc` renders for it), and what koyomi and chobo answered for the dates
+file and the book, recorded from the repository. The tests hold that record to what rulec answers now, and what this page answers
 to what the command answers ([How it is checked](assurance.md)).
 
 ## What to try
@@ -70,7 +71,8 @@ in it.
 - **Running.** `dandori run`, the scenarios, and the platforms themselves. What the builds do on
   every scenario is run by the tests.
 - **Changing a rule.** The rules are the examples' own, and a flow here can use only those; *rules*
-  shows them, but they cannot be changed here. To write a rule, use
+  shows them, but they cannot be changed here. The same goes for the dates file and the book of
+  invoice, which *rules* does not show. To write a rule, use
   [rulec's playground](https://i2y.github.io/rulec/playground/).
 - **Calls.** Nothing is called: not an API, an agent or Jev. *build* shows the code that would call
   them.

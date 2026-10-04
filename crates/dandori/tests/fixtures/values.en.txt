@@ -1,6 +1,6 @@
 error[E002]: tests/fixtures/values.flow:13:9: there is no type `mony[円]`
     13 |   点   : mony[円]
-  = a type is int, string, bool, timestamp, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
 error[E003]: tests/fixtures/values.flow:14:8: a list of lists is not supported; put the inner list in a record
     14 |   履歴 : list[list[string]]
 error[E003]: tests/fixtures/values.flow:20:16: a range is for a number (`int` or a unit), and this is `string`

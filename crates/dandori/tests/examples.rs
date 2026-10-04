@@ -30,7 +30,8 @@ fn with_rules<R>(f: impl FnOnce() -> R) -> R {
         static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::new());
     }
     let rules: std::rc::Rc<dyn ritsu_ports::Rules> = RULEC.with(|r| r.clone());
-    dandori::sources::with_rules(rules, f)
+    // the dates files and the books through koyomi's and chobo's answers, as a program that joins them reads them
+    dandori::sources::with_ports(rules, std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), f)
 }
 
 /// `dandori::check::check_file`, with the rules read through rulec.
@@ -52,6 +53,86 @@ fn rulec_vectors(rule: &Path) -> String {
     assert!(!rulec::has_error(&rulec::report(&src, path).diags), "{path} does not pass check");
     let (f, c) = rulec::prepare(&src, path).unwrap();
     rulec::vectors::generate(&f, &c).iter().map(|v| rulec::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n"
+}
+
+/// What `koyomi gen <file.cal> --target <target> --out <out>` writes, by koyomi's library.
+fn koyomi_gen(cal: &Path, out: &Path, target: koyomi::naming::Target) {
+    let checked = koyomi::check::check_file(cal.to_str().unwrap(), &koyomi::check::Options::default(), &mut koyomi::calendar::Loader::default()).unwrap();
+    let c = checked.checked.as_ref().unwrap_or_else(|| panic!("{} does not pass koyomi's check", cal.display()));
+    let unit = koyomi::codegen::unit_of(c, dandori::diag::Lang::En);
+    for (name, text) in koyomi::codegen::files(&unit, target) {
+        let p = out.join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, text).unwrap();
+    }
+}
+
+/// What `koyomi vectors <file.cal>` prints for the dates file: every input of its range, with what
+/// each date comes to, a line each (koyomi's library).
+fn koyomi_vectors(cal: &Path) -> Vec<Value> {
+    let checked = koyomi::check::check_file(cal.to_str().unwrap(), &koyomi::check::Options::default(), &mut koyomi::calendar::Loader::default()).unwrap();
+    let Some(koyomi::check::Checked::Dates(m, _)) = checked.checked else { panic!("{} is not a dates file that passes koyomi's check", cal.display()) };
+    let lines = koyomi::vectors::DatesLines::new(&m);
+    koyomi::vectors::DatesRows::new(&m).map(|r| serde_json::from_str(&lines.line(&r)).unwrap()).collect()
+}
+
+/// The vectors the glue of a rule or a date answers, a JSON line each with its `in` and `out`: for a
+/// rule, rulec's; for a date of a dates file, koyomi's, each with the day and the time of the date
+/// (`day`, `at`) as the date's activity answers them, and besides, every seventh input given as the
+/// time half an hour after the day's midnight at the calendar's offset, which the glue reads as that
+/// day.
+fn glue_vectors(m: &Model, r: usize) -> String {
+    let ru = &m.rules[r];
+    let Some(d) = ru.date() else { return rulec_vectors(&ru.info.path) };
+    let mut out = String::new();
+    for (i, v) in koyomi_vectors(&ru.info.path).iter().enumerate() {
+        let Some(o) = v.get("out") else { continue };
+        let mut want = json!({ "day": o[&d.date] });
+        if d.at {
+            want["at"] = o[&format!("{}.at", d.date)].clone();
+        }
+        let ins: serde_json::Map<String, Value> = d.params.iter().map(|(n, _, _)| (n.clone(), v["in"][n].clone())).collect();
+        out.push_str(&json!({ "in": ins, "out": want }).to_string());
+        out.push('\n');
+        if let (0, Some(offset)) = (i % 7, d.offset) {
+            let mut timed = ins.clone();
+            for (n, _, day) in &d.params {
+                if *day {
+                    let at = time_of(v["in"][n].as_str().unwrap(), offset);
+                    timed.insert(n.clone(), json!(at));
+                }
+            }
+            out.push_str(&json!({ "in": timed, "out": want }).to_string());
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// The moment half an hour after the midnight that starts `day` at an offset (minutes east of
+/// UTC), in UTC: `2026-04-01` at +09:00 is `2026-03-31T15:30:00Z`.
+fn time_of(day: &str, offset: i32) -> String {
+    let (y, mo, d) = (day[0..4].parse::<i64>().unwrap(), day[5..7].parse::<i64>().unwrap(), day[8..10].parse::<i64>().unwrap());
+    // days from 1970-01-01 (Howard Hinnant's days_from_civil)
+    let yy = if mo <= 2 { y - 1 } else { y };
+    let era = if yy >= 0 { yy } else { yy - 399 } / 400;
+    let yoe = yy - era * 400;
+    let doy = (153 * (if mo > 2 { mo - 3 } else { mo + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146097 + doe - 719468;
+    let secs = days * 86400 + 30 * 60 - offset as i64 * 60;
+    let (days, rest) = (secs.div_euclid(86400), secs.rem_euclid(86400));
+    // and back to the civil date
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let dd = doy - (153 * mp + 2) / 5 + 1;
+    let mm = if mp < 10 { mp + 3 } else { mp - 9 };
+    let yr = yoe + era * 400 + if mm <= 2 { 1 } else { 0 };
+    format!("{yr:04}-{mm:02}-{dd:02}T{:02}:{:02}:{:02}Z", rest / 3600, rest % 3600 / 60, rest % 60)
 }
 
 fn node_available() -> bool {
@@ -1564,6 +1645,549 @@ fn default_transports_send_what_the_calls_say() {
     assert!(checked > 0, "no call went through a Transport");
 }
 
+/// What a flow's runs ask of its books, for books_run_on_postgres_and_tigerbeetle: the operations
+/// each scenario's run makes, in order, as the reference interpreter shows them for Temporal
+/// (`{"book", "transfer", "op", "args", "amounts"?}`), each different list once; then each list
+/// after the operations that open its books (book_opening), and that with the list once more on the
+/// same tenant, which the books answer as operations done before.
+fn book_lists(m: &Model) -> Vec<Vec<Value>> {
+    let mut lists: Vec<Vec<Value>> = Vec::new();
+    for sc in dandori::scenarios::generate(m) {
+        let (reference, _) = dandori::interp::run_traced(m, &sc, View::Temporal).unwrap();
+        let calls: Vec<Value> = reference["steps"].as_array().unwrap().iter().filter_map(|s| s.get("call")).filter(|c| c.get("book").is_some()).cloned().collect();
+        if !calls.is_empty() && !lists.contains(&calls) {
+            lists.push(calls);
+        }
+    }
+    let mut out = lists.clone();
+    for calls in &lists {
+        let opened: Vec<Value> = book_opening(m, calls).into_iter().chain(calls.iter().cloned()).collect();
+        let again: Vec<Value> = opened.iter().chain(calls.iter()).cloned().collect();
+        out.push(opened);
+        out.push(again);
+    }
+    out
+}
+
+/// What opens the books a list of operations runs on: each transfer of a book done at once that
+/// brings in from outside the book what it moves (`receive`, from `suppliers`), with 1,000 of each
+/// amount, and for each string the value the list's operations give a parameter of that name
+/// (`sku`), else "opening".
+fn book_opening(m: &Model, calls: &[Value]) -> Vec<Value> {
+    let mut out = Vec::new();
+    let mut seen: Vec<&str> = Vec::new();
+    for c in calls {
+        let name = c["book"].as_str().unwrap();
+        if seen.contains(&name) {
+            continue;
+        }
+        seen.push(name);
+        let f = &m.books.iter().find(|b| b.facts.name == name).unwrap().facts;
+        let outside = |a: &str| f.accounts.iter().any(|x| x.name == a && x.outside);
+        for t in f.transfers.iter().filter(|t| t.pending.is_none() && t.moves.iter().all(|mv| outside(&mv.from.account))) {
+            let args: serde_json::Map<String, Value> = t
+                .params
+                .iter()
+                .map(|p| {
+                    let v = if p.unit.is_some() { json!(1000) } else { calls.iter().find_map(|c| c["args"].get(&p.name).filter(|v| v.is_string()).cloned()).unwrap_or_else(|| json!("opening")) };
+                    (p.name.clone(), v)
+                })
+                .collect();
+            out.push(json!({ "book": name, "transfer": t.name, "op": "do", "args": args }));
+        }
+    }
+    out
+}
+
+/// What chobo's reference interpreter answers for a list of operations on books that start empty
+/// (ritsu's port of books, `Books::open`), as a default Transport answers: `{"result", "reason"?}`.
+fn ledger_answers(m: &Model, calls: &[Value]) -> Vec<Value> {
+    use ritsu_ports::{BookCall, BookOutcome, Books, Ledger};
+    let mut ledgers: std::collections::BTreeMap<String, Box<dyn Ledger>> = std::collections::BTreeMap::new();
+    calls
+        .iter()
+        .map(|c| {
+            let name = c["book"].as_str().unwrap();
+            let bu = m.books.iter().find(|b| b.facts.name == name).unwrap();
+            let ledger = ledgers.entry(name.to_string()).or_insert_with(|| chobo::ports::Engine.open(&bu.path).unwrap_or_else(|_| panic!("{} does not open", bu.path.display())));
+            let t = bu.transfer(c["transfer"].as_str().unwrap()).unwrap();
+            let value = |p: &ritsu_ports::TransferParam, v: &Value| if p.unit.is_some() { Ok(v.as_i64().unwrap() as i128) } else { Err(v.as_str().unwrap().to_string()) };
+            let args = t.params.iter().filter_map(|p| c["args"].get(&p.name).map(|v| (p.name.clone(), value(p, v)))).collect();
+            let amounts = c.get("amounts").map(|a| t.params.iter().filter_map(|p| a.get(&p.name).map(|v| (p.name.clone(), v.as_i64().unwrap() as i128))).collect());
+            let call = BookCall { transfer: t.name.clone(), op: c["op"].as_str().unwrap().to_string(), args, amounts };
+            match ledger.apply(&call) {
+                Ok(BookOutcome::Done) => json!({ "result": "done" }),
+                Ok(BookOutcome::DoneBefore) => json!({ "result": "done_before" }),
+                Ok(BookOutcome::Refused(r)) => json!({ "result": "refused", "reason": r }),
+                Err(e) => panic!("chobo's reference interpreter does not take {c}: {}", e.en),
+            }
+        })
+        .collect()
+}
+
+/// A file's text without the comment lines it starts with (the header, which names the target).
+fn past_header(text: &str) -> String {
+    text.lines().skip_while(|l| l.starts_with("//") || l.starts_with('#') || l.trim().is_empty()).collect::<Vec<_>>().join("\n")
+}
+
+/// The requirements of a go.mod, each module with its version.
+fn go_requires(text: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut inside = false;
+    for l in text.lines() {
+        let t = l.trim();
+        if t == "require (" {
+            inside = true;
+            continue;
+        }
+        if inside && t == ")" {
+            inside = false;
+            continue;
+        }
+        let t = if inside {
+            t
+        } else if let Some(r) = t.strip_prefix("require ") {
+            r
+        } else {
+            continue;
+        };
+        let mut parts = t.split("//").next().unwrap().split_whitespace();
+        if let (Some(p), Some(v)) = (parts.next(), parts.next()) {
+            out.push((p.to_string(), v.to_string()));
+        }
+    }
+    out
+}
+
+/// Whether a module's version `a` comes after `b` (v1.2.3, then what follows a `-`, as text: a
+/// pseudo-version's time).
+fn go_newer(a: &str, b: &str) -> bool {
+    let parts = |v: &str| {
+        let (core, rest) = v.trim_start_matches('v').split_once('-').map(|(c, r)| (c.to_string(), r.to_string())).unwrap_or((v.trim_start_matches('v').to_string(), String::new()));
+        let nums: Vec<u64> = core.split('.').map(|n| n.parse().unwrap_or(0)).collect();
+        // a version without a part after `-` comes after one with it
+        (nums, rest.is_empty(), rest)
+    };
+    parts(a) > parts(b)
+}
+
+/// The operations the flows run on books of chobo's go through the default Transport dandori
+/// writes in TypeScript (io.ts), in Python (io.py) and in Go, and through the Lambda function it
+/// writes for Step Functions, to the clients chobo writes, on PostgreSQL and on TigerBeetle started
+/// as chobo's tests start them (ritsu-testkit's): each answers what chobo's reference interpreter
+/// answers for the same operations. The operations are those the scenarios' runs make
+/// (book_lists). The other targets hand them to the same code: durable's io.ts and the Argo
+/// caller's are Temporal's, and pydantic-graph's io.py is Temporal's for Python, which the test
+/// holds them to.
+#[test]
+fn books_run_on_postgres_and_tigerbeetle() {
+    if !need(Need::Postgres) || !need(Need::TigerBeetle) {
+        return;
+    }
+    type Flow = (PathBuf, Model, Vec<Vec<Value>>, Vec<Vec<Value>>);
+    let mut flows: Vec<Flow> = Vec::new();
+    for f in runnable() {
+        let (_, got) = check_file(&f).unwrap();
+        let m = got.model.expect("the flows pass check");
+        if dandori::asl::used_books(&m).is_empty() {
+            continue;
+        }
+        let lists = book_lists(&m);
+        let expected: Vec<Vec<Value>> = lists.iter().map(|l| ledger_answers(&m, l)).collect();
+        flows.push((f, m, lists, expected));
+    }
+    if flows.is_empty() {
+        skip("no flow runs an operation on a book; books_run_on_postgres_and_tigerbeetle has nothing to run");
+        return;
+    }
+    let work = scratch("books");
+    let runner = root().join("../chobo/tools/runner");
+    // every book once, by its name
+    let mut books: std::collections::BTreeMap<String, (PathBuf, chobo::model::Book)> = std::collections::BTreeMap::new();
+    for (f, m, _, _) in &flows {
+        for b in dandori::asl::used_books(m) {
+            let bu = &m.books[b];
+            if let Some((p, _)) = books.get(&bu.facts.name) {
+                assert_eq!(std::fs::read(p).unwrap(), std::fs::read(&bu.path).unwrap(), "{}: two books are named {}, and the databases hold one of each name", rel(f), bu.facts.name);
+                continue;
+            }
+            let (book, d) = chobo::model::load(&std::fs::read_to_string(&bu.path).unwrap());
+            assert!(d.is_empty(), "{} does not load", bu.path.display());
+            books.insert(bu.facts.name.clone(), (bu.path.clone(), book.unwrap()));
+        }
+    }
+    // a client of a book, by chobo's library, as `chobo build` writes it; the path of its first file
+    let client = |name: &str, target: chobo::target::Target, dir: &Path| -> PathBuf {
+        let (p, book) = &books[name];
+        let stem = p.file_stem().unwrap().to_string_lossy().to_string();
+        let files = chobo::target::build(book, &stem, target).unwrap_or_else(|d| panic!("{name}: {target:?}: {}", d[0].message.en));
+        let mut first = None;
+        for (r, text) in &files {
+            let at = dir.join(Path::new(r).file_name().unwrap());
+            std::fs::create_dir_all(dir).unwrap();
+            std::fs::write(&at, text).unwrap();
+            first.get_or_insert(at);
+        }
+        first.unwrap()
+    };
+    // the code dandori writes for each flow: io.ts, io.py and the books' Lambda functions
+    let mut io_ts = Vec::new();
+    let mut io_py = Vec::new();
+    let mut handlers = Vec::new();
+    for (i, (f, m, _, _)) in flows.iter().enumerate() {
+        let find = |files: &[(String, String)], end: &str| files.iter().find(|(n, _)| n == end || n.ends_with(&format!("/{end}"))).map(|(_, t)| t.clone()).unwrap_or_else(|| panic!("{}: no {end}", rel(f)));
+        let ts = find(&dandori::temporal::build(m).unwrap(), "io.ts");
+        let py = find(&dandori::temporal_py::build(m).unwrap(), "io.py");
+        for (what, other) in [
+            ("durable's io.ts", find(&dandori::temporal::build_flavor(m, dandori::temporal::Flavor::Durable).unwrap(), "io.ts")),
+            ("the Argo caller's io.ts", find(&dandori::argo::build(m).unwrap(), "io.ts")),
+        ] {
+            assert_eq!(past_header(&other), past_header(&ts), "{}: {what} is not Temporal's, which this test runs", rel(f));
+        }
+        assert_eq!(past_header(&find(&dandori::pydantic_graph::build(m).unwrap(), "io.py")), past_header(&py), "{}: pydantic-graph's io.py is not Temporal's for Python, which this test runs", rel(f));
+        let dir = work.join(format!("flows/f{i}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (ts_at, py_at) = (dir.join("io.ts"), dir.join("io.py"));
+        std::fs::write(&ts_at, ts).unwrap();
+        std::fs::write(&py_at, py).unwrap();
+        io_ts.push(ts_at);
+        io_py.push(py_at);
+        let asl = dandori::asl::build(m).unwrap();
+        let mut hs = serde_json::Map::new();
+        for b in dandori::asl::used_books(m) {
+            let name = &m.books[b].facts.name;
+            let at = dir.join(format!("book_{b}_handler.py"));
+            std::fs::write(&at, find(&asl, &format!("book_{}_handler.py", dandori::render::ident(name)))).unwrap();
+            hs.insert(name.clone(), json!(at));
+        }
+        handlers.push(hs);
+    }
+    // what the runs of a language on a database are given: each list of each flow on a tenant of its own
+    let runs = |lang: &str, backend: &str, each: &dyn Fn(usize, &Model, &mut Value)| -> Vec<Value> {
+        let mut out = Vec::new();
+        for (i, (f, m, lists, _)) in flows.iter().enumerate() {
+            for (j, calls) in lists.iter().enumerate() {
+                let mut r = json!({ "tenant": format!("{lang}/{backend}/{}/{}", key(f), j + 1), "calls": calls });
+                each(i, m, &mut r);
+                out.push(r);
+            }
+        }
+        out
+    };
+    // the answers of the runs against what the reference interpreter answers, and what the runs failed with
+    let compare = |what: &str, got: &Value, field: &str, map: &dyn Fn(&Value) -> Value, failures: &mut Vec<String>, count: &mut usize| {
+        let Some(got_runs) = got["runs"].as_array() else {
+            failures.push(format!("{what}: no runs in {got}"));
+            return;
+        };
+        let mut n = 0;
+        for (f, _, lists, expected) in &flows {
+            for (j, (calls, want)) in lists.iter().zip(expected).enumerate() {
+                let answers = got_runs.get(n).map(|r| r[field].clone()).unwrap_or(Value::Null);
+                n += 1;
+                let want: Vec<Value> = want.iter().map(map).collect();
+                if answers != Value::Array(want.clone()) {
+                    failures.push(format!(
+                        "{what}: {} list {}: the answers differ from chobo's reference interpreter's\n--- operations\n{}\n--- reference\n{}\n--- {what}\n{}",
+                        rel(f),
+                        j + 1,
+                        serde_json::to_string(calls).unwrap(),
+                        serde_json::to_string(&want).unwrap(),
+                        serde_json::to_string(&answers).unwrap()
+                    ));
+                } else {
+                    *count += calls.len();
+                }
+            }
+        }
+    };
+    let same = |v: &Value| v.clone();
+    // what the Lambda function of Step Functions answers: the client's result, or a refusal raised as the reason
+    let raised = |v: &Value| if v["result"] == "refused" { json!({ "raised": v["reason"] }) } else { v.clone() };
+    let run = |mut cmd: Command, input: &Value, name: &str| -> Result<Value, String> {
+        let file = work.join(format!("{name}.json"));
+        std::fs::write(&file, serde_json::to_string(input).unwrap()).unwrap();
+        let out = cmd.arg(&file).output().map_err(|e| e.to_string())?;
+        if !out.status.success() {
+            return Err(format!("{name}: the runner failed:\n{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+        }
+        serde_json::from_slice(&out.stdout).map_err(|e| format!("{name}: the runner's output is not JSON ({e}):\n{}", String::from_utf8_lossy(&out.stderr)))
+    };
+
+    // TypeScript: beside chobo's tools/runner/node_modules, as chobo's runner is
+    let ts_dir = work.join("ts");
+    let typescript = Command::new("node").arg("--version").output().is_ok_and(|o| o.status.success()) && runner.join("node_modules/pg").is_dir() && runner.join("node_modules/tigerbeetle-node").is_dir();
+    if typescript {
+        std::fs::create_dir_all(&ts_dir).unwrap();
+        std::os::unix::fs::symlink(runner.join("node_modules"), ts_dir.join("node_modules")).unwrap();
+        std::fs::write(ts_dir.join("package.json"), "{\"type\": \"module\"}\n").unwrap();
+        std::fs::copy(root().join("tools/books/run.ts"), ts_dir.join("run.ts")).unwrap();
+        for (i, p) in io_ts.iter().enumerate() {
+            std::fs::copy(p, ts_dir.join(format!("io{i}.ts"))).unwrap();
+        }
+    } else {
+        skip("node, or pg and tigerbeetle-node in chobo's tools/runner/node_modules, is missing; the books are not run through io.ts");
+    }
+    // Python: chobo's tools/runner/.venv, which has psycopg and tigerbeetle
+    let python = runner.join(".venv/bin/python");
+    if !python.is_file() {
+        skip("chobo's tools/runner/.venv is missing; the books are not run through io.py and the Lambda functions");
+    }
+    // Go: a module of the Go dandori writes for each flow and of chobo's Go clients
+    let go_bin = (|| -> Option<PathBuf> {
+        let temporal_go = root().join("tools/temporal-go");
+        if !Command::new("go").arg("version").output().is_ok_and(|o| o.status.success()) || !temporal_go.join("go.mod").is_file() || !runner.join("go/go.mod").is_file() {
+            skip("go, tools/temporal-go or chobo's tools/runner/go is missing; the books are not run through the Go Transport");
+            return None;
+        }
+        let module = work.join("go");
+        let ours = std::fs::read_to_string(temporal_go.join("go.mod")).unwrap();
+        let theirs = std::fs::read_to_string(runner.join("go/go.mod")).unwrap();
+        let mut requires: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+        for (p, v) in go_requires(&ours).into_iter().chain(go_requires(&theirs)) {
+            match requires.get(&p) {
+                Some(have) if !go_newer(&v, have) => {}
+                _ => {
+                    requires.insert(p, v);
+                }
+            }
+        }
+        let go_line = ours.lines().find(|l| l.starts_with("go ")).unwrap();
+        let mut gomod = format!("module dandoribooks\n\n{go_line}\n\nrequire (\n");
+        for (p, v) in &requires {
+            gomod.push_str(&format!("\t{p} {v}\n"));
+        }
+        gomod.push_str(")\n");
+        let mut sums: Vec<String> = Vec::new();
+        for f in [temporal_go.join("go.sum"), runner.join("go/go.sum")] {
+            for l in std::fs::read_to_string(f).unwrap().lines() {
+                if !sums.iter().any(|s| s == l) {
+                    sums.push(l.to_string());
+                }
+            }
+        }
+        std::fs::create_dir_all(&module).unwrap();
+        std::fs::write(module.join("go.mod"), gomod).unwrap();
+        std::fs::write(module.join("go.sum"), sums.join("\n") + "\n").unwrap();
+        let mut imports = vec!["\"context\"".to_string(), "\"encoding/json\"".into(), "\"fmt\"".into(), "\"math/big\"".into(), "\"os\"".into(), String::new(), "\"github.com/jackc/pgx/v5/pgxpool\"".into(), "tb \"github.com/tigerbeetle/tigerbeetle-go\"".into(), String::new()];
+        let mut flow_entries = String::new();
+        for (i, (_, m, _, _)) in flows.iter().enumerate() {
+            let pkg = dandori::temporal_go::package(m);
+            for (name, text) in dandori::temporal_go::build(m).unwrap() {
+                let p = module.join(format!("flows/f{i}")).join(&name);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                // the rules are not called here, as in the Go runner: rules.go bundles none of rulec's or koyomi's code
+                let text = if name.ends_with("/rules.go") { format!("package {pkg}\n\nvar ddRules = map[string]any{{}}\n") } else { text };
+                std::fs::write(&p, text).unwrap();
+            }
+            imports.push(format!("f{i} \"dandoribooks/flows/f{i}/{pkg}\""));
+            flow_entries.push_str(&format!(
+                "\t\"f{i}\": func(books map[string]any) func(context.Context, call) answer {{\n\t\tt := f{i}.NewTransport(f{i}.TransportOptions{{Books: books}}).(f{i}.BookTransport)\n\t\treturn func(ctx context.Context, c call) answer {{\n\t\t\tr, err := t.Book(ctx, f{i}.BookCall{{Book: c.Book, Transfer: c.Transfer, Op: c.Op, Args: c.Args, Amounts: c.Amounts}})\n\t\t\treturn reply(r.Result, r.Reason, err)\n\t\t}}\n\t}},\n"
+            ));
+        }
+        let mut book_entries = String::new();
+        for (k, name) in books.keys().enumerate() {
+            client(name, chobo::target::Target::PostgresGo, &module.join(format!("books/pg{k}")));
+            client(name, chobo::target::Target::TigerBeetleGo, &module.join(format!("books/tb{k}")));
+            imports.push(format!("pg{k} \"dandoribooks/books/pg{k}\""));
+            imports.push(format!("tb{k} \"dandoribooks/books/tb{k}\""));
+            book_entries.push_str(&format!("\t{name:?}: func(p *pgxpool.Pool, c tb.Client, tenant string) any {{\n\t\tif p != nil {{\n\t\t\treturn pg{k}.Postgres(p, tenant)\n\t\t}}\n\t\treturn tb{k}.TigerBeetle(c, tenant)\n\t}},\n"));
+        }
+        let main = format!(
+            "// The default Transport dandori writes in Go, running the operations of books on the Go clients chobo writes,\n// for books_run_on_postgres_and_tigerbeetle (tests/examples.rs), as tools/books/run.ts does in TypeScript.\npackage main\n\nimport (\n{}\n)\n\n{GO_BOOKS_MAIN}\nvar flows = map[string]func(map[string]any) func(context.Context, call) answer{{\n{flow_entries}}}\n\nvar books = map[string]func(*pgxpool.Pool, tb.Client, string) any{{\n{book_entries}}}\n",
+            imports.iter().map(|i| if i.is_empty() { String::new() } else { format!("\t{i}") }).collect::<Vec<_>>().join("\n")
+        );
+        std::fs::write(module.join("main.go"), main).unwrap();
+        let bin = work.join("go-books");
+        let started = std::time::Instant::now();
+        let out = go_in(&module).args(["build", "-mod=readonly", "-o"]).arg(&bin).arg(".").output().unwrap();
+        assert!(out.status.success(), "the Go of the books did not build:\n{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        eprintln!("built the Go of the books in {:.0} s", started.elapsed().as_secs_f64());
+        Some(bin)
+    })();
+
+    let pg = ritsu_testkit::pg::Postgres::start();
+    let tb = ritsu_testkit::tigerbeetle::TigerBeetle::start();
+    let mut failures: Vec<String> = Vec::new();
+    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for backend in ["postgres", "tigerbeetle"] {
+        let connection = match (backend, &pg, &tb) {
+            ("postgres", Ok(pg), _) => {
+                // the SQL of every book, in the database the clients call
+                for name in books.keys() {
+                    let sql = client(name, chobo::target::Target::Postgres, &work.join("sql"));
+                    let out = pg.psql("postgres").arg("-f").arg(&sql).output().unwrap();
+                    assert!(out.status.success(), "{name}: the SQL does not load:\n{}", String::from_utf8_lossy(&out.stderr));
+                }
+                json!({ "host": pg.socket.to_str().unwrap(), "port": pg.port, "database": "postgres", "user": pg.user })
+            }
+            ("tigerbeetle", _, Ok(tb)) => json!({ "cluster": "0", "addresses": [tb.address] }),
+            (_, Err(why), _) | (_, _, Err(why)) => {
+                skip(&format!("{why}; the books are not run on {backend}"));
+                continue;
+            }
+            _ => unreachable!(),
+        };
+        let input = |runs: Vec<Value>| {
+            let mut v = json!({ "backend": backend, "runs": runs });
+            v[backend] = connection.clone();
+            v
+        };
+        if typescript {
+            let dir = ts_dir.join(backend);
+            let target = if backend == "postgres" { chobo::target::Target::PostgresTypeScript } else { chobo::target::Target::TigerBeetleTypeScript };
+            let clients: serde_json::Map<String, Value> = books.keys().map(|n| (n.clone(), json!(client(n, target, &dir)))).collect();
+            let rs = runs("typescript", backend, &|i, _, r| {
+                r["io"] = json!(ts_dir.join(format!("io{i}.ts")));
+                r["clients"] = Value::Object(clients.clone());
+            });
+            let mut cmd = Command::new("node");
+            cmd.arg("--no-warnings").arg(ts_dir.join("run.ts"));
+            let what = format!("io.ts on {backend}");
+            match run(cmd, &input(rs), &format!("typescript-{backend}")) {
+                Ok(got) => compare(&what, &got, "answers", &same, &mut failures, counts.entry(what.clone()).or_default()),
+                Err(e) => failures.push(e),
+            }
+        }
+        if python.is_file() {
+            let dir = work.join("py").join(backend);
+            let target = if backend == "postgres" { chobo::target::Target::PostgresPython } else { chobo::target::Target::TigerBeetlePython };
+            let clients: serde_json::Map<String, Value> = books.keys().map(|n| (n.clone(), json!(client(n, target, &dir)))).collect();
+            let rs = runs("python", backend, &|i, _, r| {
+                r["io"] = json!(io_py[i]);
+                r["clients"] = Value::Object(clients.clone());
+                r["handlers"] = Value::Object(handlers[i].clone());
+            });
+            // -B: chobo's .venv is chobo's, and nothing here writes into it, its bytecode either
+            let mut cmd = Command::new(&python);
+            cmd.arg("-B").arg(root().join("tools/books/run.py"));
+            match run(cmd, &input(rs), &format!("python-{backend}")) {
+                Ok(got) => {
+                    let what = format!("io.py on {backend}");
+                    compare(&what, &got, "answers", &same, &mut failures, counts.entry(what.clone()).or_default());
+                    let what = format!("the Lambda functions of Step Functions on {backend}");
+                    compare(&what, &got, "handled", &raised, &mut failures, counts.entry(what.clone()).or_default());
+                }
+                Err(e) => failures.push(e),
+            }
+        }
+        if let Some(bin) = &go_bin {
+            let rs = runs("go", backend, &|i, _, r| r["flow"] = json!(format!("f{i}")));
+            let what = format!("the Go Transport on {backend}");
+            match run(Command::new(bin), &input(rs), &format!("go-{backend}")) {
+                Ok(got) => compare(&what, &got, "answers", &same, &mut failures, counts.entry(what.clone()).or_default()),
+                Err(e) => failures.push(e),
+            }
+        }
+    }
+    for (what, n) in &counts {
+        eprintln!("{what}: {n} operation(s) of books answered as chobo's reference interpreter answers");
+    }
+    if !failures.is_empty() {
+        let shown: Vec<String> = failures.iter().take(10).cloned().collect();
+        panic!("{} disagreement(s):\n{}", failures.len(), shown.join("\n"));
+    }
+}
+
+/// main.go's part that is the same for every flow and book: what it reads, and how it answers.
+const GO_BOOKS_MAIN: &str = r#"type call struct {
+	Book     string         `json:"book"`
+	Transfer string         `json:"transfer"`
+	Op       string         `json:"op"`
+	Args     map[string]any `json:"args"`
+	Amounts  map[string]any `json:"amounts"`
+}
+
+type answer map[string]any
+
+func reply(result, reason string, err error) answer {
+	if err != nil {
+		return answer{"error": err.Error()}
+	}
+	a := answer{"result": result}
+	if reason != "" {
+		a["reason"] = reason
+	}
+	return a
+}
+
+type input struct {
+	Backend  string `json:"backend"`
+	Postgres struct {
+		Host     string `json:"host"`
+		Port     int    `json:"port"`
+		Database string `json:"database"`
+		User     string `json:"user"`
+	} `json:"postgres"`
+	TigerBeetle struct {
+		Cluster   string   `json:"cluster"`
+		Addresses []string `json:"addresses"`
+	} `json:"tigerbeetle"`
+	Runs []struct {
+		Flow   string `json:"flow"`
+		Tenant string `json:"tenant"`
+		Calls  []call `json:"calls"`
+	} `json:"runs"`
+}
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// run answers every run's calls, one run after another, each on its tenant.
+func run() error {
+	f, err := os.Open(os.Args[1])
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	dec := json.NewDecoder(f)
+	dec.UseNumber()
+	var in input
+	if err := dec.Decode(&in); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	var pool *pgxpool.Pool
+	var client tb.Client
+	if in.Backend == "postgres" {
+		c := in.Postgres
+		pool, err = pgxpool.New(ctx, fmt.Sprintf("host=%s port=%d dbname=%s user=%s", c.Host, c.Port, c.Database, c.User))
+		if err != nil {
+			return err
+		}
+		defer pool.Close()
+	} else {
+		var cluster big.Int
+		cluster.SetString(in.TigerBeetle.Cluster, 10)
+		client, err = tb.NewClient(tb.BigIntToUint128(&cluster), in.TigerBeetle.Addresses)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+	}
+	runs := []any{}
+	for _, r := range in.Runs {
+		values := map[string]any{}
+		for _, c := range r.Calls {
+			if _, ok := values[c.Book]; !ok {
+				values[c.Book] = books[c.Book](pool, client, r.Tenant)
+			}
+		}
+		book := flows[r.Flow](values)
+		answers := []answer{}
+		for _, c := range r.Calls {
+			answers = append(answers, book(ctx, c))
+		}
+		runs = append(runs, map[string]any{"answers": answers})
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]any{"runs": runs})
+}
+"#;
+
 /// The kept histories, of TypeScript, Python and Go, replay with the code dandori writes now: a change of the generator that
 /// would make a running workflow of an unchanged `.flow` nondeterministic shows here. A change
 /// that has to do so is made with DANDORI_BLESS=1, which records the histories anew; runs that
@@ -1660,7 +2284,12 @@ fn generated_typescript_type_checks() {
             let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
             if target != "durable" {
                 for r in &called {
-                    rulec_gen(&m.rules[*r].info.path, &code.join("rulec"));
+                    // a date's code is koyomi's; a rule's, rulec's
+                    if m.rules[*r].date().is_some() {
+                        koyomi_gen(&m.rules[*r].info.path, &code.join("koyomi"), koyomi::naming::Target::TypeScript);
+                    } else {
+                        rulec_gen(&m.rules[*r].info.path, &code.join("rulec"));
+                    }
                 }
             }
             let link = code.join("node_modules");
@@ -1709,7 +2338,12 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
         let m = checked.model.expect("the flows pass check");
         let Ok(files) = dandori::temporal_go::build(&m) else { continue };
         let called: std::collections::BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_none() => Some(*r), _ => None }).collect();
-        let rules: Vec<(String, PathBuf)> = called.iter().map(|r| (m.rules[*r].info.go.module.clone(), m.rules[*r].info.path.clone())).collect();
+        // a date's package is koyomi's, by its import path; a rule's, rulec's
+        let import_of = |r: usize| match m.rules[r].date() {
+            Some(d) => format!("koyomi/go/{}", ritsu_emit::ident::go_package(&d.file_alias)),
+            None => m.rules[r].info.go.module.clone(),
+        };
+        let rules: Vec<(String, PathBuf)> = called.iter().map(|r| (import_of(*r), m.rules[*r].info.path.clone())).collect();
         // the first module whose rules of these names are these rules
         let at = modules.iter().position(|(_, by)| rules.iter().all(|(p, path)| by.get(p).is_none_or(|x| x == path))).unwrap_or_else(|| {
             let dir = scratch(&format!("go-{name}-{}", modules.len()));
@@ -1730,6 +2364,28 @@ fn go_modules(name: &str, flows: &[PathBuf]) -> Vec<GoModule> {
         let mut vectors = Vec::new();
         for r in &called {
             let ru = &m.rules[*r];
+            if ru.date().is_some() {
+                // koyomi's package, a module of its own, which go.mod requires and replaces, as rules.go says to
+                let p = import_of(*r);
+                if !by.contains_key(&p) {
+                    koyomi_gen(&ru.info.path, &module.dir.join("koyomi"), koyomi::naming::Target::Go);
+                    let dir = module.dir.join(&p);
+                    for e in std::fs::read_dir(&dir).unwrap().flatten() {
+                        if e.file_name().to_string_lossy().ends_with("_test.go") {
+                            std::fs::remove_file(e.path()).unwrap();
+                        }
+                    }
+                    std::fs::write(dir.join("go.mod"), format!("module {p}\n\ngo 1.25\n")).unwrap();
+                    let mut gomod = std::fs::read_to_string(module.dir.join("go.mod")).unwrap();
+                    gomod.push_str(&format!("\nrequire {p} v0.0.0\n\nreplace {p} => ./{p}\n"));
+                    std::fs::write(module.dir.join("go.mod"), gomod).unwrap();
+                    by.insert(p, ru.info.path.clone());
+                }
+                let file = module.dir.join(format!("vectors-{}.jsonl", dandori::render::ident(&ru.name)));
+                std::fs::write(&file, glue_vectors(&m, *r)).unwrap();
+                vectors.push((dandori::render::rule_activity(&ru.name), file));
+                continue;
+            }
             let p = ru.info.go.module.clone();
             if !by.contains_key(&p) {
                 rulec_gen(&ru.info.path, &module.dir.join("rulec"));
@@ -1783,7 +2439,8 @@ fn generated_go_vets() {
 /// The code between a platform and a rule — the Lambda handler for Step Functions and the
 /// activity for Temporal, in TypeScript and in Go — answers every vector rulec generates for the
 /// rule as rulec says: every rule the examples call, and the ones of tests/flows (names.flow
-/// calls four together, two of which take enums of one name, DESIGN 1.15).
+/// calls four together, two of which take enums of one name, DESIGN 1.15). The code around a date
+/// of a dates file answers every input of the file's range as koyomi says (glue_vectors).
 #[test]
 fn rule_glue_answers_the_rulec_vectors() {
     if !need(Need::Python) {
@@ -1806,11 +2463,16 @@ fn rule_glue_answers_the_rulec_vectors() {
             }
             let (hname, htext) = &dandori::asl::lambda_handler(&m, ri);
             let dir = scratch(&format!("glue-{}-{}", key(&f), dandori::render::ident(&r.name)));
-            // rules.ts imports every rule whose code goes with the workflow
+            // rules.ts imports every rule and every date whose code goes with the workflow
             for other in &bundled {
-                rulec_gen(&m.rules[*other].info.path, &dir.join("rulec"));
+                if m.rules[*other].date().is_some() {
+                    koyomi_gen(&m.rules[*other].info.path, &dir.join("koyomi"), koyomi::naming::Target::TypeScript);
+                    koyomi_gen(&m.rules[*other].info.path, &dir.join("koyomi"), koyomi::naming::Target::Python);
+                } else {
+                    rulec_gen(&m.rules[*other].info.path, &dir.join("rulec"));
+                }
             }
-            let vectors = rulec_vectors(&r.info.path);
+            let vectors = glue_vectors(&m, ri);
             std::fs::write(dir.join("vectors.jsonl"), &vectors).unwrap();
             let expected: Vec<Value> = vectors.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect();
 
@@ -1819,12 +2481,12 @@ fn rule_glue_answers_the_rulec_vectors() {
                 std::fs::write(&hfile, htext).unwrap();
                 let module = hfile.file_stem().unwrap().to_string_lossy().to_string();
                 let script = format!(
-                    "import json, sys\nsys.path.insert(0, 'rulec/python'); sys.path.insert(0, '.')\nfrom {module} import handler\nprint(json.dumps([handler(json.loads(l)['in'], None) for l in open('vectors.jsonl')], ensure_ascii=False))\n"
+                    "import json, sys\nsys.path.insert(0, 'rulec/python'); sys.path.insert(0, 'koyomi/python'); sys.path.insert(0, '.')\nfrom {module} import handler\nprint(json.dumps([handler(json.loads(l)['in'], None) for l in open('vectors.jsonl')], ensure_ascii=False))\n"
                 );
                 let out = Command::new("python3").arg("-c").arg(script).current_dir(&dir).output().unwrap();
                 assert!(out.status.success(), "the Lambda handler failed: {}", String::from_utf8_lossy(&out.stderr));
                 let got: Vec<Value> = serde_json::from_slice(&out.stdout).unwrap();
-                assert_eq!(norm(&json!(got)), norm(&json!(expected)), "the Lambda handler of {} differs from rulec's vectors", r.name);
+                assert_eq!(norm(&json!(got)), norm(&json!(expected)), "the Lambda handler of {} differs from the vectors of rulec or koyomi", r.name);
             } else {
                 skip(&format!("python3 is missing; the Lambda handler of {} is not run", r.name));
             }
@@ -1833,7 +2495,7 @@ fn rule_glue_answers_the_rulec_vectors() {
                 let rules_ts = ts_files.iter().find(|(n, _)| n.ends_with("/rules.ts")).map(|(_, t)| t.clone()).unwrap();
                 // Node runs TypeScript by stripping the types, and wants the extension on an import
                 let text = rules_ts.replace("\";\n", "\";\n").replace("/typescript/", "/typescript/").lines().map(|l| {
-                    if l.starts_with("import ") && l.contains("./rulec/typescript/") {
+                    if l.starts_with("import ") && (l.contains("./rulec/typescript/") || l.contains("./koyomi/typescript/")) {
                         l.replacen("\";", ".ts\";", 1)
                     } else {
                         l.to_string()
@@ -1849,7 +2511,7 @@ fn rule_glue_answers_the_rulec_vectors() {
                 let out = Command::new("node").arg("--no-warnings").arg("check.mjs").current_dir(&dir).output().unwrap();
                 assert!(out.status.success(), "rules.ts failed: {}", String::from_utf8_lossy(&out.stderr));
                 let got: Value = serde_json::from_slice(&out.stdout).unwrap();
-                assert_eq!(norm(&got), norm(&json!(expected)), "the Temporal activity of {} differs from rulec's vectors", r.name);
+                assert_eq!(norm(&got), norm(&json!(expected)), "the Temporal activity of {} differs from the vectors of rulec or koyomi", r.name);
             } else {
                 skip("node is missing; rules.ts is not run");
             }
@@ -1898,11 +2560,11 @@ fn rule_glue_answers_the_rulec_vectors() {
         assert!(out.status.success(), "rules.go failed ({}):\n{}", module.dir.display(), String::from_utf8_lossy(&out.stderr));
         let got: Value = serde_json::from_slice(&out.stdout).unwrap();
         for (k, want) in &expected {
-            assert_eq!(norm(&got[k]), norm(want), "the Temporal activity in Go of {k} differs from rulec's vectors");
+            assert_eq!(norm(&got[k]), norm(want), "the Temporal activity in Go of {k} differs from the vectors of rulec or koyomi");
             answered += want.as_array().map(|a| a.len()).unwrap_or(0);
         }
     }
-    eprintln!("rules.go answered {answered} vector(s) of the rules of the examples and tests/flows as rulec says");
+    eprintln!("rules.go answered {answered} vector(s) of the rules and the dates of the examples and tests/flows as rulec and koyomi say");
 }
 
 /// What a rule's service answers is read as the rule's own record the same way on every platform,
@@ -2523,8 +3185,9 @@ fn jev_tasks_answer_on_typesafe() {
 }
 
 /// rules.py of the Python builds — the activities for Temporal and the functions for
-/// pydantic-graph — answers every vector rulec generates for each rule the flow calls, for the
-/// examples and the flows of tests/flows.
+/// pydantic-graph — answers every vector rulec generates for each rule the flow calls, and every
+/// input of a dates file's range for each date it calls as koyomi says, for the examples and the
+/// flows of tests/flows.
 #[test]
 fn python_rules_answer_the_rulec_vectors() {
     if !need(Need::Python) {
@@ -2557,11 +3220,16 @@ fn python_rules_answer_the_rulec_vectors() {
             called.sort();
             called.dedup();
             for r in &called {
-                rulec_gen(&m.rules[*r].info.path, &pkg.join("rulec"));
+                // a date's code is koyomi's, in the package's koyomi/python/
+                if m.rules[*r].date().is_some() {
+                    koyomi_gen(&m.rules[*r].info.path, &pkg.join("koyomi"), koyomi::naming::Target::Python);
+                } else {
+                    rulec_gen(&m.rules[*r].info.path, &pkg.join("rulec"));
+                }
             }
             for r in &called {
                 let ru = &m.rules[*r];
-                let vectors = rulec_vectors(&ru.info.path);
+                let vectors = glue_vectors(&m, *r);
                 std::fs::write(dir.join("vectors.jsonl"), &vectors).unwrap();
                 let expected: Vec<Value> = vectors.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["out"].clone()).collect();
                 let script = format!(
@@ -2571,8 +3239,9 @@ fn python_rules_answer_the_rulec_vectors() {
                 let out = Command::new(&python).arg("-c").arg(script).current_dir(&dir).output().unwrap();
                 assert!(out.status.success(), "rules.py failed: {}", String::from_utf8_lossy(&out.stderr));
                 let got: Value = serde_json::from_slice(&out.stdout).unwrap();
-                assert_eq!(norm(&got), norm(&json!(expected)), "rules.py for {label} of {} differs from rulec's vectors", ru.name);
-                eprintln!("{}: rules.py for {label} answers the {} vector(s) of {} as rulec does", rel(&f), expected.len(), ru.name);
+                let whose = if ru.date().is_some() { "koyomi" } else { "rulec" };
+                assert_eq!(norm(&got), norm(&json!(expected)), "rules.py for {label} of {} differs from {whose}'s vectors", ru.name);
+                eprintln!("{}: rules.py for {label} answers the {} vector(s) of {} as {whose} does", rel(&f), expected.len(), ru.name);
             }
         }
     }
@@ -2619,9 +3288,10 @@ fn durable_one(f: &Path) {
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
             std::fs::write(&p, text).unwrap();
         }
-        // the Lambda functions the handler invokes for the rules are the ones Step Functions calls
+        // the Lambda functions the handler invokes for the rules and the dates are the ones Step Functions
+        // calls; a book's operations run in a step of the handler, through the transport, and need no Lambda
         if let Ok(asl) = dandori::asl::build(&m) {
-            for (name, text) in asl.iter().filter(|(n, _)| n.starts_with("lambda/")) {
+            for (name, text) in asl.iter().filter(|(n, _)| n.starts_with("lambda/") && !n.starts_with("lambda/book_")) {
                 let same = files.iter().find(|(n, _)| n.ends_with(&format!("/{name}"))).map(|(_, t)| t);
                 assert_eq!(same, Some(text), "{}: the durable build's {name} differs from the Step Functions build's", rel(&f));
             }

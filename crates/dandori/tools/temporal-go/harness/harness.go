@@ -131,6 +131,26 @@ type Transport interface {
 	Agent(ctx context.Context, call AgentCall) (any, error)
 }
 
+// BookCall is an operation of a book, as a package that runs books has it (io_books.go).
+type BookCall struct {
+	Book     string
+	Transfer string
+	Op       string
+	Args     map[string]any
+	Amounts  map[string]any
+}
+
+// BookResult is what a book answers, as a package that runs books has it.
+type BookResult struct {
+	Result string
+	Reason string
+}
+
+// BookRunner is a Transport that runs the operations of books: the stand-in is one.
+type BookRunner interface {
+	Book(ctx context.Context, call BookCall) (BookResult, error)
+}
+
 // History is the history of one run of a workflow.
 type History struct {
 	WorkflowID string

@@ -742,7 +742,9 @@ impl<'a> Flow<'a> {
 
         // What the call does to the known facts: on success, on the refusal, on other errors.
         let mut ok = a.clone();
-        let mut refused: Option<Abs> = None;
+        // each refusal the call can come back with, by its error: one for a rule's machine (`refused
+        // as`), one for each reason a book's hold is refused with
+        let mut refused: Vec<(String, Abs)> = Vec::new();
         let mut other_err = a.clone();
         match target {
             Some(Target::Let(v)) => {
@@ -796,7 +798,8 @@ impl<'a> Flow<'a> {
                         ok.cases[c] = CaseAbs { started: Tri::Yes, unstarted: None, states: st2 };
                         ok.path.push(Step::new(s.line, tr!("{}: {cn} が始まる", "{}: {cn} starts", t.name)).at(At::Stmt(s.site)));
                         Flow::assign(&mut ok, &cn);
-                        if !t.key {
+                        // a book's operation is done once for the key the book gives it
+                        if !t.key && t.book().is_none() {
                             self.push(Diag::warning(
                                 "W103",
                                 s.line,
@@ -817,11 +820,15 @@ impl<'a> Flow<'a> {
                         let mut fixed = self.m.cases[c].held.clone();
                         fixed.push((axis, coord));
                         let mut next: BTreeMap<usize, Path> = BTreeMap::new();
-                        let mut refusing: BTreeMap<usize, Path> = BTreeMap::new();
+                        // a book's hold says why it refuses, row by row (chobo's `reason`); a rule's machine is refused as the task says
+                        let hold = matches!(self.m.rules[self.m.cases[c].rule].kind, RuleKind::Hold { .. });
+                        let reason_ix = self.m.machine(c).decides.iter().position(|d| d == "reason");
+                        let mut refusing: BTreeMap<Option<String>, BTreeMap<usize, Path>> = BTreeMap::new();
                         for (st, p) in &now {
                             for o in self.m.machine(c).outcomes(*st, &fixed) {
                                 if self.is_refused(c, &o) {
-                                    refusing.entry(*st).or_insert_with(|| p.clone());
+                                    let err = if hold { reason_ix.and_then(|i| o.produces.get(i).cloned().flatten()) } else { t.refused_as.clone() };
+                                    refusing.entry(err).or_default().entry(*st).or_insert_with(|| p.clone());
                                     continue;
                                 }
                                 let mut np = p.clone();
@@ -840,11 +847,15 @@ impl<'a> Flow<'a> {
                                 }
                             }
                         }
-                        let refused_err = t.refused_as.clone();
                         if next.is_empty() {
                             let names = self.names(c, now.keys().cloned()).join(", ");
                             let p = now.values().next().cloned().unwrap_or_default();
-                            self.push(Diag::error("E021", s.line, 1, tr!("ここで `{cn}` は {names} のどれかで、ステートマシンはどの状態でも `{event}` を拒否します", "`{cn}` can be in {names} here, and the machine refuses `{event}` in every one of them")).with_path(p));
+                            let msg = if hold {
+                                tr!("ここで `{cn}` は {names} のどれかで、帳簿はどの状態でも `{event}` を断ります", "`{cn}` can be in {names} here, and the book refuses `{event}` in every one of them")
+                            } else {
+                                tr!("ここで `{cn}` は {names} のどれかで、ステートマシンはどの状態でも `{event}` を拒否します", "`{cn}` can be in {names} here, and the machine refuses `{event}` in every one of them")
+                            };
+                            self.push(Diag::error("E021", s.line, 1, msg).with_path(p));
                             ok = Abs::dead();
                         } else {
                             self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(next.keys().cloned());
@@ -852,10 +863,19 @@ impl<'a> Flow<'a> {
                             ok.path.push(Step::new(s.line, tr!("{}: {event}", "{}: {event}", t.name)).at(At::Stmt(s.site)));
                             Flow::assign(&mut ok, &cn);
                         }
-                        if !refusing.is_empty() {
+                        for (refused_err, refusing) in &refusing {
                             let names = self.names(c, refusing.keys().cloned()).join(", ");
                             let p = refusing.values().next().cloned().unwrap_or_default();
-                            match &refused_err {
+                            match refused_err {
+                                Some(err) if hold && t.error(err).is_none() => self.push(
+                                    Diag::error(
+                                        "E022",
+                                        s.line,
+                                        1,
+                                        tr!("ここでは帳簿が `{event}` を `{err}` で断ることがあります（`{cn}` が {names} のとき）。`{}` の `errors` に `{err}` を書き、`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); declare `{err}` in the `errors` of `{}`, and handle it with `on {err} =>`", t.name),
+                                    )
+                                    .with_path(p),
+                                ),
                                 None => self.push(
                                     Diag::error(
                                         "E022",
@@ -867,15 +887,12 @@ impl<'a> Flow<'a> {
                                 ),
                                 Some(err) => {
                                     if !handles(&HErr::Declared(err.clone())) {
-                                        self.push(
-                                            Diag::error(
-                                                "E022",
-                                                s.line,
-                                                1,
-                                                tr!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`on {err} =>` で処理してください", "the machine may refuse `{event}` here, when `{cn}` is in {names}; handle it with `on {err} =>`"),
-                                            )
-                                            .with_path(p),
-                                        );
+                                        let msg = if hold {
+                                            tr!("ここでは帳簿が `{event}` を `{err}` で断ることがあります（`{cn}` が {names} のとき）。`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); handle it with `on {err} =>`")
+                                        } else {
+                                            tr!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`on {err} =>` で処理してください", "the machine may refuse `{event}` here, when `{cn}` is in {names}; handle it with `on {err} =>`")
+                                        };
+                                        self.push(Diag::error("E022", s.line, 1, msg).with_path(p));
                                     }
                                     let mut r = a.clone();
                                     r.cases[c].states = refusing.clone();
@@ -887,10 +904,11 @@ impl<'a> Flow<'a> {
                                         .or_else(|| handlers.iter().position(|h| h.errors.contains(&named) || h.errors.contains(&HErr::Failure)))
                                         .map(|j| At::Handler(s.site, j))
                                         .unwrap_or(At::Stmt(s.site));
-                                    refused = Some(r.step(Step::new(s.line, tr!("{}: {event} が拒否される（{err}）", "{}: {event} is refused ({err})", t.name)).at(at)));
+                                    refused.push((err.clone(), r.step(Step::new(s.line, tr!("{}: {event} が拒否される（{err}）", "{}: {event} is refused ({err})", t.name)).at(at))));
                                 }
                             }
-                        } else if let Some(err) = &refused_err {
+                        }
+                        if let (true, Some(err)) = (refusing.is_empty(), &t.refused_as) {
                             let only_refusal = handlers.iter().any(|h| h.errors.len() == 1 && h.errors[0] == HErr::Declared(err.clone()));
                             if only_refusal {
                                 let names = self.names(c, now.keys().cloned()).join(", ");
@@ -942,13 +960,23 @@ impl<'a> Flow<'a> {
         }
         kinds.push((HErr::Timeout, "timeout".into()));
         kinds.push((HErr::Failure, "failure".into()));
-        let refused_err = match (target, callee) {
-            (Some(Target::Case(_)), Callee::Task(t)) => self.m.tasks[*t].refused_as.clone(),
-            _ => None,
+        // the errors a refusal comes back as, which E022 speaks of: the task's `refused as`, or for a
+        // book's hold, each reason the hold is refused with
+        let refusals: Vec<String> = match (target, callee) {
+            (Some(Target::Case(c)), Callee::Task(t)) if matches!(self.m.rules[self.m.cases[*c].rule].kind, RuleKind::Hold { .. }) => {
+                let mc = self.m.machine(*c);
+                let at = mc.decides.iter().position(|d| d == "reason");
+                let mut v: Vec<String> = mc.rows.iter().filter_map(|r| at.and_then(|i| r.produces.get(i).cloned().flatten())).filter(|x| x != "none" && self.m.tasks[*t].error(x).is_some()).collect();
+                v.sort();
+                v.dedup();
+                v
+            }
+            (Some(Target::Case(_)), Callee::Task(t)) => self.m.tasks[*t].refused_as.clone().into_iter().collect(),
+            _ => vec![],
         };
         let unhandled: Vec<String> = kinds
             .iter()
-            .filter(|(k, n)| !handles(k) && Some(n) != refused_err.as_ref())
+            .filter(|(k, n)| !handles(k) && !refusals.contains(n))
             .map(|(_, n)| n.clone())
             .collect();
         if !unhandled.is_empty() {
@@ -969,16 +997,16 @@ impl<'a> Flow<'a> {
                     HErr::Failure => "failure".into(),
                 })
                 .collect();
-            let is_refusal = refused_err.as_ref().map(|r| names.len() == 1 && names[0] == *r).unwrap_or(false);
+            let is_refusal = names.len() == 1 && refusals.contains(&names[0]);
             let entry = if is_refusal {
-                match &refused {
-                    Some(r) => r.clone(),
+                match refused.iter().find(|(e, _)| *e == names[0]) {
+                    Some((_, r)) => r.clone(),
                     None => continue,
                 }
             } else {
                 let mut en = other_err.clone();
-                if let Some(r) = &refused {
-                    if names.iter().any(|n| Some(n) == refused_err.as_ref()) || h.errors.contains(&HErr::Failure) {
+                for (e, r) in &refused {
+                    if names.contains(e) || h.errors.contains(&HErr::Failure) {
                         en = join(&en, r);
                     }
                 }

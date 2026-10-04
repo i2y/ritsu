@@ -223,6 +223,30 @@ func (s *standIn) Agent(ctx context.Context, call AgentCall) (any, error) {
 	return nil, errors.New("scripted")
 }
 
+// Book is an operation of a book: what chobo's client would answer, done (or done before), a
+// refusal with its reason, or a failure.
+func (s *standIn) Book(ctx context.Context, call BookCall) (BookResult, error) {
+	c := map[string]any{"book": call.Book, "transfer": call.Transfer, "op": call.Op, "args": call.Args}
+	if call.Amounts != nil {
+		c["amounts"] = call.Amounts
+	}
+	ans, err := s.run.take(ctx, c)
+	if err != nil {
+		return BookResult{}, err
+	}
+	if held(ans) {
+		return BookResult{}, s.run.hold(ctx, ans)
+	}
+	if v, ok := ans["ok"].(map[string]any); ok {
+		r, _ := v["result"].(string)
+		return BookResult{Result: r}, nil
+	}
+	if k := kind(ans); k == "failure" || k == "timeout" {
+		return BookResult{}, errors.New("scripted")
+	}
+	return BookResult{Result: "refused", Reason: kind(ans)}, nil
+}
+
 // kind is the error a scenario's answer names.
 func kind(ans map[string]any) string {
 	k, _ := ans["error"].(string)

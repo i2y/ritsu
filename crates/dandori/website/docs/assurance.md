@@ -170,6 +170,28 @@ protobuf writes back, its zero values left out, fills in to the input again. dan
 buf's standard lint, and every `.proto` of a service in the examples and the tests builds with
 protoc.
 
+## Dates and books
+
+- A date and an operation of a book are answered from the scenario on every platform, as a rule and
+  a task are: a date with a day, and a time when it says one; an operation with done, done before,
+  or one of the reasons the book refuses it with. The stand-ins of the dates and of the `Transport`'s
+  `book` answer from the scenario. Every runner sets the clock of what it runs to one time
+  (`2026-03-31T15:30:00Z`), which the reference interpreter reads for `now`: in its copy of the code on
+  Temporal, durable functions and pydantic-graph, as the time a state is entered on Step Functions,
+  and in the template's `now()` on Argo. At `+09:00` that time is already the next day, so a date
+  that reads it at the wrong offset shows.
+- The code between each platform and a dates file (the Lambda function, `rules.ts`, `rules.py`,
+  `rules.go`) runs with the code koyomi writes, on every input of the file's range, and must answer
+  what koyomi says each date comes to. One input in seven goes as a time half an hour into that day at
+  the calendar's offset, which must read as the same day.
+- The operations of books that the flows' runs make go through the `Transport` dandori writes in
+  TypeScript, Python and Go, and through the Lambda function it writes for Step Functions, to the
+  clients chobo writes, on PostgreSQL and on TigerBeetle, started as chobo's own tests start them.
+  Each must answer what chobo's reference interpreter answers for the same operations: on an empty
+  book, after a delivery has filled it, and once more on the same book, where every operation was
+  done before. The `io.ts` of durable functions and of Argo's caller is Temporal's, and the `io.py` of
+  pydantic-graph is Temporal's for Python, which the test holds them to.
+
 ## The pictures
 
 What `dandori doc` writes for the examples, the flows of tests/flows and a first draft with errors
@@ -184,11 +206,12 @@ rules.
 ## The playground
 
 [Try it in the browser](playground.md) runs dandori compiled to wasm32, and reads what the examples
-read from `presets.json`: their files, and what rulec printed for their rules, `rulec doc` among it.
-Both are committed, and both are held to the repository.
+read from `presets.json`: their files, what rulec printed for their rules, `rulec doc` among it, and
+what koyomi and chobo said of their dates files and books. Both are committed, and both are held to
+the repository.
 
-- `presets.json` must be what checking the examples reads now, and what rulec prints for their rules
-  now.
+- `presets.json` must be what checking the examples reads now, and what rulec, koyomi and chobo
+  print for their rules, dates files and books now.
 - For every flow the page opens, the command, reading the disk and running rulec, must print and
   write what the page answers from `presets.json`: `check`, `build` for all seven targets, and `doc` in
   both formats.
@@ -245,7 +268,9 @@ what rulec draws for the rules, `rulec doc` among it, and its version is in that
 anew when the version changes.
 
 A test that cannot find Node, the tools, buf, protoc, the cluster, the `argo` command, the image of
-LocalStack or Chrome prints a `SKIP:` line and passes, so read the output with `-- --nocapture`. The whole
+LocalStack or Chrome prints a `SKIP:` line and passes, so read the output with `-- --nocapture`.
+The test of the books uses PostgreSQL, TigerBeetle and chobo's `tools/runner` (its `node_modules`,
+`.venv` and Go module) as chobo's own tests do, and says SKIP when one is missing. The whole
 `cargo test` takes six to seven minutes; `tools/argo/setup.sh` sets Argo's controller up for it, to
 look at a workflow again a second after a change rather than ten, on the node image of kind 0.33.0.
 `DANDORI_FLOW=<part of a path>` runs only the flows whose path

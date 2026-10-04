@@ -57,6 +57,10 @@ pub struct Program {
     pub uses: Vec<UseRule>,
     /// `use openapi|smithy|proto <name> from "<path>"`: the descriptions of the APIs the tasks call
     pub apis: Vec<UseApi>,
+    /// `use dates <name> from "<path>"`: the dates files whose dates the flow calls (koyomi's)
+    pub dates: Vec<UseDates>,
+    /// `use book <name> from "<path>"`: the books whose transfers the tasks run (chobo's)
+    pub books: Vec<UseBook>,
     pub enums: Vec<EnumDecl>,
     pub records: Vec<RecordDecl>,
     pub inputs: Vec<Field>,
@@ -81,6 +85,29 @@ pub struct UseRule {
     pub connect: Option<(String, Span)>,
     /// `connection "<EventBridge connection>"`: how Step Functions' HTTP Task reaches the service
     pub connection: Option<(String, Span)>,
+}
+
+/// `use dates terms from "dates/payment_terms.cal"`: a dates file of koyomi's, whose dates the flow
+/// calls as it calls a rule (`terms.payment(received: …)`).
+#[derive(Clone, Debug)]
+pub struct UseDates {
+    pub name: Name,
+    pub path: String,
+    /// `lambda "<function>"`: the Lambda function that computes its dates, for Step Functions and
+    /// Lambda durable functions
+    pub lambda: Option<(String, Span)>,
+    /// Temporal: its dates are called as local activities
+    pub local: bool,
+}
+
+/// `use book stock from "books/inventory.book"`: a book of chobo's, whose transfers the tasks run
+/// (`book stock.reserve.hold`).
+#[derive(Clone, Debug)]
+pub struct UseBook {
+    pub name: Name,
+    pub path: String,
+    /// `lambda "<function>"`: the Lambda function that runs its operations, for Step Functions
+    pub lambda: Option<(String, Span)>,
 }
 
 #[derive(Clone, Debug)]
@@ -136,6 +163,8 @@ pub enum TypeExpr {
     Str(Span),
     Bool(Span),
     Timestamp(Span),
+    /// `date`: a day of the calendar
+    Date(Span),
     /// any JSON value, passed along without being looked into
     Json(Span),
     /// `Name` or `rule.Name`
@@ -151,7 +180,7 @@ pub enum TypeExpr {
 impl TypeExpr {
     pub fn span(&self) -> Span {
         match self {
-            TypeExpr::Int(s) | TypeExpr::Str(s) | TypeExpr::Bool(s) | TypeExpr::Timestamp(s) | TypeExpr::Json(s) | TypeExpr::Unit(_, s) | TypeExpr::List(_, s) | TypeExpr::Opt(_, s) => *s,
+            TypeExpr::Int(s) | TypeExpr::Str(s) | TypeExpr::Bool(s) | TypeExpr::Timestamp(s) | TypeExpr::Date(s) | TypeExpr::Json(s) | TypeExpr::Unit(_, s) | TypeExpr::List(_, s) | TypeExpr::Opt(_, s) => *s,
             TypeExpr::Named(v) => v[0].1,
         }
     }
@@ -174,6 +203,8 @@ pub enum Binding {
     /// Jev, TypeSafe's System One model, asked what the answer's type asks: `jev "…"` one
     /// question, whose answer is the task's; `jev` alone a question for each field of a record
     Jev(JevDecl),
+    /// `book stock.reserve.hold`: an operation of a transfer of a book `use book` reads
+    Book { book: Name, transfer: Name, op: Name },
 }
 
 /// What a `jev` clause asks. A question whose answer is the task's own has `ask`; one for each
@@ -355,13 +386,15 @@ pub enum Expr {
     Record(Vec<(Name, Expr)>, Span),
     /// `[a, b]`
     List(Vec<Expr>, Span),
+    /// `now`: the moment the statement runs
+    Now(Span),
 }
 
 impl Expr {
     pub fn span(&self) -> Span {
         match self {
             Expr::Path(p) => p[0].1,
-            Expr::Str(_, s) | Expr::Interp(_, s) | Expr::Int(_, s) | Expr::Bool(_, s) | Expr::Record(_, s) | Expr::List(_, s) => *s,
+            Expr::Str(_, s) | Expr::Interp(_, s) | Expr::Int(_, s) | Expr::Bool(_, s) | Expr::Record(_, s) | Expr::List(_, s) | Expr::Now(s) => *s,
         }
     }
 }
@@ -728,7 +761,7 @@ const KEYWORDS: &[&str] = &[
     "aws", "connection", "queue", "machine", "durable", "function", "image", "template", "errors", "retry", "timeout", "key", "idempotent",
     "starts", "sends", "observes", "refused", "callback", "held", "external", "state", "then", "true", "false", "until",
     "pass", "for", "in", "at", "most", "parallel", "yield", "some", "none", "list", "json", "range",
-    "openapi", "smithy", "proto", "connect", "url",
+    "openapi", "smithy", "proto", "connect", "url", "now",
 ];
 
 pub fn is_keyword(s: &str) -> bool {
@@ -778,6 +811,7 @@ fn type_base(cur: &mut Cur) -> Result<TypeExpr, Diag> {
         "string" => return Ok(TypeExpr::Str(sp)),
         "bool" => return Ok(TypeExpr::Bool(sp)),
         "timestamp" => return Ok(TypeExpr::Timestamp(sp)),
+        "date" => return Ok(TypeExpr::Date(sp)),
         "json" => return Ok(TypeExpr::Json(sp)),
         "list" if cur.is_sym("[") => {
             cur.i += 1;
@@ -901,6 +935,10 @@ fn expr(cur: &mut Cur) -> Result<Expr, Diag> {
         Some(Tok::Ident(s)) if s == "true" || s == "false" => {
             cur.i += 1;
             Ok(Expr::Bool(s == "true", sp))
+        }
+        Some(Tok::Ident(s)) if s == "now" => {
+            cur.i += 1;
+            Ok(Expr::Now(sp))
         }
         Some(Tok::Ident(_)) => Ok(Expr::Path(cur.qualname()?)),
         Some(Tok::Sym("{")) => {
@@ -1034,8 +1072,28 @@ fn for_header(cur: &mut Cur) -> Result<(Name, Expr, u32, Option<u32>), Diag> {
     Ok((var, list, n as u32, parallel))
 }
 
+/// Whether a call starts here: a name, or a date of a dates file (`terms.payment`), then `(`.
+fn call_ahead(cur: &Cur) -> bool {
+    let mut k = 0;
+    loop {
+        if !matches!(cur.peek_at(k), Some(Tok::Ident(_))) {
+            return false;
+        }
+        match cur.peek_at(k + 1) {
+            Some(Tok::Sym("(")) => return true,
+            Some(Tok::Sym(".")) => k += 2,
+            _ => return false,
+        }
+    }
+}
+
 fn call(cur: &mut Cur) -> Result<Call, Diag> {
-    let callee = cur.ident(tr!("タスクか規則の名前", "the name of a task or a rule"))?;
+    let mut callee = cur.ident(tr!("タスクか規則の名前", "the name of a task or a rule"))?;
+    // a date of a dates file: `terms.payment`
+    while cur.eat_sym(".") {
+        let (n, _) = cur.ident(tr!("日付の名前", "the name of a date"))?;
+        callee.0 = format!("{}.{n}", callee.0);
+    }
     cur.expect_sym("(")?;
     let mut args = Vec::new();
     if !cur.eat_sym(")") {
@@ -1233,7 +1291,7 @@ fn simple_stmt(cur: &mut Cur) -> Result<StmtKind, Diag> {
         let name = cur.ident(tr!("変数の名前", "a variable name"))?;
         let ty = if cur.eat_sym(":") { Some(type_expr(cur)?) } else { None };
         cur.expect_sym("=")?;
-        if matches!(cur.peek(), Some(Tok::Ident(_))) && matches!(cur.peek_at(1), Some(Tok::Sym("("))) {
+        if call_ahead(cur) {
             let c = call(cur)?;
             return Ok(StmtKind::Let { name, ty, call: c, handlers: vec![] });
         }
@@ -1288,7 +1346,7 @@ fn simple_stmt(cur: &mut Cur) -> Result<StmtKind, Diag> {
         let c = call(cur)?;
         return Ok(StmtKind::CaseCall { case, call: c, handlers: vec![] });
     }
-    if matches!(cur.peek(), Some(Tok::Ident(_))) && matches!(cur.peek_at(1), Some(Tok::Sym("("))) {
+    if call_ahead(cur) {
         let c = call(cur)?;
         return Ok(StmtKind::Call { call: c, handlers: vec![] });
     }
@@ -1324,6 +1382,8 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
         kind: Kind::Standard,
         uses: vec![],
         apis: vec![],
+        dates: vec![],
+        books: vec![],
         enums: vec![],
         records: vec![],
         inputs: vec![],
@@ -1384,14 +1444,52 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 cur.expect_end()?;
                 p.pos += 1;
             }
+            "use" if cur.is_kw("dates") || cur.is_kw("book") => {
+                let dates = cur.eat_kw("dates");
+                if !dates {
+                    cur.expect_kw("book")?;
+                }
+                let name = if dates { cur.ident(tr!("日付のファイルの名前", "the dates file's name"))? } else { cur.ident(tr!("帳簿の名前", "the book's name"))? };
+                cur.expect_kw("from")?;
+                let (path, _) = if dates { cur.string(tr!(".cal ファイルのパス", "the path of the .cal file"))? } else { cur.string(tr!(".book ファイルのパス", "the path of the .book file"))? };
+                cur.expect_end()?;
+                p.pos += 1;
+                let mut lambda = None;
+                let mut local = false;
+                while let Some(cl) = p.cur_line() {
+                    if cl.indent == 0 {
+                        break;
+                    }
+                    let cl = cl.clone();
+                    let mut cc = Cur::new(&cl);
+                    let at = cc.span();
+                    if cc.eat_kw("lambda") {
+                        lambda = Some((cc.string(tr!("Lambda 関数", "the Lambda function"))?.0, at));
+                        cc.expect_end()?;
+                    } else if dates && cc.eat_kw("local") {
+                        local = true;
+                        cc.expect_end()?;
+                    } else if dates {
+                        return Err(err(cc.span(), tr!("`use dates` の下に書けるのは `lambda \"<関数>\"` と `local` だけです", "only `lambda \"<function>\"` and `local` can be written under `use dates`")));
+                    } else {
+                        return Err(err(cc.span(), tr!("`use book` の下に書けるのは `lambda \"<関数>\"` だけです", "only `lambda \"<function>\"` can be written under `use book`")));
+                    }
+                    p.pos += 1;
+                }
+                if dates {
+                    prog.dates.push(UseDates { name, path, lambda, local });
+                } else {
+                    prog.books.push(UseBook { name, path, lambda });
+                }
+            }
             "use" if !cur.is_kw("rule") => {
                 let ksp = cur.span();
-                let (k, _) = cur.ident(tr!("`rule`・`openapi`・`smithy`・`proto` のどれか", "`rule`, `openapi`, `smithy` or `proto`"))?;
+                let (k, _) = cur.ident(tr!("`rule`・`dates`・`book`・`openapi`・`smithy`・`proto` のどれか", "`rule`, `dates`, `book`, `openapi`, `smithy` or `proto`"))?;
                 let kind = match k.as_str() {
                     "openapi" => crate::apis::ApiKind::OpenApi,
                     "smithy" => crate::apis::ApiKind::Smithy,
                     "proto" => crate::apis::ApiKind::Proto,
-                    _ => return Err(err(ksp, tr!("`use rule`・`use openapi`・`use smithy`・`use proto` のどれかを書きます", "write `use rule`, `use openapi`, `use smithy` or `use proto`"))),
+                    _ => return Err(err(ksp, tr!("`use rule`・`use dates`・`use book`・`use openapi`・`use smithy`・`use proto` のどれかを書きます", "write `use rule`, `use dates`, `use book`, `use openapi`, `use smithy` or `use proto`"))),
                 };
                 let name = cur.ident(tr!("API の名前", "the API's name"))?;
                 cur.expect_kw("from")?;
@@ -1651,17 +1749,28 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
 fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
     let sp = cc.span();
     let (kw, _) = cc.ident(tr!("タスクの項目", "a task clause"))?;
-    if matches!(kw.as_str(), "lambda" | "http" | "aws" | "agent" | "connect" | "jev") {
+    if matches!(kw.as_str(), "lambda" | "http" | "aws" | "agent" | "connect" | "jev" | "book") {
         if let Some((_, first)) = &t.binding {
             return Err(Diag::error(
                 "E007",
                 sp.line,
                 sp.col,
-                tr!("このタスクの呼び出し方はもう書かれています（{} 行目）。呼び出し方は lambda・http・connect・aws・agent・jev のどれか一つです", "the task is already called another way (line {}); a task is called by one of lambda, http, connect, aws, agent and jev", first.line),
+                tr!("このタスクの呼び出し方はもう書かれています（{} 行目）。呼び出し方は lambda・http・connect・aws・agent・jev・book のどれか一つです", "the task is already called another way (line {}); a task is called by one of lambda, http, connect, aws, agent, jev and book", first.line),
             ));
         }
     }
     match kw.as_str() {
+        // an operation of a book's transfer: `book stock.reserve.hold`
+        "book" => {
+            let at = cc.span();
+            let q = cc.qualname()?;
+            if q.len() != 3 {
+                return Err(err(at, tr!("帳簿の振替の操作は `book <帳簿>.<振替>.<操作>` と書きます（操作は do・hold・post・void）", "write an operation of a book's transfer as `book <book>.<transfer>.<operation>` (the operation is do, hold, post or void)")));
+            }
+            let mut q = q.into_iter();
+            let (book, transfer, op) = (q.next().unwrap(), q.next().unwrap(), q.next().unwrap());
+            t.binding = Some((Binding::Book { book, transfer, op }, sp));
+        }
         "lambda" => {
             let f = cc.string(tr!("Lambda 関数", "the Lambda function"))?.0;
             t.binding = Some((Binding::Lambda(f), sp));

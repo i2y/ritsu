@@ -1,0 +1,28 @@
+workflow 日付の間違い v1
+description "日付を使う書き方の間違い：読めない日付のファイル、帳簿と同じ名前、無い日付、UTC オフセットを言わないカレンダーの日付に渡す時刻、日付に渡す数と文字列、足りない入力、date に入れる timestamp"
+
+use dates 期限 from "dates/期限.cal"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:due-dates"
+use dates 無い from "dates/無い.cal"
+use dates 壊れた from "dates/壊れた.cal"
+use book 期限 from "../flows/books/倉庫.book"
+
+record 注文
+  id     : string
+  受けた : date
+  数     : int
+
+inputs
+  受注 : 注文
+
+outputs
+  期日 : date
+
+flow
+  let a = 期限.無い日(起点: 受注.受けた)
+  let b = 期限.期日(起点: now)
+  let c = 期限.期日(起点: 受注.数)
+  let d = 期限.期日(起点: "2026-04-01")
+  let e = 期限.期日()
+  let f: date = now
+  succeed 期日 = 受注.受けた

@@ -163,10 +163,12 @@ impl ritsu_ports::Items for Engine {
 
 impl ritsu_ports::References for Engine {
     /// The rules a flow calls (`use rule`, with the ways written under it: `use rule … lambda`,
-    /// `use rule … connect`, `use rule … local`), the descriptions of the APIs its tasks call
-    /// (`use proto`, `use openapi`, `use smithy`), the service of a `.proto` it implements
-    /// (`implements`), each method of one a task calls (`connect`), and the `.flow` of each
-    /// child workflow (`flow`). A service is named from its `.proto`'s package.
+    /// `use rule … connect`, `use rule … local`), the dates files and the books it reads (`use
+    /// dates`, `use book`, with the ways written under them too), the descriptions of the APIs its
+    /// tasks call (`use proto`, `use openapi`, `use smithy`), the service of a `.proto` it implements
+    /// (`implements`), each method of one a task calls (`connect`), each transfer of a book a task
+    /// runs an operation of (`book`), and the `.flow` of each child workflow (`flow`). A service is
+    /// named from its `.proto`'s package.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let (_, prog) = parsed(root, file)?;
         let from_root = |written: &str| ritsu_base::paths::join(&ritsu_base::paths::parent(file), written).ok();
@@ -178,6 +180,19 @@ impl ritsu_ports::References for Engine {
             let ways: Vec<&str> = [(u.lambda.is_some(), "lambda"), (u.connect.is_some(), "connect"), (u.local, "local")].into_iter().filter(|(w, _)| *w).map(|(_, n)| n).collect();
             let how = if ways.is_empty() { "use rule".to_string() } else { format!("use rule … {}", ways.join(", ")) };
             out.push(Reference { line: u.name.1.line, target: Naming::file(Tool::Rulec, p), how });
+        }
+        for u in &prog.dates {
+            let Some(p) = from_root(&u.path) else { continue };
+            let ways: Vec<&str> = [(u.lambda.is_some(), "lambda"), (u.local, "local")].into_iter().filter(|(w, _)| *w).map(|(_, n)| n).collect();
+            let how = if ways.is_empty() { "use dates".to_string() } else { format!("use dates … {}", ways.join(", ")) };
+            out.push(Reference { line: u.name.1.line, target: Naming::file(Tool::Koyomi, p), how });
+        }
+        // the `.book` a `use book` name stands for, from the root
+        let book = |name: &str| prog.books.iter().find(|b| b.name.0 == name).and_then(|b| from_root(&b.path));
+        for u in &prog.books {
+            let Some(p) = from_root(&u.path) else { continue };
+            let how = if u.lambda.is_some() { "use book … lambda" } else { "use book" };
+            out.push(Reference { line: u.name.1.line, target: Naming::file(Tool::Chobo, p), how: how.into() });
         }
         for a in &prog.apis {
             let Some(p) = from_root(&a.path) else { continue };
@@ -199,6 +214,11 @@ impl ritsu_ports::References for Engine {
                     // a service is not nested, so its name from the package is its last part
                     let service = service.rsplit('.').next().unwrap_or(service);
                     out.push(Reference { line: at.line, target: Naming::file(Tool::Proto, p).with("service", service).with("method", m), how: "connect".into() });
+                }
+            }
+            if let Some((Binding::Book { book: b, transfer, .. }, at)) = &t.binding {
+                if let Some(p) = book(&b.0) {
+                    out.push(Reference { line: at.line, target: Naming::file(Tool::Chobo, p).with("transfer", &transfer.0), how: "book".into() });
                 }
             }
             if let Some((written, at)) = &t.flow {

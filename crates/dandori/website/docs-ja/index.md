@@ -176,6 +176,29 @@ TypeSafe の Jev に尋ねるタスクも書けます。Jev は文章を書か�
 <div class="dd-row dd-row--flip" markdown>
 <div markdown>
 
+```flow
+task 引き当てる(注文: string, sku: string, 数: int) -> 在庫.引当
+  book 在庫.引当.hold
+  starts 在庫.引当
+  errors 在庫切れ
+…
+  let 期限 = 支払条件.支払日(受領日: now)
+  wait until 期限.at
+```
+
+</div>
+<div markdown>
+
+### 期日を数え、在庫を押さえる
+
+期日は koyomi の日付にできます。営業日を数え、範囲のすべての日で確かめたものです。在庫は chobo の帳簿にできます。勘定の境界は、どの書き込みでも守られます。ワークフローは、日付を規則と同じように呼び、在庫を押さえる・確定する・取り消すことをタスクにします。仮押さえは案件になり、確定の前に期限が切れうることを検査が数えます。[日付と帳簿](dates-and-books.md)
+
+</div>
+</div>
+
+<div class="dd-row" markdown>
+<div markdown>
+
 ```text
 dandori doc hotel.flow > hotel.md
 dandori doc hotel.flow --format html > hotel.html

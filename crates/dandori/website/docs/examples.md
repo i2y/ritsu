@@ -1,9 +1,10 @@
 # Examples
 
-Five examples, each written for Temporal, for AWS and for pydantic-graph: the same flow, with its
-tasks called and its news brought in the way the platform does. Temporal is dandori's main platform,
-and its version is the one to read first. The version for Temporal is also drawn by `dandori doc`, on
-a page where each scenario lights up the way its run goes ([Draw a workflow](diagrams.md)).
+Six examples. Five are each written for Temporal, for AWS and for pydantic-graph: the same flow,
+with its tasks called and its news brought in the way the platform does. Temporal is dandori's main
+platform, and its version is the one to read first. The sixth, invoice, is written once and runs as it
+is on every platform. The version for Temporal, and invoice, are also drawn by `dandori doc`, on a
+page where each scenario lights up the way its run goes ([Draw a workflow](diagrams.md)).
 
 Every version has a Japanese twin beside it, `<name>.ja.flow` (fulfillment's child too,
 `arrange_delivery.ja.flow`), which names everything in Japanese but what an API description fixes:
@@ -19,6 +20,7 @@ draws the Japanese versions.
 | reserving the lines of an order side by side, packing, delivery: a workflow that implements a service of a `.proto` ([Implement a service](services.md)), the warehouse called by Connect, with the types of its answers made from its `.proto`, and the delivery a child flow, [arrange_delivery](https://github.com/i2y/dandori/blob/main/examples/fulfillment/arrange_delivery.flow), written once for every platform | [temporal](https://github.com/i2y/dandori/blob/main/examples/fulfillment/temporal/fulfillment.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/fulfillment/aws/fulfillment.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/fulfillment/pydantic-graph/fulfillment.flow) | [page](doc/fulfillment.html) |
 | an inquiry sorted by [Jev](jev.md), with an agent's reading when Jev is not sure, a rule that routes it, and an agent that drafts the reply | [temporal](https://github.com/i2y/dandori/blob/main/examples/inquiry/temporal/inquiry.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/inquiry/aws/inquiry.flow) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/inquiry/pydantic-graph/inquiry.flow) | [page](doc/inquiry.html) |
 | an application scored by [Jev](jev.md), and a rule that weighs how sure the score is and sends the rest to a person's approval; also [for Argo Workflows](https://github.com/i2y/dandori/blob/main/examples/review/argo/review.flow) | [temporal](https://github.com/i2y/dandori/blob/main/examples/review/temporal/review.flow) | [aws](https://github.com/i2y/dandori/blob/main/examples/review/aws/review.flow) (Lambda durable functions) | [pydantic-graph](https://github.com/i2y/dandori/blob/main/examples/review/pydantic-graph/review.flow) | [page](doc/review.html) |
+| an order's goods held in stock until its payment is due, then shipped once paid or put back: the stock a book of chobo's, the due date a date of koyomi's ([Dates and books](dates-and-books.md)) | [invoice](https://github.com/i2y/dandori/blob/main/examples/invoice/invoice.flow), the same for every platform | the same | the same | [page](doc/invoice.html) |
 
 ## How the versions differ
 
@@ -53,7 +55,9 @@ and a run the process loses is lost.
 
 Only a flow that runs as it is on every platform sits beside the versions: fulfillment's child, whose
 calls are HTTP ones dandori writes for each. The versions share the rules (`rules/`) and the API
-descriptions (`specs/`).
+descriptions (`specs/`). Invoice has no versions: its calls are an HTTP API, a date and a book's
+operations, which dandori writes for every platform, so the one flow sits in its directory with the
+dates file, its calendar and the book (`dates/`, `calendars/`, `books/`).
 
 ## The tests' flows
 
@@ -61,7 +65,8 @@ The flows under
 [tests/flows](https://github.com/i2y/dandori/tree/main/tests/flows) exercise the corners of the
 language: lists put into `json`, a parallel loop inside a parallel loop, agents' answers with every
 kind of type, Jev's questions of every kind and how sure its answers are, calls that time out, local
-rules, Connect's zero values, events, and services implemented, whose requests come with their zero
-values left out. They are written with
+rules, Connect's zero values, events, services implemented, whose requests come with their zero
+values left out, and dates and books (two dates of one file called as local activities, `now`, a
+transfer done at once, and a hold posted in part). They are written with
 Japanese names on purpose, to see that names outside ASCII come through all five platforms as
 identifiers, keys and URL paths.

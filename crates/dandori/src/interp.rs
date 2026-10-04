@@ -173,6 +173,8 @@ fn run_all(m: &Model, sc: &Value, view: View) -> Result<Ran, String> {
     for (v, _) in &m.vars {
         r.vars.insert(v.clone(), Value::Null);
     }
+    // what `now` reads: the scenario's moment, which the runners give the platforms' clocks too
+    r.vars.insert(NOW_VAR.into(), json!(sc["now"].as_str().unwrap_or(render::SCENARIO_NOW)));
     // a workflow that implements a service reads its input as protobuf reads the request: the zero
     // values its JSON leaves out are there
     let input = match &m.service {
@@ -484,6 +486,14 @@ impl<'a> Run<'a> {
                     }
                     break Ok(read);
                 }
+                // a book's operation done, now or before: the hold the code dandori writes makes of the
+                // arguments, in the state the operation leaves it in
+                if let Some(b) = match callee {
+                    Callee::Task(t) => m.tasks[*t].book(),
+                    Callee::Rule(_) => None,
+                } {
+                    break Ok(render::book_value(m, b, &a));
+                }
                 // a Connect answer is read as protobuf reads it: the zero values its JSON leaves out are
                 // there; so is the value of an event or a callback that a method of the service sends
                 break Ok(match callee {
@@ -625,7 +635,11 @@ impl<'a> Run<'a> {
                 other => render::asl_error(self.m, callee, &HErr::Declared(other.to_string())).into_iter().next().unwrap_or_else(|| other.to_string()),
             },
         };
-        CallError { kind: kind.to_string(), target_name, cause: SCRIPTED_CAUSE.into() }
+        // a book's refusal comes back with its reason, which the code dandori writes gives as the
+        // cause; on Step Functions it is the book's Lambda function that fails, as the stand-in says
+        let refused = matches!(callee, Callee::Task(t) if self.m.tasks[*t].book().is_some() && self.m.tasks[*t].error(kind).is_some());
+        let cause = if refused && self.view != View::Asl { kind.to_string() } else { SCRIPTED_CAUSE.into() };
+        CallError { kind: kind.to_string(), target_name, cause }
     }
 
     /// (errors, max attempts, interval, backoff) for each retrier, as the targets have them.
@@ -683,9 +697,13 @@ pub fn matches_error(names: &[String], err: &str) -> bool {
     names.iter().any(|n| n == err || (n == "States.ALL" && err != "States.Runtime" && err != "States.DataLimitExceeded"))
 }
 
+/// Where the run keeps what `now` reads: a name no variable can have.
+pub const NOW_VAR: &str = "(now)";
+
 /// The value of an expression over the given variables. A field that is absent reads as null.
 pub fn value_of(vars: &BTreeMap<String, Value>, e: &TExpr) -> Value {
     match e {
+        TExpr::Now => vars.get(NOW_VAR).cloned().unwrap_or_else(|| json!(render::SCENARIO_NOW)),
         TExpr::Str(s) => json!(s),
         TExpr::Int(n) => json!(n),
         TExpr::Bool(b) => json!(b),

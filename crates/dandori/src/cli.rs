@@ -253,6 +253,16 @@ pub fn with_ritsu() -> String {
     }
 }
 
+/// The `dandori` command as `run`, reading the dates files through `dates` (koyomi's answer) and
+/// the books through `books` (chobo's) besides the rules: what a program that joins all three
+/// hands over.
+pub fn run_with_ports(args: &[String], rules: Rc<dyn Rules>, dates: Rc<dyn ritsu_ports::Dates>, books: Rc<dyn ritsu_ports::Books>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    COMMAND.with(|c| *c.borrow_mut() = Some(args.to_vec()));
+    let code = crate::sources::with_ports(rules, dates, books, || run_here(args, out, err));
+    COMMAND.with(|c| *c.borrow_mut() = None);
+    code
+}
+
 fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let lang = Lang::pick(lang_asked(args).as_deref(), "DANDORI_LANG");
     let table = table();

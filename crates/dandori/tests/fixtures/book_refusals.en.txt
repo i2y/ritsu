@@ -1,0 +1,24 @@
+error[E022]: tests/fixtures/book_refusals.flow:41:1: the book may refuse `post` here with `expired` (when `押さえ` is in expired); declare `expired` in the `errors` of `出荷する`, and handle it with `on expired =>`
+    41 |       押さえ <- 出荷する(注文: 受注.id, sku: 受注.sku)
+  the run that gets there:
+      38  引き当てる: 押さえ starts in held
+      40  match 受注.急ぎ: true
+          `expire` happens on the other side: 押さえ held → expired
+error[E022]: tests/fixtures/book_refusals.flow:43:1: the book may refuse `post` here with `expired` (when `押さえ` is in expired); handle it with `on expired =>`
+    43 |       押さえ <- 一部を出す(注文: 受注.id, sku: 受注.sku, 数: 受注.数)
+  the run that gets there:
+      38  引き当てる: 押さえ starts in held
+      42  match 受注.急ぎ: false
+          `expire` happens on the other side: 押さえ held → expired
+error[E021]: tests/fixtures/book_refusals.flow:44:1: `押さえ` can be in posted here, and the book refuses `void` in every one of them
+    44 |   押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+  the run that gets there:
+      38  引き当てる: 押さえ starts in held
+      40  match 受注.急ぎ: true
+      41  出荷する: 押さえ held → posted
+error[E022]: tests/fixtures/book_refusals.flow:44:1: the book may refuse `void` here with `already_posted` (when `押さえ` is in posted); declare `already_posted` in the `errors` of `戻す`, and handle it with `on already_posted =>`
+    44 |   押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+  the run that gets there:
+      38  引き当てる: 押さえ starts in held
+      40  match 受注.急ぎ: true
+      41  出荷する: 押さえ held → posted

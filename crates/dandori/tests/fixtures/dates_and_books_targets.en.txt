@@ -1,0 +1,8 @@
+build --target asl:
+error[E050]: tests/fixtures/dates_and_books_targets.flow:4:1: the date `期限.出荷日` is called, so it needs `lambda "<function>"` under `use dates`, the Lambda function that computes it
+     4 | use dates 期限 from "../flows/dates/出荷の期限.cal"
+error[E050]: tests/fixtures/dates_and_books_targets.flow:5:1: Step Functions runs the operations of the book `倉庫` in a Lambda function, so it needs `lambda "<function>"` under `use book`
+     5 | use book 倉庫 from "../flows/books/倉庫.book"
+build --target durable:
+error[E050]: tests/fixtures/dates_and_books_targets.flow:4:1: the date `期限.出荷日` is called, so it needs `lambda "<function>"` under `use dates`, the Lambda function that computes it
+     4 | use dates 期限 from "../flows/dates/出荷の期限.cal"

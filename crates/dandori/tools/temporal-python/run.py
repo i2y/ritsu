@@ -591,6 +591,8 @@ def main() -> None:
     event_wait = "await workflow.wait_condition(lambda: name in events, timeout=timedelta(seconds=seconds(limit)))"
     assert event_wait in text, "runtime.py has no event's wait to shorten"
     text = text.replace(event_wait, f"await workflow.wait_condition(lambda: name in events, timeout=timedelta(seconds=min(limit, {EVENT_SECONDS})))")
+    # the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
+    text = text.replace('return workflow.now().strftime("%Y-%m-%dT%H:%M:%SZ")', 'return "2026-03-31T15:30:00Z"')
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     with open(os.path.join(copy, "dd_test_children.py"), "w", encoding="utf-8") as f:

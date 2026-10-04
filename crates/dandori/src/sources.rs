@@ -1,18 +1,20 @@
 //! Where dandori reads what a `.flow` names: the child `.flow`s it runs, the descriptions of the
-//! APIs it calls, and the rules, through ritsu's port of rules (`ritsu_ports::Rules`, ritsu's
-//! DESIGN 3.2). dandori holds no rulec: the program that runs it hands it the port.
+//! APIs it calls, the rules, through ritsu's port of rules (`ritsu_ports::Rules`, ritsu's DESIGN
+//! 3.2), and the dates files and the books, through the ports of dates and books (`Dates`,
+//! `Books`). dandori holds no rulec, koyomi or chobo: the program that runs it hands it the ports.
 //!
 //! - `Disk`: the disk, and the port it is handed. `ritsu dandori` and the tests hand it rulec's own
 //!   answer (`rulec::ports::Engine`); the dandori binary of this crate hands it `NoRules`, which
 //!   reads no rule and says to run the flow with `ritsu dandori` (ritsu's DESIGN 2.3).
-//! - `Playground`: the page in the browser, which can neither read the disk nor hold rulec. It
-//!   reads a bundle recorded beforehand: the files the examples read, and what rulec answered for
-//!   their rules (`Recorded`, which answers the port from the record).
-//! - `Recorder`: the disk and a port, keeping what was read, to record the bundle.
+//! - `Playground`: the page in the browser, which can neither read the disk nor hold rulec, koyomi
+//!   or chobo. It reads a bundle recorded beforehand: the files the examples read, what rulec
+//!   answered for their rules (`Recorded`, which answers the port from the record), and what koyomi
+//!   and chobo answered for their dates files and books (`RecordedDates`, `RecordedBooks`).
+//! - `Recorder`: the disk and the ports, keeping what was read, to record the bundle.
 
 use crate::diag::Lang;
 use ritsu_base::text::Text;
-use ritsu_ports::{Answer, DaySet, Precondition, RuleError, RuleFacts, Rules, Said, Values};
+use ritsu_ports::{Answer, BookFacts, Books, DateFacts, DateValue, Dates, DaySet, Found, Ledger, Precondition, RuleError, RuleFacts, Rules, Said, Values};
 use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -26,6 +28,15 @@ pub trait Sources {
     fn canonical(&self, path: &Path) -> PathBuf;
     /// The port the rules are read through.
     fn rules(&self) -> &dyn Rules;
+    /// The port the dates files are read through: none, unless the program that runs dandori
+    /// hands one over.
+    fn dates(&self) -> &dyn Dates {
+        &NoDates
+    }
+    /// The port the books are read through, likewise.
+    fn books(&self) -> &dyn Books {
+        &NoBooks
+    }
 }
 
 thread_local! {
@@ -50,6 +61,12 @@ pub fn with_rules<R>(rules: Rc<dyn Rules>, f: impl FnOnce() -> R) -> R {
     with(Rc::new(Disk::new(rules)), f)
 }
 
+/// Run `f` reading the disk, the rules through `rules`, the dates files through `dates` and the
+/// books through `books` (what `ritsu dandori` hands over when it joins koyomi and chobo).
+pub fn with_ports<R>(rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books>, f: impl FnOnce() -> R) -> R {
+    with(Rc::new(Disk { rules, dates: Some(dates), books: Some(books) }), f)
+}
+
 /// What is read from now: the disk with no rules, unless `with` says otherwise.
 fn current() -> Rc<dyn Sources> {
     CURRENT.with(|c| c.borrow().clone()).unwrap_or_else(|| Rc::new(Disk::new(Rc::new(NoRules))))
@@ -66,6 +83,16 @@ pub fn canonical(path: &Path) -> PathBuf {
 /// What rulec knows of a rule, or what is said instead.
 pub fn rule(path: &Path) -> Result<RuleFacts, Vec<Said>> {
     current().rules().facts(path)
+}
+
+/// What koyomi knows of a dates file, or what is said instead.
+pub fn dates(path: &Path) -> Result<DateFacts, Vec<Said>> {
+    current().dates().facts(path)
+}
+
+/// What chobo knows of a book, or what is said instead.
+pub fn book(path: &Path) -> Result<BookFacts, Vec<Said>> {
+    current().books().facts(path)
 }
 
 /// The page `rulec doc` draws for a rule, in a language: Markdown, or with `html` the page on which
@@ -93,6 +120,25 @@ pub fn said_notes(said: &[Said]) -> Vec<Text> {
         .collect()
 }
 
+/// What a port said of a file a flow reads, as notes, with every file under the flow's directory
+/// named from there, as the flow names it (`books/stock.book`), not by the path it was reached by.
+pub fn said_notes_from(said: &[Said], base: &std::path::Path) -> Vec<Text> {
+    let dir = base.to_string_lossy().to_string();
+    if dir.is_empty() {
+        return said_notes(said);
+    }
+    let prefix = format!("{}/", dir.trim_end_matches('/'));
+    let shown: Vec<Said> = said
+        .iter()
+        .map(|s| Said {
+            file: s.file.strip_prefix(&prefix).map(str::to_string).unwrap_or_else(|| s.file.clone()),
+            message: Text::new(s.message.ja.replace(&prefix, ""), s.message.en.replace(&prefix, "")),
+            ..s.clone()
+        })
+        .collect();
+    said_notes(&shown)
+}
+
 /// `rulec doc` as it is run, which is also how a bundle names what it drew.
 pub fn doc_command(html: bool, lang: Lang) -> String {
     let lang = if lang == Lang::Ja { "ja" } else { "en" };
@@ -103,14 +149,16 @@ pub fn doc_command(html: bool, lang: Lang) -> String {
     }
 }
 
-/// The disk, and the port of rules the program that runs dandori hands over.
+/// The disk, and the ports the program that runs dandori hands over.
 pub struct Disk {
     rules: Rc<dyn Rules>,
+    dates: Option<Rc<dyn Dates>>,
+    books: Option<Rc<dyn Books>>,
 }
 
 impl Disk {
     pub fn new(rules: Rc<dyn Rules>) -> Disk {
-        Disk { rules }
+        Disk { rules, dates: None, books: None }
     }
 }
 
@@ -125,6 +173,77 @@ impl Sources for Disk {
 
     fn rules(&self) -> &dyn Rules {
         &*self.rules
+    }
+
+    fn dates(&self) -> &dyn Dates {
+        match &self.dates {
+            Some(d) => &**d,
+            None => &NoDates,
+        }
+    }
+
+    fn books(&self) -> &dyn Books {
+        match &self.books {
+            Some(b) => &**b,
+            None => &NoBooks,
+        }
+    }
+}
+
+/// The ports of dates and books when none is handed over (the dandori binary of this crate, and a
+/// program that joins rulec only): every question is answered with what to run instead.
+pub struct NoDates;
+pub struct NoBooks;
+
+fn unread(file: &Path, ja: &str, en: &str) -> Vec<Said> {
+    vec![Said {
+        code: String::new(),
+        file: file.display().to_string(),
+        line: None,
+        message: ritsu_base::tr!(
+            "この dandori は{ja}を読めません。{ja}を使うワークフローは `ritsu dandori …` で走らせてください",
+            "this dandori does not read {en}; run a workflow that uses {en} with `ritsu dandori …`"
+        ),
+    }]
+}
+
+impl Dates for NoDates {
+    fn facts(&self, file: &Path) -> Result<DateFacts, Vec<Said>> {
+        Err(unread(file, "日付のファイル", "dates files"))
+    }
+
+    fn values(&self, file: &Path, _: &str) -> Result<Found<DaySet>, Vec<Said>> {
+        Err(unread(file, "日付のファイル", "dates files"))
+    }
+
+    fn days(&self, file: &Path, _: &str) -> Result<Found<(i64, i64)>, Vec<Said>> {
+        Err(unread(file, "日付のファイル", "dates files"))
+    }
+
+    fn eval(&self, file: &Path, _: &[(String, i64)]) -> Result<Vec<(String, DateValue)>, Vec<Said>> {
+        Err(unread(file, "日付のファイル", "dates files"))
+    }
+
+    fn joined(&self) -> bool {
+        false
+    }
+}
+
+impl Books for NoBooks {
+    fn facts(&self, file: &Path) -> Result<BookFacts, Vec<Said>> {
+        Err(unread(file, "帳簿", "books"))
+    }
+
+    fn refusals(&self, file: &Path, _: &str, _: (i128, i128)) -> Result<Found<Vec<(String, Vec<String>)>>, Vec<Said>> {
+        Err(unread(file, "帳簿", "books"))
+    }
+
+    fn open(&self, file: &Path) -> Result<Box<dyn Ledger>, Vec<Said>> {
+        Err(unread(file, "帳簿", "books"))
+    }
+
+    fn joined(&self) -> bool {
+        false
     }
 }
 
@@ -174,6 +293,16 @@ impl Rules for NoRules {
 /// which holds no rulec (E018).
 pub fn rules_joined() -> bool {
     current().rules().joined()
+}
+
+/// Whether the dates files a flow uses can be read here, likewise (koyomi).
+pub fn dates_joined() -> bool {
+    current().dates().joined()
+}
+
+/// Whether the books a flow uses can be read here, likewise (chobo).
+pub fn books_joined() -> bool {
+    current().books().joined()
 }
 
 /// A path as a bundle names it: without `.` and `..`, with `/` between the parts.
@@ -241,15 +370,70 @@ impl Rules for Recorded {
     }
 }
 
-/// Files, and what rulec answered for the rules among them, by their paths from one directory.
+/// What koyomi answered for dates files, by their paths from one directory: each file's facts. It
+/// answers the port from the record, and says it has nothing else.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RecordedDates {
+    pub facts: BTreeMap<String, DateFacts>,
+}
+
+/// What chobo answered for books, by their paths from one directory: each book's facts. It answers
+/// the port from the record, and says it has nothing else.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RecordedBooks {
+    pub facts: BTreeMap<String, BookFacts>,
+}
+
+fn not_here(file: &Path, tool: &str, ja: &str, en: &str) -> Vec<Said> {
+    let message = ritsu_base::tr!("このページでは {tool} を動かせないので、読めるのは例の{ja}だけです", "this page does not run {tool}, and reads the {en} of the examples only");
+    vec![Said { code: String::new(), file: key(file), line: None, message }]
+}
+
+impl Dates for RecordedDates {
+    fn facts(&self, file: &Path) -> Result<DateFacts, Vec<Said>> {
+        self.facts.get(&key(file)).cloned().ok_or_else(|| not_here(file, "koyomi", "日付のファイル", "dates files"))
+    }
+
+    fn values(&self, file: &Path, _: &str) -> Result<Found<DaySet>, Vec<Said>> {
+        Err(not_here(file, "koyomi", "日付のファイル", "dates files"))
+    }
+
+    fn days(&self, file: &Path, _: &str) -> Result<Found<(i64, i64)>, Vec<Said>> {
+        Err(not_here(file, "koyomi", "日付のファイル", "dates files"))
+    }
+
+    fn eval(&self, file: &Path, _: &[(String, i64)]) -> Result<Vec<(String, DateValue)>, Vec<Said>> {
+        Err(not_here(file, "koyomi", "日付のファイル", "dates files"))
+    }
+}
+
+impl Books for RecordedBooks {
+    fn facts(&self, file: &Path) -> Result<BookFacts, Vec<Said>> {
+        self.facts.get(&key(file)).cloned().ok_or_else(|| not_here(file, "chobo", "帳簿", "books"))
+    }
+
+    fn refusals(&self, file: &Path, _: &str, _: (i128, i128)) -> Result<Found<Vec<(String, Vec<String>)>>, Vec<Said>> {
+        Err(not_here(file, "chobo", "帳簿", "books"))
+    }
+
+    fn open(&self, file: &Path) -> Result<Box<dyn Ledger>, Vec<Said>> {
+        Err(not_here(file, "chobo", "帳簿", "books"))
+    }
+}
+
+/// Files, and what rulec, koyomi and chobo answered for the rules, the dates files and the books
+/// among them, by their paths from one directory.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Bundle {
     pub files: BTreeMap<String, String>,
     pub rules: Recorded,
+    pub dates: RecordedDates,
+    pub books: RecordedBooks,
 }
 
 impl Bundle {
-    /// `{"files": {path: text}, "rules": {path: {"facts": facts, "doc …": page}}}`
+    /// `{"files": {path: text}, "rules": {path: {"facts": facts, "doc …": page}}, "dates": {path:
+    /// facts}, "books": {path: facts}}`, the last two when there are some.
     pub fn to_json(&self) -> Value {
         let mut rules = serde_json::Map::new();
         let paths: std::collections::BTreeSet<&String> = self.rules.facts.keys().chain(self.rules.pages.keys()).collect();
@@ -263,7 +447,14 @@ impl Bundle {
             }
             rules.insert(p.clone(), Value::Object(one));
         }
-        json!({ "files": self.files, "rules": rules })
+        let mut v = json!({ "files": self.files, "rules": rules });
+        if !self.dates.facts.is_empty() {
+            v["dates"] = Value::Object(self.dates.facts.iter().map(|(p, f)| (p.clone(), crate::record::dates_to_json(f))).collect());
+        }
+        if !self.books.facts.is_empty() {
+            v["books"] = Value::Object(self.books.facts.iter().map(|(p, f)| (p.clone(), crate::record::book_to_json(f))).collect());
+        }
+        v
     }
 
     pub fn from_json(v: &Value) -> Result<Bundle, String> {
@@ -283,6 +474,12 @@ impl Bundle {
                     b.rules.pages.entry(path.clone()).or_default().insert(k.clone(), page.to_string());
                 }
             }
+        }
+        for (path, x) in v["dates"].as_object().into_iter().flatten() {
+            b.dates.facts.insert(path.clone(), crate::record::dates_from_json(x).map_err(|e| format!("the facts of {path}: {e}"))?);
+        }
+        for (path, x) in v["books"].as_object().into_iter().flatten() {
+            b.books.facts.insert(path.clone(), crate::record::book_from_json(x).map_err(|e| format!("the facts of {path}: {e}"))?);
         }
         Ok(b)
     }
@@ -317,14 +514,74 @@ impl Sources for Playground {
     fn rules(&self) -> &dyn Rules {
         &self.bundle.rules
     }
+
+    fn dates(&self) -> &dyn Dates {
+        &self.bundle.dates
+    }
+
+    fn books(&self) -> &dyn Books {
+        &self.bundle.books
+    }
 }
 
-/// The disk and a port, keeping what was read by its path from `root`: the bundle of what the
+/// The disk and the ports, keeping what was read by its path from `root`: the bundle of what the
 /// command read, for the playground to read the same.
 pub struct Recorder {
     root: String,
     pub got: RefCell<Bundle>,
     rules: Recording,
+    dates: Option<RecordingDates>,
+    books: Option<RecordingBooks>,
+}
+
+/// The port of dates, keeping what it answered (a file's facts) by the path from the recorder's root.
+struct RecordingDates {
+    root: String,
+    inner: Rc<dyn Dates>,
+    got: RefCell<RecordedDates>,
+}
+
+impl Dates for RecordingDates {
+    fn facts(&self, file: &Path) -> Result<DateFacts, Vec<Said>> {
+        let f = self.inner.facts(file)?;
+        self.got.borrow_mut().facts.insert(rel(&self.root, file), f.clone());
+        Ok(f)
+    }
+
+    fn values(&self, file: &Path, date: &str) -> Result<Found<DaySet>, Vec<Said>> {
+        self.inner.values(file, date)
+    }
+
+    fn days(&self, file: &Path, date: &str) -> Result<Found<(i64, i64)>, Vec<Said>> {
+        self.inner.days(file, date)
+    }
+
+    fn eval(&self, file: &Path, inputs: &[(String, i64)]) -> Result<Vec<(String, DateValue)>, Vec<Said>> {
+        self.inner.eval(file, inputs)
+    }
+}
+
+/// The port of books, likewise.
+struct RecordingBooks {
+    root: String,
+    inner: Rc<dyn Books>,
+    got: RefCell<RecordedBooks>,
+}
+
+impl Books for RecordingBooks {
+    fn facts(&self, file: &Path) -> Result<BookFacts, Vec<Said>> {
+        let f = self.inner.facts(file)?;
+        self.got.borrow_mut().facts.insert(rel(&self.root, file), f.clone());
+        Ok(f)
+    }
+
+    fn refusals(&self, file: &Path, transfer: &str, amounts: (i128, i128)) -> Result<Found<Vec<(String, Vec<String>)>>, Vec<Said>> {
+        self.inner.refusals(file, transfer, amounts)
+    }
+
+    fn open(&self, file: &Path) -> Result<Box<dyn Ledger>, Vec<Said>> {
+        self.inner.open(file)
+    }
 }
 
 /// A port that answers as another does, and keeps what it answered (a rule's facts, and the pages
@@ -375,13 +632,27 @@ impl Rules for Recording {
 impl Recorder {
     pub fn new(root: &Path, rules: Rc<dyn Rules>) -> Recorder {
         let root = key(root);
-        Recorder { root: root.clone(), got: RefCell::new(Bundle::default()), rules: Recording { root, inner: rules, got: RefCell::new(Recorded::default()) } }
+        Recorder { root: root.clone(), got: RefCell::new(Bundle::default()), rules: Recording { root, inner: rules, got: RefCell::new(Recorded::default()) }, dates: None, books: None }
     }
 
-    /// What was read, the rules' answers with it.
+    /// A recorder that reads the dates files and the books too, through `dates` and `books`.
+    pub fn with_ports(root: &Path, rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books>) -> Recorder {
+        let mut r = Recorder::new(root, rules);
+        r.dates = Some(RecordingDates { root: r.root.clone(), inner: dates, got: RefCell::new(RecordedDates::default()) });
+        r.books = Some(RecordingBooks { root: r.root.clone(), inner: books, got: RefCell::new(RecordedBooks::default()) });
+        r
+    }
+
+    /// What was read, the ports' answers with it.
     pub fn bundle(&self) -> Bundle {
         let mut b = self.got.borrow().clone();
         b.rules = self.rules.got.borrow().clone();
+        if let Some(d) = &self.dates {
+            b.dates = d.got.borrow().clone();
+        }
+        if let Some(k) = &self.books {
+            b.books = k.got.borrow().clone();
+        }
         b
     }
 }
@@ -399,6 +670,20 @@ impl Sources for Recorder {
 
     fn rules(&self) -> &dyn Rules {
         &self.rules
+    }
+
+    fn dates(&self) -> &dyn Dates {
+        match &self.dates {
+            Some(d) => d,
+            None => &NoDates,
+        }
+    }
+
+    fn books(&self) -> &dyn Books {
+        match &self.books {
+            Some(b) => b,
+            None => &NoBooks,
+        }
     }
 }
 

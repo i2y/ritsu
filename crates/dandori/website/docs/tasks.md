@@ -14,6 +14,7 @@ Step Functions sends, so the same `.flow` makes the same requests wherever it ru
 | `aws sns:publish` | AWS SDK integration | an activity dandori writes, with the AWS SDK | a step dandori writes, with the AWS SDK | the same, with the AWS SDK | the same, with boto3 |
 | `agent …` ([Agents](agents.md)) | HTTP Task to the model's API | an activity dandori writes | a step dandori writes | the same | the same |
 | `jev …` ([Jev](jev.md)) | HTTP Task to TypeSafe's API | an activity dandori writes, with `fetch` | a step dandori writes, with `fetch` | the same, with `fetch` | the same, with urllib |
+| `book <book>.<transfer>.<operation>` ([Dates and books](dates-and-books.md)) | Lambda Task of the book's function, which dandori writes around chobo's Python client | an activity dandori writes, on chobo's client through the `Transport` | a step dandori writes, the same | the same, in the caller image | a function dandori writes, the same |
 | `state machine "<arn>"` | nested execution (`startExecution.sync:2`) | | | | |
 | `flow "<path>"` ([Child flows](#child-flows)) | nested execution, with `state machine` | child workflow `<name>_v<n>` on the child's task queue | invoke, with `durable function` | a Workflow from the child's WorkflowTemplate | a function you write |
 | `workflow "<type>"` | | child workflow | | | |
@@ -28,7 +29,7 @@ SDK, and the Go build with `net/http` and the AWS SDK for Go v2.
 
 The calls dandori writes go through a `Transport` (`io.ts`, `io.py`, `io.go`), whose credentials and clients
 are yours to set: the headers of an HTTP API, the AWS SDK's clients, an agent's API key, TypeSafe's
-key for Jev. In tests it is where a stand-in goes.
+key for Jev, the clients of the books a flow runs operations on. In tests it is where a stand-in goes.
 
 - `queue "<name>"` sends a Temporal activity or child workflow to that task queue, where workers in
   any of the three languages can serve it.

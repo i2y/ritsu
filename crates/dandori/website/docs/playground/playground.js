@@ -35,8 +35,9 @@ const TEXT = {
     revert: "undo my edits",
     draft: "A first draft of the hotel booking, with errors",
     and: " · ",
-    examples: { hotel: "Hotel booking", order: "Order", fulfillment: "Fulfillment", inquiry: "Inquiry", review: "Review" },
+    examples: { hotel: "Hotel booking", order: "Order", fulfillment: "Fulfillment", inquiry: "Inquiry", review: "Review", invoice: "Invoice" },
     versions: { temporal: "for Temporal", aws: "for AWS", "pydantic-graph": "for pydantic-graph", argo: "for Argo Workflows" },
+    everywhere: "for every platform",
     beside: (name) => `${name}, the child flow, for every platform`,
     targets: {
       asl: "Step Functions (ASL)",
@@ -73,8 +74,9 @@ const TEXT = {
     revert: "編集を取り消す",
     draft: "ホテルの予約の最初の下書き（エラーあり）",
     and: "・",
-    examples: { hotel: "ホテルの予約", order: "注文", fulfillment: "引当と発送", inquiry: "問い合わせ", review: "審査" },
+    examples: { hotel: "ホテルの予約", order: "注文", fulfillment: "引当と発送", inquiry: "問い合わせ", review: "審査", invoice: "請求" },
     versions: { temporal: "Temporal 版", aws: "AWS 版", "pydantic-graph": "pydantic-graph 版", argo: "Argo Workflows 版" },
+    everywhere: "どのプラットフォームでもそのまま動く版",
     beside: (name) => `${name}（子のフロー。どのプラットフォームでもそのまま動く）`,
     targets: {
       asl: "Step Functions（ASL）",
@@ -149,7 +151,11 @@ function label(t, path) {
   if (path.startsWith("tests/")) return t.draft;
   const [, ex, dir, file] = path.split("/");
   const name = t.examples[ex] || ex;
-  if (file === undefined) return name + t.and + t.beside(dir.replace(/(\.ja)?\.flow$/, ""));
+  if (file === undefined) {
+    // a flow beside the versions: the example itself when it has the example's name, else its child
+    const stem = dir.replace(/(\.ja)?\.flow$/, "");
+    return name + t.and + (stem === ex ? t.everywhere : t.beside(stem));
+  }
   return name + t.and + (t.versions[dir] || dir);
 }
 

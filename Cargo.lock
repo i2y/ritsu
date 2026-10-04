@@ -18,6 +18,8 @@ dependencies = [
 name = "dandori"
 version = "0.1.0"
 dependencies = [
+ "chobo",
+ "koyomi",
  "ritsu-base",
  "ritsu-emit",
  "ritsu-ports",

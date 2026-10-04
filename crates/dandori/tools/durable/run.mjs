@@ -34,6 +34,8 @@ for (const f of fs.readdirSync(dir)) {
   if (!f.endsWith(".ts")) continue;
   let text = fs.readFileSync(path.join(dir, f), "utf8").replace(/from "(\.\/[^"]+)"/g, (_, p) => `from "${p}.ts"`);
   if (f === "workflow.ts") text = text.replace(/dd\.atATime\(\d+\)/g, "dd.atATime(1)");
+  // the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
+  if (f === "runtime.ts") text = text.replace('return new Date(ms).toISOString().slice(0, 19) + "Z";', 'return "2026-03-31T15:30:00Z";');
   fs.writeFileSync(path.join(work, f), text);
 }
 // the generated code imports the SDK; let it find the runner's copy

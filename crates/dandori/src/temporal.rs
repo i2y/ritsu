@@ -80,9 +80,80 @@ pub(crate) const BEAT_SECONDS: u64 = 10;
 pub(crate) const RULE_SECONDS: u64 = 10;
 
 /// io.ts, with the numbers every target sends put in.
-fn io_ts() -> String {
-    IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string())
+fn io_ts(m: &Model) -> String {
+    let io = IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string());
+    let books = crate::asl::used_books(m);
+    if books.is_empty() {
+        return io;
+    }
+    // the books' operations: on chobo's TypeScript client, which the transport is given
+    let mut names = String::from("/** How chobo's TypeScript client names each transfer of a book, and which parameters are amounts (bigint). */\nconst BOOKS: Record<string, Record<string, { member: string; amounts: string[] }>> = {\n");
+    for b in &books {
+        let f = &m.books[*b].facts;
+        names.push_str(&format!("  {}: {{\n", q(&f.name)));
+        for (t, c) in f.transfers.iter().zip(&f.typescript.transfers) {
+            let amounts: Vec<String> = t.params.iter().filter(|p| p.unit.is_some()).map(|p| q(&p.name)).collect();
+            names.push_str(&format!("    {}: {{ member: {}, amounts: [{}] }},\n", q(&t.name), q(&c.member), amounts.join(", ")));
+        }
+        names.push_str("  },\n");
+    }
+    names.push_str("};\n\n");
+    io.replace("export interface Transport {", &format!("{BOOK_TYPES_TS}{names}export interface Transport {{"))
+        .replace("  agent(call: AgentCall): Promise<unknown>;\n}", "  agent(call: AgentCall): Promise<unknown>;\n  /** Run an operation of a book of chobo's (do, hold, post or void) on chobo's client; a refusal is an answer, with its reason. */\n  book(call: BookCall): Promise<BookResult>;\n}")
+        .replace("  /** TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY. */\n  typesafe?: { apiKey?: string };\n}", "  /** TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY. */\n  typesafe?: { apiKey?: string };\n  /**\n   * The books the tasks run operations on, by the book's name: the value chobo's TypeScript client\n   * makes (`tigerbeetle(client, { tenant })` or `postgres(db, { tenant })`).\n   */\n  books?: Record<string, any>;\n}")
+        .replace("      const result = await new sdk.Runner(config).run(agent, JSON.stringify(call.input));\n      return result.finalOutput;\n    },\n  };\n}", &format!("      const result = await new sdk.Runner(config).run(agent, JSON.stringify(call.input));\n      return result.finalOutput;\n    }},\n{BOOK_RUN_TS}  }};\n}}"))
+        + BOOKED_TS
 }
+
+/// What an operation of a book and its answer are, in io.ts.
+const BOOK_TYPES_TS: &str = r#"/**
+ * An operation of a book of chobo's: the book's name, the transfer, the operation (do, hold, post or
+ * void), the arguments by the book's names, and for a post of part of a hold, the amounts apart.
+ */
+export interface BookCall {
+  book: string;
+  transfer: string;
+  op: "do" | "hold" | "post" | "void";
+  args: Record<string, unknown>;
+  amounts?: Record<string, unknown>;
+}
+
+/** What a book answers: "done", "done_before" (the same operation was done before), or "refused" with the reason. */
+export interface BookResult {
+  result: "done" | "done_before" | "refused";
+  reason?: string;
+}
+
+"#;
+
+/// The default transport's `book`: the call on chobo's client, with the amounts as bigint.
+const BOOK_RUN_TS: &str = r#"    async book(call) {
+      const b = options.books?.[call.book];
+      if (!b) throw new Error(`no client for the book "${call.book}": give the transport { books: { "${call.book}": … } }, the value chobo's TypeScript client makes`);
+      const names = BOOKS[call.book][call.transfer];
+      const big = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, names.amounts.includes(k) ? BigInt(v as number) : v]));
+      const t = b[names.member];
+      const r = call.op === "post" && call.amounts !== undefined ? await t.post(big(call.args), big(call.amounts)) : await t[call.op](big(call.args));
+      return r.reason === undefined ? { result: r.result } : { result: r.result, reason: r.reason };
+    },
+"#;
+
+/// How a task reads a book's answer.
+const BOOKED_TS: &str = r#"
+/**
+ * A book's answer as a task's: the hold (the arguments that are its key, `keys`, and its state now,
+ * `state`) when the operation is done, now or before; nothing for a transfer done at once (`state`
+ * null); or the declared error a refusal's reason names (`names`), else a failure.
+ */
+export function booked(r: BookResult, names: Record<string, string>, fail: (kind: string, message: string) => never, args: Record<string, unknown>, keys: string[], state: string | null): unknown {
+  if (r.result === "refused") return fail(names[r.reason ?? ""] ?? `Dandori.Failure.${r.reason}`, String(r.reason));
+  if (state === null) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const k of keys) out[k] = args[k];
+  out.state = state;
+  return out;
+}
+"#;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Flavor {
@@ -123,7 +194,7 @@ fn q(s: &str) -> String {
 fn ts_type(m: &Model, t: &Ty) -> String {
     match t {
         Ty::Int | Ty::Num(_) => "number".into(),
-        Ty::Str | Ty::Timestamp => "string".into(),
+        Ty::Str | Ty::Timestamp | Ty::Date => "string".into(),
         Ty::Bool => "boolean".into(),
         Ty::Enum(e) => format!("T.{}", type_name(&m.enums[*e].name)),
         Ty::Record(r) => format!("T.{}", type_name(&m.records[*r].name)),
@@ -143,6 +214,7 @@ fn ts_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, depth: usize
         },
         Ty::Str => format!("typeof {x} === \"string\""),
         Ty::Timestamp => format!("(typeof {x} === \"string\" && {p}TIMESTAMP.test({x}))"),
+        Ty::Date => format!("(typeof {x} === \"string\" && {p}DATE.test({x}))"),
         Ty::Bool => format!("typeof {x} === \"boolean\""),
         Ty::Enum(e) => format!("{p}{}_values.includes({x})", type_name(&m.enums[*e].name)),
         Ty::Record(r) => format!("{p}is_{}({x})", type_name(&m.records[*r].name)),
@@ -226,6 +298,9 @@ fn types_file(m: &Model, header: &str) -> String {
     let mut t = header.to_string();
     t.push_str(&format!("// The records and enums of {} v{}, and a check for each.\n\n", m.name, m.version));
     t.push_str(&format!("export const TIMESTAMP = /{}/;\n\n", render::TIMESTAMP_RE.replace("\\\\", "\\")));
+    if m.uses_dates() {
+        t.push_str(&format!("export const DATE = /{}/;\n\n", render::DATE_RE));
+    }
     for e in &enums {
         let en = &m.enums[*e];
         let n = type_name(&en.name);
@@ -307,7 +382,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
     // the rules whose code goes with the workflow: the others are called at their services
     let bundled: BTreeSet<usize> = called.iter().copied().filter(|r| m.rules[*r].connect.is_none()).collect();
-    let io = format!("{header}{}", io_ts());
+    let io = format!("{header}{}", io_ts(m));
     if flavor == Flavor::Durable {
         let mut errs = Vec::new();
         errs.extend(m.refuse_on_cancel(
@@ -319,6 +394,15 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         for r in &bundled {
             if m.rules[*r].lambda.is_none() {
                 let ru = &m.rules[*r];
+                if ru.date().is_some() {
+                    errs.push(Diag::error(
+                        "E050",
+                        ru.line,
+                        1,
+                        tr!("日付 `{}` は呼ばれているので、`use dates` の下に、それを計算する Lambda 関数を `lambda \"<関数>\"` と書いてください", "the date `{}` is called, so it needs `lambda \"<function>\"` under `use dates`, the Lambda function that computes it", ru.name),
+                    ));
+                    continue;
+                }
                 errs.push(Diag::error(
                     "E050",
                     ru.line,
@@ -340,13 +424,13 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         if !errs.is_empty() {
             return Err(errs);
         }
-        let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: "context".into(), can: None };
+        let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: "context".into(), can: None, now: "dd.now()".into() };
         let wf = g.workflow(&header, !bundled.is_empty());
         let mut files = vec![
             (format!("{dir}/types.ts"), types_ts),
             (format!("{dir}/tasks.ts"), tasks_file(m, flavor, &header)),
             (format!("{dir}/io.ts"), io),
-            (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME_DURABLE}")),
+            (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME_DURABLE}{}", if m.uses_now() { STAMP_TS } else { "" })),
             (format!("{dir}/workflow.ts"), wf),
         ];
         for r in &bundled {
@@ -358,13 +442,13 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
     if let Some(d) = crate::check::history_limit(m, Platform::Temporal) {
         return Err(vec![d]);
     }
-    let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: String::new(), can: None };
+    let mut g = Gen { m, out: String::new(), loops: vec![], flavor, ctx: String::new(), can: None, now: "dd.now()".into() };
     let wf = g.workflow(&header, !bundled.is_empty());
     let mut files = vec![
         (format!("{dir}/types.ts"), types_ts),
         (format!("{dir}/activities.ts"), tasks_file(m, flavor, &header)),
         (format!("{dir}/io.ts"), io),
-        (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME}")),
+        (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME}{}", if m.uses_now() { NOW_TS } else { "" })),
         (format!("{dir}/workflow.ts"), wf),
         (format!("{dir}/client.ts"), client_file(m, &header)),
     ];
@@ -576,7 +660,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         .tasks
         .iter()
         .filter(|t| !t.is_child(p) && !t.event)
-        .filter(|t| flavor != Flavor::Argo || matches!(t.via(p), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. }) | Some(Via::Jev(_))))
+        .filter(|t| flavor != Flavor::Argo || matches!(t.via(p), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. }) | Some(Via::Jev(_)) | Some(Via::Book(_))))
         .collect();
     let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
     let connected = connect_rules(m);
@@ -805,6 +889,26 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                 }
                 a.push_str(&format!("      ) as {},\n", task_result(m, task)));
             }
+            Some(Via::Book(b)) => {
+                // the book's operation, on chobo's client through the transport; a refusal is the declared error its reason names
+                let f = &m.books[b.book].facts;
+                let names = task.errors.iter().map(|e| format!("{}: {}", q(&e.name), q(&e.name))).collect::<Vec<_>>().join(", ");
+                let amounts: Vec<String> = f.transfers.iter().find(|t| t.name == b.transfer).map(|t| t.params.iter().filter(|p| p.unit.is_some()).map(|p| p.name.clone()).collect()).unwrap_or_default();
+                let (call_args, call_amounts): (Vec<&(String, Ty)>, Vec<&(String, Ty)>) = task.params.iter().partition(|(p, _)| !(b.op == "post" && amounts.contains(p)));
+                let pick = |ps: &[&(String, Ty)]| ps.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect::<Vec<_>>().join(", ");
+                let mut call = format!("book: {}, transfer: {}, op: {}, args: {}", q(&f.name), q(&b.transfer), q(&b.op), braces(&pick(&call_args)));
+                if !call_amounts.is_empty() {
+                    call.push_str(&format!(", amounts: {}", braces(&pick(&call_amounts))));
+                }
+                let keys: Vec<String> = f.transfers.iter().find(|t| t.name == b.transfer).map(|t| t.params.iter().filter(|p| t.key.contains(&p.name)).map(|p| q(&p.name)).collect()).unwrap_or_default();
+                let state = match (b.op.as_str(), &task.result) {
+                    (_, None) | ("do", _) => "null".to_string(),
+                    ("hold", _) => q("held"),
+                    ("post", _) => q("posted"),
+                    _ => q("voided"),
+                };
+                a.push_str(&format!("    {name}: async (args) => io.booked(await transport.book({{ {call} }}), {}, fail, args, [{}], {state}) as {},\n", braces(&names), keys.join(", "), task_result(m, task)));
+            }
             Some(Via::Jev(j)) => {
                 let state: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
                 let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
@@ -874,15 +978,20 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     let mut files = vec![
         ("caller/types.ts".to_string(), types_file(m, header)),
         ("caller/tasks.ts".to_string(), ts(tasks_file(m, Flavor::Argo, header))),
-        ("caller/io.ts".to_string(), format!("{header}{}", io_ts())),
+        ("caller/io.ts".to_string(), format!("{header}{}", io_ts(m))),
         (
             "caller/transport.ts".to_string(),
-            format!("{header}// Where the tasks dandori writes send their calls: set the credentials and the AWS SDK's\n// configuration here, as io.ts's Options say.\n\nimport * as io from \"./io.ts\";\n\nexport const transport: io.Transport = io.transport();\n"),
+            if crate::asl::used_books(m).is_empty() {
+                format!("{header}// Where the tasks dandori writes send their calls: set the credentials and the AWS SDK's\n// configuration here, as io.ts's Options say.\n\nimport * as io from \"./io.ts\";\n\nexport const transport: io.Transport = io.transport();\n")
+            } else {
+                let names: Vec<String> = crate::asl::used_books(m).iter().map(|b| m.books[*b].facts.name.clone()).collect();
+                format!("{header}// Where the tasks dandori writes send their calls: set the credentials and the AWS SDK's\n// configuration here, as io.ts's Options say, and the books the `book` tasks run operations on\n// ({}): the value chobo's TypeScript client makes for each, as\n//   books: {{ {}: tigerbeetle(createClient({{ cluster_id: 0n, replica_addresses: [\"3000\"] }})) }}\n\nimport * as io from \"./io.ts\";\n\nexport const transport: io.Transport = io.transport({{ books: {{}} }});\n", names.join(", "), names[0])
+            },
         ),
     ];
     if !called.is_empty() {
         let rules = rules_file(m, header, &called).lines().map(|l| {
-            if l.starts_with("import ") && l.contains("./rulec/typescript/") {
+            if l.starts_with("import ") && (l.contains("./rulec/typescript/") || l.contains("./koyomi/typescript/")) {
                 l.replacen("\";", ".ts\";", 1)
             } else {
                 l.to_string()
@@ -892,7 +1001,7 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     }
     let mut declared = Vec::new();
     for t in &m.tasks {
-        if matches!(t.via(Platform::Argo), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. }) | Some(Via::Jev(_))) {
+        if matches!(t.via(Platform::Argo), Some(Via::Lambda(_)) | Some(Via::Http { .. }) | Some(Via::Aws { .. }) | Some(Via::Agent { .. }) | Some(Via::Jev(_)) | Some(Via::Book(_))) {
             declared.push(format!("  {}: [{}],", q(&ident(&t.name)), t.errors.iter().map(|e| q(&e.name)).collect::<Vec<_>>().join(", ")));
         }
     }
@@ -1008,13 +1117,34 @@ pub(crate) fn import_names(imports: &BTreeMap<String, BTreeSet<String>>, same: i
     (lines, local)
 }
 
-fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
+pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     let mut rules_ts = header.to_string();
-    rules_ts.push_str("// The rules the workflow calls, as activities around the TypeScript rulec generates.\n");
-    rules_ts.push_str("// `rulec gen <rule> --out rulec` writes the modules these imports read.\n\n");
+    let dates = called.iter().any(|r| m.rules[*r].date().is_some());
+    if called.iter().all(|r| m.rules[*r].date().is_some()) {
+        rules_ts.push_str("// The dates the workflow calls, as activities around the TypeScript koyomi generates.\n");
+    } else if dates {
+        rules_ts.push_str("// The rules and the dates the workflow calls, as activities around the TypeScript rulec and\n// koyomi generate.\n");
+    } else {
+        rules_ts.push_str("// The rules the workflow calls, as activities around the TypeScript rulec generates.\n");
+    }
+    if called.iter().any(|r| m.rules[*r].is_rule()) {
+        rules_ts.push_str("// `rulec gen <rule> --out rulec` writes the modules these imports read.\n");
+    }
+    if dates {
+        rules_ts.push_str("// `koyomi gen <file.cal> --out koyomi` writes the modules of the dates.\n");
+    }
+    rules_ts.push('\n');
     // one import a module: two rules of the flow may be the same rule
     let mut imports: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for r in called {
+        if let Some(d) = m.rules[*r].date() {
+            let names = imports.entry(format!("koyomi/typescript/{}", d.file_alias)).or_default();
+            names.insert(d.alias.clone());
+            if d.at {
+                names.insert(format!("{}_at", d.alias));
+            }
+            continue;
+        }
         let ts = &m.rules[*r].info.typescript;
         let module = ts.module.trim_end_matches(".ts").to_string();
         let names = imports.entry(module).or_default();
@@ -1037,12 +1167,42 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     let (lines, local) = import_names(&imports, |n| n.strip_prefix("type "));
     for (module, names) in lines {
         if !names.is_empty() {
-            rules_ts.push_str(&format!("import {{ {} }} from \"./rulec/typescript/{module}\";\n", names.join(", ")));
+            // a module of koyomi's is named by its path; one of rulec's by its name
+            let path = if module.contains('/') { module.clone() } else { format!("rulec/typescript/{module}") };
+            rules_ts.push_str(&format!("import {{ {} }} from \"./{path}\";\n", names.join(", ")));
         }
+    }
+    if dates {
+        rules_ts.push_str(DAY_TS);
     }
     rules_ts.push_str("\nexport const rules = {\n");
     for r in called {
         let ru = &m.rules[*r];
+        if let Some(d) = ru.date() {
+            // koyomi's function for the date: its inputs by position, a day as `YYYY-MM-DD`
+            let module = format!("koyomi/typescript/{}", d.file_alias);
+            let name_of = |n: &str| local.get(&(module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
+            let offset = d.offset.unwrap_or(0);
+            let mut args = Vec::new();
+            let mut arg_types = Vec::new();
+            for (n, _, day) in &d.params {
+                let get = format!("args[{}]", q(n));
+                if *day {
+                    args.push(format!("day(String({get}), {offset})"));
+                    arg_types.push(format!("{}: string", q(n)));
+                } else {
+                    args.push(format!("Number({get})"));
+                    arg_types.push(format!("{}: number", q(n)));
+                }
+            }
+            let a = args.join(", ");
+            let mut outs = vec![format!("day: {}({a})", name_of(&d.alias))];
+            if d.at {
+                outs.push(format!("at: {}({a})", name_of(&format!("{}_at", d.alias))));
+            }
+            rules_ts.push_str(&format!("  async {}(args: {{ {} }}): Promise<Record<string, unknown>> {{\n    return {{ {} }};\n  }},\n", render::rule_activity(&ru.name), arg_types.join("; "), outs.join(", ")));
+            continue;
+        }
         let ts = &ru.info.typescript;
         let module = ts.module.trim_end_matches(".ts").to_string();
         let name_of = |n: &str| local.get(&(module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
@@ -1090,6 +1250,14 @@ fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> String {
     rules_ts.push_str("};\n");
     rules_ts
 }
+
+/// How the code dandori writes in TypeScript reads a day it hands koyomi's code.
+pub(crate) const DAY_TS: &str = r#"
+/** A day of the calendar: `YYYY-MM-DD` as it is, or a time (`…Z`) as the day it falls on at the calendar's offset (minutes east of UTC). */
+function day(v: string, offset: number): string {
+  return v.length <= 10 ? v : new Date(Date.parse(v) + offset * 60000).toISOString().slice(0, 10);
+}
+"#;
 
 const IO: &str = r#"// How the tasks that say `lambda`, `http`, `aws`, `agent` or `jev` reach the other side. They go
 // through a Transport, so that the credentials, the clients and a test's stand-in are yours to
@@ -1522,6 +1690,22 @@ export function jev(body: unknown, t: JevTask, fail: (kind: string, message: str
     out[c.field] = r === undefined ? null : Math.floor(r[1] * c.per + 1e-9);
   }
   return out;
+}
+"#;
+
+/// `now` on Temporal: the workflow's clock, which a replay reads again the same.
+const NOW_TS: &str = r#"
+/** `now`: the moment, by the workflow's clock, which a replay reads again the same; to the second, in UTC. */
+export function now(): string {
+  return new Date(Date.now()).toISOString().slice(0, 19) + "Z";
+}
+"#;
+
+/// `now` on durable functions: the moment a step read (`Date.now()`), as dandori's timestamp.
+const STAMP_TS: &str = r#"
+/** A moment a step read, in milliseconds, as `now` reads it: to the second, in UTC. */
+export function stamp(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19) + "Z";
 }
 "#;
 
@@ -2038,6 +2222,9 @@ struct Gen<'a> {
     /// Temporal: the loop at the top of the flow that the next statement is, which goes on in a
     /// new run once the history is long, by its place among such loops (the first is 1)
     can: Option<usize>,
+    /// what `now` is written as: the workflow's clock on Temporal; on durable functions, the moment
+    /// the step before the statement read
+    now: String,
 }
 
 impl<'a> Gen<'a> {
@@ -2060,6 +2247,7 @@ impl<'a> Gen<'a> {
             TExpr::Bool(b) => b.to_string(),
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "null".into(),
+            TExpr::Now => self.now.clone(),
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
                 let is_input = self.m.inputs.iter().any(|(i, _)| i == name);
@@ -2375,6 +2563,18 @@ impl<'a> Gen<'a> {
     }
 
     fn stmt(&mut self, s: &TStmt, d: usize) {
+        let ctx = self.ctx.clone();
+        // durable functions: the clock is read in a step, so that a replay reads the same moment
+        if self.flavor == Flavor::Durable && s.kind.reads_now() {
+            let site = s.site;
+            self.line(d, &format!("const dd_clock_{site} = dd.stamp(await {ctx}.step({}, async () => Date.now(), {{ retryStrategy: dd.noRetry }}));", q(&format!("{} clock", s.line))));
+            self.now = format!("dd_clock_{site}");
+        }
+        self.stmt_here(s, d);
+        self.now = "dd.now()".into();
+    }
+
+    fn stmt_here(&mut self, s: &TStmt, d: usize) {
         let m = self.m;
         let ctx = self.ctx.clone();
         match &s.kind {

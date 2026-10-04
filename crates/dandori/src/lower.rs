@@ -13,8 +13,8 @@ use std::path::Path;
 
 fn type_hint() -> Text {
     tr!(
-        "型は int・string・bool・timestamp・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです",
-        "a type is int, string, bool, timestamp, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?"
+        "型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです",
+        "a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?"
     )
 }
 
@@ -40,6 +40,12 @@ pub struct Lowerer<'a> {
     /// the APIs whose missing `url` is already said
     url_said: BTreeSet<String>,
     rule_ix: BTreeMap<String, usize>,
+    /// the dates files `use dates` reads, by the name it gives
+    date_files: BTreeMap<String, ritsu_ports::DateFacts>,
+    /// the books `use book` reads, by the name it gives
+    book_ix: BTreeMap<String, usize>,
+    /// the life of the holds of each transfer that holds, by book and transfer: the rule it is
+    hold_ix: BTreeMap<(String, String), usize>,
     task_ix: BTreeMap<String, usize>,
     var_ty: BTreeMap<String, Ty>,
     site: usize,
@@ -101,6 +107,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             kind: prog.kind.clone(),
             source_file: file.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default(),
             rules: vec![],
+            books: vec![],
             enums: vec![],
             records: vec![],
             inputs: vec![],
@@ -125,6 +132,9 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         use_spans: BTreeMap::new(),
         url_said: BTreeSet::new(),
         rule_ix: BTreeMap::new(),
+        date_files: BTreeMap::new(),
+        book_ix: BTreeMap::new(),
+        hold_ix: BTreeMap::new(),
         task_ix: BTreeMap::new(),
         var_ty: BTreeMap::new(),
         site: 0,
@@ -136,6 +146,8 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     };
     let base = file.parent().unwrap_or(Path::new("."));
     lw.rules(base);
+    lw.dates(base);
+    lw.books(base);
     lw.apis(base);
     lw.local_types();
     lw.io();
@@ -283,7 +295,188 @@ impl<'a> Lowerer<'a> {
                 connection: u.connection.as_ref().map(|(c, _)| c.clone()),
                 outputs: rec,
                 line: sp.line,
+                kind: RuleKind::Rule,
             });
+        }
+    }
+
+    /// Whether a name `use` gives is taken already: by a rule, a dates file or a book.
+    fn used_name(&mut self, name: &str, sp: Span) -> bool {
+        if self.rule_ix.contains_key(name) || self.date_files.contains_key(name) || self.book_ix.contains_key(name) {
+            self.push(e("E006", sp, tr!("`{name}` が二度読み込まれています（規則と日付のファイルと帳簿は名前を共有します）", "`{name}` is used twice (rules, dates files and books share names)")));
+            return true;
+        }
+        false
+    }
+
+    /// The dates files (`use dates terms from "…"`), read through the port of dates (koyomi's
+    /// answer): each date of a file is called as a rule is, by `<file>.<date>`, and answers its day,
+    /// and its time when the date turns into one (`at`). E005 when koyomi says the file does not pass
+    /// its check, or this dandori reads no dates file.
+    fn dates(&mut self, base: &Path) {
+        for u in &self.prog.dates {
+            let (name, sp) = &u.name;
+            if self.used_name(name, *sp) {
+                continue;
+            }
+            let path = base.join(&u.path);
+            let facts = match crate::sources::dates(&path) {
+                Ok(f) => f,
+                Err(said) => {
+                    let d = e("E005", *sp, tr!("日付のファイル `{}` を読めませんでした", "could not read the dates file `{}`", u.path));
+                    self.push(crate::sources::said_notes_from(&said, base).into_iter().fold(d, Diag::note));
+                    continue;
+                }
+            };
+            self.use_spans.insert(name.clone(), *sp);
+            for f in &facts.functions {
+                let callee = format!("{name}.{}", f.name);
+                let ix = self.m.rules.len();
+                let params: Vec<(String, String, bool)> = f
+                    .params
+                    .iter()
+                    .filter_map(|p| facts.inputs.iter().find(|i| i.name == *p))
+                    .map(|i| (i.name.clone(), i.alias.clone(), i.kind == ritsu_ports::DateKind::Date))
+                    .collect();
+                let mut fields = vec![("day".to_string(), Ty::Date)];
+                if f.at.is_some() {
+                    fields.push(("at".to_string(), Ty::Timestamp));
+                }
+                let rec = self.m.records.len();
+                self.m.records.push(RecordDef { name: callee.clone(), fields, ranges: BTreeMap::new(), origin: RecordOrigin::RuleOutputs(ix) });
+                let number = ritsu_units::Unit::parse("number").ok();
+                let column = |(n, a, day): &(String, String, bool)| rulec::Column {
+                    name: n.clone(),
+                    alias: a.clone(),
+                    ty: if *day {
+                        RType::Date
+                    } else {
+                        let i = facts.inputs.iter().find(|i| i.name == *n);
+                        RType::Num { unit: number.clone().unwrap_or_else(|| ritsu_units::Unit::count("number")), min: i.map(|i| i.min), max: i.map(|i| i.max) }
+                    },
+                };
+                let call = |module: String, function: String| ritsu_ports::Call {
+                    module,
+                    function,
+                    input_type: String::new(),
+                    params: params.iter().map(|(n, a, _)| ritsu_ports::Param { name: n.clone(), alias: a.clone(), ty: String::new(), optional: false }).collect(),
+                    outputs: vec![],
+                    enums: vec![],
+                };
+                // the names koyomi's generated code gives the file and the date (koyomi's `api`): the
+                // alias in TypeScript and Python, and Go's package and exported name (ritsu-emit's)
+                let info = rulec::RuleInfo {
+                    rule: facts.name.clone(),
+                    version: facts.version.clone(),
+                    path: path.clone(),
+                    sha256: facts.sha256.clone(),
+                    inputs: params.iter().map(column).collect(),
+                    outputs: vec![],
+                    enums: vec![],
+                    machine: None,
+                    preconditions: vec![],
+                    connect: None,
+                    typescript: call(facts.alias.clone(), f.alias.clone()),
+                    python: call(facts.alias.clone(), f.alias.clone()),
+                    go: call(ritsu_emit::ident::go_package(&facts.alias), ritsu_emit::ident::pascal(&f.alias)),
+                    walks: None,
+                    optional: vec![],
+                };
+                self.rule_ix.insert(callee.clone(), ix);
+                self.m.rules.push(RuleUse {
+                    name: callee,
+                    info,
+                    lambda: u.lambda.as_ref().map(|(f, _)| f.clone()),
+                    local: u.local,
+                    connect: None,
+                    connection: None,
+                    outputs: rec,
+                    line: sp.line,
+                    kind: RuleKind::Date(DateCall {
+                        file: name.clone(),
+                        date: f.name.clone(),
+                        file_alias: facts.alias.clone(),
+                        alias: f.alias.clone(),
+                        params: params.clone(),
+                        at: f.at.is_some(),
+                        offset: facts.calendar.as_ref().and_then(|c| c.offset),
+                    }),
+                });
+            }
+            self.date_files.insert(name.clone(), facts);
+        }
+    }
+
+    /// The books (`use book stock from "…"`), read through the port of books (chobo's answer). Each
+    /// transfer that holds gives a type, `<book>.<transfer>`: a record of the parameters of its key and
+    /// its state, which a task that holds, posts or voids answers, and a case that follows the hold is
+    /// held in; and the life of its holds, as a machine a case follows (chobo's, as a rule's is).
+    fn books(&mut self, base: &Path) {
+        for u in &self.prog.books {
+            let (name, sp) = &u.name;
+            if self.used_name(name, *sp) {
+                continue;
+            }
+            let path = base.join(&u.path);
+            let facts = match crate::sources::book(&path) {
+                Ok(f) => f,
+                Err(said) => {
+                    let d = e("E005", *sp, tr!("帳簿 `{}` を読めませんでした", "could not read the book `{}`", u.path));
+                    self.push(crate::sources::said_notes_from(&said, base).into_iter().fold(d, Diag::note));
+                    continue;
+                }
+            };
+            self.use_spans.insert(name.clone(), *sp);
+            let bix = self.m.books.len();
+            for t in &facts.transfers {
+                let Some(mc) = &t.machine else { continue };
+                let rname = format!("{name}.{}", t.name);
+                let state = self.m.enums.len();
+                self.enum_ix.insert(format!("{rname}.{}", mc.state_enum), state);
+                self.m.enums.push(EnumDef { name: format!("{rname}.{}", mc.state_enum), values: mc.states.clone() });
+                // the key's parameters, in the order the transfer declares them: what a post and a void take
+                let mut fields: Vec<(String, Ty)> = t.params.iter().filter(|p| t.key.contains(&p.name)).map(|p| (p.name.clone(), Ty::Str)).collect();
+                fields.push(("state".to_string(), Ty::Enum(state)));
+                let ix = self.m.rules.len();
+                let rec = self.m.records.len();
+                self.record_ix.insert(rname.clone(), rec);
+                self.m.records.push(RecordDef { name: rname.clone(), fields, ranges: BTreeMap::new(), origin: RecordOrigin::Hold { book: bix, transfer: t.name.clone() } });
+                let none = ritsu_ports::Call { module: String::new(), function: String::new(), input_type: String::new(), params: vec![], outputs: vec![], enums: vec![] };
+                let info = rulec::RuleInfo {
+                    rule: facts.name.clone(),
+                    version: format!("v{}", facts.version),
+                    path: path.clone(),
+                    sha256: facts.sha256.clone(),
+                    inputs: vec![],
+                    outputs: vec![],
+                    enums: vec![(mc.state_enum.clone(), mc.states.clone())],
+                    machine: Some(rulec::machine(mc.clone())),
+                    preconditions: vec![],
+                    connect: None,
+                    typescript: none.clone(),
+                    python: none.clone(),
+                    go: none,
+                    walks: None,
+                    optional: vec![],
+                };
+                self.hold_ix.insert((name.clone(), t.name.clone()), ix);
+                self.m.rules.push(RuleUse { name: rname, info, lambda: None, local: false, connect: None, connection: None, outputs: rec, line: sp.line, kind: RuleKind::Hold { book: bix, transfer: t.name.clone() } });
+            }
+            self.book_ix.insert(name.clone(), bix);
+            self.m.books.push(BookUse { name: name.clone(), path, facts, lambda: u.lambda.as_ref().map(|(f, _)| f.clone()), line: sp.line });
+        }
+    }
+
+    /// The type of a parameter of a book's transfer: a string, or an amount in a unit of the book,
+    /// as dandori types it: a count with a name and nothing else (`unit pcs`) is a whole number,
+    /// `int`, which dandori has no other spelling for; money and a quantity of the table are a number
+    /// with that unit (`unit 円 incl_tax` is `money[円, incl_tax]`), which a value is given in as it
+    /// is, and never converted (P1).
+    fn book_param_ty(book: &BookUse, p: &ritsu_ports::TransferParam) -> Ty {
+        match p.unit.as_deref().and_then(|u| book.facts.unit(u)) {
+            None if p.unit.is_none() => Ty::Str,
+            Some(u) if !matches!(u.dim, ritsu_units::Dim::Count(_) | ritsu_units::Dim::Number) => Ty::Num(u.clone()),
+            _ => Ty::Int,
         }
     }
 
@@ -333,6 +526,7 @@ impl<'a> Lowerer<'a> {
         match t {
             RType::Bool => Ty::Bool,
             RType::Str => Ty::Str,
+            RType::Date => Ty::Date,
             RType::Enum(n) => Ty::Enum(*self.enum_ix.get(&format!("{rule}.{n}")).expect("rule enums are registered first")),
             // rulec's `number` has no unit: it is an integer like dandori's `int`
             RType::Num { unit, .. } if unit.dim == ritsu_units::Dim::Number => Ty::Int,
@@ -400,6 +594,7 @@ impl<'a> Lowerer<'a> {
             TypeExpr::Str(_) => Some(Ty::Str),
             TypeExpr::Bool(_) => Some(Ty::Bool),
             TypeExpr::Timestamp(_) => Some(Ty::Timestamp),
+            TypeExpr::Date(_) => Some(Ty::Date),
             TypeExpr::Json(_) => Some(Ty::Json),
             TypeExpr::List(inner, sp) => {
                 let t = self.ty(inner)?;
@@ -786,7 +981,8 @@ impl<'a> Lowerer<'a> {
         let activities: BTreeMap<String, &str> = bundled.iter().map(|r| (crate::render::rule_activity(&m.rules[*r].name), m.rules[*r].name.as_str())).collect();
         let fix_rule = tr!("規則のファイルで規則の別名を変えてください（`rule <名前>(<別名>) v1`。名前はそのままで構いません）", "Change the rule's alias in its file (`rule <name>(<alias>) v1`); its name can stay as it is.");
         let fix_enum = tr!("規則のファイルで列挙の別名を変えてください（`enum <名前>(<別名>) = …`）", "Change the enum's alias in the rule's file (`enum <name>(<alias>) = …`).");
-        for r in &bundled {
+        // the names of rulec's code (a date of a dates file goes by koyomi's, which `use dates` checks)
+        for r in bundled.iter().filter(|r| m.rules[**r].is_rule()) {
             let ru = &m.rules[*r];
             let (n, info) = (ru.name.as_str(), &ru.info);
             // each name of the rule's generated code, with the places it would clash and what it is
@@ -1101,6 +1297,11 @@ impl<'a> Lowerer<'a> {
                 }
                 _ => {}
             }
+            // an operation of a book's transfer: the transfer and its parameters hold the task
+            let book_op = match &t.binding {
+                Some((syntax::Binding::Book { book, transfer, op }, bsp)) => self.book_task(t, book, transfer, op, *bsp, &params, result.as_ref()),
+                _ => None,
+            };
             // what a Jev task asks, from the type of its answer
             let jev = match &t.binding {
                 Some((syntax::Binding::Jev(jd), bsp)) => Some(self.jev(t, jd, *bsp, result.as_ref())),
@@ -1130,7 +1331,15 @@ impl<'a> Lowerer<'a> {
                     effort: t.effort.as_ref().map(|x| x.0.clone()),
                 },
                 syntax::Binding::Jev(_) => Binding::Jev(jev.clone().expect("lowered above")),
+                // a book that could not be read, or an operation it has not, is said above
+                syntax::Binding::Book { .. } => match &book_op {
+                    Some(b) => Binding::Book(b.clone()),
+                    None => Binding::Lambda(String::new()),
+                },
             });
+            if matches!(t.binding, Some((syntax::Binding::Book { .. }, _))) && book_op.is_none() {
+                continue;
+            }
             self.agent(t, result.as_ref(), result_range);
             // another `.flow` as the child: checked here, for its names and the contract it holds the task to
             let flow = t.flow.as_ref().and_then(|(path, fsp)| self.child_flow(path, *fsp));
@@ -1161,6 +1370,20 @@ impl<'a> Lowerer<'a> {
                 }
                 if errors.iter().any(|x| x.name == *en) {
                     self.push(e("E006", *esp, tr!("エラー `{en}` が二度書かれています", "the error `{en}` is written twice")));
+                    continue;
+                }
+                if let Some(Binding::Book(b)) = &binding {
+                    if er.status.is_some() || er.exception.is_some() {
+                        self.push(e("E007", *esp, tr!("帳簿の操作のエラーは、帳簿が断る理由の名前そのものです。`= …` は外してください", "an error of a book's operation is the name of the reason the book refuses it with; leave out `= …`")));
+                        continue;
+                    }
+                    let reasons = self.book_reasons(b);
+                    if !reasons.contains(en) {
+                        let (tn, op) = (&b.transfer, &b.op);
+                        self.push(e("E016", *esp, tr!("`{en}` は、帳簿が `{tn}.{op}` を断る理由ではありません（{}）", "`{en}` is not a reason the book refuses `{tn}.{op}` with ({})", reasons.join("・"); reasons.join(", "))));
+                        continue;
+                    }
+                    errors.push(ErrDef { name: en.clone(), status: None, exception: None });
                     continue;
                 }
                 if matches!(binding, Some(Binding::Agent { .. })) {
@@ -1219,7 +1442,7 @@ impl<'a> Lowerer<'a> {
                     }
                     (Some(Binding::Http { .. }), Some(_), Some(_)) => {}
                     // refused above
-                    (Some(Binding::Agent { .. }), _, _) => {}
+                    (Some(Binding::Agent { .. }), _, _) | (Some(Binding::Book(_)), _, _) => {}
                 }
                 if let Some(st) = status {
                     if let Some(other) = errors.iter().find(|x| x.status == Some(st)) {
@@ -1255,7 +1478,7 @@ impl<'a> Lowerer<'a> {
                 let ok = match &binding {
                     None | Some(Binding::Lambda(_)) => true,
                     Some(Binding::Aws { service, action }) => service == "sqs" && action == "sendMessage",
-                    Some(Binding::Http { .. }) | Some(Binding::Agent { .. }) | Some(Binding::Jev(_)) => false,
+                    Some(Binding::Http { .. }) | Some(Binding::Agent { .. }) | Some(Binding::Jev(_)) | Some(Binding::Book(_)) => false,
                 };
                 if !ok {
                     self.push(e(
@@ -1306,6 +1529,7 @@ impl<'a> Lowerer<'a> {
                     self.push(e("E007", ksp, tr!("子ワークフローはプラットフォームが呼び出しごとに一度だけ始めるので、`key` は使えません", "the platform starts a child workflow once for each call, so `key` does not apply to it")));
                 }
                 match (&binding, &t.key_param) {
+                    (Some(Binding::Book(_)), _) => self.push(e("E007", ksp, tr!("帳簿の操作は、帳簿に書いたキーで一度だけ行われます。`key` は外してください", "an operation of a book is done once for the key the book gives it; leave out `key`"))),
                     (Some(Binding::Agent { .. }), _) => self.push(e("E007", ksp, tr!("エージェントは外部のデータを何も変えないので、`key` は要りません", "an agent changes nothing on the other side, so it takes no `key`"))),
                     (Some(Binding::Jev(_)), _) => self.push(e("E007", ksp, tr!("Jev は答えるだけで外部のデータを何も変えないので、`key` は要りません", "Jev only answers, and changes nothing on the other side, so it takes no `key`"))),
                     (Some(Binding::Aws { .. }), None) => self.push(e(
@@ -1338,7 +1562,8 @@ impl<'a> Lowerer<'a> {
                 Retry { times: r.times, every: r.every, backoff: r.backoff, on: r.on.iter().map(|x| x.0.clone()).collect() }
             });
             if let Some((ra, rsp)) = &t.refused_as {
-                if !errors.iter().any(|x| x.name == *ra) {
+                // a book's operation takes no `refused as` at all, which is said below
+                if !errors.iter().any(|x| x.name == *ra) && !matches!(binding, Some(Binding::Book(_))) {
                     self.push(e("E007", *rsp, tr!("`{ra}` を `errors` にも書いてください", "declare `{ra}` in `errors` too")));
                 }
             }
@@ -1350,11 +1575,39 @@ impl<'a> Lowerer<'a> {
                 MachineUse::Sends { event, column } => Some(TaskMachine::Sends { event: event.0.clone(), column: column.as_ref().map(|c| c.0.clone()) }),
                 MachineUse::Observes => Some(TaskMachine::Observes),
             });
-            if t.refused_as.is_some() && !matches!(machine, Some(TaskMachine::Sends { .. })) {
+            if let (Some(Binding::Book(_)), Some((_, rsp))) = (&binding, &t.refused_as) {
+                self.push(e("E007", *rsp, tr!("帳簿は、仮押さえの状態ごとに理由を付けて断ります。`refused as` は外し、理由を `errors` に書いてください", "a book refuses with a reason for each state of the hold; leave out `refused as`, and declare the reasons in `errors`")));
+            } else if t.refused_as.is_some() && !matches!(machine, Some(TaskMachine::Sends { .. })) {
                 self.push(e("E007", t.refused_as.as_ref().unwrap().1, tr!("`refused as` はイベントを `sends` するタスクに書きます", "`refused as` belongs to a task that `sends` an event")));
             }
             if machine.is_some() && result.is_none() {
                 self.push(e("E008", *sp, tr!("`{name}` は案件を動かすので、案件のレコードを返します。`-> <レコード>` を書いてください", "`{name}` moves a case, so it answers with the case's record; write `-> <record>`")));
+            }
+            // what a book's operation does to the hold a case follows is the operation's own
+            if let (Some(Binding::Book(b)), Some(mu)) = (&binding, &machine) {
+                let hold = self.hold_ix.get(&(self.m.books[b.book].name.clone(), b.transfer.clone())).copied();
+                let fits = match (b.op.as_str(), mu) {
+                    ("hold", TaskMachine::Starts { rule, then }) => Some(*rule) == hold && then.is_empty(),
+                    ("post", TaskMachine::Sends { event, .. }) => event == "post",
+                    ("void", TaskMachine::Sends { event, .. }) => event == "void",
+                    _ => false,
+                };
+                if !fits {
+                    let (bn, tn, op) = (&self.m.books[b.book].name, &b.transfer, &b.op);
+                    let want = match op.as_str() {
+                        "hold" => format!("starts {bn}.{tn}"),
+                        "post" => "sends post".to_string(),
+                        "void" => "sends void".to_string(),
+                        _ => String::new(),
+                    };
+                    let msp = t.machine.as_ref().map(|(_, s)| *s).unwrap_or(*sp);
+                    let d = if want.is_empty() {
+                        e("E008", msp, tr!("`{tn}.do` はすぐに確定する振替で、案件の始まりも終わりもしません", "`{tn}.do` is a transfer done at once, which neither starts nor ends a case"))
+                    } else {
+                        e("E008", msp, tr!("`{tn}.{op}` が仮押さえにすることは `{want}` です", "what `{tn}.{op}` does to the hold is `{want}`"))
+                    };
+                    self.push(d);
+                }
             }
             self.task_ix.insert(name.clone(), self.m.tasks.len());
             self.m.tasks.push(TaskDef {
@@ -1424,6 +1677,130 @@ impl<'a> Lowerer<'a> {
                 }
             }
         }
+    }
+
+    /// An operation of a book's transfer as a task's way of calling (`book stock.reserve.hold`):
+    /// the book and the transfer it names (E002), an operation the transfer has (E007: `do` for a
+    /// transfer done at once, `hold`, `post` and `void` for one that holds), and the task's
+    /// parameters and answer held to the transfer (E016): `do` and `hold` take every parameter of
+    /// the transfer, `post` and `void` those of the key (`post` all its amounts besides, or none, for
+    /// all of it), each of the type the book gives it; `hold`, `post` and `void` answer the hold
+    /// (`<book>.<transfer>`), or nothing, and `do` nothing.
+    fn book_task(&mut self, t: &syntax::TaskDecl, book: &syntax::Name, transfer: &syntax::Name, op: &syntax::Name, bsp: Span, params: &[(String, Ty)], result: Option<&Ty>) -> Option<BookOp> {
+        let Some(&bix) = self.book_ix.get(&book.0) else {
+            self.push(e("E002", book.1, tr!("帳簿 `{}` はありません。`use book` で読んだものを書きます", "there is no book `{}`; name one read by `use book`", book.0)));
+            return None;
+        };
+        let bu = self.m.books[bix].clone();
+        let Some(tr) = bu.transfer(&transfer.0) else {
+            let names: Vec<&str> = bu.facts.transfers.iter().map(|x| x.name.as_str()).collect();
+            self.push(e("E002", transfer.1, tr!("帳簿 `{}` に振替 `{}` はありません（{}）", "the book `{}` has no transfer `{}` ({})", book.0, transfer.0, names.join("・"); book.0, transfer.0, names.join(", "))));
+            return None;
+        };
+        let holds = tr.pending.is_some();
+        let ops: &[&str] = if holds { &["hold", "post", "void"] } else { &["do"] };
+        if !ops.contains(&op.0.as_str()) {
+            let tn = &tr.name;
+            let msg = if holds {
+                tr!("`{tn}` は仮押さえにする振替で、操作は hold・post・void です", "`{tn}` is a transfer that holds first; its operations are hold, post and void")
+            } else {
+                tr!("`{tn}` はすぐに確定する振替で、操作は do です", "`{tn}` is a transfer done at once; its operation is do")
+            };
+            self.push(e("E007", op.1, msg));
+            return None;
+        }
+        let tn = tr.name.clone();
+        let opn = op.0.clone();
+        let mut ok = true;
+        // what the operation takes, each with its type
+        let key: Vec<&ritsu_ports::TransferParam> = tr.params.iter().filter(|p| tr.key.contains(&p.name)).collect();
+        let amounts: Vec<&ritsu_ports::TransferParam> = tr.params.iter().filter(|p| p.unit.is_some()).collect();
+        let takes: Vec<&ritsu_ports::TransferParam> = match opn.as_str() {
+            "do" | "hold" => tr.params.iter().collect(),
+            "post" if amounts.iter().any(|a| params.iter().any(|(n, _)| *n == a.name)) => key.iter().chain(amounts.iter()).copied().collect(),
+            _ => key.clone(),
+        };
+        let line = Span { line: t.name.1.line, col: 1 };
+        for p in &takes {
+            let want = Self::book_param_ty(&bu, p);
+            match params.iter().find(|(n, _)| *n == p.name) {
+                None => {
+                    ok = false;
+                    self.push(e("E016", line, tr!("`{tn}.{opn}` は `{}` を受け取ります。タスクの引数に書いてください", "`{tn}.{opn}` takes `{}`; give the task that parameter", p.name)));
+                }
+                Some((_, got)) if *got != want => {
+                    ok = false;
+                    let (g, w) = (self.m.ty_name(got), self.m.ty_name(&want));
+                    self.push(e("E016", line, tr!("帳簿は `{}` を `{w}` で受け取りますが、タスクの引数は `{g}` です", "the book takes `{}` as `{w}`, but the task's parameter is `{g}`", p.name)));
+                }
+                _ => {}
+            }
+        }
+        for (n, _) in params {
+            if !takes.iter().any(|p| p.name == *n) {
+                ok = false;
+                self.push(e("E016", line, tr!("`{tn}.{opn}` は `{n}` を受け取りません", "`{tn}.{opn}` takes no `{n}`")));
+            }
+        }
+        if opn == "post" && takes.len() > key.len() && amounts.iter().any(|a| !params.iter().any(|(n, _)| *n == a.name)) {
+            // a post takes every amount, or none: a part of the hold, or all of it
+            ok = false;
+        }
+        let hold_rec = self.record_ix.get(&format!("{}.{tn}", book.0)).copied();
+        match (opn.as_str(), result) {
+            (_, None) => {}
+            ("do", Some(_)) => {
+                ok = false;
+                self.push(e("E016", line, tr!("`{tn}.do` は何も返しません。`->` は外してください", "`{tn}.do` answers nothing; leave out `->`")));
+            }
+            (_, Some(r)) if hold_rec.map(Ty::Record).as_ref() == Some(r) => {}
+            (_, Some(r)) => {
+                ok = false;
+                let g = self.m.ty_name(r);
+                let w = format!("{}.{tn}", book.0);
+                self.push(e("E016", line, tr!("`{tn}.{opn}` が返すのは仮押さえ `{w}` です（`{g}` ではありません）", "`{tn}.{opn}` answers the hold, `{w}`, not `{g}`")));
+            }
+        }
+        let _ = bsp;
+        ok.then(|| BookOp { book: bix, transfer: tn, op: opn })
+    }
+
+    /// The reasons a book can refuse an operation with: its check's, and those chobo gives itself
+    /// for every operation of its kind (DESIGN 2.7 of chobo's).
+    fn book_reasons(&self, b: &BookOp) -> Vec<String> {
+        let bu = &self.m.books[b.book];
+        let mut out: Vec<String> = Vec::new();
+        if let Some(tr) = bu.transfer(&b.transfer) {
+            for (op, rs) in &tr.refusals {
+                if *op == b.op {
+                    out.extend(rs.iter().cloned());
+                }
+            }
+        }
+        // the bounds' own reasons can refuse a do and a hold, which move amounts
+        if matches!(b.op.as_str(), "do" | "hold") {
+            for a in &bu.facts.accounts {
+                for bd in [&a.lower, &a.upper].into_iter().flatten() {
+                    out.push(bd.refusal.clone());
+                }
+            }
+        }
+        let own: &[&str] = match b.op.as_str() {
+            "do" | "hold" => &["key_conflict", "already_refused", "same_account"],
+            "post" => &["no_such_hold", "already_voided", "expired", "over_hold", "key_conflict"],
+            _ => &["no_such_hold", "already_posted", "expired"],
+        };
+        out.extend(own.iter().map(|s| s.to_string()));
+        let mut seen = Vec::new();
+        out.retain(|r| {
+            if seen.contains(r) {
+                false
+            } else {
+                seen.push(r.clone());
+                true
+            }
+        });
+        out
     }
 
     /// The service of a `.proto` the workflow implements (`implements`, DESIGN 1.14): its methods and
@@ -1905,10 +2282,26 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// `payment_intent.payment`: a rule that is used, and its machine's name.
+    /// `payment_intent.payment`: a rule that is used, and its machine's name; or `stock.reserve`, a
+    /// book and its transfer that holds, whose holds' life is chobo's machine.
     fn machine_rule(&mut self, q: &[(String, Span)], sp: Span) -> Option<usize> {
         if q.len() != 2 {
             self.push(e("E002", sp, tr!("ステートマシンは <規則>.<ステートマシン> と書きます", "name a machine as <rule>.<machine>")));
+            return None;
+        }
+        if let Some(&bix) = self.book_ix.get(&q[0].0) {
+            if let Some(&r) = self.hold_ix.get(&(q[0].0.clone(), q[1].0.clone())) {
+                return Some(r);
+            }
+            let bu = &self.m.books[bix];
+            let holds: Vec<&str> = bu.facts.transfers.iter().filter(|t| t.pending.is_some()).map(|t| t.name.as_str()).collect();
+            let what = if bu.transfer(&q[1].0).is_some() {
+                tr!("`{}` はすぐに確定する振替で、仮押さえにしないので、案件はそれに従えません", "`{}` is a transfer done at once, which holds nothing a case could follow", q[1].0)
+            } else {
+                tr!("帳簿 `{}` に振替 `{}` はありません", "the book `{}` has no transfer `{}`", q[0].0, q[1].0)
+            };
+            let holds = if holds.is_empty() { tr!("この帳簿に仮押さえにする振替はありません", "the book has no transfer that holds") } else { tr!("仮押さえにする振替は {} です", "the transfers that hold are {}", holds.join("・"); holds.join(", ")) };
+            self.push(e("E002", q[1].1, what).note(holds));
             return None;
         }
         let rix = match self.rule_ix.get(&q[0].0) {
@@ -1940,7 +2333,7 @@ impl<'a> Lowerer<'a> {
                 continue;
             }
             let record = match self.ty(&c.record) {
-                Some(Ty::Record(r)) if matches!(self.m.records[r].origin, RecordOrigin::Local | RecordOrigin::Proto { .. }) => r,
+                Some(Ty::Record(r)) if matches!(self.m.records[r].origin, RecordOrigin::Local | RecordOrigin::Proto { .. } | RecordOrigin::Hold { .. }) => r,
                 Some(_) => {
                     self.push(e(
                         "E008",
@@ -2045,8 +2438,23 @@ impl<'a> Lowerer<'a> {
                 }
                 held_values.push((inp.clone(), val.clone()));
             }
+            let hold = matches!(self.m.rules[rule].kind, RuleKind::Hold { .. });
             let mut external = Vec::new();
-            for (ev, esp) in &c.external {
+            if hold {
+                // a hold expires on its own when the book says it does: the workflow need not say so
+                for (ev, esp) in &c.external {
+                    if ev != "expire" || mc.axes_with_value(ev).is_empty() {
+                        self.push(e("E008", *esp, tr!("仮押さえに外で起きるのは、有効期限のある振替の `expire` だけです", "what happens to a hold on its own is `expire`, of a transfer whose holds expire")));
+                    }
+                }
+                if let Some(a) = mc.axes_with_value("expire").first() {
+                    external.push((*a, mc.axes[*a].coords.iter().position(|x| x == "expire").unwrap(), "expire".to_string()));
+                }
+                if let Some(((_, osp), _)) = &c.refused_when {
+                    self.push(e("E008", *osp, tr!("仮押さえを断るのは帳簿で、理由は状態ごとに決まっています。`refused when` は外してください", "a hold is refused by the book, with a reason for each state; leave out `refused when`")));
+                }
+            }
+            for (ev, esp) in c.external.iter().filter(|_| !hold) {
                 let axes = mc.axes_with_value(ev);
                 match axes.len() {
                     1 => external.push((axes[0], mc.axes[axes[0]].coords.iter().position(|x| x == ev).unwrap(), ev.clone())),
@@ -2055,6 +2463,8 @@ impl<'a> Lowerer<'a> {
                 }
             }
             let refused_when = match &c.refused_when {
+                // chobo's table says whether a call is refused, in `refused`
+                _ if hold => mc.decides.iter().position(|d| d == "refused").map(|i| (i, "true".to_string())),
                 Some(((o, osp), (v, _))) => match mc.decides.iter().position(|d| d == o) {
                     Some(i) => Some((i, v.clone())),
                     None => {
@@ -2648,6 +3058,12 @@ impl<'a> Lowerer<'a> {
             let rn = self.m.rules[r].name.clone();
             let ps = self.m.rules[r].info.inputs.iter().map(|col| (col.name.clone(), self.rty(&rn, &col.ty))).collect();
             (Callee::Rule(r), ps)
+        } else if let Some((file, facts)) = name.split_once('.').and_then(|(f, _)| self.date_files.get(f).map(|x| (f.to_string(), x))) {
+            // a date that the dates file does not have: say which it has
+            let date = &name[file.len() + 1..];
+            let names: Vec<&str> = facts.functions.iter().map(|f| f.name.as_str()).collect();
+            self.push(e("E002", *sp, tr!("日付のファイル `{file}` に日付 `{date}` はありません（{}）", "the dates file `{file}` has no date `{date}` ({})", names.join("・"); names.join(", "))));
+            return None;
         } else {
             self.push(e("E002", *sp, tr!("タスクか規則 `{name}` はありません", "there is no task or rule `{name}`")));
             return None;
@@ -2668,6 +3084,29 @@ impl<'a> Lowerer<'a> {
                 self.push(e("E004", *asp, tr!("`{an}` が二度書かれています", "`{an}` is given twice")));
                 ok = false;
                 continue;
+            }
+            // a day of a dates file takes a time too, read as the day it falls on in the calendar's offset
+            let date_call = match &callee {
+                Callee::Rule(r) => self.m.rules[*r].date().cloned(),
+                _ => None,
+            };
+            if let (Some(dc), Ty::Date) = (&date_call, &pty) {
+                if self.quiet_expr(ex, None) == Some(Ty::Timestamp) {
+                    if dc.offset.is_none() {
+                        let file = &dc.file;
+                        self.push(e("E003", ex.span(), tr!("ここには `date` が要りますが、これは `timestamp` です", "expected `date` here, but this is `timestamp`")).note(tr!(
+                            "`{file}` のカレンダーは UTC オフセットを言わないので、時刻がどの日にあたるかが決まりません。カレンダーに `offset +09:00` のように書くか、日付を渡してください",
+                            "the calendar of `{file}` says no UTC offset, so which day a time falls on is not known; give the calendar an offset (`offset +09:00`), or pass a day"
+                        )));
+                        ok = false;
+                        continue;
+                    }
+                    match self.expr(ex, Some(&Ty::Timestamp)) {
+                        Some(te) => args.push((an.clone(), te)),
+                        None => ok = false,
+                    }
+                    continue;
+                }
             }
             match self.expr(ex, Some(&pty)) {
                 Some(te) => args.push((an.clone(), te)),
@@ -2695,6 +3134,7 @@ impl<'a> Lowerer<'a> {
 
     fn expr(&mut self, ex: &Expr, expected: Option<&Ty>) -> Option<TExpr> {
         let te = match ex {
+            Expr::Now(_) => TExpr::Now,
             Expr::Str(s, _) => TExpr::Str(s.clone()),
             Expr::Int(n, _) => TExpr::Int(*n),
             Expr::Bool(b, _) => TExpr::Bool(*b),
@@ -2703,10 +3143,11 @@ impl<'a> Lowerer<'a> {
                 for p in parts {
                     match p {
                         Part::Lit(s) => out.push(IPart::Lit(s.clone())),
+                        Part::Hole(path) if path.len() == 1 && path[0].0 == "now" => out.push(IPart::Hole(TExpr::Now)),
                         Part::Hole(path) => {
                             let x = self.path(path, None)?;
                             let t = x.ty();
-                            if !matches!(t, Ty::Str | Ty::Int | Ty::Num(_) | Ty::Bool | Ty::Enum(_) | Ty::Timestamp) {
+                            if !matches!(t, Ty::Str | Ty::Int | Ty::Num(_) | Ty::Bool | Ty::Enum(_) | Ty::Timestamp | Ty::Date) {
                                 let n = self.m.ty_name(&t);
                                 let message = if matches!(t, Ty::Opt(_)) {
                                     tr!("`{}` は `{n}` で、値が無いことがあるので、そのままでは文字列に入れられません。先に `none` と `some <名前>` で `match` してください", "`{}` is `{n}` and may be absent, so it cannot be put in a string as it is; `match` it with `none` and `some <name>` first", x.show())

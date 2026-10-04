@@ -45,6 +45,9 @@ use std::collections::{BTreeMap, BTreeSet};
 /// What a callback's wait answers when its time runs out.
 pub const TIMEOUT: &str = "dandori:timeout";
 
+/// `now`, as expr-lang reads the clock: to the second, in UTC, as dandori's timestamp.
+pub const ARGO_NOW: &str = "now().UTC().Format(\"2006-01-02T15:04:05Z\")";
+
 pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     fit(m)?;
     let (doc, comment) = Gen::new(m).workflow();
@@ -394,6 +397,8 @@ impl<'a> Gen<'a> {
             TExpr::Bool(b) => b.to_string(),
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "nil".into(),
+            // the clock, read once, as the template that computes the value is reached
+            TExpr::Now => ARGO_NOW.into(),
             TExpr::Var { name, fields, .. } => {
                 let mut s = format!("sprig.fromJson({})", self.var_raw(name));
                 for f in fields {
@@ -409,7 +414,7 @@ impl<'a> Gen<'a> {
                     match p {
                         IPart::Lit(s) => out.push(q(s)),
                         IPart::Hole(x) => match x.ty() {
-                            Ty::Str | Ty::Timestamp | Ty::Enum(_) => out.push(self.ex(x)),
+                            Ty::Str | Ty::Timestamp | Ty::Date | Ty::Enum(_) => out.push(self.ex(x)),
                             _ => out.push(format!("string({})", self.ex(x))),
                         },
                     }
@@ -429,6 +434,7 @@ impl<'a> Gen<'a> {
         match t {
             Ty::Str => format!("type({x}) == \"string\""),
             Ty::Timestamp => format!("(type({x}) == \"string\" && {x} matches {})", q(&render::TIMESTAMP_RE.replace("\\\\", "\\"))),
+            Ty::Date => format!("(type({x}) == \"string\" && {x} matches {})", q(render::DATE_RE)),
             Ty::Int | Ty::Num(_) => {
                 let mut parts = vec![format!("type({x}) in [\"int\", \"float\"]"), format!("{x} == int({x})")];
                 parts.extend(rg.map(|r| r.tests(|op, n| format!("{x} {op} {n}"))).unwrap_or_default());

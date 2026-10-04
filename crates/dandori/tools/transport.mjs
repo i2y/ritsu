@@ -1,5 +1,5 @@
 // A Transport for the code dandori writes for Temporal, durable functions and Argo, in place of
-// Lambda, HTTP, the AWS APIs and OpenAI's agents: every call goes to `run.take(call, callbackId)`
+// Lambda, HTTP, the AWS APIs, OpenAI's agents and chobo's clients of the books: every call goes to `run.take(call, callbackId)`
 // as Step Functions would send it (an agent's, as the generated code hands it over), which
 // writes it down and gives the scenario's answer. Shared by tools/temporal/run.mjs,
 // tools/durable/run.mjs, and the pods of tools/argo/run.mjs.
@@ -83,6 +83,19 @@ export function makeTransport(spec, run) {
       const e = new Error("scripted");
       e.name = errorName(ans.error);
       throw e;
+    },
+    // an operation of a book: what chobo's client would answer, done (or done before), a refusal
+    // with its reason, or a failure thrown
+    async book(call) {
+      const ans = await run.take(call);
+      if (held(ans)) return run.hold(ans);
+      if ("ok" in ans) return ans.ok;
+      if (ans.error === "failure" || ans.error === "timeout") {
+        const e = new Error("scripted");
+        e.name = errorName(ans.error);
+        throw e;
+      }
+      return { result: "refused", reason: ans.error };
     },
   };
 }

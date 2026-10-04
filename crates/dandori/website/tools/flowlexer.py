@@ -34,14 +34,14 @@ KEYWORDS = ("workflow", "implements", "description", "kind", "use", "rule", "fro
     "timeout", "key", "idempotent", "starts", "sends", "observes", "refused", "callback",
     "held", "external", "state", "then", "true", "false", "until", "pass", "for", "in", "at",
     "most", "parallel", "yield", "some", "none", "list", "json", "range", "openapi", "smithy",
-    "proto", "connect", "url")
+    "proto", "connect", "url", "now")
 
 # The words the parser reads only where they belong, so they stay usable as names elsewhere.
 CONTEXTUAL = ("agent", "claude", "model", "every", "times", "backoff", "second", "seconds",
               "minute", "minutes", "hour", "hours", "day", "days", "event", "failure", "cancel",
               "local", "express", "form", "when", "effort", "jev", "score", "confidence", "of",
-              "else", "step")
-TYPES = ("int", "string", "bool", "timestamp", "money", "mass", "length", "area", "volume",
+              "else", "step", "dates", "book")
+TYPES = ("int", "string", "bool", "timestamp", "date", "money", "mass", "length", "area", "volume",
          "duration", "temperature", "sound", "rate", "incl_tax", "excl_tax")
 METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
 CONSTANTS = ("true", "false", "none")

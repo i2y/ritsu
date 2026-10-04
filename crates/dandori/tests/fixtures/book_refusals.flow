@@ -1,0 +1,54 @@
+workflow 帳簿の断り v1
+description "帳簿が断ることを処理しない流れ：押さえたあとの確定は、そのあいだに期限が切れていると expired で断られる。理由を errors に書かないとき、書いても on で処理しないとき、確定したあとの取り消しがどの状態でも断られるとき"
+
+use book 倉庫 from "../flows/books/倉庫.book"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:warehouse"
+
+record 注文
+  id   : string
+  sku  : string
+  数   : int
+  急ぎ : bool
+
+inputs
+  受注 : 注文
+
+task 引き当てる(注文: string, sku: string, 数: int) -> 倉庫.引当
+  book 倉庫.引当.hold
+  starts 倉庫.引当
+  errors 足りない
+
+task 出荷する(注文: string, sku: string) -> 倉庫.引当
+  book 倉庫.引当.post
+  sends post
+
+task 一部を出す(注文: string, sku: string, 数: int) -> 倉庫.引当
+  book 倉庫.引当.post
+  sends post
+  errors expired
+
+task 戻す(注文: string, sku: string) -> 倉庫.引当
+  book 倉庫.引当.void
+  sends void
+  errors expired
+
+case 押さえ : 倉庫.引当 follows 倉庫.引当
+
+flow
+  押さえ <- 引き当てる(注文: 受注.id, sku: 受注.sku, 数: 受注.数)
+  match 受注.急ぎ
+    true =>
+      押さえ <- 出荷する(注文: 受注.id, sku: 受注.sku)
+    false =>
+      押さえ <- 一部を出す(注文: 受注.id, sku: 受注.sku, 数: 受注.数)
+  押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+    on expired => pass
+
+on failure
+  match 押さえ.state
+    none => pass
+    held =>
+      押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+        on expired => pass
+        on failure => fail 戻せない "押さえた品を戻せませんでした" leaving 押さえ
+    posted, expired => pass

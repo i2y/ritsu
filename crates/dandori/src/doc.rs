@@ -365,6 +365,7 @@ pub fn how_called(i: &Input, t: &TaskDef) -> (String, bool) {
         Some(Binding::Http { .. }) => clause.map(|c| c.trim_start_matches("http ").replace('"', "")),
         Some(Binding::Aws { service, action }) => Some(format!("aws {service}:{action}")),
         Some(Binding::Lambda(f)) => Some(format!("lambda {}", function_name(f))),
+        Some(Binding::Book(b)) => Some(format!("book {}.{}.{}", i.m.books[b.book].name, b.transfer, b.op)),
         Some(Binding::Agent { provider, model, url, .. }) => {
             // with `url`, the agent is on a server of Open Responses, not OpenAI's
             let mut s = match url {
@@ -424,7 +425,7 @@ fn rule_path(i: &Input, r: &RuleUse) -> String {
 /// the page shows them as it drew them.
 fn rule_docs<'a>(i: &Input<'a>, html: bool) -> Vec<(&'a RuleUse, Result<String, String>)> {
     let said = |s: Vec<ritsu_ports::Said>| crate::sources::said_notes(&s).iter().map(|t| t.get(i.lang).to_string()).collect::<Vec<_>>().join("\n");
-    i.m.rules.iter().map(|r| (r, crate::sources::rule_doc(&r.info.path, html, i.lang).map_err(said))).collect()
+    i.m.rules.iter().filter(|r| r.is_rule()).map(|r| (r, crate::sources::rule_doc(&r.info.path, html, i.lang).map_err(said))).collect()
 }
 
 fn retry_text(r: &Retry) -> String {
@@ -455,7 +456,7 @@ fn call_lines(i: &Input, target: Option<&Target>, callee: &Callee, args: &[(Stri
     match callee {
         Callee::Rule(r) => {
             let ru = &m.rules[*r];
-            let mut how = format!("rule {}", rule_file(i, ru));
+            let mut how = if ru.date().is_some() { format!("dates {}", rule_file(i, ru)) } else { format!("rule {}", rule_file(i, ru)) };
             if ru.connect.is_some() {
                 how.push_str(" · connect");
             }
@@ -748,6 +749,8 @@ fn call_row(i: &Input, s: &TStmt, target: Option<&Target>, callee: &Callee, args
         Callee::Rule(r) => {
             let ru = &m.rules[*r];
             let mut how = match (lang, &ru.connect) {
+                (Lang::En, None) if ru.date().is_some() => format!("the date `{}` of `{}`", ru.date().map(|d| d.date.as_str()).unwrap_or_default(), rule_file(i, ru)),
+                (Lang::Ja, None) if ru.date().is_some() => format!("`{}` の日付 `{}`", rule_file(i, ru), ru.date().map(|d| d.date.as_str()).unwrap_or_default()),
                 (Lang::En, None) => format!("rule `{}`", rule_file(i, ru)),
                 (Lang::Ja, None) => format!("規則 `{}`", rule_file(i, ru)),
                 (Lang::En, Some(c)) => format!("rule `{}`, by Connect at `{}`", rule_file(i, ru), c.base),
@@ -766,7 +769,7 @@ fn call_row(i: &Input, s: &TStmt, target: Option<&Target>, callee: &Callee, args
             let mut how = if code { format!("`{h}`") } else { h };
             match &t.machine {
                 Some(TaskMachine::Starts { rule, then }) => {
-                    let mut s = format!("starts {}", m.rules[*rule].info.machine.as_ref().map(|mc| format!("{}.{}", m.rules[*rule].name, mc.name)).unwrap_or_default());
+                    let mut s = format!("starts {}", m.rules[*rule].machine_label());
                     if !then.is_empty() {
                         s.push_str(&format!(" then {}", then.join(", ")));
                     }
@@ -1042,7 +1045,7 @@ pub fn markdown(i: &Input) -> String {
         }
         let _ = writeln!(o, "```mermaid\n{}```\n", mermaid(&g, p, lang));
         if p.key == "flow" {
-            let _ = writeln!(o, "{}\n", legend_text(lang));
+            let _ = writeln!(o, "{}\n", legend_text(lang, m.calls_dates()));
         }
     }
     if let Some(s) = &m.service {
@@ -1180,7 +1183,16 @@ fn diag_errors(diags: &[Diag]) -> usize {
     diags.iter().filter(|d| d.severity == Severity::Error).count()
 }
 
-pub fn legend_text(lang: Lang) -> String {
+/// What the shapes of the pictures are; with `dates`, for a flow that calls a date of a dates file,
+/// which is drawn as a rule is.
+pub fn legend_text(lang: Lang, dates: bool) -> String {
+    if dates {
+        return tr(
+            lang,
+            "A rectangle is a task, one with a line down each side a rule or a date of a dates file, a slanted one a task whose value comes from outside (an event, or the answer to a callback), a hexagon a `match`, a rounded box a wait, and a box around steps a loop. A dashed arrow is an error the call handles.",
+            "四角はタスク、両脇に線のある四角は規則か日付のファイルの日付、斜めの四角は外から値が届くタスク（イベントやコールバックの応答）、六角形は `match`、角の丸い四角は待ち、ステップを囲む枠はループです。破線の矢印は、呼び出しがその場で処理するエラーです。",
+        );
+    }
     tr(
         lang,
         "A rectangle is a task, one with a line down each side a rule, a slanted one a task whose value comes from outside (an event, or the answer to a callback), a hexagon a `match`, a rounded box a wait, and a box around steps a loop. A dashed arrow is an error the call handles.",

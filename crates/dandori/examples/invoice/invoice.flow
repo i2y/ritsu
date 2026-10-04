@@ -1,0 +1,78 @@
+# An order holds its goods in stock until its payment is due, by the payment terms counted from the
+# moment the order came in; paid, the goods ship, and unpaid, they go back on the shelves. The stock
+# is a book of chobo's, and the due date a date of koyomi's. It runs on every platform.
+workflow invoice v1
+description "An order holds its goods until its payment is due, then ships them once paid, or puts them back"
+
+use dates terms from "dates/payment_terms.cal"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:payment-terms"
+use book stock from "books/stock.book"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:stock"
+
+record Order
+  id       : string
+  sku      : string
+  quantity : int  range >=1 <=100
+
+record Payment
+  paid : bool
+
+enum Outcome = shipped | not_paid | out_of_stock
+
+inputs
+  order : Order
+
+outputs
+  outcome : Outcome
+  due     : date?
+
+# The book holds the goods for the order: chobo's client runs the hold, and a refusal comes back
+# with the reason the book gives it.
+task reserve(order: string, sku: string, qty: int) -> stock.reserve
+  book stock.reserve.hold
+  starts stock.reserve
+  errors out_of_stock
+
+task ship(order: string, sku: string) -> stock.reserve
+  book stock.reserve.post
+  sends post
+  errors expired
+
+task put_back(order: string, sku: string) -> stock.reserve
+  book stock.reserve.void
+  sends void
+  errors expired
+
+task check_payment(order: string, due: date) -> Payment
+  http GET "https://payments.example.com/orders/{order}/payment"
+  connection "arn:aws:events:eu-west-2:123456789012:connection/payments/1a2b3c"
+  retry 2 times every 10 seconds
+  idempotent
+
+# The hold expires on its own after 60 days, as the book says: the checker counts that too.
+case hold : stock.reserve follows stock.reserve
+
+flow
+  hold <- reserve(order: order.id, sku: order.sku, qty: order.quantity)
+    on out_of_stock => succeed outcome = out_of_stock, due = none
+  let due = terms.payment(received: now)
+  wait until due.at
+  let payment = check_payment(order: order.id, due: due.day)
+  match payment.paid
+    true =>
+      hold <- ship(order: order.id, sku: order.sku)
+        on expired => succeed outcome = not_paid, due = due.day
+      succeed outcome = shipped, due = due.day
+    false =>
+      hold <- put_back(order: order.id, sku: order.sku)
+        on expired => pass
+      succeed outcome = not_paid, due = due.day
+
+on failure
+  match hold.state
+    none => pass
+    held =>
+      hold <- put_back(order: order.id, sku: order.sku)
+        on expired => pass
+        on failure => fail NotPutBack "the goods held for the order could not be put back" leaving hold
+    posted, voided, expired => pass

@@ -1,13 +1,13 @@
 # dandori 設計文書
 
-業務ルールを呼ぶワークフローのための、型の付いた小さな言語。書いたものを走らせる前に検査し、AWS Step Functions（ASL）、Temporal（TypeScript、Python、Go）、AWS Lambda durable functions（TypeScript）、Argo Workflows（WorkflowTemplate の YAML）、pydantic-graph（Python）へコンパイルする。判断そのものは rulec の規則に書き、dandori はそれを ritsu の規則の口（rulec が答える）を通して読む。
+業務ルールを呼ぶワークフローのための、型の付いた小さな言語。書いたものを走らせる前に検査し、AWS Step Functions（ASL）、Temporal（TypeScript、Python、Go）、AWS Lambda durable functions（TypeScript）、Argo Workflows（WorkflowTemplate の YAML）、pydantic-graph（Python）へコンパイルする。判断そのものは rulec の規則に書き、dandori はそれを ritsu の規則の口（rulec が答える）を通して読む。期日は koyomi の日付のファイルに、在庫や残高は chobo の帳簿に書き、dandori はそれぞれ ritsu の日付の口と帳簿の口を通して読む（1.16）。
 
 名前は段取り（手順を前もって組むこと）から取った。ファイルの拡張子は `.flow`。
 
 ## 0. 全体像
 
 ```
-.flow ── 構文解析 ── 名前と型の解決（規則は ritsu の規則の口から読む）── 型を付けた構文木
+.flow ── 構文解析 ── 名前と型の解決（規則・日付のファイル・帳簿は ritsu の口から読む）── 型を付けた構文木
                                                                      ├── 流れに沿った検査（案件の状態、代入、網羅、出口）
                                                                      ├── 参照インタプリタ ── シナリオの自動生成
                                                                      ├── 図（`dandori doc`）：Mermaid を入れた Markdown と、実行を光らせる HTML
@@ -21,7 +21,7 @@
 ### 0.1 前提
 
 - **P1**：`.flow` 自身は判断しない。dandori の式は値を組み立てられる（レコード、リスト、値を埋め込んだ文字列）が、比較・算術・論理演算を持たない。分岐は、列挙・bool・オプショナルな値の `match` だけで、その値は規則かタスク（API、エージェント、自分で書くコード、人の承認）の結果である。抜けがあっては困る判断は rulec の規則にして、網羅と重なりを rulec に証明させるのを勧める。
-- **P2**：rulec の中には入れない。dandori は rulec を、ritsu の規則の口（`ritsu_ports::Rules`）を通してだけ読む。規則の事実は型の付いたまま受け取り、`rulec doc` が描いたページは手を加えずに埋め込む。dandori のクレートは rulec のクレートに依存せず（ritsu の DESIGN 3.1）、口の答えは dandori を走らせる側が渡す。rulec は dandori を知らない。
+- **P2**：rulec の中には入れない。dandori は rulec を、ritsu の規則の口（`ritsu_ports::Rules`）を通してだけ読む。規則の事実は型の付いたまま受け取り、`rulec doc` が描いたページは手を加えずに埋め込む。dandori のクレートは rulec のクレートに依存せず（ritsu の DESIGN 3.1）、口の答えは dandori を走らせる側が渡す。rulec は dandori を知らない。koyomi の日付のファイルと chobo の帳簿も同じく、日付の口（`ritsu_ports::Dates`）と帳簿の口（`ritsu_ports::Books`）を通してだけ読み、koyomi と chobo のクレートにも依存しない（1.16）。
 - **P3**：意味を決めるのは参照インタプリタ一つ。五つのプラットフォームは、どれもそれと突き合わせて確かめる。
 - **P4**：ループは回数に上限を書く。再帰は無い。だから実行履歴の長さに上限が見積もれる。
 - **P5**：静的に言えないこと（外部のサービスが何を返すか）は、境界で実行時に確かめる。確かめて外れたら、その場で失敗させる。
@@ -86,7 +86,7 @@ dandori は ritsu（七つの言語を一つにまとめる処理系）に取り
 
 - **中のものと参照**（ritsu の PLAN の D.6）：ritsu の口の `Items` と `References` に答える `src/ports.rs` を足した。ritsu の名指しの種類は `task`、`case`、`record`（下に `field`）、`enum`（下に `value`）、`input`、`output` で（ritsu の DESIGN 6.3）、名前は `.flow` に書いたとおり（日本語の名前もそのまま）である。どちらも構文まで読むだけで、規則は読まない。
   - 定義の文（yuen が端のハッシュを取る元）は、タスク・案件・レコードなら宣言の行とその下の塊の行、列挙・フィールド・入力・出力ならその行、列挙の値ならその名前である。どの行も、コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げを深さごとの空白二つに直す。レコードのコロンをそろえ直しても、字下げの幅を変えても、コメントを書き足しても、定義は変わらない。型や呼び方を変えれば変わる。
-  - 参照は、`use rule`（呼び方を添える：下に何も書かなければ `use rule`、書けば `use rule … lambda`・`use rule … connect`・`use rule … local`、二つなら `use rule … lambda, local`）、`use proto`（`proto` の名指し）と `use openapi`・`use smithy`（`file` の名指し）、`implements` のサービス、`connect` のタスクのサービスとメソッド、子の `flow` である。サービスは package から見た名前で名指す。型の中の参照（`<API>.<名前>`、`<規則>.<列挙>`、`follows`）と `http` の操作は入れていない（どれも、参照に出る行のファイルの中を指す）。
+  - 参照は、`use rule`（呼び方を添える：下に何も書かなければ `use rule`、書けば `use rule … lambda`・`use rule … connect`・`use rule … local`、二つなら `use rule … lambda, local`）、`use proto`（`proto` の名指し）と `use openapi`・`use smithy`（`file` の名指し）、`implements` のサービス、`connect` のタスクのサービスとメソッド、子の `flow` である。日付のファイルと帳簿を足してからは（1.16）、`use dates`（`koyomi` の名指し。呼び方を添えて `use dates … lambda, local`）、`use book`（`chobo` の名指し。`use book … lambda`）、帳簿の操作のタスクが名指す振替（`chobo "<帳簿>" transfer <振替>`、`book`）も参照になる。サービスは package から見た名前で名指す。型の中の参照（`<API>.<名前>`、`<規則>.<列挙>`、`follows`）と `http` の操作は入れていない（どれも、参照に出る行のファイルの中を指す）。
   - dandori のコマンドの出力は変わらない。
 
 - **規則の名前のぶつかりと `explain`**（ritsu の D の二つ目の部分）：規則の別名が、dandori が規則のまわりに書くコードの名前とぶつかると生成物が壊れるので（ritsu の PLAN 7.5）、そういう規則を `check` が E006 で断る。別名が同じ二つの規則と、タスクと規則のアクティビティが同じ名前になるものも断る。二つの規則のあいだで重なる名前（同じ名前の列挙、同じ単位の型）は、断らずに生成するコードの側で避けるようにした（1.15）。あわせて、診断のコードの台帳（`src/codes.rs`）と `dandori explain <コード> | --all [--format markdown|json]` を足した（ritsu の DESIGN 4.3。台帳の形は ritsu-base のもの）。どのコードにも、いつ出るか、直し方、そのコードを出す最小の `.flow`（要る規則や `.proto` は隣に置く）があり、`tests/codes.rs` が、どの例も自分のコードを出すことと、検査が出しうるコードがどれも台帳にあることを確かめる。サイトの診断コードの表は、これまでどおり一行ずつの表のままにした。
@@ -147,6 +147,7 @@ on failure
 | `string` | 文字列 |
 | `bool` | 真偽 |
 | `timestamp` | UTC の RFC 3339（`2026-10-01T10:00:00Z`）。Step Functions の Wait が受け付ける形に合わせた |
+| `date` | 日付（`2026-10-01`）。日付のファイルの日付と、rulec の日付の列の型。比べも足しもせず、運ぶだけ（1.16） |
 | 列挙 | `enum 結果 = 宿泊済 \| 確認待ち`、または規則の列挙 `payment_intent.status` |
 | レコード | `record` で宣言する。規則の呼び出しは、その規則の出力のレコードを返す。自分自身を含められない（下の注） |
 | `list[T]` | リスト。リストのリストは書けない（下の注） |
@@ -212,13 +213,16 @@ dandori の式は算術を持たない（P1）ので、値の範囲は、出ど�
 - `workflow <名前> v<版> [implements <API>.<サービス>]`：ワークフローの名前とバージョン。`implements` を続けると、このワークフローが、`use proto` で読んだ `.proto` のそのサービスを実装する（1.14）。
 - `use openapi|smithy|proto <名前> from "<パス>"`：呼ぶ API の記述を読む（1.10）。下に `url "<場所>"` を書くと、API の場所になる。`.proto` の場所が要るのは、`connect` のタスクで呼ぶときだけである。
 - `use rule <名前> from "<パス>"`：規則を読む。Step Functions と durable functions から呼ぶなら、下に `lambda "<関数>"` を書く。下に `local` を書くと、Temporal ではローカルアクティビティとして呼ぶ（4.2）。ほかのプラットフォームでは何も変わらない。`lambda` の代わりに `connect "<URL>"` を書くと、どのプラットフォームでも、rulec が生成した規則の Connect のサービスをその URL で呼ぶ（1.13）。Step Functions から呼ぶなら、その下に `connection "<EventBridge の接続>"` も書く。要素の並びをたどる規則（rulec の `elements`）は、まだ読めない（E005。1.13）。
+- `use dates <名前> from "<パス>"`：koyomi の日付のファイルを読む。ファイルの日付は `<名前>.<日付>(…)` で規則と同じく呼ぶ。下に `lambda "<関数>"`（Step Functions と durable functions で日付を計算する関数）と `local`（Temporal のローカルアクティビティ）を書ける（1.16）。
+- `use book <名前> from "<パス>"`：chobo の帳簿を読む。タスクが `book <名前>.<振替>.<操作>` でその振替の操作になる。下に `lambda "<関数>"`（Step Functions で操作する関数）を書ける（1.16）。
 - `task <名前>(<引数>) [-> <型>]`：外部のサービスへの呼び出し。`->` を書かないタスクは何も返さない（結果は読まない）。下に次の項目を書く。
   - 呼び出し方（1.6）：`lambda "<関数>"`、`http <メソッド> "<URL>" [form]` と `connection "<EventBridge の接続>"`、`aws <サービス>:<操作>`、`agent [openai | claude] "<指示>"` と `model "<モデル>"`（1.7。Step Functions では `connection` も）のどれか一つ。子ワークフローとして呼ぶなら、プラットフォームごとに `workflow "<型>"`（Temporal）、`state machine "<ARN>"`（Step Functions）、`durable function "<関数>"`（durable functions）、`workflow template "<名前>"`（Argo）。子も dandori で書いたなら `flow "<パス>"`（1.9）。Temporal では `queue "<タスクキュー>"` で送り先のキューを選べる。Argo で利用者のコンテナを動かすなら `image "<イメージ>"`。
   - `errors <名前> [= <HTTP ステータス> | = <例外の名前>], …`：業務のエラー。`http` のタスクではステータスを、`aws` のタスクでは API の例外（`ConditionalCheckFailedException`、書かなければエラーの名前そのもの）を書く。`timeout` と `failure`（それ以外の失敗のすべて）は宣言しなくても使える。
   - `retry <n> times [every <時間>] [backoff <k>] [on <エラー>, …]`：`on` を書かなければ、`failure` と `timeout` をリトライ、宣言したエラーはリトライしない。
   - `timeout <時間>`（書かなければ、プラットフォームがそのタスクに許すだけ動く。4 章）、`key`（冪等キーを送る。`aws` のタスクでは `key ClientToken` のように、キーを受け取る API の引数を書く）、`idempotent`（二度しても一度と同じ）、`callback`（トークンや ID を渡して応答を待つ）。
   - 案件に何をするか：`starts <規則>.<ステートマシン> [then <イベント>, …]`、`sends <イベント>`、`observes`。`refused as <エラー>` は、ステートマシンがイベントを拒否したときに返ってくるエラー。
-- `case <名前> : <レコード> follows <規則>.<ステートマシン>`：rulec のステートマシンに従う案件。下に `held <入力> = <値>`、`external <イベント>, …`、`state <フィールド>`、`refused when <出力> = <値>` を書く。
+  - 帳簿の振替の操作：`book <帳簿>.<振替>.<操作>`（呼び出し方の一つ。操作は `do`・`hold`・`post`・`void`。1.16）。
+- `case <名前> : <レコード> follows <規則>.<ステートマシン>`：rulec のステートマシンに従う案件。下に `held <入力> = <値>`、`external <イベント>, …`、`state <フィールド>`、`refused when <出力> = <値>` を書く。帳簿の仮押さえなら `case <名前> : <帳簿>.<振替> follows <帳簿>.<振替>`（2.7）。
 - `inputs`・`outputs`：ワークフローの入力と出力。`T?` の出力は `succeed` で省ける。
 - `flow`：本体。`on failure`：処理されなかったタスクのエラーのあとに走るブロック。`on cancel`：ワークフローがキャンセルされたときに走るブロック（2.6。Temporal だけ）。
 
@@ -239,7 +243,7 @@ dandori の式は算術を持たない（P1）ので、値の範囲は、出ど�
 | `succeed <出力> = <値>, …` | 成功で終わる |
 | `fail <エラー> ["<理由>"] [leaving <案件>, …]` | 失敗で終わる。`leaving` は、終わっていない案件をそのまま引き渡すという宣言 |
 
-値に書けるのは、変数とそのフィールド、文字列・数・`true`・`false`・列挙の値、`none`（オプショナルな値のところだけ）、`{フィールド: 値, …}`（型は渡す先で決まる）、`[値, …]`、そして値を埋め込んだ文字列（`"注文 {受注.id} を出荷しました"`、波括弧そのものは `{{` と `}}`）である。文字列に埋め込めるのは文字列・数・bool・列挙・timestamp で、オプショナルな値は先に `match` で分ける。`fail` の理由にも埋め込める。
+値に書けるのは、変数とそのフィールド、文字列・数・`true`・`false`・列挙の値、`none`（オプショナルな値のところだけ）、`now`（その文を走らせた時刻。1.16）、`{フィールド: 値, …}`（型は渡す先で決まる）、`[値, …]`、そして値を埋め込んだ文字列（`"注文 {受注.id} を出荷しました"`、波括弧そのものは `{{` と `}}`）である。文字列に埋め込めるのは文字列・数・bool・列挙・timestamp・date で、オプショナルな値は先に `match` で分ける。`fail` の理由にも埋め込める。
 
 変数の型は、値を入れるすべての場所から決まる。一つの名前は一つの型を持ち、`T` と `T?` の両方を入れる名前は `T?` になる。
 
@@ -254,6 +258,7 @@ dandori の式は算術を持たない（P1）ので、値の範囲は、出ど�
 | `connect`（1.10） | HTTP Task（Connect の JSON） | dandori が書くアクティビティが `fetch` で送る | dandori が書く step の中で `fetch` で送る | 同じく、コンテナで `fetch` | 同じく、urllib で |
 | `aws` | AWS SDK 統合 | dandori が書くアクティビティが AWS SDK で呼ぶ | dandori が書く step の中で AWS SDK で呼ぶ | 同じく、コンテナで AWS SDK | 同じく、boto3 で |
 | `agent` | HTTP Task で OpenAI の Responses API を呼ぶ（Claude なら Messages API） | dandori が書くアクティビティが OpenAI の Agents SDK で呼ぶ（Claude なら Anthropic の SDK） | dandori が書く step の中で、同じ SDK で呼ぶ | 同じく、コンテナで | 同じく、Python の Agents SDK か Anthropic の SDK で |
+| `book`（1.16） | 帳簿の Lambda 関数の Task（chobo の Python のクライアントで操作する関数を dandori が書く） | dandori が書くアクティビティが `Transport` の `book` で chobo のクライアントを呼ぶ | dandori が書く step の中で、同じく | 同じく、コンテナで | 同じく、`Transport` の `book` で |
 | `state machine` | ネストした実行（`startExecution.sync:2`） | | | | |
 | `flow`（1.9） | ネストした実行（`state machine` と） | 子の `<名前>_v<版>` の子ワークフローを、子のタスクキューで | invoke（`durable function` と） | 子の WorkflowTemplate から Workflow を作る | 利用者が書く関数 |
 | `workflow` | | 子ワークフロー（`executeChild`） | | | |
@@ -635,6 +640,67 @@ service FulfillmentService {
 
 **確かめ方**：`tests/names.rs` が、四つの表のどの名前の規則にも E006 が出ること、列挙の別名、Go の `ok`、`rule_<規則>`、別名の同じ二つの規則、タスクと規則のアクティビティを確かめ、表の名前がどれも、そのファイルに実際に書かれることも確かめる（使わなくなった名前が表に残らないように）。断らない名前で全部の出力先の生成物が通ることは、`tests/flows/names.flow` で確かめる。このフローは、単位の型が同じ規則二つ、同じ名前の列挙を受け取る規則二つ、dandori の名前に近い別名の規則二つ（`rule` と `activities`。どちらも `tests/flows/rules/` に置いた）と、ステートマシンの規則 `order_state`（列挙の値の集合を行に書く規則。rulec の §15.171 で、その TypeScript が `tsc --strict` を通るようになった）を呼び、ほかのテストのフローと同じく、どのプラットフォームでも走らせて参照インタプリタと突き合わせ、TypeScript を `tsc --strict` で、Go を `go vet` で確かめ、規則のまわりのコードに rulec の例を全部答えさせる。
 
+### 1.16 日付のファイルと帳簿（koyomi と chobo）
+
+業務のワークフローは、判断のほかに、日を数えることと数を動かすことをする。支払期日まで在庫を押さえ、支払われたら出荷し、支払われなければ棚に戻す、といった形である。`.flow` は算術を持たない（P1）ので、どちらも自分ではしない。期日は koyomi の日付のファイル（`.cal`）に、数は chobo の帳簿（`.book`）に書き、`.flow` はそれを読む宣言と呼び方を持つ（ritsu の DESIGN 7.8）。`examples/invoice` が、どのプラットフォームでもそのまま動く例である。
+
+```
+use dates terms from "dates/payment_terms.cal"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:payment-terms"
+use book stock from "books/stock.book"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:stock"
+
+task reserve(order: string, sku: string, qty: int) -> stock.reserve
+  book stock.reserve.hold
+  starts stock.reserve
+  errors out_of_stock
+
+case hold : stock.reserve follows stock.reserve
+
+flow
+  hold <- reserve(order: order.id, sku: order.sku, qty: order.quantity)
+    on out_of_stock => succeed outcome = out_of_stock, due = none
+  let due = terms.payment(received: now)
+  wait until due.at
+  …
+```
+
+**決定**：規則と同じく、ritsu の口から読む。日付のファイルは日付の口（`ritsu_ports::Dates`、koyomi が答える）、帳簿は帳簿の口（`ritsu_ports::Books`、chobo が答える）の `facts` で、型の付いた事実を受け取る。dandori のクレートは koyomi と chobo のクレートに依存しない（P2）。口の答えは走らせる側が渡す（`dandori::cli::run_with_ports(引数, 規則の口, 日付の口, 帳簿の口, …)` と `dandori::sources::with_ports`）。口を渡さない走らせ方（dandori のクレートのバイナリ）では、規則と同じく E018 になる（`use rule`・`use dates`・`use book` のうち、読めないものの最初の宣言で一度だけ言い、`ritsu dandori` で走らせる形を注に書いて exit 2。0.3）。そのために、日付の口と帳簿の口にも `joined` を足し、読めない口（`NoDates`・`NoBooks`）は false を返す。テストは koyomi と chobo を dev-dependency にして、それぞれの口の答えをつなぐ。
+
+| 口の答え | dandori が読むもの |
+|---|---|
+| 日付の口の `facts` | ファイルの名前と ASCII の別名、バージョンと SHA-256、入力（名前、別名、日付か整数か、範囲）、日付ごとの名前と別名と読む入力と時刻（`at 09:00`、一日の終わり）、カレンダーの名前と UTC オフセット |
+| 帳簿の口の `facts` | 帳簿の名前とバージョンと SHA-256、単位、勘定（引数、単位、外の勘定か、下限と上限とその理由）、振替（引数と単位、キー、仮押さえか、有効期限、移動、操作ごとの断られうる理由、仮押さえのステートマシン）、chobo が書くクライアントの名前（下） |
+
+帳簿の口には、クライアントの名前（`BookFacts` の `typescript`・`python`・`go`、型は `BookClient` と `ClientTransfer`）を足した。dandori が書くコードは chobo のクライアントを呼ぶので、生成したクライアントを読まずに、振替のメンバーの名前（`book.reserve`、Go の `b.Reserve`）と引数の名前（Python のキーワード、Go のフィールド）が要る。chobo の口は、chobo 自身の名前の決め方（`chobo api` の `targets` と同じもの）から埋める。koyomi が生成するコードの名前（TypeScript と Python は別名、Go はパッケージの名前と外から見える名前）は、口に足さず、koyomi と同じ ritsu-emit の決め方で求める。
+
+**`date` 型**：日付は新しい型 `date` で、値は `YYYY-MM-DD` の文字列である。入力、出力、レコードのフィールド、タスクの引数と結果に書け、値を埋め込んだ文字列にも入れられる。入ってくるところで形を確かめるのは、ほかの型と同じである（P5）。比べることも足すこともしない（P1）。日を数えるのは日付のファイルの役目で、dandori は日付を運ぶだけにした。rulec の `date` の列（規則の入力が日付のもの）も、文字列ではなく `date` として読むようになった。
+
+**日付を呼ぶ**：`<ファイル>.<日付>(<入力>: …)` で、日付のファイルの一つの日付を、規則と同じく `let` で呼ぶ。返すのはレコード `{ day: date, at: timestamp }` で、`at` は、日付が時刻を言うとき（`at 09:00`）、その日のその時刻をカレンダーのオフセットで UTC にしたものである。時刻を言わない日付は `day` だけを返す。`at` はそのまま `wait until` に渡せる。
+
+- 日付の入力には `date` を渡す。カレンダーが UTC オフセットを言うなら（`offset +09:00`）、`timestamp` も渡せ、時刻は、そのオフセットでその時刻にあたる日として読む（`2026-03-31T15:30:00Z` は、`+09:00` では 4 月 1 日）。オフセットを言わないカレンダーの日付に時刻を渡すと E003 で、注に、カレンダーにオフセットを書くか、日付を渡すよう書く。時刻をどの日と読むかは、日付のファイルのカレンダーが決めることで、`.flow` の側で決めると、ファイルとワークフローで読み方が分かれるからである。
+- 整数の入力には `int` を渡す。範囲（ファイルが宣言した範囲）は、規則の入力と同じく確かめる（E014、W104）。
+- 一つのファイルの日付は、それぞれ別に呼ぶ。日付ごとに、それが読む入力だけを渡す（日付の口が、日付ごとに読む入力を言う）。
+- `use dates` の下の `lambda "<関数>"` は、Step Functions と Lambda durable functions で日付を計算する Lambda 関数、`local` は Temporal のローカルアクティビティ。規則のものと同じ意味である。
+
+日付は、規則と同じくアクティビティ（各プラットフォームの呼び出し）にした。koyomi の生成したコードは純関数だが、カレンダーの祝日の表は毎年変わるので、ワークフローのコードの中で計算すると、表を入れ替えたワーカーで再生が食い違う（ritsu の DESIGN 7.8）。規則を普通のアクティビティにした理由（判定の記録が履歴に残る、直しても再生が食い違わない。4.2）も、そのまま当てはまる。生成するコードの中では、日付は規則の一つとして扱い、アクティビティの名前は `dates_<ファイル>_<日付>` にした（規則のアクティビティ `rule_<規則>` とぶつからない）。
+
+**`now`**：その文を走らせた時刻を読む式。値は `timestamp`（UTC、秒まで）で、日付の入力、タスクの引数、`wait until`、文字列の中（`"受付 {now}"`）に書ける。ritsu の DESIGN 7.7 が、渡す日付が仮押さえを作った日であると言うために求めたものである。どのプラットフォームも、再生や再試行で同じ時刻を読み直せるように読む（4.6）。参照インタプリタは、シナリオの `now`（無ければ `2026-03-31T15:30:00Z`）を読み、一つの実行のどの `now` も同じ時刻になる。この時刻は `+09:00` ではもう次の日なので、時刻をオフセットで日に読むところの誤りが、突き合わせに出る（5 章）。
+
+**帳簿の振替を呼ぶ**：タスクの呼び出し方の一つ、`book <帳簿>.<振替>.<操作>`。操作は chobo のものそのままで、すぐに確定する振替なら `do`、仮押さえにする振替なら `hold`・`post`・`void` である。振替に無い操作は E007。
+
+- 引数は、振替の引数を名前のとおりに書く。`do` と `hold` は全部、`post` と `void` はキーの引数である。`post` に数の引数も書けば、押さえた数のうちその数だけを確定し、残りを戻す（一部の確定。数の引数は全部書くか、一つも書かないか）。数は `int` で、帳簿の単位で数えた整数のまま渡す。名前や型の違い、足りない引数、余る引数は E016。
+- 結果は、`hold`・`post`・`void` なら仮押さえのレコード `<帳簿>.<振替>`（キーの引数のフィールドと、状態 `state`）で、`do` は何も返さない（`->` を書けば E016）。仮押さえのレコードは、帳簿を読んだときに作る。chobo のクライアントが返すのは、通ったか（`done`、同じ操作を前にしていれば `done_before`）と、断られたなら理由だけなので、結果は渡した引数と操作から作る（`hold` なら `held`、`post` なら `posted`）。
+- 断られた理由は、そのまま宣言したエラーの名前になる（`errors out_of_stock`、`errors expired`）。`= <ステータス>` は書けない（E007）。帳簿がその操作を断りえない名前は E016 で、断りうる理由は、chobo の検査が言うもの、勘定の境界の理由、chobo が操作ごとに決めている理由（`key_conflict`、`no_such_hold`、`already_posted`、`expired` など）である。宣言しなかった理由で断られれば、`Dandori.Failure.<理由>` の `failure` になる。
+- `key` は書けない（E007）。帳簿の振替は、帳簿に書いたキーで一度しか通らない。再試行しても二度は動かず、同じ操作の二度目は `done_before` で、通ったものとして読む。だから E030 と W030 にあたらない（chobo の DESIGN 5 章）。`refused as` も書けない（E007）。仮押さえは状態ごとに理由を付けて断るので、理由を `errors` に書く（2.7）。
+- `use book` の下の `lambda "<関数>"` は、Step Functions で帳簿の操作をする Lambda 関数である（4.1）。ほかのプラットフォームでは、dandori が書く実装が `Transport` の `book` で chobo のクライアントを呼ぶ（4.2）。
+
+**名前**：規則・日付のファイル・帳簿は、`use rule`・`use dates`・`use book` の名前を共有する（同じ名前は E006）。`dates` と `book` は、`agent` や `jev` と同じく、置き場所（`use` のあと、タスクの項目の頭）でだけ読む語にした。ふつうの名前としてよく使う語だからである。`now` は式の語なので、サイトのハイライトでもキーワードにした。
+
+**仮押さえを案件にする**：`case <名前> : <帳簿>.<振替> follows <帳簿>.<振替>` で、仮押さえを案件として追う（2.7）。
+
+`tests/flows/dates_and_books.flow` は、日本語の名前で、すぐに確定する振替（`do`）、一部の確定、時刻を言わない二つの日付（一つは整数の入力も取る）をローカルアクティビティで呼ぶこと、`now` を日付の入力と文字列に書くこと、日付をタスクに渡すことと、タスクの結果の日付を日付に渡すことを、どのプラットフォームでも走らせる。
+
 ## 2. 案件とステートマシン
 
 ### 2.1 案件の状態を追う
@@ -691,18 +757,40 @@ on cancel
 - 検査は、キャンセルが届きうるところ（`on cancel` の外のすべての呼び出しと待ち）から `on cancel` に入る。呼び出しの途中で届いたキャンセルでは、外部のサービスでイベントが起きたかどうかが分からないので、失敗のときと同じく両方を持つ。`on cancel` の終わりで案件が終わりの状態にいなければ E020、後始末の呼び出しが失敗しうれば W101。
 - Temporal のほかのプラットフォームでは、`on cancel` は E050。Step Functions と durable functions は、実行を止めるとその場で終え、あとに何も走らせない。Argo の `argo stop` は exit handler を走らせるが、`on cancel` をそれとして書くのはまだである。pydantic-graph も同じくまだである。
 
+### 2.7 帳簿の仮押さえ
+
+仮押さえの振替は、帳簿の口が渡すステートマシンを持つ。状態は `held`（押さえ中）・`posted`（確定）・`voided`（取消）・`expired`（期限切れ）、イベントは `post`・`void`・`expire`、始まりは `held`、終わりは残りの三つである。表の行は、断るなら理由（`reason`）を持つ。押さえ中でない仮押さえの確定は `already_voided` や `expired` で、取消は `already_posted` や `expired` で断られ、確定した仮押さえをもう一度確定すると、前にしたとして通る。
+
+- 仮押さえを作るタスク（`book … hold`）は `starts <帳簿>.<振替>`、確定は `sends post`、取消は `sends void` を書く。合わなければ E008 で、`do` は案件を動かさない。
+- 有効期限のある振替（`pending expires after …`）では、`expire` が外で起きるイベントになる。検査は、`external expire` を書かなくても、確定や取消の前に期限が切れうることを数える（2.2）。期限の無い振替には `expire` が無い。`expire` のほかの `external` は E008。
+- 断られた理由は、行の `reason` そのもので、タスクの宣言したエラーとして返ってくる。理由ごとに、断られうるのに宣言していなければ E022、宣言していても `on` で受けていなければ E022、どの状態でも断るなら E021 である（2.3）。`refused when` は書けない（E008）。断ることと理由は、帳簿が状態ごとに決めているからである。
+- 案件のレコードは、仮押さえのレコード `<帳簿>.<振替>`（キーの引数と `state`）である。
+
+`tests/fixtures/book_refusals.flow` の検査の一部：
+
+```
+エラー[E022]: tests/fixtures/book_refusals.flow:41:1: ここでは帳簿が `post` を `expired` で断ることがあります（`押さえ` が expired のとき）。`出荷する` の `errors` に `expired` を書き、`on expired =>` で処理してください
+    41 |       押さえ <- 出荷する(注文: 受注.id, sku: 受注.sku)
+  そうなる例:
+      38  引き当てる: 押さえ が held で始まる
+      40  match 受注.急ぎ: true
+          外部のサービスで `expire` が起きる: 押さえ held → expired
+```
+
+chobo の DESIGN 5 章の案は、案件に `external expire` と `refused when refused = true` を書いていた。帳簿を読めば分かることをもう一度書かせると、書き忘れたときに検査が期限切れを数えず、理由も一つの `refused as` にまとまってしまう。そこで、`expire` は帳簿から足し、`refused when` は断る（6 章）。
+
 ## 3. 検査の一覧
 
 | コード | 内容 |
 |---|---|
 | E001 | 構文 |
-| E002 | 名前が無い（型・変数・フィールド・規則・タスク。単位の表に無い単位と次元、税区分の誤り、記述に無い型の名前、型を作れない記述の名前、`.proto` が import して読めなかったファイルにある型を作ろうとしたときも） |
-| E003 | 型が合わない（オプショナルな値をそのまま使う、`none` の置き場所、リストのリスト、型の分からない `{…}` や `[]`、数でないものの範囲、数の入らない範囲、型の次元に無い単位や整数にならない値で書いた範囲の端、自分自身を含むレコードも。手で書いたものも、`.proto` から作ったものも） |
+| E002 | 名前が無い（型・変数・フィールド・規則・タスク・日付のファイルの日付・帳簿・帳簿の振替。単位の表に無い単位と次元、税区分の誤り、記述に無い型の名前、型を作れない記述の名前、`.proto` が import して読めなかったファイルにある型を作ろうとしたときも） |
+| E003 | 型が合わない（オプショナルな値をそのまま使う、`none` の置き場所、リストのリスト、型の分からない `{…}` や `[]`、数でないものの範囲、数の入らない範囲、型の次元に無い単位や整数にならない値で書いた範囲の端、自分自身を含むレコードも。手で書いたものも、`.proto` から作ったものも。UTC オフセットを言わないカレンダーの日付に渡す時刻も） |
 | E004 | 引数や出力の過不足、`{…}` のレコードのフィールドの不足 |
-| E005 | 規則を読めなかった（rulec の検査を通らない規則、規則を読まない dandori のクレートのバイナリで読もうとした規則、要素の並びをたどる規則、無いことがある入力か出力（`T?`）を持つ規則も。`connect` で呼ぶ規則について、rulec が Connect のサービスを言わないとき、サービスが列挙の値を何と呼ぶかを言わないときも） |
-| E006 | 二度の宣言（生成するコードで同じ名前になる型、規則と API に付けた同じ名前も）。生成するコードでぶつかる規則の名前（規則の別名がまわりのコードの名前と同じ、別名が同じ二つの規則、タスクと規則のアクティビティが同じ名前。1.15） |
-| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`・案件を始めることなど、エージェントでないタスクや Claude の `url`、http でも https でもない `url`、Jev が答えられない結果の型・尋ねていないフィールド・意味の誤り・下限の誤り・`confidence` のエラーのリトライ・ステータスの無いエラー）。規則の項目の誤り（`lambda` と `connect` の重なり、`connect` の無い規則の `connection`、http でも https でもない `connect`）も |
-| E008 | 案件の宣言や、案件に何をするかの誤り（`.proto` から作った列挙の値がステートマシンの状態と違う、案件の型も） |
+| E005 | 規則・日付のファイル・帳簿を読めなかった（rulec の検査を通らない規則、規則を読まない dandori のクレートのバイナリで読もうとした規則、要素の並びをたどる規則、無いことがある入力か出力（`T?`）を持つ規則も。`connect` で呼ぶ規則について、rulec が Connect のサービスを言わないとき、サービスが列挙の値を何と呼ぶかを言わないときも。koyomi の検査を通らない日付のファイル、chobo の検査を通らない帳簿、無いファイルも） |
+| E006 | 二度の宣言（生成するコードで同じ名前になる型、規則と API に付けた同じ名前、規則・日付のファイル・帳簿に付けた同じ名前も）。生成するコードでぶつかる規則の名前（規則の別名がまわりのコードの名前と同じ、別名が同じ二つの規則、タスクと規則のアクティビティが同じ名前。1.15） |
+| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`・案件を始めることなど、エージェントでないタスクや Claude の `url`、http でも https でもない `url`、Jev が答えられない結果の型・尋ねていないフィールド・意味の誤り・下限の誤り・`confidence` のエラーのリトライ・ステータスの無いエラー）。規則の項目の誤り（`lambda` と `connect` の重なり、`connect` の無い規則の `connection`、http でも https でもない `connect`）も。帳簿の操作のタスクの、振替に無い操作、`key`、`refused as`、エラーの `= …` も |
+| E008 | 案件の宣言や、案件に何をするかの誤り（`.proto` から作った列挙の値がステートマシンの状態と違う、案件の型も。帳簿の仮押さえでは、案件に合わない操作、`expire` のほかの `external`、`refused when` も） |
 | E009 | 文の置き場所の誤り（`yield`、並列のイテレーションの中の `break`・`succeed`・案件の呼び出し・イベントの待ち、`on failure` と `on cancel` の中の `succeed`、中と外の両方で値を入れる変数、規則を `let` なしで呼ぶことも） |
 | E010 | `match` のどの分岐にも当たらない値がある |
 | E011 | 通らない分岐 |
@@ -710,15 +798,16 @@ on cancel
 | E013 | 始まっていない案件にタスクを呼んだ、始まった案件をもう一度始めた |
 | E014 | 範囲のあるところ（規則の入力、タスクの引数、書き出したレコードのフィールド、出力）に、範囲を外れることのある値を渡した |
 | E015 | ほかの `.flow` を走らせるタスクが、子と合わない（引数と入力、結果と出力、宣言したエラーと子の `fail`。子を読めない、子が検査を通らない、自分を走らせるフローも） |
-| E016 | タスクが API の記述と合わない（無い操作、受け取らない引数、要る引数の不足、型・範囲・列挙の違い、結果が省くフィールドを `T?` にしていない、返さないステータス、無い例外、冪等トークンでない `key`、ストリームのメソッド。記述を読めないとき、`connect` で呼ぶ `.proto` に `url` が無いとき、メソッドやメッセージが読めなかった import の型を使っているときも） |
+| E016 | タスクが API の記述と合わない（無い操作、受け取らない引数、要る引数の不足、型・範囲・列挙の違い、結果が省くフィールドを `T?` にしていない、返さないステータス、無い例外、冪等トークンでない `key`、ストリームのメソッド。記述を読めないとき、`connect` で呼ぶ `.proto` に `url` が無いとき、メソッドやメッセージが読めなかった import の型を使っているときも）。帳簿の操作のタスクが振替と合わない（引数の名前と型、仮押さえでない結果、`do` の結果、帳簿が断りえない理由のエラー）も |
 | E017 | ワークフローが、`implements` で名指したサービスと合わない（無いサービス、`.proto` でない記述のサービス、ワークフローの名前とバージョン、dandori の印の無いメソッドと印の二つあるメソッド、ストリーム、始めるメソッドの数、リクエストのフィールドと入力、レスポンスのフィールドと出力、`fails` とフローの `fail`、`event` と `answer` のメソッドのタスクと値、状態のメソッドの数と形、`dandori/v1/options.proto` の import、読めなかった import にあるメッセージ） |
+| E018 | 規則・日付のファイル・帳簿を読めない dandori（このクレートのバイナリ）で、それらを使うフローを確かめた（読めないものの最初の宣言で一度だけ言い、exit 2） |
 | E020 | 終わりでない状態の案件を残して終わる（`on cancel` が終わってキャンセルで終わるときも） |
-| E021 | どの状態でも拒否されるイベントを送った |
-| E022 | 拒否されることがあるイベントの拒否を処理していない |
+| E021 | どの状態でも拒否されるイベントを送った（帳簿の仮押さえなら、帳簿がどの状態でも断る操作） |
+| E022 | 拒否されることがあるイベントの拒否を処理していない（帳簿の仮押さえなら、帳簿が断りうる理由を宣言していない、宣言しても `on` で受けていない） |
 | E030 | 外部のデータを変える呼び出しを、`key` なしでリトライする |
 | E031 | Express でできないこと（五分を超える待ち、コールバック、ネストした実行、`key` なしで外部のデータを変える呼び出し） |
 | E040 | プラットフォームで、一回の実行が大きくなりすぎうる（ビルドがプラットフォームごとに見る）。実行履歴が上限を超えうる（Step Functions は 25,000 件、Temporal は 51,200 件、Lambda durable functions は 3,000 操作）。Argo Workflows では、一回の実行のノードが目安の 10,000 個を超えうる |
-| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントと Jev、`connect` で呼ぶ規則にも要る）、ネストした実行の宣言したエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送り先（規則のサービスも）。Temporal のほかでは `on cancel` と `event` のタスク、サービスの `status` のメソッド。Step Functions と durable functions では、呼ばれる規則の `lambda` か `connect`。durable functions では invoke する関数の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`） |
+| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントと Jev、`connect` で呼ぶ規則にも要る）、ネストした実行の宣言したエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送り先（規則のサービスも）。Temporal のほかでは `on cancel` と `event` のタスク、サービスの `status` のメソッド。Step Functions と durable functions では、呼ばれる規則の `lambda` か `connect` と、呼ばれる日付の `lambda`。Step Functions では、帳簿の `lambda`。durable functions では invoke する関数の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`） |
 | W030 | 外部のデータを変えるかもしれない呼び出しを `key` なしでリトライする |
 | W032 | 確信度を使う Jev のタスクが、モデルをバージョンではなくエイリアスで書いている |
 | W101 | 処理されないエラーで、案件を終わりでない状態に残して失敗することがある（`on failure` や `on cancel` の片付けの最中も） |
@@ -760,6 +849,9 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - 規則を呼ぶ Lambda 関数のコード（Python）も出す。rulec が生成した Python を import し、JSON を列挙と整数に直して呼び、結果を JSON に戻す。
 - `connect` で呼ぶ規則（1.13）は HTTP Task にする。`ApiEndpoint` は `connect` の URL と `rulec api` のパス、ヘッダは `Connect-Protocol-Version: 1` で、本文は JSONata で組み立てる（フィールドの JSON の名前、数は `$string`、列挙は規則の値から `.proto` の名前への表）。結果は Task の出力の式で、ゼロ値を埋め、規則の出力の名前と値に戻してから、ほかの規則と同じ Choice で確かめる。Retry は規則のもの。`connection` が無ければ E050、HTTPS でなければ E050。その規則の Lambda 関数のコードは出さない。
 - サービスを実装するフロー（1.14）では、最初のステートを、入力のゼロ値を埋める Pass（`Output` が埋めた入力）にし、始まりの Pass と入力を確かめる Choice はその出力を読む。サービスに書かれた `callback` のタスクは、Task の結果の式で応答を埋める。実行は、出力が無いときも `{}` で終える。`status` のメソッドを持つサービスは E050。
+- **日付**（1.16）は、規則と同じく Lambda の Task にする。呼ばれる日付ごとに、koyomi が生成した Python を呼ぶ Lambda 関数のコード（`lambda/<ファイルの別名>_<日付の別名>_handler.py`）を出す。時刻の入力は、カレンダーのオフセットでその日に読み、日付と `at`（時刻を言う日付なら）を返す。
+- **帳簿の操作**（1.16）は、`use book` の `lambda` の Lambda 関数を呼ぶ Task にする。payload は `{transfer, op, args, amounts?}`。帳簿ごとに、chobo の Python のクライアントで操作する Lambda 関数のコード（`lambda/book_<帳簿>_handler.py`）を出す。利用者は `handler = make_handler(lambda: tigerbeetle(ClientSync(…)))` のように、帳簿の値を作る関数を渡す。断られたら、理由を名前にした例外を投げる。Lambda はその名前を `errorType` に入れ、Step Functions はそれをエラーの名前として Catch に渡す（宣言したエラーの名前は、帳簿の理由そのもの）。通ったら、仮押さえのレコードを Task の Assign の JSONata で、渡した引数から作る。Retry は書いたとおりで、キーで冪等なので、二度目は `done_before` で通る。
+- **`now`**（1.16）は、`($substring($states.context.State.EnteredTime, 0, 19) & "Z")`。そのステートに入った時刻を秒までにしたもので、Retry のあいだも変わらない。
 
 ### 4.2 Temporal
 
@@ -794,6 +886,9 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
   - ローカルアクティビティのエラーは、アクティビティのエラーに包まれずに届く。失敗は `ApplicationFailure`（Python では `ApplicationError`）のまま届き、タイムアウトは、初めて走るときは `ActivityFailure` に包まれた `TimeoutFailure` で、再生では包まれない `TimeoutFailure` で届く（TypeScript の SDK 1.24.0 と Python の SDK 1.33.0 の両方で、dev server の上で確かめた）。生成するコードは、包まれていてもいなくても同じ種類に読む。そうしないと、タイムアウトを処理する `on timeout` が、再生では失敗と読まれて別の道に進み、非決定的と言われる（`tests/flows/local_rules.flow` は、タイムアウトを処理してタスクを呼ぶので、これが起きれば再生で分かる。直す前は、実行が終わったあとのクエリの再生で `Nondeterminism error` になった）。
 - **`connect` で呼ぶ規則は、dandori が書くアクティビティにする**（1.13）。名前は同梱の規則と同じ `rule_<名前>` で、`makeActivities(own, transport)` の中に書き、`Transport` の `http` で送る。ワークフローは同梱の規則と同じ proxy（10 秒、`local` ならローカルアクティビティ）で呼ぶので、ワークフローのコードも、履歴に残る引数と結果も、同梱のときと変わらない。`rules.ts` には同梱の規則だけを書く。
 - **サービスを実装するフロー**（1.14）では、ワークフローのコードが、入力の型を確かめる前にゼロ値を埋め（`T.fill`）、サービスに書かれた `event` の値と `callback` の応答も、受け取ったあと型を確かめる前に埋める。表は記述のメッセージから作り、コードに書き込む。実行は、出力が無いときも `{}` で終える。`client.ts` には、サービスの名前（`SERVICE`）、メソッドの名前の関数（`fulfill`、`answerPacking` など。中身は `start`・`send`・`answer`・`status` を呼ぶだけ）、メッセージの名前の型（`FulfillRequest` は `T.WorkflowInput`）を足す。
+- **日付**（1.16）は、規則と同じ proxy で呼ぶアクティビティ `dates_<ファイル>_<日付>` にする（`local` ならローカルアクティビティ）。`rules.ts` が、koyomi が生成した TypeScript（`koyomi/typescript/<別名>.ts`）の関数を、入力を位置の順に並べて呼ぶ。時刻の入力は、カレンダーのオフセットでその日に読む（`day`）。`at` は koyomi の `<日付>_at` が返す。
+- **帳簿の操作**（1.16）は、dandori が書くアクティビティ（名前はタスクの名前）にし、`Transport` の `book` で chobo のクライアントを呼ぶ。`io.ts` は、フローが帳簿を使うときだけ、`BookCall`・`BookResult`・`book`、帳簿ごとの名前の表（振替のメンバーと数の引数）と、既定の `Transport` の実装を持つ。既定の実装は、利用者が渡す帳簿の値（`transport({ books: { stock: postgres(pool, { tenant }) } })`。chobo の TypeScript のクライアントが作るもの）のメンバーを呼び、数の引数を bigint にする。答えは `io.booked` が読み、断られたら理由の名前の宣言したエラー（無ければ `Dandori.Failure.<理由>`）として失敗させ、通れば仮押さえのレコードを引数から作る。
+- **`now`**（1.16）は、ワークフローの `Date.now()`（再生でも同じ時刻を返す）を秒までにした `dd.now()`。
 
 **Python SDK 向け**（`--target temporal-python`）も出す。ワークフローの名前のパッケージに、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`、`runtime.py`、`workflow.py`（ワークフローのクラスと、ワーカーに渡す `workflows`）を置く。`worker.py`（`worker_options` と `make_worker`）と `client.py`（`start`・`answer`・`status`）も同じ形で出す。意味は TypeScript 版と同じで、線に乗る名前もそろえた。ワークフローの型、アクティビティの名前、コールバックの Update とシグナル、クエリ、search attribute、子ワークフローとコールバックの ID が同じなので、TypeScript のワーカーが持つアクティビティを Python のワークフローから呼べ、その逆もできる（5 章で、全部のシナリオを両方向に走らせて確かめている）。書き方が違うのは次のところ。
 
@@ -805,6 +900,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - SDK は、空のエラーメッセージを受け取ると「Application error」と読む。ワークフローの中でエラーの理由を読むときは、届いた failure の `message` をそのまま読む。
 - 新しい実行で続けるのは `workflow.continue_as_new` で、履歴の長さとサーバーの勧めは `workflow.info()` の `get_current_history_length()` と `is_continue_as_new_suggested()` で読む。続きの実行に渡すものは TypeScript 版と同じ形の `dict` で、`run` の二つ目の引数で受け取る。
 - `connect` で呼ぶ規則は、`activities.py` の `make_activities` の中に、名前 `rule_<名前>` のアクティビティとして書く。サービスを実装するフローの `client.py` のメソッドの名前の関数は、snake case（`answer_packing`）にする。
+- 日付は `rules.py` が `.koyomi.python.<別名>` から読み、`{"day": …, "at": …}` を返す。帳簿の操作は `io.py` の `book`（帳簿の値は `transport(books=…)`。chobo の Python のクライアントは同期なので `asyncio.to_thread` で呼ぶ）。`now` は `workflow.now()`。
 
 **Go SDK 向け**（`--target temporal-go`）も出す（2026-10-02）。ワークフローの名前の Go のパッケージ一つに、`doc.go`（パッケージの説明と、前提にするモジュールのバージョン）、`types.go`、`values.go`（JSON の値を読み書きする部品）、`activities.go`（`OwnTasks` と `Activities(own, transport)`）、`io.go`（と、フローが使うときだけ `io_aws.go`・`io_openai.go`・`io_claude.go`）、`rules.go`、`runtime.go`、`workflow.go`（`Workflow`）、`client.go`（`Start`・`Answer`・`Send`・`Status`・`Histories`）、`worker.go`（`NewWorker`・`Replay`）を置く。線に乗る名前は TypeScript 版と同じなので、ワークフローとアクティビティを TypeScript や Python のワーカーと分け合える（5 章で、Go と TypeScript の組み合わせを両方向に走らせて確かめている）。書き方が違うのは次のところ。
 
@@ -821,6 +917,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - **Go の map は順を持たない。** そのため Go 版は、オブジェクトの鍵も、クエリとフォームの組も、名前の順に書く。エージェントに渡す入力の JSON の文字列も同じである。JSON としても組としても同じだが、TypeScript 版と Python 版が `.flow` の引数の順や、受け取った JSON の順に書くのとは、文字列としては違う。モデルが読む文字列が鍵の順だけ違っても、答えに効くことはないと見ている。
 - **gofmt のとおりに書く。** 構造体のフィールドと、一行に一つずつ書いた複合リテラルのキーと値を、gofmt の規則（キーが 40 バイトを超えるときの比の規則も）でそろえ、長くなる関数リテラルは初めから行を分ける。テストは、生成したコードが `go vet` を通り、`gofmt -l` が何も言わないことを確かめる。
 - **Go のバージョン。** Temporal の Go SDK 1.49.0 は `go 1.26.0` を求めるので、生成したコードを使うには Go 1.26 が要る（手元の Go が古ければ、go コマンドが 1.26 のツールチェーンを取ってくる）。
+- **日付と帳簿。** 日付は `rules.go` が koyomi の Go のパッケージ（`koyomi/go/<パッケージ>`。日付のファイルごとのモジュールで、規則と同じく利用者の `go.mod` で require して replace する）を呼ぶ。帳簿の操作は、フローが帳簿を使うときだけ書く `io_books.go` の `Book`（`BookTransport`）で、`TransportOptions.Books` の値（chobo の Go のクライアントの `*Book`）を呼ぶ。Go 版はクライアントの型を知らないまま書くので、振替のフィールド、操作のメソッド（`Do`・`Hold`・`Post`・`Void`）、引数の構造体を、chobo の口が渡す名前でリフレクションで引く。`now` は `workflow.Now(ctx)`。
 
 ### 4.3 Lambda durable functions
 
@@ -838,6 +935,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - 冪等キーは `context.executionContext.durableExecutionArn` から作る。
 - 一回の実行で使える操作は 3,000 回まで（引き上げられない）。E040 はこれも見積もる。
 - `connect` で呼ぶ規則は、`context.invoke` ではなく、dandori が書く実装（`tasks.ts` の `rule_<名前>`）を step の中で呼ぶ。`lambda` は要らない。サービスを実装するフローでは、ハンドラが入力の型を確かめる前にゼロ値を埋め、サービスに書かれたコールバックの応答も埋める。`status` のメソッドを持つサービスは E050。
+- 日付は、規則と同じく `context.invoke` で Lambda を呼ぶ（Step Functions と同じ関数）。帳簿の操作は、dandori が書く実装（`tasks.ts`）を step の中で呼び、`Transport` の `book` で chobo のクライアントを呼ぶ（Temporal と同じ `io.ts`）。`now` は、その文の前の step（`<行> clock`）で読む。答えはチェックポイントに残るので、再生でも同じ時刻になる。step は操作を一回使うので、E040 の見積もりは `now` を読む文ごとに 1 を足す。
 
 ### 4.4 Argo Workflows
 
@@ -859,6 +957,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - 一回の実行が作るノードの数は E040 で見積もる（3 章）。
 - `connect` で呼ぶ規則も、ほかの規則と同じく caller のコンテナ（`node /app/call.ts rule_<名前>`）で動く。中身は `tasks.ts` の `makeTasks` に書く、`Transport` の `http` で送る実装で、`call.ts` は同梱の規則だけを `rules.ts` から読む。
 - サービスを実装するフローでは、始まりのテンプレートの出力の式が、入力のゼロ値を `sprig.set` で埋めてから確かめる。表はビルドのときに分かるので、メッセージの入れ子とメッセージのリストの形に合わせて式を書く。`sprig.set` は map をその場で書き換えて返すので、式は「フィールドごとの `sprig.set` と、中のメッセージを埋める式と、リストの各項目を埋める `map` を並べたリストのあとに、値そのものを置き、その最後を読む」形にした（`[sprig.set(x, "k", x["k"] ?? 0), …, x][n]`）。中のメッセージは map のときだけ、リストは配列のときだけ埋め、無いものに鍵を足さない。`sprig.set` を入れ子に重ねる形では、無いメッセージにも `null` の鍵ができ、`json` のフィールドがあるかどうかの判定が参照インタプリタと変わる。リストの項目は `map` の `#` で、項目の中のリストはその内側の `map` の `#` で埋めるので、内側の `#` が外側の項目を指すことはない。この形が、null の項目を埋め、宣言していない鍵と、map でない値を残し、中のメッセージとリストの中のリストでも埋め、無いメッセージに鍵を足さないことを、kind の上の v4.1.4 で確かめた（2026-10-01）。サービスに書かれたコールバックの応答も、それを読む式で埋める。`status` のメソッドを持つサービスは E050。
+- 日付は、ほかの規則と同じく caller のコンテナで、`caller/rules.ts` が koyomi の TypeScript を呼ぶ（読み込みは `.ts` を付けて書く）。帳簿の操作も caller のコンテナで、`transport.ts` で利用者が渡す帳簿の値を `Transport` の `book` が呼ぶ。`now` は、値を計算するテンプレートの出力の式の `now().UTC().Format("2006-01-02T15:04:05Z")` で、そのテンプレートに来たときに一度だけ評価される（上の項）。
 
 ### 4.5 pydantic-graph
 
@@ -870,6 +969,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - **並列のイテレーションは、イテレーションの本体を別のグラフにする。** イテレーションごとに `State` のコピーを作ってそのグラフを走らせ、`k` 個ずつ並べる。イテレーションの中で処理していないエラーはイテレーションのグラフの外に出て、ループの節点が、全部のイテレーションが終わってから、リストの順で最初のものを扱う。イテレーションの本体を節点の並びのまま、イテレーションごとの変数のコピーで走らせられるので、この形にした。
 - **実行はプロセスの中にしかない。** pydantic-graph 2.x は状態をどこにも残さない（1.x にあった `FileStatePersistence` などは無くなった）ので、プロセスが止まれば実行は失われる。何日もの `wait` やコールバックも書けるが、そのあいだプロセスが生きている必要がある。止まっても続く実行が要るなら、ほかのプラットフォームを使う。
 - `connect` で呼ぶ規則は、`tasks.py` の `make_tasks(own, transport)` に書く関数（`rule_<名前>`）で、グラフは `Deps.tasks` から呼ぶ（`Deps.rules` は同梱の規則だけ）。サービスを実装するフローでは、グラフの最初の節点が入力のゼロ値を埋めてから確かめ、サービスに書かれたコールバックの応答も埋める。`status` のメソッドを持つサービスは E050。
+- 日付は `rules.py` の関数が koyomi の Python を呼ぶ（Temporal の Python 版と同じ形）。帳簿の操作は `tasks.py` の関数が `Transport` の `book` を呼ぶ（Temporal の Python 版と同じ `io.py`）。`now` は `Deps.clock` から読む。
 
 ### 4.6 五つのプラットフォームでそろえたこと
 
@@ -894,6 +994,9 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 | 無い `T?`・`json`（入力、レコードのフィールド）を null として読む | `($exists(x) ? x : null)` | TypeScript は `?? null`、Python は `.get`、Go は `ddGet` | Temporal と同じ | 式の `nil`（`toJson` で null） | `.get` |
 | サービスの入口（ゼロ値を埋める） | 最初の Pass で入力を、Task の結果の式で応答を | ワークフローのコード（`T.fill`） | Temporal と同じ | 始まりのテンプレートの式（`sprig.set`） | グラフの最初の節点 |
 | サービスの `status` | 作れない（E050） | クエリ `dandori.status` | 作れない（E050） | 作れない（E050、まだ） | 作れない（E050、まだ） |
+| 日付（1.16） | Lambda と、koyomi の Python をつなぐコード | アクティビティ（`local` ならローカルアクティビティ）と、koyomi の TypeScript・Python・Go をつなぐコード | `context.invoke` と、Step Functions と同じ Lambda | コンテナと、koyomi の TypeScript をつなぐコード | 関数と、koyomi の Python をつなぐコード |
+| 帳簿の操作（1.16） | 帳簿の Lambda と、chobo の Python のクライアントで操作するコード。仮押さえは Task の Assign で引数から作る | dandori が書くアクティビティ（`Transport` の `book` で chobo のクライアントを呼ぶ。Go 版はリフレクションで） | dandori が書く実装を step の中で | dandori が書く実装を caller のコンテナで | dandori が書く関数（`Transport` の `book`） |
+| `now`（1.16） | `$states.context.State.EnteredTime` を秒まで | ワークフローの時計（`Date.now()`、`workflow.now()`、`workflow.Now`） | 時計を読む step（チェックポイントに残る） | 値を計算するテンプレートの式の `now()` | `Deps.clock` |
 
 実行中の案件と規則のバージョンの関係は、どのプラットフォームでも同じになる。規則は Lambda かアクティビティとして呼ぶので、規則を直すと、実行中の案件も途中から新しいバージョンで判定される。
 
@@ -948,6 +1051,9 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - **本物の Open Responses のサーバー**：このマシンで Ollama が動いていれば（`DANDORI_OLLAMA`、既定は `http://127.0.0.1:11434`）、`url` のあるエージェントごとに、シナリオで応答のある最初の呼び出しを、モデルを Ollama にあるもの（`DANDORI_OLLAMA_MODEL`、無ければいちばん小さいもの）に替え、エフォートを外して（小さなモデルは推論しないことがあり、Ollama はそうしたモデルへのエフォートを拒否する。エフォートの形はモックのサーバーで Step Functions と突き合わせている）、TypeScript と Python と Go の既定の `Transport` から本当に送る。応答は、タスクの型に合わなければならない。Ollama が無ければ SKIP にする。テストの前に読み込まれていなかったモデルは、終わったら下ろす（Ollama は読み込んだモデルを 5 分置き、8B のモデルでは 8 GB を超える。テスト全体の途中でメモリが逼迫した）。
 - **既定の `Transport`**：シナリオの呼び出しのうち `Transport` を通るもの（HTTP、Lambda、AWS の API）を、TypeScript の既定の実装（`fetch` と AWS SDK for JavaScript v3）と Python の既定の実装（標準ライブラリと boto3）から、ローカルのモックに送る（`tools/wire`）。ローカルのサーバーは、HTTP と Lambda の Invoke に、ランナーの差し替えの `Transport` がそのシナリオで返すものと同じレスポンスを返す。HTTP のタスクの URL は、スキームとホストをこのサーバーに置き換える。AWS の API は、AWS の API をローカルでまねる moto（5.2.3）に渡す。届いたもの（HTTP ならメソッド・パス・クエリ・ヘッダ・本文、Lambda なら関数と payload、SNS と SQS なら moto のキューに届いたメッセージ）が呼び出しと同じで、`Transport` が返すものが差し替えの `Transport` と同じで、TypeScript と Python が同じ文字列を送ることを確かめる。Go の既定の実装（`net/http` と AWS SDK for Go v2）も、Go のランナーの `--wire` が同じ呼び出しを送る。AWS SDK は `AWS_ENDPOINT_URL` でローカルのサーバーに向ける。Go の map は順を持たないので、Go はオブジェクトの鍵とクエリとフォームの組を名前の順に書く。そのため Go については、JSON の本文は値として、クエリとフォームは組の集まりとして比べ、文字列は比べない。AWS のエラーは、moto に起こさせられるもの（無いトピックへの `sns:publish` の `NotFoundException`、無いキューへの `sqs:sendMessage` の `QueueDoesNotExist`）だけを試す。何もローカルの外には出ない。
 - **つなぐコード**：Lambda の Python、`rules.ts`、Python の二つのプラットフォームの `rules.py`、`rules.go` を、rulec が生成した Python と TypeScript と Go と一緒に動かし、`rulec vectors` の全件で rulec の期待値と比べる。例が呼ぶ規則はすべて比べ、Step Functions に出せない例の規則も外さない（審査の規則は Step Functions に出せない例にしか無く、前は外れていた）。出力が一つの規則は、rulec の関数がその値をそのまま返す（二つ以上なら `Output` のレコード）。つなぐコードはこれを知らずにフィールドを読んでいて、審査の規則を足したときに `tsc` がそれを見つけた。durable functions 向けに出す規則の Lambda が、Step Functions 向けのものと一字も違わないことも確かめる。
+- **日付と帳簿の突き合わせ**（1.16）：日付と帳簿の操作には、どのプラットフォームでも、規則やタスクと同じくシナリオが答える。日付には、一つの実行の中でどれも違う日付（と、時刻を言う日付なら時刻）で答える。帳簿の操作には、通った（`{"ok": {"result": "done"}}`）、前に通った（`done_before`）、帳簿の行の理由ごとの断り（宣言したエラー）、失敗、タイムアウトで答える。帳簿は答えの形を決めているので、型の合わない答えやありえない状態の答えは選ばない（`done` と `done_before` のどちらでも、仮押さえは引数から作る）。ランナーは、日付のアクティビティと `Transport` の `book` をスタブにし、走らせるコードの時計を `2026-03-31T15:30:00Z` に替える。Temporal の三つ・durable functions・pydantic-graph ではコードのコピーの時計の関数を書き換え、Step Functions では `tools/asl-run.mjs` がステートに入った時刻をその時刻にし、LocalStack の定義とテンプレートの `now()`（Argo）は、その時刻の文字列に置き換える。参照インタプリタも、シナリオの `now` にその時刻を読む。
+- **日付のつなぐコード**（1.16）：Lambda の Python、`rules.ts`、Python の二つのプラットフォームの `rules.py`、`rules.go` の日付のアクティビティを、koyomi が生成したコード（koyomi のライブラリで、テストのプロセスの中で作る）と一緒に動かし、koyomi の `vectors` の全件（入力の範囲のすべて）で、日付と `at` を koyomi の期待値と比べる。カレンダーがオフセットを言うファイルでは、七件に一件、日付の代わりに、その日の 0 時 30 分（オフセットで）を UTC にした時刻を渡し、同じ日として読むことも確かめる。
+- **帳簿を本物のデータベースで**（1.16）：例とテストのフローの実行が出す帳簿の操作の並び（参照インタプリタが Temporal に見せる形で、違う並びを一つずつ）を、dandori が書く `Transport` の `book`（TypeScript の `io.ts`、Python の `io.py`、Go の `io_books.go`）と、Step Functions 向けに書く Lambda 関数のコードから、chobo が書くクライアントに通し、PostgreSQL と TigerBeetle の上で動かす（`books_run_on_postgres_and_tigerbeetle`）。サーバーは chobo のテストと同じく ritsu-testkit が立て、PostgreSQL には chobo が書く SQL を入れる。クライアントの依存（`pg`、`tigerbeetle-node`、psycopg、tigerbeetle、pgx、tigerbeetle-go）は、chobo の `tools/runner` のものを読むだけで使う。並びごとに、空の帳簿で、帳簿の外から入れる振替（`receive`）で満たしてから、そのあと同じ帳簿でもう一度（どの操作も前にした）の三通りで流し、どの答えも、同じ操作に chobo の参照インタプリタ（帳簿の口の `open`）が返すものと同じでなければならない。durable functions と Argo の caller の `io.ts` が Temporal のものと、pydantic-graph の `io.py` が Temporal の Python 版のものと、頭の注のほかは同じであることも確かめるので、ほかのプラットフォームの実装もこれで確かめたことになる。サーバーかツールが無ければ SKIP にする。
 - **サービスを実装するフローのシナリオ**（1.14）：start の入力から、入力の型が受け取るゼロ値（空の文字列、範囲に入る 0、false、空のリスト、ゼロ値を持つ列挙のゼロ値）のフィールドを省いた実行を足す。中のメッセージはゼロ値のメッセージにし、メッセージのリストには、ゼロ値のメッセージを一つ入れて、どの深さでも省く。サービスに書かれた `event` の値と `callback` の応答にも、同じように省いたものを選べる。参照インタプリタは、省かれたものを埋めてから読むので、埋めないプラットフォームは食い違う。また、設定されているかどうかが分かるフィールド（メッセージ、`optional`、`oneof` の一つ）を `T?` でない入力で読むなら、その最初の一つを省いた入力の実行を一本足す。どのプラットフォームも、何も呼ばずに `Dandori.BadInput` で終えなければならない（`json` の入力は選ばない。無ければ null として読んで進むので、拒否の試験にならない）。型が受け取らないゼロ値（ゼロ値を持たない列挙）は省かない。省いても、埋めても埋めなくても型の検査で落ち、埋める誤りと区別がつかないからである。形の合わない値として選ぶのは、`connect` のタスクと同じく `[]` にした。`{}` は、ゼロ値をすべて省いたメッセージとして読め、埋めると形が合ってしまう（作る途中で、参照インタプリタがシナリオに無い次の呼び出しへ進んで分かった）。
 - **入力が無い `json` のシナリオ**（1.2）：`json` を入力に、または入力のレコードのフィールドに持つフローには、呼び出しがいちばん多い実行と同じ結果の並びで、その入力から無くてよいもの（`json` と、値の無い `T?`）を全部省いた実行を一本足す。どのプラットフォームも、それを null として読み、参照インタプリタと同じ呼び出しを、同じ引数（`json` は `null`）で出して、同じに終わらなければならない。サービスを実装するフローに限らない（Temporal のクライアントが、入力のフィールドを省いて始めることもある）。
 - **Connect で呼ぶ規則の結果**（1.13）：シナリオは、規則の出力を選んでから、rulec のサービスが書く形（protojson。ゼロ値のフィールドを省き、数を文字列、列挙を `.proto` の名前で書く。0 番が規則の値の列挙は、その値のときに省く）にして返す。ほかに、失敗（リトライを通る）、範囲の外の数、形の合わない結果（`[]`）、数と真偽と、0 番が規則の値の列挙をゼロ値にして省いた結果、列挙を省いた結果（0 番が「設定されていない」の列挙だけ。埋めると `…_UNSPECIFIED` になり、結果の検査が拒否する）を選べる。スタブの `Transport` は、`ok` を 200 の本文として、失敗を 500 として返す。
@@ -1065,6 +1171,7 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
   - 規則のレスポンスの 200 通りを、参照インタプリタ、TypeScript、Python、Go、JSONata の五か所で同じに読んだ。`rules.go` は、例の規則のベクタ 600 件に rulec のとおりに答えた。生成した Go は、46 本のフローのすべてで、rulec の Go と一緒に `go vet` を通り、gofmt のとおりだった。
   - テストのランナーは、50 のパッケージを一つのバイナリにする。ビルドは 7〜9 秒（SDK のパッケージがビルドのキャッシュにあるとき）、バイナリは 102 MB で、ビルドの間のメモリは最大で 1.4 GB ほどだった。テスト全体の中では、ほかのテストと重なって 67 秒かかった。テストは、自分の一時ディレクトリ（`dandori-test-<プロセスの番号>-…`）を、あとで読めるように残して終わる。前はそれを誰も消さず、9/26 からの一週間で 26,000 個、6.8 GB たまっていた（Go のランナーは一つで 100 MB ある）。そこで、テストのプロセスは最初に、終わったプロセスのディレクトリを消す（`kill -0` がそのプロセスは無いと言うものだけ）。Go のビルドと、テストの `go vet`・`go run` には `-trimpath` を付ける。付けないと、Go のビルドキャッシュはパッケージをディレクトリごとに鍵にするので、毎回別の一時ディレクトリで作る同じパッケージがキャッシュに当たらず、Go の三つのテストを流すたびにキャッシュが 0.8 GB 増えた（Go 版を作った一晩で 8.6 GB）。`go run` は作った実行ファイルもキャッシュに入れるので、規則のつなぎを確かめるプログラムには、ベクタのファイルを絶対パスでなく名前で渡す。直したあとは、二回目からの増え方が 1 MB になった。
   - ランナーを書く中で分かった Go の SDK の振る舞い（ランナーの側で手当てした）：ワークフローやアクティビティを登録していないワーカーでも、Go の SDK は両方の種類のタスクを取りに行き、自分のアクティビティを先に取ろうとする（eager execution）。言語をまたぐ実行で、ワークフローだけのワーカーには `LocalActivityWorkerOnly` を、アクティビティだけのワーカーには `DisableWorkflowWorker` を付けた。付ける前は `unable to find activityType=rule_policy. Supported types: []` で失敗し、クエリがアクティビティだけのワーカーに届いた。利用者が Go のワーカーを同じように分けるときも同じである。生成したワークフローが panic すると、既定ではワークフロータスクの失敗を繰り返して止まるので、ランナーのワーカーは `WorkflowPanicPolicy: FailWorkflow` にした。Go のワーカーのスティッキーなタスクキューは `<ホスト名>:<uuid>` と名付けられるので、履歴を記録するときにホスト名を `localhost` に替える。
+- 日付と帳簿（1.16、2026-10-04）：請求の例（英語の版と日本語の版、どちらも 18 本）と `tests/flows/dates_and_books.flow`（15 本）は、Step Functions（JSONata と LocalStack）、Temporal の TypeScript・Python・Go、Lambda durable functions、Argo Workflows、pydantic-graph のすべてで参照インタプリタと一致した。Argo では、フローごとに一本を本物の Pod でも走らせ、一回の実行のノードは、多いもので請求が 133 個（E040 の見積もりは 173 個）、`dates_and_books.flow` が 137 個（193 個）だった。言語をまたぐアクティビティでは、請求の 18 本が両方向で一致した（`dates_and_books.flow` は日付が `local` なので外れる）。日付のつなぐコードは、請求の日付で koyomi の 835 件（英語）と 831 件（日本語）、`dates_and_books.flow` の二つの日付でそれぞれ 728 件の例に、Temporal と pydantic-graph の `rules.py` が koyomi のとおりに答え、`rules.go` は規則と日付を合わせて 3,849 件に答えた。帳簿の操作は、三つのフローの並びを合わせた 170 件を、TypeScript・Python・Go の `Transport` と Step Functions の Lambda 関数のコードから、PostgreSQL と TigerBeetle の上で流し、どれも chobo の参照インタプリタと同じ答えだった。替える前（ff11288）と後で、例とテストのフローの全部（`check` を英語と日本語と JSON で、`scenarios`、`doc` を二つの形と二つの言語で、`build` を七つのプラットフォームで、939 回）の出力を比べると、違ったのは、新しい書き方を使うフロー（請求の二つの版、`dates_and_books.flow`、新しい四つの検査のテストのファイル）と、`tests/fixtures/values.flow` の `check`（型の一覧を言う注に `date` が増えた三つ）だけだった。
 
 ### 5.2 図にする（`dandori doc`）
 
@@ -1116,6 +1223,8 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 **規則は、記録した口の答えから読む**：ページの中では rulec を動かせない。dandori の wasm のモジュールは、rulec を持たない（P2）。そこで、例の規則について rulec の口が答えたもの（規則の事実と、`rulec doc` が描いたページ）を、テストが記録してバンドル（`presets.json`）に入れる（`Recorder`）。事実は dandori の形の JSON（`src/record.rs`。単位は rulec の綴りで書き、読み直すと同じ単位になる）で持ち、ページは描いたまま持つ。ページの中では、記録から答える口（`Recorded`）が規則を読む。前は、三つのコマンド（`schema`・`certificate`・`api`）が出力した JSON をそのまま記録していた。ページでは規則を書き換えられない。規則を書くのは rulec のプレイグラウンドの役目である。
 
 **規則を見るタブ**：「規則」のタブで、フローが呼ぶ規則ごとに、`.rule` の本文（読むだけ）と、`rulec doc --format html` のページを開くリンクを出す。`.rule` の本文は、表示のためだけに文字列として読み、読み解かない。バンドルには、規則の本文と、`rulec doc` が描いたもの（Markdown と HTML、そのフローを見せる言葉のもの）も入る。
+
+**日付のファイルと帳簿**（1.16）：ページの中では koyomi も chobo も動かせないので、例の日付のファイルと帳簿について口が答えた事実を、規則と同じくバンドルに記録する（`RecordedDates`、`RecordedBooks`。JSON の形は `src/record.rs`。単位は rulec の綴りで、名前だけの数の単位は `{"count": "pcs"}` と書く）。請求の例も開ける。「規則」のタブには、規則だけを出す（日付と帳簿には `rulec doc` のページが無い）。
 
 **`.proto`**：フローが読む `.proto`（呼ぶ API の記述、型を作る記述、実装するサービスの記述）は、ほかのファイルと同じくバンドルに記録する。`dandori/v1/options.proto` は dandori に埋め込んであるので、バンドルには入れない。
 
@@ -1217,6 +1326,14 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - **読めなかった import の型を、`json` として黙って運ぶこと。** タスクの引数やレスポンスが記述に合うかを確かめないまま通り、記述との突き合わせの意味が薄れる。分からない型は分からないと言い、`json` にするか、ファイルを足すかは書いた人が決める（1.10）。
 - **規則のサービスのレスポンスの数を、どんな長さの十進の文字列からも数に直すこと。** JavaScript と JSONata の数は倍精度なので、2^53 を超える整数が別の数に丸まり、プラットフォームによって結果が変わる。16 桁までで、2^53 − 1 を超えないものだけを数に直し、ほかは残して結果の検査に断らせる（1.13）。
 
+- **日付をワークフローのコードの中で計算すること。** koyomi の生成したコードは純関数で、履歴も増えないが、カレンダーの祝日の表は毎年変わるので、表を入れ替えたワーカーで再生が食い違う（ritsu の DESIGN 7.8）。規則と同じくアクティビティにした（1.16）。
+- **参照インタプリタで、帳簿の操作を chobo の参照インタプリタに答えさせること。** 帳簿の答えは、帳簿に入っているもの（在庫の量、前の操作）で決まり、それはワークフローの外にある。ワークフローを確かめるには、どの答えも起こりうるものとしてシナリオが選び、断りの道も通したい。chobo に答えさせると、初めの中身を決めないと答えが決まらず、断りの道を通るシナリオを作りにくい。帳簿の振る舞いそのものは chobo が確かめ、dandori は、書くコードが chobo のクライアントを正しく呼ぶことを、本物のデータベースで chobo の参照インタプリタと比べて確かめる（5 章）。
+- **仮押さえのレコードを、操作のあとに帳簿から読むこと**（クライアントの `status`）。呼び出し一つにデータベースの往復が二つになり、そのあいだに期限が切れたかどうかで答えが揺れる。操作が通ったなら状態は操作で決まるので、渡した引数から作る（1.16）。
+- **帳簿のタスクに `key` を書かせること。** 帳簿の操作は、帳簿に書いたキーで一度しか通らない。dandori の冪等キー（実行と呼び出しの場所から作るもの）を重ねても、帳簿は使わない（1.16）。
+- **仮押さえの案件に `external expire` と `refused when refused = true` を書かせること**（chobo の DESIGN 5 章の案）。帳簿を読めば分かることをもう一度書かせると、書き忘れたときに検査が期限切れを数えない。断りは理由ごとに違うので、一つの `refused as` にまとめると、どの理由で断られたかをフローが分けられない（2.7）。
+- **`dates` と `book` をキーワードにすること。** どちらも名前としてよく使う語なので、`agent` と同じく置き場所でだけ読む語にした（1.16）。
+- **`now` を、走らせる側が入力で渡すこと。** 再生でも同じ時刻になり、プラットフォームごとの読み方も要らないが、ワークフローの途中の時刻（待ったあと、リトライのあと）を読めず、仮押さえを作った日を言う（ritsu の DESIGN 7.7）には足りない。
+
 ## 7. まだやっていないこと
 
 - 別々の本体を同時に走らせる Parallel。案件を二つの枝から同時に動かすことは、並行の問題になるのでエラーにする予定。
@@ -1272,3 +1389,10 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - Argo と pydantic-graph で、実行がいまどこにいるかを答えること（サービスの `status`）。
 - テスト全体の負荷の中でしか出ない揺れの原因を突き止めること（5.1）。Argo のコントローラーが、演じた Pod の終わりを見落とすこと（と、全体の途中で自分から終わって立ち上がり直すこと。こちらは、リーダーのリースの更新がクライアントのレート制限で期限を過ぎ、リーダーを失って終わるのだと、一度のログから分かった。`tools/argo/setup.sh` でリーダー選出を止めるか、リースの期限やクライアントの上限を延ばせば防げるはずだが、試していない）と、Temporal の終わりのクエリが、案件の状態を一つ前のものや null で答えることは、そのテストだけを走らせても、負荷をかけても出なかったので、原因は確かめていない。いまは、ランナーが前者を演じ直し、後者を尋ね直す。
 - Temporal のランナーに、一本ごとの上限を付けること。生成した Python のワークフローが例外を投げ続けると、SDK はワークフロータスクを終わりなく試し直すので、ランナーが終わらない（読みをわざと誤らせて確かめた）。TypeScript の SDK も決まりは同じだが、ランナーでは確かめていない。
+- 言語をまたぐ検査（ritsu の DESIGN 7.6〜7.8 の X4・X5・X6）。帳簿の操作の数の範囲から断りうる理由を絞ること（X4。いまは帳簿の検査が言う理由を全部数える）、仮押さえの有効期限と、作ってから確定するまでの待ちの長さを比べること（X5。いまは期限が切れうるものとしていつも数える）、渡す日付が日付のファイルの入力の範囲とカレンダーのデータの範囲に収まるかを確かめること（X6）。
+- `ritsu dandori` が日付の口と帳簿の口を渡すこと。dandori の側は `cli::run_with_ports` で受け取れる。それまでは、`use dates` と `use book` のあるフローは、テストの中でしか読めない（`ritsu dandori` は E018 で、自分で走らせるよう言ってしまう）。
+- 日付の範囲。`date` に `range` を書くこと、日付の範囲を求めて運ぶこと（X6 で要る）。
+- 帳簿の残高（クライアントの `balance`）と仮押さえの状態（`status`）を読むタスク、PostgreSQL の帳簿の期限切れを片付ける `expire()` をワークフローから呼ぶこと。
+- 帳簿の操作を、生成したワークフローを通して（Temporal の dev server などの上で）本物の帳簿に送ること。いまは、既定の `Transport` と Step Functions の Lambda 関数のコードを、本物のデータベースの上のクライアントで確かめるところまでである（5 章）。
+- 帳簿の Lambda 関数で、データベースにつなぐところ（`make_handler` に渡す関数）を dandori が書くこと。いまは利用者が書く。
+- TypeScript の型で、`succeed` で省いた `T?` の出力を通すこと。いまの `run` の型は、省いた出力を `tsc --strict` が拒否する（請求の例は `due = none` と書いて避けた）。

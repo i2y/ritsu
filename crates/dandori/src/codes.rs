@@ -46,10 +46,10 @@ pub fn ledger() -> Ledger {
             "E002",
             tr!("無い名前を書いています", "A name that is not there"),
             tr!(
-                "型（`.proto` に無いメッセージや列挙も、読めなかった import にある型のフィールドを持つメッセージも）・変数・フィールド・規則・タスクの名前が見つからないとき。単位の表に無い単位と、`incl_tax`・`excl_tax` のほかの税区分も。",
-                "A type (a message or an enum the `.proto` does not have, or a message that has a field of a type from a file the `.proto` imports and that could not be read, too), a variable, a field, a rule or a task that is not there; a unit the table of units does not have, or a tax that is neither incl_tax nor excl_tax, too."
+                "型（`.proto` に無いメッセージや列挙も、読めなかった import にある型のフィールドを持つメッセージも）・変数・フィールド・規則・タスクの名前が見つからないとき。日付のファイルに無い日付、無い帳簿、帳簿に無い振替も。単位の表に無い単位と、`incl_tax`・`excl_tax` のほかの税区分も。",
+                "A type (a message or an enum the `.proto` does not have, or a message that has a field of a type from a file the `.proto` imports and that could not be read, too), a variable, a field, a rule or a task that is not there; a date the dates file does not have, a book, or a transfer the book does not have; a unit the table of units does not have, or a tax that is neither incl_tax nor excl_tax, too."
             ),
-            tr!("名前の綴りを直すか、宣言を足します（`task`、`record`、`use rule` など）。", "Correct the spelling, or declare it (`task`, `record`, `use rule`, ...)."),
+            tr!("名前の綴りを直すか、宣言を足します（`task`、`record`、`use rule`、`use dates`、`use book` など）。", "Correct the spelling, or declare it (`task`, `record`, `use rule`, `use dates`, `use book`, ...)."),
             "workflow w v1\n\nflow\n  notify()\n",
             &["E006"],
         ),
@@ -57,8 +57,8 @@ pub fn ledger() -> Ledger {
             "E003",
             tr!("型が合いません", "Types that do not match"),
             tr!(
-                "値の型が、置いた場所の型と違うとき。オプショナルな値をそのまま使う、`none` を置けない場所に置く、リストのリスト、型の決まらない `{{…}}` や `[]`、数でないものに付けた範囲、どの数も入らない範囲、型の次元に無い単位を付けた範囲の端と、型の単位で数えると整数にならない範囲の端、自分自身を含むレコード（`.flow` に書いたものも、`.proto` のメッセージから作ったものも）。単位は単位の型で比べるので、`JPY` と `円` は同じ型、`kg` と `g`、税込と税抜は違う型です。",
-                "A value's type is not the type of where it goes: a value that may be absent used as it is, `none` where it cannot go, a list of lists, a `{{…}}` or `[]` whose type cannot be told, a range on what is not a number, a range no number is in, a bound of a range whose unit is not of its type or that does not come to a whole number of it, a record that contains itself, written in the `.flow` or made of a message of a `.proto`. Units are compared as units: `JPY` and `円` are one type, `kg` and `g`, and tax in and tax out, are not."
+                "値の型が、置いた場所の型と違うとき。オプショナルな値をそのまま使う、`none` を置けない場所に置く、リストのリスト、型の決まらない `{{…}}` や `[]`、数でないものに付けた範囲、どの数も入らない範囲、型の次元に無い単位を付けた範囲の端と、型の単位で数えると整数にならない範囲の端、自分自身を含むレコード（`.flow` に書いたものも、`.proto` のメッセージから作ったものも）、カレンダーが UTC オフセットを言わない日付のファイルの日付に渡す時刻（`now` など）。単位は単位の型で比べるので、`JPY` と `円` は同じ型、`kg` と `g`、税込と税抜は違う型です。",
+                "A value's type is not the type of where it goes: a value that may be absent used as it is, `none` where it cannot go, a list of lists, a `{{…}}` or `[]` whose type cannot be told, a range on what is not a number, a range no number is in, a bound of a range whose unit is not of its type or that does not come to a whole number of it, a record that contains itself, written in the `.flow` or made of a message of a `.proto`, a time (`now`, say) passed to a date of a dates file whose calendar says no UTC offset. Units are compared as units: `JPY` and `円` are one type, `kg` and `g`, and tax in and tax out, are not."
             ),
             tr!("渡す値を、受け取る側の型にします。単位が違うなら、換算する規則かタスクを通します（dandori は値を換算しません）。", "Pass a value of the type that is taken; for another unit, go through a rule or a task that converts it (dandori converts nothing)."),
             "workflow w v1\n\ninputs\n  count : int\n\ntask send(text: string)\n\nflow\n  send(text: count)\n",
@@ -74,12 +74,12 @@ pub fn ledger() -> Ledger {
         ),
         e(
             "E005",
-            tr!("規則を読めません", "A rule that could not be read"),
+            tr!("規則、日付のファイル、帳簿を読めません", "A rule, a dates file or a book that could not be read"),
             tr!(
-                "rulec の検査を通らない規則、要素の並び（`elements`）をたどる規則（dandori は規則に並びを渡せません）、無いことがある入力か出力（`T?`）を持つ規則。`connect` で呼ぶ規則なら、rulec が Connect のサービスについて何も言わないものと、列挙の値をサービスが何と呼ぶかを言わないものも。規則を読めない `dandori` のコマンドだけで走らせたときは、E018 です。",
-                "A rule that does not pass rulec's check, one that walks a list of elements (`elements`), which dandori does not pass a rule, or one with an input or an output that may be none (`T?`); for `connect`, one whose Connect service rulec says nothing of, or does not say what the service calls the values of an enum. Run with the `dandori` binary alone, which reads no rule, it is E018."
+                "rulec の検査を通らない規則、要素の並び（`elements`）をたどる規則（dandori は規則に並びを渡せません）、無いことがある入力か出力（`T?`）を持つ規則。`connect` で呼ぶ規則なら、rulec が Connect のサービスについて何も言わないものと、列挙の値をサービスが何と呼ぶかを言わないものも。koyomi の検査を通らない日付のファイルと、chobo の検査を通らない帳簿も（無いものも）。規則・日付のファイル・帳簿を読めない `dandori` のコマンドだけで走らせたときは、E018 です。",
+                "A rule that does not pass rulec's check, one that walks a list of elements (`elements`), which dandori does not pass a rule, or one with an input or an output that may be none (`T?`); for `connect`, one whose Connect service rulec says nothing of, or does not say what the service calls the values of an enum. A dates file that does not pass koyomi's check, and a book that does not pass chobo's, too (or one that is not there). Run with the `dandori` binary alone, which reads no rule, dates file or book, it is E018."
             ),
-            tr!("注に出る rulec の診断を、規則のファイルで直します。", "Correct the rule as the notes, rulec's diagnostics, say."),
+            tr!("注に出る rulec・koyomi・chobo の診断を、そのファイルで直します。", "Correct the file as the notes, rulec's, koyomi's or chobo's diagnostics, say."),
             "workflow w v1\n\nuse rule fee from \"fee.rule\"\n\nflow\n  pass\n",
             &["E002", "E018"],
         ),
@@ -87,8 +87,8 @@ pub fn ledger() -> Ledger {
             "E006",
             tr!("一つの名前が二つのものを指します", "One name for two things"),
             tr!(
-                "同じ名前を二度宣言しているとき。生成するコードで同じ名前になる型（`warehouse.Stock` と `warehouse_Stock`）、規則と API に付けた同じ名前も。規則の名前も見ます。rulec が規則のために生成するコードは、規則の別名（関数とモジュール、Go ではパッケージ）と、受け取る列挙の別名で呼ばれ、dandori がまわりに書くコードがそれを自分の名前と並べて読み込むので、まわりのコードがもう使っている名前（`rules`、`args`、`out`、`activity`、`handler`、`ctx` など、DESIGN 1.15）は使えません。別名が同じ二つの規則（rulec の生成したファイルが重なる）、タスクと規則のアクティビティ（`rule_<規則>`）が同じ名前になるものも。",
-                "A name declared twice; types that come to one name in the code dandori writes (`warehouse.Stock` and `warehouse_Stock`); one name for a rule and an API. The rules' names too: the code rulec generates for a rule goes by the rule's alias (its function and module, in Go its package) and the aliases of the enums it takes, and the code dandori writes around it imports those beside its own names, so a name that code uses already (`rules`, `args`, `out`, `activity`, `handler`, `ctx` and the others of DESIGN 1.15) cannot be one; nor can two rules have one alias (the files rulec generates would be one), nor a task and a rule's activity (`rule_<rule>`) one name."
+                "同じ名前を二度宣言しているとき（規則・日付のファイル・帳簿は、`use rule`・`use dates`・`use book` の名前を共有します）。生成するコードで同じ名前になる型（`warehouse.Stock` と `warehouse_Stock`）、規則と API に付けた同じ名前も。規則の名前も見ます。rulec が規則のために生成するコードは、規則の別名（関数とモジュール、Go ではパッケージ）と、受け取る列挙の別名で呼ばれ、dandori がまわりに書くコードがそれを自分の名前と並べて読み込むので、まわりのコードがもう使っている名前（`rules`、`args`、`out`、`activity`、`handler`、`ctx` など、DESIGN 1.15）は使えません。別名が同じ二つの規則（rulec の生成したファイルが重なる）、タスクと規則のアクティビティ（`rule_<規則>`）が同じ名前になるものも。",
+                "A name declared twice (rules, dates files and books share the names of `use rule`, `use dates` and `use book`); types that come to one name in the code dandori writes (`warehouse.Stock` and `warehouse_Stock`); one name for a rule and an API. The rules' names too: the code rulec generates for a rule goes by the rule's alias (its function and module, in Go its package) and the aliases of the enums it takes, and the code dandori writes around it imports those beside its own names, so a name that code uses already (`rules`, `args`, `out`, `activity`, `handler`, `ctx` and the others of DESIGN 1.15) cannot be one; nor can two rules have one alias (the files rulec generates would be one), nor a task and a rule's activity (`rule_<rule>`) one name."
             ),
             tr!("どちらかの名前を変えます。規則の別名なら、規則のファイルで `rule <名前>(<別名>) v1` の別名を変えます。", "Rename one of the two; for a rule's alias, change the alias in `rule <name>(<alias>) v1` in the rule's file."),
             Repro::File { body: "workflow w v1\n\nuse rule rule_of_thumb from \"rules.rule\"\n\ninputs\n  member : bool\n\nflow\n  let r = rule_of_thumb(member: member)\n", beside: &[RULES] },
@@ -98,8 +98,8 @@ pub fn ledger() -> Ledger {
             "E007",
             tr!("タスクや規則の書き方が合いません", "Clauses of a task or a rule that do not go together"),
             tr!(
-                "タスクの書き方が合わないとき。呼び出し方が二つある、`flow` のタスクにほかの呼び出し方や `image` がある、Connect に無いエラーコード、ステータスの無い HTTP のエラー、呼び出し方が持てない `key` や `callback`、知らない AWS のサービス、`agent` の無い `model`、Jev が答えられない結果の型など（一覧はサイトの診断コードの表）。規則の書き方が合わないもの（`lambda` と `connect` の両方、`connect` の無い `connection`、http:// でも https:// でもない `connect`）も。",
-                "A task's clauses that do not go together: two ways of calling, a `flow` task with another one or with an `image`, a Connect error code that is not one, an HTTP error without its status, a `key` or a `callback` the way of calling cannot have, an AWS service it does not know, `model` without an `agent`, an answer Jev cannot give, and the others the site's table of codes lists; and a rule's: `lambda` and `connect` together, a `connection` without `connect`, a `connect` that is not http:// or https://."
+                "タスクの書き方が合わないとき。呼び出し方が二つある、`flow` のタスクにほかの呼び出し方や `image` がある、Connect に無いエラーコード、ステータスの無い HTTP のエラー、呼び出し方が持てない `key` や `callback`、知らない AWS のサービス、`agent` の無い `model`、Jev が答えられない結果の型など（一覧はサイトの診断コードの表）。帳簿の操作のタスクの、振替に無い操作（すぐに確定する振替の hold・post・void、仮押さえにする振替の do）、`key`、`refused as`、エラーの `= …`。規則の書き方が合わないもの（`lambda` と `connect` の両方、`connect` の無い `connection`、http:// でも https:// でもない `connect`）も。",
+                "A task's clauses that do not go together: two ways of calling, a `flow` task with another one or with an `image`, a Connect error code that is not one, an HTTP error without its status, a `key` or a `callback` the way of calling cannot have, an AWS service it does not know, `model` without an `agent`, an answer Jev cannot give, and the others the site's table of codes lists; for a task that runs an operation of a book, an operation the transfer does not have (hold, post or void of a transfer done at once, do of one that holds first), `key`, `refused as`, an error's `= …`; and a rule's: `lambda` and `connect` together, a `connection` without `connect`, a `connect` that is not http:// or https://."
             ),
             tr!("メッセージが言う句を外すか、合う句に替えます。", "Take out the clause the message names, or put in one that goes with the others."),
             "workflow w v1\n\ntask send(text: string)\n  lambda \"arn:aws:lambda:ap-northeast-1:123456789012:function:send\"\n  http POST \"https://example.com/send\"\n\nflow\n  send(text: \"hi\")\n",
@@ -108,7 +108,7 @@ pub fn ledger() -> Ledger {
         Entry::new(
             "E008",
             tr!("案件の宣言か、案件への呼び出しが誤っています", "A case declared wrong, or a call that does to a case what it cannot"),
-            tr!("案件のレコードに状態のフィールドが無い、無いステートマシンに従う、`.proto` から作った列挙の値がステートマシンの状態と違うなど、案件の宣言が誤っているとき。タスクが案件にできないこと（始めない案件に `starts` のタスクを呼ぶなど）をしているときも。", "A case declared wrong: its record has no field for the state, the machine it follows is not there, the values of an enum made from a `.proto` are not the machine's states; or a task that does to a case what it cannot."),
+            tr!("案件のレコードに状態のフィールドが無い、無いステートマシンに従う、`.proto` から作った列挙の値がステートマシンの状態と違うなど、案件の宣言が誤っているとき。タスクが案件にできないこと（始めない案件に `starts` のタスクを呼ぶなど）をしているときも。帳簿の仮押さえに従う案件では、合わない操作（hold は `starts`、post は `sends post`、void は `sends void` で、do は案件を動かさない）、`expire` のほかの `external`、`refused when`。", "A case declared wrong: its record has no field for the state, the machine it follows is not there, the values of an enum made from a `.proto` are not the machine's states; or a task that does to a case what it cannot. For a case that follows a book's hold, an operation that does not fit it (hold `starts` it, post `sends post`, void `sends void`, and do moves no case), an `external` other than `expire`, `refused when`."),
             tr!("案件のレコードに、ステートマシンの状態の型のフィールドを持たせます（`state <フィールド>` で名指せます）。", "Give the case's record a field of the type of the machine's states (`state <field>` names it)."),
             Repro::File { body: "workflow w v1\n\nuse rule door from \"door.rule\"\n\nrecord Door\n  id : string\n\ncase d : Door follows door.door\n\nflow\n  pass\n", beside: &[DOOR] },
             &["E013", "E020"],
@@ -176,12 +176,12 @@ pub fn ledger() -> Ledger {
         ),
         e(
             "E016",
-            tr!("API の記述と合いません", "A task that does not fit the API it calls"),
+            tr!("API の記述や帳簿と合いません", "A task that does not fit the API or the book it calls"),
             tr!(
-                "タスクが、呼ぶ API の記述（OpenAPI、Smithy、`.proto`）と合わないとき。無い操作、受け取らない引数、要る引数の不足、型・範囲・列挙の違い、レスポンスが省きうるのに `T?` でないフィールド、返さないステータスや例外、冪等トークンでない `key`、ストリームのメソッド。記述が読めないとき、`connect` で呼ぶ `.proto` に `url` が無いとき、メソッドやメッセージが、読めなかった import にある型を使っているときも。",
-                "A task that does not fit the description of the API it calls (OpenAPI, Smithy, `.proto`): an operation that is not there, a parameter it does not take or one it needs left out, a type, range or enum that differs, a field the answer may leave out that is not `T?`, a status or an exception it does not answer with, a `key` that is not its idempotency token, a method that streams; a description that cannot be read, a `.proto` without `url` that a `connect` task calls, or a method whose message has a type from a file that could not be read, too."
+                "タスクが、呼ぶ API の記述（OpenAPI、Smithy、`.proto`）と合わないとき。無い操作、受け取らない引数、要る引数の不足、型・範囲・列挙の違い、レスポンスが省きうるのに `T?` でないフィールド、返さないステータスや例外、冪等トークンでない `key`、ストリームのメソッド。記述が読めないとき、`connect` で呼ぶ `.proto` に `url` が無いとき、メソッドやメッセージが、読めなかった import にある型を使っているときも。帳簿の操作のタスクでは、操作が受け取るもの（名前と型）と違う引数、仮押さえでない結果（do は何も返さない）、帳簿がその操作を断る理由でないエラー。",
+                "A task that does not fit the description of the API it calls (OpenAPI, Smithy, `.proto`): an operation that is not there, a parameter it does not take or one it needs left out, a type, range or enum that differs, a field the answer may leave out that is not `T?`, a status or an exception it does not answer with, a `key` that is not its idempotency token, a method that streams; a description that cannot be read, a `.proto` without `url` that a `connect` task calls, or a method whose message has a type from a file that could not be read, too. For a task that runs an operation of a book: parameters other than what the operation takes (by name and type), an answer that is not the hold (a do answers nothing), an error that is not a reason the book refuses the operation with."
             ),
-            tr!("タスクを記述に合わせるか、記述のパスを直します。", "Make the task fit the description, or correct the description's path."),
+            tr!("タスクを記述や帳簿に合わせるか、記述のパスを直します。", "Make the task fit the description or the book, or correct the description's path."),
             "workflow w v1\n\nuse openapi shop from \"shop.json\"\n\nflow\n  pass\n",
             &["E015", "E017"],
         ),
@@ -197,12 +197,12 @@ pub fn ledger() -> Ledger {
             "E018",
             tr!("規則を読めない dandori で、規則を使うフローを確かめています", "A flow that uses rules, run with a dandori that reads none"),
             tr!(
-                "dandori のクレートのバイナリ（`dandori`）で、`use rule` のあるフローを確かめるとき。このバイナリはほかの言語を持たず（ritsu の DESIGN 2.3）、規則を読めません。最初の `use rule` で一度だけ言い、規則を読めないことから起きるほかの診断は出しません。exit code は 2（走らせ方の問題で、フローの誤りではないため）。",
-                "A flow with a `use rule`, checked with the binary of dandori's own crate (`dandori`), which holds no other language (ritsu's DESIGN 2.3) and reads no rule. It is said once, at the first `use rule`, and nothing that follows from the rules it cannot read is said. The exit code is 2: it is how the command is run, not what the flow says."
+                "dandori のクレートのバイナリ（`dandori`）で、`use rule` のあるフローを確かめるとき。このバイナリはほかの言語を持たず（ritsu の DESIGN 2.3）、規則を読めません。最初の `use rule` で一度だけ言い、規則を読めないことから起きるほかの診断は出しません。exit code は 2（走らせ方の問題で、フローの誤りではないため）。日付のファイル（`use dates`）と帳簿（`use book`）も同じで、koyomi と chobo を持たないこのバイナリは読めません。言うのは、読めないもののうち最初の宣言で一度だけです。",
+                "A flow with a `use rule`, checked with the binary of dandori's own crate (`dandori`), which holds no other language (ritsu's DESIGN 2.3) and reads no rule. It is said once, at the first `use rule`, and nothing that follows from the rules it cannot read is said. The exit code is 2: it is how the command is run, not what the flow says. So with a dates file (`use dates`) and a book (`use book`), which this binary, holding neither koyomi nor chobo, cannot read either; it is said once, at the first of the declarations it cannot read."
             ),
             tr!(
-                "同じコマンドを `ritsu dandori` で走らせます（`ritsu dandori check flow.flow`）。規則を同じプロセスの中で読みます。",
-                "Run the same command as `ritsu dandori` (`ritsu dandori check flow.flow`), which reads the rules in the same process."
+                "同じコマンドを `ritsu dandori` で走らせます（`ritsu dandori check flow.flow`）。規則、日付のファイル、帳簿を同じプロセスの中で読みます。",
+                "Run the same command as `ritsu dandori` (`ritsu dandori check flow.flow`), which reads the rules, the dates files and the books in the same process."
             ),
             Repro::File { body: "workflow w v1\n\nuse rule door from \"door.rule\"\n\nflow\n  pass\n", beside: &[DOOR] },
             &["E005"],
@@ -218,7 +218,7 @@ pub fn ledger() -> Ledger {
         Entry::new(
             "E021",
             tr!("どの状態でも拒否されるイベントを送っています", "An event sent that every state refuses"),
-            tr!("案件がその場所でとりうるどの状態でも、ステートマシンが拒否するイベントを送るとき。", "An event sent that the machine refuses in every state the case can be in at that point."),
+            tr!("案件がその場所でとりうるどの状態でも、ステートマシンが拒否するイベントを送るとき。帳簿の仮押さえなら、帳簿がどの状態でも断る操作。", "An event sent that the machine refuses in every state the case can be in at that point; for a book's hold, an operation the book refuses in every one."),
             tr!("送るイベントか送る場所を直します。メッセージが、その場所での案件の状態を言います。", "Correct the event, or where it is sent; the message says the states the case can be in there."),
             Repro::File { body: "workflow w v1\n\nuse rule door from \"door.rule\"\n\nrecord Door\n  id    : string\n  state : door.state\n\ntask open_door(id: string) -> Door\n  starts door.door\n  key\n\ntask reopen(id: string) -> Door\n  sends open_it\n\ncase d : Door follows door.door\n  refused when accepted = false\n\nflow\n  d <- open_door(id: \"x\")\n  d <- reopen(id: \"x\")\n", beside: &[DOOR] },
             &["E022"],
@@ -226,8 +226,8 @@ pub fn ledger() -> Ledger {
         Entry::new(
             "E022",
             tr!("拒否されうるイベントの拒否を処理していません", "An event that can be refused, with nothing to handle the refusal"),
-            tr!("案件がその場所でとりうる状態のどれかでステートマシンが拒否するイベントを送るのに、拒否されたときの処理が無いとき。拒否はタスクの `refused as <エラー>` で宣言したエラーとして返ってきます。", "An event sent that the machine refuses in some state the case can be in there, with nothing to handle the refusal; a refusal comes back as the error the task's `refused as <error>` declares."),
-            tr!("タスクに `refused as <エラー>` を書き、呼び出しの下に `on <エラー> =>` を書くか、案件の状態を `match` で見てから送ります。", "Write `refused as <error>` on the task, and `on <error> =>` under the call; or look at the case's state with `match` before sending it."),
+            tr!("案件がその場所でとりうる状態のどれかでステートマシンが拒否するイベントを送るのに、拒否されたときの処理が無いとき。拒否はタスクの `refused as <エラー>` で宣言したエラーとして返ってきます。帳簿の仮押さえでは、帳簿が断る理由そのものがエラーです（仮押さえは外で期限が切れるので、押さえたあとの post と void は `expired` で断られることがあります）。", "An event sent that the machine refuses in some state the case can be in there, with nothing to handle the refusal; a refusal comes back as the error the task's `refused as <error>` declares. For a book's hold, the error is the reason the book refuses with (a hold expires on its own, so a post or a void after a hold may be refused with `expired`)."),
+            tr!("タスクに `refused as <エラー>` を書き、呼び出しの下に `on <エラー> =>` を書くか、案件の状態を `match` で見てから送ります。帳簿の操作なら、理由を `errors` に書き、`on <理由> =>` を書きます。", "Write `refused as <error>` on the task, and `on <error> =>` under the call; or look at the case's state with `match` before sending it. For a book's operation, declare the reason in `errors`, and write `on <reason> =>`."),
             Repro::File { body: "workflow w v1\n\nuse rule door from \"door.rule\"\n\nrecord Door\n  id    : string\n  state : door.state\n\ninputs\n  hurry : bool\n\ntask open_door(id: string) -> Door\n  starts door.door\n  key\n\ntask shut(id: string) -> Door\n  sends shut_it\n\ncase d : Door follows door.door\n  refused when accepted = false\n\nflow\n  d <- open_door(id: \"x\")\n  match hurry\n    true => d <- shut(id: \"x\")\n    false => pass\n  d <- shut(id: \"x\")\n", beside: &[DOOR] },
             &["E021", "W102"],
         ),
@@ -260,8 +260,8 @@ pub fn ledger() -> Ledger {
             "E050",
             tr!("プラットフォームに要るものが無いか、できないことです", "What the platform needs is missing, or it cannot do it"),
             tr!(
-                "`dandori build` が出します。Step Functions では、呼び出し方か `connection`、ネストした実行が宣言するエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送信先。Temporal 以外では、`on cancel`、`event` のタスク、実装するサービスの、実行がいまどこにいるかを聞くメソッド。Step Functions と Lambda durable functions では、呼ばれる規則の `lambda` か `connect`。Lambda durable functions では、invoke する関数の `timeout`。Argo では、呼び出し方か `image`、`workflow template` が宣言するエラー、`callback` のタスクの `retry`。",
-                "From `dandori build`. On Step Functions, a way of calling or a `connection`, a nested execution's declared errors, a `timeout` over 60 seconds on `http`, `agent` and `jev`, a destination that is not HTTPS; off Temporal, `on cancel`, `event` tasks, and a method of the service the workflow implements that asks where a run is; on Step Functions and Lambda durable functions, a called rule's `lambda` or `connect`; on Lambda durable functions, a `timeout` on a function it invokes; on Argo, a way of calling or an `image`, a `workflow template`'s declared errors, `retry` on a `callback` task."
+                "`dandori build` が出します。Step Functions では、呼び出し方か `connection`、ネストした実行が宣言するエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送信先。Temporal 以外では、`on cancel`、`event` のタスク、実装するサービスの、実行がいまどこにいるかを聞くメソッド。Step Functions と Lambda durable functions では、呼ばれる規則の `lambda` か `connect` と、呼ばれる日付の `lambda`。Step Functions では、帳簿の `lambda`。Lambda durable functions では、invoke する関数の `timeout`。Argo では、呼び出し方か `image`、`workflow template` が宣言するエラー、`callback` のタスクの `retry`。",
+                "From `dandori build`. On Step Functions, a way of calling or a `connection`, a nested execution's declared errors, a `timeout` over 60 seconds on `http`, `agent` and `jev`, a destination that is not HTTPS; off Temporal, `on cancel`, `event` tasks, and a method of the service the workflow implements that asks where a run is; on Step Functions and Lambda durable functions, a called rule's `lambda` or `connect`, and a called date's `lambda`; on Step Functions, a book's `lambda`; on Lambda durable functions, a `timeout` on a function it invokes; on Argo, a way of calling or an `image`, a `workflow template`'s declared errors, `retry` on a `callback` task."
             ),
             tr!("メッセージが言うものを書き足すか、そのプラットフォームにできる書き方にします。", "Add what the message says the platform needs, or write it in a way the platform can do."),
             "workflow w v1\n\nflow\n  pass\n\non cancel\n  pass\n",

@@ -32,7 +32,7 @@ page() {
       "$1" | cat -s > "$2"
 }
 
-for p in tour tasks services agents jev checks diagrams platforms examples design; do
+for p in tour tasks services agents jev dates-and-books checks diagrams platforms examples design; do
   page "$docs/$p.md" "$out/$p.md"
 done
 page "$docs/reference/commands.md" "$out/commands.md"

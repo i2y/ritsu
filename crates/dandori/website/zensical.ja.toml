@@ -24,6 +24,7 @@ nav = [
   { "サービスを実装する" = "services.md" },
   { "エージェント" = "agents.md" },
   { Jev = "jev.md" },
+  { "日付と帳簿" = "dates-and-books.md" },
   { "何を検査するか" = "checks.md" },
   { "ワークフローを図にする" = "diagrams.md" },
   { "プラットフォーム別のビルド" = "platforms.md" },

@@ -204,6 +204,32 @@ flow handles. How sure is enough for what can be a rule's table.
 <div class="dd-row dd-row--flip" markdown>
 <div markdown>
 
+```flow
+task reserve(order: string, sku: string, qty: int) -> stock.reserve
+  book stock.reserve.hold
+  starts stock.reserve
+  errors out_of_stock
+…
+  let due = terms.payment(received: now)
+  wait until due.at
+```
+
+</div>
+<div markdown>
+
+### Due dates counted, stock held
+
+A due date can be a date of koyomi's, which counts business days and is checked on every day of its
+range, and stock can be a book of chobo's, whose bounds hold in every write. A workflow calls a date
+as it calls a rule, and holds, posts and voids stock as tasks. A hold is a case, and the checker
+counts that it may expire before it is posted. [Dates and books](dates-and-books.md)
+
+</div>
+</div>
+
+<div class="dd-row" markdown>
+<div markdown>
+
 ```text
 dandori doc hotel.flow > hotel.md
 dandori doc hotel.flow --format html > hotel.html

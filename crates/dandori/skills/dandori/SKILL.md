@@ -1,7 +1,7 @@
 ---
 name: dandori
-description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents, TypeSafe's Jev and code of your own, checked before they run and built for Temporal (TypeScript, Python or Go), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W032, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
-compatibility: Requires the `dandori` binary on PATH (`cargo install --path .` in a clone of https://github.com/i2y/dandori). A workflow that uses rules (`use rule`) also needs `rulec` (`brew install i2y/tap/rulec`).
+description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents, TypeSafe's Jev, koyomi's dates, chobo's books and code of your own, checked before they run and built for Temporal (TypeScript, Python or Go), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W032, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
+compatibility: Requires the `dandori` binary on PATH (`cargo install --path .` in a clone of https://github.com/i2y/dandori). A workflow that uses rules (`use rule`) also needs `rulec` (`brew install i2y/tap/rulec`); one that uses dates (`use dates`) or books (`use book`) runs as `ritsu dandori`, which reads them with koyomi and chobo.
 license: MIT OR Apache-2.0
 ---
 
@@ -37,9 +37,9 @@ people:
 
 Everything is reachable from the command line: `dandori --help` lists the commands, and
 `dandori check --format json` gives the diagnostics as data (§5). There is no step where you have
-to read dandori's source. For a workflow that uses rules, run every command as `ritsu dandori
-<command>` (`ritsu dandori check …`): it reads the rules in the same process, and the `dandori`
-binary alone says to run it that way (E005).
+to read dandori's source. For a workflow that uses rules, dates files or books, run every command
+as `ritsu dandori <command>` (`ritsu dandori check …`): it reads them in the same process, and the
+`dandori` binary alone says to run it that way (E018).
 
 ## 1. The loop
 
@@ -159,18 +159,24 @@ use rule <name> from "<file.rule>"        a rulec rule, read by rulec; under it,
                                           input or an output that may be none (T?)
 use openapi|smithy|proto <name> from "<file>"   an API description; under it, url "<base>"
                                           (a proto needs one to `connect` to it)
+use dates <name> from "<file.cal>"        a dates file of koyomi's; each date is called like a
+                                          rule, <name>.<date>(<input>: …), and answers {day, at};
+                                          under it, lambda "<function>" and local, as for a rule
+use book <name> from "<file.book>"        a book of chobo's, whose transfers tasks run operations
+                                          on; under it, lambda "<function>" (Step Functions)
 enum <Name> = <value> | <value> | …
 record <Name>                             then one field a line, <name> : <type>
 inputs, outputs                           the same, for what a run takes and gives back
 task <name>(<param>: <type>, …) [-> <type>]
 case <name> : <Record> follows <rule>.<machine>
+case <name> : <book>.<transfer> follows <book>.<transfer>    a hold of a book, as a case
 flow                                      the steps
 on failure                                runs when a task fails and nothing handled it, then the
                                           run fails with the same error
 on cancel                                 runs when the workflow is cancelled (Temporal only)
 ```
 
-The types are `int`, `string`, `bool`, `timestamp`, `json` (passed along without being looked
+The types are `int`, `string`, `bool`, `timestamp`, `date` (a day, `YYYY-MM-DD`), `json` (passed along without being looked
 into; an input or a field that is not there reads as null), `list[T]`, `T?` (a value that may be absent), numbers with a unit as rulec has them
 (`money[JPY, incl_tax]`, `duration[h]`), a rule's enums and records (`hold.room`), a message or an
 enum of a `.proto` read by `use proto` (`warehouse.ReserveResponse`), and the file's own. A number
@@ -188,6 +194,8 @@ how it is called: one of these, or none for a task you write
   connect <api> "<Service>/<Method>"                 aws <service>:<action>
   lambda "<function>"                                agent "<instructions>"  |  agent claude "<instructions>"
   jev "<question>"  |  jev score "<question>"  |  jev   (TypeSafe's Jev; see below)
+  book <book>.<transfer>.do|hold|post|void           an operation of a book's transfer (no key: the
+                                                     book's own key makes it happen once)
   event                                              a value sent to the workflow by name (Temporal)
 a child workflow
   flow "<child.flow>"          a .flow of its own, held to this task (E015); Step Functions and
@@ -259,7 +267,11 @@ case pi : PaymentIntent follows payment_intent.payment
 ```
 
 `held` fixes a value the machine's table reads, for this case. `external` names the events that
-happen on the other system's side by themselves; the checker follows them too. `refused when`
+happen on the other system's side by themselves; the checker follows them too. A hold of a book
+follows the machine the book gives it (held, then posted, voided or expired): the task that holds
+`starts` it, the ones that post and void `sends post` and `sends void`, its `expire` is counted
+without `external`, and the reasons the book refuses with are the tasks' errors, so it takes no
+`refused when`; [dates-and-books.md](dates-and-books.md) has the whole of it. `refused when`
 says which output of the machine means an event was refused. `state <field>` names the record's
 field that holds the state, when more than one field has the state's type. When the workflow
 ends, every case it started must be in a final state (E020), unless `fail … leaving <case>` hands
@@ -285,7 +297,8 @@ pass
 Every value a `match` can meet needs an arm, and there is no default arm (E010): a value no arm
 names fails the run with `Dandori.UnexpectedValue`. The expressions are names and their fields
 (`booking.room`), literals, records (`{order_id: order.id, reservations: results}`), lists,
-`none`, and strings with values put in (`"Order {order.id}"`); nothing compares, adds or combines
+`none`, `now` (the time the statement runs at, a `timestamp`), and strings with values put in
+(`"Order {order.id}"`); nothing compares, adds or combines
 conditions. The rounds of a parallel `for` keep their own variables; when one fails, the others
 still run to their end, and the first failure in the list's order decides. From the fulfillment
 of an order:
@@ -346,7 +359,7 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 
 | Code | What it finds | The usual fix |
 |---|---|---|
-| E001 to E006 | syntax, names, types, arguments, rules rulec could not read, a name declared twice | what the message says |
+| E001 to E006 | syntax, names, types, arguments, rules, dates files or books that could not be read, a name declared twice | what the message says; a time given to a date whose calendar says no UTC offset is E003 |
 | E007 | the clauses of a task that do not go together | the message names the clause |
 | E008 | a case declared wrongly, or a task doing to a case what it cannot | follow the machine's table |
 | E009 | a statement where it cannot be | `yield` last in its `for`; no `break`, `succeed` or call on a case inside a parallel round |
@@ -356,10 +369,10 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | E013 | a task on a case not started yet, or a case started twice | start it first, once |
 | E014, W104 | a value that can be outside a range, or whose range is unknown | say the range where the value comes from (the input, the task's answer) |
 | E015 | a task that does not fit the child `.flow` it runs | match the child's inputs, outputs and `fail`s |
-| E016 | a task that does not fit its API's description | follow it: `T?` for what the answer may leave out, every value of an enum; or use the `.proto`'s messages as the types |
+| E016 | a task that does not fit its API's description, or the book's transfer it runs | follow it: `T?` for what the answer may leave out, every value of an enum; or use the `.proto`'s messages as the types; for a book, the transfer's parameters by name, the hold as the answer, only reasons the book refuses with |
 | E017 | a workflow that does not fit the service it implements | follow the service: the inputs and outputs by their JSON names, every `fail` in `fails`, the events and callbacks it names; one of dandori's options on each method |
 | E020 | a case the workflow can leave in a state that is not final | settle it before the end, or `fail … leaving <case>` |
-| E021, E022 | an event refused in every state; a refusal no handler takes | do not send it there; handle the `refused as` error |
+| E021, E022 | an event refused in every state; a refusal no handler takes | do not send it there; handle the `refused as` error, or for a book, declare the reason in `errors` and handle it (a hold may have expired) |
 | E030, W030 | a call that changes something, retried without `key` | `key`, or `idempotent` if twice is the same as once |
 | E031 | what an Express workflow cannot do | `kind standard`, or less |
 | E040 | a run that can outgrow the platform's history | lower the loop bounds; on Temporal, a loop at the top of the flow goes on in a new run |
@@ -397,13 +410,13 @@ checker looks at.
 | `temporal` | the workflow, activities, a worker and a client, in TypeScript | the main platform; the only one with `on cancel`, `event` and a service's `status` |
 | `temporal-python` | the same with Temporal's Python SDK | named as in TypeScript, so a worker in one language can serve another |
 | `temporal-go` | the same with Temporal's Go SDK, as one package | values are JSON values (`map[string]any`); your tasks implement `OwnTasks`; Go 1.26 |
-| `asl` | an ASL state machine with JSONata, and a Lambda handler for every rule called by `lambda` | no code of your own (every task needs a way of calling); `http`, `agent`, `jev` and a rule at its `connect` need `connection` |
+| `asl` | an ASL state machine with JSONata, and a Lambda handler for every rule and date called by `lambda`, and for every book | no code of your own (every task needs a way of calling); `http`, `agent`, `jev` and a rule at its `connect` need `connection` |
 | `durable` | a Lambda durable function in TypeScript | a task of your own is a step |
 | `argo` | a WorkflowTemplate and the caller image | a task of your own is a container of its `image` |
 | `pydantic-graph` | a graph in Python | runs in your own process, and keeps nothing when it stops |
 
-[platforms.md](platforms.md) has the details, and [examples.md](examples.md) the five examples, each
-written for Temporal, for AWS and for pydantic-graph.
+[platforms.md](platforms.md) has the details, and [examples.md](examples.md) the six examples: five
+written for Temporal, for AWS and for pydantic-graph, and one that runs as it is on every platform.
 
 ## 7. The files bundled with this skill
 
@@ -414,12 +427,13 @@ written for Temporal, for AWS and for pydantic-graph.
 | [services.md](services.md) | a workflow whose entry is a proto service: dandori's options, what is held to the service, clients in other languages |
 | [agents.md](agents.md) | agent tasks: typed answers, OpenAI, Open Responses, Claude |
 | [jev.md](jev.md) | Jev tasks: the answer type as the question, confidence, rates for a rule |
+| [dates-and-books.md](dates-and-books.md) | koyomi's dates and chobo's books: calling a date, `now`, a book's operations, a hold as a case, what each platform writes |
 | [checks.md](checks.md) | what the checker looks at, with a diagnostic |
 | [codes.md](codes.md) | every diagnostic code and what it finds |
 | [diagrams.md](diagrams.md) | `dandori doc`: the workflow drawn for the person who reviews it |
 | [commands.md](commands.md) | the commands, the flags, the exit codes |
 | [platforms.md](platforms.md) | what each target writes and how it runs |
-| [examples.md](examples.md) | the five examples and how their versions differ |
+| [examples.md](examples.md) | the six examples and how their versions differ |
 | [design.md](design.md) | the six principles the language keeps |
 
 They are copies of the pages of <https://i2y.github.io/dandori/>, which has them in Japanese too.

@@ -38,7 +38,8 @@ fn with_rules<R>(f: impl FnOnce() -> R) -> R {
         static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::new());
     }
     let rules: std::rc::Rc<dyn ritsu_ports::Rules> = RULEC.with(|r| r.clone());
-    dandori::sources::with_rules(rules, f)
+    // the dates files and the books through koyomi's and chobo's answers, as a program that joins them reads them
+    dandori::sources::with_ports(rules, std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), f)
 }
 
 /// `dandori::check::drawable`, with the rules read through rulec.
@@ -63,13 +64,27 @@ fn dump_dom(chrome: &Path, url: &str) -> String {
     ritsu_testkit::chrome::dump_dom(chrome, url, 20_000, Duration::from_secs(120))
 }
 
-/// The flows `doc` is held to: each example as written for Temporal and the child flow beside them,
+/// The examples the site draws, in the order it lists them.
+const EXAMPLES: [&str; 6] = ["fulfillment", "hotel", "inquiry", "order", "review", "invoice"];
+
+/// An example as the site draws it: as written for Temporal, or as it is written for every
+/// platform when it has no versions (invoice); `lang` is "" or ".ja".
+fn example(ex: &str, lang: &str) -> PathBuf {
+    let temporal = root().join(format!("examples/{ex}/temporal/{ex}{lang}.flow"));
+    if temporal.exists() {
+        temporal
+    } else {
+        root().join(format!("examples/{ex}/{ex}{lang}.flow"))
+    }
+}
+
+/// The flows `doc` is held to: each example as the site draws it and the child flow beside them,
 /// in English and in Japanese, the flows of tests/flows, and a first draft whose check finds errors.
 fn flows() -> Vec<PathBuf> {
     let mut out = Vec::new();
     for lang in ["", ".ja"] {
-        for ex in ["fulfillment", "hotel", "inquiry", "order", "review"] {
-            out.push(root().join(format!("examples/{ex}/temporal/{ex}{lang}.flow")));
+        for ex in EXAMPLES {
+            out.push(example(ex, lang));
         }
         out.push(root().join(format!("examples/fulfillment/arrange_delivery{lang}.flow")));
     }
@@ -117,10 +132,10 @@ fn markdown_matches_the_golden_files() {
 #[test]
 fn the_site_shows_the_pages_doc_writes_now() {
     let mut wrong = Vec::new();
-    for ex in ["fulfillment", "hotel", "inquiry", "order", "review"] {
+    for ex in EXAMPLES {
         // the Japanese site draws the Japanese version of each example
         for (lang, dir, version) in [(Lang::En, "website/docs/doc", ""), (Lang::Ja, "website/docs-ja/doc", ".ja")] {
-            let f = root().join(format!("examples/{ex}/temporal/{ex}{version}.flow"));
+            let f = example(ex, version);
             let page = written(&f, lang, true);
             let at = root().join(format!("{dir}/{ex}.html"));
             if ritsu_testkit::golden::check(&at, &page).is_err() {

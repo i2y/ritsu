@@ -102,6 +102,8 @@ HTTP には `net/http`、Lambda と AWS の API には AWS SDK for Go v2、OpenA
 
 `--target pydantic-graph` は、`graph.py`（`graph` と、その `State` と `Deps`）、`types.py`、`tasks.py`（`make_tasks(own, transport)`）、`io.py`、`rules.py`、`runtime.py` を持つパッケージを書き出します。文の一つ一つがノードで、各ノードの戻り値の型に次のノードが書いてあるので、`graph.render()` でフローの図を描けます。実行の状態は、それを動かすプロセスの中にしかありません。待つときは `Deps.clock` で眠り、コールバックへの応答は `Deps.callbacks` に届きます。pydantic-graph 2.x は実行の状態をどこにも残さないので、プロセスが落ちればその実行も失われます。試作や、エージェントの中の短いフローに向いています。
 
+日付のファイルの日付と帳簿の操作は、どのプラットフォーム向けにもビルドできます。日付は規則と同じ呼び出しになり、帳簿の操作は、Step Functions では Lambda 関数、ほかでは渡された chobo のクライアントを `Transport` を通して呼ぶものになります。Step Functions と Lambda durable functions では呼ぶ日付の `lambda` が、Step Functions では帳簿の `lambda` が要ります（E050）。プラットフォームごとに何を書き出し、横に何を置くかは、[日付と帳簿](dates-and-books.md)にあります。
+
 Lambda durable functions、Argo Workflows、pydantic-graph も、`event` のタスクと、サービスの、実行がいまどこにいるかを聞くメソッドはエラーにします（E050）。サービスを実装するワークフローは、どのプラットフォームでも、入力と、サービスのメソッドが送ってくるコールバックの応答に、protobuf の JSON が省いたゼロ値を埋めてから読みます。
 
 ## シナリオと参照インタプリタ

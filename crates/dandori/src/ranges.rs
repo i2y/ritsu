@@ -216,7 +216,7 @@ fn estimate(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr) -> Est {
             let rd = &m.records[r];
             let from = match &rd.origin {
                 RecordOrigin::RuleOutputs(ix) => tr!("規則 `{}` の出力 `{f}`", "the output `{f}` of the rule `{}`", m.rules[*ix].name),
-                RecordOrigin::Local | RecordOrigin::Proto { .. } => tr!("`{}` のフィールド `{f}`", "the field `{f}` of `{}`", rd.name),
+                RecordOrigin::Local | RecordOrigin::Proto { .. } | RecordOrigin::Hold { .. } => tr!("`{}` のフィールド `{f}`", "the field `{f}` of `{}`", rd.name),
             };
             Est::or(m.field_range(r, f), from)
         }

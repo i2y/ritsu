@@ -1,0 +1,17 @@
+dates 出荷の期限(shipping_dates) v1
+description "出荷日は起点に日数を足した日で、休みなら次の営業日。締め日は 20 日締め"
+use calendar "../calendars/平日.cal"
+
+inputs
+  起点(origin)    : date  range >=2026-04-01 <=2026-06-30
+  日数(day_count) : int   range >=1 <=7
+
+date 出荷日(ship_on) = 起点
+  + 日数 days
+  roll following
+
+date 締め日(closing) = 起点
+  close day 20
+
+claims
+  出荷日は営業日 : 出荷日 is open

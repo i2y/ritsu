@@ -1,0 +1,77 @@
+workflow 出荷の段取り v1
+description "koyomi の日付と chobo の帳簿を試す：入荷をすぐに確定し（do）、注文の数を押さえ（hold）、押さえた分の一部を出荷で確定する（数を渡す post）。日付は一つのファイルの二つ（どちらも時刻が無く、一つは整数の入力も取る）をローカルアクティビティで呼び、起点にはタスクが返した日付と now を渡す。now は文字列の中にも書き、日付をタスクに渡す。どのプラットフォームでも動く"
+
+use dates 期限 from "dates/出荷の期限.cal"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:shipping-dates"
+  local
+use book 倉庫 from "books/倉庫.book"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:warehouse"
+
+record 注文
+  id     : string
+  sku    : string
+  数     : int  range >=1 <=50
+  出す数 : int  range >=1 <=50
+  日数   : int  range >=1 <=7
+
+record 予定
+  出荷日 : date
+
+inputs
+  受注 : 注文
+  便   : string
+
+outputs
+  出した数 : int
+  出荷日   : date?
+  締め日   : date?
+
+task 入荷する(便: string, sku: string, 数: int)
+  book 倉庫.入荷.do
+
+task 引き当てる(注文: string, sku: string, 数: int) -> 倉庫.引当
+  book 倉庫.引当.hold
+  starts 倉庫.引当
+  errors 足りない
+
+# 押さえた分のうち、出す数だけを確定する（数を渡す post）。残りは棚に戻る。
+task 一部を出す(注文: string, sku: string, 数: int) -> 倉庫.引当
+  book 倉庫.引当.post
+  sends post
+  errors expired
+
+task 戻す(注文: string, sku: string) -> 倉庫.引当
+  book 倉庫.引当.void
+  sends void
+  errors expired
+
+task 予定を聞く(注文: string, 受付: string) -> 予定
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:schedule"
+  idempotent
+
+task 知らせる(注文: string, 出荷日: date, 締め日: date, 文: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:notify"
+  idempotent
+
+case 押さえ : 倉庫.引当 follows 倉庫.引当
+
+flow
+  入荷する(便: 便, sku: 受注.sku, 数: 受注.数)
+  押さえ <- 引き当てる(注文: 受注.id, sku: 受注.sku, 数: 受注.数)
+    on 足りない => succeed 出した数 = 0, 出荷日 = none, 締め日 = none
+  let 予定 = 予定を聞く(注文: 受注.id, 受付: "受付 {now}")
+  let 出荷 = 期限.出荷日(起点: 予定.出荷日, 日数: 受注.日数)
+  let 締め = 期限.締め日(起点: now)
+  押さえ <- 一部を出す(注文: 受注.id, sku: 受注.sku, 数: 受注.出す数)
+    on expired => succeed 出した数 = 0, 出荷日 = none, 締め日 = 締め.day
+  知らせる(注文: 受注.id, 出荷日: 出荷.day, 締め日: 締め.day, 文: "{受注.id} は {出荷.day} に出荷")
+  succeed 出した数 = 受注.出す数, 出荷日 = 出荷.day, 締め日 = 締め.day
+
+on failure
+  match 押さえ.state
+    none => pass
+    held =>
+      押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+        on expired => pass
+        on failure => fail 戻せない "押さえた品を戻せませんでした" leaving 押さえ
+    posted, expired => pass

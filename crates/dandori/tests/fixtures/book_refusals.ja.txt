@@ -1,0 +1,24 @@
+エラー[E022]: tests/fixtures/book_refusals.flow:41:1: ここでは帳簿が `post` を `expired` で断ることがあります（`押さえ` が expired のとき）。`出荷する` の `errors` に `expired` を書き、`on expired =>` で処理してください
+    41 |       押さえ <- 出荷する(注文: 受注.id, sku: 受注.sku)
+  そうなる例:
+      38  引き当てる: 押さえ が held で始まる
+      40  match 受注.急ぎ: true
+          外部のサービスで `expire` が起きる: 押さえ held → expired
+エラー[E022]: tests/fixtures/book_refusals.flow:43:1: ここでは帳簿が `post` を `expired` で断ることがあります（`押さえ` が expired のとき）。`on expired =>` で処理してください
+    43 |       押さえ <- 一部を出す(注文: 受注.id, sku: 受注.sku, 数: 受注.数)
+  そうなる例:
+      38  引き当てる: 押さえ が held で始まる
+      42  match 受注.急ぎ: false
+          外部のサービスで `expire` が起きる: 押さえ held → expired
+エラー[E021]: tests/fixtures/book_refusals.flow:44:1: ここで `押さえ` は posted のどれかで、帳簿はどの状態でも `void` を断ります
+    44 |   押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+  そうなる例:
+      38  引き当てる: 押さえ が held で始まる
+      40  match 受注.急ぎ: true
+      41  出荷する: 押さえ が held → posted
+エラー[E022]: tests/fixtures/book_refusals.flow:44:1: ここでは帳簿が `void` を `already_posted` で断ることがあります（`押さえ` が posted のとき）。`戻す` の `errors` に `already_posted` を書き、`on already_posted =>` で処理してください
+    44 |   押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+  そうなる例:
+      38  引き当てる: 押さえ が held で始まる
+      40  match 受注.急ぎ: true
+      41  出荷する: 押さえ が held → posted

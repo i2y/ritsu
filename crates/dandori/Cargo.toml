@@ -23,3 +23,7 @@ ritsu-testkit = { path = "../ritsu-testkit" }
 # The tests read the rules through rulec's own answer to the port, as `ritsu dandori` does
 # (ritsu's DESIGN 3.3): a test may hold the crate that answers, the library never does.
 rulec = { path = "../rulec" }
+# and the dates files and the books through koyomi's and chobo's answers to their ports, as a program
+# that joins them hands them over
+koyomi = { path = "../koyomi" }
+chobo = { path = "../chobo" }

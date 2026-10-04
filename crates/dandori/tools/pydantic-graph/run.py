@@ -163,6 +163,12 @@ def main() -> None:
         text = re.sub(r"dd\.at_a_time\(\d+\)", "dd.at_a_time(1)", f.read())
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
+    # the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
+    path = os.path.join(copy, "runtime.py")
+    with open(path, encoding="utf-8") as f:
+        text = f.read().replace('return clock.now().astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")', 'return "2026-03-31T15:30:00Z"')
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
     sys.path.insert(0, work)
     try:
         results = asyncio.run(run_all(package, spec))

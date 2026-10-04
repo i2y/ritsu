@@ -167,12 +167,31 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 }
             }
             (None, Some(_)) => {}
+            (None, None) if ru.date().is_some() => errs.push(Diag::error(
+                "E050",
+                ru.line,
+                1,
+                tr!("日付 `{}` は呼ばれているので、`use dates` の下に、それを計算する Lambda 関数を `lambda \"<関数>\"` と書いてください", "the date `{}` is called, so it needs `lambda \"<function>\"` under `use dates`, the Lambda function that computes it", ru.name),
+            )),
             (None, None) => errs.push(Diag::error(
                 "E050",
                 ru.line,
                 1,
                 tr!("規則 `{}` は呼ばれているので、`use rule` の下に `lambda \"<関数>\"` か `connect \"<URL>\"` が要ります", "the rule `{}` is called, so it needs `lambda \"<function>\"` or `connect \"<url>\"` under `use rule`", ru.name),
             )),
+        }
+    }
+    // a book's operations run in the book's Lambda function, with chobo's Python client
+    let books = used_books(m);
+    for b in &books {
+        let bu = &m.books[*b];
+        if bu.lambda.is_none() {
+            errs.push(Diag::error(
+                "E050",
+                bu.line,
+                1,
+                tr!("Step Functions は帳簿 `{}` の操作を Lambda 関数で行うので、`use book` の下に `lambda \"<関数>\"` が要ります", "Step Functions runs the operations of the book `{}` in a Lambda function, so it needs `lambda \"<function>\"` under `use book`", bu.name),
+            ));
         }
     }
     if !errs.is_empty() {
@@ -257,7 +276,15 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     for r in called.into_iter().filter(|r| m.rules[*r].connect.is_none()) {
         files.push(lambda_handler(m, r));
     }
+    for b in books {
+        files.push(book_handler(m, b));
+    }
     Ok(files)
+}
+
+/// The books whose operations the tasks run, by their place in the model.
+pub fn used_books(m: &Model) -> BTreeSet<usize> {
+    m.tasks.iter().filter_map(|t| t.book().map(|b| b.book)).collect()
 }
 
 /// Every variable some parallel round keeps for itself.
@@ -809,6 +836,38 @@ impl<'a> Gen<'a> {
                         w.insert("RequestBody".into(), render::jev_request(j, Value::Object(state)));
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), jev_answer(j), task.timeout, retry)
                     }
+                    // the book's Lambda function runs the operation, and answers the hold, or fails with the reason
+                    Via::Book(b) => {
+                        let mut a = Map::new();
+                        let mut am = Map::new();
+                        let amounts: Vec<String> = m.books[b.book].transfer(&b.transfer).map(|t| t.params.iter().filter(|p| p.unit.is_some()).map(|p| p.name.clone()).collect()).unwrap_or_default();
+                        for (p, _) in &task.params {
+                            if let Some((_, e)) = args.iter().find(|(x, _)| x == p) {
+                                if b.op == "post" && amounts.contains(p) {
+                                    am.insert(p.clone(), arg_value(e));
+                                } else {
+                                    a.insert(p.clone(), arg_value(e));
+                                }
+                            }
+                        }
+                        let mut call = json!({ "transfer": b.transfer, "op": b.op, "args": a });
+                        if !am.is_empty() {
+                            call["amounts"] = Value::Object(am);
+                        }
+                        let f = m.books[b.book].lambda.clone().unwrap_or_default();
+                        // what the task answers when the book has done it: the hold, made of the arguments of its key and its state
+                        let state = match b.op.as_str() {
+                            "hold" => "held",
+                            "post" => "posted",
+                            _ => "voided",
+                        };
+                        let keys: Vec<String> = m.books[b.book]
+                            .transfer(&b.transfer)
+                            .map(|t| t.params.iter().filter(|p| t.key.contains(&p.name)).filter_map(|p| args.iter().find(|(x, _)| *x == p.name).map(|(_, e)| format!("{}: {}", jsonata_string(&p.name), jsonata_expr(e)))).collect())
+                            .unwrap_or_default();
+                        let hold = format!("{{{}, \"state\": {}}}", keys.join(", "), jsonata_string(state));
+                        ("arn:aws:states:::lambda:invoke".to_string(), json!({ "FunctionName": f, "Payload": call }), hold, task.timeout, retry)
+                    }
                     Via::Workflow(_) | Via::DurableFunction(_) | Via::Own | Via::Image(_) | Via::ArgoTemplate(_) | Via::Event => unreachable!("not a way Step Functions calls"),
                 }
             }
@@ -1135,6 +1194,9 @@ pub const AROUND_RULE: &[&str] = &["handler", "event", "context", "out", "bool",
 /// Python rulec generated, JSON out.
 pub fn lambda_handler(m: &Model, r: usize) -> (String, String) {
     let ru = &m.rules[r];
+    if let Some(d) = ru.date() {
+        return date_handler(m, ru, d);
+    }
     let py = &ru.info.python;
     let module = py.module.as_str();
     let function = py.function.as_str();
@@ -1187,4 +1249,114 @@ pub fn lambda_handler(m: &Model, r: usize) -> (String, String) {
 
 fn py_str(s: &str) -> String {
     serde_json::to_string(s).unwrap()
+}
+
+/// How the code dandori writes in Python reads a day it hands koyomi's code: `YYYY-MM-DD` as it is,
+/// and a time (`…Z`) as the day it falls on in the calendar's offset (`offset`, minutes east).
+pub const PY_DAY: &str = r#"
+def _day(v: str, offset: int) -> datetime.date:
+    """A day of the calendar: `YYYY-MM-DD` as it is, or a time (`…Z`) as the day it falls on at
+    the calendar's offset (minutes east of UTC)."""
+    if len(v) > 10:
+        t = datetime.datetime.strptime(v[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+        return (t + datetime.timedelta(minutes=offset)).date()
+    return datetime.date.fromisoformat(v)
+"#;
+
+/// What koyomi's Python is called with for a date, from the arguments as JSON (`event`): each
+/// input of the date, a day read by `_day`, a whole number as `int`.
+pub fn date_py_args(d: &DateCall, get: impl Fn(&str) -> String) -> Vec<String> {
+    let offset = d.offset.unwrap_or(0);
+    d.params.iter().map(|(n, _, day)| if *day { format!("_day({}, {offset})", get(n)) } else { format!("int({})", get(n)) }).collect()
+}
+
+/// The Lambda function the state machine and the durable function invoke for a date of a dates
+/// file: koyomi's Python for the date, which `koyomi gen` writes, called with the arguments.
+fn date_handler(m: &Model, ru: &RuleUse, d: &DateCall) -> (String, String) {
+    let module = &d.file_alias;
+    let f = &d.alias;
+    let args = date_py_args(d, |n| format!("event[{}]", py_str(n))).join(", ");
+    let sha = &ru.info.sha256[..12.min(ru.info.sha256.len())];
+    let mut text = String::new();
+    text.push_str(&format!("# Code generated by dandori from {}. DO NOT EDIT.\n", m.source_file));
+    text.push_str(&format!("# The Lambda function the state machine calls for the date {} of the dates file {} v{} (sha256:{sha}).\n", d.date, ru.info.rule, ru.info.version));
+    text.push_str(&format!("# Deploy it together with {module}.py, which `koyomi gen` writes for the file.\n\n"));
+    text.push_str("import datetime\n\n");
+    let imports = if d.at { format!("{f}, {f}_at") } else { f.clone() };
+    text.push_str(&format!("from {module} import {imports}\n\n"));
+    text.push_str(PY_DAY);
+    text.push_str("\n\ndef handler(event, context):\n");
+    text.push_str(&format!("    out = {{\"day\": {f}({args}).isoformat()}}\n"));
+    if d.at {
+        text.push_str(&format!("    out[\"at\"] = {f}_at({args})\n"));
+    }
+    text.push_str("    return out\n");
+    (format!("lambda/{module}_{f}_handler.py"), text)
+}
+
+/// The names chobo's Python client gives the transfers of a book and their parameters, as Python
+/// writes them: what the code dandori writes calls the client by.
+pub fn book_py_names(bu: &BookUse) -> String {
+    let mut rows = Vec::new();
+    for (t, c) in bu.facts.transfers.iter().zip(&bu.facts.python.transfers) {
+        let params: Vec<String> = t.params.iter().zip(&c.params).map(|(p, n)| format!("{}: {}", py_str(&p.name), py_str(n))).collect();
+        rows.push(format!("    {}: ({}, {{{}}}),", py_str(&t.name), py_str(&c.member), params.join(", ")));
+    }
+    format!("{{\n{}\n}}", rows.join("\n"))
+}
+
+/// How the Python dandori writes runs an operation of a book on chobo's client (`book`), by the
+/// transfer and the operation and the arguments as the book names them: the client's result,
+/// `{"result": "done" | "done_before" | "refused", "reason": …}`.
+pub const PY_BOOK_RUN: &str = r#"
+def _book_run(book: Any, names: dict, call: dict) -> dict:
+    """Run an operation of a book on chobo's client: `call` names the transfer, the operation
+    (do, hold, post or void), the arguments, and for a post of part of a hold the amounts, by
+    the book's names, which `names` gives as the client writes them."""
+    member, params = names[call["transfer"]]
+    t = getattr(book, member)
+    kw = {params[k]: v for k, v in call["args"].items()}
+    if call["op"] == "post" and call.get("amounts"):
+        kw.update({params[k]: v for k, v in call["amounts"].items()})
+    r = getattr(t, call["op"])(**kw)
+    out = {"result": r.result}
+    if r.reason is not None:
+        out["reason"] = r.reason
+    return out
+"#;
+
+/// The Lambda function the state machine invokes for the operations of a book: chobo's Python
+/// client runs one, and the function answers what the client answered (done, or done before), or
+/// fails with the reason the book refuses it with, which the state machine reads as the error's
+/// name. The state machine makes the hold of the arguments it sent.
+fn book_handler(m: &Model, b: usize) -> (String, String) {
+    let bu = &m.books[b];
+    let f = &bu.facts;
+    let module = &f.python.module;
+    let mut text = String::new();
+    text.push_str(&format!("# Code generated by dandori from {}. DO NOT EDIT.\n", m.source_file));
+    text.push_str(&format!("# The Lambda function the state machine calls for the operations of the book {} v{} (sha256:{}).\n", f.name, f.version, &f.sha256[..12.min(f.sha256.len())]));
+    text.push_str(&format!("# It runs them with the Python client `chobo build --target postgres-python` (or tigerbeetle-python) writes,\n# {module}.py: make the handler with the client's book, as\n#   handler = make_handler(lambda: tigerbeetle(ClientSync(cluster_id=0, replica_addresses=\"3000\")))\n\n"));
+    text.push_str("from typing import Any, Callable\n\n");
+    text.push_str(&format!("# each transfer: the member of the book value, and its parameters as the client takes them\nNAMES = {}\n", book_py_names(bu)));
+    text.push_str(PY_BOOK_RUN);
+    text.push_str(r#"
+
+def make_handler(book: Callable[[], Any]) -> Callable[[dict, Any], Any]:
+    """The handler, running the operations on the book `book()` makes (once, on the first call)."""
+    made: list = []
+
+    def handler(event: dict, context: Any) -> Any:
+        if not made:
+            made.append(book())
+        r = _book_run(made[0], NAMES, event)
+        if r["result"] == "refused":
+            # the error's type is the reason, which the state machine names the error by
+            raise type(r["reason"], (Exception,), {})(f"the book refuses {event['transfer']}.{event['op']}: {r['reason']}")
+        # done, now or before: the state machine makes the hold of its own arguments
+        return r
+
+    return handler
+"#);
+    (format!("lambda/book_{}_handler.py", crate::render::ident(&f.name)), text)
 }

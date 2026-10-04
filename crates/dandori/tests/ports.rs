@@ -100,6 +100,23 @@ fn a_flow_names_its_rules_apis_services_methods_and_children() {
     assert_eq!(ways("examples/inquiry/temporal/inquiry.flow"), ["use rule … local"]);
     // an OpenAPI document is a file
     assert!(show("examples/hotel/temporal/hotel.ja.flow").contains(&"6 file \"examples/hotel/specs/stripe.json\" [use openapi]".to_string()));
+    // a dates file is koyomi's, and a book chobo's, with each transfer a task runs an operation of
+    assert_eq!(
+        show("examples/invoice/invoice.flow"),
+        [
+            "7 koyomi \"examples/invoice/dates/payment_terms.cal\" [use dates … lambda]",
+            "9 chobo \"examples/invoice/books/stock.book\" [use book … lambda]",
+            "32 chobo \"examples/invoice/books/stock.book\" transfer reserve [book]",
+            "37 chobo \"examples/invoice/books/stock.book\" transfer reserve [book]",
+            "42 chobo \"examples/invoice/books/stock.book\" transfer reserve [book]",
+        ]
+    );
+    assert_eq!(ways_of("tests/flows/dates_and_books.flow", Tool::Koyomi), ["use dates … lambda, local"]);
+}
+
+/// The ways one tool's files are named by a flow.
+fn ways_of(file: &str, tool: Tool) -> Vec<String> {
+    Engine.references(&root(), file).unwrap().into_iter().filter(|r| r.target.tool == tool && r.target.items.is_empty()).map(|r| r.how).collect()
 }
 
 #[test]

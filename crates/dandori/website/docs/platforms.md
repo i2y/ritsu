@@ -120,6 +120,13 @@ statement is a node, and the return type of each node names where the flow can g
 anywhere else, so a run the process loses is lost. It suits a prototype, or a short flow inside an
 agent.
 
+A dates file's dates and a book's operations build for every platform: a date is a call like a rule's,
+and an operation of a book is a Lambda function on Step Functions and a call through the `Transport`
+elsewhere, on the chobo client you give it. Step Functions and Lambda durable functions need the
+`lambda` of a date that is called, and Step Functions the `lambda` of a book (E050).
+[Dates and books](dates-and-books.md) has what each platform writes for them, and what to put beside
+it.
+
 Lambda durable functions, Argo Workflows and pydantic-graph refuse `event` tasks and a service's
 method that asks where a run is too (E050). A workflow that implements a service fills the zero
 values protobuf's JSON leaves out of its input, and of a callback's answer that a method of the

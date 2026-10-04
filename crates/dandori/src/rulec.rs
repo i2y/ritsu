@@ -20,6 +20,8 @@ use std::path::{Path, PathBuf};
 pub enum RType {
     Bool,
     Str,
+    /// a day of the calendar, `YYYY-MM-DD` on the wire
+    Date,
     Enum(String),
     /// A number, with its unit as rulec has it (`money[JPY, incl_tax]`, a rate with its step), and
     /// its range as the integers that go on the wire
@@ -142,12 +144,14 @@ impl RuleInfo {
     }
 }
 
-/// A column's type as dandori types it. A day travels as the string `YYYY-MM-DD`. A value that may be
-/// `none` is typed as the value (`RuleInfo::optional` names it, and lower refuses the rule).
+/// A column's type as dandori types it. A day is dandori's `date`, which travels as the string
+/// `YYYY-MM-DD`. A value that may be `none` is typed as the value (`RuleInfo::optional` names it,
+/// and lower refuses the rule).
 fn rtype(t: &ColumnType) -> RType {
     match t {
         ColumnType::Bool => RType::Bool,
-        ColumnType::Str | ColumnType::Date => RType::Str,
+        ColumnType::Str => RType::Str,
+        ColumnType::Date => RType::Date,
         ColumnType::Enum(e) => RType::Enum(e.clone()),
         ColumnType::Opt(inner) => rtype(inner),
         ColumnType::Num { written, unit, min, max } => {
@@ -159,7 +163,7 @@ fn rtype(t: &ColumnType) -> RType {
     }
 }
 
-fn machine(m: ritsu_ports::Machine) -> Machine {
+pub(crate) fn machine(m: ritsu_ports::Machine) -> Machine {
     Machine {
         name: m.name,
         carry_in: m.carry_in,

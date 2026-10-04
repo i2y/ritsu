@@ -132,8 +132,8 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         (format!("{dir}/__init__.py"), format!("{header}# {} v{}: the workflow as a pydantic-graph graph. See graph.py.\n", m.name, m.version)),
         (format!("{dir}/types.py"), types_file(m, &header)),
         (format!("{dir}/tasks.py"), tasks_file(m, &header)),
-        (format!("{dir}/io.py"), format!("{header}{}", io_py())),
-        (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}")),
+        (format!("{dir}/io.py"), format!("{header}{}", io_py(m))),
+        (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}{}", if m.uses_now() { NOW_PY } else { "" })),
         (format!("{dir}/graph.py"), graph),
     ];
     if !called.is_empty() {
@@ -200,6 +200,16 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("\n\ndef make_tasks(own: OwnTasks, transport: io.Transport | None = None) -> Tasks:\n    return Tasks(own, transport)\n");
     a
 }
+
+/// `now` on pydantic-graph: the clock the graph runs with.
+const NOW_PY: &str = r#"
+
+def now(clock: Any) -> str:
+    """`now`: the moment, by the clock the graph runs with (Deps.clock); to the second, in UTC."""
+    import datetime as dt
+
+    return clock.now().astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+"#;
 
 const RUNTIME: &str = r#"# What the generated graph shares: retries, error kinds, keys, the clock, and the answers of
 # callbacks.
@@ -419,6 +429,7 @@ impl<'a> Gen<'a> {
             TExpr::Bool(b) => if *b { "True".into() } else { "False".into() },
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "None".into(),
+            TExpr::Now => "dd.now(deps.clock)".into(),
             TExpr::Var { name, fields, ty } => {
                 let mut s = self.var(name);
                 for (i, f) in fields.iter().enumerate() {

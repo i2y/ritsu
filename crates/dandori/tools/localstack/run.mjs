@@ -131,9 +131,13 @@ function statesOf(def) {
   return out;
 }
 
+/** How a definition reads `now` (dandori's render::JSONATA_NOW). */
+const NOW = '($substring($states.context.State.EnteredTime, 0, 19) & "Z")';
+
 // the definition as it runs here (the head of this file says how), and the variables of its waits
 function forLocalStack(def) {
-  const d = structuredClone(def);
+  // `now` reads the scenarios' moment here (dandori's render::SCENARIO_NOW), not LocalStack's clock
+  const d = JSON.parse(JSON.stringify(def).replaceAll(JSON.stringify(NOW).slice(1, -1), "\\\"2026-03-31T15:30:00Z\\\""));
   const waits = {};
   for (const [name, st] of Object.entries(statesOf(d))) {
     if (st.Type === "Wait") {

@@ -1,0 +1,26 @@
+workflow 日付と帳簿の出力先 v1
+description "検査は通るが、Step Functions と Lambda durable functions には出せない：lambda の無い日付は、どちらでも Lambda 関数で計算するので出せず、lambda の無い帳簿は、Step Functions では Lambda 関数で操作するので出せない。Temporal、Argo、pydantic-graph には出せる"
+
+use dates 期限 from "../flows/dates/出荷の期限.cal"
+use book 倉庫 from "../flows/books/倉庫.book"
+
+record 注文
+  id   : string
+  sku  : string
+  数   : int  range >=1 <=50
+  日数 : int  range >=1 <=7
+
+inputs
+  受注 : 注文
+  便   : string
+
+outputs
+  出荷日 : date
+
+task 入荷する(便: string, sku: string, 数: int)
+  book 倉庫.入荷.do
+
+flow
+  入荷する(便: 便, sku: 受注.sku, 数: 受注.数)
+  let 出荷 = 期限.出荷日(起点: now, 日数: 受注.日数)
+  succeed 出荷日 = 出荷.day

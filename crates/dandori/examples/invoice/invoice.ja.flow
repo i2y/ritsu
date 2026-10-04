@@ -1,0 +1,78 @@
+# 注文の品を、支払期日まで在庫から押さえる。期日は、注文を受けた時刻から支払条件で数える。支払われ
+# たら出荷し、支払われなければ棚に戻す。在庫は chobo の帳簿、期日は koyomi の日付。どのプラットフォ
+# ームでも動く。
+workflow 請求 v1
+description "注文の品を支払期日まで押さえ、支払われたら出荷し、支払われなければ戻す"
+
+use dates 支払条件 from "dates/支払条件.cal"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:payment-terms"
+use book 在庫 from "books/在庫.book"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:stock"
+
+record 注文
+  id  : string
+  sku : string
+  数  : int  range >=1 <=100
+
+record 支払
+  済み : bool
+
+enum 終わり方 = 出荷済 | 未払い | 在庫切れ
+
+inputs
+  受注 : 注文
+
+outputs
+  結果 : 終わり方
+  期日 : date?
+
+# 帳簿が注文のために品を押さえる。押さえるのは chobo のクライアントで、断られると、帳簿が付けた
+# 理由で返ってくる。
+task 引き当てる(注文: string, sku: string, 数: int) -> 在庫.引当
+  book 在庫.引当.hold
+  starts 在庫.引当
+  errors 在庫切れ
+
+task 出荷する(注文: string, sku: string) -> 在庫.引当
+  book 在庫.引当.post
+  sends post
+  errors expired
+
+task 戻す(注文: string, sku: string) -> 在庫.引当
+  book 在庫.引当.void
+  sends void
+  errors expired
+
+task 支払を確かめる(注文: string, 期日: date) -> 支払
+  http GET "https://payments.example.com/orders/{注文}/payment"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/payments/1a2b3c"
+  retry 2 times every 10 seconds
+  idempotent
+
+# 押さえは、帳簿のとおり 60 日たつと勝手に期限が切れる。検査はそれも数える。
+case 押さえ : 在庫.引当 follows 在庫.引当
+
+flow
+  押さえ <- 引き当てる(注文: 受注.id, sku: 受注.sku, 数: 受注.数)
+    on 在庫切れ => succeed 結果 = 在庫切れ, 期日 = none
+  let 期限 = 支払条件.支払日(受領日: now)
+  wait until 期限.at
+  let 入金 = 支払を確かめる(注文: 受注.id, 期日: 期限.day)
+  match 入金.済み
+    true =>
+      押さえ <- 出荷する(注文: 受注.id, sku: 受注.sku)
+        on expired => succeed 結果 = 未払い, 期日 = 期限.day
+      succeed 結果 = 出荷済, 期日 = 期限.day
+    false =>
+      押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+        on expired => pass
+      succeed 結果 = 未払い, 期日 = 期限.day
+
+on failure
+  match 押さえ.state
+    none => pass
+    held =>
+      押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+        on expired => pass
+        on failure => fail 戻せない "注文のために押さえた品を戻せませんでした" leaving 押さえ
+    posted, voided, expired => pass

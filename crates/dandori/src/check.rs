@@ -4,7 +4,7 @@
 
 use crate::diag::{Diag, Text};
 use crate::model::*;
-use crate::syntax::{self, Kind};
+use crate::syntax::{self, Kind, Span};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
@@ -81,12 +81,24 @@ fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<
         Ok(p) => p,
         Err(d) => return (None, Default::default(), vec![d]),
     };
-    // the dandori binary of this crate holds no rulec: a flow that uses a rule is said once to run
-    // through ritsu (E018), and nothing that follows from the rules it cannot read is said
-    if let Some(u) = prog.uses.first() {
-        if !crate::sources::rules_joined() {
-            return (None, Default::default(), vec![unjoined(u)]);
-        }
+    // the dandori binary of this crate holds no rulec, koyomi or chobo: a flow that uses a rule, a
+    // dates file or a book is said once, at the first of them it cannot read, to run through ritsu
+    // (E018), and nothing that follows from what it cannot read is said
+    let mut cannot: Vec<(Span, Text)> = Vec::new();
+    if let (Some(u), false) = (prog.uses.first(), crate::sources::rules_joined()) {
+        let name = &u.name.0;
+        cannot.push((u.name.1, tr!("この dandori は規則を読めません。このフローは規則 `{name}` を使います", "this dandori cannot read rules, and the flow uses the rule `{name}`")));
+    }
+    if let (Some(u), false) = (prog.dates.first(), crate::sources::dates_joined()) {
+        let name = &u.name.0;
+        cannot.push((u.name.1, tr!("この dandori は日付のファイルを読めません。このフローは日付のファイル `{name}` を使います", "this dandori cannot read dates files, and the flow uses the dates file `{name}`")));
+    }
+    if let (Some(u), false) = (prog.books.first(), crate::sources::books_joined()) {
+        let name = &u.name.0;
+        cannot.push((u.name.1, tr!("この dandori は帳簿を読めません。このフローは帳簿 `{name}` を使います", "this dandori cannot read books, and the flow uses the book `{name}`")));
+    }
+    if let Some((sp, said)) = cannot.into_iter().min_by_key(|(sp, _)| (sp.line, sp.col)) {
+        return (None, Default::default(), vec![unjoined(sp, said)]);
     }
     let (model, mut diags) = crate::lower::lower(&prog, path);
     let mut model = match model {
@@ -106,12 +118,11 @@ fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<
     (Some(model), fr.facts, diags)
 }
 
-/// E018: a flow that uses a rule, checked where rulec is not joined (ritsu's DESIGN 2.3), at its
-/// first `use rule`, with the command to run instead.
-fn unjoined(u: &syntax::UseRule) -> Diag {
-    let (name, sp) = &u.name;
+/// E018: a flow that uses a rule, a dates file or a book, checked where rulec, koyomi or chobo is not
+/// joined (ritsu's DESIGN 2.3), at the first of them it cannot read, with the command to run instead.
+fn unjoined(sp: Span, said: Text) -> Diag {
     let cmd = crate::cli::with_ritsu();
-    Diag::error("E018", sp.line, sp.col, tr!("この dandori は規則を読めません。このフローは規則 `{name}` を使います", "this dandori cannot read rules, and the flow uses the rule `{name}`")).note(tr!(
+    Diag::error("E018", sp.line, sp.col, said).note(tr!(
         "dandori のクレートのバイナリは、ほかの言語を持ちません。同じコマンドを、すべての言語をつないだ `{cmd}` のように ritsu で走らせます。",
         "The binary of dandori's own crate holds no other language; run it with every language joined, through ritsu: `{cmd}`."
     ))
@@ -296,6 +307,8 @@ pub struct Cost {
     /// what filling in the zero values of the input adds to the run of a workflow that implements
     /// a service: on Step Functions, the Pass it starts with
     pub fill: u64,
+    /// what reading `now` adds to a statement: on durable functions, the step that reads the clock
+    pub clock: u64,
 }
 
 /// Step Functions: a task is entered, scheduled, started, succeeds and is exited (5); a
@@ -304,7 +317,7 @@ pub struct Cost {
 /// starts and succeeds (2); the execution starts and ends. Reading Jev's answer adds a Pass that
 /// keeps it and one that raises the task's error (4). A workflow that implements a service starts
 /// with a Pass that fills in the input's zero values (2).
-pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3, jev: 4, fill: 2 };
+pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3, jev: 4, fill: 2, clock: 0 };
 
 /// Temporal: an activity is scheduled, started, completed, and a workflow task follows
 /// (6); a retry, done in the workflow's code so that it matches Step Functions, adds a
@@ -313,14 +326,15 @@ pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice:
 /// (accepted, completed), its workflow task, and the timer of its timeout (7); a call on a
 /// case, the search attribute's upsert (1). A local activity leaves a marker, and a workflow
 /// task may follow (4); its retry, a timer and another (9).
-pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9, jev: 0, fill: 0 };
+pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9, jev: 0, fill: 0, clock: 0 };
 
 /// Lambda durable functions: a task is one step, or a callback and its submit step (2); a
 /// rule is one invoke; a retry adds a wait and another call (3); a wait is one operation, a
-/// wait until reads the clock in a step first (2); a map is one operation, and each round
+/// wait until reads the clock in a step first (2), and so does a statement that reads `now` (1);
+/// a map is one operation, and each round
 /// runs in a child context of its own (1). The limit is 3,000 operations an execution and
 /// cannot be raised.
-pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3, jev: 0, fill: 0 };
+pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3, jev: 0, fill: 0, clock: 1 };
 pub const DURABLE_LIMIT: u64 = 3_000;
 
 /// Argo Workflows: the nodes in the Workflow's status. A statement is a step group of its
@@ -336,7 +350,7 @@ pub const DURABLE_LIMIT: u64 = 3_000;
 /// check and frame. In the runs of tests/flows/edges.flow, a node took 510 to 612 bytes,
 /// about 60 compressed; the template, which Argo keeps twice in the Workflow, took 240 KB
 /// of it in the runs of examples/hotel.
-pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2, jev: 0, fill: 0 };
+pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2, jev: 0, fill: 0, clock: 0 };
 /// Argo stores a Workflow of up to 1 MiB, compressing the node status when it is larger
 /// (MAX_WORKFLOW_SIZE), unless the status goes to a database. At about 60 bytes a node, that
 /// is some 15,000 nodes; values larger than the tests' leave fewer, so the check stops at 10,000.
@@ -386,6 +400,7 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
             TK::Pass => 0,
             TK::Succeed { .. } | TK::Fail { .. } => c.choice,
         };
+        let here = here + if s.kind.reads_now() { c.clock } else { 0 };
         total = total.saturating_add(here);
     }
     total

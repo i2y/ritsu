@@ -137,6 +137,22 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
                 }
             }
         }
+        // an operation of a book: what the transport is asked to run by chobo's client, and on Step
+        // Functions what the book's Lambda function is invoked with
+        Some(Via::Book(b)) => {
+            let (call, _) = book_call(m, task, b, args);
+            match view {
+                View::Asl => json!({ "lambda": m.books[b.book].lambda.clone().unwrap_or_default(), "payload": call }),
+                _ => {
+                    let mut c = Map::new();
+                    c.insert("book".into(), json!(m.books[b.book].facts.name));
+                    for (k, v) in call.as_object().into_iter().flatten() {
+                        c.insert(k.clone(), v.clone());
+                    }
+                    Value::Object(c)
+                }
+            }
+        }
         // an HTTP request, which every target sends as Step Functions' HTTP Task does
         Some(Via::Jev(j)) => json!({ "http": "POST", "url": JEV_URL, "body": jev_request(j, Value::Object(agent_input(task, args))) }),
         Some(Via::StateMachine(arn)) => json!({ "state_machine": arn, "input": args }),
@@ -157,6 +173,48 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
         }
         None => json!({ "task": task.name, "args": args }),
     }
+}
+
+/// An operation of a book, as every target hands it on: the transfer and the operation, the
+/// arguments by the transfer's parameters, and for a `post` of part of a hold the amounts apart
+/// (chobo's clients take them apart: `post(key, amounts)`). With it, whether it is a post of part.
+pub fn book_call(m: &Model, task: &TaskDef, b: &BookOp, args: &Map<String, Value>) -> (Value, bool) {
+    let amounts: Vec<String> = m.books[b.book].transfer(&b.transfer).map(|t| t.params.iter().filter(|p| p.unit.is_some()).map(|p| p.name.clone()).collect()).unwrap_or_default();
+    let mut a = Map::new();
+    let mut am = Map::new();
+    for (p, _) in &task.params {
+        let Some(v) = args.get(p) else { continue };
+        if b.op == "post" && amounts.contains(p) {
+            am.insert(p.clone(), v.clone());
+        } else {
+            a.insert(p.clone(), v.clone());
+        }
+    }
+    let part = !am.is_empty();
+    let mut c = json!({ "transfer": b.transfer, "op": b.op, "args": a });
+    if part {
+        c["amounts"] = Value::Object(am);
+    }
+    (c, part)
+}
+
+/// The hold a book's operation answers when it is done: the arguments that are the hold's key, and
+/// the state the operation leaves it in; nothing for a transfer done at once.
+pub fn book_value(m: &Model, b: &BookOp, args: &Map<String, Value>) -> Value {
+    let state = match b.op.as_str() {
+        "hold" => "held",
+        "post" => "posted",
+        "void" => "voided",
+        _ => return Value::Null,
+    };
+    let mut o = Map::new();
+    if let Some(t) = m.books[b.book].transfer(&b.transfer) {
+        for p in t.params.iter().filter(|p| t.key.contains(&p.name)) {
+            o.insert(p.name.clone(), args.get(&p.name).cloned().unwrap_or(Value::Null));
+        }
+    }
+    o.insert("state".into(), json!(state));
+    Value::Object(o)
 }
 
 /// Where every target sends an agent's call over HTTP: OpenAI's Responses API, or that of the
@@ -474,6 +532,7 @@ pub fn json_schema(m: &Model, t: &Ty, rg: Option<Range>, p: Provider) -> Option<
             Ty::Str => json!({ "type": "string" }),
             Ty::Bool => json!({ "type": "boolean" }),
             Ty::Timestamp => json!({ "type": "string", "pattern": TIMESTAMP_RE }),
+            Ty::Date => json!({ "type": "string", "pattern": DATE_RE }),
             Ty::Enum(e) => json!({ "type": "string", "enum": m.enums[*e].values }),
             Ty::List(x) => json!({ "type": "array", "items": go(m, x, rg, p, within)? }),
             Ty::Opt(x) => json!({ "anyOf": [go(m, x, rg, p, within)?, { "type": "null" }] }),
@@ -704,7 +763,11 @@ pub fn fill_url(url: &str, args: &Map<String, Value>) -> (String, Map<String, Va
 }
 
 pub fn rule_activity(rule: &str) -> String {
-    format!("rule_{}", ident(rule))
+    match rule.split_once('.') {
+        // a date of a dates file (`terms.payment`), which koyomi computes and is called as a rule is
+        Some((file, date)) => format!("dates_{}_{}", ident(file), ident(date)),
+        None => format!("rule_{}", ident(rule)),
+    }
 }
 
 /// A name the generated code can use as an identifier. JavaScript and Step Functions both
@@ -773,6 +836,7 @@ pub fn jsonata_expr(e: &TExpr) -> String {
         TExpr::Bool(b) => b.to_string(),
         TExpr::Enum(v, _) => jsonata_string(v),
         TExpr::None(_) => "null".into(),
+        TExpr::Now => JSONATA_NOW.into(),
         TExpr::Record { fields, .. } => {
             format!("{{{}}}", fields.iter().map(|(f, x)| format!("{}: {}", jsonata_string(f), jsonata_expr(x))).collect::<Vec<_>>().join(", "))
         }
@@ -794,7 +858,7 @@ pub fn jsonata_expr(e: &TExpr) -> String {
                 match p {
                     IPart::Lit(s) => out.push(jsonata_string(s)),
                     IPart::Hole(x) => match x.ty() {
-                        Ty::Str | Ty::Timestamp | Ty::Enum(_) => out.push(jsonata_expr(x)),
+                        Ty::Str | Ty::Timestamp | Ty::Date | Ty::Enum(_) => out.push(jsonata_expr(x)),
                         _ => out.push(format!("$string({})", jsonata_expr(x))),
                     },
                 }
@@ -833,9 +897,12 @@ pub fn literal(e: &TExpr) -> Option<Value> {
             Some(Value::Object(o))
         }
         TExpr::List { items, .. } => items.iter().map(literal).collect::<Option<Vec<_>>>().map(Value::Array),
-        TExpr::Var { .. } | TExpr::Interp(_) => None,
+        TExpr::Var { .. } | TExpr::Interp(_) | TExpr::Now => None,
     }
 }
+
+/// `now` in JSONata: the moment the state was entered, to the second, as dandori's timestamp.
+pub const JSONATA_NOW: &str = "($substring($states.context.State.EnteredTime, 0, 19) & \"Z\")";
 
 /// A JSONata expression for `x` with the zero values filled in that protobuf's JSON leaves out
 /// (`apis::fill`): what a `connect` task's answer reads as.
@@ -1042,6 +1109,7 @@ pub fn jsonata_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, depth: usize
         Ty::Str => format!("$type({x}) = \"string\""),
         Ty::Bool => format!("$type({x}) = \"boolean\""),
         Ty::Timestamp => format!("($type({x}) = \"string\" and $contains({x}, /{TIMESTAMP_RE}/))"),
+        Ty::Date => format!("($type({x}) = \"string\" and $contains({x}, /{DATE_RE}/))"),
         Ty::Int | Ty::Num(_) => {
             let mut parts = vec![format!("$type({x}) = \"number\""), format!("{x} = $floor({x})")];
             parts.extend(rg.map(|r| r.tests(|op, n| format!("{x} {op} {n}"))).unwrap_or_default());
@@ -1066,6 +1134,20 @@ pub fn jsonata_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, depth: usize
 
 /// What Step Functions' Wait takes: RFC 3339 with an uppercase T, in UTC with an uppercase Z.
 pub const TIMESTAMP_RE: &str = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$";
+
+/// A day of the calendar: `YYYY-MM-DD`, as koyomi and rulec write one.
+pub const DATE_RE: &str = "^[0-9]{4}-[0-9]{2}-[0-9]{2}$";
+
+pub fn is_date(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 10 && b[4] == b'-' && b[7] == b'-' && [0, 1, 2, 3, 5, 6, 8, 9].iter().all(|i| b[*i].is_ascii_digit())
+}
+
+/// How every target reads `now`: the moment, to the second, in UTC (`2026-03-31T15:30:00Z`).
+/// What the scenarios say `now` reads, when they say nothing else: half past midnight in Tokyo,
+/// the day after a month ends, so that a time read as a day in the wrong offset comes out a day,
+/// and a month, apart.
+pub const SCENARIO_NOW: &str = "2026-03-31T15:30:00Z";
 
 pub fn is_timestamp(s: &str) -> bool {
     let b = s.as_bytes();
@@ -1094,6 +1176,7 @@ pub fn value_fits(m: &Model, v: &Value, t: &Ty, rg: Option<Range>) -> bool {
         Ty::Str => v.is_string(),
         Ty::Bool => v.is_boolean(),
         Ty::Timestamp => v.as_str().map(is_timestamp).unwrap_or(false),
+        Ty::Date => v.as_str().map(is_date).unwrap_or(false),
         Ty::Int | Ty::Num(_) => v.as_f64().is_some_and(|f| f.fract() == 0.0 && rg.map_or(true, |r| r.lo.map_or(true, |lo| f >= lo as f64) && r.hi.map_or(true, |hi| f <= hi as f64))),
         Ty::Enum(e) => v.as_str().map(|s| m.enums[*e].values.iter().any(|x| x == s)).unwrap_or(false),
         Ty::Record(r) => match v.as_object() {

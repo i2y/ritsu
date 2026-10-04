@@ -101,6 +101,44 @@ fn a_flow_with_rules_is_told_to_run_with_ritsu_dandori() {
     assert_eq!(with_rulec(&["check", flow]), (0, String::new(), format!("{flow}: ok\n")));
 }
 
+/// So is a flow that uses a dates file or a book: once, at the first of them this binary cannot
+/// read, with exit 2. rulec's port alone does not read them either; with koyomi's and chobo's
+/// joined too, the flow passes.
+#[test]
+fn a_flow_with_dates_and_books_is_told_to_run_with_ritsu_dandori() {
+    let flow = "examples/invoice/invoice.flow";
+    let (code, out, err) = binary(&["check", flow]);
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert_eq!(
+        err,
+        format!("error[E018]: {flow}:7:11: this dandori cannot read dates files, and the flow uses the dates file `terms`\n     7 | use dates terms from \"dates/payment_terms.cal\"\n  = The binary of dandori's own crate holds no other language; run it with every language joined, through ritsu: `ritsu dandori check {flow}`.\n")
+    );
+    let (code, _, ja) = binary(&["check", flow, "--lang", "ja"]);
+    assert_eq!(code, 2);
+    assert!(ja.contains("エラー[E018]: examples/invoice/invoice.flow:7:11: この dandori は日付のファイルを読めません。このフローは日付のファイル `terms` を使います"), "{ja}");
+    // with rulec alone, the dates file is still not read
+    let (code, _, err) = with_rulec(&["check", flow]);
+    assert_eq!(code, 2, "{err}");
+    // a book alone
+    let dir = ritsu_testkit::TempDir::new("cli-book");
+    let book = std::fs::read_to_string(root().join("examples/invoice/books/stock.book")).unwrap();
+    std::fs::write(dir.path().join("stock.book"), book).unwrap();
+    let only_book = dir.path().join("receive.flow");
+    std::fs::write(&only_book, "workflow receive v1\n\nuse book stock from \"stock.book\"\n  lambda \"arn:aws:lambda:eu-west-2:123456789012:function:stock\"\n\ninputs\n  delivery : string\n  sku      : string\n\ntask receive(delivery: string, sku: string, qty: int)\n  book stock.receive.do\n\nflow\n  receive(delivery: delivery, sku: sku, qty: 10)\n").unwrap();
+    let (code, _, err) = binary(&["check", only_book.to_str().unwrap()]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains(":3:10: this dandori cannot read books, and the flow uses the book `stock`"), "{err}");
+    // with every port joined, both pass
+    let joined = |path: &str| {
+        let args: Vec<String> = ["check", path].iter().map(|a| a.to_string()).collect();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = dandori::cli::run_with_ports(&args, Rc::new(rulec::ports::Engine::new()), Rc::new(koyomi::ports::Engine), Rc::new(chobo::ports::Engine), &mut out, &mut err);
+        (code, String::from_utf8(err).unwrap())
+    };
+    assert_eq!(joined(flow), (0, format!("{flow}: ok\n")));
+    assert_eq!(joined(only_book.to_str().unwrap()).0, 0);
+}
+
 /// `cli::run` takes the words after the program's name and writes where it is told: a page asked
 /// for to `out`, what is wrong to `err`, and answers the exit code.
 #[test]

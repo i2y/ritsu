@@ -1,0 +1,10 @@
+dates 期限(due_dates) v1
+description "起点の 30 日後、休みなら次の営業日。カレンダーは UTC オフセットを言わない"
+use calendar "../calendars/オフセット無し.cal"
+
+inputs
+  起点(origin) : date  range >=2026-01-01 <=2026-12-31
+
+date 期日(due) = 起点
+  + 30 days
+  roll following

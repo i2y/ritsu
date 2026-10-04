@@ -1,0 +1,81 @@
+workflow 帳簿の間違い v1
+description "帳簿を使う書き方の間違い：読めない帳簿、二度読む名前、無い帳簿と振替、振替に無い操作、帳簿の操作に付けられないもの（エラーの = …、key、refused as）、引数と返り値の食い違い、帳簿が断らない理由、案件に合わない操作、仮押さえに書けない external と refused when"
+
+use book 倉庫 from "../flows/books/倉庫.book"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:warehouse"
+use book 無い from "books/無い.book"
+use book 壊れた from "books/壊れた.book"
+use book 倉庫 from "../flows/books/倉庫.book"
+
+record 注文
+  id  : string
+  sku : string
+  数  : int
+
+inputs
+  受注 : 注文
+
+task 棚卸しする(注文: string)
+  book 棚卸し.引当.hold
+
+task 捨てる(便: string, sku: string, 数: int)
+  book 倉庫.廃棄.do
+
+task 入荷を押さえる(便: string, sku: string, 数: int)
+  book 倉庫.入荷.hold
+
+task すぐに引き当てる(注文: string, sku: string, 数: int)
+  book 倉庫.引当.do
+
+task 入荷する(便: string, sku: string, 数: int)
+  book 倉庫.入荷.do
+  key 便
+  errors 足りない = 409
+
+task 引き当てる(注文: string, sku: string, 数: string) -> 注文
+  book 倉庫.引当.hold
+  starts 倉庫.引当
+  errors 品切れ
+
+task 一つだけ渡す(注文: string) -> 倉庫.引当
+  book 倉庫.引当.hold
+  starts 倉庫.引当
+
+task 色も渡す(注文: string, sku: string, 色: string) -> 倉庫.引当
+  book 倉庫.引当.void
+  sends void
+
+task 入荷を返す(便: string, sku: string, 数: int) -> 倉庫.引当
+  book 倉庫.入荷.do
+
+task 確定する(注文: string, sku: string) -> 倉庫.引当
+  book 倉庫.引当.post
+  sends void
+
+task 取り消す(注文: string, sku: string) -> 倉庫.引当
+  book 倉庫.引当.void
+  sends void
+  refused as 断られた
+
+task 押さえ直す(注文: string, sku: string, 数: int) -> 倉庫.引当
+  book 倉庫.引当.hold
+  sends post
+
+task 押さえる(注文: string, sku: string, 数: int) -> 倉庫.引当
+  book 倉庫.引当.hold
+  starts 倉庫.引当
+  errors 足りない
+
+task 出荷する(注文: string, sku: string) -> 倉庫.引当
+  book 倉庫.引当.post
+  sends post
+  errors expired
+
+case 押さえ : 倉庫.引当 follows 倉庫.引当
+  external post
+  refused when refused = true
+
+flow
+  押さえ <- 押さえる(注文: 受注.id, sku: 受注.sku, 数: 受注.数)
+  押さえ <- 出荷する(注文: 受注.id, sku: 受注.sku)
+    on expired => pass

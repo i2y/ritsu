@@ -25,6 +25,7 @@ nav = [
   { "Implement a service" = "services.md" },
   { Agents = "agents.md" },
   { Jev = "jev.md" },
+  { "Dates and books" = "dates-and-books.md" },
   { "What it checks" = "checks.md" },
   { "Draw a workflow" = "diagrams.md" },
   { "Build for a platform" = "platforms.md" },

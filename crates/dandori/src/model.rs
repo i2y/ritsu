@@ -17,6 +17,8 @@ pub enum Ty {
     Bool,
     /// an RFC 3339 moment in UTC, `2026-10-01T10:00:00Z`, as Step Functions' Wait takes it
     Timestamp,
+    /// a day of the calendar, without a time or a zone: `2026-10-01` (koyomi's and rulec's `date`)
+    Date,
     /// a number with a unit, spelled as rulec spells it and written (`money[JPY, incl_tax]`), and
     /// counted on the wire in that unit (a rate, in its step)
     Num(Unit),
@@ -39,7 +41,7 @@ impl PartialEq for Ty {
             (Ty::Enum(a), Ty::Enum(b)) => a == b,
             (Ty::Record(a), Ty::Record(b)) => a == b,
             (Ty::List(a), Ty::List(b)) | (Ty::Opt(a), Ty::Opt(b)) => a == b,
-            (Ty::Int, Ty::Int) | (Ty::Str, Ty::Str) | (Ty::Bool, Ty::Bool) | (Ty::Timestamp, Ty::Timestamp) | (Ty::Json, Ty::Json) => true,
+            (Ty::Int, Ty::Int) | (Ty::Str, Ty::Str) | (Ty::Bool, Ty::Bool) | (Ty::Timestamp, Ty::Timestamp) | (Ty::Date, Ty::Date) | (Ty::Json, Ty::Json) => true,
             _ => false,
         }
     }
@@ -151,8 +153,12 @@ pub struct EnumDef {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordOrigin {
     Local,
-    /// the outputs of a rule, which a call of the rule returns
+    /// the outputs of a rule, which a call of the rule returns; for a date of a dates file
+    /// (`RuleKind::Date`), the day and its time, which a call of the date returns
     RuleOutputs(usize),
+    /// a hold of a book's transfer (`stock.reserve`): the parameters of its key and its state, which
+    /// a task that holds, posts or voids it answers, and a case that follows it is held in
+    Hold { book: usize, transfer: String },
     /// a message of a `.proto`, made into a record (`use proto`, by the name `api`)
     Proto { api: String },
 }
@@ -199,6 +205,81 @@ pub struct RuleUse {
     pub connection: Option<String>,
     pub outputs: RecordId,
     pub line: usize,
+    /// what it is: a rule of rulec's, a date of a dates file that koyomi computes (called as a rule
+    /// is), or the life of a hold of a book's transfer (which a case follows, and nothing calls)
+    pub kind: RuleKind,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum RuleKind {
+    Rule,
+    /// `use dates terms from "…"`, called as `terms.payment(received: …)`: koyomi's function for a
+    /// date, which answers the day, and its time when the date says one (`at 09:00`)
+    Date(DateCall),
+    /// `case h : stock.reserve follows stock.reserve`: the life of a hold of the book's transfer,
+    /// as chobo gives it (held, posted, voided, expired)
+    Hold { book: usize, transfer: String },
+}
+
+/// A date of a dates file, as the code dandori writes calls koyomi's generated code for it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DateCall {
+    /// the name `use dates` gives the file, and the date's name in it
+    pub file: String,
+    pub date: String,
+    /// the ASCII aliases of the file and of the date, which koyomi names its code by
+    pub file_alias: String,
+    pub alias: String,
+    /// the inputs the date reads, in the order written: name, alias, and whether it is a day
+    /// (else a whole number)
+    pub params: Vec<(String, String, bool)>,
+    /// the date turns into a time of the day (`at 09:00`, `at end of day`)
+    pub at: bool,
+    /// the calendar's UTC offset, in minutes east: a time given for a day is read as the day it
+    /// falls on there
+    pub offset: Option<i32>,
+}
+
+impl RuleUse {
+    /// The date of a dates file this is, when it is one.
+    pub fn date(&self) -> Option<&DateCall> {
+        match &self.kind {
+            RuleKind::Date(d) => Some(d),
+            _ => None,
+        }
+    }
+
+    /// How a `.flow` names the machine it is: `payment_intent.payment` for a rule's, `stock.reserve`
+    /// for the holds of a book's transfer.
+    pub fn machine_label(&self) -> String {
+        match (&self.kind, &self.info.machine) {
+            (RuleKind::Hold { .. }, _) => self.name.clone(),
+            (_, Some(mc)) => format!("{}.{}", self.name, mc.name),
+            _ => self.name.clone(),
+        }
+    }
+
+    /// Whether this is a rule of rulec's: its code goes with the workflow, and `rulec doc` draws it.
+    pub fn is_rule(&self) -> bool {
+        self.kind == RuleKind::Rule
+    }
+}
+
+/// A book of chobo's that the tasks call (`use book stock from "inventory.book"`).
+#[derive(Clone, Debug)]
+pub struct BookUse {
+    pub name: String,
+    pub path: std::path::PathBuf,
+    pub facts: ritsu_ports::BookFacts,
+    /// Step Functions: the Lambda function that runs the book's operations
+    pub lambda: Option<String>,
+    pub line: usize,
+}
+
+impl BookUse {
+    pub fn transfer(&self, name: &str) -> Option<&ritsu_ports::Transfer> {
+        self.facts.transfers.iter().find(|t| t.name == name)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -214,6 +295,16 @@ pub enum Binding {
     /// Jev, TypeSafe's System One model: it reads the arguments (its state) and answers the
     /// questions the task's type asks, all in one request
     Jev(Jev),
+    /// an operation of a book's transfer (`book stock.reserve.hold`): `do`, `hold`, `post` or `void`,
+    /// run by chobo's client; a refusal comes back as the error its reason names
+    Book(BookOp),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BookOp {
+    pub book: usize,
+    pub transfer: String,
+    pub op: String,
 }
 
 /// Where every target sends a Jev task's request.
@@ -325,6 +416,9 @@ pub enum Via<'a> {
     Agent { provider: Provider, instructions: &'a str, model: &'a str, url: Option<&'a str>, effort: Option<&'a str> },
     /// Jev, over HTTP: a POST to `JEV_URL`, the same on every platform
     Jev(&'a Jev),
+    /// an operation of a book of chobo's: through the transport, by chobo's client; on Step
+    /// Functions, by the book's Lambda function
+    Book(&'a BookOp),
     /// Step Functions: a nested execution of another state machine
     StateMachine(&'a str),
     /// Temporal: a child workflow
@@ -413,7 +507,15 @@ impl TaskDef {
     /// same as doing it once, unless the task says it is. An agent only reads and answers;
     /// an event only comes.
     pub fn changes_things(&self) -> bool {
-        !self.idempotent && !self.event && !matches!(self.machine, Some(TaskMachine::Observes)) && !matches!(self.binding, Some(Binding::Agent { .. }) | Some(Binding::Jev(_)))
+        !self.idempotent && !self.event && !matches!(self.machine, Some(TaskMachine::Observes)) && !matches!(self.binding, Some(Binding::Agent { .. }) | Some(Binding::Jev(_)) | Some(Binding::Book(_)))
+    }
+
+    /// The operation of a book this task is, when it is one.
+    pub fn book(&self) -> Option<&BookOp> {
+        match &self.binding {
+            Some(Binding::Book(b)) => Some(b),
+            _ => None,
+        }
     }
 
     /// What the task asks Jev, when it is a Jev task.
@@ -435,6 +537,7 @@ impl TaskDef {
             Binding::Aws { service, action } => Via::Aws { service, action },
             Binding::Agent { provider, instructions, model, url, effort } => Via::Agent { provider: *provider, instructions, model, url: url.as_deref(), effort: effort.as_deref() },
             Binding::Jev(j) => Via::Jev(j),
+            Binding::Book(b) => Via::Book(b),
         });
         match p {
             Platform::StepFunctions => self.state_machine.as_deref().map(Via::StateMachine).or(bound),
@@ -618,6 +721,9 @@ pub enum TExpr {
     List { items: Vec<TExpr>, ty: Ty },
     /// a string with values put in
     Interp(Vec<IPart>),
+    /// `now`: the moment the statement runs, as the platform's clock reads it (on Temporal, the
+    /// workflow's time, which a replay reads again the same)
+    Now,
 }
 
 impl TExpr {
@@ -627,8 +733,20 @@ impl TExpr {
             TExpr::Str(_) | TExpr::Interp(_) => Ty::Str,
             TExpr::Int(_) => Ty::Int,
             TExpr::Bool(_) => Ty::Bool,
+            TExpr::Now => Ty::Timestamp,
             TExpr::Enum(_, e) => Ty::Enum(*e),
             TExpr::None(t) | TExpr::Record { ty: t, .. } | TExpr::List { ty: t, .. } => t.clone(),
+        }
+    }
+
+    /// Whether the expression reads `now`.
+    pub fn has_now(&self) -> bool {
+        match self {
+            TExpr::Now => true,
+            TExpr::Record { fields, .. } => fields.iter().any(|(_, x)| x.has_now()),
+            TExpr::List { items, .. } => items.iter().any(|x| x.has_now()),
+            TExpr::Interp(parts) => parts.iter().any(|p| matches!(p, IPart::Hole(x) if x.has_now())),
+            _ => false,
         }
     }
 
@@ -661,6 +779,7 @@ impl TExpr {
             TExpr::Bool(b) => b.to_string(),
             TExpr::Enum(v, _) => v.clone(),
             TExpr::None(_) => "none".into(),
+            TExpr::Now => "now".into(),
             TExpr::Record { fields, .. } => format!("{{{}}}", fields.iter().map(|(f, x)| format!("{f}: {}", x.show())).collect::<Vec<_>>().join(", ")),
             TExpr::List { items, .. } => format!("[{}]", items.iter().map(|x| x.show()).collect::<Vec<_>>().join(", ")),
             TExpr::Interp(parts) => parts
@@ -694,6 +813,26 @@ pub enum TK {
     Fail { error: String, cause: Option<TExpr>, leaving: Vec<usize> },
 }
 
+impl TK {
+    /// The values the statement itself holds, not those of the blocks under it.
+    pub fn exprs(&self) -> Vec<&TExpr> {
+        match self {
+            TK::Call { args, .. } => args.iter().map(|(_, e)| e).collect(),
+            TK::Assign { expr, .. } | TK::Match { expr, .. } => vec![expr],
+            TK::WaitUntil { at } => vec![at],
+            TK::For { list, result, .. } => std::iter::once(list).chain(result.as_ref().map(|(_, y)| y)).collect(),
+            TK::Succeed { fields } => fields.iter().map(|(_, e)| e).collect(),
+            TK::Fail { cause, .. } => cause.iter().collect(),
+            _ => vec![],
+        }
+    }
+
+    /// Whether the statement itself reads `now`.
+    pub fn reads_now(&self) -> bool {
+        self.exprs().iter().any(|e| e.has_now())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Model {
     pub name: String,
@@ -702,6 +841,8 @@ pub struct Model {
     pub kind: Kind,
     pub source_file: String,
     pub rules: Vec<RuleUse>,
+    /// the books of chobo's the tasks call
+    pub books: Vec<BookUse>,
     pub enums: Vec<EnumDef>,
     pub records: Vec<RecordDef>,
     pub inputs: Vec<(String, Ty)>,
@@ -727,6 +868,35 @@ pub struct Model {
 }
 
 impl Model {
+    /// Whether a statement of the workflow reads `now`.
+    pub fn uses_now(&self) -> bool {
+        self.all_stmts().iter().any(|s| s.kind.reads_now())
+    }
+
+    /// Whether the workflow calls a date of a dates file.
+    pub fn calls_dates(&self) -> bool {
+        self.all_stmts().iter().any(|s| matches!(&s.kind, TK::Call { callee: Callee::Rule(r), .. } if self.rules[*r].date().is_some()))
+    }
+
+    /// Whether a value of the workflow is a day (`date`): an input, an output, a field of a record
+    /// it holds, a parameter or the answer of a task, a variable.
+    pub fn uses_dates(&self) -> bool {
+        fn has(m: &Model, t: &Ty, seen: &mut Vec<RecordId>) -> bool {
+            match t {
+                Ty::Date => true,
+                Ty::List(x) | Ty::Opt(x) => has(m, x, seen),
+                Ty::Record(r) if !seen.contains(r) => {
+                    seen.push(*r);
+                    m.records[*r].fields.iter().any(|(_, f)| has(m, f, seen))
+                }
+                _ => false,
+            }
+        }
+        let mut seen = Vec::new();
+        let tys = self.inputs.iter().chain(&self.outputs).chain(&self.vars).map(|(_, t)| t).chain(self.tasks.iter().flat_map(|t| t.params.iter().map(|(_, p)| p).chain(t.result.iter())));
+        tys.into_iter().collect::<Vec<_>>().into_iter().any(|t| has(self, t, &mut seen))
+    }
+
     /// A platform's refusal of `on cancel`, when the workflow has one: the platform stops a run
     /// at once and runs nothing after.
     pub fn refuse_on_cancel(&self, why: Text) -> Option<crate::diag::Diag> {
@@ -784,6 +954,7 @@ impl Model {
             Ty::Str => "string".into(),
             Ty::Bool => "bool".into(),
             Ty::Timestamp => "timestamp".into(),
+            Ty::Date => "date".into(),
             Ty::Num(u) => u.to_string(),
             Ty::Enum(e) => self.enums[*e].name.clone(),
             Ty::Record(r) => self.records[*r].name.clone(),

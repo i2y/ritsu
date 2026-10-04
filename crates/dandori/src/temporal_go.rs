@@ -153,7 +153,7 @@ impl Names {
 fn go_type(m: &Model, n: &Names, t: &Ty) -> String {
     match t {
         Ty::Int | Ty::Num(_) => "int64".into(),
-        Ty::Str | Ty::Timestamp => "string".into(),
+        Ty::Str | Ty::Timestamp | Ty::Date => "string".into(),
         Ty::Bool => "bool".into(),
         Ty::Enum(e) => n.ty(&m.enums[*e].name),
         Ty::Record(r) => n.ty(&m.records[*r].name),
@@ -175,6 +175,7 @@ fn go_check(m: &Model, n: &Names, x: &str, t: &Ty, rg: Option<Range>, depth: usi
         },
         Ty::Str => format!("ddIsStr({x})"),
         Ty::Timestamp => format!("ddIsTimestamp({x})"),
+        Ty::Date => format!("ddIsDate({x})"),
         Ty::Bool => format!("ddIsBool({x})"),
         Ty::Enum(e) => format!("ddIsOneOf({x}, {}Values...)", n.ty(&m.enums[*e].name)),
         Ty::Record(r) => format!("Is{}({x})", n.ty(&m.records[*r].name)),
@@ -342,6 +343,9 @@ fn types_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
         m.name, m.version
     ));
     t.push_str(&format!("// TIMESTAMP is what a timestamp looks like: RFC 3339, in UTC.\nvar TIMESTAMP = regexp.MustCompile(`{}`)\n", render::TIMESTAMP_RE.replace("\\\\", "\\")));
+    if m.uses_dates() {
+        t.push_str(&format!("\n// DATE is what a day of the calendar looks like: YYYY-MM-DD.\nvar DATE = regexp.MustCompile(`{}`)\n\n// ddIsDate says whether v is a day of the calendar.\nfunc ddIsDate(v any) bool {{\n\ts, ok := v.(string)\n\treturn ok && DATE.MatchString(s)\n}}\n", render::DATE_RE));
+    }
     for e in &enums {
         let en = &m.enums[*e];
         let tn = n.ty(&en.name);
@@ -1042,10 +1046,11 @@ struct Needs {
     aws: BTreeSet<(String, String)>,
     openai: bool,
     claude: bool,
+    books: bool,
 }
 
 fn needs(m: &Model) -> Needs {
-    let mut n = Needs { lambda: false, aws: BTreeSet::new(), openai: false, claude: false };
+    let mut n = Needs { lambda: false, aws: BTreeSet::new(), openai: false, claude: false, books: !crate::asl::used_books(m).is_empty() };
     for t in &m.tasks {
         if t.is_child(Platform::Temporal) || t.event {
             continue;
@@ -1106,6 +1111,9 @@ fn io_file(n: &Needs, pkg: &str, header: &str) -> String {
     }
     if n.claude {
         t.push_str("\t// Claude are options of Anthropic's client for the Claude agents, such as option.WithAPIKey or\n\t// option.WithBaseURL. The client does not retry by itself unless they say so: the workflow retries,\n\t// as `retry` says.\n\tClaude []anthropicoption.RequestOption\n");
+    }
+    if n.books {
+        t.push_str("\t// Books are the books the tasks run operations on, by the book's name: the *Book the Go client chobo\n\t// writes for it makes (its Postgres or TigerBeetle function).\n\tBooks map[string]any\n");
     }
     t.push_str("}\n");
     t.push_str(&IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string()).replace("{{BEAT_SECONDS}}", &crate::temporal::BEAT_SECONDS.to_string()));
@@ -2077,6 +2085,27 @@ fn task_body(m: &Model, task: &TaskDef) -> Vec<String> {
         }
     };
     match task.via(p) {
+        Some(Via::Book(b)) => {
+            // the book's operation, on chobo's client through the transport; a refusal is the declared error its reason names
+            let f = &m.books[b.book].facts;
+            let tr = f.transfers.iter().find(|t| t.name == b.transfer);
+            let amounts: Vec<String> = tr.map(|t| t.params.iter().filter(|p| p.unit.is_some()).map(|p| p.name.clone()).collect()).unwrap_or_default();
+            let (call_args, call_amounts): (Vec<&(String, Ty)>, Vec<&(String, Ty)>) = task.params.iter().partition(|(p, _)| !(b.op == "post" && amounts.contains(p)));
+            let pick = |ps: &[&(String, Ty)]| format!("map[string]any{{{}}}", ps.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect::<Vec<_>>().join(", "));
+            let mut call = format!("BookCall{{Book: {}, Transfer: {}, Op: {}, Args: {}", q(&f.name), q(&b.transfer), q(&b.op), pick(&call_args));
+            if !call_amounts.is_empty() {
+                call.push_str(&format!(", Amounts: {}", pick(&call_amounts)));
+            }
+            call.push('}');
+            let keys: Vec<String> = tr.map(|t| t.params.iter().filter(|p| t.key.contains(&p.name)).map(|p| q(&p.name)).collect()).unwrap_or_default();
+            let state = match (b.op.as_str(), &task.result) {
+                (_, None) | ("do", _) => q(""),
+                ("hold", _) => q("held"),
+                ("post", _) => q("posted"),
+                _ => q("voided"),
+            };
+            vec![format!("r, err := ddBook(ctx, t, {call})"), format!("return ddBooked(r, err, {}, args, []string{{{}}}, {state})", names(task.errors.iter().map(|e| (e.name.clone(), e.name.clone())).collect()), keys.join(", "))]
+        }
         Some(Via::Lambda(f)) => {
             let mut out = vec![format!("o, err := t.Lambda(ctx, {}, args)", q(f))];
             out.extend(returned(format!("ddValue(o, err, {})", names(task.errors.iter().map(|e| (e.name.clone(), e.name.clone())).collect()))));
@@ -2323,19 +2352,41 @@ pub const AROUND_RULES: &[&str] = &["context", "ctx", "args", "int64", "any", "s
 /// generates, as activities.
 fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> String {
     let mut t = header.to_string();
-    t.push_str("// The rules the workflow calls, as activities around the Go rulec generates. `rulec gen <rule>\n");
-    t.push_str("// --out <this package's directory>/rulec` writes each package these imports read, as a module of its\n");
-    t.push_str("// own (rulec/go/<package>), which your go.mod requires and replaces with that directory:\n//\n");
+    let dated: BTreeSet<String> = called.iter().filter_map(|r| m.rules[*r].date()).map(|d| ritsu_emit::ident::go_package(&d.file_alias)).collect();
     let mut packages = BTreeSet::new();
-    for r in called {
+    for r in called.iter().filter(|r| m.rules[**r].is_rule()) {
         packages.insert(m.rules[*r].info.go.module.clone());
     }
-    for p in &packages {
-        t.push_str(&format!("//\trequire {p} v0.0.0\n//\treplace {p} => ./<this package's directory>/rulec/go/{p}\n"));
+    if !packages.is_empty() {
+        t.push_str(if dated.is_empty() { "// The rules the workflow calls, as activities around the Go rulec generates. `rulec gen <rule>\n" } else { "// The rules and the dates the workflow calls, as activities around the Go rulec and koyomi generate.\n// `rulec gen <rule>\n" });
+        t.push_str("// --out <this package's directory>/rulec` writes each package these imports read, as a module of its\n");
+        t.push_str("// own (rulec/go/<package>), which your go.mod requires and replaces with that directory:\n//\n");
+        for p in &packages {
+            t.push_str(&format!("//\trequire {p} v0.0.0\n//\treplace {p} => ./<this package's directory>/rulec/go/{p}\n"));
+        }
     }
-    t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n\n"));
+    if !dated.is_empty() {
+        if packages.is_empty() {
+            t.push_str("// The dates the workflow calls, as activities around the Go koyomi generates.\n");
+        } else {
+            t.push_str("//\n");
+        }
+        t.push_str("// `koyomi gen <file.cal> --out <this package's directory>/koyomi` writes the package of each dates file,\n");
+        t.push_str("// koyomi/go/<package>: give its directory a go.mod (`module koyomi/go/<package>`), which your go.mod\n// requires and replaces with that directory:\n//\n");
+        for p in &dated {
+            t.push_str(&format!("//\trequire koyomi/go/{p} v0.0.0\n//\treplace koyomi/go/{p} => ./<this package's directory>/koyomi/go/{p}\n"));
+        }
+    }
+    t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n"));
+    if !dated.is_empty() {
+        t.push_str("\t\"time\"\n");
+    }
+    t.push('\n');
     for p in &packages {
         t.push_str(&format!("\t{}\n", q(p)));
+    }
+    for p in &dated {
+        t.push_str(&format!("\t{}\n", q(&format!("koyomi/go/{p}"))));
     }
     t.push_str(")\n\n// ddRules are the rules whose code goes with the workflow, by the names the workflow calls them by.\nvar ddRules = map[string]any{\n");
     for r in called {
@@ -2343,8 +2394,15 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
         t.push_str(&format!("\t{}: ddRule_{},\n", q(&render::rule_activity(&ru.name)), ident(&ru.name)));
     }
     t.push_str("}\n");
+    if !dated.is_empty() {
+        t.push_str(DAY_GO);
+    }
     for r in called {
         let ru = &m.rules[*r];
+        if let Some(d) = ru.date() {
+            t.push_str(&date_rule_go(ru, d));
+            continue;
+        }
         let go = &ru.info.go;
         let pkgname = go.module.as_str();
         let is_enum = |ty: &str| go.enums.iter().any(|e| e.alias == ty);
@@ -2401,6 +2459,191 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
     }
     t
 }
+
+/// How rules.go reads a day it hands koyomi's code.
+const DAY_GO: &str = "\n// ddDay is a day of the calendar: YYYY-MM-DD as it is, or a time (…Z) as the day it falls on at the\n// calendar's offset (minutes east of UTC).\nfunc ddDay(v string, offset int) string {\n\tif len(v) <= 10 {\n\t\treturn v\n\t}\n\tt, err := time.Parse(time.RFC3339, v)\n\tif err != nil {\n\t\treturn v\n\t}\n\treturn t.UTC().Add(time.Duration(offset) * time.Minute).Format(\"2006-01-02\")\n}\n";
+
+/// A date of a dates file, as an activity of rules.go around koyomi's Go: its inputs by position,
+/// a day as the package's Date; it answers the day, and its time when the date turns into one.
+fn date_rule_go(ru: &RuleUse, d: &DateCall) -> String {
+    let pkgname = ritsu_emit::ident::go_package(&d.file_alias);
+    let f = ritsu_emit::ident::pascal(&d.alias);
+    let offset = d.offset.unwrap_or(0);
+    let mut body = Vec::new();
+    let mut args = Vec::new();
+    for (i, (n, _, day)) in d.params.iter().enumerate() {
+        let get = format!("args[{}]", q(n));
+        if *day {
+            let x = format!("dd_in{i}");
+            body.push(format!("{x}, err := {pkgname}.ParseDate(ddDay(ddStr({get}), {offset}))"));
+            body.push("if err != nil {".into());
+            body.push("\treturn nil, err".into());
+            body.push("}".into());
+            args.push(x);
+        } else {
+            args.push(format!("int(ddInt64({get}))"));
+        }
+    }
+    let a = args.join(", ");
+    body.push(format!("day, err := {pkgname}.{f}({a})"));
+    body.push("if err != nil {".into());
+    body.push("\treturn nil, err".into());
+    body.push("}".into());
+    let mut outs = vec!["\"day\": day.String()".to_string()];
+    if d.at {
+        body.push(format!("at, err := {pkgname}.{}({a})", ritsu_emit::ident::pascal(&format!("{}_at", d.alias))));
+        body.push("if err != nil {".into());
+        body.push("\treturn nil, err".into());
+        body.push("}".into());
+        outs.push("\"at\": at".into());
+    }
+    let mut t = format!("\n// ddRule_{} is the date {} of the dates file {} v{}.\nfunc ddRule_{}(ctx context.Context, args map[string]any) (any, error) {{\n", ident(&ru.name), d.date, ru.info.rule, ru.info.version, ident(&ru.name));
+    for l in &body {
+        t.push_str(&format!("\t{l}\n"));
+    }
+    t.push_str(&format!("\treturn map[string]any{{{}}}, nil\n}}\n", outs.join(", ")));
+    t
+}
+
+/// io_books.go: the operations of the books, on the Go clients chobo writes, which the default
+/// Transport reaches by reflection, so that this package imports none of them.
+fn io_books_file(m: &Model, pkg: &str, header: &str) -> String {
+    let mut t = header.to_string();
+    t.push_str("// How the tasks that say `book` run an operation of a book of chobo's: through the Transport, which\n// the default one does on the Go client chobo writes for the book (TransportOptions.Books).\n");
+    t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\t\"reflect\"\n)\n"));
+    t.push_str(BOOKS_GO);
+    t.push_str("\n// ddBooks are how chobo's Go client names each transfer of a book and its parameters, by the book's name.\nvar ddBooks = map[string]map[string]ddBookNames{\n");
+    for b in crate::asl::used_books(m) {
+        let f = &m.books[b].facts;
+        t.push_str(&format!("\t{}: {{\n", q(&f.name)));
+        for (tr, c) in f.transfers.iter().zip(&f.go.transfers) {
+            let params: Vec<String> = tr.params.iter().zip(&c.params).map(|(p, n)| format!("{}: {}", q(&p.name), q(n))).collect();
+            t.push_str(&format!("\t\t{}: {{Member: {}, Params: map[string]string{{{}}}}},\n", q(&tr.name), q(&c.member), params.join(", ")));
+        }
+        t.push_str("\t},\n");
+    }
+    t.push_str("}\n");
+    t
+}
+
+/// What io_books.go shares with every flow that runs a book's operations.
+const BOOKS_GO: &str = r##"
+// BookCall is an operation of a book of chobo's: the book's name, the transfer, the operation (do,
+// hold, post or void), the arguments by the book's names, and for a post of part of a hold, the
+// amounts apart.
+type BookCall struct {
+	Book     string
+	Transfer string
+	Op       string
+	Args     map[string]any
+	Amounts  map[string]any
+}
+
+// BookResult is what a book answers: "done", "done_before" (the same operation was done before),
+// or "refused" with the reason.
+type BookResult struct {
+	Result string
+	Reason string
+}
+
+// BookTransport is a Transport that runs the operations of books; the default one does.
+type BookTransport interface {
+	Book(ctx context.Context, call BookCall) (BookResult, error)
+}
+
+// ddBookNames is how chobo's Go client names a transfer and its parameters.
+type ddBookNames struct {
+	Member string
+	Params map[string]string
+}
+
+// Book runs an operation of a book on the client TransportOptions.Books has for it, the *Book the Go
+// client chobo writes makes: the field of the transfer, its method for the operation (Do, Hold, Post
+// or Void), and the struct of the arguments it takes, each found by reflection.
+func (t *DefaultTransport) Book(ctx context.Context, call BookCall) (BookResult, error) {
+	b, ok := t.o.Books[call.Book]
+	if !ok {
+		return BookResult{}, fmt.Errorf("no client for the book %s: set TransportOptions.Books[%q], the *Book chobo's Go client makes", call.Book, call.Book)
+	}
+	names, ok := ddBooks[call.Book][call.Transfer]
+	if !ok {
+		return BookResult{}, fmt.Errorf("the book %s has no transfer %s", call.Book, call.Transfer)
+	}
+	v := reflect.ValueOf(b)
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	op := map[string]string{"do": "Do", "hold": "Hold", "post": "Post", "void": "Void"}[call.Op]
+	method := v.FieldByName(names.Member).MethodByName(op)
+	if !method.IsValid() {
+		return BookResult{}, fmt.Errorf("the client of the book %s has no %s.%s", call.Book, names.Member, op)
+	}
+	fill := func(into reflect.Value, values map[string]any) {
+		for k, x := range values {
+			f := into.FieldByName(names.Params[k])
+			if f.Kind() == reflect.String {
+				f.SetString(ddStr(x))
+			} else if f.CanInt() {
+				f.SetInt(ddInt64(x))
+			}
+		}
+	}
+	in := []reflect.Value{reflect.ValueOf(ctx)}
+	args := reflect.New(method.Type().In(1)).Elem()
+	fill(args, call.Args)
+	in = append(in, args)
+	if method.Type().NumIn() == 3 {
+		// a post of a transfer with amounts: all of it when there are none
+		amounts := reflect.Zero(method.Type().In(2))
+		if call.Amounts != nil {
+			amounts = reflect.New(method.Type().In(2).Elem())
+			fill(amounts.Elem(), call.Amounts)
+		}
+		in = append(in, amounts)
+	}
+	out := method.Call(in)
+	if e := out[1]; !e.IsNil() {
+		return BookResult{}, e.Interface().(error)
+	}
+	return BookResult{Result: out[0].FieldByName("Outcome").String(), Reason: out[0].FieldByName("Reason").String()}, nil
+}
+
+// ddBook runs an operation of a book through t, which must run them.
+func ddBook(ctx context.Context, t Transport, call BookCall) (BookResult, error) {
+	bt, ok := t.(BookTransport)
+	if !ok {
+		return BookResult{}, fmt.Errorf("the transport runs no operation of a book: give it a Book method (BookTransport)")
+	}
+	return bt.Book(ctx, call)
+}
+
+// ddBooked is a book's answer as a task's: the hold (the arguments that are its key, and its state
+// now) when the operation is done, now or before; nothing for a transfer done at once (state "");
+// or the declared error a refusal's reason names, else a failure.
+func ddBooked(r BookResult, err error, names map[string]string, args map[string]any, keys []string, state string) (any, error) {
+	if err != nil {
+		return nil, err
+	}
+	if r.Result == "refused" {
+		if kind, ok := names[r.Reason]; ok {
+			return nil, ddFailure(kind, r.Reason)
+		}
+		return nil, ddFailure("Dandori.Failure."+r.Reason, r.Reason)
+	}
+	if state == "" {
+		return nil, nil
+	}
+	out := map[string]any{}
+	for _, k := range keys {
+		out[k] = args[k]
+	}
+	out["state"] = state
+	return out, nil
+}
+"##;
+
+/// `now` on Temporal: the workflow's clock, which a replay reads again the same.
+const NOW_GO: &str = "\n// ddNow is `now`: the moment, by the workflow's clock, which a replay reads again the same; to the\n// second, in UTC.\nfunc ddNow(ctx workflow.Context) string {\n\treturn workflow.Now(ctx).UTC().Format(\"2006-01-02T15:04:05Z\")\n}\n";
 
 /// client.go: starting the workflow, answering its callbacks, and asking where it is.
 fn client_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
@@ -2577,7 +2820,10 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     if nd.claude {
         files.push((format!("{pkg}/io_claude.go"), constant(IO_CLAUDE)));
     }
-    files.push((format!("{pkg}/runtime.go"), constant(RUNTIME)));
+    files.push((format!("{pkg}/runtime.go"), format!("{}{}", constant(RUNTIME), if m.uses_now() { NOW_GO } else { "" })));
+    if !crate::asl::used_books(m).is_empty() {
+        files.push((format!("{pkg}/io_books.go"), io_books_file(m, &pkg, &header)));
+    }
     files.push((format!("{pkg}/workflow.go"), wf));
     if !called.is_empty() {
         files.push((format!("{pkg}/rules.go"), rules_file(m, &pkg, &header, &called)));
@@ -2674,6 +2920,7 @@ impl<'a> Gen<'a> {
             TExpr::Bool(b) => b.to_string(),
             TExpr::Enum(v, _) => q(v),
             TExpr::None(_) => "nil".into(),
+            TExpr::Now => "ddNow(ctx)".into(),
             TExpr::Var { name, fields, .. } => {
                 if fields.is_empty() {
                     self.var(name)

@@ -3,8 +3,9 @@
 //! Chrome and shows what `check` prints.
 //!
 //! Two of its files are committed products: presets.json, recorded from the examples here (the
-//! files they read, and what rulec answered for their rules through ritsu's port of rules, read in
-//! this process; `DANDORI_BLESS=1` records it anew), and dandori.wasm, built by
+//! files they read, and what rulec, koyomi and chobo answered for their rules, dates files and
+//! books through ritsu's ports, read in this process; `DANDORI_BLESS=1` records it anew), and
+//! dandori.wasm, built by
 //! website/tools/make_wasm.sh. Both can go stale, and these tests are what says so. Node drives
 //! the module, and Chrome the page (ritsu-testkit's: `RITSU_CHROME` or `DANDORI_CHROME`, else where
 //! macOS keeps it, else on the PATH). A test that cannot find what it needs prints `SKIP:
@@ -44,6 +45,16 @@ fn rulec() -> Rc<dyn Rules> {
     RULEC.with(|r| r.clone())
 }
 
+/// koyomi's and chobo's own answers to the ports of dates and books, which a program that joins
+/// them hands over with rulec's.
+fn dates() -> Rc<dyn ritsu_ports::Dates> {
+    Rc::new(koyomi::ports::Engine)
+}
+
+fn books() -> Rc<dyn ritsu_ports::Books> {
+    Rc::new(chobo::ports::Engine)
+}
+
 fn node_available() -> bool {
     Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
@@ -70,7 +81,7 @@ fn lang(tag: &str) -> Lang {
 
 /// The examples in the order the site lists them, and the versions of each in the order it
 /// lists them.
-const EXAMPLES: [&str; 5] = ["hotel", "order", "fulfillment", "inquiry", "review"];
+const EXAMPLES: [&str; 6] = ["hotel", "order", "fulfillment", "inquiry", "review", "invoice"];
 const VERSIONS: [&str; 4] = ["temporal", "aws", "pydantic-graph", "argo"];
 
 /// The flows the playground opens, for each language: a first draft whose check finds errors,
@@ -124,7 +135,7 @@ fn target_for(path: &str, m: Option<&dandori::model::Model>) -> &'static str {
 /// checking a flow reads the rules and the APIs it names and its child flows; drawing it, the page
 /// `rulec doc` draws for its rules in the page's language; the rules tab, the rules' files.
 fn record() -> String {
-    let rec = Rc::new(Recorder::new(&root(), rulec()));
+    let rec = Rc::new(Recorder::with_ports(&root(), rulec(), dates(), books()));
     let mut flows = serde_json::Map::new();
     sources::with(rec.clone(), || {
         for (tag, list) in presets() {
@@ -141,7 +152,13 @@ fn record() -> String {
         }
     });
     let got = rec.bundle().to_json();
-    let v = json!({ "flows": flows, "files": got["files"], "rules": got["rules"] });
+    let mut v = json!({ "flows": flows, "files": got["files"], "rules": got["rules"] });
+    // the dates files and the books the examples read, and what koyomi and chobo answered for them
+    for k in ["dates", "books"] {
+        if !got[k].is_null() {
+            v[k] = got[k].clone();
+        }
+    }
     laid_out(&v, 3, 0) + "\n"
 }
 
@@ -202,12 +219,12 @@ fn presets_are_what_the_examples_read() {
     }
 }
 
-/// The command, as `ritsu dandori` runs it (with rulec's port, ritsu's DESIGN 3.3), from the
-/// repository's root (where the tests run) on the file as it is committed.
+/// The command, as `ritsu dandori` runs it (with rulec's port, ritsu's DESIGN 3.3, and koyomi's and
+/// chobo's), from the repository's root (where the tests run) on the file as it is committed.
 fn dandori(args: &[&str]) -> (i32, String, String) {
     let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let code = dandori::cli::run(&args, rulec(), &mut out, &mut err);
+    let code = dandori::cli::run_with_ports(&args, rulec(), dates(), books(), &mut out, &mut err);
     (code as i32, String::from_utf8_lossy(&out).into_owned(), String::from_utf8_lossy(&err).into_owned())
 }
 
@@ -281,7 +298,7 @@ fn the_bundle_answers_as_the_command_does() {
                         differs(&mut failures, "doc --format html", &page, &got["html"]);
                         differs(&mut failures, "doc", &md, &got["markdown"]);
                         // the rules tab has no command: it reads the disk and rulec as the page reads the bundle
-                        let disk = sources::with_rules(rulec(), || playground::rules_here(&r));
+                        let disk = sources::with_ports(rulec(), dates(), books(), || playground::rules_here(&r));
                         let got = playground::rules(&bundle, &r);
                         if disk != got {
                             failures.push(format!("{path} ({tag}), the rules:\n--- the disk\n{disk:#}\n--- the page\n{got:#}"));

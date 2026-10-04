@@ -173,7 +173,9 @@ function podErrors(w) {
     .map((n) => `${w.metadata.name} ${n.displayName}: ${n.message ?? ""}`);
 }
 
-const wt = spec.template;
+// `now` reads the scenarios' moment here (dandori's render::SCENARIO_NOW), not the controller's clock
+const ARGO_NOW = 'now().UTC().Format("2006-01-02T15:04:05Z")';
+const wt = JSON.parse(JSON.stringify(spec.template).replaceAll(JSON.stringify(ARGO_NOW).slice(1, -1), '\\"2026-03-31T15:30:00Z\\"'));
 const name = wt.metadata.name;
 // seconds added to the deadline of every pod of a template under test, for the pod to start in (see below)
 const DEADLINE_ROOM = 120;
@@ -261,7 +263,7 @@ for (const t of wt.spec.templates) {
   if (task === undefined) continue;
   const cmd = c.command ?? [];
   // a rule whose code goes with the workflow is a stand-in; one called at its Connect service runs the generated caller, which sends through the transport
-  if (cmd[1] === "/app/call.ts" && String(cmd[2]).startsWith("rule_") && !(spec.connectRules ?? []).includes(cmd[2])) c.command = ["node", "/app/stand-in.mjs", "rule", task];
+  if (cmd[1] === "/app/call.ts" && (String(cmd[2]).startsWith("rule_") || String(cmd[2]).startsWith("dates_")) && !(spec.connectRules ?? []).includes(cmd[2])) c.command = ["node", "/app/stand-in.mjs", "rule", task];
   else if (cmd[1] !== "/app/call.ts") c.command = ["node", "/app/stand-in.mjs", own.get(task)?.callback ? "callback" : "task", task];
   c.image = "node:24-alpine";
   c.imagePullPolicy = "IfNotPresent";

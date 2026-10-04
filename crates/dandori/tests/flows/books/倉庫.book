@@ -1,0 +1,19 @@
+# 倉庫の在庫。入荷で棚に足し、注文の数を引き当てて押さえ、出荷で押さえた分の一部か全部を確定する。
+book 倉庫 v1
+description "SKU ごとの在庫。入荷で増え、注文は 7 日まで引き当てて押さえ、出荷で押さえた分の一部か全部を確定する"
+
+unit 個
+
+account 棚(sku: string) : 個
+  at least 0 refused as 足りない
+account 仕入先 : 個 outside
+account 客 : 個 outside
+
+transfer 入荷(便: string, sku: string, 数: 個)
+  key 便, sku
+  move 数 from 仕入先 to 棚(sku)
+
+transfer 引当(注文: string, sku: string, 数: 個)
+  key 注文, sku
+  pending expires after 7 days
+  move 数 from 棚(sku) to 客

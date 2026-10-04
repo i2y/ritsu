@@ -1,0 +1,11 @@
+# chobo の検査を通らない帳簿：振替が、無い口座から動かす。
+book 壊れた v1
+
+unit 個
+
+account 棚(sku: string) : 個
+account 客 : 個 outside
+
+transfer 出荷(注文: string, sku: string, 数: 個)
+  key 注文
+  move 数 from 倉(sku) to 客

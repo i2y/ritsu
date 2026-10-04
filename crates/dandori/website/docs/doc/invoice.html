@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="dandori doc">
+<title>invoice v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #8c959f; --node: #f6f8fa; --stroke: #59636e; --ok: #1a7f37; --bad: #cf222e; --lit: #0969da; --litbg: #ddf4ff; --sel: #9a6700; --border: #d1d9e0; --code: #eff2f5; --side: #f6f8fa; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #6e7681; --node: #151b23; --stroke: #9198a1; --ok: #3fb950; --bad: #f85149; --lit: #4493f8; --litbg: #0c2d6b; --sel: #d29922; --border: #3d444d; --code: #262c36; --side: #0f141b; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+.app { height: 100vh; display: flex; flex-direction: column; }
+code, pre, .dl, .ln { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+code { font-size: .9em; background: var(--code); padding: .08em .3em; border-radius: 4px; }
+header.top { padding: 12px 16px 10px; border-bottom: 1px solid var(--border); }
+header.top h1 { margin: 0; font-size: 18px; }
+header.top h1 code { background: none; padding: 0; font-size: 1em; }
+header.top .ver { color: var(--muted); font-weight: 400; font-size: 14px; }
+header.top .file { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+header.top .file code { background: none; padding: 0; }
+header.top .desc { margin: 6px 0 0; max-width: 72em; font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; }
+header.top .desc.open { -webkit-line-clamp: unset; }
+.banner { margin: 8px 0 0; padding: 6px 10px; border: 1px solid var(--bad); border-radius: 6px; color: var(--bad); font-size: 13px; }
+.grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr) minmax(18rem, 26rem); }
+.side, .detail { overflow: auto; padding: 12px 14px; background: var(--side); }
+.side { border-right: 1px solid var(--border); }
+.detail { border-left: 1px solid var(--border); }
+.side h2 { font-size: 13px; margin: 4px 0 6px; text-transform: none; }
+.side section + section { margin-top: 16px; }
+.note { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+ul.groups, ul.checks, ul.rules, ul.legend, ul.facts, ol.steps { list-style: none; margin: 0; padding: 0; }
+.group { margin: 0 0 10px; }
+.gl { font-size: 12px; margin-bottom: 3px; }
+.gl code { background: none; padding: 0; }
+.gl.ok code { color: var(--ok); } .gl.bad code { color: var(--bad); }
+.gn { color: var(--muted); font-size: 11px; }
+.gn::before { content: "× "; }
+.runs { display: flex; flex-wrap: wrap; gap: 4px; }
+button.run { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-width: 2.2em; padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--fg); cursor: pointer; }
+button.run:hover, button.check:hover { border-color: var(--lit); }
+button.run[aria-pressed="true"] { background: var(--lit); border-color: var(--lit); color: #fff; }
+.picking button.run { opacity: .35; }
+.picking button.run.through { opacity: 1; border-color: var(--lit); }
+button.check { display: block; width: 100%; text-align: left; font: inherit; font-size: 12px; padding: 5px 7px; margin: 0 0 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+button.check[aria-pressed="true"] { border-color: var(--lit); box-shadow: 0 0 0 1px var(--lit); }
+button.rule { display: block; width: 100%; text-align: left; font: inherit; font-size: 12px; padding: 5px 7px; margin: 0 0 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+button.rule:hover { border-color: var(--lit); }
+button.rule code { background: none; padding: 0; }
+.detail button.rule { display: inline-block; width: auto; margin: 10px 0 0; }
+.sheet { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--bg); }
+.sheet[hidden] { display: none; }
+.sheet .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--side); font-size: 13px; }
+.sheet .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet button.close { font: inherit; font-size: 16px; line-height: 1; padding: 3px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+.sheet button.close:hover { border-color: var(--lit); }
+.sheet iframe { flex: 1; width: 100%; border: 0; }
+.code { font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.code.err { color: var(--bad); } .code.warn { color: var(--sel); }
+.dl { color: var(--muted); font-size: 11px; }
+.canvas { overflow: auto; padding: 14px; display: flex; flex-wrap: wrap; gap: 24px; align-content: flex-start; align-items: flex-start; outline: none; }
+figure.panel { margin: 0; }
+figure.panel figcaption { margin: 0 0 2px 6px; font-size: 12px; color: var(--muted); }
+figure.panel figcaption code { background: none; padding: 0; }
+.dd-svg { display: block; }
+.dd-svg text { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; fill: var(--fg); }
+.n { cursor: pointer; }
+.n .shape { fill: var(--node); stroke: var(--stroke); stroke-width: 1.2; }
+.n .side { fill: none; stroke: var(--stroke); stroke-width: 1.2; }
+.n .t.sub { fill: var(--muted); font-size: 11px; }
+.n .ln { fill: var(--muted); font-size: 10px; }
+.k-succeed .shape, .n.ok .shape { stroke: var(--ok); stroke-width: 2; }
+.k-fail .shape, .n.bad .shape { stroke: var(--bad); stroke-width: 2; }
+.k-start .shape { stroke-width: 2; }
+.k-entry .shape { stroke-dasharray: 5 3; stroke-width: 1.6; }
+.frame { cursor: pointer; }
+.frame .shape { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 6 4; }
+.frame .ft { fill: var(--muted); }
+.e path { fill: none; stroke: var(--line); stroke-width: 1.3; marker-end: url(#dd-arrow); }
+.e.inner path { marker-end: none; }
+.e.dash path { stroke-dasharray: 5 4; }
+.e .el { fill: var(--muted); font-size: 11px; }
+.ah { fill: var(--line); } .ah.lit { fill: var(--lit); }
+.tick circle { fill: var(--bg); stroke: var(--bad); stroke-width: 1.2; }
+.tick text { fill: var(--bad); font-size: 10px; font-weight: 700; text-anchor: middle; }
+.n:focus { outline: none; } .frame:focus { outline: none; }
+.n.sel .shape, .n:focus-visible .shape { stroke: var(--sel); stroke-width: 3; }
+.frame.sel .shape, .frame:focus-visible .shape { stroke: var(--sel); stroke-width: 2.2; }
+.running .n, .running .e, .running .frame { opacity: .22; transition: opacity .12s; }
+.running .lit { opacity: 1; }
+.running .n.lit .shape { stroke: var(--lit); stroke-width: 2.4; fill: var(--litbg); }
+.running .frame.lit .shape { stroke: var(--lit); }
+.running .e.lit path { stroke: var(--lit); stroke-width: 2.4; marker-end: url(#dd-arrow-lit); }
+.running .e.lit .el { fill: var(--lit); font-weight: 600; }
+.running .tick.lit circle { fill: var(--bad); }
+.running .tick.lit text { fill: var(--bg); }
+.count { fill: var(--lit); font-weight: 700; font-size: 11px; }
+.detail h2.dh { font-size: 14px; margin: 2px 0 8px; }
+.detail h2.dh code { background: none; padding: 0; font-size: 13px; }
+.detail h3 { font-size: 12px; color: var(--muted); margin: 14px 0 4px; font-weight: 600; }
+pre.src, pre.diag { margin: 0; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; overflow: auto; white-space: pre; }
+pre.src .ln { color: var(--muted); }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; margin: 10px 0 0; font-size: 12.5px; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+ul.facts li { font-size: 12.5px; margin: 2px 0; }
+ol.steps li { font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+ol.steps .ln { color: var(--muted); font-size: 11px; display: inline-block; min-width: 2.4em; }
+ol.steps code { background: none; padding: 0; }
+.round { color: var(--muted); font-size: 11px; }
+.chip { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 0 5px; border-radius: 9px; border: 1px solid var(--border); white-space: nowrap; }
+.chip.ok { color: var(--ok); border-color: var(--ok); } .chip.bad { color: var(--bad); border-color: var(--bad); } .chip.cancel { color: var(--sel); border-color: var(--sel); }
+p.through { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+ul.legend li { display: flex; gap: 8px; align-items: center; font-size: 12.5px; margin: 5px 0; }
+ul.legend svg { flex: none; }
+.lg { fill: var(--node); stroke: var(--stroke); stroke-width: 1.2; }
+.lg.frame { fill: none; stroke: var(--line); stroke-dasharray: 4 3; }
+.lg.ok { stroke: var(--ok); stroke-width: 2; } .lg.bad { stroke: var(--bad); stroke-width: 2; }
+.lg-e { stroke: var(--line); stroke-width: 1.4; fill: none; } .lg-e.dash { stroke-dasharray: 4 3; }
+.lg-tick { fill: var(--bg); stroke: var(--bad); stroke-width: 1.2; }
+.lg-tick-t { fill: var(--bad); font: 700 10px sans-serif; text-anchor: middle; }
+.tables { padding: 16px; border-top: 1px solid var(--border); overflow: auto; }
+.tables h2 { font-size: 15px; margin: 8px 0; }
+.tables table { border-collapse: collapse; font-size: 12.5px; margin-bottom: 16px; }
+.tables th, .tables td { border: 1px solid var(--border); padding: 4px 8px; vertical-align: top; text-align: left; }
+.tables td.num { text-align: right; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.tables th { background: var(--side); }
+@media (max-width: 900px) {
+  .app { height: auto; display: block; }
+  .grid { display: block; }
+  .side, .detail { border: 0; border-bottom: 1px solid var(--border); }
+  .canvas { max-height: 80vh; }
+}
+@media print { .side, .detail, .sheet { display: none; } .grid { display: block; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="dd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,1 L10,5 L0,9 z"/></marker><marker id="dd-arrow-lit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah lit" d="M0,1 L10,5 L0,9 z"/></marker></defs></svg>
+<div class="app">
+<header class="top"><h1><code>invoice</code> <span class="ver">v1</span></h1><p class="file"><code>examples/invoice/invoice.flow</code> · dandori doc</p><p class="desc" title="An order holds its goods until its payment is due, then ships them once paid, or puts them back">An order holds its goods until its payment is due, then ships them once paid, or puts them back</p></header>
+<main class="grid">
+<nav class="side" aria-label="runs"><section><h2>Scenarios</h2><p class="note">18 scenarios that together take every arm, every handler of an error and every way a case can move, grouped by how they end. Pick one to light up the way it goes.</p><ul class="groups"><li class="group"><div class="gl ok"><code>57 succeed outcome = out_of_stock, due = none</code> <span class="gn">1</span></div><div class="runs"><button class="run" data-run="1" aria-pressed="false">2</button></div></li><li class="group"><div class="gl ok"><code>64 succeed outcome = not_paid, due = due.day</code> <span class="gn">2</span></div><div class="runs"><button class="run" data-run="10" aria-pressed="false">11</button><button class="run" data-run="11" aria-pressed="false">12</button></div></li><li class="group"><div class="gl ok"><code>65 succeed outcome = shipped, due = due.day</code> <span class="gn">2</span></div><div class="runs"><button class="run" data-run="0" aria-pressed="false">1</button><button class="run" data-run="13" aria-pressed="false">14</button></div></li><li class="group"><div class="gl ok"><code>69 succeed outcome = not_paid, due = due.day</code> <span class="gn">4</span></div><div class="runs"><button class="run" data-run="7" aria-pressed="false">8</button><button class="run" data-run="9" aria-pressed="false">10</button><button class="run" data-run="15" aria-pressed="false">16</button><button class="run" data-run="17" aria-pressed="false">18</button></div></li><li class="group"><div class="gl bad"><code>77 fail NotPutBack</code> <span class="gn">1</span></div><div class="runs"><button class="run" data-run="12" aria-pressed="false">13</button></div></li><li class="group"><div class="gl bad"><code>fails with the same error</code> <span class="gn">6</span></div><div class="runs"><button class="run" data-run="2" aria-pressed="false">3</button><button class="run" data-run="3" aria-pressed="false">4</button><button class="run" data-run="4" aria-pressed="false">5</button><button class="run" data-run="6" aria-pressed="false">7</button><button class="run" data-run="14" aria-pressed="false">15</button><button class="run" data-run="16" aria-pressed="false">17</button></div></li><li class="group"><div class="gl bad"><code>fail Dandori.BadResponse: an answer not of the declared type</code> <span class="gn">2</span></div><div class="runs"><button class="run" data-run="5" aria-pressed="false">6</button><button class="run" data-run="8" aria-pressed="false">9</button></div></li></ul></section></nav>
+<section class="canvas" tabindex="-1"><figure class="panel" data-panel="flow"><figcaption><code>flow</code></figcaption><svg class="dd-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1127 688" width="1127" height="688"><g class="frames"></g><g class="edges"><g class="e" data-id="flow-12"><path d="M225.0,42.0 L225.0,70.0"/></g><g class="e dash" data-id="flow-1"><path d="M319.0,100.0 L524.0,100.0 L524.0,156.0"/><text class="el" x="530.0" y="115.0"><tspan x="530.0" dy="0">on out_of_stock</tspan></text></g><g class="e" data-id="flow-8"><path d="M225.0,130.0 L225.0,212.0"/></g><g class="e" data-id="flow-9"><path d="M225.0,256.0 L225.0,284.0"/></g><g class="e" data-id="flow-10"><path d="M225.0,312.0 L225.0,340.0"/></g><g class="e" data-id="flow-11"><path d="M225.0,400.0 L225.0,428.0"/></g><g class="e" data-id="flow-6"><path d="M225.0,462.0 L225.0,488.0"/><text class="el" x="231.0" y="476.0"><tspan x="231.0" dy="0">true</tspan></text></g><g class="e dash" data-id="flow-2"><path d="M319.0,518.0 L520.5,518.0 L520.5,574.0"/><text class="el" x="526.5" y="533.0"><tspan x="526.5" dy="0">on expired</tspan></text></g><g class="e" data-id="flow-3"><path d="M225.0,548.0 L225.0,630.0"/></g><g class="e" data-id="flow-7"><path d="M322.5,445.0 L897.5,445.0 L897.5,488.0"/><text class="el" x="903.5" y="460.0"><tspan x="903.5" dy="0">false</tspan></text></g><g class="e" data-id="flow-4"><path d="M897.5,548.0 L897.5,602.0"/></g><g class="e dash" data-id="flow-5"><path d="M991.5,518.0 L1023.5,518.0 L1023.5,574.0 L1023.5,592.0 L897.5,592.0 L897.5,602.0"/><text class="el" x="1029.5" y="533.0"><tspan x="1029.5" dy="0">on expired</tspan></text></g></g><g class="nodes"><g class="n k-start" data-id="start" tabindex="0"><rect class="shape" x="172.5" y="14.0" width="105.0" height="28.0" rx="14.0"/><text class="t" x="188.5" y="32.0">invoice v1</text></g><g class="n k-call" data-id="s1" tabindex="0"><rect class="shape" x="131.0" y="70.0" width="188.0" height="60.0" rx="4"/><text class="t" x="141.0" y="88.0"><tspan class="ln">56</tspan> hold ← reserve(…)</text><text class="t sub" x="141.0" y="104.0">book stock.reserve.hold</text><text class="t sub" x="141.0" y="120.0">starts</text><g class="tick"><title>out_of_stock → line 57; timeout, failure → on failure</title><circle cx="319.0" cy="79.0" r="6.5"/><text x="319.0" y="82.5">!</text></g></g><g class="n k-succeed" data-id="s2" tabindex="0"><rect class="shape" x="345.0" y="156.0" width="358.0" height="28.0" rx="14.0"/><text class="t" x="361.0" y="174.0"><tspan class="ln">57</tspan> succeed outcome = out_of_stock, due = none</text></g><g class="n k-rule" data-id="s3" tabindex="0"><rect class="shape" x="119.0" y="212.0" width="212.0" height="44.0" rx="3"/><path class="side" d="M125.0,212.0 V256.0 M325.0,212.0 V256.0"/><text class="t" x="135.0" y="230.0"><tspan class="ln">58</tspan> due = terms.payment(…)</text><text class="t sub" x="135.0" y="246.0">dates payment_terms.cal</text><g class="tick"><title>timeout, failure → on failure</title><circle cx="331.0" cy="221.0" r="6.5"/><text x="331.0" y="224.5">!</text></g></g><g class="n k-wait" data-id="s4" tabindex="0"><rect class="shape" x="137.0" y="284.0" width="176.0" height="28.0" rx="12"/><text class="t" x="153.0" y="302.0"><tspan class="ln">59</tspan> wait until due.at</text></g><g class="n k-call" data-id="s5" tabindex="0"><rect class="shape" x="14.0" y="340.0" width="422.0" height="60.0" rx="4"/><text class="t" x="24.0" y="358.0"><tspan class="ln">60</tspan> payment = check_payment(…)</text><text class="t sub" x="24.0" y="374.0">GET https://payments.example.com/orders/{order}/payment</text><text class="t sub" x="24.0" y="390.0">retry 2 times every 10 seconds</text><g class="tick"><title>timeout, failure → on failure</title><circle cx="436.0" cy="349.0" r="6.5"/><text x="436.0" y="352.5">!</text></g></g><g class="n k-match" data-id="s6" tabindex="0"><polygon class="shape" points="127.5,445.0 140.5,428.0 309.5,428.0 322.5,445.0 309.5,462.0 140.5,462.0"/><text class="t" x="149.5" y="449.0"><tspan class="ln">61</tspan> match payment.paid</text></g><g class="n k-call" data-id="s7" tabindex="0"><rect class="shape" x="131.0" y="488.0" width="188.0" height="60.0" rx="4"/><text class="t" x="141.0" y="506.0"><tspan class="ln">63</tspan> hold ← ship(…)</text><text class="t sub" x="141.0" y="522.0">book stock.reserve.post</text><text class="t sub" x="141.0" y="538.0">sends post</text><g class="tick"><title>expired → line 64; timeout, failure → on failure</title><circle cx="319.0" cy="497.0" r="6.5"/><text x="319.0" y="500.5">!</text></g></g><g class="n k-succeed" data-id="s8" tabindex="0"><rect class="shape" x="345.0" y="574.0" width="351.0" height="28.0" rx="14.0"/><text class="t" x="361.0" y="592.0"><tspan class="ln">64</tspan> succeed outcome = not_paid, due = due.day</text></g><g class="n k-succeed" data-id="s9" tabindex="0"><rect class="shape" x="53.0" y="630.0" width="344.0" height="28.0" rx="14.0"/><text class="t" x="69.0" y="648.0"><tspan class="ln">65</tspan> succeed outcome = shipped, due = due.day</text></g><g class="n k-call" data-id="s10" tabindex="0"><rect class="shape" x="803.5" y="488.0" width="188.0" height="60.0" rx="4"/><text class="t" x="813.5" y="506.0"><tspan class="ln">67</tspan> hold ← put_back(…)</text><text class="t sub" x="813.5" y="522.0">book stock.reserve.void</text><text class="t sub" x="813.5" y="538.0">sends void</text><g class="tick"><title>expired → line 68; timeout, failure → on failure</title><circle cx="991.5" cy="497.0" r="6.5"/><text x="991.5" y="500.5">!</text></g></g><g class="n k-succeed" data-id="s12" tabindex="0"><rect class="shape" x="722.0" y="602.0" width="351.0" height="28.0" rx="14.0"/><text class="t" x="738.0" y="620.0"><tspan class="ln">69</tspan> succeed outcome = not_paid, due = due.day</text></g></g></svg></figure><figure class="panel" data-panel="on-failure"><figcaption><code>on failure</code></figcaption><svg class="dd-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1185 362" width="1185" height="362"><g class="frames"></g><g class="edges"><g class="e" data-id="on-failure-3"><path d="M121.5,42.0 L121.5,70.0"/></g><g class="e" data-id="on-failure-2"><path d="M212.0,87.0 L332.0,87.0 L332.0,130.0"/><text class="el" x="338.0" y="102.0"><tspan x="338.0" dy="0">held</tspan></text></g><g class="e dash" data-id="on-failure-1"><path d="M426.0,160.0 L764.0,160.0 L764.0,216.0"/><text class="el" x="770.0" y="175.0"><tspan x="770.0" dy="0">on failure</tspan></text></g><g class="e" data-id="on-failure-4"><path d="M121.5,104.0 L121.5,130.0 L121.5,304.0"/><text class="el" x="127.5" y="118.0"><tspan x="127.5" dy="0">none</tspan></text></g><g class="e" data-id="on-failure-5"><path d="M332.0,190.0 L332.0,294.0 L121.5,294.0 L121.5,304.0"/></g><g class="e dash" data-id="on-failure-6"><path d="M426.0,160.0 L458.0,160.0 L458.0,216.0 L458.0,294.0 L121.5,294.0 L121.5,304.0"/><text class="el" x="464.0" y="175.0"><tspan x="464.0" dy="0">on expired</tspan></text></g><g class="e" data-id="on-failure-7"><path d="M212.0,87.0 L987.0,87.0 L987.0,130.0 L987.0,294.0 L121.5,294.0 L121.5,304.0"/><text class="el" x="993.0" y="102.0"><tspan x="993.0" dy="0">posted, voided, expired</tspan></text></g></g><g class="nodes"><g class="n k-entry" data-id="onf" tabindex="0"><rect class="shape" x="59.0" y="14.0" width="125.0" height="28.0" rx="14.0"/><text class="t" x="75.0" y="32.0"><tspan class="ln">71</tspan> on failure</text></g><g class="n k-match" data-id="s13" tabindex="0"><polygon class="shape" points="31.0,87.0 44.0,70.0 199.0,70.0 212.0,87.0 199.0,104.0 44.0,104.0"/><text class="t" x="53.0" y="91.0"><tspan class="ln">72</tspan> match hold.state</text></g><g class="n k-call" data-id="s15" tabindex="0"><rect class="shape" x="238.0" y="130.0" width="188.0" height="60.0" rx="4"/><text class="t" x="248.0" y="148.0"><tspan class="ln">75</tspan> hold ← put_back(…)</text><text class="t sub" x="248.0" y="164.0">book stock.reserve.void</text><text class="t sub" x="248.0" y="180.0">sends void</text></g><g class="n k-fail" data-id="s17" tabindex="0"><rect class="shape" x="573.0" y="216.0" width="382.0" height="60.0" rx="15.0"/><text class="t" x="589.0" y="234.0"><tspan class="ln">77</tspan> fail NotPutBack</text><text class="t sub" x="589.0" y="250.0">&quot;the goods held for the order could not be put …</text><text class="t sub" x="589.0" y="266.0">leaving hold</text></g><g class="n k-end bad" data-id="onfEnd" tabindex="0"><rect class="shape" x="14.0" y="304.0" width="215.0" height="28.0" rx="14.0"/><text class="t" x="30.0" y="322.0">fails with the same error</text></g></g></svg></figure></section>
+<aside class="detail" id="dd-detail" aria-live="polite"></aside>
+</main>
+</div>
+<section class="tables"><h2>Calls</h2><table><thead><tr><th>Line</th><th>Call</th><th>Calls</th><th>Retries</th><th>Timeout</th><th>When it fails</th><th>Case after</th></tr></thead><tbody><tr><td class="num">56</td><td><code>hold ← reserve(…)</code></td><td><code>book stock.reserve.hold</code>, <code>starts stock.reserve</code></td><td>—</td><td>—</td><td><code>out_of_stock</code> → line 57<br><code>timeout</code>, <code>failure</code> → <code>on failure</code></td><td><code>hold</code>: <code>held</code></td></tr><tr><td class="num">58</td><td><code>due = terms.payment(…)</code></td><td>the date <code>payment</code> of <code>payment_terms.cal</code></td><td>2 times, after 1 second and 2 (failure)</td><td>—</td><td><code>timeout</code>, <code>failure</code> → <code>on failure</code></td><td>—</td></tr><tr><td class="num">60</td><td><code>payment = check_payment(…)</code></td><td><code>GET https://payments.example.com/orders/{order}/payment</code>, <code>idempotent</code></td><td>2 times every 10 seconds (failure, timeout)</td><td>—</td><td><code>timeout</code>, <code>failure</code> → <code>on failure</code></td><td>—</td></tr><tr><td class="num">63</td><td><code>hold ← ship(…)</code></td><td><code>book stock.reserve.post</code>, <code>sends post</code></td><td>—</td><td>—</td><td><code>expired</code> → line 64<br><code>timeout</code>, <code>failure</code> → <code>on failure</code></td><td><code>hold</code>: <code>posted</code></td></tr><tr><td class="num">67</td><td><code>hold ← put_back(…)</code></td><td><code>book stock.reserve.void</code>, <code>sends void</code></td><td>—</td><td>—</td><td><code>expired</code> → line 68<br><code>timeout</code>, <code>failure</code> → <code>on failure</code></td><td><code>hold</code>: <code>voided</code></td></tr><tr><td class="num">75</td><td><code>hold ← put_back(…)</code></td><td><code>book stock.reserve.void</code>, <code>sends void</code></td><td>—</td><td>—</td><td><code>expired</code> → line 76<br><code>timeout</code>, <code>failure</code> → line 77</td><td><code>hold</code>: <code>voided</code></td></tr></tbody></table><h2>Ends</h2><table><thead><tr><th>Line</th><th>End</th><th><code>hold</code></th></tr></thead><tbody><tr><td class="num">57</td><td><code>succeed outcome = out_of_stock, due = none</code></td><td>not started</td></tr><tr><td class="num">64</td><td><code>succeed outcome = not_paid, due = due.day</code></td><td><code>expired</code></td></tr><tr><td class="num">65</td><td><code>succeed outcome = shipped, due = due.day</code></td><td><code>posted</code></td></tr><tr><td class="num">69</td><td><code>succeed outcome = not_paid, due = due.day</code></td><td><code>voided</code>, <code>expired</code></td></tr><tr><td class="num">77</td><td><code>fail NotPutBack</code> &quot;the goods held for the order could not be put back&quot; <code>leaving hold</code></td><td>handed over as it is: <code>held</code>, <code>voided</code>, <code>expired</code></td></tr><tr><td class="num">78</td><td><code>on failure</code> runs to its end, and the workflow fails with the error that started it</td><td>not started, or <code>posted</code>, <code>voided</code>, <code>expired</code></td></tr></tbody></table></section>
+<template id="t-default"><h2 class="dh">Reading the picture</h2><p>Pick a step to see what the checker knows there. Pick a scenario on the left to light up the way its run goes; the number beside a step is how often the run passes it.</p><ul class="legend"><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg" x="2" y="2" width="26" height="13" rx="2"/></svg><span>a task</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg" x="2" y="2" width="26" height="13" rx="2"/><path class="lg" d="M6,2 V15 M24,2 V15"/></svg><span>a rule</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><polygon class="lg" points="7,2 28,2 23,15 2,15"/></svg><span>a task whose value comes from outside: an event, or the answer to a callback</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><polygon class="lg" points="1,8.5 7,2 23,2 29,8.5 23,15 7,15"/></svg><span>a match</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg" x="2" y="2" width="26" height="13" rx="6.5"/></svg><span>a wait</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg frame" x="2" y="2" width="26" height="13" rx="3"/></svg><span>a loop, around the steps it repeats</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><rect class="lg ok" x="2" y="2" width="12" height="13" rx="6"/><rect class="lg bad" x="16" y="2" width="12" height="13" rx="6"/></svg><span>an end: succeed, fail</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><path class="lg-e dash" d="M2,8.5 H28"/></svg><span>an error the call handles</span></li><li><svg viewBox="0 0 30 17" width="30" height="17" aria-hidden="true"><circle class="lg-tick" cx="15" cy="8.5" r="6"/><text class="lg-tick-t" x="15" y="12">!</text></svg><span>a call with an error it does not handle</span></li></ul></template>
+<template id="t-start"><h2 class="dh"><code>invoice v1</code></h2><p>An order holds its goods until its payment is due, then ships them once paid, or puts them back</p><dl class="facts"><dt>Inputs</dt><dd><code>order: Order</code></dd><dt>Outputs</dt><dd><code>outcome: Outcome</code>, <code>due: date?</code></dd><dt>File</dt><dd><code>examples/invoice/invoice.flow</code></dd></dl></template>
+<template id="t-s1"><h2 class="dh"><code>hold ← reserve(…)</code> <span class="dl">line 56</span></h2><pre class="src"><span class="ln">  56</span>  hold &lt;- reserve(order: order.id, sku: order.sku, qty: order.quantity)
+<span class="ln">  57</span>    on out_of_stock =&gt; succeed outcome = out_of_stock, due = none
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: not started</li></ul><dl class="facts"><dt>Calls</dt><dd><code>book stock.reserve.hold</code>, <code>starts stock.reserve</code></dd><dt>When it fails</dt><dd><code>out_of_stock</code> → line 57<br><code>timeout</code>, <code>failure</code> → <code>on failure</code></dd><dt>The case after it</dt><dd><code>hold</code>: <code>held</code></dd></dl><h3>The task</h3><pre class="src"><span class="ln">  29</span>  # The book holds the goods for the order: chobo's client runs the hold, and a refusal comes back
+<span class="ln">  30</span>  # with the reason the book gives it.
+<span class="ln">  31</span>  task reserve(order: string, sku: string, qty: int) -&gt; stock.reserve
+<span class="ln">  32</span>    book stock.reserve.hold
+<span class="ln">  33</span>    starts stock.reserve
+<span class="ln">  34</span>    errors out_of_stock
+</pre></template>
+<template id="t-s2"><h2 class="dh"><code>succeed outcome = out_of_stock, due = none</code> <span class="dl">line 57</span></h2><pre class="src"><span class="ln">  57</span>  on out_of_stock =&gt; succeed outcome = out_of_stock, due = none
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: not started</li></ul><h3>The cases when it ends</h3><ul class="facts"><li><code>hold</code>: not started</li></ul></template>
+<template id="t-s3"><h2 class="dh"><code>due = terms.payment(…)</code> <span class="dl">line 58</span></h2><pre class="src"><span class="ln">  58</span>  let due = terms.payment(received: now)
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>held</code></li></ul><dl class="facts"><dt>Calls</dt><dd>the date <code>payment</code> of <code>payment_terms.cal</code></dd><dt>Retries</dt><dd>2 times, after 1 second and 2 (failure)</dd><dt>When it fails</dt><dd><code>timeout</code>, <code>failure</code> → <code>on failure</code></dd></dl><h3>The rule</h3><pre class="src"><span class="ln">   7</span>  use dates terms from &quot;dates/payment_terms.cal&quot;
+<span class="ln">   8</span>    lambda &quot;arn:aws:lambda:eu-west-2:123456789012:function:payment-terms&quot;
+</pre><p><button class="rule" type="button" data-rule="1">Open the rule's page</button></p></template>
+<template id="t-s4"><h2 class="dh"><code>wait until due.at</code> <span class="dl">line 59</span></h2><pre class="src"><span class="ln">  59</span>  wait until due.at
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>held</code></li></ul></template>
+<template id="t-s5"><h2 class="dh"><code>payment = check_payment(…)</code> <span class="dl">line 60</span></h2><pre class="src"><span class="ln">  60</span>  let payment = check_payment(order: order.id, due: due.day)
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>held</code></li></ul><dl class="facts"><dt>Calls</dt><dd><code>GET https://payments.example.com/orders/{order}/payment</code>, <code>idempotent</code></dd><dt>Retries</dt><dd>2 times every 10 seconds (failure, timeout)</dd><dt>When it fails</dt><dd><code>timeout</code>, <code>failure</code> → <code>on failure</code></dd></dl><h3>The task</h3><pre class="src"><span class="ln">  46</span>  task check_payment(order: string, due: date) -&gt; Payment
+<span class="ln">  47</span>    http GET &quot;https://payments.example.com/orders/{order}/payment&quot;
+<span class="ln">  48</span>    connection &quot;arn:aws:events:eu-west-2:123456789012:connection/payments/1a2b3c&quot;
+<span class="ln">  49</span>    retry 2 times every 10 seconds
+<span class="ln">  50</span>    idempotent
+</pre></template>
+<template id="t-s6"><h2 class="dh"><code>match payment.paid</code> <span class="dl">line 61</span></h2><pre class="src"><span class="ln">  61</span>  match payment.paid
+<span class="ln">  62</span>    true =&gt;
+<span class="ln">  66</span>    false =&gt;
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>held</code></li></ul></template>
+<template id="t-s7"><h2 class="dh"><code>hold ← ship(…)</code> <span class="dl">line 63</span></h2><pre class="src"><span class="ln">  63</span>  hold &lt;- ship(order: order.id, sku: order.sku)
+<span class="ln">  64</span>    on expired =&gt; succeed outcome = not_paid, due = due.day
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>held</code></li></ul><dl class="facts"><dt>Calls</dt><dd><code>book stock.reserve.post</code>, <code>sends post</code></dd><dt>When it fails</dt><dd><code>expired</code> → line 64<br><code>timeout</code>, <code>failure</code> → <code>on failure</code></dd><dt>The case after it</dt><dd><code>hold</code>: <code>posted</code></dd></dl><h3>The task</h3><pre class="src"><span class="ln">  36</span>  task ship(order: string, sku: string) -&gt; stock.reserve
+<span class="ln">  37</span>    book stock.reserve.post
+<span class="ln">  38</span>    sends post
+<span class="ln">  39</span>    errors expired
+</pre></template>
+<template id="t-s8"><h2 class="dh"><code>succeed outcome = not_paid, due = due.day</code> <span class="dl">line 64</span></h2><pre class="src"><span class="ln">  64</span>  on expired =&gt; succeed outcome = not_paid, due = due.day
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>expired</code></li></ul><h3>The cases when it ends</h3><ul class="facts"><li><code>hold</code>: <code>expired</code></li></ul></template>
+<template id="t-s9"><h2 class="dh"><code>succeed outcome = shipped, due = due.day</code> <span class="dl">line 65</span></h2><pre class="src"><span class="ln">  65</span>  succeed outcome = shipped, due = due.day
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>posted</code></li></ul><h3>The cases when it ends</h3><ul class="facts"><li><code>hold</code>: <code>posted</code></li></ul></template>
+<template id="t-s10"><h2 class="dh"><code>hold ← put_back(…)</code> <span class="dl">line 67</span></h2><pre class="src"><span class="ln">  67</span>  hold &lt;- put_back(order: order.id, sku: order.sku)
+<span class="ln">  68</span>    on expired =&gt; pass
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>held</code></li></ul><dl class="facts"><dt>Calls</dt><dd><code>book stock.reserve.void</code>, <code>sends void</code></dd><dt>When it fails</dt><dd><code>expired</code> → line 68<br><code>timeout</code>, <code>failure</code> → <code>on failure</code></dd><dt>The case after it</dt><dd><code>hold</code>: <code>voided</code></dd></dl><h3>The task</h3><pre class="src"><span class="ln">  41</span>  task put_back(order: string, sku: string) -&gt; stock.reserve
+<span class="ln">  42</span>    book stock.reserve.void
+<span class="ln">  43</span>    sends void
+<span class="ln">  44</span>    errors expired
+</pre></template>
+<template id="t-s12"><h2 class="dh"><code>succeed outcome = not_paid, due = due.day</code> <span class="dl">line 69</span></h2><pre class="src"><span class="ln">  69</span>  succeed outcome = not_paid, due = due.day
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>voided</code>, <code>expired</code></li></ul><h3>The cases when it ends</h3><ul class="facts"><li><code>hold</code>: <code>voided</code>, <code>expired</code></li></ul></template>
+<template id="t-fin"><h2 class="dh"><code>end: succeeds</code></h2><p>The flow runs to its end, and the workflow succeeds.</p></template>
+<template id="t-onf"><h2 class="dh"><code>on failure</code> <span class="dl">line 71</span></h2><p>Runs when a call fails and nothing at the call handles the error. When it runs to its end, the workflow fails with that error. It comes here from the calls on lines 56, 58, 60, 63 and 67.</p></template>
+<template id="t-s13"><h2 class="dh"><code>match hold.state</code> <span class="dl">line 72</span></h2><pre class="src"><span class="ln">  72</span>  match hold.state
+<span class="ln">  73</span>    none =&gt; pass
+<span class="ln">  74</span>    held =&gt;
+<span class="ln">  78</span>    posted, voided, expired =&gt; pass
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: not started, or <code>held</code>, <code>posted</code>, <code>voided</code>, <code>expired</code></li></ul></template>
+<template id="t-s15"><h2 class="dh"><code>hold ← put_back(…)</code> <span class="dl">line 75</span></h2><pre class="src"><span class="ln">  75</span>  hold &lt;- put_back(order: order.id, sku: order.sku)
+<span class="ln">  76</span>    on expired =&gt; pass
+<span class="ln">  77</span>    on failure =&gt; fail NotPutBack &quot;the goods held for the order could not be put back&quot; leaving hold
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>held</code></li></ul><dl class="facts"><dt>Calls</dt><dd><code>book stock.reserve.void</code>, <code>sends void</code></dd><dt>When it fails</dt><dd><code>expired</code> → line 76<br><code>timeout</code>, <code>failure</code> → line 77</dd><dt>The case after it</dt><dd><code>hold</code>: <code>voided</code></dd></dl><h3>The task</h3><pre class="src"><span class="ln">  41</span>  task put_back(order: string, sku: string) -&gt; stock.reserve
+<span class="ln">  42</span>    book stock.reserve.void
+<span class="ln">  43</span>    sends void
+<span class="ln">  44</span>    errors expired
+</pre></template>
+<template id="t-s17"><h2 class="dh"><code>fail NotPutBack</code> <span class="dl">line 77</span></h2><pre class="src"><span class="ln">  77</span>  on failure =&gt; fail NotPutBack &quot;the goods held for the order could not be put back&quot; leaving hold
+</pre><h3>The cases when a run gets here</h3><ul class="facts"><li><code>hold</code>: <code>held</code>, <code>voided</code>, <code>expired</code></li></ul><h3>The cases when it ends</h3><ul class="facts"><li><code>hold</code>: handed over as it is: <code>held</code>, <code>voided</code>, <code>expired</code></li></ul></template>
+<template id="t-onfEnd"><h2 class="dh"><code>fails with the same error</code></h2><p>on failure runs to its end, and the workflow fails with the error that started it.</p><h3>The cases when it ends</h3><ul class="facts"><li><code>hold</code>: not started, or <code>posted</code>, <code>voided</code>, <code>expired</code></li></ul></template>
+<template id="t-run-0"><h2 class="dh">scenario 1 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>true</code></li><li><span class="ln">63</span> <code>hold ← ship(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">65</span> <code>succeed outcome = shipped, due = due.day</code></li></ol></template>
+<template id="t-run-1"><h2 class="dh">scenario 2 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip bad">out_of_stock</span> → <code>on out_of_stock</code></li><li><span class="ln">57</span> <code>succeed outcome = out_of_stock, due = none</code></li></ol></template>
+<template id="t-run-2"><h2 class="dh">scenario 3 <span class="chip bad">fails with failure</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip bad">failure</span> → not handled here</li><li><code>on failure</code></li><li><span class="ln">72</span> <code>match hold.state</code> → <code>none</code></li><li>fails with the same error</li></ol></template>
+<template id="t-run-3"><h2 class="dh">scenario 4 <span class="chip bad">fails with failure</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → not handled here</li><li><code>on failure</code></li><li><span class="ln">72</span> <code>match hold.state</code> → <code>held</code></li><li><span class="ln">75</span> <code>hold ← put_back(…)</code> <span class="chip ok">ok</span></li><li>fails with the same error</li></ol></template>
+<template id="t-run-4"><h2 class="dh">scenario 5 <span class="chip bad">fails with failure</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → not handled here</li><li><code>on failure</code></li><li><span class="ln">72</span> <code>match hold.state</code> → <code>held</code></li><li><span class="ln">75</span> <code>hold ← put_back(…)</code> <span class="chip bad">expired</span> → <code>on expired</code></li><li>fails with the same error</li></ol></template>
+<template id="t-run-5"><h2 class="dh">scenario 6 <span class="chip bad">fail Dandori.BadResponse: an answer not of the declared type</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<template id="t-run-6"><h2 class="dh">scenario 7 <span class="chip bad">fails with failure</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → not handled here</li><li><code>on failure</code></li><li><span class="ln">72</span> <code>match hold.state</code> → <code>held</code></li><li><span class="ln">75</span> <code>hold ← put_back(…)</code> <span class="chip bad">expired</span> → <code>on expired</code></li><li>fails with the same error</li></ol></template>
+<template id="t-run-7"><h2 class="dh">scenario 8 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip bad">failure</span> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>false</code></li><li><span class="ln">67</span> <code>hold ← put_back(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">69</span> <code>succeed outcome = not_paid, due = due.day</code></li></ol></template>
+<template id="t-run-8"><h2 class="dh">scenario 9 <span class="chip bad">fail Dandori.BadResponse: an answer not of the declared type</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip ok">ok</span></li></ol></template>
+<template id="t-run-9"><h2 class="dh">scenario 10 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>false</code></li><li><span class="ln">67</span> <code>hold ← put_back(…)</code> <span class="chip bad">expired</span> → <code>on expired</code></li><li><span class="ln">69</span> <code>succeed outcome = not_paid, due = due.day</code></li></ol></template>
+<template id="t-run-10"><h2 class="dh">scenario 11 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>true</code></li><li><span class="ln">63</span> <code>hold ← ship(…)</code> <span class="chip bad">expired</span> → <code>on expired</code></li><li><span class="ln">64</span> <code>succeed outcome = not_paid, due = due.day</code></li></ol></template>
+<template id="t-run-11"><h2 class="dh">scenario 12 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>true</code></li><li><span class="ln">63</span> <code>hold ← ship(…)</code> <span class="chip bad">expired</span> → <code>on expired</code></li><li><span class="ln">64</span> <code>succeed outcome = not_paid, due = due.day</code></li></ol></template>
+<template id="t-run-12"><h2 class="dh">scenario 13 <span class="chip bad">fails with NotPutBack</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>true</code></li><li><span class="ln">63</span> <code>hold ← ship(…)</code> <span class="chip bad">failure</span> → not handled here</li><li><code>on failure</code></li><li><span class="ln">72</span> <code>match hold.state</code> → <code>held</code></li><li><span class="ln">75</span> <code>hold ← put_back(…)</code> <span class="chip bad">failure</span> → <code>on failure</code></li><li><span class="ln">77</span> <code>fail NotPutBack</code></li></ol></template>
+<template id="t-run-13"><h2 class="dh">scenario 14 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>true</code></li><li><span class="ln">63</span> <code>hold ← ship(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">65</span> <code>succeed outcome = shipped, due = due.day</code></li></ol></template>
+<template id="t-run-14"><h2 class="dh">scenario 15 <span class="chip bad">fails with failure</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip bad">failure</span> <span class="chip bad">failure</span> <span class="chip bad">failure</span> → not handled here</li><li><code>on failure</code></li><li><span class="ln">72</span> <code>match hold.state</code> → <code>held</code></li><li><span class="ln">75</span> <code>hold ← put_back(…)</code> <span class="chip ok">ok</span></li><li>fails with the same error</li></ol></template>
+<template id="t-run-15"><h2 class="dh">scenario 16 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip bad">failure</span> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>false</code></li><li><span class="ln">67</span> <code>hold ← put_back(…)</code> <span class="chip bad">expired</span> → <code>on expired</code></li><li><span class="ln">69</span> <code>succeed outcome = not_paid, due = due.day</code></li></ol></template>
+<template id="t-run-16"><h2 class="dh">scenario 17 <span class="chip bad">fails with failure</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip bad">failure</span> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>false</code></li><li><span class="ln">67</span> <code>hold ← put_back(…)</code> <span class="chip bad">failure</span> → not handled here</li><li><code>on failure</code></li><li><span class="ln">72</span> <code>match hold.state</code> → <code>held</code></li><li><span class="ln">75</span> <code>hold ← put_back(…)</code> <span class="chip ok">ok</span></li><li>fails with the same error</li></ol></template>
+<template id="t-run-17"><h2 class="dh">scenario 18 <span class="chip ok">succeeds</span></h2><ol class="steps"><li><span class="ln">56</span> <code>hold ← reserve(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">58</span> <code>due = terms.payment(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">59</span> <code>wait until due.at</code></li><li><span class="ln">60</span> <code>payment = check_payment(…)</code> <span class="chip bad">failure</span> <span class="chip ok">ok</span></li><li><span class="ln">61</span> <code>match payment.paid</code> → <code>false</code></li><li><span class="ln">67</span> <code>hold ← put_back(…)</code> <span class="chip ok">ok</span></li><li><span class="ln">69</span> <code>succeed outcome = not_paid, due = due.day</code></li></ol></template>
+<script type="application/json" id="dd-data">{"runs":[{"nodes":["s1","s3","s4","s5","s6","s7","s9","start"],"edges":["flow-10","flow-11","flow-12","flow-3","flow-6","flow-8","flow-9"],"counts":{"s1":1,"s3":1,"s4":1,"s5":1,"s6":1,"s7":1,"s9":1},"failed":[]},{"nodes":["s1","s2","start"],"edges":["flow-1","flow-12"],"counts":{"s1":1,"s2":1},"failed":[]},{"nodes":["onf","onfEnd","s1","s13","start"],"edges":["flow-12","on-failure-3","on-failure-4"],"counts":{"s1":1,"s13":1},"failed":["s1"]},{"nodes":["onf","onfEnd","s1","s13","s15","s3","start"],"edges":["flow-12","flow-8","on-failure-2","on-failure-3","on-failure-5"],"counts":{"s1":1,"s13":1,"s15":1,"s3":1},"failed":["s3"]},{"nodes":["onf","onfEnd","s1","s13","s15","s3","start"],"edges":["flow-12","flow-8","on-failure-2","on-failure-3","on-failure-6"],"counts":{"s1":1,"s13":1,"s15":1,"s3":1},"failed":["s3"]},{"nodes":["s1","s3","start"],"edges":["flow-12","flow-8"],"counts":{"s1":1,"s3":1},"failed":[]},{"nodes":["onf","onfEnd","s1","s13","s15","s3","s4","s5","start"],"edges":["flow-10","flow-12","flow-8","flow-9","on-failure-2","on-failure-3","on-failure-6"],"counts":{"s1":1,"s13":1,"s15":1,"s3":1,"s4":1,"s5":1},"failed":["s5"]},{"nodes":["s1","s10","s12","s3","s4","s5","s6","start"],"edges":["flow-10","flow-11","flow-12","flow-4","flow-7","flow-8","flow-9"],"counts":{"s1":1,"s10":1,"s12":1,"s3":1,"s4":1,"s5":1,"s6":1},"failed":[]},{"nodes":["s1","s3","s4","s5","start"],"edges":["flow-10","flow-12","flow-8","flow-9"],"counts":{"s1":1,"s3":1,"s4":1,"s5":1},"failed":[]},{"nodes":["s1","s10","s12","s3","s4","s5","s6","start"],"edges":["flow-10","flow-11","flow-12","flow-5","flow-7","flow-8","flow-9"],"counts":{"s1":1,"s10":1,"s12":1,"s3":1,"s4":1,"s5":1,"s6":1},"failed":[]},{"nodes":["s1","s3","s4","s5","s6","s7","s8","start"],"edges":["flow-10","flow-11","flow-12","flow-2","flow-6","flow-8","flow-9"],"counts":{"s1":1,"s3":1,"s4":1,"s5":1,"s6":1,"s7":1,"s8":1},"failed":[]},{"nodes":["s1","s3","s4","s5","s6","s7","s8","start"],"edges":["flow-10","flow-11","flow-12","flow-2","flow-6","flow-8","flow-9"],"counts":{"s1":1,"s3":1,"s4":1,"s5":1,"s6":1,"s7":1,"s8":1},"failed":[]},{"nodes":["onf","s1","s13","s15","s17","s3","s4","s5","s6","s7","start"],"edges":["flow-10","flow-11","flow-12","flow-6","flow-8","flow-9","on-failure-1","on-failure-2","on-failure-3"],"counts":{"s1":1,"s13":1,"s15":1,"s17":1,"s3":1,"s4":1,"s5":1,"s6":1,"s7":1},"failed":["s7"]},{"nodes":["s1","s3","s4","s5","s6","s7","s9","start"],"edges":["flow-10","flow-11","flow-12","flow-3","flow-6","flow-8","flow-9"],"counts":{"s1":1,"s3":1,"s4":1,"s5":1,"s6":1,"s7":1,"s9":1},"failed":[]},{"nodes":["onf","onfEnd","s1","s13","s15","s3","s4","s5","start"],"edges":["flow-10","flow-12","flow-8","flow-9","on-failure-2","on-failure-3","on-failure-5"],"counts":{"s1":1,"s13":1,"s15":1,"s3":1,"s4":1,"s5":1},"failed":["s5"]},{"nodes":["s1","s10","s12","s3","s4","s5","s6","start"],"edges":["flow-10","flow-11","flow-12","flow-5","flow-7","flow-8","flow-9"],"counts":{"s1":1,"s10":1,"s12":1,"s3":1,"s4":1,"s5":1,"s6":1},"failed":[]},{"nodes":["onf","onfEnd","s1","s10","s13","s15","s3","s4","s5","s6","start"],"edges":["flow-10","flow-11","flow-12","flow-7","flow-8","flow-9","on-failure-2","on-failure-3","on-failure-5"],"counts":{"s1":1,"s10":1,"s13":1,"s15":1,"s3":1,"s4":1,"s5":1,"s6":1},"failed":["s10"]},{"nodes":["s1","s10","s12","s3","s4","s5","s6","start"],"edges":["flow-10","flow-11","flow-12","flow-4","flow-7","flow-8","flow-9"],"counts":{"s1":1,"s10":1,"s12":1,"s3":1,"s4":1,"s5":1,"s6":1},"failed":[]}],"checks":[],"through":"{k} of the {n} scenarios pass here.","rules":[]}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('dd-data').textContent);
+  var canvas = document.querySelector('.canvas');
+  var detail = document.getElementById('dd-detail');
+  var side = document.querySelector('.side');
+  var SVG = 'http://www.w3.org/2000/svg';
+  var state = { node: null, run: null, check: null, rule: null };
+  var sheet = document.getElementById('dd-sheet');
+  var opener = null;
+  function all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+  function byId(id) { return all('[data-id="' + id + '"]'); }
+  function show(id) {
+    var t = document.getElementById('t-' + id) || document.getElementById('t-default');
+    detail.replaceChildren(t.content.cloneNode(true));
+  }
+  function unlight() {
+    canvas.classList.remove('running');
+    all('.lit').forEach(function (e) { e.classList.remove('lit'); });
+    all('.count').forEach(function (e) { e.remove(); });
+    all('button[aria-pressed="true"]').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+  }
+  function light(l) {
+    canvas.classList.add('running');
+    l.nodes.forEach(function (id) { byId(id).forEach(function (e) { e.classList.add('lit'); }); });
+    l.edges.forEach(function (id) { byId(id).forEach(function (e) { e.classList.add('lit'); }); });
+    l.failed.forEach(function (id) { byId(id).forEach(function (e) { var t = e.querySelector('.tick'); if (t) t.classList.add('lit'); }); });
+    Object.keys(l.counts).forEach(function (id) {
+      var n = l.counts[id];
+      if (n < 2) return;
+      byId(id).forEach(function (g) {
+        if (!g.classList.contains('n')) return;
+        var b = g.querySelector('.shape').getBBox();
+        var t = document.createElementNS(SVG, 'text');
+        t.setAttribute('class', 'count');
+        t.setAttribute('x', b.x + b.width + 5);
+        t.setAttribute('y', b.y + b.height - 3);
+        t.textContent = '×' + n;
+        g.appendChild(t);
+      });
+    });
+  }
+  function unpick() {
+    all('.n.sel, .frame.sel').forEach(function (e) { e.classList.remove('sel'); });
+    side.classList.remove('picking');
+    all('button.run.through').forEach(function (b) { b.classList.remove('through'); });
+  }
+  function pick(id) {
+    unpick();
+    byId(id).forEach(function (e) { if (e.classList.contains('n') || e.classList.contains('frame')) e.classList.add('sel'); });
+    show(id);
+    if (data.runs.length) {
+      var k = 0;
+      data.runs.forEach(function (r, i) {
+        if (r.nodes.indexOf(id) >= 0) { k++; var b = document.querySelector('button.run[data-run="' + i + '"]'); if (b) b.classList.add('through'); }
+      });
+      side.classList.add('picking');
+      var p = document.createElement('p');
+      p.className = 'through';
+      p.textContent = data.through.replace('{k}', k).replace('{n}', data.runs.length);
+      detail.appendChild(p);
+    }
+  }
+  function remember() {
+    var h = state.run !== null ? 'run=' + (state.run + 1) : state.check !== null ? 'check=' + (state.check + 1) : '';
+    if (state.node) h += (h ? '&' : '') + 'node=' + state.node;
+    if (state.rule !== null) h += (h ? '&' : '') + 'rule=' + encodeURIComponent(data.rules[state.rule].name);
+    try { history.replaceState(null, '', h ? '#' + h : location.pathname + location.search); } catch (e) {}
+  }
+  function run(k) {
+    unlight();
+    state.run = k; state.check = null;
+    light(data.runs[k]);
+    var b = document.querySelector('button.run[data-run="' + k + '"]');
+    if (b) b.setAttribute('aria-pressed', 'true');
+    if (!state.node) show('run-' + k);
+  }
+  function check(k) {
+    unlight();
+    state.check = k; state.run = null;
+    light(data.checks[k]);
+    var b = document.querySelector('button.check[data-check="' + k + '"]');
+    if (b) b.setAttribute('aria-pressed', 'true');
+    if (!state.node) show('check-' + k);
+  }
+  function node(id) { state.node = id; pick(id); }
+  function reset() { state = { node: null, run: null, check: null, rule: null }; unlight(); unpick(); show('default'); remember(); }
+  // a rule's page, over this one: the page rulec doc renders, or why there is none
+  function code(text) { var c = document.createElement('code'); c.textContent = text; return c; }
+  function openRule(k) {
+    var r = data.rules[k];
+    if (!r || !sheet) return;
+    if (sheet.hidden) opener = document.activeElement;
+    sheet.querySelector('.what').replaceChildren(code(r.name), ' · ' + r.title + ' · ', code(r.file), ' · rulec doc');
+    var err = document.createElement('pre');
+    err.textContent = r.error || '';
+    sheet.querySelector('iframe').srcdoc = r.page !== null ? r.page : '<!doctype html><meta charset="utf-8"><pre style="white-space:pre-wrap;font:13px ui-monospace,monospace;padding:16px">' + err.innerHTML + '</pre>';
+    sheet.hidden = false;
+    state.rule = k;
+    sheet.querySelector('.close').focus();
+  }
+  function closeRule() {
+    if (!sheet || sheet.hidden) return false;
+    sheet.hidden = true;
+    sheet.querySelector('iframe').srcdoc = '';
+    state.rule = null;
+    if (opener && opener.focus) opener.focus();
+    return true;
+  }
+  if (sheet) sheet.querySelector('.close').addEventListener('click', function () { closeRule(); remember(); });
+  detail.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-rule]');
+    if (b) { openRule(+b.dataset.rule); remember(); }
+  });
+  side.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.rule !== undefined) { openRule(+b.dataset.rule); remember(); return; }
+    state.node = null; unpick();
+    if (b.dataset.run !== undefined) { if (state.run === +b.dataset.run) { reset(); return; } run(+b.dataset.run); show('run-' + b.dataset.run); }
+    if (b.dataset.check !== undefined) { if (state.check === +b.dataset.check) { reset(); return; } check(+b.dataset.check); show('check-' + b.dataset.check); }
+    remember();
+  });
+  canvas.addEventListener('click', function (ev) {
+    var g = ev.target.closest('.n, .frame');
+    if (!g) { if (state.node) { state.node = null; unpick(); if (state.run !== null) show('run-' + state.run); else if (state.check !== null) show('check-' + state.check); else show('default'); remember(); } return; }
+    node(g.dataset.id);
+    remember();
+  });
+  canvas.addEventListener('keydown', function (ev) {
+    var g = ev.target.closest && ev.target.closest('.n, .frame');
+    if (g && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); node(g.dataset.id); remember(); }
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    if (closeRule()) remember(); else reset();
+  });
+  var desc = document.querySelector('header.top .desc');
+  if (desc) desc.addEventListener('click', function () { desc.classList.toggle('open'); });
+  function fromHash() {
+    var h = {};
+    location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p[0]) h[p[0]] = decodeURIComponent(p[1] || ''); });
+    if (h.run !== undefined && data.runs[+h.run - 1]) run(+h.run - 1);
+    else if (h.check !== undefined && data.checks[+h.check - 1]) check(+h.check - 1);
+    if (h.node && document.getElementById('t-' + h.node)) node(h.node);
+    else if (h.run === undefined && h.check === undefined) show('default');
+    for (var k = 0; k < data.rules.length; k++) { if (data.rules[k].name === h.rule) openRule(k); }
+  }
+  fromHash();
+})();
+</script>
+</body>
+</html>
