@@ -1,8 +1,9 @@
 //! The certificate, re-checked by the Lean program that carries the proofs (§15.97).
 //!
-//! `proofs/` states the meaning of a rule, the checks a certificate has to pass, and the
-//! theorems that say a `true` from each check settles the matching claim. `Main.lean` runs
-//! exactly those check functions, so what it prints is the proofs applied to one document.
+//! `RulecCert`, in ritsu's `proofs/` at the root of the repository (ritsu's DESIGN 11.4), states
+//! the meaning of a rule, the checks a certificate has to pass, and the theorems that say a `true`
+//! from each check settles the matching claim. `RulecMain.lean` there runs exactly those check
+//! functions, so what it prints is the proofs applied to one document.
 //! These tests hold the pair together: the corpus has to pass here as it does under
 //! `tools/recheck.py` in `tests/cert.rs`, and a certificate that has been tampered with has
 //! to fail in both. Nothing here builds Lean: CI does that, and without the binary the
@@ -16,11 +17,16 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// ritsu's Lean package, which holds `RulecCert` beside the other libraries of the Lean layer.
+fn proofs() -> PathBuf {
+    root().join("../../proofs")
+}
+
 /// The Lean program, when the level lets the tests run it (ritsu's DESIGN 10.2) and it has been
-/// built (`lake build` in `proofs/`); a SKIP line says which it is not.
+/// built (`lake build` in ritsu's `proofs/`); a SKIP line says which it is not.
 fn checker() -> Option<PathBuf> {
-    let p = root().join("proofs/.lake/build/bin/rulec-recheck");
-    ready(Need::Lean, || p.exists(), "proofs/ が build されていない（lake build で作る）").then_some(p)
+    let p = proofs().join(".lake/build/bin/rulec-recheck");
+    ready(Need::Lean, || p.exists(), "ritsu の proofs/ が build されていない（そこで lake build で作る）").then_some(p)
 }
 
 fn rulec(args: &[&str]) -> (i32, String) {
@@ -305,10 +311,12 @@ fn 証明付きの検査器は別のファイルを拒む() {
 }
 
 /// Nothing in the development is left open. A `sorry` anywhere would make every theorem
-/// above it worth nothing, and it is the one thing a reader cannot see from the outside.
+/// above it worth nothing, and it is the one thing a reader cannot see from the outside. The
+/// package holds every library of ritsu's Lean layer, and every file of it is read: a theorem
+/// may stand on another library's (`RitsuCross` stands on `RulecCert`).
 #[test]
 fn 証明に穴が無い() {
-    let dir = root().join("proofs");
+    let dir = proofs();
     let mut files: Vec<PathBuf> = Vec::new();
     let mut stack = vec![dir.clone()];
     while let Some(d) = stack.pop() {
@@ -377,7 +385,7 @@ fn 定理が立つ公理は三つだけ() {
     }
     std::fs::write(&file, src).unwrap();
     let o = Command::new(&lake)
-        .current_dir(root().join("proofs"))
+        .current_dir(proofs())
         .args(["env", "lean", &file.to_string_lossy()])
         .output()
         .expect("lake を起動できない");

@@ -18,6 +18,13 @@
   made it: the capture fails with nothing to handle it, `on failure` reads the record, still
   `pending`, and voids the payment; a refusal that only passes ends `on failure`, and the workflow
   fails with the payment `processing`.
+
+  The last two are where the check reads a run as dandori's does (`DandoriCore.World`, what a run
+  takes for granted, 2 and 3), and passes what dandori's check passes. In `lostStart` the call that
+  opens the payment fails, and `on failure` passes when the record says nothing: a failed start has
+  not started the case. In `refusedFinal` a hold that expires on its own is voided, and the void's
+  `on unexpected_state` passes: the refusal comes back only when the hold has expired, which is
+  final. dandori's check passes both, written as `.flow` files over the machines below.
 -/
 import DandoriCore.Check
 
@@ -104,5 +111,63 @@ example : chkFlow (envOnFailure [.pass 7]) 100 = false := by decide
 
 /-- A refusal that hands the payment over: passes. -/
 example : chkFlow (envOnFailure [.fail 7 "CleanupFailed" none [0]]) 100 = true := by decide
+
+/-- Open (it starts the payment, nothing handles its failure), capture, settle; `on failure` passes
+    when the record says nothing and hands the payment over otherwise. -/
+def lostStart : Flow where
+  records := []
+  inputs := []
+  tasks := [task "open_payment" (.starts []), task "capture_payment" (.sends "capture"),
+            task "settle_payment" (.sends "settle")]
+  rules := []
+  cases := [{ name := "p", stateField := "status" }]
+  monitors := []
+  flow := [.call 1 1 (some (.case 0)) (.task 0) [] [], .call 2 2 (some (.case 0)) (.task 1) [] [],
+           .call 3 3 (some (.case 0)) (.task 2) [] []]
+  onFailure := some [.matchOn 4 4 (.var "p" ["status"]) "p.status" [
+      .mk [] true none [.pass 5],
+      .mk ["pending", "processing"] false none [.fail 6 "Unclear" none [0]]]]
+  onCancel := none
+
+/-- The open's failure leaves no payment to account for: passes, as dandori's check does. -/
+example : chkFlow { flow := lostStart, ms := fun _ => payment, n := 1 } 100 = true := by decide
+
+/-- pending —void→ voided, pending —expire→ expired on the other side; both final. -/
+def expiring : Machine where
+  names := ["pending", "voided", "expired"]
+  initial := 0
+  finals := [1, 2]
+  next := fun s e => match s, e with
+    | 0, "void" => [1]
+    | 0, "expire" => [2]
+    | _, _ => []
+  refuses := fun s e => match s, e with
+    | 0, "void" => false
+    | 0, "expire" => false
+    | _, _ => true
+  ext := fun s => match s with
+    | 0 => [2]
+    | _ => []
+  any := fun s => match s with
+    | 0 => [1, 2]
+    | _ => []
+
+/-- Open, then void, with `on unexpected_state => pass` and `on failure` handing the payment over. -/
+def refusedFinal : Flow where
+  records := []
+  inputs := []
+  tasks := [task "open_payment" (.starts []), task "void_payment" (.sends "void")]
+  rules := []
+  cases := [{ name := "p", stateField := "status" }]
+  monitors := []
+  flow := [.call 1 1 (some (.case 0)) (.task 0) [] [],
+           .call 2 2 (some (.case 0)) (.task 1) [] [.mk [.declared ["unexpected_state"]] [.pass 3],
+                                                    .mk [.failure] [.fail 4 "Unclear" none [0]]]]
+  onFailure := none
+  onCancel := none
+
+/-- The refusal comes back only once the hold has expired, which is final: passes, as dandori's
+    check does. -/
+example : chkFlow { flow := refusedFinal, ms := fun _ => expiring, n := 1 } 100 = true := by decide
 
 end DandoriCore.Examples

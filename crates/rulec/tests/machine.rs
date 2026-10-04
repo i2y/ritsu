@@ -429,8 +429,8 @@ fn ステートマシンの証明書は再検査を通り_偽れば落ちる() {
 
 #[test]
 fn ステートマシンの証明書は証明付きの検査器でも確かめられる() {
-    let bin = root().join("proofs/.lake/build/bin/rulec-recheck");
-    if !ready(Need::Lean, || bin.exists(), "proofs/ が build されていない（lake build で作る）") {
+    let bin = root().join("../../proofs/.lake/build/bin/rulec-recheck");
+    if !ready(Need::Lean, || bin.exists(), "ritsu の proofs/ が build されていない（そこで lake build で作る）") {
         return;
     }
     let cert = cert();
@@ -611,8 +611,8 @@ fn 世界ごとの証明書は再検査を通り_偽れば落ちる() {
         ("別の世界の額で呼んだ", cert.replacen(r#""at":[2,1,3]"#, r#""at":[2,1,4]"#, 1)),
     ];
     let python = ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無いので Python の再検査を飛ばした");
-    let lean = root().join("proofs/.lake/build/bin/rulec-recheck");
-    let lean = if ready(Need::Lean, || lean.exists(), "proofs/ が build されていない（lake build で作る）") { lean } else { PathBuf::new() };
+    let lean = root().join("../../proofs/.lake/build/bin/rulec-recheck");
+    let lean = if ready(Need::Lean, || lean.exists(), "ritsu の proofs/ が build されていない（そこで lake build で作る）") { lean } else { PathBuf::new() };
     if python {
         let (c, said) = feed(Command::new("python3").args(["tools/recheck.py", "--rule", &rule]), &cert);
         assert_eq!(c, 0, "{said}");

@@ -175,8 +175,8 @@ fn certificate_holds(src: &str, needle: &str, said: &str) {
         assert!(o.status.success(), "{out}{}", String::from_utf8_lossy(&o.stderr));
         assert!(out.contains(said) && out.contains("every claim this program states was proved"), "{out}");
     }
-    let lean = root().join("proofs/.lake/build/bin/rulec-recheck");
-    if ritsu_testkit::ready(ritsu_testkit::Need::Lean, || lean.exists(), "proofs/ is not built (lake build makes it); the Lean re-check is not run") {
+    let lean = root().join("../../proofs/.lake/build/bin/rulec-recheck");
+    if ritsu_testkit::ready(ritsu_testkit::Need::Lean, || lean.exists(), "ritsu's proofs/ is not built (lake build there makes it); the Lean re-check is not run") {
         let o = Command::new(&lean).current_dir(root()).args(["--rule", path.to_str().unwrap(), cert_path.to_str().unwrap()]).output().unwrap();
         let out = String::from_utf8_lossy(&o.stdout);
         assert!(o.status.success() && out.contains("OK: every claim this program states was proved"), "{out}{}", String::from_utf8_lossy(&o.stderr));

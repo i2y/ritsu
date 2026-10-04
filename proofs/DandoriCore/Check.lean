@@ -11,6 +11,14 @@
   last heard, a state the case was in when it last heard or since) that a run can bring to the
   point; the true state is then that state or one external events lead to from it.
 
+  Two readings are dandori's, and the check makes them as dandori's check does (dandori's DESIGN
+  2.1, 2.2; `DandoriCore.World` states them as what can happen). A call that starts a case and
+  fails leaves the case not started: dandori counts no case it has no record of, and asks for a
+  task's `key` (W103) so that a retry finds the case the other side made. And a refusal's error
+  — the task's `refused as`, or a reason a book refuses with — comes back only from a refusal: a
+  handler that takes no other error is given only the states that refuse, and where none do, it
+  never runs.
+
   At every place the flow ends — `succeed`, `fail` (less the cases it hands over with `leaving`),
   the end of the flow, the end of `on failure` — every state a started case can be in, the
   external events' included, has to be final; otherwise the check fails, as E020 does. Where it
@@ -35,6 +43,8 @@ structure Machine where
   /-- why a book refuses the event in the state (chobo's `reason`), which its refusal comes back
       as; nothing for a rule's machine, whose refusal comes back as the task's `refused as` -/
   reason : Nat → String → Option String := fun _ _ => none
+  /-- every reason a book refuses an event with, row by row; none for a rule's machine -/
+  reasons : List String := []
   /-- what the events on the other side lead to from a state -/
   ext : Nat → List Nat
   /-- what any event leads to: a case the flow finds already started can be anywhere these lead -/
@@ -141,9 +151,6 @@ def thenStates (m : Machine) (es : List String) : List Nat :=
 def startOk (m : Machine) (es : List String) : List Pair :=
   (thenStates m es).map (fun s => (some s, some s))
 
-def startErr (m : Machine) (es : List String) (P : List Pair) : List Pair :=
-  P ++ P.flatMap (fun p => (thenStates m es).map (fun s => (p.1, some s)))
-
 /-- Every state a case the flow finds already started can be in. -/
 def clAny (m : Machine) : List Nat := (closure m.any m.initial).getD []
 
@@ -153,8 +160,50 @@ def observeOk (m : Machine) (P : List Pair) : List Pair :=
     | some b => (cl m b).map (fun s => (some s, some s))
     | none => (clAny m).map (fun s => (some s, some s)))
 
-/-- What a call can leave its case in, answered and failed; none where the check cannot say. -/
-def callAbs (env : Env) (tgt : Option Target) (callee : Callee) (A : Abs) : Option (Abs × Abs) :=
+/-- The error a refused event comes back as: for a book's operation, the reason the book refuses it
+    with in the case's state (chobo's `reason`); for a rule's machine, the task's `refused as`. -/
+def refusedName (env : Env) (callee : Callee) (c s : Nat) (e : String) : String :=
+  match callee with
+  | .task t => match env.flow.tasks[t]? with
+    | some tk => match tk.book with
+      | some _ => ((env.ms c).reason s e).getD "failure"
+      | none => tk.refusedAs.getD "failure"
+    | none => "failure"
+  | .rule _ => "failure"
+
+/-- The errors a refusal of the call comes back as, which come back from nothing else (dandori's
+    `refusals`): the task's `refused as`, or every reason the book refuses with. -/
+def refusalNames (env : Env) (callee : Callee) (c : Nat) : List String :=
+  match callee with
+  | .task t => match env.flow.tasks[t]? with
+    | some tk => match tk.book with
+      | some _ => (env.ms c).reasons
+      | none => tk.refusedAs.toList
+    | none => []
+  | .rule _ => []
+
+/-- The pairs a refusal that comes back as `r` can leave: the case in a state that refuses `e`
+    with that error, where it stays, heard as before. -/
+def refusedPairs (env : Env) (callee : Callee) (c : Nat) (e r : String) (P : List Pair) : List Pair :=
+  P.flatMap (fun p => match p.2 with
+    | some b => ((cl (env.ms c) b).filter (fun s => (env.ms c).refuses s e && refusedName env callee c s e == r)).map
+        (fun s => (p.1, some s))
+    | none => [])
+
+/-- What the check makes of a call: the pairs it can leave answered (`ok`); failed with an error
+    no refusal comes back as (`err`); the errors a refusal comes back as (`names`); and, for each of
+    those a refusal here can come back with, the pairs it leaves (`refused`). -/
+structure CallRes where
+  ok : Abs
+  err : Abs
+  names : List String
+  refused : List (String × Abs)
+
+def CallRes.plain (A : Abs) : CallRes := { ok := A, err := A, names := [], refused := [] }
+
+/-- What a call can leave its case in; none where the check cannot say. A call that starts a case
+    and fails leaves it as it was, not started. -/
+def callAbs (env : Env) (tgt : Option Target) (callee : Callee) (A : Abs) : Option CallRes :=
   match tgt, callee with
   | some (.case c), .task t =>
     if c < env.n then
@@ -162,15 +211,21 @@ def callAbs (env : Env) (tgt : Option Target) (callee : Callee) (A : Abs) : Opti
       let P := A c
       match ((env.flow.tasks[t]?).map Task.effect : Option Effect) with
       | some (.sends e) =>
-        if allStarted P && closuresOk m P then some (setAbs A c (sendOk m e P), setAbs A c (sendErr m e P)) else .none
+        if allStarted P && closuresOk m P then
+          let names := refusalNames env (.task t) c
+          some { ok := setAbs A c (sendOk m e P), err := setAbs A c (sendErr m e P), names,
+                 refused := (names.filter (fun r => !(refusedPairs env (.task t) c e r P).isEmpty)).map
+                   (fun r => (r, setAbs A c (refusedPairs env (.task t) c e r P))) }
+        else .none
       | some (.starts es) =>
-        if allUnstarted P then some (setAbs A c (startOk m es), setAbs A c (startErr m es P)) else .none
+        if allUnstarted P then some { ok := setAbs A c (startOk m es), err := A, names := [], refused := [] } else .none
       | some .observes =>
-        if closuresOk m P && (allStarted P || (closure m.any m.initial).isSome) then some (setAbs A c (observeOk m P), A)
+        if closuresOk m P && (allStarted P || (closure m.any m.initial).isSome) then
+          some { ok := setAbs A c (observeOk m P), err := A, names := [], refused := [] }
         else .none
       | _ => .none
     else .none
-  | _, _ => some (A, A)
+  | _, _ => some (CallRes.plain A)
 
 /-- Whether a handler takes every error: one that names `failure`. -/
 def catchesAll : List Handler → Bool
@@ -178,6 +233,38 @@ def catchesAll : List Handler → Bool
   | (.mk errs _) :: rest => errs.any (fun e => match e with
       | .failure => true
       | _ => false) || catchesAll rest
+
+/-- Whether a handler takes an error of this kind. -/
+def Handler.takesB (h : Handler) (k : String) : Bool :=
+  match h with
+  | .mk errs _ => errs.any (HErr.hits k)
+
+/-- A handler that takes no error but those of `names`: every error it names is a declared one,
+    seen only by names among them. -/
+def takesOnly (names : List String) : Handler → Bool
+  | .mk errs _ => !errs.isEmpty && errs.all (fun e => match e with
+      | .declared ns => ns.all (fun n => names.contains n)
+      | _ => false)
+
+/-- The union of some of what the check keeps; none of none. -/
+def unionAll : List Abs → Option Abs
+  | [] => .none
+  | a :: rest =>
+    match unionAll rest with
+    | .none => some a
+    | some u => some (unionA a u)
+
+/-- What a handler under a call is given: the pairs of each refusal it takes, and, unless it takes
+    refusals' errors only, the pairs of the other errors. None: it never runs. -/
+def handlerIn (cr : CallRes) (h : Handler) : Option Abs :=
+  unionAll ((cr.refused.filter (fun q => h.takesB q.1)).map (·.2) ++
+    (if takesOnly cr.names h then [] else [cr.err]))
+
+/-- What no handler under a call takes, and goes on to `on failure`: the other errors, unless a
+    handler takes every error, and each refusal no handler takes. -/
+def raisedIn (cr : CallRes) (hs : List Handler) : Option Abs :=
+  unionAll ((if catchesAll hs then [] else [cr.err]) ++
+    (cr.refused.filter (fun q => !hs.any (fun h => h.takesB q.1))).map (·.2))
 
 /-! ## A match on a case's state -/
 
@@ -236,10 +323,15 @@ def loopRes (n : Nat) (bd : Abs → Option Res) (A : Abs) : Option Res :=
     | .none => .none
     | some rb => some { normal := joinO (some H) rb.brk, brk := .none, raised := rb.raised }
 
-def chkHandlers (rec : List Stmt → Abs → Option Res) (A : Abs) : List Handler → Option Res
+/-- Each handler's body, from what it is given; a handler given nothing never runs. -/
+def chkHandlers (rec : List Stmt → Abs → Option Res) (cr : CallRes) : List Handler → Option Res
   | [] => some Res.none
-  | (.mk _ body) :: rest =>
-    match rec body A, chkHandlers rec A rest with
+  | h :: rest =>
+    let mine : Option Res := match handlerIn cr h with
+      | .none => some Res.none
+      | some A => match h with
+        | .mk _ body => rec body A
+    match mine, chkHandlers rec cr rest with
     | some r, some rs => some (r.join rs)
     | _, _ => .none
 
@@ -268,12 +360,12 @@ def chkHead (env : Env) (rec : List Stmt → Abs → Option Res) (s : Stmt) (A :
   | .call _ _ tgt callee _ hs =>
     match callAbs env tgt callee A with
     | .none => .none
-    | some (aok, aerr) =>
-      match chkHandlers rec aerr hs with
+    | some cr =>
+      match chkHandlers rec cr hs with
       | .none => .none
       | some rh =>
-        some { normal := joinO (some aok) rh.normal, brk := rh.brk,
-               raised := joinO (if catchesAll hs then .none else some aerr) rh.raised }
+        some { normal := joinO (some cr.ok) rh.normal, brk := rh.brk,
+               raised := joinO (raisedIn cr hs) rh.raised }
 
 /-- A block of statements. The fuel bounds how deep blocks nest, no more. -/
 def chk (env : Env) : Nat → List Stmt → Abs → Option Res

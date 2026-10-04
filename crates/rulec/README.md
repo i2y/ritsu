@@ -258,8 +258,9 @@ docs/             reference.md (the grammar), formats.md (machine-readable outpu
                   codes.md / codes.ja.md (every diagnostic, generated)
 website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/
-proofs/           the Lean 4 development: what a table means, the checks a certificate has to
-                  pass, the theorems that each check settles its claim, and the re-checker
+../../proofs/     the Lean 4 development, RulecCert in ritsu's one Lean package: what a table
+                  means, the checks a certificate has to pass, the theorems that each check
+                  settles its claim, and the re-checker
 src/              53 modules, and 6 more under codegen/
 tests/corpus/     87 rules, and the copies of the documents they cite
 tests/mutants/    109 files, each with one mistake planted in it

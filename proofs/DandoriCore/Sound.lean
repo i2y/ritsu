@@ -2,7 +2,10 @@
   The check settles what it says (dandori's DESIGN 2.5, E020): a flow that `chkFlow` passes ends,
   in every run where the check looks — `succeed`, `fail`, the end of the flow, the end of
   `on failure` — with every case it does not hand over either not started or in a final state,
-  and in one the events on the other side cannot take it out of (`chkFlow_sound`).
+  and in one the events on the other side cannot take it out of (`chkFlow_sound`). The runs are
+  those of `DandoriCore.World`, with what they take for granted: one call is one event on the
+  other side, a case is started once, a call that starts a case and fails has not started it, and
+  a refusal's error comes back only from a refusal.
 
   The proof keeps, at each point, the invariant that every run that reaches it is described by
   what the check keeps there (`InvS`): for each case, a pair whose first half is what the flow last
@@ -241,39 +244,56 @@ theorem caseCall_eq {env : Env} {c t : Nat} {eff : Effect}
   obtain ⟨tk, htk, he⟩ := Option.map_eq_some_iff.1 heff
   simp [caseCall, htk, he]
 
-/-- **What the check makes of a call describes every way it can come out.** -/
-theorem callAbs_sound {env : Env} {tgt : Option Target} {callee : Callee} {A aok aerr : Abs} {w1 : World}
-    (hca : callAbs env tgt callee A = some (aok, aerr)) (h : InvS env A w1) :
-    (∀ w2, CallStep env tgt callee w1 (.ok w2) → InvS env aok w2) ∧
-    (∀ k w2, CallStep env tgt callee w1 (.err k w2) → InvS env aerr w2) := by
-  have plain : caseCall env tgt callee = none → aok = A → aerr = A →
-      (∀ w2, CallStep env tgt callee w1 (.ok w2) → InvS env aok w2) ∧
-      (∀ k w2, CallStep env tgt callee w1 (.err k w2) → InvS env aerr w2) := by
-    intro hcc h1 h2
-    subst h1; subst h2
-    constructor
-    · intro w2 hs
-      rcases plain_step hcc hs with he | ⟨k, he⟩
+theorem InvS_keep {env : Env} {A : Abs} {w : World} {c : Nat} {P : List Pair}
+    (h : InvS env A w) (hc : Inv (env.ms c) P (w c)) : InvS env (setAbs A c P) w := by
+  intro i hi
+  by_cases hic : i = c
+  · subst hic; simpa [setAbs] using hc
+  · simpa [setAbs, hic] using h i hi
+
+theorem caseCall_inj {env : Env} {tgt : Option Target} {callee : Callee} {c c' : Nat} {eff eff' : Effect}
+    (h1 : caseCall env tgt callee = some (c, eff)) (h2 : caseCall env tgt callee = some (c', eff')) :
+    c = c' ∧ eff = eff' := by
+  rw [h1] at h2
+  simp only [Option.some.injEq, Prod.mk.injEq] at h2
+  exact h2
+
+/-- What the check makes of a call describes what can come of it, one way at a time. -/
+def CallFine (env : Env) (tgt : Option Target) (callee : Callee) (w1 : World) (cr : CallRes) : Prop :=
+  (∀ w2, CallStep env tgt callee w1 (.ok w2) → InvS env cr.ok w2) ∧
+  (∀ k w2, CallStep env tgt callee w1 (.err k w2) → k ∉ cr.names → InvS env cr.err w2) ∧
+  (∀ k w2, CallStep env tgt callee w1 (.err k w2) → k ∈ cr.names →
+    ∃ R, (k, R) ∈ cr.refused ∧ InvS env R w2)
+
+/-- **What the check makes of a call describes every way it can come out**: answered; failed with
+    an error no refusal comes back as; refused, with the error the refusal comes back as. -/
+theorem callAbs_sound {env : Env} {tgt : Option Target} {callee : Callee} {A : Abs} {cr : CallRes}
+    {w1 : World} (hca : callAbs env tgt callee A = some cr) (h : InvS env A w1) :
+    CallFine env tgt callee w1 cr := by
+  have plain : caseCall env tgt callee = none → cr = CallRes.plain A → CallFine env tgt callee w1 cr := by
+    intro hcc hcr
+    subst hcr
+    refine ⟨fun w2 hs => ?_, fun k w2 hs _ => ?_, fun k w2 _ hk => by simp [CallRes.plain] at hk⟩
+    · rcases plain_step hcc hs with he | ⟨k, he⟩
       · cases he; exact h
       · cases he
-    · intro k w2 hs
-      rcases plain_step hcc hs with he | ⟨k', he⟩
+    · rcases plain_step hcc hs with he | ⟨k', he⟩
       · cases he
       · cases he; exact h
   cases tgt with
   | none =>
-    simp only [callAbs, Option.some.injEq, Prod.mk.injEq] at hca
-    exact plain rfl hca.1.symm hca.2.symm
+    simp only [callAbs, Option.some.injEq] at hca
+    exact plain rfl hca.symm
   | some tg =>
     cases tg with
     | letVar x =>
-      simp only [callAbs, Option.some.injEq, Prod.mk.injEq] at hca
-      exact plain rfl hca.1.symm hca.2.symm
+      simp only [callAbs, Option.some.injEq] at hca
+      exact plain rfl hca.symm
     | case c =>
       cases callee with
       | rule r =>
-        simp only [callAbs, Option.some.injEq, Prod.mk.injEq] at hca
-        exact plain rfl hca.1.symm hca.2.symm
+        simp only [callAbs, Option.some.injEq] at hca
+        exact plain rfl hca.symm
       | task t =>
         simp only [callAbs] at hca
         split at hca
@@ -286,18 +306,15 @@ theorem callAbs_sound {env : Env} {tgt : Option Target} {callee : Callee} {A aok
             · next hcond =>
               simp only [Bool.and_eq_true] at hcond
               obtain ⟨_, hclo⟩ := hcond
-              simp only [Option.some.injEq, Prod.mk.injEq] at hca
-              obtain ⟨h1, h2⟩ := hca
-              subst h1; subst h2
-              constructor
+              simp only [Option.some.injEq] at hca
+              subst hca
+              refine ⟨?_, ?_, ?_⟩
               · intro w2 hs
                 cases hs with
                 | plainOk h0 => rw [hcc] at h0; cases h0
                 | sendOk h0 hs hs' =>
-                  rw [hcc] at h0
-                  simp only [Option.some.injEq, Prod.mk.injEq, Effect.sends.injEq] at h0
-                  obtain ⟨h1, h2⟩ := h0
-                  subst h1; subst h2
+                  obtain ⟨rfl, he⟩ := caseCall_inj hcc h0
+                  cases he
                   apply InvS_set h
                   obtain ⟨b0, hb0, hr⟩ := inv_started hinv hs
                   refine ⟨some _, ?_, Or.inr ⟨_, _, rfl, rfl, Reach.refl _⟩⟩
@@ -308,17 +325,15 @@ theorem callAbs_sound {env : Env} {tgt : Option Target} {callee : Callee} {A aok
                 | startOk h0 _ _ => rw [hcc] at h0; simp at h0
                 | observeOk h0 _ => rw [hcc] at h0; simp at h0
                 | observeFound h0 _ _ => rw [hcc] at h0; simp at h0
-              · intro k w2 hs
+              · intro k w2 hs _
                 have hsub : ∀ p ∈ A c, p ∈ sendErr (env.ms c) e (A c) := fun p hp => List.mem_append.2 (Or.inl hp)
                 cases hs with
                 | plainErr h0 => rw [hcc] at h0; cases h0
                 | sendRefused h0 _ _ => exact InvS_widen h hsub
-                | sendFailed h0 => exact InvS_widen h hsub
-                | sendFailedAfter h0 hs hs' =>
-                  rw [hcc] at h0
-                  simp only [Option.some.injEq, Prod.mk.injEq, Effect.sends.injEq] at h0
-                  obtain ⟨h1, h2⟩ := h0
-                  subst h1; subst h2
+                | sendFailed h0 _ => exact InvS_widen h hsub
+                | sendFailedAfter h0 _ hs hs' =>
+                  obtain ⟨rfl, he⟩ := caseCall_inj hcc h0
+                  cases he
                   apply InvS_set h
                   obtain ⟨b0, hb0, hr⟩ := inv_started hinv hs
                   refine ⟨some _, ?_, Or.inr ⟨_, _, rfl, rfl, Reach.refl _⟩⟩
@@ -328,48 +343,61 @@ theorem callAbs_sound {env : Env} {tgt : Option Target} {callee : Callee} {A aok
                   simp only [List.mem_flatMap, List.mem_map]
                   exact ⟨_, cl_complete hclo hb0 hr, _, hs', rfl⟩
                 | startFailed h0 => rw [hcc] at h0; simp at h0
-                | startFailedAfter h0 _ _ => rw [hcc] at h0; simp at h0
+                | observeFailed h0 => rw [hcc] at h0; simp at h0
+              · intro k w2 hs hk
+                cases hs with
+                | plainErr h0 => rw [hcc] at h0; cases h0
+                | @sendRefused c' e' s h0 hs hrf =>
+                  obtain ⟨rfl, he⟩ := caseCall_inj hcc h0
+                  cases he
+                  obtain ⟨b0, hb0, hr⟩ := inv_started hinv hs
+                  have hst := cl_complete hclo hb0 hr
+                  have hmem : ((w1 c).1, some s) ∈
+                      refusedPairs env (.task t) c e (refusedName env (.task t) c s e) (A c) := by
+                    simp only [refusedPairs, List.mem_flatMap]
+                    refine ⟨((w1 c).1, some b0), hb0, ?_⟩
+                    simp only [List.mem_map, List.mem_filter, Bool.and_eq_true, beq_iff_eq]
+                    exact ⟨s, ⟨hst, hrf, rfl⟩, rfl⟩
+                  refine ⟨setAbs A c (refusedPairs env (.task t) c e (refusedName env (.task t) c s e) (A c)), ?_, ?_⟩
+                  · simp only [List.mem_map, List.mem_filter, Prod.mk.injEq]
+                    refine ⟨_, ⟨hk, ?_⟩, rfl, rfl⟩
+                    cases hP : refusedPairs env (.task t) c e (refusedName env (.task t) c s e) (A c) with
+                    | nil => rw [hP] at hmem; cases hmem
+                    | cons _ _ => rfl
+                  · exact InvS_keep h ⟨some s, hmem, Or.inr ⟨s, s, rfl, hs, Reach.refl s⟩⟩
+                | sendFailed h0 hnot =>
+                  obtain ⟨rfl, -⟩ := caseCall_inj hcc h0
+                  exact absurd hk hnot
+                | sendFailedAfter h0 hnot _ _ =>
+                  obtain ⟨rfl, -⟩ := caseCall_inj hcc h0
+                  exact absurd hk hnot
+                | startFailed h0 => rw [hcc] at h0; simp at h0
                 | observeFailed h0 => rw [hcc] at h0; simp at h0
             · cases hca
           · next es heff =>
             have hcc := caseCall_eq (c := c) heff
             split at hca
-            · simp only [Option.some.injEq, Prod.mk.injEq] at hca
-              obtain ⟨h1, h2⟩ := hca
-              subst h1; subst h2
-              constructor
+            · simp only [Option.some.injEq] at hca
+              subst hca
+              refine ⟨?_, ?_, fun k w2 _ hk => absurd hk (List.not_mem_nil)⟩
               · intro w2 hs
                 cases hs with
                 | plainOk h0 => rw [hcc] at h0; cases h0
                 | sendOk h0 _ _ => rw [hcc] at h0; simp at h0
                 | startOk h0 hnone hs =>
-                  rw [hcc] at h0
-                  simp only [Option.some.injEq, Prod.mk.injEq, Effect.starts.injEq] at h0
-                  obtain ⟨h1, h2⟩ := h0
-                  subst h1; subst h2
+                  obtain ⟨rfl, he⟩ := caseCall_inj hcc h0
+                  cases he
                   apply InvS_set h
                   exact ⟨some _, List.mem_map.2 ⟨_, hs, rfl⟩, Or.inr ⟨_, _, rfl, rfl, Reach.refl _⟩⟩
                 | observeOk h0 _ => rw [hcc] at h0; simp at h0
                 | observeFound h0 _ _ => rw [hcc] at h0; simp at h0
-              · intro k w2 hs
-                have hsub : ∀ p ∈ A c, p ∈ startErr (env.ms c) es (A c) := fun p hp => List.mem_append.2 (Or.inl hp)
+              · intro k w2 hs _
                 cases hs with
                 | plainErr h0 => rw [hcc] at h0; cases h0
                 | sendRefused h0 _ _ => rw [hcc] at h0; simp at h0
-                | sendFailed h0 => rw [hcc] at h0; simp at h0
-                | sendFailedAfter h0 _ _ => rw [hcc] at h0; simp at h0
-                | startFailed h0 => exact InvS_widen h hsub
-                | startFailedAfter h0 hnone hs =>
-                  rw [hcc] at h0
-                  simp only [Option.some.injEq, Prod.mk.injEq, Effect.starts.injEq] at h0
-                  obtain ⟨h1, h2⟩ := h0
-                  subst h1; subst h2
-                  apply InvS_set h
-                  have hm := inv_unstarted hinv hnone
-                  refine ⟨some _, ?_, Or.inr ⟨_, _, rfl, rfl, Reach.refl _⟩⟩
-                  apply List.mem_append.2 (Or.inr _)
-                  simp only [List.mem_flatMap, List.mem_map]
-                  exact ⟨_, hm, _, hs, rfl⟩
+                | sendFailed h0 _ => rw [hcc] at h0; simp at h0
+                | sendFailedAfter h0 _ _ _ => rw [hcc] at h0; simp at h0
+                | startFailed h0 => exact h
                 | observeFailed h0 => rw [hcc] at h0; simp at h0
             · cases hca
           · next heff =>
@@ -378,20 +406,16 @@ theorem callAbs_sound {env : Env} {tgt : Option Target} {callee : Callee} {A aok
             · next hcond =>
               simp only [Bool.and_eq_true, Bool.or_eq_true] at hcond
               obtain ⟨hclo, hany⟩ := hcond
-              simp only [Option.some.injEq, Prod.mk.injEq] at hca
-              obtain ⟨h1, h2⟩ := hca
-              subst h1; subst h2
-              constructor
+              simp only [Option.some.injEq] at hca
+              subst hca
+              refine ⟨?_, ?_, fun k w2 _ hk => absurd hk (List.not_mem_nil)⟩
               · intro w2 hs
                 cases hs with
                 | plainOk h0 => rw [hcc] at h0; cases h0
                 | sendOk h0 _ _ => rw [hcc] at h0; simp at h0
                 | startOk h0 _ _ => rw [hcc] at h0; simp at h0
                 | observeOk h0 ht =>
-                  rw [hcc] at h0
-                  simp only [Option.some.injEq, Prod.mk.injEq] at h0
-                  obtain ⟨h1, _⟩ := h0
-                  subst h1
+                  obtain ⟨rfl, -⟩ := caseCall_inj hcc h0
                   apply InvS_set h
                   obtain ⟨b0, hb0, hr⟩ := inv_started hinv ht
                   refine ⟨some _, ?_, Or.inr ⟨_, _, rfl, rfl, Reach.refl _⟩⟩
@@ -400,10 +424,7 @@ theorem callAbs_sound {env : Env} {tgt : Option Target} {callee : Callee} {A aok
                   simp only [List.mem_map]
                   exact ⟨_, cl_complete hclo hb0 hr, rfl⟩
                 | observeFound h0 hnone hr =>
-                  rw [hcc] at h0
-                  simp only [Option.some.injEq, Prod.mk.injEq] at h0
-                  obtain ⟨h1, _⟩ := h0
-                  subst h1
+                  obtain ⟨rfl, -⟩ := caseCall_inj hcc h0
                   apply InvS_set h
                   have hm := inv_unstarted hinv hnone
                   have hclAny : ∃ cls, closure (env.ms c).any (env.ms c).initial = some cls := by
@@ -420,18 +441,134 @@ theorem callAbs_sound {env : Env} {tgt : Option Target} {callee : Callee} {A aok
                   refine ⟨_, hm, ?_⟩
                   simp only [List.mem_map, clAny, hcls, Option.getD_some]
                   exact ⟨_, closure_complete hcls hr, rfl⟩
-              · intro k w2 hs
+              · intro k w2 hs _
                 cases hs with
                 | plainErr h0 => rw [hcc] at h0; cases h0
                 | sendRefused h0 _ _ => rw [hcc] at h0; simp at h0
-                | sendFailed h0 => rw [hcc] at h0; simp at h0
-                | sendFailedAfter h0 _ _ => rw [hcc] at h0; simp at h0
+                | sendFailed h0 _ => rw [hcc] at h0; simp at h0
+                | sendFailedAfter h0 _ _ _ => rw [hcc] at h0; simp at h0
                 | startFailed h0 => rw [hcc] at h0; simp at h0
-                | startFailedAfter h0 _ _ => rw [hcc] at h0; simp at h0
                 | observeFailed h0 => exact h
             · cases hca
           · cases hca
         · cases hca
+
+/-! ## What a handler is given, and what goes on to `on failure` -/
+
+theorem takes_iff {h : Handler} {k : String} : h.takes k ↔ h.takesB k = true := by
+  cases h; rfl
+
+theorem takesOnly_mem {names : List String} {h : Handler} {k : String} (ho : takesOnly names h = true)
+    (ht : h.takes k) : k ∈ names := by
+  cases h with
+  | mk errs body =>
+    simp only [takesOnly, Bool.and_eq_true, List.all_eq_true] at ho
+    simp only [Handler.takes, List.any_eq_true] at ht
+    obtain ⟨x, hx, hk⟩ := ht
+    have := ho.2 x hx
+    cases x with
+    | declared ns =>
+      simp only [List.all_eq_true, List.contains_iff_mem] at this
+      simp only [HErr.hits, List.contains_iff_mem] at hk
+      exact this k hk
+    | timeout => simp at this
+    | failure => simp at this
+
+theorem mem_unionAll {env : Env} : ∀ {parts : List Abs} {a U : Abs}, a ∈ parts → unionAll parts = some U →
+    LeA env a U
+  | [], _, _, ha, _ => by cases ha
+  | b :: rest, a, U, ha, hu => by
+    simp only [unionAll] at hu
+    split at hu
+    · next hn =>
+      simp only [Option.some.injEq] at hu
+      subst hu
+      rcases List.mem_cons.1 ha with rfl | ha'
+      · exact LeA_refl env _
+      · cases rest with
+        | nil => cases ha'
+        | cons x xs => simp [unionAll] at hn; split at hn <;> cases hn
+    · next u hu' =>
+      simp only [Option.some.injEq] at hu
+      subst hu
+      rcases List.mem_cons.1 ha with rfl | ha'
+      · exact LeA_unionA_left env _ _
+      · exact LeA_trans (mem_unionAll ha' hu') (LeA_unionA_right env _ _)
+
+theorem unionAll_of_mem : ∀ {parts : List Abs} {a : Abs}, a ∈ parts → ∃ U, unionAll parts = some U
+  | [], _, ha => by cases ha
+  | b :: rest, _, _ => by
+    simp only [unionAll]
+    split
+    · exact ⟨b, rfl⟩
+    · next u _ => exact ⟨unionA b u, rfl⟩
+
+theorem covered {env : Env} {parts : List Abs} {a : Abs} (ha : a ∈ parts) :
+    ∃ U, unionAll parts = some U ∧ LeA env a U := by
+  obtain ⟨U, hU⟩ := unionAll_of_mem ha
+  exact ⟨U, hU, mem_unionAll ha hU⟩
+
+/-- **A handler that runs is given what the call left**, whichever way it failed. -/
+theorem handler_entry {env : Env} {tgt : Option Target} {callee : Callee} {w1 w2 : World} {cr : CallRes}
+    {k : String} {h : Handler} (hf : CallFine env tgt callee w1 cr)
+    (hs : CallStep env tgt callee w1 (.err k w2)) (ht : h.takes k) :
+    ∃ U, handlerIn cr h = some U ∧ InvS env U w2 := by
+  by_cases hk : k ∈ cr.names
+  · obtain ⟨R, hR, hiR⟩ := hf.2.2 k w2 hs hk
+    have hin : R ∈ (cr.refused.filter (fun q => h.takesB q.1)).map (·.2) ++
+        (if takesOnly cr.names h then [] else [cr.err]) := by
+      refine List.mem_append.2 (Or.inl (List.mem_map.2 ⟨(k, R), List.mem_filter.2 ⟨hR, ?_⟩, rfl⟩))
+      exact takes_iff.1 ht
+    obtain ⟨U, hU, hle⟩ := covered (env := env) hin
+    exact ⟨U, hU, InvS_mono hle hiR⟩
+  · have hiE := hf.2.1 k w2 hs hk
+    have hno : takesOnly cr.names h = false := by
+      cases hto : takesOnly cr.names h with
+      | false => rfl
+      | true => exact absurd (takesOnly_mem hto ht) hk
+    have hin : cr.err ∈ (cr.refused.filter (fun q => h.takesB q.1)).map (·.2) ++
+        (if takesOnly cr.names h then [] else [cr.err]) := by
+      rw [hno]
+      exact List.mem_append.2 (Or.inr (List.mem_singleton.2 rfl))
+    obtain ⟨U, hU, hle⟩ := covered (env := env) hin
+    exact ⟨U, hU, InvS_mono hle hiE⟩
+
+theorem catchesAll_false {k : String} : ∀ {hs : List Handler}, (∀ h ∈ hs, ¬ h.takes k) → catchesAll hs = false
+  | [], _ => rfl
+  | (.mk errs body) :: rest, hno => by
+    simp only [catchesAll, Bool.or_eq_false_iff]
+    constructor
+    · rw [Bool.eq_false_iff]
+      intro hany
+      apply hno (.mk errs body) List.mem_cons_self
+      simp only [Handler.takes, List.any_eq_true] at hany ⊢
+      obtain ⟨x, hx, hf⟩ := hany
+      refine ⟨x, hx, ?_⟩
+      cases x <;> simp_all [HErr.hits]
+    · exact catchesAll_false (fun h hh => hno h (List.mem_cons_of_mem _ hh))
+
+/-- **An error no handler takes leaves what goes on to `on failure`.** -/
+theorem raised_entry {env : Env} {tgt : Option Target} {callee : Callee} {w1 w2 : World} {cr : CallRes}
+    {k : String} {hs : List Handler} (hf : CallFine env tgt callee w1 cr)
+    (hst : CallStep env tgt callee w1 (.err k w2)) (hno : ∀ h ∈ hs, ¬ h.takes k) :
+    ∃ U, raisedIn cr hs = some U ∧ InvS env U w2 := by
+  by_cases hk : k ∈ cr.names
+  · obtain ⟨R, hR, hiR⟩ := hf.2.2 k w2 hst hk
+    have hin : R ∈ (if catchesAll hs then [] else [cr.err]) ++
+        (cr.refused.filter (fun q => !hs.any (fun h => h.takesB q.1))).map (·.2) := by
+      refine List.mem_append.2 (Or.inr (List.mem_map.2 ⟨(k, R), List.mem_filter.2 ⟨hR, ?_⟩, rfl⟩))
+      simp only [Bool.not_eq_eq_eq_not, Bool.not_true, List.any_eq_false]
+      intro h hh
+      exact fun ht => hno h hh (takes_iff.2 ht)
+    obtain ⟨U, hU, hle⟩ := covered (env := env) hin
+    exact ⟨U, hU, InvS_mono hle hiR⟩
+  · have hiE := hf.2.1 k w2 hst hk
+    have hin : cr.err ∈ (if catchesAll hs then [] else [cr.err]) ++
+        (cr.refused.filter (fun q => !hs.any (fun h => h.takesB q.1))).map (·.2) := by
+      rw [catchesAll_false hno]
+      exact List.mem_append.2 (Or.inl (List.mem_singleton.2 rfl))
+    obtain ⟨U, hU, hle⟩ := covered (env := env) hin
+    exact ⟨U, hU, InvS_mono hle hiE⟩
 
 /-! ## A match, the handlers, the arms -/
 
@@ -453,19 +590,23 @@ theorem narrow_sound {env : Env} {e : Expr} {arm : Arm} {A : Abs} {w : World}
     · simpa [setAbs, hic] using h i hi
   · exact h
 
-theorem chkHandlers_mem (env : Env) {rec : List Stmt → Abs → Option Res} {A : Abs} :
-    ∀ {hs : List Handler} {R : Res}, chkHandlers rec A hs = some R →
-      ∀ h ∈ hs, ∃ r, rec h.body A = some r ∧ r.le env R
+theorem chkHandlers_mem (env : Env) {rec : List Stmt → Abs → Option Res} {cr : CallRes} :
+    ∀ {hs : List Handler} {R : Res}, chkHandlers rec cr hs = some R →
+      ∀ h ∈ hs, ∀ A, handlerIn cr h = some A → ∃ r, rec h.body A = some r ∧ r.le env R
   | [], _, _, h, hh => by cases hh
-  | (.mk errs body) :: rest, R, hc, h, hh => by
+  | h0 :: rest, R, hc, h, hh => by
     simp only [chkHandlers] at hc
     split at hc
     · next r rs hr hrs =>
       cases hc
       rcases List.mem_cons.1 hh with he | he
       · subst he
-        exact ⟨r, hr, Res.le_join_left env r rs⟩
-      · obtain ⟨r', hr', hle⟩ := chkHandlers_mem env hrs h he
+        intro A hA
+        rw [hA] at hr
+        cases h with
+        | mk errs body => exact ⟨r, hr, Res.le_join_left env r rs⟩
+      · intro A hA
+        obtain ⟨r', hr', hle⟩ := chkHandlers_mem env hrs h he A hA
         exact ⟨r', hr', Res.le_trans hle (Res.le_join_right env r rs)⟩
     · cases hc
 
@@ -484,20 +625,6 @@ theorem chkArms_mem (env : Env) {rec : List Stmt → Abs → Option Res} {e : Ex
       · obtain ⟨r', hr', hle⟩ := chkArms_mem env hrs arm he
         exact ⟨r', hr', Res.le_trans hle (Res.le_join_right env r rs)⟩
     · cases hc
-
-theorem catchesAll_false {k : String} : ∀ {hs : List Handler}, (∀ h ∈ hs, ¬ h.takes k) → catchesAll hs = false
-  | [], _ => rfl
-  | (.mk errs body) :: rest, hno => by
-    simp only [catchesAll, Bool.or_eq_false_iff]
-    constructor
-    · rw [Bool.eq_false_iff]
-      intro hany
-      apply hno (.mk errs body) List.mem_cons_self
-      simp only [Handler.takes, List.any_eq_true] at hany ⊢
-      obtain ⟨x, hx, hf⟩ := hany
-      refine ⟨x, hx, ?_⟩
-      cases x <;> simp_all [HErr.hits]
-    · exact catchesAll_false (fun h hh => hno h (List.mem_cons_of_mem _ hh))
 
 /-! ## Loops -/
 
@@ -637,16 +764,15 @@ theorem go_on {env : Env} {f : Nat} {rest : List Stmt} {r1 r : Res} {A1 : Abs} {
 theorem chkHead_call {env : Env} {rec : List Stmt → Abs → Option Res} {site line : Nat} {tgt : Option Target}
     {callee : Callee} {hs : List Handler} {A : Abs} {r1 : Res}
     {args : List (String × Expr)} (hh : chkHead env rec (.call site line tgt callee args hs) A = some r1) :
-    ∃ aok aerr rh, callAbs env tgt callee A = some (aok, aerr) ∧ chkHandlers rec aerr hs = some rh ∧
-      r1 = { normal := joinO (some aok) rh.normal, brk := rh.brk,
-             raised := joinO (if catchesAll hs then none else some aerr) rh.raised } := by
+    ∃ cr rh, callAbs env tgt callee A = some cr ∧ chkHandlers rec cr hs = some rh ∧
+      r1 = { normal := joinO (some cr.ok) rh.normal, brk := rh.brk, raised := joinO (raisedIn cr hs) rh.raised } := by
   simp only [chkHead] at hh
   split at hh
   · cases hh
-  · next aok aerr hca =>
+  · next cr hca =>
     split at hh
     · cases hh
-    · next rh hrh => cases hh; exact ⟨aok, aerr, rh, hca, hrh, rfl⟩
+    · next rh hrh => cases hh; exact ⟨cr, rh, hca, hrh, rfl⟩
 
 theorem chkHead_repeat {env : Env} {rec : List Stmt → Abs → Option Res} {site t : Nat} {body : List Stmt}
     {A : Abs} {r1 : Res} (hh : chkHead env rec (.repeat site t body) A = some r1) :
@@ -852,30 +978,30 @@ theorem exec_sound {env : Env} {ss : List Stmt} {w : World} {o : Out} (h : Exec 
     | zero => simp [chk] at hc
     | succ f =>
       obtain ⟨r1, hh, hr⟩ := chk_cons_eq hc
-      obtain ⟨aok, aerr, rh, hca, hrh, rfl⟩ := chkHead_call hh
+      obtain ⟨cr, rh, hca, hrh, rfl⟩ := chkHead_call hh
       have hi2 := (callAbs_sound hca (ExtW_inv hi hx)).1 _ hst
-      exact go_on hr (LeO_joinO_left env (some aok) rh.normal) hi2 ih
-  | callHandled hx hst hmem _ _ _ ihb ihr =>
+      exact go_on hr (LeO_joinO_left env (some cr.ok) rh.normal) hi2 ih
+  | callHandled hx hst hmem htk _ _ ihb ihr =>
     intro f A r hc hi
     cases f with
     | zero => simp [chk] at hc
     | succ f =>
       obtain ⟨r1, hh, hr⟩ := chk_cons_eq hc
-      obtain ⟨aok, aerr, rh, hca, hrh, rfl⟩ := chkHead_call hh
-      have hi2 := (callAbs_sound hca (ExtW_inv hi hx)).2 _ _ hst
-      obtain ⟨rhh, hrhh, hle⟩ := chkHandlers_mem env hrh _ hmem
-      obtain ⟨A3, hA3, hi3⟩ := ihb f aerr rhh hrhh hi2
-      exact go_on hr (LeO_trans (fun A' hA' => by cases hA'; exact hle.1 A3 hA3) (LeO_joinO_right env (some aok) rh.normal)) hi3 ihr
-  | callHandledStop hx hst hmem _ _ hstop ihb =>
+      obtain ⟨cr, rh, hca, hrh, rfl⟩ := chkHead_call hh
+      obtain ⟨U, hU, hi2⟩ := handler_entry (callAbs_sound hca (ExtW_inv hi hx)) hst htk
+      obtain ⟨rhh, hrhh, hle⟩ := chkHandlers_mem env hrh _ hmem U hU
+      obtain ⟨A3, hA3, hi3⟩ := ihb f U rhh hrhh hi2
+      exact go_on hr (LeO_trans (fun A' hA' => by cases hA'; exact hle.1 A3 hA3) (LeO_joinO_right env (some cr.ok) rh.normal)) hi3 ihr
+  | callHandledStop hx hst hmem htk _ hstop ihb =>
     intro f A r hc hi
     cases f with
     | zero => simp [chk] at hc
     | succ f =>
       obtain ⟨r1, hh, hr⟩ := chk_cons_eq hc
-      obtain ⟨aok, aerr, rh, hca, hrh, rfl⟩ := chkHead_call hh
-      have hi2 := (callAbs_sound hca (ExtW_inv hi hx)).2 _ _ hst
-      obtain ⟨rhh, hrhh, hle⟩ := chkHandlers_mem env hrh _ hmem
-      have hok := OutOk_mono hle (ihb f aerr rhh hrhh hi2)
+      obtain ⟨cr, rh, hca, hrh, rfl⟩ := chkHead_call hh
+      obtain ⟨U, hU, hi2⟩ := handler_entry (callAbs_sound hca (ExtW_inv hi hx)) hst htk
+      obtain ⟨rhh, hrhh, hle⟩ := chkHandlers_mem env hrh _ hmem U hU
+      have hok := OutOk_mono hle (ihb f U rhh hrhh hi2)
       apply lift_head hstop hr
       exact OutOk_mono ⟨LeO_joinO_right _ _ _, LeO_refl _ _, LeO_joinO_right _ _ _⟩ hok
   | callRaised hx hst hno =>
@@ -884,11 +1010,10 @@ theorem exec_sound {env : Env} {ss : List Stmt} {w : World} {o : Out} (h : Exec 
     | zero => simp [chk] at hc
     | succ f =>
       obtain ⟨r1, hh, hr⟩ := chk_cons_eq hc
-      obtain ⟨aok, aerr, rh, hca, hrh, rfl⟩ := chkHead_call hh
-      have hi2 := (callAbs_sound hca (ExtW_inv hi hx)).2 _ _ hst
+      obtain ⟨cr, rh, hca, hrh, rfl⟩ := chkHead_call hh
+      obtain ⟨U, hU, hi2⟩ := raised_entry (callAbs_sound hca (ExtW_inv hi hx)) hst hno
       apply lift_head (by simp [Out.stops]) hr
-      rw [catchesAll_false hno]
-      obtain ⟨B, hB, hab⟩ := LeO_joinO_left env (some aerr) rh.raised aerr rfl
+      obtain ⟨B, hB, hab⟩ := LeO_joinO_left env _ rh.raised U hU
       exact ⟨B, hB, InvS_mono hab hi2⟩
 
 theorem start_inv (env : Env) : InvS env start World.start := by

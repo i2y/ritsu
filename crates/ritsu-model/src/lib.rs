@@ -1,13 +1,15 @@
-//! The Lean models of ritsu's languages, held to the Rust implementations (DESIGN 11.3).
+//! The Lean models of ritsu's languages and of the checks across them, held to the Rust
+//! implementations (DESIGN 11.3).
 //!
-//! `proofs/` states, as Lean functions, what the core of chobo, koyomi and dandori means, and
-//! proves what their checks settle. `lake build` there also makes `ritsu-model`, a program that
-//! runs those functions: it reads the file a test writes for it (a book, a dates or calendar file,
-//! a flow, resolved the way the model reads them), then answers every line of its standard input
-//! with one line. The tests of this crate make the inputs — every scenario chobo writes for its
-//! books, every input of koyomi's vectors, the scenarios of dandori's flows that stay inside the
-//! core — run each one through the language's reference interpreter and through the model, and
-//! compare the answers a line at a time.
+//! `proofs/` states, as Lean functions, what the core of chobo, koyomi and dandori means and what
+//! the checks across the languages decide, and proves what each settles. `lake build` there also
+//! makes `ritsu-model`, a program that runs those functions: it reads the file a test writes for
+//! it (a book, a dates or calendar file, a flow, resolved the way the model reads them), then
+//! answers every line of its standard input with one line. The tests of this crate make the
+//! inputs — every scenario chobo writes for its books, every input of koyomi's vectors, the
+//! scenarios of dandori's flows that stay inside the core, the checks of `ritsu-cross` over the
+//! languages' own answers — run each one through the Rust and through the model, and compare the
+//! answers a line at a time.
 //!
 //! This library is the part that does not know any language: where the program is, and running
 //! it over a stream of lines while they are made. The languages are the tests' own

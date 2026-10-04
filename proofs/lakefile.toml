@@ -1,10 +1,17 @@
 name = "ritsu_proofs"
 version = "0.1.0"
-defaultTargets = ["ChoboModel", "KoyomiModel", "DandoriCore", "ritsu-model"]
+defaultTargets = ["RulecCert", "ChoboModel", "KoyomiModel", "DandoriCore", "RitsuCross", "rulec-recheck", "ritsu-model"]
 
-# The models of the meaning's core (DESIGN 11.2): each library states what one part of a language
-# means, as functions, and proves what its checks settle. `ritsu-model` runs those functions on the
-# inputs the Rust tests make (DESIGN 11.3).
+# The Lean layer of ritsu (DESIGN 11): one package, one toolchain, no dependencies.
+#
+# `RulecCert` says what a rulec certificate means and proves that the checks it has to pass settle
+# its claims; `rulec-recheck` runs those checks on a certificate. `ChoboModel`, `KoyomiModel` and
+# `DandoriCore` model the core of three languages and prove what their checks settle; `RitsuCross`
+# models the checks across the languages and proves that each of them settles what it says.
+# `ritsu-model` runs the models on the inputs the Rust tests make (DESIGN 11.3).
+
+[[lean_lib]]
+name = "RulecCert"
 
 [[lean_lib]]
 name = "ChoboModel"
@@ -14,6 +21,13 @@ name = "KoyomiModel"
 
 [[lean_lib]]
 name = "DandoriCore"
+
+[[lean_lib]]
+name = "RitsuCross"
+
+[[lean_exe]]
+name = "rulec-recheck"
+root = "RulecMain"
 
 [[lean_exe]]
 name = "ritsu-model"

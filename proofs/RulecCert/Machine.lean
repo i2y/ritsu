@@ -4,7 +4,7 @@
   A `machine` names one input of a rule that the host hands back as one of the rule's outputs
   on the next call. The generated code keeps nothing; what the section adds is claims about
   every **sequence** of calls. This file says what those claims are, in the terms of
-  `RulecCert.Semantics`, and proves that the checks `Main` runs on the certificate's
+  `RulecCert.Semantics`, and proves that the checks `RulecMain` runs on the certificate's
   `machine` section settle them.
 
   The table that decides the carried output is a `Table` as before. One of its axes is the

@@ -1,13 +1,14 @@
-//! Nothing in the Lean models is left open (DESIGN 11.4).
+//! Nothing in the Lean layer is left open (DESIGN 11.4).
 //!
 //! A `sorry` would make every theorem above it worth nothing, and it is the one thing a reader
 //! cannot see from the outside. Two tests hold `proofs/` to that. One reads every `.lean` of it for
 //! `sorry`, `axiom`, `native_decide` and `implemented_by`. The other asks Lean: every declaration of
-//! `ChoboModel`, `KoyomiModel` and `DandoriCore` — every theorem, and every definition the theorems
-//! and `ritsu-model` stand on — is put to `collectAxioms`, what `#print axioms` prints, and may stand
-//! only on the three axioms Lean itself stands on: `propext`, `Classical.choice`, `Quot.sound`. A
-//! `sorry` shows there as `sorryAx`, a `native_decide` as `Lean.ofReduceBool`, an `axiom` by its
-//! name, wherever a tactic hid it.
+//! every library — `RulecCert`, `ChoboModel`, `KoyomiModel`, `DandoriCore` and `RitsuCross`, every
+//! theorem, and every definition the theorems, `rulec-recheck` and `ritsu-model` stand on — is put
+//! to `collectAxioms`, what `#print axioms` prints, and may stand only on the three axioms Lean
+//! itself stands on: `propext`, `Classical.choice`, `Quot.sound`. A `sorry` shows there as
+//! `sorryAx`, a `native_decide` as `Lean.ofReduceBool`, an `axiom` by its name, wherever a tactic
+//! hid it. rulec's `tests/lean.rs` asks the same of the theorems a certificate's claims rest on.
 
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::{Path, PathBuf};
@@ -17,9 +18,18 @@ fn proofs() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../proofs")
 }
 
-/// The libraries of the models, and the theorems each one exists for.
-const LIBRARIES: &[&str] = &["ChoboModel", "KoyomiModel", "DandoriCore"];
+/// The libraries of the Lean layer, and the theorems each one exists for.
+const LIBRARIES: &[&str] = &["RulecCert", "ChoboModel", "KoyomiModel", "DandoriCore", "RitsuCross"];
 const THEOREMS: &[&str] = &[
+    "RulecCert.Certified.complete",
+    "RulecCert.Certified.reached",
+    "RulecCert.Certified.notExcluded",
+    "RulecCert.Certified.disjoint",
+    "RulecCert.Certified.disjointAsked",
+    "RulecCert.Certified.unique",
+    "RulecCert.farkas_sound",
+    "RulecCert.included_sound",
+    "RulecCert.runTotal_exact",
     "ChoboModel.apply_kept",
     "ChoboModel.pass_kept",
     "ChoboModel.within_stays",
@@ -35,6 +45,37 @@ const THEOREMS: &[&str] = &[
     "KoyomiModel.ifClosed_open",
     "DandoriCore.exec_sound",
     "DandoriCore.chkFlow_sound",
+    "RitsuCross.corner_holds",
+    "RitsuCross.corner_fails",
+    "RitsuCross.corner_undecided",
+    "RitsuCross.x2_holds",
+    "RitsuCross.x2_fails",
+    "RitsuCross.daysFit_holds",
+    "RitsuCross.daysFit_fails",
+    "RitsuCross.amountFits_holds_iff",
+    "RitsuCross.amountFits_holds",
+    "RitsuCross.amountFits_fails",
+    "RitsuCross.amountFits_chobo_takes",
+    "RitsuCross.refusalsMet_holds",
+    "RitsuCross.refusalsMet_fails",
+    "RitsuCross.daysGiven_holds",
+    "RitsuCross.daysGiven_fails",
+    "RitsuCross.amountsGiven_holds",
+    "RitsuCross.amountsHull_covers",
+    "RitsuCross.refusalsMet_undecided",
+    "RitsuCross.inputRange_some",
+    "RitsuCross.heldUntil_holds",
+    "RitsuCross.heldUntil_fails",
+    "RitsuCross.heldUntil_fails_expired",
+    "RitsuCross.heldUntil_holds_held",
+    "RitsuCross.x2_days_holds",
+    "RitsuCross.x2_days_fails",
+    "RitsuCross.daysOf_mem",
+    "RitsuCross.mem_daysOf",
+    "RitsuCross.x3a_holds",
+    "RitsuCross.x3a_fails",
+    "RitsuCross.x3b_complete",
+    "RitsuCross.x3b_unique",
 ];
 
 fn lean_files(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -54,7 +95,7 @@ fn lean_files(dir: &Path, out: &mut Vec<PathBuf>) {
 fn no_proof_is_left_open() {
     let mut files = Vec::new();
     lean_files(&proofs(), &mut files);
-    assert!(files.len() >= 15, "proofs/ has fewer .lean files than it did: {}", files.len());
+    assert!(files.len() >= 35, "proofs/ has fewer .lean files than it did: {}", files.len());
     for f in &files {
         let text = std::fs::read_to_string(f).unwrap();
         for bad in ["sorry", "axiom ", "@[implemented_by", "native_decide"] {
@@ -98,8 +139,8 @@ fn script() -> String {
 
 #[test]
 fn every_declaration_stands_on_the_three_axioms_lean_stands_on() {
-    let built = proofs().join(".lake/build/lib/lean/DandoriCore.olean");
-    if !ready(Need::Lean, || built.exists(), "proofs/ is not built (lake build in proofs/)") {
+    let built = |l: &&str| proofs().join(format!(".lake/build/lib/lean/{l}.olean")).exists();
+    if !ready(Need::Lean, || LIBRARIES.iter().all(built), "proofs/ is not built (lake build in proofs/)") {
         return;
     }
     let lake = std::env::var("HOME").map(|h| PathBuf::from(h).join(".elan/bin/lake")).ok().filter(|p| p.exists());
@@ -137,7 +178,7 @@ fn every_declaration_stands_on_the_three_axioms_lean_stands_on() {
         }
     }
     let count = count.unwrap_or_else(|| panic!("Lean did not say how many declarations it read:\n{said}"));
-    assert!(count >= 1500, "the libraries have fewer declarations than they did: {count}");
+    assert!(count >= 5000, "the libraries have fewer declarations than they did: {count}");
     for t in THEOREMS {
         assert!(theorems.iter().any(|x| x == t), "{t} is not among the theorems Lean read");
     }

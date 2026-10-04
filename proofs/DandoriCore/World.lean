@@ -9,16 +9,27 @@
   is in. What the flow does to a case follows its machine:
 
   - `sends e`, answered: the case went to a state the machine leads to from its state by `e`, and
-    the flow heard it. Refused: the case is in a state where the machine refuses `e`, and stays. Any
-    other error: the event may have happened or not, and the flow heard nothing.
+    the flow heard it. Refused: the case is in a state where the machine refuses `e`, and stays, and
+    the call comes back with the refusal's error. Any other error: the event may have happened or
+    not, and the flow heard nothing.
   - `starts … then …`, on a case not started: answered, it is in a state the events lead to from
-    the machine's start; failed, it may or may not have started.
+    the machine's start; failed, it did not start.
   - `observes`: answered, the flow hears the state the case is in — a case it did not start is
     found in some state the machine reaches from its start.
 
-  One call is one event on the other side however many times it is tried (what a task's `key`
-  gives), and a case is started once. `DandoriCore.Sound` proves that a flow `chkFlow` passes ends,
-  in every run where the check looks, with no case left in a state that is not final.
+  What a run takes for granted — of the other side, and of the platform between it and the flow:
+
+  1. One call is one event on the other side however many times it is tried (what a task's `key`
+     gives), and a case is started once.
+  2. A call that starts a case and fails has not started it (`startFailed`; dandori's reading,
+     which counts no case it has no record of and asks for a task's `key`, W103, so that a retry
+     finds the case the other side made).
+  3. A refusal's error comes back only from a refusal (`sendFailed` and `sendFailedAfter` come back
+     with any other error): the task's `refused as`, or a reason a book refuses with, is an error
+     the other side gives for a refusal and the platform gives for nothing else.
+
+  `DandoriCore.Sound` proves that a flow `chkFlow` passes ends, in every run where the check looks,
+  with no case left in a state that is not final.
 -/
 import DandoriCore.Check
 
@@ -49,17 +60,6 @@ def caseCall (env : Env) (tgt : Option Target) (callee : Callee) : Option (Nat �
   | some (.case c), .task t => (env.flow.tasks[t]?).map (fun tk => (c, tk.effect))
   | _, _ => none
 
-/-- The error a refused event comes back as: for a book's operation, the reason the book refuses it
-    with in the case's state (chobo's `reason`); for a rule's machine, the task's `refused as`. -/
-def refusedName (env : Env) (callee : Callee) (c s : Nat) (e : String) : String :=
-  match callee with
-  | .task t => match env.flow.tasks[t]? with
-    | some tk => match tk.book with
-      | some _ => ((env.ms c).reason s e).getD "failure"
-      | none => tk.refusedAs.getD "failure"
-    | none => "failure"
-  | .rule _ => "failure"
-
 /-- **One call, on the other side.** -/
 inductive CallStep (env : Env) (tgt : Option Target) (callee : Callee) : World → CallOut → Prop
   | plainOk {w} : caseCall env tgt callee = none → CallStep env tgt callee w (.ok w)
@@ -68,14 +68,13 @@ inductive CallStep (env : Env) (tgt : Option Target) (callee : Callee) : World �
       s' ∈ (env.ms c).next s e → CallStep env tgt callee w (.ok (setW w c (some s', some s')))
   | sendRefused {w c e s} : caseCall env tgt callee = some (c, .sends e) → (w c).2 = some s →
       (env.ms c).refuses s e = true → CallStep env tgt callee w (.err (refusedName env callee c s e) w)
-  | sendFailed {w c e k} : caseCall env tgt callee = some (c, .sends e) → CallStep env tgt callee w (.err k w)
-  | sendFailedAfter {w c e k s s'} : caseCall env tgt callee = some (c, .sends e) → (w c).2 = some s →
-      s' ∈ (env.ms c).next s e → CallStep env tgt callee w (.err k (setW w c ((w c).1, some s')))
+  | sendFailed {w c e k} : caseCall env tgt callee = some (c, .sends e) → k ∉ refusalNames env callee c →
+      CallStep env tgt callee w (.err k w)
+  | sendFailedAfter {w c e k s s'} : caseCall env tgt callee = some (c, .sends e) → k ∉ refusalNames env callee c →
+      (w c).2 = some s → s' ∈ (env.ms c).next s e → CallStep env tgt callee w (.err k (setW w c ((w c).1, some s')))
   | startOk {w c es s} : caseCall env tgt callee = some (c, .starts es) → (w c).2 = none →
       s ∈ thenStates (env.ms c) es → CallStep env tgt callee w (.ok (setW w c (some s, some s)))
   | startFailed {w c es k} : caseCall env tgt callee = some (c, .starts es) → CallStep env tgt callee w (.err k w)
-  | startFailedAfter {w c es k s} : caseCall env tgt callee = some (c, .starts es) → (w c).2 = none →
-      s ∈ thenStates (env.ms c) es → CallStep env tgt callee w (.err k (setW w c ((w c).1, some s)))
   | observeOk {w c t} : caseCall env tgt callee = some (c, .observes) → (w c).2 = some t →
       CallStep env tgt callee w (.ok (setW w c (some t, some t)))
   | observeFound {w c t} : caseCall env tgt callee = some (c, .observes) → (w c).2 = none →

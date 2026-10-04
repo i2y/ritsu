@@ -3,7 +3,7 @@
 
   `RulecCert.Sound` states each theorem against the check it belongs to; this file puts one
   table's worth of them together, so that a single `true` from `Certified.checks` is a
-  statement about the table itself. It is also the shape `Main` builds from the JSON: what
+  statement about the table itself. It is also the shape `RulecMain` builds from the JSON: what
   the program reads becomes a `Certified`, and what it prints is which of the three
   theorems below apply to it.
 -/

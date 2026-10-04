@@ -161,15 +161,16 @@ jobs:
           } >> "$GITHUB_ENV"
 
       # The toolchain is pinned by proofs/lean-toolchain, so the cache key is that file: a new
-      # Lean is a change in the repository, read as such.
+      # Lean is a change in the repository, read as such. rulec's tests need RulecCert and the
+      # re-checker of ritsu's one Lean package, not the models beside them.
       - uses: actions/cache@v6
         if: matrix.group == 'rulec'
         with:
           path: |
             ~/.elan
-            crates/rulec/proofs/.lake
-          key: lean-${{ runner.os }}-${{ hashFiles('crates/rulec/proofs/lean-toolchain', 'crates/rulec/proofs/RulecCert/*.lean', 'crates/rulec/proofs/Main.lean') }}
-          restore-keys: lean-${{ runner.os }}-
+            proofs/.lake
+          key: lean-rulec-${{ runner.os }}-${{ hashFiles('proofs/lean-toolchain', 'proofs/lakefile.toml', 'proofs/RulecCert/*.lean', 'proofs/RulecCert.lean', 'proofs/RulecMain.lean') }}
+          restore-keys: lean-rulec-${{ runner.os }}-
 
       - name: "rulec: Lean, and the re-checker the tests run"
         if: matrix.group == 'rulec'
@@ -179,8 +180,8 @@ jobs:
             curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
           fi
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-          cd crates/rulec/proofs
-          "$HOME/.elan/bin/lake" build
+          cd proofs
+          "$HOME/.elan/bin/lake" build RulecCert rulec-recheck
 
       # --- dandori: the SDKs and runners under tools/, and the rulec its tests read rules with.
       - name: "dandori: the Node packages under tools/"

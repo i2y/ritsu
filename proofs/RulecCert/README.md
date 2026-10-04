@@ -1,14 +1,16 @@
 # The proofs behind a rulec certificate
 
 `rulec certificate <file.rule>` prints the evidence for the five things `rulec check`
-proves. This directory says what that evidence **means**, and proves that a certificate
-which passes the checks really does settle the claims. It is a Lean 4 package with no
-dependencies beyond the toolchain `lean-toolchain` pins.
+proves. This library says what that evidence **means**, and proves that a certificate
+which passes the checks really does settle the claims. It is `RulecCert`, one library of
+ritsu's Lean package (`proofs/`, the directory above this one, with no dependencies beyond
+the toolchain its `lean-toolchain` pins), and `rulec-recheck` is one of its two programs.
+The paths below are from `proofs/`, and the commands run there.
 
 ```console
-$ lake build                                   # checks the proofs, builds the program
-$ rulec certificate rules/送料.rule > cert.json
-$ .lake/build/bin/rulec-recheck --rule rules/送料.rule cert.json
+$ lake build                                   # checks the proofs, builds the programs
+$ rulec certificate rules/shipping_fee.rule > cert.json
+$ .lake/build/bin/rulec-recheck --rule rules/shipping_fee.rule cert.json
 ```
 
 ## What is in it
@@ -25,10 +27,12 @@ $ .lake/build/bin/rulec-recheck --rule rules/送料.rule cert.json
 | `RulecCert/Machine.lean` | a rule that is one step of a state machine: a case is what the rows allow from the initial state, and the checks on the reach set, the final states and the `never` and `once` lines hold of every sequence of calls (`reaches_mem`, `final_stays`, `never_after`, `once_below_two`); from the calls a certificate hands over, every state a case can reach can still finish (`reachable_finishes`) |
 | `RulecCert/Cells.lean` | from the cells a rule writes to the boxes the claims are about: the compression of §6.2, shown faithful |
 | `RulecCert/Certified.lean` | one table's certificate, and the three theorems put together |
-| `RulecCert/Read.lean`, `RulecCert/Sha256.lean`, `Main.lean` | reading the JSON, the digest, and the program that runs the checks |
+| `RulecCert/Read.lean`, `RulecCert/Sha256.lean`, `RulecMain.lean` | reading the JSON, the digest, and the program that runs the checks |
 
-Nothing is left open: `tests/lean.rs` in the repository above fails if a `sorry`, an
-`axiom`, or a `native_decide` appears anywhere here.
+Nothing is left open: rulec's `crates/rulec/tests/lean.rs` fails if a `sorry`, an `axiom`,
+or a `native_decide` appears anywhere in the package, and asks Lean what the theorems the
+claims rest on stand on; `crates/ritsu-model/tests/proofs.rs` asks it of every declaration
+of every library.
 
 ## What it does not say
 

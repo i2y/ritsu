@@ -1,7 +1,7 @@
 /-
   The checks a certificate has to pass, as functions (DESIGN §15.97).
 
-  These are not a description of `tools/recheck.py`: they are the thing itself. `Main` reads
+  These are not a description of `tools/recheck.py`: they are the thing itself. `RulecMain` reads
   a certificate and runs exactly these, and `RulecCert.Sound` proves that a `true` from each
   one settles the matching claim in `RulecCert.Semantics`. A check here therefore has to
   stay **decidable and small** — one set intersection, one lookup, one walk of a tree the
@@ -44,7 +44,7 @@ def partsOn (a b : Box) (axis : Nat) : Bool :=
 /-- **The overlap check.** For each pair of rows, the certificate names an axis; the pair
     parts there, or the pair is one the certificate does not claim apart and is listed as such.
     A pair that is listed as undecided is not proved apart — `Sound` carries that as a
-    hypothesis, and `Main` prints the count rather than hiding it. -/
+    hypothesis, and `RulecMain` prints the count rather than hiding it. -/
 def pairsPart (rows : List Row) (told : Nat → Nat → Option Nat)
     (undecided : Nat → Nat → Bool) : Bool :=
   rows.all (fun r =>
@@ -158,7 +158,7 @@ def kidsOk (arities : List Arity) (rows : List Row) (ruledOut : Point → Bool) 
 end
 
 /-! Whether the cover leans on an upstream claim anywhere. A certificate that does is still
-checked, but what comes out is weaker, and `Main` says so rather than printing "ok". -/
+checked, but what comes out is weaker, and `RulecMain` says so rather than printing "ok". -/
 
 mutual
 def Cover.leansOnUpstream : Cover → Bool
