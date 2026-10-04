@@ -1,0 +1,8 @@
+context Warehouse(warehouse) v1
+description "Holds the stock on the shelves, and holds what an order takes until it ships"
+owner "the warehouse team"
+
+owns
+  dir "../warehouse"
+
+partnership with Ordering

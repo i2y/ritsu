@@ -1,0 +1,7 @@
+table decide
+policy unique
+| status    | -> handling |
+| received  | wait        |
+| paid      | bill        |
+| shipped   | bill        |
+| cancelled | skip        |

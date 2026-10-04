@@ -1,0 +1,20 @@
+dates net30 v1
+description "Net 30: an invoice is due 30 days after it is sent, on the next day the office is open when that day is closed. The claims are this example's own"
+use calendar "shop_days.cal"
+
+inputs
+  invoice_date : date  range >=2026-01-01 <=2027-11-30
+
+date due = invoice_date
+  + 30 days             # "Net 30": due 30 days after the invoice date
+  roll following        # on the next business day when that day is closed
+
+claims
+  due_on_a_business_day   : due is open
+  at_least_30_days        : due >= invoice_date + 30 days
+  later_invoice_later_due : due is monotonic
+
+examples
+| invoice_date | -> due     |
+| 2026-03-02   | 2026-04-01 |
+| 2026-11-25   | 2026-12-28 |

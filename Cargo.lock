@@ -115,6 +115,7 @@ dependencies = [
  "ritsu-ports",
  "ritsu-project",
  "ritsu-testkit",
+ "ritsu-wasm",
  "rulec",
  "sakai",
  "serde_json",

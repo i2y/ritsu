@@ -1,0 +1,20 @@
+dates 支払期日(net30) v1
+description "請求書を送った日から 30 日後が支払期日。その日が休みなら、次の営業日。条件はこの例のもの"
+use calendar "店の休み.cal"
+
+inputs
+  請求日(invoice_date) : date  range >=2026-01-01 <=2027-11-30
+
+date 期日(due) = 請求日
+  + 30 days             # 「30 日後」
+  roll following        # 「休みなら次の営業日」
+
+claims
+  営業日に払う       : 期日 is open
+  30日より早くない   : 期日 >= 請求日 + 30 days
+  遅い請求は遅い期日 : 期日 is monotonic
+
+examples
+| 請求日     | -> 期日    |
+| 2026-03-02 | 2026-04-01 |
+| 2026-12-02 | 2027-01-04 |

@@ -1,0 +1,9 @@
+map 通販(shop) v1
+description "小さな通販。受注が注文を受けて出荷し、倉庫が在庫を持ち、請求が注文に請求する"
+
+use context "contexts/受注.ctx"
+use context "contexts/倉庫.ctx"
+use context "contexts/請求.ctx"
+
+covers "."
+proto root "proto"

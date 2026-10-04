@@ -24,4 +24,7 @@ yuen = { path = "../yuen" }
 
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
+# The page in the browser, held to this binary by tests/playground.rs (a dev-dependency may close
+# the circle: ritsu-wasm runs this crate's library).
+ritsu-wasm = { path = "../ritsu-wasm" }
 serde_json = { version = "1", features = ["preserve_order"] }

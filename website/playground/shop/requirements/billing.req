@@ -1,0 +1,22 @@
+requirements billing v1
+description "Where billing's decisions come from. Written for the example"
+
+role accounts "decides how the shop bills"
+
+requirement bill_once_paid
+  text "An order is billed once it is paid, and is not billed when it is cancelled"
+  owner accounts
+  decided 2026-10-01 by accounts "the shop bills what it has been paid for"
+  satisfied by rulec "../billing/rules/billing_need.rule" table decide
+    reviewed 2026-10-04 by accounts sha256:7ed70f2d84c38c7f -> sha256:87a2cba6eed82644
+  not verified "rulec checks that the table answers every state an order can be in, and that no two of its rows answer one"
+    approved 2026-10-04 by accounts sha256:7ed70f2d84c38c7f
+
+requirement net_30
+  text "An invoice is due 30 days after it is sent, on a day the office is open"
+  owner accounts
+  decided 2026-10-01 by accounts "the terms the shop offers its business customers"
+  satisfied by koyomi "../billing/net30.cal" date due
+    reviewed 2026-10-04 by accounts sha256:7169f4e922769774 -> sha256:40177f8768a169f1
+  verified by koyomi "../billing/net30.cal" claim due_on_a_business_day
+    reviewed 2026-10-04 by accounts sha256:7169f4e922769774 -> sha256:8064857a2ee1809b

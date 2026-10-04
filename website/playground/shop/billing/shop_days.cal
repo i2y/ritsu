@@ -1,0 +1,6 @@
+calendar shop_days v1
+description "The days the shop's office is closed: Saturdays, Sundays, Christmas Day and New Year's Day. Written for the example; it copies no one's holidays"
+
+closed weekly sat, sun
+closed every 12-25 "Christmas Day"
+closed every 01-01 "New Year's Day"

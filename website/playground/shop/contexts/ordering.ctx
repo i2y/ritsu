@@ -1,0 +1,18 @@
+context Ordering(ordering) v1
+description "Takes an order, asks for the payment, has it shipped and waits for the delivery"
+owner "the ordering team"
+
+owns
+  dir "../ordering", "../proto/shop"
+
+published language shop.v1
+  proto "../proto/shop/v1/order.proto"
+  open host service OrderService
+
+terms
+  order "what a customer has bought, from the moment they confirm it; cancelling it does not make it go away"
+    means message Order
+  cancel "to call an order off before it ships"
+    means enum OrderStatus value ORDER_STATUS_CANCELLED
+
+partnership with Warehouse

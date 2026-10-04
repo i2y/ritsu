@@ -1,0 +1,22 @@
+requirements 請求 v1
+description "請求の決め方がどこから来たか。書き下ろしの例"
+
+role 経理 "お店の請求の仕方を決める"
+
+requirement 入金後に請求(bill_once_paid)
+  text "注文には入金のあとに請求し、取り消された注文には請求しない"
+  owner 経理
+  decided 2026-10-01 by 経理 "入金されたものに請求する"
+  satisfied by rulec "../billing/rules/請求の要否.rule" table 扱いの判定
+    reviewed 2026-10-04 by 経理 sha256:8b7922b9e83b647b -> sha256:c3a43b055df6c13b
+  not verified "表が注文のどの状態にも答え、二つの行が同じ状態に答えないことは、rulec の検査が確かめる"
+    approved 2026-10-04 by 経理 sha256:8b7922b9e83b647b
+
+requirement 三十日払い(net_30)
+  text "請求書は送った日から 30 日後が支払期日で、事務所の開いている日に払う"
+  owner 経理
+  decided 2026-10-01 by 経理 "法人のお客さまに示している支払条件"
+  satisfied by koyomi "../billing/支払期日.cal" date 期日
+    reviewed 2026-10-04 by 経理 sha256:8f9a043caa83d1b6 -> sha256:39e30c023ba88e6a
+  verified by koyomi "../billing/支払期日.cal" claim 営業日に払う
+    reviewed 2026-10-04 by 経理 sha256:8f9a043caa83d1b6 -> sha256:9e0d3b76b2bb3d8f

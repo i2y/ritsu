@@ -1,0 +1,11 @@
+context Billing(billing) v1
+description "Decides whether to bill an order, and when the invoice is due"
+owner "the accounts team"
+
+owns
+  dir "../billing"
+
+upstream Ordering anticorruption layer
+  through shop.v1
+  layer rulec "../billing/rules/billing_need.rule"
+  enum OrderStatus -> rulec "../billing/rules/billing_need.rule" enum order_status

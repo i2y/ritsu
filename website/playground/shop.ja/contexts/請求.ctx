@@ -1,0 +1,11 @@
+context 請求(billing) v1
+description "注文に請求するかと、請求書の支払期日を決める"
+owner "経理チーム"
+
+owns
+  dir "../billing"
+
+upstream 受注 anticorruption layer
+  through shop.v1
+  layer rulec "../billing/rules/請求の要否.rule"
+  enum OrderStatus -> rulec "../billing/rules/請求の要否.rule" enum 注文の状態

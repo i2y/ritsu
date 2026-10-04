@@ -1,0 +1,18 @@
+context 受注(ordering) v1
+description "注文を受け、入金を催促し、出荷させ、配達を待つ"
+owner "受注チーム"
+
+owns
+  dir "../ordering", "../proto/shop"
+
+published language shop.v1
+  proto "../proto/shop/v1/order.proto"
+  open host service OrderService
+
+terms
+  注文 "お客さまが確定させた購入。取り消されても消えない"
+    means message Order
+  取消 "出荷の前に注文を取りやめること"
+    means enum OrderStatus value ORDER_STATUS_CANCELLED
+
+partnership with 倉庫

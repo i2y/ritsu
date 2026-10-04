@@ -1,0 +1,206 @@
+/* The playground's own styling. It borrows the theme's variables, so it follows the palette and
+   the dark-mode switch; its own colours (the mark of a selected tab, the terminal the output is
+   shown in) have values of their own, so that the widget reads the same outside the site too. */
+
+.pg {
+  --rt-mark: #2f6f8f;
+  --rt-mark-light: #8fc4dd;
+  --rt-ink: #1d2428;
+  --rt-err: #e0675a;
+  --rt-warn: #d9a83a;
+  border: 1px solid var(--md-default-fg-color--lightest, #ccd);
+  border-radius: .2rem;
+  margin: 1.2em 0;
+  contain: inline-size;
+}
+
+/* The playground takes the width of the column and never asks for more: a long line of a file or
+   of the output scrolls in its own box, and a narrow screen does not scroll the whole page. */
+.pg-bar,
+.pg-files,
+.pg-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem .6rem;
+  padding: .4rem .6rem;
+  background: var(--md-code-bg-color, #f5f6f7);
+}
+
+.pg-bar { border-bottom: 1px solid var(--md-default-fg-color--lightest, #ccd); }
+.pg-files { gap: .3rem; border-bottom: 1px solid var(--md-default-fg-color--lightest, #ccd); }
+.pg-tabs { border-top: 1px solid var(--md-default-fg-color--lightest, #ccd); }
+
+.pg button,
+.pg select {
+  font: inherit;
+  font-size: .68rem;
+  padding: .2rem .55rem;
+  border: 1px solid var(--md-default-fg-color--lighter, #99a);
+  border-radius: .15rem;
+  background: var(--md-default-bg-color, #fff);
+  color: var(--md-default-fg-color, #222);
+}
+
+.pg button { cursor: pointer; }
+.pg button:disabled { cursor: default; opacity: .5; }
+.pg select { min-width: 0; max-width: 100%; padding: .2rem; text-overflow: ellipsis; }
+
+.pg button:hover:not(:disabled) { border-color: var(--rt-mark); color: var(--rt-mark); }
+.pg button.on,
+.pg button.on:hover { background: var(--rt-mark); border-color: var(--rt-mark); color: #fff; }
+
+/* A tab is a file of the project, by its path; a dot says what the last check found in it. */
+.pg .pg-file {
+  font-family: var(--md-code-font-family, monospace);
+  font-size: .62rem;
+  padding: .15rem .45rem;
+  overflow-wrap: anywhere;
+}
+
+.pg .pg-file.err::after,
+.pg .pg-file.warn::after {
+  content: "";
+  display: inline-block;
+  width: .45em;
+  height: .45em;
+  margin-left: .4em;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--rt-err);
+}
+
+.pg .pg-file.warn::after { background: var(--rt-warn); }
+
+/* A file of no language (what yuen keeps of what was looked at, a data file a calendar reads) is
+   read by the file that names it; its tab steps back. */
+.pg .pg-file.pg-other:not(.on) { opacity: .6; }
+
+/* The status line says which version answered, how long it took and what it found. A stale
+   ritsu.wasm in a cache shows there rather than answering quietly. */
+.pg-status {
+  margin-left: auto;
+  font-size: .62rem;
+  color: var(--md-default-fg-color--light, #667);
+}
+
+.pg-src,
+.pg-pre {
+  font-family: var(--md-code-font-family, monospace);
+  font-size: .68rem;
+  line-height: 1.5;
+  letter-spacing: 0;
+  tab-size: 2;
+}
+
+.pg-src {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 24em;
+  min-height: 8em;
+  padding: .7rem .8rem;
+  border: 0;
+  resize: vertical;
+  background: var(--md-default-bg-color, #fff);
+  color: var(--md-default-fg-color, #222);
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow: auto;
+}
+
+.pg-src:focus { outline: 2px solid var(--rt-mark); outline-offset: -2px; }
+
+.pg-out {
+  max-height: 34em;
+  overflow: auto;
+  background: var(--rt-ink);
+  color: #dfe6e8;
+}
+
+/* The theme gives a <pre> its own colours, which on the light scheme are dark on light. */
+.pg .pg-pre,
+.md-typeset .pg .pg-pre {
+  margin: 0;
+  padding: .7rem .8rem;
+  white-space: pre;
+  color: #dfe6e8;
+  background: none;
+  border-radius: 0;
+}
+
+/* Where a finding is takes the reader to that line of that file. */
+.pg .pg-at {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--rt-mark-light);
+  text-decoration: underline;
+  text-underline-offset: .15em;
+}
+
+.pg .pg-at:hover { color: #fff; }
+
+.pg-note {
+  margin: 0;
+  padding: .7rem .8rem 0;
+  font-size: .68rem;
+}
+
+/* The page `doc` writes is a whole document: it opens in a tab of its own. */
+.pg-board { padding: 1.1em 1.3em; }
+.pg-board p { margin: 0 0 1em; max-width: 44em; font-size: .72rem; }
+.pg-board code,
+.md-typeset .pg-board code { background: rgba(255, 255, 255, .1); color: inherit; padding: 0 .3em; border-radius: .15rem; }
+.pg-board .pg-pre { padding: 1em 0 0; }
+
+/* A link, not a button, so that a middle click and a cmd click do what they should; it is given
+   the colours of the selected tab with the specificity to win over the theme's link colour. */
+.pg a.pg-open,
+.pg a.pg-open:hover {
+  display: inline-block;
+  padding: .4rem 1rem;
+  border-radius: .15rem;
+  font-size: .72rem;
+  font-weight: 700;
+  text-decoration: none;
+  background: var(--rt-mark);
+  color: #fff;
+}
+
+.pg a.pg-open:hover { background: var(--rt-mark-light); color: var(--rt-ink); }
+
+/* The theme dresses every <details> as an admonition; this one is a plain fold in the pane. */
+.pg details.pg-md,
+.md-typeset .pg details.pg-md {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  color: #dfe6e8;
+  font-size: inherit;
+}
+
+.pg details.pg-md > summary,
+.md-typeset .pg details.pg-md > summary {
+  margin: 0;
+  padding: .6rem 1.3em;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: .68rem;
+  font-weight: normal;
+  color: #dfe6e8;
+  cursor: pointer;
+}
+
+.md-typeset .pg details.pg-md > summary::before,
+.md-typeset .pg details.pg-md > summary::after { display: none; }
+.pg details.pg-md > summary::marker { content: "▸ "; }
+.pg details.pg-md[open] > summary::marker { content: "▾ "; }
+.pg details.pg-md > .pg-pre { margin: 0; }

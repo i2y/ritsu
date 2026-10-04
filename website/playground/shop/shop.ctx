@@ -1,0 +1,9 @@
+map Shop(shop) v1
+description "A small shop: ordering takes the orders and ships them, the warehouse holds the stock, and billing bills the orders"
+
+use context "contexts/ordering.ctx"
+use context "contexts/warehouse.ctx"
+use context "contexts/billing.ctx"
+
+covers "."
+proto root "proto"

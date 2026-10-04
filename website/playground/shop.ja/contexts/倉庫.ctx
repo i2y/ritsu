@@ -1,0 +1,8 @@
+context 倉庫(warehouse) v1
+description "棚の在庫を持ち、注文の分を出荷まで押さえておく"
+owner "倉庫チーム"
+
+owns
+  dir "../warehouse"
+
+partnership with 受注

@@ -1,0 +1,25 @@
+rule urgency v1
+description "Whether an order goes out in a hurry, and by which carrier: a member's always does, and anyone else's from 30,000 yen. Written for the example"
+
+enum carrier = standard | next_day
+
+inputs
+  member : bool
+  amount : money[JPY, incl_tax]  range >=0JPY <=1000000JPY
+
+outputs
+  urgent  : bool
+  carrier : carrier
+
+table decide
+policy unique
+| member | amount     | -> urgent | carrier  |
+| true   | -          | true      | next_day |
+| false  | >=30000JPY | true      | next_day |
+| false  | <30000JPY  | false     | standard |
+
+examples
+| member | amount   | -> urgent | carrier  |
+| true   | 1000JPY  | true      | next_day |
+| false  | 5000JPY  | false     | standard |
+| false  | 30000JPY | true      | next_day |
