@@ -33,7 +33,8 @@ impl Default for Joined {
 impl Joined {
     /// Every language, made once, and the index over them.
     pub fn new() -> Joined {
-        let rulec = Rc::new(rulec::ports::Engine::new());
+        // rulec reads the days of a koyomi date through koyomi's port (DESIGN 7.5 (b)).
+        let rulec = Rc::new(rulec::ports::Engine::with_dates(Joined::dates()));
         let koyomi = Rc::new(koyomi::ports::Engine);
         let chobo = Rc::new(chobo::ports::Engine);
         let geas = Rc::new(geas::ports::Engine);
@@ -51,6 +52,12 @@ impl Joined {
             .with_items(Tool::Sakai, sakai.clone())
             .with_references(Tool::Sakai, sakai.clone());
         Joined { rulec, koyomi, chobo, geas, dandori, sakai, index: Rc::new(index) }
+    }
+
+    /// The port of dates, as rulec reads the days of `range from koyomi` with it (DESIGN 7.5
+    /// (b)): koyomi's engine holds nothing, so one for each reader is the same one.
+    pub fn dates() -> rulec::days::Port {
+        std::sync::Arc::new(koyomi::ports::Engine)
     }
 
     /// The port of rules, as dandori reads a flow's rules with it.

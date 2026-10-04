@@ -315,6 +315,21 @@ It says so. It does not approximate and pass.
   What is left is what that cannot decide because it works over the
   rationals — a pair kept apart only by the values being whole.
 
+## Over the days a koyomi date comes to
+
+A date input can take its range from a date of a koyomi file:
+`pay_day : date  range from koyomi "payment_terms.cal" date payment`.
+koyomi computes the date on every input of its own range, so the days it
+comes to are known exactly, and the seven checks run over those days and
+no other: a table needs no row for the days between two payment days, a
+payment day no row takes is E101 with that day as the example, and a row
+that takes none of them is E102. The generated code refuses any other
+day at its door, and the certificate carries the days with the koyomi
+file's SHA-256. The days are read through ritsu, with koyomi joined
+(`ritsu rulec check`, `ritsu check`); a rulec with no koyomi does not
+check the rule over every day instead, and says so (E129). See
+[the reference](reference.md#range-from-koyomi-the-days-a-koyomi-date-comes-to).
+
 ## Showing it to the person who approves
 
 ```console

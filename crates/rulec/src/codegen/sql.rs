@@ -458,6 +458,21 @@ impl<'a> Gen<'a> {
                 lit(&tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}"))
             ));
         }
+        // The days of a koyomi date (§15.174), refused as the other backends refuse them.
+        let mut day_inputs: Vec<&String> = self.c.day_sets.keys().collect();
+        day_inputs.sort();
+        for name in day_inputs {
+            let set = &self.c.day_sets[name];
+            let col = q(&local(name));
+            let tests: Vec<String> = crate::codegen::day_runs(&set.days)
+                .into_iter()
+                .map(|(a, b)| if a == b { format!("{col} = {a}") } else { format!("({a} <= {col} AND {col} <= {b})") })
+                .collect();
+            let from = set.from.as_ref().map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
+            let _ = from;
+            let (file, date) = set.from.as_ref().map(|fr| (fr.file.replace(['"', '\\', '`', '\'', '$'], ""), fr.date.clone())).unwrap_or_default();
+            guard.push(format!("WHEN NOT ({}) THEN {}", tests.join(" OR "), lit(&tr!("{name} は {file} の {date} がとる日ではありません", "{name} is not a day {date} of {file} comes to"))));
+        }
         cols.push(if guard.is_empty() {
             format!("NULL AS {}", q("_input_error"))
         } else {

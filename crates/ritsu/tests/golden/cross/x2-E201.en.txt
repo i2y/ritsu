@@ -1,0 +1,8 @@
+ok refund_check.rule
+refund.flow: ok
+error[ritsu E201]: refund.flow:21:1: The call of the rule check can give it values that break its precondition `asked <= paid`
+    21 |   let decision = check(paid: paid, asked: asked)
+  = `asked` is `>=0 <=10000` and `paid` is `>=0 <=10000`, and at asked = 10000, paid = 0 `asked <= paid` does not hold
+  = The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, gathered from every place the values come from.
+  = Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result).
+ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

@@ -221,7 +221,7 @@ partial def coverOfJson : Option Json → Option Cover
       | none =>
         if (field c "upstream").isSome || (field c "constraint").isSome
           || (field c "derived_axis").isSome || (field c "every_point_ruled_out").isSome
-          || (field c "farkas").isSome
+          || (field c "farkas").isSome || (field c "days_axis").isSome
         then some .impossible else none
 
 partial def kidsOfJson : List Json → Option Kids
@@ -322,7 +322,8 @@ def srcOfJson (j : Json) : Option (List (Option SrcSpan)) :=
 
 def readTable (rangesOf : String → Option Span2) (groups : String → List String)
     (declaredOf : String → Option Span2)
-    (factOf : Json → Option (List (String × Rat) × Rat × Bool)) (j : Json) : Option ReadTable := do
+    (factOf : Json → Option (List (String × Rat) × Rat × Bool))
+    (daysOf : String → Option (List Rat)) (j : Json) : Option ReadTable := do
   let name := fieldStr j "table"
   let policy ← (if fieldStr j "policy" == "unique" then some Policy.unique
                 else if fieldStr j "policy" == "first" then some Policy.first else none)
@@ -357,6 +358,10 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     some (a, b, ax))
   let undec : List (Nat × Nat) := (fieldArr j "undecided").toList.filterMap (fun d => do
     let a ← fieldNat d "a"; let b ← fieldNat d "b"; some (a, b))
+  -- The pairs koyomi's days part (rulec's §15.174), each with its axis of days.
+  let byDays : List (Nat × Nat × Nat) := (fieldArr j "days_apart").toList.filterMap (fun d => do
+    let a ← fieldNat d "a"; let b ← fieldNat d "b"; let ax ← fieldNat d "axis"
+    some (a, b, ax))
   -- The table's linear model (§15.141): its facts, each built again from where the
   -- certificate says it comes from, over the axes and then the model's other names.
   let lin := (field j "linear").getD Json.null
@@ -433,12 +438,16 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
                      let ai ← fieldNat a "axis"; let ac ← fieldNat a "coord"
                      let bi ← fieldNat b "axis"; let bc ← fieldNat b "coord"
                      some ((ai, ac), (bi, bc)))
-                 facts := facts }
+                 facts := facts
+                 -- The days an input takes from a koyomi file (rulec's §15.174), on its axis.
+                 days := axes.toList.map (fun a =>
+                   if fieldStr a "kind" == "input" then daysOf (fieldStr a "column") else none) }
       cover := cover
       told := fun a b => (told.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
       witness := fun i => (wit.find? (fun w => w.1 == i)).map (fun w => (w.2.1, w.2.2))
       undecided := fun a b => (undec.find? (fun u => u.1 == a && u.2 == b)).isSome
       refuted := fun a b => (refuted.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
-      farkasAt := fun p => (leaves.find? (fun l => l.1 == p)).map (fun l => l.2) } }
+      farkasAt := fun p => (leaves.find? (fun l => l.1 == p)).map (fun l => l.2)
+      daysApart := fun a b => (byDays.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2) } }
 
 end RulecCert

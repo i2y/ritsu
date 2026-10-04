@@ -1,0 +1,8 @@
+error[E065]: The shape of `range from` is wrong
+  --> variant.rule:7
+  |
+7 |   pay_day : date  range from koyomi "payment_terms.cal" 
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+ The shape is `range from koyomi "<file>" date <name of a date>`: the days a date of a koyomi file comes to become this input's range (§15.174).
+

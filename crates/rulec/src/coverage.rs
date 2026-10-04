@@ -246,6 +246,15 @@ fn thresholds(cell: &Cell, ty: &Ty, q: Rat) -> Vec<(Rat, Rat, Rat)> {
     out
 }
 
+/// Whether `v` is a value the input `col` takes as far as koyomi's days go: one of them, on an
+/// input whose range is a koyomi date (§15.174); any value, on every other input.
+fn a_day(c: &Checked, col: &str, v: Rat) -> bool {
+    match c.day_sets.get(col) {
+        Some(d) => v.den == 1 && d.days.binary_search(&(v.num as i64)).is_ok(),
+        None => true,
+    }
+}
+
 pub fn in_range(c: &Checked, col: &str, v: Rat) -> bool {
     let Some((lo, hi)) = c.ranges.get(col) else { return true };
     lo.is_none_or(|l| v.cmp_to(l) != std::cmp::Ordering::Less)
@@ -423,8 +432,12 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                 for (b, inside, outside) in thresholds(cell, &ty, q) {
                     // §9.1: an unrealizable side is not an obligation. Nor is a side no input
                     // satisfying the rule's `constraint`s reaches with the row's other cells held.
+                    // A side that is not one of koyomi's days on an input of them (§15.174) is
+                    // unrealizable too.
                     if !in_range(c, col, inside)
                         || !in_range(c, col, outside)
+                        || !a_day(c, col, inside)
+                        || !a_day(c, col, outside)
                         || unreachable_side(f, c, t, row, col, inside)
                         || unreachable_side(f, c, t, row, col, outside)
                     {

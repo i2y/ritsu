@@ -893,6 +893,25 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
             );
             continue;
         }
+        // A date input of koyomi's days takes those days only (§15.174), and the generated code
+        // refuses any other at its door: an example on another day claims an answer for it.
+        if let Some((name, shown)) = c.day_sets.iter().find_map(|(name, d)| match env.get(name) {
+            Some(v @ Val::Date(y, m, dd)) if d.days.binary_search(&(crate::types::date_ord(*y, *m, *dd).num as i64)).is_err() => Some((name.clone(), v.show(&Ty::Date))),
+            _ => None,
+        }) {
+            let from = c.day_sets[&name].from.as_ref().map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
+            out.push(
+                Diag::error("E019", tr!("例の値が、宣言した範囲の外です", "An example's value is outside the declared range"))
+                    .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
+                    .mark(row.span.clone(), tr!("{name} = {shown} は {from} がとる日ではありません", "{name} = {shown} is not a day {from} comes to"))
+                    .note(tr!(
+                        "{name} がとるのは koyomi が数えた日だけで、ほかの日は生成コードが入口で断ります。例はその日に答えがあると言っていることになり、検査もその日には行を求めていません。",
+                        "{name} takes only the days koyomi counted, and the generated code refuses any other at its door. The example claims an answer for that day, and the checks never asked a row to cover it."
+                    ))
+                    .note(tr!("例の日付を、koyomi のファイルがとる日に直してください。", "Correct the example's date to a day the koyomi file comes to.")),
+            );
+            continue;
+        }
         // An example is a case the rule is claimed to answer, so it has to be a case the rule
         // can receive. A `constraint` says which combinations exist (§15.55); an example
         // outside them would be asserting an answer for an input the generated code refuses

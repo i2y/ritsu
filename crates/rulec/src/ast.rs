@@ -60,6 +60,19 @@ pub struct TypeRef {
 pub struct Range {
     /// A conjunction, e.g. `range >=1g <=40kg`.
     pub bounds: Vec<(CmpOp, Lit)>,
+    /// `range from koyomi "<file>" date <name>`: the days a date of a koyomi file comes to over
+    /// the whole range of its inputs, in place of bounds (ritsu's DESIGN 7.5, §15.174). The rule
+    /// keeps the naming; koyomi keeps the set, and the check reads it through ritsu's port.
+    pub days: Option<DaysFrom>,
+    pub span: Span,
+}
+
+/// Where the days of `range from koyomi "<file>" date <name>` come from: the file as written
+/// (from the directory of the `.rule`), and the date of it.
+#[derive(Debug, Clone)]
+pub struct DaysFrom {
+    pub file: String,
+    pub date: String,
     pub span: Span,
 }
 

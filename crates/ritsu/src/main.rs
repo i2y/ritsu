@@ -57,7 +57,8 @@ fn refuse(msg: Text, lang: Lang) -> ExitCode {
 fn language(name: &str, args: &[String]) -> ExitCode {
     let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
     let code = match name {
-        "rulec" => return rulec::cli::run(args.to_vec()),
+        // rulec reads the days of `range from koyomi` through koyomi's port (DESIGN 7.5 (b))
+        "rulec" => return rulec::days::with(Some(Joined::dates()), || rulec::cli::run(args.to_vec())),
         "koyomi" => return koyomi::run::run(args.to_vec()),
         "chobo" => return chobo::run::run(args.to_vec()),
         "geas" => {

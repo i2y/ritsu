@@ -183,7 +183,25 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         let (lo, hi) = &c.ranges[n];
         ranges = ranges.raw(n, format!("[{},{}]", end(lo), end(hi)));
     }
-    Obj::new()
+    // The days a date input takes from a koyomi file (§15.174): where they come from — the file
+    // and its date as the rule names them, and the file's SHA-256 — and the days, on the scale
+    // of `ranges`. Written only for a rule that has them, so no other certificate changes.
+    let days = (!c.day_sets.is_empty()).then(|| {
+        let mut d = Obj::new();
+        let mut names: Vec<&String> = c.day_sets.keys().collect();
+        names.sort();
+        for n in names {
+            let set = &c.day_sets[n];
+            let from = match &set.from {
+                Some(fr) => Obj::new().str("tool", "koyomi").str("file", &fr.file).str("date", &fr.date).finish(),
+                None => "null".to_string(),
+            };
+            let list: Vec<String> = set.days.iter().map(|x| format!("\"{x}\"")).collect();
+            d = d.raw(n, Obj::new().raw("from", from).str("sha256", &set.sha256).raw("days", format!("[{}]", list.join(","))).finish());
+        }
+        d.finish()
+    });
+    let o = Obj::new()
         // The version of this shape. A program that re-checks a certificate reads it first and
         // refuses one it was not written for, rather than checking something else (§15.156).
         .int("v", 1)
@@ -201,8 +219,12 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
             }
             ts.finish()
         })
-        .raw("ranges", ranges.finish())
-        .raw("groups", {
+        .raw("ranges", ranges.finish());
+    let o = match days {
+        Some(d) => o.raw("days", d),
+        None => o,
+    };
+    o.raw("groups", {
             let mut g = Obj::new();
             let mut names: Vec<&String> = c.groups.keys().collect();
             names.sort();
@@ -947,7 +969,7 @@ fn table_json(t: CertTable, src: &str) -> String {
         .iter()
         .map(|(a, b, r)| Obj::new().int("a", *a as i128).int("b", *b as i128).raw("farkas", farkas_json(r, &t.model)).finish())
         .collect();
-    Obj::new()
+    let o = Obj::new()
         .str("table", &t.name)
         .str("policy", t.policy)
         .int("outputs", t.outputs as i128)
@@ -955,7 +977,15 @@ fn table_json(t: CertTable, src: &str) -> String {
         .raw("decides", crate::json::strs(&t.decides))
         .raw("rows", arr(&rows))
         .raw("disjoint", arr(&disjoint))
-        .raw("refuted", arr(&refuted))
+        .raw("refuted", arr(&refuted));
+    // The pairs koyomi's days part (§15.174), written only for a table that has them, so no
+    // other certificate changes.
+    let o = if t.days_apart.is_empty() {
+        o
+    } else {
+        o.raw("days_apart", arr(&t.days_apart.iter().map(|(a, b, ai)| Obj::new().int("a", *a as i128).int("b", *b as i128).int("axis", *ai as i128).finish()).collect::<Vec<_>>()))
+    };
+    o
         .raw("undecided", arr(&undecided))
         .raw("reach", arr(&reach))
         .raw("unused", arr(&t.unused.iter().map(|r| r.to_string()).collect::<Vec<_>>()))
@@ -1059,6 +1089,7 @@ fn cover_json(c: &Cover, model: &[crate::fourier::Origin]) -> String {
         Cover::ByDerived(ai) => Obj::new().int("derived_axis", *ai as i128).finish(),
         Cover::ByUpstream(what, _) => Obj::new().str("upstream", what).finish(),
         Cover::ByPoints => Obj::new().bool("every_point_ruled_out", true).finish(),
+        Cover::ByDays(ai) => Obj::new().int("days_axis", *ai as i128).finish(),
     }
 }
 

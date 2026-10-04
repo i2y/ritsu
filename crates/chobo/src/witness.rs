@@ -69,8 +69,9 @@ impl<'b> Builder<'b> {
 
     /// The smallest positive amount the scenario has not used yet.
     pub fn fresh_amount(&mut self) -> i128 {
-        let mut v = 1;
-        while self.amounts.contains(&v) {
+        let (lo, hi) = held_to().unwrap_or((1, i128::MAX));
+        let mut v = lo;
+        while self.amounts.contains(&v) && v < hi {
             v += 1;
         }
         self.amounts.insert(v);
@@ -256,7 +257,7 @@ impl<'b> Builder<'b> {
             fixed1.insert(*p, Val::Amt(v));
         }
         let mut tries = vec![fixed1];
-        let cands: Vec<i128> = CANDIDATES.iter().copied().filter(|v| *v >= min).collect();
+        let cands: Vec<i128> = candidates().into_iter().filter(|v| *v >= min).collect();
         let shown = free.len().min(4);
         for combo in grid(shown, &cands) {
             let mut f = fixed.clone();
@@ -350,6 +351,52 @@ impl<'b> Builder<'b> {
 
 /// The amounts tried when the first ones do not do.
 pub const CANDIDATES: &[i128] = &[1, 2, 3, 5, 10, 100, 1000];
+
+thread_local! {
+    /// The amounts every call is held to while ritsu's port asks which refusals a transfer can
+    /// come to with its amounts in a range (`Books::refusals`, ritsu's DESIGN 7.6): None for the
+    /// check, which tries the candidates above.
+    static WITHIN: std::cell::Cell<Option<(i128, i128)>> = const { std::cell::Cell::new(None) };
+}
+
+/// Runs `f` with every amount the search tries held to `lo..=hi` (at least 1).
+pub fn within<R>(lo: i128, hi: i128, f: impl FnOnce() -> R) -> R {
+    let old = WITHIN.with(|w| w.replace(Some((lo.max(1), hi))));
+    struct Back(Option<(i128, i128)>);
+    impl Drop for Back {
+        fn drop(&mut self) {
+            WITHIN.with(|w| w.set(self.0));
+        }
+    }
+    let _back = Back(old);
+    f()
+}
+
+/// The range the amounts are held to, if they are.
+fn held_to() -> Option<(i128, i128)> {
+    WITHIN.with(|w| w.get())
+}
+
+/// Whether an amount may be tried: inside the range the port holds the amounts to, if it does.
+fn allowed(v: i128) -> bool {
+    held_to().is_none_or(|(lo, hi)| lo <= v && v <= hi)
+}
+
+/// The amounts tried when the first ones do not do: the fixed candidates, or with the amounts held
+/// to a range, its ends, the steps in from them and its middle, with the candidates inside it.
+pub fn candidates() -> Vec<i128> {
+    match held_to() {
+        None => CANDIDATES.to_vec(),
+        Some((lo, hi)) => {
+            let mut v: Vec<i128> = vec![lo, lo.saturating_add(1), lo + (hi - lo) / 2, hi.saturating_sub(1), hi];
+            v.extend(CANDIDATES.iter().copied());
+            v.retain(|x| lo <= *x && *x <= hi);
+            v.sort_unstable();
+            v.dedup();
+            v
+        }
+    }
+}
 
 /// Every way to give `n` parameters one of `cands` each: different values before repeated
 /// ones, then the smaller sums first.
@@ -485,6 +532,10 @@ pub fn bound_refusal(book: &Book, k: usize, i: usize, upper: bool) -> Option<Bui
     let shown = ap.len().min(4);
     let mut tries: Vec<(BTreeMap<usize, Val>, Option<i128>)> = Vec::new();
     for (a, fill) in &shapes {
+        // an amount the port holds the amounts away from is not tried (ritsu's DESIGN 7.6)
+        if p.is_some() && !allowed(*a) {
+            continue;
+        }
         let mut first = BTreeMap::new();
         if let Some(p) = p {
             first.insert(p, Val::Amt(*a));
@@ -492,8 +543,8 @@ pub fn bound_refusal(book: &Book, k: usize, i: usize, upper: bool) -> Option<Bui
         tries.push((first, *fill));
     }
     for (a, fill) in &shapes {
-        let mut cands: Vec<i128> = CANDIDATES.to_vec();
-        if !cands.contains(a) {
+        let mut cands: Vec<i128> = candidates();
+        if !cands.contains(a) && allowed(*a) {
             cands.push(*a);
         }
         for combo in grid(shown, &cands) {

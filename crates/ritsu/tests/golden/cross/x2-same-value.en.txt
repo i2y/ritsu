@@ -1,0 +1,3 @@
+ok refund_check.rule
+refund.flow: ok
+ritsu check: 2 files (rulec 1, dandori 1): all pass; borders between the languages: 1 checked, 0 undecided

@@ -490,6 +490,15 @@ const X_E061: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=
 const X_E062: &str = "rule t(t) v1\n\ninputs\n  d(d) : date  range >=2026-01-01 <=2026-12-31\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| d            | -> r(r) : bool |\n| <=2026-02-30 | true           |\n| >2026-02-30  | false          |\n";
 /// E063: a comparison with something after it, which used to read as the comparison alone.
 const X_E063: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a             | -> r(r) : bool |\n| <=100\u{5186} + 1\u{5186} | true           |\n| >100\u{5186}        | false          |\n";
+/// E065: `range from` written in a shape that names no koyomi date.
+const X_E065: &str = "rule t(t) v1\n\ninputs\n  d(d) : date  range from koyomi \"terms.cal\"\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| d | -> r(r) : bool |\n| - | true           |\n";
+/// E129: a rule whose range is a koyomi date, checked where no koyomi is joined.
+const X_E129: &str = "rule t(t) v1\n\ninputs\n  d(d) : date  range from koyomi \"terms.cal\" date payment\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| d | -> r(r) : bool |\n| - | true           |\n";
+/// E130: the koyomi file has no such date.
+const X_E130: &str = "rule t(t) v1\n\ninputs\n  d(d) : date  range from koyomi \"terms.cal\" date due\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| d | -> r(r) : bool |\n| - | true           |\n";
+/// The koyomi file beside the examples of E129 and E130: the 10th of each month after a close on the 20th.
+const X_TERMS_CAL: &str = "dates terms v1\n\ninputs\n  received : date  range >=2026-01-01 <=2026-12-20\n\ndate closing = received\n  close day 20\n\ndate payment = closing\n  day 10 of month +1\n";
+
 /// E064: a row one cell short of its header, which used to be read as it stood.
 const X_E064: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  |\n| false | true           |\n";
 /// E057: an input with a name and nothing after it.
@@ -1412,6 +1421,20 @@ pub fn ledger() -> Vec<Entry> {
             &["E063", "E008", "E111"],
         ),
         err(
+            "E065",
+            tr!("`range from koyomi` の形か置き場所が違います", "`range from koyomi` is misshapen or misplaced"),
+            tr!(
+                "`range from` の後ろが `koyomi \"<ファイル>\" date <日付の名前>` の形になっていないとき、日付でない入力に書いたとき、出力・導出・並びの要素に書いたとき。koyomi の日付がとりうる日は、呼び出し側が渡す日付の範囲にだけなります（§15.174）。",
+                "What follows `range from` is not `koyomi \"<file>\" date <name of a date>`, or it is written on an input that is not a date, or on an output, a derive or a field of an element. The days a koyomi date comes to can only be the range of a date the caller passes (§15.174)."
+            ),
+            tr!(
+                "日付の入力に `range from koyomi \"<ファイル>\" date <日付の名前>` と書きます。ファイルは規則のディレクトリからのパスです。",
+                "Write `range from koyomi \"<file>\" date <name of a date>` on a date input. The file is a path from the rule's directory."
+            ),
+            X_E065,
+            &["E129", "E130"],
+        ),
+        err(
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
@@ -1856,6 +1879,36 @@ pub fn ledger() -> Vec<Entry> {
             &["E109", "W127"],
         )
         .with_budget(100),
+        err(
+            "E129",
+            tr!("この rulec は koyomi のファイルを読めません", "This rulec reads no koyomi file"),
+            tr!(
+                "範囲を koyomi の日付からとる規則（`range from koyomi`）を、koyomi をつないでいない rulec で確かめたとき。rulec のクレートのバイナリと、ブラウザで試すページがそうです。範囲全体で確かめ直すことはせず、確かめられなかったとして終了コード 2 で終わります（§15.174）。",
+                "A rule that takes a range from a koyomi date (`range from koyomi`) is checked by a rulec with no koyomi joined: the binary of rulec's own crate, or the page in the browser. The check does not fall back to every day of the range; the file counts as not checked, and the run exits 2 (§15.174)."
+            ),
+            tr!(
+                "`ritsu rulec check <ファイル>` か `ritsu check <ディレクトリ>` で走らせます。どちらも koyomi の口から日の集合を受け取ります。",
+                "Run `ritsu rulec check <file>` or `ritsu check <dir>`; both hand the set of days over through koyomi's port."
+            ),
+            X_E129,
+            &["E065", "E130"],
+        )
+        .with_files(&[("terms.cal", X_TERMS_CAL)]),
+        err(
+            "E130",
+            tr!("koyomi の日付がとる日を読めません", "The days of the koyomi date cannot be read"),
+            tr!(
+                "`range from koyomi` が名指す日付の日を、koyomi が答えないとき。ファイルが無い、koyomi の検査を通らない、その名前の日付が無い、入力の組み合わせが koyomi の確かめる数を超える、途中で計算が止まる入力がある、とる日が一つも無い、のどれかです。koyomi が言うことを注に書きます。範囲全体で確かめ直すことはしません（§15.174）。",
+                "koyomi does not answer for the days of the date `range from koyomi` names: the file is not there, does not pass koyomi's check, or has no date of that name; the inputs come to more combinations than koyomi checks; the computation stops at some input; or the date comes to no day at all. What koyomi says is in the notes. The check does not fall back to every day of the range (§15.174)."
+            ),
+            tr!(
+                "koyomi のファイルを `ritsu koyomi check` で通るようにし、日付の名前を合わせます。",
+                "Make the koyomi file pass `ritsu koyomi check`, and name a date it has."
+            ),
+            X_E130,
+            &["E065", "E129"],
+        )
+        .with_files(&[("terms.cal", X_TERMS_CAL)]),
         warn(
             "W125",
             tr!("どの手順でも着かない状態があります", "No sequence of calls reaches a state"),

@@ -159,7 +159,15 @@ fn a_ledger_runs_every_scenario_as_the_interpreter_does() {
     assert!(l.apply(&BookCall { transfer: "無い".into(), op: "do".into(), args: vec![], amounts: None }).is_err());
     let f = Engine.facts(&root().join("tests/books/在庫.book")).unwrap();
     let t = &f.transfers[0];
-    assert!(matches!(Engine.refusals(&root().join("tests/books/在庫.book"), &t.name, (1, 10)).unwrap(), ritsu_ports::Found::Undecided(_)));
+    // the refusals with every amount held to a range (ritsu's DESIGN 7.6): the same search as
+    // the check's, which finds the same reasons here, where the check's own amounts are in range
+    match Engine.refusals(&root().join("tests/books/在庫.book"), &t.name, (1, 10)).unwrap() {
+        ritsu_ports::Found::Value(ops) => assert_eq!(ops, t.refusals, "{}", t.name),
+        other => panic!("{other:?}"),
+    }
+    // a range with no amount chobo takes, and a transfer the book does not have
+    assert!(matches!(Engine.refusals(&root().join("tests/books/在庫.book"), &t.name, (-10, 0)).unwrap(), ritsu_ports::Found::Undecided(_)));
+    assert!(Engine.refusals(&root().join("tests/books/在庫.book"), "無い", (1, 10)).is_err());
 }
 
 fn short(text: &str) -> String {

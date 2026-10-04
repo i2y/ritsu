@@ -629,12 +629,37 @@ def above_rules_out(t, path):
     return False
 
 
+def days_of_axis(t, ai):
+    """The days an axis of inputs takes, when the input's range is a date of a koyomi file
+    (`range from koyomi`, §15.174): the certificate's `days` for its column. None for any
+    other axis."""
+    axis = t["axes"][ai]
+    if axis.get("kind") != "input":
+        return None
+    d = t.get("_days", {}).get(axis["column"])
+    return None if d is None else sorted(num(x) for x in d["days"])
+
+
+def day_rules_out(t, ai, path):
+    """Whether the coordinate the path takes on an axis of koyomi's days holds none of them
+    (§15.174). `None` when the axis has no days."""
+    if ai >= len(path) or ai >= len(t["axes"]):
+        return None
+    days = days_of_axis(t, ai)
+    if days is None:
+        return None
+    lo, hi = closed_at(t, ai, path[ai])
+    return not any((lo is None or lo <= d) and (hi is None or d <= hi) for d in days)
+
+
 def point_ruled_out(t, path):
-    """Whether the sieve rules this point out: some constraint cannot hold at it, or some
-    derived column cannot reach it."""
+    """Whether the sieve rules this point out: some constraint cannot hold at it, some
+    derived column cannot reach it, or it takes no day of koyomi's on an axis of them."""
     for k in t.get("constraints", []):
         if constraint_rules_out(t, k, path):
             return True
+    if any(day_rules_out(t, ai, path) for ai in range(len(path))):
+        return True
     return any(derived_rules_out(t, ai, path) for ai in range(len(path)))
 
 
@@ -971,7 +996,7 @@ def check_cover(t):
     axes, rows = t["axes"], {r["row"]: r for r in t["rows"]}
     if t.get("cover") is None:
         raise Bad(f"{t['table']}: no cover is stated, so completeness is not shown")
-    seen = {"rows": 0, "constraint": 0, "derived": 0, "above": 0, "points": 0, "model": 0}
+    seen = {"rows": 0, "constraint": 0, "derived": 0, "above": 0, "points": 0, "model": 0, "days": 0}
 
     def walk(node, path):
         if "split" in node:
@@ -1014,6 +1039,17 @@ def check_cover(t):
             if not out:
                 raise Bad(f"{t['table']}: {axes[ai]['column']} can reach this box, so it is not impossible")
             seen["derived"] += 1
+            return
+        if "days_axis" in node:
+            ai = node["days_axis"]
+            if not isinstance(ai, int) or not 0 <= ai < len(axes):
+                raise Bad(f"{t['table']}: a leaf points at axis {ai}, which does not exist")
+            out = day_rules_out(t, ai, path)
+            if out is None:
+                raise Bad(f"{t['table']}: {axes[ai]['column']} is said to miss koyomi's days here, and the certificate states no days for it")
+            if not out:
+                raise Bad(f"{t['table']}: a day {axes[ai]['column']} takes lies in this box, so it is not impossible")
+            seen["days"] += 1
             return
         if "farkas" in node:
             box = [[c] for c in path] + [list(range(len(a["coords"]))) for a in axes[len(path):]]
@@ -1211,6 +1247,9 @@ def sieve_admits(t, values, at):
         reach = t.get("_reach_of", {}).get(axes[ai]["column"])
         if reach is not None and axes[ai]["kind"] == "derived" and not (reach[0] <= v <= reach[1]):
             return f"{axes[ai]['column']} = {v} is outside what its own expression reaches"
+        days = days_of_axis(t, ai)
+        if days is not None and v not in days:
+            return f"{axes[ai]['column']} = {v} is not one of the days koyomi computes for it"
     for k in t["constraints"]:
         if k["left"] not in col or k["right"] not in col:
             continue
@@ -1264,7 +1303,7 @@ def check_table(t):
         from_cells += 1
 
     # (1) No two rows of a `unique` table meet.
-    pairs = model_pairs = 0
+    pairs = model_pairs = days_pairs = 0
     if t["policy"] == "unique":
         told = {}
         for d in t["disjoint"]:
@@ -1293,13 +1332,27 @@ def check_table(t):
                 raise Bad(f"{name}: rows {a} and {b} are said to part on the linear model, and {why}")
             told[(a, b)] = None
             model_pairs += 1
+        # The pairs koyomi's days part (§15.174): on an axis of days, every coordinate both
+        # rows take holds none of them, so no point the rule is asked about is in both.
+        for d in t.get("days_apart", []):
+            a, b, ai = d["a"], d["b"], d["axis"]
+            if a not in rows or b not in rows:
+                raise Bad(f"{name}: rows {a} and {b} are not both in the table")
+            if not 0 <= ai < len(axes) or days_of_axis(t, ai) is None:
+                raise Bad(f"{name}: rows {a} and {b} are said to part on koyomi's days of axis {ai}, which has none")
+            shared = sorted(set(rows[a]["accepts"][ai]) & set(rows[b]["accepts"][ai]))
+            held = [c for c in shared if not day_rules_out(t, ai, [0] * ai + [c])]
+            if held:
+                raise Bad(f"{name}: rows {a} and {b} are said to part on koyomi's days, and both take a day of them on {axes[ai]['column']}")
+            told[(a, b)] = None
+            days_pairs += 1
         undecided = {(u["a"], u["b"]) for u in t["undecided"]}
         numbers = sorted(rows)
         for i, a in enumerate(numbers):
             for b in numbers[i + 1:]:
                 if (a, b) not in told and (a, b) not in undecided:
                     raise Bad(f"{name}: rows {a} and {b} are neither proved apart nor listed as undecided")
-    elif t["disjoint"] or t.get("refuted"):
+    elif t["disjoint"] or t.get("refuted") or t.get("days_apart"):
         raise Bad(f"{name}: a `first` table cannot claim its rows are disjoint")
 
     # (2) Every row is reached.
@@ -1356,7 +1409,7 @@ def check_table(t):
         cover_note = f", {seen['rows']} boxes covered"
         for k, word in (("constraint", "by a constraint"), ("derived", "out of a derive's reach"),
                         ("above", "for the tables above"), ("points", "point by point"),
-                        ("model", "by the linear model")):
+                        ("model", "by the linear model"), ("days", "outside koyomi's days")):
             if seen[k]:
                 cover_note += f" + {seen[k]} impossible {word}"
 
@@ -1370,6 +1423,8 @@ def check_table(t):
         STATED.append(f"{name}: {len(weak)} points come with no values behind them")
     boxes = f", {from_cells} boxes read back from their cells" if from_cells else ""
     apart = f" + {model_pairs} apart on the linear model" if model_pairs else ""
+    if days_pairs:
+        apart += f" + {days_pairs} apart on koyomi's days"
     return (f"{name}: {t['policy']}, {len(rows)} rows — {pairs} pairs disjoint{apart}, "
             f"{len(reached)} rows reached{unused_note}{cover_note}{boxes}{note}, "
             f"{tiled} axes tiled")
@@ -1956,6 +2011,9 @@ def check(cert):
         t["_reach_of"] = reach
         t["_tables"] = cert["tables"]
         t["_ranges"] = cert.get("ranges", {})
+        # The days a date input takes from a koyomi file (§15.174) are the document's word, as
+        # the ranges are: tied to the koyomi file by its SHA-256, which this program does not run.
+        t["_days"] = cert.get("days", {})
         t["_sieve"] = True
         t["_cert"] = cert
         for what, n in (("pairs the axes do not part", len(t.get("undecided", []))),

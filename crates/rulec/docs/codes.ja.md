@@ -70,6 +70,7 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E062](#e062) | error | ありえない日付です |
 | [E063](#e063) | error | セルを読めません |
 | [E064](#e064) | error | 行が見出しと合いません |
+| [E065](#e065) | error | `range from koyomi` の形か置き場所が違います |
 | [E101](#e101) | error | 完全性の欠落: どの行にも当てはまらない入力があります |
 | [E102](#e102) | error | どの入力にも当てはまらない行があります |
 | [E103](#e103) | error | 単位の混同: 型の違う値を混ぜています |
@@ -101,6 +102,8 @@ rulec が出しうるコードの全部と、いつ出るか、どう直すか�
 | [E126](#e126) | error | `never` の主張が破れています |
 | [E127](#e127) | error | `once` の主張が破れています |
 | [E128](#e128) | error | ステートマシンの主張を検査できませんでした |
+| [E129](#e129) | error | この rulec は koyomi のファイルを読めません |
+| [E130](#e130) | error | koyomi の日付がとる日を読めません |
 | [W125](#w125) | warning | どの手順でも着かない状態があります |
 | [W126](#w126) | warning | 案件が着ける状態からは使われない遷移があります |
 | [W127](#w127) | warning | ステートマシンの主張を決めきれませんでした |
@@ -2134,6 +2137,33 @@ policy unique
 
 関係するコード: [E063](#e063), [E008](#e008), [E111](#e111)
 
+## E065
+
+`error` — **`range from koyomi` の形か置き場所が違います**
+
+**いつ出るか。** `range from` の後ろが `koyomi "<ファイル>" date <日付の名前>` の形になっていないとき、日付でない入力に書いたとき、出力・導出・並びの要素に書いたとき。koyomi の日付がとりうる日は、呼び出し側が渡す日付の範囲にだけなります（§15.174）。
+
+**直し方。** 日付の入力に `range from koyomi "<ファイル>" date <日付の名前>` と書きます。ファイルは規則のディレクトリからのパスです。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  d(d) : date  range from koyomi "terms.cal"
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| d | -> r(r) : bool |
+| - | true           |
+```
+
+関係するコード: [E129](#e129), [E130](#e130)
+
 ## E101
 
 `error` — **完全性の欠落: どの行にも当てはまらない入力があります**
@@ -3211,6 +3241,90 @@ machine k(k) over m
 ```
 
 関係するコード: [E109](#e109), [W127](#w127)
+
+## E129
+
+`error` — **この rulec は koyomi のファイルを読めません**
+
+**いつ出るか。** 範囲を koyomi の日付からとる規則（`range from koyomi`）を、koyomi をつないでいない rulec で確かめたとき。rulec のクレートのバイナリと、ブラウザで試すページがそうです。範囲全体で確かめ直すことはせず、確かめられなかったとして終了コード 2 で終わります（§15.174）。
+
+**直し方。** `ritsu rulec check <ファイル>` か `ritsu check <ディレクトリ>` で走らせます。どちらも koyomi の口から日の集合を受け取ります。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  d(d) : date  range from koyomi "terms.cal" date payment
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| d | -> r(r) : bool |
+| - | true           |
+```
+
+隣に置く `terms.cal`:
+
+```proto
+dates terms v1
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-20
+
+date closing = received
+  close day 20
+
+date payment = closing
+  day 10 of month +1
+```
+
+関係するコード: [E065](#e065), [E130](#e130)
+
+## E130
+
+`error` — **koyomi の日付がとる日を読めません**
+
+**いつ出るか。** `range from koyomi` が名指す日付の日を、koyomi が答えないとき。ファイルが無い、koyomi の検査を通らない、その名前の日付が無い、入力の組み合わせが koyomi の確かめる数を超える、途中で計算が止まる入力がある、とる日が一つも無い、のどれかです。koyomi が言うことを注に書きます。範囲全体で確かめ直すことはしません（§15.174）。
+
+**直し方。** koyomi のファイルを `ritsu koyomi check` で通るようにし、日付の名前を合わせます。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+
+inputs
+  d(d) : date  range from koyomi "terms.cal" date due
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| d | -> r(r) : bool |
+| - | true           |
+```
+
+隣に置く `terms.cal`:
+
+```proto
+dates terms v1
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-20
+
+date closing = received
+  close day 20
+
+date payment = closing
+  day 10 of month +1
+```
+
+関係するコード: [E065](#e065), [E129](#e129)
 
 ## W125
 

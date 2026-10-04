@@ -60,7 +60,11 @@ enum Axis {
     /// are carried: `shown` to write the value back into a cell, `wire` to put it in a
     /// witness. Everything else has 1 for both. `step` is the axis's own grid, which is what
     /// keeps a witness on a value the type can actually hold.
-    Num { unit: String, date: bool, coords: Vec<Coord>, shown: i128, wire: i128, step: Rat },
+    ///
+    /// `days` is the set a date input takes when its range is a date of a koyomi file
+    /// (`range from koyomi …`, §15.174): a coordinate with no day of it in is one no input
+    /// reaches, and a witness on the axis is always one of its days.
+    Num { unit: String, date: bool, coords: Vec<Coord>, shown: i128, wire: i128, step: Rat, days: Option<std::sync::Arc<Vec<i64>>> },
     Bool,
     /// A `string` column, cut by the prefixes its own cells name (§15.101).
     ///
@@ -95,6 +99,14 @@ fn outside_all(patterns: &[String]) -> String {
     if patterns.iter().any(|p| s.starts_with(p.as_str())) { format!("{s}!") } else { s }
 }
 
+/// The first day of a sorted set strictly between two boundaries, either of which may run on.
+fn day_inside(days: &[i64], a: Option<Rat>, b: Option<Rat>) -> Option<i64> {
+    days.iter().copied().find(|d| {
+        let v = Rat::int(*d as i128);
+        a.is_none_or(|a| a.cmp_to(v) == std::cmp::Ordering::Less) && b.is_none_or(|b| v.cmp_to(b) == std::cmp::Ordering::Less)
+    })
+}
+
 fn inside(a: Option<Rat>, b: Option<Rat>, step: Rat) -> Rat {
     match (a, b) {
         (Some(a), _) => a.add(step),
@@ -125,11 +137,28 @@ impl Axis {
         }
         match self {
             Axis::Enum { .. } | Axis::Bool | Axis::Prefix { .. } => None,
-            Axis::Num { coords, step, .. } => match coords.get(i) {
+            Axis::Num { coords, step, days, .. } => match coords.get(i) {
                 Some(Coord::Point(v)) => Some(*v),
-                Some(Coord::Open(a, b)) => Some(inside(*a, *b, *step)),
+                // On an axis of koyomi's days, the first day inside the interval (§15.174).
+                Some(Coord::Open(a, b)) => match days {
+                    Some(ds) => day_inside(ds, *a, *b).map(|d| Rat::int(d as i128)).or(Some(inside(*a, *b, *step))),
+                    None => Some(inside(*a, *b, *step)),
+                },
                 None => None,
             },
+        }
+    }
+
+    /// Whether coordinate `i` holds a day of the axis's set, on an axis of koyomi's days; true
+    /// on every other axis, where nothing is ruled out this way (§15.174).
+    fn holds_a_day(&self, i: usize) -> bool {
+        match self {
+            Axis::Num { coords, days: Some(ds), .. } => match coords.get(i) {
+                Some(Coord::Point(v)) => v.den == 1 && ds.binary_search(&(v.num as i64)).is_ok(),
+                Some(Coord::Open(a, b)) => day_inside(ds, *a, *b).is_some(),
+                None => true,
+            },
+            _ => true,
         }
     }
 
@@ -951,7 +980,19 @@ impl TableRegion {
                 }
                 Ty::Date => {
                     let range = inputs.iter().find(|i| i.name.text == *name).and_then(|i| i.range.clone());
-                    let (b, lo, hi) = num_bounds(&t.rows, ci, &ty, &range);
+                    let (mut b, mut lo, mut hi) = num_bounds(&t.rows, ci, &ty, &range);
+                    // The days of a koyomi date (§15.174): the axis runs over their hull, and
+                    // every coordinate with none of them in it is one no input reaches.
+                    let days = c.day_sets.get(name).map(|d| std::sync::Arc::new(d.days.clone()));
+                    if let Some((dlo, dhi)) = days.as_ref().and_then(|_| c.ranges.get(name).copied()) {
+                        for v in [dlo, dhi].into_iter().flatten() {
+                            b.push(v);
+                        }
+                        b.sort_by(|x, y| x.cmp_to(*y));
+                        b.dedup_by(|x, y| x.cmp_to(*y) == std::cmp::Ordering::Equal);
+                        lo = dlo.or(lo);
+                        hi = dhi.or(hi);
+                    }
                     // A date's step is one day. Dates are serial day numbers, so adjacent days
                     // differ by 1.
                     Axis::Num {
@@ -961,6 +1002,7 @@ impl TableRegion {
                         shown: 1,
                         wire: 1,
                         step: Rat::int(1),
+                        days,
                     }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
@@ -1006,6 +1048,7 @@ impl TableRegion {
                         shown: if matches!(ty, Ty::Rate) { 100 } else { 1 },
                         wire: c.wire_scale(name),
                         step: q,
+                        days: None,
                     }
                 }
                 _ => {
@@ -2173,7 +2216,9 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     for i in 0..t.rows.len() {
         let up_dead = upstream_dead(&t.rows[i], &ups, c, t);
         let winners = &set.beats[i];
-        let dead = if reg.empty(i) || up_dead {
+        // A row that takes no day of koyomi's on an axis of them never matches (§15.174).
+        let no_day = reg.misses_the_days(i).map(|ai| reg.col_names[ai].clone());
+        let dead = if reg.empty(i) || up_dead || no_day.is_some() {
             true
         } else if !winners.is_empty() {
             // First check containment in a single winning row. Every dead row of a staircase
@@ -2227,7 +2272,10 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                     .rowref(tn.clone(), t.rows[i].index)
                     .fix_kind(crate::diag::FixKind::RemoveRow)
                     .mark(t.rows[i].span.clone(), tr!("{}: ここに到達する入力はありません", "{}: no input reaches here", rn(i)))
-                    .note(if reg.unreachable_row[i] {
+                    .note(if let Some(col) = &no_day {
+                        let from = c.day_sets.get(col).and_then(|d| d.from.as_ref()).map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
+                        tr!("{col} は {from} がとる日だけで、この行の日付はそのどれでもありません。", "{col} takes only the days {from} comes to, and this row's dates are none of them.")
+                    } else if reg.unreachable_row[i] {
                         tr!("この行が名指ししている値を、上流の表は決して出しません。", "The upstream table never produces the values this row names.")
                     } else if up_dead {
                         tr!(
@@ -2241,7 +2289,9 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                     } else {
                         tr!("この行の条件を同時に満たす入力がありません。", "No input satisfies all of this row's conditions at once.")
                     })
-                    .note(if reg.unreachable_row[i] {
+                    .note(if no_day.is_some() {
+                        tr!("ヒント: koyomi のファイルがこの日をとるようにするか、この行を削除してください。", "hint: make the koyomi file come to such a day, or delete this row.")
+                    } else if reg.unreachable_row[i] {
                         tr!("ヒント: 上流の表がこの値を出すようにするか、この行を削除してください。", "hint: make the upstream table produce this value, or delete this row.")
                     } else {
                         tr!("ヒント: 新しい仕様なら上へ移してください。不要なら削除してください。", "hint: if this is a new specification, move it up; if it is not needed, delete it.")
@@ -2822,14 +2872,22 @@ impl TableRegion {
                 return None;
             }
         }
-        Some(
-            (0..self.axes.len())
-                .map(|ai| {
-                    let by_constraint = b.get(&self.col_names[ai]).and_then(pick);
-                    self.axes[ai].witness_num(path.get(ai).copied().unwrap_or(0), by_constraint)
-                })
-                .collect(),
-        )
+        let vals: Vec<Option<Rat>> = (0..self.axes.len())
+            .map(|ai| {
+                let by_constraint = b.get(&self.col_names[ai]).and_then(pick);
+                self.axes[ai].witness_num(path.get(ai).copied().unwrap_or(0), by_constraint)
+            })
+            .collect();
+        // On an axis of koyomi's days a value that is not one of them names an input that never
+        // arrives (§15.174); no point is named rather than that one.
+        for (ai, v) in vals.iter().enumerate() {
+            if let (Some(ds), Some(v)) = (self.days_of_axis(ai), v)
+                && !(v.den == 1 && ds.binary_search(&(v.num as i64)).is_ok())
+            {
+                return None;
+            }
+        }
+        Some(vals)
     }
 
     /// Whether a `constraint` can hold anywhere in this box. Interval arithmetic, the same
@@ -2879,6 +2937,9 @@ impl TableRegion {
     /// coordinate's interval intersect. If they do not, the point is infeasible. When two or
     /// more constrained derived values share an input, their dependency cannot be examined.
     pub fn feasible(&self, path: &[usize]) -> Feasible {
+        if self.days_rule_out(path).is_some() {
+            return Feasible::No;
+        }
         for k in &self.constraints {
             if self.constraint_impossible(k, path) {
                 return Feasible::No;
@@ -2910,6 +2971,29 @@ impl TableRegion {
 }
 
 impl TableRegion {
+    /// The first axis of koyomi's days on which this path takes a coordinate with no day in it
+    /// (§15.174): no input reaches anything below the path.
+    pub fn days_rule_out(&self, path: &[usize]) -> Option<usize> {
+        path.iter().enumerate().find(|(ai, ci)| !self.axes[*ai].holds_a_day(**ci)).map(|(ai, _)| ai)
+    }
+
+    /// Whether row `ri` takes no day of koyomi's on some axis of koyomi's days: every
+    /// coordinate it takes there holds none (§15.174), so it never matches.
+    pub fn misses_the_days(&self, ri: usize) -> Option<usize> {
+        (0..self.axes.len()).find(|&ai| {
+            matches!(&self.axes[ai], Axis::Num { days: Some(_), .. })
+                && (0..self.axes[ai].len()).all(|ci| !self.masks[ri][ai][ci] || !self.axes[ai].holds_a_day(ci))
+        })
+    }
+
+    /// The days of an axis of koyomi's, as the certificate's checker reads them.
+    pub fn days_of_axis(&self, ai: usize) -> Option<&[i64]> {
+        match &self.axes[ai] {
+            Axis::Num { days: Some(ds), .. } => Some(ds.as_slice()),
+            _ => None,
+        }
+    }
+
     pub fn derived_names(&self) -> Vec<String> {
         self.col_names
             .iter()
@@ -3069,6 +3153,9 @@ pub struct CertTable {
     /// The pairs the axes do not part and the model does: nothing that satisfies it reaches
     /// both rows, and the multipliers say why (§15.141).
     pub refuted: Vec<(usize, usize, crate::fourier::Refutation)>,
+    /// The pairs the axes do not part and koyomi's days do (§15.174): on this axis of days, every
+    /// coordinate both rows take holds none of them, so no input reaches both.
+    pub days_apart: Vec<(usize, usize, usize)>,
 }
 
 /// The certificate of one definition set (§15.96), or nothing when the set has no region to
@@ -3244,6 +3331,21 @@ impl TableRegion {
                 None => true,
             });
         }
+        // Or koyomi's days part them: every coordinate both take on an axis of days holds none
+        // of the days (§15.174).
+        let mut days_apart = Vec::new();
+        undecided.retain(|&(a, b)| {
+            let on = (0..self.axes.len()).find(|&ai| {
+                self.days_of_axis(ai).is_some() && (0..self.axes[ai].len()).all(|c| !(self.masks[a - 1][ai][c] && self.masks[b - 1][ai][c]) || !self.axes[ai].holds_a_day(c))
+            });
+            match on {
+                Some(ai) => {
+                    days_apart.push((a, b, ai));
+                    false
+                }
+                None => true,
+            }
+        });
         let model: Vec<crate::fourier::Origin> = self.model.iter().flat_map(|g| g.sys.iter().map(|q| q.origin.clone())).collect();
         let mut model_extra: Vec<String> = self
             .model
@@ -3308,6 +3410,7 @@ impl TableRegion {
             model,
             model_extra,
             refuted,
+            days_apart,
         }
     }
 
@@ -3468,6 +3571,9 @@ pub enum Cover {
     /// Every point of the box was asked about one at a time, and the sieve ruled each one
     /// out. The re-checker redoes exactly that (§15.98).
     ByPoints,
+    /// The coordinate the path takes on this axis of koyomi's days holds none of them
+    /// (§15.174).
+    ByDays(usize),
     /// The tables above cannot produce this combination. When the reason can be written
     /// small — two spans on one input that do not meet — it comes with it and is re-checked
     /// like any other leaf; otherwise the leaf is bare and is **stated, not proved**
@@ -3535,6 +3641,9 @@ impl TableRegion {
         *budget -= 1;
         if *budget < 0 {
             return None;
+        }
+        if let Some(ai) = self.days_rule_out(path) {
+            return Some(Cover::ByDays(ai));
         }
         for (k, con) in self.constraints.iter().enumerate() {
             if self.constraint_impossible(con, path) {

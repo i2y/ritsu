@@ -179,12 +179,27 @@ impl ritsu_ports::Books for Engine {
         })
     }
 
-    fn refusals(&self, file: &Path, transfer: &str, _amounts: (i128, i128)) -> Result<Found<Vec<(String, Vec<String>)>>, Vec<Said>> {
-        checked(file)?;
-        Ok(Found::Undecided(ritsu_base::tr!(
-            "chobo の検査は、額を決まった値（1、2、3、5、10、100、1000）でしか試さないので、`{transfer}` の額を範囲に限った問いにはまだ答えられません",
-            "chobo's check tries amounts of a few fixed values only (1, 2, 3, 5, 10, 100, 1000), so it cannot yet answer for `{transfer}` with its amounts held to a range"
-        )))
+    /// The refusals chobo's search finds for each operation of `transfer` with every amount held
+    /// to `amounts` (its ends, the steps in from them, its middle, and the fixed candidates inside
+    /// it): the same search the check makes, to the same depth, so a reason it finds comes with a
+    /// run that ends in it, and a reason it does not find is one it found no run for within that
+    /// depth. An empty range, or one wholly below 1 (chobo's amounts are 1 or more), is not
+    /// decided.
+    fn refusals(&self, file: &Path, transfer: &str, amounts: (i128, i128)) -> Result<Found<Vec<(String, Vec<String>)>>, Vec<Said>> {
+        let (_, book, _) = checked(file)?;
+        let (lo, hi) = amounts;
+        if hi < lo.max(1) {
+            return Ok(Found::Undecided(ritsu_base::tr!(
+                "額の範囲 {lo}〜{hi} には、chobo が受け取る額（1 以上）がありません",
+                "the range of amounts {lo} to {hi} holds no amount chobo takes (1 or more)"
+            )));
+        }
+        let Some(k) = book.transfers.iter().position(|t| t.name == transfer) else {
+            let path = file.to_string_lossy().to_string();
+            return Err(vec![Said { code: String::new(), file: path.clone(), line: None, message: ritsu_base::tr!("`{path}` に振替 `{transfer}` はありません", "`{path}` has no transfer `{transfer}`") }]);
+        };
+        let rep = crate::witness::within(lo, hi, || crate::check::report(&book));
+        Ok(Found::Value(rep.ops.iter().filter(|o| o.kind == k).map(|o| (o.op.name().to_string(), o.refusals.iter().map(|r| r.name.clone()).collect())).collect()))
     }
 
     fn open(&self, file: &Path) -> Result<Box<dyn Ledger>, Vec<Said>> {

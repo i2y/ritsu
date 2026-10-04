@@ -1,0 +1,9 @@
+error[E130]: koyomi does not answer for the days of koyomi "no_such_terms.cal" date payment
+  --> variant.rule:7
+  |
+7 |   pay_day : date  range from koyomi "no_such_terms.cal" date payment
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no_such_terms.cal cannot be read, or does not pass koyomi's check
+  |
+ What koyomi says: no_such_terms.cal: cannot read `no_such_terms.cal`: No such file or directory (os error 2)
+ When the set cannot be read, the check stops here rather than checking every day in between instead: a table written over the set is seldom complete over every day.
+

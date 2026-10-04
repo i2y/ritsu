@@ -85,6 +85,25 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
                 }
                 vs.push(Val::Str(outside_prefixes(&ps)));
             }
+            // The days of a koyomi date (§15.174): around each boundary, the nearest day of the
+            // set on each side, since no other day arrives.
+            Ty::Date if c.day_sets.contains_key(name) => {
+                let days = &c.day_sets[name].days;
+                let mut picked: BTreeSet<i64> = BTreeSet::new();
+                for b in numeric_bounds(f, name, &inner, c) {
+                    let at = (b.num / b.den) as i64;
+                    if let Some(d) = days.iter().copied().filter(|d| *d <= at).last() {
+                        picked.insert(d);
+                    }
+                    if let Some(d) = days.iter().copied().find(|d| *d >= at) {
+                        picked.insert(d);
+                    }
+                }
+                for d in picked {
+                    let (y, m, dd) = crate::types::ord_to_date(Rat::int(d as i128));
+                    vs.push(Val::Date(y, m, dd));
+                }
+            }
             Ty::Date => {
                 let q = Rat::int(1);
                 for b in numeric_bounds(f, name, &inner, c) {
@@ -1271,6 +1290,18 @@ fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
 /// A combination the caller says does not happen is not a test case: the generated code
 /// refuses it at the door, and the checker never demanded a row for it. Filtering here is
 /// what keeps the suite and the proof talking about the same set of inputs.
+/// Whether every date input of koyomi's days takes one of them (§15.174): the generated code
+/// refuses any other day at its door, so no vector names one.
+pub fn days_ok(c: &Checked, a: &BTreeMap<String, Val>) -> bool {
+    c.day_sets.iter().all(|(name, d)| match a.get(name) {
+        Some(Val::Date(y, m, dd)) => {
+            let v = crate::types::date_ord(*y, *m, *dd);
+            d.days.binary_search(&(v.num as i64)).is_ok()
+        }
+        _ => true,
+    })
+}
+
 pub fn allowed(f: &RuleFile, a: &BTreeMap<String, Val>) -> bool {
     f.constraints.iter().all(|k| match (a.get(&k.left), a.get(&k.right)) {
         (Some(Val::Num(x)), Some(Val::Num(y))) => {
@@ -1303,7 +1334,7 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
 
 pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let cands = candidates(f, c);
-    let raw: Vec<_> = pool(f, c, &cands).into_iter().filter(|(a, _)| allowed(f, a)).collect();
+    let raw: Vec<_> = pool(f, c, &cands).into_iter().filter(|(a, _)| allowed(f, a) && days_ok(c, a)).collect();
 
     let key_of = |a: &BTreeMap<String, Val>| -> String {
         a.iter().map(|(k, v)| format!("{k}={}", show(v))).collect::<Vec<_>>().join(",")

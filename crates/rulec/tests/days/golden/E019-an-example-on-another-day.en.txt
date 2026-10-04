@@ -1,0 +1,9 @@
+error[E019]: An example's value is outside the declared range
+  --> variant.rule:26 examples
+   |
+26 | | 2026-07-05 | second_half |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ pay_day = 2026-07-05 is not a day koyomi "payment_terms.cal" date payment comes to
+   |
+ pay_day takes only the days koyomi counted, and the generated code refuses any other at its door. The example claims an answer for that day, and the checks never asked a row to cover it.
+ Correct the example's date to a day the koyomi file comes to.
+

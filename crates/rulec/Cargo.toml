@@ -36,6 +36,9 @@ ritsu-units = { path = "../ritsu-units" }
 
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
+# The tests of `range from koyomi` join koyomi as `ritsu rulec` does (ritsu's DESIGN 3.3: the
+# receiving side's tests hold the giving side as a dev-dependency).
+koyomi = { path = "../koyomi" }
 
 # `cargo binstall rulec` takes the release archive instead of building. Linux has only the
 # static musl binaries, which run on a glibc system as well.

@@ -763,7 +763,13 @@ impl P {
             let Some((name, ty, k)) = self.decl_head(&line, section) else { continue };
             // `from …` runs to the end of the line, so everything before it is the tail the
             // range and the markers are read from (§15.125).
-            let cut = line.iter().position(|t| t.ident() == Some(crate::kw::FROM)).unwrap_or(line.len());
+            // A `from` right after `range` names the days of a koyomi file (§15.174), and is not
+            // where a projection starts.
+            let cut = line
+                .iter()
+                .enumerate()
+                .position(|(k, t)| t.ident() == Some(crate::kw::FROM) && !(k > 0 && line[k - 1].ident() == Some(crate::kw::RANGE)))
+                .unwrap_or(line.len());
             let head = &line[..cut];
             let from = (cut < line.len()).then(|| self.projection(&line[cut..])).flatten();
             let (range, contract_only) = self.tail_range(head, k);
@@ -909,6 +915,21 @@ impl P {
         for line in self.block_lines() {
             let Some((name, ty, k)) = self.decl_head(&line, crate::kw::OUTPUTS) else { continue };
             let rounding = self.tail_rounding(&line, k);
+            // `range from koyomi` names the days an input takes (§15.174); an output's values are
+            // the rule's to decide, and the line would otherwise drop it in silence.
+            if let Some(p) = line.windows(2).position(|w| w[0].ident() == Some(crate::kw::RANGE) && w[1].ident() == Some(crate::kw::FROM)) {
+                let sp = span_of(&line[p..(p + 6).min(line.len())]);
+                let at = self.at(sp.line);
+                self.err(
+                    Diag::error("E065", tr!("`range from koyomi` を書けるのは入力だけです", "Only an input takes `range from koyomi`"))
+                        .at(at)
+                        .mark(sp, tr!("{} は出力です", "{} is an output", name.text))
+                        .note(tr!(
+                            "koyomi の日付がとりうる日は、呼び出し側が渡す日付の範囲です。出力の値は規則が決めるもので、別のファイルから借りられません。",
+                            "The days a koyomi date comes to are the range of a date the caller passes. An output's values are the rule's to decide, and cannot be borrowed from another file."
+                        )),
+                );
+            }
             self.tail_junk(&line, k);
             v.push(OutDecl { name, ty, rounding, span: span_of(&line) });
         }
@@ -970,6 +991,12 @@ impl P {
             match ts[k].ident() {
                 Some(crate::kw::RANGE) => {
                     k += 1;
+                    // `range from koyomi "<file>" date <name>` is read by `tail_range`, which
+                    // says what is wrong with it; here it is stepped over whole.
+                    if ts.get(k).and_then(|t| t.ident()) == Some(crate::kw::FROM) {
+                        k = (k + 5).min(ts.len());
+                        continue;
+                    }
                     while k + 1 < ts.len()
                         && matches!(ts[k].kind, Kind::Le | Kind::Ge | Kind::Lt | Kind::Gt)
                         && lit_of(&ts[k + 1]).is_some()
@@ -1015,6 +1042,28 @@ impl P {
         let mut contract_only = false;
         while k < ts.len() {
             match ts[k].ident() {
+                Some(crate::kw::RANGE) if ts.get(k + 1).and_then(|t| t.ident()) == Some(crate::kw::FROM) => {
+                    let start = k;
+                    let end = (k + 6).min(ts.len());
+                    let days = match (ts.get(k + 2).and_then(|t| t.ident()), ts.get(k + 3).map(|t| &t.kind), ts.get(k + 4).and_then(|t| t.ident()), ts.get(k + 5).and_then(|t| t.ident())) {
+                        (Some("koyomi"), Some(Kind::Str(file)), Some(crate::kw::DATE), Some(date)) => Some(DaysFrom { file: file.clone(), date: date.to_string(), span: span_of(&ts[start..end]) }),
+                        _ => {
+                            let at = self.at(ts[start].span.line);
+                            self.err(
+                                Diag::error("E065", tr!("`range from` の形が違います", "The shape of `range from` is wrong"))
+                                    .at(at)
+                                    .mark(span_of(&ts[start..end]), "")
+                                    .note(tr!(
+                                        "形は `range from koyomi \"<ファイル>\" date <日付の名前>` です。koyomi のファイルの日付がとりうる日を、この入力の範囲にします（§15.174）。",
+                                        "The shape is `range from koyomi \"<file>\" date <name of a date>`: the days a date of a koyomi file comes to become this input's range (§15.174)."
+                                    )),
+                            );
+                            None
+                        }
+                    };
+                    range = Some(Range { bounds: Vec::new(), days, span: span_of(&ts[start..end]) });
+                    k = end;
+                }
                 Some(crate::kw::RANGE) => {
                     let start = k;
                     k += 1;
@@ -1031,7 +1080,7 @@ impl P {
                         bounds.push((op, l));
                         k += 2;
                     }
-                    range = Some(Range { bounds, span: span_of(&ts[start..k.min(ts.len())]) });
+                    range = Some(Range { bounds, days: None, span: span_of(&ts[start..k.min(ts.len())]) });
                 }
                 Some(crate::kw::CONTRACT_ONLY) => {
                     contract_only = true;

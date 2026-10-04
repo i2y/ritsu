@@ -117,6 +117,38 @@ impl Engine {
     }
 }
 
+impl ritsu_ports::Flows for Engine {
+    /// The calls of rules in a flow that passes `dandori check`, with the range of each value given
+    /// as dandori's own range check reads it (its E014): every value put in a variable anywhere in
+    /// the flow, joined. A value with a place it comes from that has no range carries that place.
+    fn rule_calls(&self, file: &Path, rules: std::rc::Rc<dyn ritsu_ports::Rules>) -> Result<Vec<ritsu_ports::RuleCall>, Vec<Said>> {
+        crate::sources::with_rules(rules, || {
+            let path = file.to_string_lossy().to_string();
+            let (_, c) = crate::check::check_file(file).map_err(|e| vec![Said::unreadable(&path, &e)])?;
+            let Some(m) = c.model else {
+                return Err(c.diags.iter().filter(|d| d.severity == crate::diag::Severity::Error).map(|d| Said { code: d.code.to_string(), file: path.clone(), line: Some(d.line), message: Text { ja: d.ja.clone(), en: d.en.clone() } }).collect());
+            };
+            Ok(crate::ranges::rule_calls(&m)
+                .into_iter()
+                .map(|(line, r, args)| ritsu_ports::RuleCall {
+                    line,
+                    rule: m.rules[r].info.path.clone(),
+                    name: m.rules[r].name.clone(),
+                    args: args
+                        .into_iter()
+                        .map(|(input, shown, range, unknown)| ritsu_ports::CallArg {
+                            input,
+                            shown,
+                            range: range.map(|r| (r.lo.map(i128::from), r.hi.map(i128::from))),
+                            unknown: unknown.map(|t| Text { ja: t.ja, en: t.en }),
+                        })
+                        .collect(),
+                })
+                .collect())
+        })
+    }
+}
+
 impl ritsu_ports::Items for Engine {
     /// Each task, case, record (and each of its fields), enum (and each of its values), input
     /// and output the file writes (ritsu's DESIGN 6.3). A task's, a case's and a record's

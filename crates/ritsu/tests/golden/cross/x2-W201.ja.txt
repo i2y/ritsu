@@ -1,0 +1,11 @@
+ok refund_check.rule
+警告[dandori W104]: refund.flow:21:1: `asked` の範囲が分かりません（`ask_amount` の結果に範囲がありません）。規則 `check` の `asked` が受け取るのは `>=0 <=10000` です
+    21 |   let decision = check(paid: paid, asked: asked)
+警告[dandori W104]: refund.flow:23:1: `asked` の範囲が分かりません（`ask_amount` の結果に範囲がありません）。`pay_back` の引数 `amount` が受け取るのは `>=0 <=10000` です
+    23 |     at_once => pay_back(order: order, amount: asked)
+refund.flow: 検査を通りました（警告 2 件）
+警告[ritsu W201]: refund.flow:21:1: 規則 check を呼ぶところで、前提 `asked <= paid` が保たれるかを決められません
+    21 |   let decision = check(paid: paid, asked: asked)
+  = `asked` の範囲が分かりません（`ask_amount` の結果に範囲がありません）
+  = 規則の生成したコードが、ワークフローを走らせたときに入口で確かめます。破れば、この呼び出しはそこで落ちます。
+ritsu check: ファイル 2 個（rulec 1、dandori 1）。どれも検査を通った（警告 3 件）。言語の境目: 確かめた 1 か所、決められない 1 か所

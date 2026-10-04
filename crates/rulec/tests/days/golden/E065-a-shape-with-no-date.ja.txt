@@ -1,0 +1,8 @@
+error[E065]: `range from` の形が違います
+  --> variant.rule:7
+  |
+7 |   pay_day : date  range from koyomi "payment_terms.cal" 
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+ 形は `range from koyomi "<ファイル>" date <日付の名前>` です。koyomi のファイルの日付がとりうる日を、この入力の範囲にします（§15.174）。
+

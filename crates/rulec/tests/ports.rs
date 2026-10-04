@@ -279,10 +279,11 @@ fn 口が描くページはrulec_docと同じ() {
 }
 
 /// A relation between two inputs holds for every value of their ranges, or the corner that
-/// breaks it is the example; a bound over a list whose length the question does not carry is not
-/// decided.
+/// breaks it is the example; a bound over a list is decided by how long the list can be — not
+/// decided when that is not known, held when the longest list stays inside, and the longest list
+/// at the top of its field's range the example when it does not.
 #[test]
-fn 前提は範囲の角で決まり_並びの上限は決めない() {
+fn 前提は範囲の角で決まり_並びの上限は長さで決まる() {
     let e = Engine::new();
     let rule = Path::new("tests/corpus/比例配分.rule");
     let f = e.facts(rule).unwrap();
@@ -291,13 +292,13 @@ fn 前提は範囲の角で決まり_並びの上限は決めない() {
     let Precondition::Relation { left, op, right } = rels[0] else { unreachable!() };
     assert!(op.starts_with('<'), "{op}");
     // the rule's own ranges: the check passed, so the guard the generated code has is what keeps them apart
-    let none = e.preconditions_hold(rule, &[]).unwrap();
+    let none = e.preconditions_hold(rule, &[], None).unwrap();
     assert!(none.iter().any(|(p, _)| p == rels[0]));
     // the left side kept below the right: it holds
-    let ok = e.preconditions_hold(rule, &[(left.clone(), Some(0), Some(10)), (right.clone(), Some(10), Some(20))]).unwrap();
+    let ok = e.preconditions_hold(rule, &[(left.clone(), Some(0), Some(10)), (right.clone(), Some(10), Some(20))], None).unwrap();
     assert_eq!(ok.iter().find(|(p, _)| p == rels[0]).map(|(_, a)| a.clone()), Some(Answer::Holds));
     // the left side may pass the right: the corner is the example
-    let bad = e.preconditions_hold(rule, &[(left.clone(), Some(0), Some(30)), (right.clone(), Some(10), Some(20))]).unwrap();
+    let bad = e.preconditions_hold(rule, &[(left.clone(), Some(0), Some(30)), (right.clone(), Some(10), Some(20))], None).unwrap();
     match bad.iter().find(|(p, _)| p == rels[0]).map(|(_, a)| a.clone()) {
         Some(Answer::Fails(ex)) => {
             assert_eq!(ex.iter().find(|(n, _)| n == left).map(|(_, v)| v.clone()), Some(Value::Int(30)));
@@ -309,19 +310,40 @@ fn 前提は範囲の角で決まり_並びの上限は決めない() {
         other => panic!("{other:?}"),
     }
     // an open end decides nothing
-    let open = e.preconditions_hold(rule, &[(left.clone(), Some(0), None)]).unwrap();
+    let open = e.preconditions_hold(rule, &[(left.clone(), Some(0), None)], None).unwrap();
     assert!(matches!(open.iter().find(|(p, _)| p == rels[0]).map(|(_, a)| a), Some(Answer::Undecided(_)) | Some(Answer::Holds) | Some(Answer::Fails(_))));
-    // the bounds over a list
+    // the bounds over a list: not decided without a length; with one, held or broken
+    let mut sums = 0;
     for path in corpus() {
-        let Ok(f) = e.facts(Path::new(&path)) else { continue };
-        for (p, a) in e.preconditions_hold(Path::new(&path), &[]).unwrap() {
+        let Ok(_) = e.facts(Path::new(&path)) else { continue };
+        for (p, a) in e.preconditions_hold(Path::new(&path), &[], None).unwrap() {
             if matches!(p, Precondition::Sum { .. } | Precondition::Length { .. }) {
                 assert!(matches!(a, Answer::Undecided(_)), "{path}: {p:?} {a:?}");
             }
         }
-        let _ = f;
+        for (p, a) in e.preconditions_hold(Path::new(&path), &[], Some(0)).unwrap() {
+            if matches!(p, Precondition::Sum { .. } | Precondition::Length { .. }) {
+                assert_eq!(a, Answer::Holds, "{path}: the empty list keeps every bound: {p:?}");
+            }
+        }
+        for (p, a) in e.preconditions_hold(Path::new(&path), &[], Some(1_000_000)).unwrap() {
+            match (&p, &a) {
+                (Precondition::Length { sequence, max }, Answer::Fails(ex)) => {
+                    let Some((n, Value::List(xs))) = ex.first() else { panic!("{path}: {ex:?}") };
+                    assert!(n == sequence && xs.len() as i128 == max + 1, "{path}: {ex:?}");
+                }
+                (Precondition::Sum { over, of, .. }, Answer::Fails(ex)) => {
+                    sums += 1;
+                    let Some((n, Value::List(xs))) = ex.first() else { panic!("{path}: {ex:?}") };
+                    assert!(n == over && xs.iter().all(|x| x.iter().any(|(f, _)| f == of)), "{path}: {ex:?}");
+                }
+                (Precondition::Sum { .. } | Precondition::Length { .. }, other) => panic!("{path}: a list of a million breaks {p:?}, not {other:?}"),
+                _ => {}
+            }
+        }
     }
-    // a set of days is not yet a range rulec holds a table to
+    assert!(sums > 0, "some rule of the corpus bounds a total over its list");
+    // a set of days for an input the rule does not have, or not a date, is not decided
     assert!(matches!(e.checked_over(rule, "x", &Default::default()).unwrap(), Answer::Undecided(_)));
 }
 

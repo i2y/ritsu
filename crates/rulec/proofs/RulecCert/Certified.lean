@@ -32,6 +32,9 @@ structure Certified where
   /-- The cover's leaves the linear model rules out, by the path to each, with the
       refutation for the box below it. -/
   farkasAt : Point → Option (List (Ref × Rat)) := fun _ => none
+  /-- The pairs the axes do not part and koyomi's days do (rulec's §15.174): the axis of days
+      on which every coordinate both rows take holds none of the days. -/
+  daysApart : Nat → Nat → Option Nat := fun _ _ => none
 
 /-- The table the certificate is about. Its `asked` is the sieve's: a combination counts
     when the values behind it satisfy everything the rule declares. -/
@@ -84,7 +87,8 @@ def Certified.pairChecks (C : Certified) : Bool :=
     rows: an axis they part on, or a refutation the linear model gives for what both take,
     or the pair is named as undecided. -/
 def pairsApart (s : Sieve) (rows : List Row) (told : Nat → Nat → Option Nat)
-    (refuted : Nat → Nat → Option (List (Ref × Rat))) (undecided : Nat → Nat → Bool) : Bool :=
+    (refuted : Nat → Nat → Option (List (Ref × Rat))) (undecided : Nat → Nat → Bool)
+    (daysApart : Nat → Nat → Option Nat := fun _ _ => none) : Bool :=
   rows.all (fun r =>
     rows.all (fun q =>
       if r.index < q.index then
@@ -93,13 +97,17 @@ def pairsApart (s : Sieve) (rows : List Row) (told : Nat → Nat → Option Nat)
         | none =>
           match refuted r.index q.index with
           | some refs => farkasRuledOut s (pairBox r.box q.box) refs
-          | none => undecided r.index q.index
+          | none =>
+            match daysApart r.index q.index with
+            | some axis => daysPart s r.box q.box axis
+            | none => undecided r.index q.index
       else true))
 
 theorem disjointAsked_of_pairsApart {s : Sieve} {rows : List Row} {told : Nat → Nat → Option Nat}
     {refuted : Nat → Nat → Option (List (Ref × Rat))} {undecided : Nat → Nat → Bool}
+    {daysApart : Nat → Nat → Option Nat}
     (hshape : rowsDistinct rows = true) (hnone : ∀ a b, undecided a b = false)
-    (h : pairsApart s rows told refuted undecided = true) :
+    (h : pairsApart s rows told refuted undecided daysApart = true) :
     ∀ p, s.asked p → ((rows.filter (fun r => inBox r.box p)).length ≤ 1) := by
   intro p hask
   refine length_filter_le_one ?_
@@ -121,14 +129,20 @@ theorem disjointAsked_of_pairsApart {s : Sieve} {rows : List Row} {told : Nat �
       | some refs =>
         rw [hrf] at hxy
         exact not_asked_of_farkas hxy (inBox_pairBox hxp hyp) hask
-      | none => rw [hrf, hnone] at hxy; exact absurd hxy (by simp)
+      | none =>
+        rw [hrf] at hxy
+        cases hda : daysApart x.index y.index with
+        | some axis =>
+          rw [hda] at hxy
+          exact not_asked_of_daysPart hxy hxp hyp hask
+        | none => rw [hda, hnone] at hxy; exact absurd hxy (by simp)
   rcases Nat.lt_or_ge r.index q.index with hlt | hge
   · exact key r q hr hq hlt hrp hqp
   · exact key q r hq hr (Nat.lt_of_le_of_ne hge (Ne.symm hne)) hqp hrp
 
 /-- The overlap check on the points the rule is asked about, for a table's certificate. -/
 def Certified.pairAskedChecks (C : Certified) : Bool :=
-  rowsDistinct C.rows && pairsApart C.sieve C.rows C.told C.refuted C.undecided
+  rowsDistinct C.rows && pairsApart C.sieve C.rows C.told C.refuted C.undecided C.daysApart
 
 theorem Certified.complete (C : Certified) (h : C.coverChecks = true) :
     C.table.completeHolds := by

@@ -132,11 +132,14 @@ dependencies = [
 name = "ritsu-cross"
 version = "0.1.0"
 dependencies = [
+ "chobo",
+ "koyomi",
  "ritsu-base",
  "ritsu-ports",
  "ritsu-project",
  "ritsu-proto",
  "ritsu-testkit",
+ "rulec",
 ]
 
 [[package]]
@@ -208,6 +211,7 @@ dependencies = [
 name = "rulec"
 version = "0.22.1"
 dependencies = [
+ "koyomi",
  "ritsu-base",
  "ritsu-emit",
  "ritsu-ports",

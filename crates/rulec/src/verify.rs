@@ -385,6 +385,9 @@ pub enum Pre {
     Sum { name: String, over: String, of: String, max: i128 },
     /// How many elements a sequence may have.
     Length { sequence: String, max: i128 },
+    /// A date input that takes only the days of a koyomi date (§15.174): the file and the date
+    /// as the rule names them, and the days, as ordinals.
+    Days { input: String, file: String, date: String, days: Vec<i64> },
 }
 
 /// Every precondition of the rule, in the order a reader meets them: the declared relations
@@ -419,6 +422,14 @@ pub fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Pre> {
     if let (Some(cap), Some(el)) = (cap, f.elements.as_ref()) {
         v.push(Pre::Length { sequence: el.name.text.clone(), max: cap });
     }
+    // The days of a koyomi date, in the order the inputs are declared (§15.174).
+    for i in &f.inputs {
+        if let Some(d) = c.day_sets.get(&i.name.text)
+            && let Some(fr) = &d.from
+        {
+            v.push(Pre::Days { input: i.name.text.clone(), file: fr.file.clone(), date: fr.date.clone(), days: d.days.clone() });
+        }
+    }
     v
 }
 
@@ -447,6 +458,23 @@ pub fn preconditions_json(f: &RuleFile, c: &Checked) -> String {
                     .str("kind", "length")
                     .str("sequence", sequence)
                     .int("max", *max)
+                    .finish(),
+                Pre::Days { input, file, date, days } => crate::json::Obj::new()
+                    .str("kind", "days")
+                    .str("input", input)
+                    .raw("from", crate::json::Obj::new().str("tool", "koyomi").str("file", file).str("date", date).finish())
+                    .raw(
+                        "days",
+                        crate::json::strs(
+                            &days
+                                .iter()
+                                .map(|d| {
+                                    let (y, m, dd) = crate::types::ord_to_date(crate::num::Rat::int(*d as i128));
+                                    format!("{y:04}-{m:02}-{dd:02}")
+                                })
+                                .collect::<Vec<_>>(),
+                        ),
+                    )
                     .finish(),
             })
             .collect::<Vec<_>>(),

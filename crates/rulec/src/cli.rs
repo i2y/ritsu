@@ -1352,6 +1352,12 @@ fn check(
             if d.severity == Severity::Error {
                 worst = worst.max(1);
             }
+            // A rule whose range is a koyomi date cannot be checked where no koyomi is joined:
+            // the run says so in E129 and exits 2, as the receiving languages' own binaries do
+            // (ritsu's DESIGN 2.3, §15.174).
+            if d.code == "E129" {
+                worst = 2;
+            }
             printed += 1;
             if json {
                 println!("{}", render_json(d, path));

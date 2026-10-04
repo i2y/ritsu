@@ -70,6 +70,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E062](#e062) | error | There is no such date |
 | [E063](#e063) | error | The cell cannot be read |
 | [E064](#e064) | error | The row does not fit the header |
+| [E065](#e065) | error | `range from koyomi` is misshapen or misplaced |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -101,6 +102,8 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E126](#e126) | error | A `never` line is broken |
 | [E127](#e127) | error | A `once` line is broken |
 | [E128](#e128) | error | The machine's claims could not be checked |
+| [E129](#e129) | error | This rulec reads no koyomi file |
+| [E130](#e130) | error | The days of the koyomi date cannot be read |
 | [W125](#w125) | warning | No sequence of calls reaches a state |
 | [W126](#w126) | warning | A transition is never taken from a state a case can reach |
 | [W127](#w127) | warning | A claim of the machine could not be settled |
@@ -2134,6 +2137,33 @@ policy unique
 
 Related codes: [E063](#e063), [E008](#e008), [E111](#e111)
 
+## E065
+
+`error` — **`range from koyomi` is misshapen or misplaced**
+
+**When.** What follows `range from` is not `koyomi "<file>" date <name of a date>`, or it is written on an input that is not a date, or on an output, a derive or a field of an element. The days a koyomi date comes to can only be the range of a date the caller passes (§15.174).
+
+**Fix.** Write `range from koyomi "<file>" date <name of a date>` on a date input. The file is a path from the rule's directory.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  d(d) : date  range from koyomi "terms.cal"
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| d | -> r(r) : bool |
+| - | true           |
+```
+
+Related codes: [E129](#e129), [E130](#e130)
+
 ## E101
 
 `error` — **Completeness gap: some input matches no row**
@@ -3211,6 +3241,90 @@ machine k(k) over m
 ```
 
 Related codes: [E109](#e109), [W127](#w127)
+
+## E129
+
+`error` — **This rulec reads no koyomi file**
+
+**When.** A rule that takes a range from a koyomi date (`range from koyomi`) is checked by a rulec with no koyomi joined: the binary of rulec's own crate, or the page in the browser. The check does not fall back to every day of the range; the file counts as not checked, and the run exits 2 (§15.174).
+
+**Fix.** Run `ritsu rulec check <file>` or `ritsu check <dir>`; both hand the set of days over through koyomi's port.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  d(d) : date  range from koyomi "terms.cal" date payment
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| d | -> r(r) : bool |
+| - | true           |
+```
+
+With `terms.cal` beside it:
+
+```proto
+dates terms v1
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-20
+
+date closing = received
+  close day 20
+
+date payment = closing
+  day 10 of month +1
+```
+
+Related codes: [E065](#e065), [E130](#e130)
+
+## E130
+
+`error` — **The days of the koyomi date cannot be read**
+
+**When.** koyomi does not answer for the days of the date `range from koyomi` names: the file is not there, does not pass koyomi's check, or has no date of that name; the inputs come to more combinations than koyomi checks; the computation stops at some input; or the date comes to no day at all. What koyomi says is in the notes. The check does not fall back to every day of the range (§15.174).
+
+**Fix.** Make the koyomi file pass `ritsu koyomi check`, and name a date it has.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  d(d) : date  range from koyomi "terms.cal" date due
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| d | -> r(r) : bool |
+| - | true           |
+```
+
+With `terms.cal` beside it:
+
+```proto
+dates terms v1
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-20
+
+date closing = received
+  close day 20
+
+date payment = closing
+  day 10 of month +1
+```
+
+Related codes: [E065](#e065), [E129](#e129)
 
 ## W125
 

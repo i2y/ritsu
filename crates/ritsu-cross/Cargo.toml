@@ -17,3 +17,8 @@ ritsu-project = { path = "../ritsu-project" }
 
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
+# The decisions of the borders are held to the real answers of the languages that give them
+# (DESIGN 3.3: tests may hold the giving languages as dev-dependencies).
+chobo = { path = "../chobo" }
+koyomi = { path = "../koyomi" }
+rulec = { path = "../rulec" }

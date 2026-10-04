@@ -274,6 +274,18 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
         if let Some(pr) = &i.from {
             note.push(tr!("呼び出し側のオブジェクトから取ります: `{}`", "Taken from the caller's object: `{}`", pr.text()));
         }
+        // The days of a koyomi date (§15.174): the approver reads which file decides them, and
+        // that the checks held the tables to those days only.
+        if let Some(d) = c.day_sets.get(n) {
+            let from = d.from.as_ref().map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
+            let shown = d.shown();
+            let listed = if shown.len() <= 24 { shown.join(", ") } else { format!("{}, …, {}", shown[..3].join(", "), shown[shown.len() - 1]) };
+            note.push(tr!(
+                "`{from}` がとる日だけ（{} 日: {listed}）。表はこの日の上で確かめ、ほかの日は生成コードが入口で断ります",
+                "Only the days `{from}` comes to ({} days: {listed}). The tables are checked over these days; the generated code refuses any other day at its door",
+                shown.len()
+            ));
+        }
         if let Some(cm) = trailing_comment(&lines, i.name.span.line) {
             note.push(cm);
         }

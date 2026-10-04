@@ -1,0 +1,9 @@
+error[E102]: Unreachable row: row 4 never matches
+  --> variant.rule:20 table pick
+   |
+20 | | >=2026-07-01 <=2026-07-09 | second_half    |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4: no input reaches here
+   |
+ pay_day takes only the days koyomi "payment_terms.cal" date payment comes to, and this row's dates are none of them.
+ hint: make the koyomi file come to such a day, or delete this row.
+

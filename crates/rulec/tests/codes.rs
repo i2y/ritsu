@@ -73,7 +73,10 @@ fn 台帳の例は本当にそのコードを出す() {
             d
         });
         let path = dir.join("explain.rule");
-        let ds = rulec::report_with(e.example, &path.to_string_lossy(), budget).diags;
+        // koyomi is joined as `ritsu rulec` joins it, but for E129, which is what a rulec with
+        // no koyomi says (§15.174).
+        let port: Option<rulec::days::Port> = (e.code != "E129").then(|| std::sync::Arc::new(koyomi::ports::Engine) as rulec::days::Port);
+        let ds = rulec::days::with(port, || rulec::report_with(e.example, &path.to_string_lossy(), budget).diags);
         let codes: Vec<&str> = ds.iter().map(|d| d.code).collect();
         assert!(
             codes.contains(&e.code),
@@ -100,7 +103,7 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     }
     // Every code that has a golden snapshot, and every code in the DESIGN ledger, is here;
     // `出しうるコードは全部台帳にある` covers the first. There are no vacant numbers left.
-    assert_eq!(all.len(), 109, "台帳の件数が変わった: {}", all.len());
+    assert_eq!(all.len(), 112, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {

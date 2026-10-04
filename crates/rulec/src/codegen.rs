@@ -1725,6 +1725,48 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("{indent}{}\n", sp.close));
             }
         }
+        o.push_str(&self.day_guards(local, lang, indent, &raise));
+        o
+    }
+
+    /// The door for a date input whose range is the days of a koyomi date (§15.174): the checks
+    /// held the tables to those days and no other, so any other day is refused here, as a
+    /// combination a `constraint` rules out is. The days are written as runs of consecutive
+    /// ordinals, so a set of business days stays a few comparisons long.
+    fn day_guards(&self, local: &dyn Fn(&str) -> String, lang: Lang, indent: &str, raise: &dyn Fn(&str) -> String) -> String {
+        let sp = lang.spelling();
+        let mut o = String::new();
+        let mut names: Vec<&String> = self.c.day_sets.keys().collect();
+        names.sort();
+        for name in names {
+            let set = &self.c.day_sets[name];
+            let v = local(name);
+            let lit = |n: i64| if lang == Lang::Ts { format!("{n}n") } else { n.to_string() };
+            let eq = match lang {
+                Lang::Ts => "===",
+                Lang::Sql => "=",
+                _ => "==",
+            };
+            let or = match lang {
+                Lang::Py => " or ",
+                Lang::Sql => " OR ",
+                _ => " || ",
+            };
+            let tests: Vec<String> = day_runs(&set.days)
+                .into_iter()
+                .map(|(a, b)| if a == b { format!("{v} {eq} {}", lit(a)) } else { format!("({}{}{})", format!("{} <= {v}", lit(a)), sp.and, format!("{v} <= {}", lit(b))) })
+                .collect();
+            let from = set.from.as_ref().map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
+            o.push_str(&format!("{indent}{} {}\n", sp.comment, tr!("{name} は {from} がとる日だけ（{} 日）", "{name} takes only the days {from} comes to ({} days)", set.days.len())));
+            o.push_str(&format!("{indent}{}\n", (sp.if_head)(&format!("{}({})", lang.not(), tests.join(or)))));
+            // The message goes inside a string literal of every language as it is, like the
+            // constraint's: the file is written without the characters a literal would need escaped.
+            let (file, date) = set.from.as_ref().map(|fr| (fr.file.replace(['"', '\\', '`', '\'', '$'], ""), fr.date.clone())).unwrap_or_default();
+            o.push_str(&raise(&tr!("{name} は {file} の {date} がとる日ではありません", "{name} is not a day {date} of {file} comes to")));
+            if !sp.close.is_empty() {
+                o.push_str(&format!("{indent}{}\n", sp.close));
+            }
+        }
         o
     }
 
@@ -3272,6 +3314,18 @@ function _roundBankers(x: bigint, g: bigint): bigint {{
         half_down = tr!("半分ちょうどは 0 へ寄せる。", "An exact half goes toward zero."),
         bankers = tr!("半分ちょうどは偶数へ。", "An exact half goes to the even neighbor."),
     )
+}
+
+/// A sorted set of days as runs of consecutive ones, each its first and last.
+pub(crate) fn day_runs(days: &[i64]) -> Vec<(i64, i64)> {
+    let mut runs: Vec<(i64, i64)> = Vec::new();
+    for &d in days {
+        match runs.last_mut() {
+            Some((_, b)) if *b + 1 == d => *b = d,
+            _ => runs.push((d, d)),
+        }
+    }
+    runs
 }
 
 /// Which language a shared emitter is writing for. `guards` is the one body three languages

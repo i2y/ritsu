@@ -1,0 +1,9 @@
+error[E130]: koyomi does not answer for the days of koyomi "payment_terms.cal" date due
+  --> variant.rule:7
+  |
+7 |   pay_day : date  range from koyomi "payment_terms.cal" date due
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ payment_terms.cal cannot be read, or does not pass koyomi's check
+  |
+ What koyomi says: payment_terms.cal: `payment_terms.cal` has no date `due`
+ When the set cannot be read, the check stops here rather than checking every day in between instead: a table written over the set is seldom complete over every day.
+

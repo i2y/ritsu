@@ -384,6 +384,47 @@ pub struct Checked {
     pub sets: Vec<crate::defset::DefSet>,
     /// Table name → its set, and whether the set is evaluated at that table's position.
     pub set_of: HashMap<String, (usize, bool)>,
+    /// Date input name → the days it takes, when its range is a date of a koyomi file
+    /// (`range from koyomi …`, §15.174) or `checked_over` holds it to a set. The input's range
+    /// is the hull of the days; the region sieves out every other day, and the generated code
+    /// refuses it.
+    pub day_sets: HashMap<String, Days>,
+}
+
+/// The days a date input takes (§15.174).
+#[derive(Clone, Debug)]
+pub struct Days {
+    /// Where they come from, as the rule writes it; None for the days `checked_over` was given.
+    pub from: Option<crate::ast::DaysFrom>,
+    /// The koyomi file as rulec reached it: the rule's directory joined with what is written.
+    pub file: String,
+    /// The SHA-256 of the koyomi file, in hex; empty for the days `checked_over` was given.
+    pub sha256: String,
+    /// In order, as rulec's ordinals of dates (days since 1970-01-01).
+    pub days: Vec<i64>,
+}
+
+impl Days {
+    /// Whether some day lies between `lo` and `hi`, both ends included where they are given.
+    pub fn any_within(&self, lo: Option<Rat>, hi: Option<Rat>) -> bool {
+        self.first_within(lo, hi).is_some()
+    }
+
+    /// The first day between `lo` and `hi`, both ends included where they are given.
+    pub fn first_within(&self, lo: Option<Rat>, hi: Option<Rat>) -> Option<i64> {
+        self.days.iter().copied().find(|d| {
+            let v = Rat::int(*d as i128);
+            lo.is_none_or(|l| l.cmp_to(v) != std::cmp::Ordering::Greater) && hi.is_none_or(|h| v.cmp_to(h) != std::cmp::Ordering::Greater)
+        })
+    }
+
+    /// The days written as dates.
+    pub fn shown(&self) -> Vec<String> {
+        self.days.iter().map(|d| {
+            let (y, m, dd) = ord_to_date(Rat::int(*d as i128));
+            format!("{y:04}-{m:02}-{dd:02}")
+        }).collect()
+    }
 }
 
 impl Checked {
@@ -482,6 +523,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         diags: Vec::new(),
         sets: Vec::new(),
         set_of: HashMap::new(),
+        day_sets: HashMap::new(),
     };
     // Read the guarantees before anything is typed: `allocate` asks about them, and the
     // order of declarations in the file should not change what is accepted. Whether both
@@ -596,7 +638,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
 
     for i in &f.inputs {
         let ty = c.resolve(&i.ty);
-        if let Some(r) = &i.range {
+        if let Some(from) = i.range.as_ref().and_then(|r| r.days.clone()) {
+            koyomi_days(&mut c, i, &ty, &from, path, &at);
+        } else if let Some(r) = &i.range {
             let (b, bad) = bounds_of(r, &ty);
             for n in bad {
                 c.diags.push(
@@ -618,6 +662,20 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             // 100% declares its range like any other number.
             c.ranges.insert(i.name.text.clone(), (Some(Rat::zero()), Some(Rat::int(1))));
         }
+        if ty == Ty::Date
+            && let Some(given) = crate::days::held_over(&i.name.text)
+        {
+            // `checked_over` (ritsu's port): the input takes only the days given, inside what the
+            // rule declares for it.
+            let (lo, hi) = c.ranges.get(&i.name.text).copied().unwrap_or((None, None));
+            let held = Days { from: None, file: String::new(), sha256: String::new(), days: given };
+            let days: Vec<i64> = held.days.iter().copied().filter(|d| held_one(*d, lo, hi)).collect();
+            let held = Days { days, ..held };
+            if let (Some(first), Some(last)) = (held.days.first(), held.days.last()) {
+                c.ranges.insert(i.name.text.clone(), (Some(Rat::int(*first as i128)), Some(Rat::int(*last as i128))));
+            }
+            c.day_sets.insert(i.name.text.clone(), held);
+        }
         if let Some(n) = unreadable_step(&i.ty, &ty) {
             c.diags.push(
                 Diag::error("E103", tr!("刻み `{}` は {ty} の値ではありません", "The step `{}` is not a value of {ty}", n.raw))
@@ -638,6 +696,29 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         c.syms.insert(
             i.name.text.clone(),
             Sym { ty, span: i.name.span.clone(), kind: SymKind::Input, contract_only: i.contract_only },
+        );
+    }
+    // `range from koyomi` is a range an input takes; anywhere else it says nothing a check could
+    // read (§15.174).
+    let misplaced = f
+        .elements
+        .iter()
+        .flat_map(|el| el.fields.iter())
+        .filter_map(|o| o.range.as_ref().and_then(|r| r.days.as_ref().map(|d| (o.name.text.clone(), d.span.clone()))))
+        .chain(f.items.iter().filter_map(|it| match it {
+            Item::Derived(d) => d.range.as_ref().and_then(|r| r.days.as_ref().map(|x| (d.name.text.clone(), x.span.clone()))),
+            _ => None,
+        }))
+        .collect::<Vec<_>>();
+    for (name, span) in misplaced {
+        c.diags.push(
+            Diag::error("E065", tr!("`range from koyomi` を書けるのは入力だけです", "Only an input takes `range from koyomi`"))
+                .at(at(span.line))
+                .mark(span, tr!("{name} は入力ではありません", "{name} is not an input"))
+                .note(tr!(
+                    "koyomi の日付がとりうる日は、呼び出し側が渡す日付の範囲です。出力、導出、並びの要素の範囲は、規則が自分で確かめる主張なので、別のファイルから借りられません。",
+                    "The days a koyomi date comes to are the range of a date the caller passes. The range of an output, a derive or an element's field is a claim the rule checks itself, and cannot be borrowed from another file."
+                )),
         );
     }
     // The fields of one element (§15.56). They are declared like inputs and a table may use
@@ -3502,6 +3583,85 @@ pub fn fmt_val(v: Rat, ty: &Ty) -> String {
 /// came out with one side missing. That side is the universe the completeness proof
 /// quantifies over and the entry guard of the generated code, so losing it in silence is
 /// the worst shape a mistake can take here.
+/// Whether the day `d` lies inside a declared range, both ends included where they are given.
+fn held_one(d: i64, lo: Option<Rat>, hi: Option<Rat>) -> bool {
+    let v = Rat::int(d as i128);
+    lo.is_none_or(|l| l.cmp_to(v) != std::cmp::Ordering::Greater) && hi.is_none_or(|h| v.cmp_to(h) != std::cmp::Ordering::Greater)
+}
+
+/// The days of `range from koyomi "<file>" date <name>` on the input `i` (§15.174): read through
+/// ritsu's port of dates, recorded as the input's set, with its hull as the input's range. A
+/// set that cannot be had stops the check: the tables are not checked over the whole of the
+/// days in between instead (E129, E130).
+fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFrom, path: &str, at: &dyn Fn(usize) -> String) {
+    let name = &i.name.text;
+    if !matches!(ty, Ty::Date) {
+        c.diags.push(
+            Diag::error("E065", tr!("`range from koyomi` を書けるのは日付の入力だけです", "Only a date input takes `range from koyomi`"))
+                .at(at(from.span.line))
+                .mark(from.span.clone(), tr!("{name} は {ty} です", "{name} is a {ty}"))
+                .note(tr!(
+                    "koyomi の日付は暦日です。`date` の入力にだけ、その日の集合を範囲にできます。",
+                    "A koyomi date is a calendar day, so only a `date` input can take its days as its range."
+                )),
+        );
+        return;
+    }
+    let dir = std::path::Path::new(path).parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let file = dir.join(&from.file);
+    let shown = file.to_string_lossy().to_string();
+    let naming = format!("koyomi \"{}\" date {}", from.file, from.date);
+    let stop = |c: &mut Checked, title: String, mark: String, notes: Vec<String>| {
+        let mut d = Diag::error("E130", title).at(at(from.span.line)).mark(from.span.clone(), mark);
+        for n in notes {
+            d = d.note(n);
+        }
+        d = d.note(tr!(
+            "日付の集合を読めないときは、そのあいだのすべての日で確かめ直すのではなく、ここで止めます。集合の上で書いた表は、すべての日の上では完全でないことが多いからです。",
+            "When the set cannot be read, the check stops here rather than checking every day in between instead: a table written over the set is seldom complete over every day."
+        ));
+        c.diags.push(d);
+    };
+    match crate::days::read(&file, &from.date) {
+        crate::days::Read::Days { sha256, days } if !days.is_empty() => {
+            let (first, last) = (days[0], days[days.len() - 1]);
+            c.ranges.insert(name.clone(), (Some(Rat::int(first as i128)), Some(Rat::int(last as i128))));
+            c.day_sets.insert(name.clone(), Days { from: Some(from.clone()), file: shown, sha256, days });
+        }
+        crate::days::Read::Days { .. } => stop(
+            c,
+            tr!("{naming} がとる日が一つもありません", "{naming} comes to no day at all"),
+            tr!("{name} の範囲が空になります", "the range of {name} is empty"),
+            vec![],
+        ),
+        crate::days::Read::NotJoined => c.diags.push(
+            Diag::error("E129", tr!("この rulec は koyomi のファイルを読めません", "This rulec reads no koyomi file"))
+                .at(at(from.span.line))
+                .mark(from.span.clone(), tr!("{name} の範囲は {naming} がとる日です", "the range of {name} is the days {naming} comes to"))
+                .note(tr!(
+                    "rulec のクレートのバイナリ（とブラウザで試すページ）は、koyomi をつないでいません。`ritsu rulec check …` か `ritsu check …` で走らせると、koyomi の口から日の集合を受け取って確かめます。",
+                    "The binary of rulec's own crate (and the page in the browser) has no koyomi joined. Run `ritsu rulec check …` or `ritsu check …`, which hand the set of days over through koyomi's port."
+                )),
+        ),
+        crate::days::Read::Refused(said) => {
+            let notes = said
+                .iter()
+                .map(|s| {
+                    let code = if s.code.is_empty() { String::new() } else { format!("[{}] ", s.code) };
+                    let line = s.line.map(|l| format!(":{l}")).unwrap_or_default();
+                    let msg = if crate::i18n::ja() { s.message.ja.clone() } else { s.message.en.clone() };
+                    tr!("koyomi が言うこと: {code}{}{line}: {msg}", "What koyomi says: {code}{}{line}: {msg}", s.file)
+                })
+                .collect();
+            stop(c, tr!("{naming} の日を koyomi が答えません", "koyomi does not answer for the days of {naming}"), tr!("{shown} を読めないか、koyomi の検査を通りません", "{shown} cannot be read, or does not pass koyomi's check"), notes)
+        }
+        crate::days::Read::Undecided(why) => {
+            let why = if crate::i18n::ja() { why.ja } else { why.en };
+            stop(c, tr!("{naming} がとる日を koyomi が数えられません", "koyomi does not count the days {naming} comes to"), tr!("{why}", "{why}"), vec![])
+        }
+    }
+}
+
 fn bounds_of(r: &Range, ty: &Ty) -> ((Option<Rat>, Option<Rat>), Vec<crate::lex::Num>) {
     let (mut lo, mut hi) = (None, None);
     let mut bad = Vec::new();

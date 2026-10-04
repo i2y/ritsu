@@ -1,0 +1,25 @@
+rule settlement v1
+description "The settlement run a payment day falls in. The days are the ones payment_terms.cal pays on, so the table names those and nothing in between"
+
+enum run = first_half | second_half | year_end
+
+inputs
+  pay_day : date  range from koyomi "payment_terms.cal" date payment
+
+outputs
+  batch : run
+
+# Over every day from 2026-02-10 to 2027-01-10 this table leaves two gaps: 2026-07-01 to
+# 2026-07-09, and 2026-12-11 to 2026-12-31. No payment day falls in either.
+table pick
+policy unique
+| pay_day                   | -> batch : run |
+| <=2026-06-30              | first_half     |
+| >=2026-07-10 <=2026-12-10 | second_half    |
+| >=2027-01-01              | year_end       |
+
+examples
+| pay_day    | -> batch    |
+| 2026-02-10 | first_half  |
+| 2026-07-10 | second_half |
+| 2027-01-10 | year_end    |

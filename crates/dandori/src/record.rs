@@ -91,6 +91,7 @@ pub fn facts_to_json(f: &RuleFacts) -> Value {
             Precondition::Relation { left, op, right } => json!({ "kind": "constraint", "left": left, "op": op, "right": right }),
             Precondition::Sum { name, over, of, max } => json!({ "kind": "sum", "name": name, "over": over, "of": of, "max": int(*max) }),
             Precondition::Length { sequence, max } => json!({ "kind": "length", "sequence": sequence, "max": int(*max) }),
+            Precondition::Days { input, file, date, days } => json!({ "kind": "days", "input": input, "file": file, "date": date, "days": days.iter().map(|d| int(*d as i128)).collect::<Vec<_>>() }),
         })
         .collect();
     let connect = f.connect.as_ref().map(|c| {
@@ -373,6 +374,12 @@ pub fn facts_from_json(v: &Value) -> R<RuleFacts> {
             "constraint" => Ok(Precondition::Relation { left: text(p, "left")?, op: text(p, "op")?, right: text(p, "right")? }),
             "sum" => Ok(Precondition::Sum { name: text(p, "name")?, over: text(p, "over")?, of: text(p, "of")?, max: read_int(&p["max"])? }),
             "length" => Ok(Precondition::Length { sequence: text(p, "sequence")?, max: read_int(&p["max"])? }),
+            "days" => Ok(Precondition::Days {
+                input: text(p, "input")?,
+                file: text(p, "file")?,
+                date: text(p, "date")?,
+                days: p["days"].as_array().map(|ds| ds.iter().filter_map(|d| read_int(d).ok()).map(|d| d as i64).collect()).unwrap_or_default(),
+            }),
             k => Err(format!("`{k}` is not a kind of precondition")),
         })
         .collect::<R<_>>()?;

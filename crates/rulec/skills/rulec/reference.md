@@ -597,6 +597,51 @@ are its range.
 
 Without it, an input no table uses is W111.
 
+### `range from koyomi` — the days a koyomi date comes to
+
+A date input can take its range from a date of a [koyomi](https://github.com/i2y/ritsu) file
+instead of from bounds. koyomi computes the date on every input of its own range, so the set of
+days it comes to is known exactly, and the rule is checked over those days and no other:
+
+```rule
+inputs
+  pay_day : date  range from koyomi "payment_terms.cal" date payment
+```
+
+What follows `from` names the date the way every language of ritsu names one: `koyomi`, the
+file (a path from the rule's directory), `date` and the date's name. With `payment_terms.cal`
+closing on the 20th and paying on the 10th of the next month, `pay_day` takes twelve days, the
+10th of each month, and a table needs no row for the days between them:
+
+```rule
+table pick
+policy unique
+| pay_day                   | -> batch : run |
+| <=2026-06-30              | first_half     |
+| >=2026-07-10 <=2026-12-10 | second_half    |
+| >=2027-01-01              | year_end       |
+```
+
+Over every day from 2026-02-10 to 2027-01-10 this table leaves 2026-07-01 to 07-09 uncovered;
+over the payment days it is complete. The four jobs a range does all follow the set:
+
+1. **Completeness, overlaps and unreachable rows** are about the days in the set. A day of the
+   set no row takes is E101 with that day as the example; a row that takes none of them is E102.
+2. **The examples and the vectors** use those days only. An example on another day is E019.
+3. **The generated code refuses any other day at its door**, in every backend.
+4. **The certificate** carries the days and where they come from — the koyomi file and its date
+   as the rule names them, and the file's SHA-256 — and both re-checkers (`tools/recheck.py`
+   and the Lean one in `proofs/`) rule a box out when it holds none of the days.
+
+The set is read through ritsu's port of dates, so the rule has to be checked with koyomi joined:
+`ritsu rulec check` or `ritsu check`. The binary of rulec's own crate, and the page in the
+browser, have no koyomi; there the file is not checked over every day instead, and the run says
+so (E129, exit 2). A set that cannot be had — the file is not there, does not pass koyomi's
+check, has no such date, or comes to no day — is E130, with what koyomi says. Only a `date`
+input takes `range from koyomi` (E065); an output, a `derive` or a field of an element cannot
+borrow its range from another file. The days are listed as a precondition in `rulec api`
+(`"kind": "days"`), and the approver's page lists them beside the input.
+
 ### `round` — required on every numeric output
 
 ```

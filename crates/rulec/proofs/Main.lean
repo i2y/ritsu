@@ -569,7 +569,12 @@ def checkTable (t : ReadTable) (r : Report) : Report := Id.run do
       let byModel := (C.rows.flatMap (fun a => C.rows.filterMap (fun b =>
         if a.index < b.index && (C.told a.index b.index).isNone && (C.refuted a.index b.index).isSome
         then some (a.index, b.index) else none))).length
+      let byDays := (C.rows.flatMap (fun a => C.rows.filterMap (fun b =>
+        if a.index < b.index && (C.told a.index b.index).isNone && (C.refuted a.index b.index).isNone
+          && (C.daysApart a.index b.index).isSome
+        then some (a.index, b.index) else none))).length
       let apart := if byModel > 0 then s!" ({byModel} by the linear model)" else ""
+      let apart := if byDays > 0 then apart ++ s!" ({byDays} by koyomi's days)" else apart
       if undec.isEmpty then notes := notes.push s!"no two rows meet{apart}"
       else
         r := r.state s!"{undec.length} pairs of {t.name} the axes do not part"
@@ -1011,9 +1016,15 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
             | ">=" => some ([(l, -1), (r, 1)], 0, false)
             | ">" => some ([(l, -1), (r, 1)], 0, true)
             | _ => none
+    -- The days a date input takes from a koyomi file (rulec's §15.174): the document's word,
+    -- as the ranges are, tied to the koyomi file by the SHA-256 the certificate writes beside them.
+    let daysJ := (field cert "days").getD Json.null
+    let daysOf : String → Option (List Rat) := fun n => do
+      let d ← field daysJ n
+      (fieldArr d "days").toList.mapM optRat
     let mut tables : Array ReadTable := #[]
     for tj in fieldArr cert "tables" do
-      match readTable reachOf groups declaredRange factOf tj with
+      match readTable reachOf groups declaredRange factOf daysOf tj with
       | none => r := r.fail s!"{fieldStr tj "table"}: this program cannot read the table"
       | some t =>
         r := checkAbove tj (fieldArr cert "tables") r

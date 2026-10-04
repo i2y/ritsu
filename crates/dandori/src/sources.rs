@@ -268,7 +268,11 @@ impl Rules for NoRules {
         Err(no_rules(rule))
     }
 
-    fn preconditions_hold(&self, rule: &Path, _: &[(String, Option<i128>, Option<i128>)]) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+    fn preconditions_hold(&self, rule: &Path, _: &[(String, Option<i128>, Option<i128>)], _: Option<i128>) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+        Err(no_rules(rule))
+    }
+
+    fn output_values(&self, rule: &Path, _: &str) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
         Err(no_rules(rule))
     }
 
@@ -352,7 +356,11 @@ impl Rules for Recorded {
         self.facts.get(&key(rule)).cloned().ok_or_else(|| self.missing(rule))
     }
 
-    fn preconditions_hold(&self, rule: &Path, _: &[(String, Option<i128>, Option<i128>)]) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+    fn preconditions_hold(&self, rule: &Path, _: &[(String, Option<i128>, Option<i128>)], _: Option<i128>) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+        Err(self.missing(rule))
+    }
+
+    fn output_values(&self, rule: &Path, _: &str) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
         Err(self.missing(rule))
     }
 
@@ -610,8 +618,12 @@ impl Rules for Recording {
         Ok(f)
     }
 
-    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
-        self.inner.preconditions_hold(rule, ranges)
+    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)], max_len: Option<i128>) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+        self.inner.preconditions_hold(rule, ranges, max_len)
+    }
+
+    fn output_values(&self, rule: &Path, output: &str) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
+        self.inner.output_values(rule, output)
     }
 
     fn checked_over(&self, rule: &Path, input: &str, days: &DaySet) -> Result<Answer<Text>, Vec<Said>> {

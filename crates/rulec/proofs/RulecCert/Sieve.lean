@@ -144,6 +144,10 @@ structure Sieve where
       order, then the names the model uses that are not columns of the table. Values that
       satisfy the coordinates and not these are values no input produces. -/
   facts : List LinIneq := []
+  /-- One entry per axis: the days an input takes when its range is a date of a koyomi file
+      (`range from koyomi`, rulec's §15.174), as day numbers; `none` on every other axis. A
+      value no day of the list equals is one no caller sends: the generated code refuses it. -/
+  days : List (Option (List Rat)) := []
 
 def Sieve.coordAt (s : Sieve) (i c : Nat) : Option Coord :=
   match s.coords[i]? with
@@ -162,7 +166,8 @@ def Sieve.asked (s : Sieve) (p : Point) : Prop :=
     (∀ (i : Nat) (I : Ival), s.reach[i]? = some (some I) → ∃ w, v[i]? = some w ∧ inIval I w) ∧
     (∀ q ∈ s.never, p[q.1]? ≠ some q.2) ∧
     (∀ qr ∈ s.apart, ¬(p[qr.1.1]? = some qr.1.2 ∧ p[qr.2.1]? = some qr.2.2)) ∧
-    (∀ q ∈ s.facts, q.holds v)
+    (∀ q ∈ s.facts, q.holds v) ∧
+    (∀ (i : Nat) (D : List Rat), s.days[i]? = some (some D) → ∃ w, v[i]? = some w ∧ w ∈ D)
 
 /-! ## One constraint rules a box out -/
 
@@ -206,6 +211,57 @@ def neverRulesOut (s : Sieve) (p : Point) : Bool :=
 /-- Two coordinates the tables above cannot hold at once, both of them held here. -/
 def apartRulesOut (s : Sieve) (p : Point) : Bool :=
   s.apart.any (fun qr => p[qr.1.1]? == some qr.1.2 && p[qr.2.1]? == some qr.2.2)
+
+/-- Whether a coordinate takes this value, read exactly: one value, or strictly between the
+    two boundaries. -/
+def coordHoldsB : Coord → Rat → Bool
+  | .exactly a, v => decide (v = a)
+  | .between lo hi, v =>
+      (match lo with | some a => decide (a < v) | none => true) &&
+      (match hi with | some b => decide (v < b) | none => true)
+
+theorem coordHoldsB_of_holds {x : Coord} {v : Rat} (h : x.holds v) : coordHoldsB x v = true := by
+  cases x with
+  | exactly a =>
+    simp only [Coord.holds] at h
+    simp [coordHoldsB, h]
+  | between lo hi =>
+    obtain ⟨h1, h2⟩ := h
+    simp only [coordHoldsB, Bool.and_eq_true]
+    constructor
+    · cases lo with
+      | none => rfl
+      | some a => simpa using h1 a rfl
+    · cases hi with
+      | none => rfl
+      | some b => simpa using h2 b rfl
+
+/-- An axis of koyomi's days whose coordinate takes none of them (rulec's §15.174). -/
+def daysRulesOut (s : Sieve) (i : Nat) (p : Point) : Bool :=
+  match p[i]?, s.days[i]? with
+  | some c, some (some D) =>
+    match s.coordAt i c with
+    | some x => D.all (fun d => !coordHoldsB x d)
+    | none => false
+  | _, _ => false
+
+theorem not_asked_of_days {s : Sieve} {i : Nat} {p : Point}
+    (h : daysRulesOut s i p = true) : ¬ s.asked p := by
+  rintro ⟨v, hf, _, _, _, _, _, hd⟩
+  unfold daysRulesOut at h
+  split at h
+  case _ c D hp hD =>
+    split at h
+    case _ x hx =>
+      obtain ⟨w, hw, hh⟩ := hf i c x hp hx
+      obtain ⟨w', hw', hmem⟩ := hd i D hD
+      rw [hw] at hw'
+      obtain rfl : w = w' := Option.some.inj hw'
+      have hall := List.all_eq_true.1 h w hmem
+      rw [coordHoldsB_of_holds hh] at hall
+      exact absurd hall (by simp)
+    case _ => exact absurd h (by simp)
+  case _ => exact absurd h (by simp)
 
 /-- The reading of a point the two tests above share: pull the value out of the assignment
     and bound it by the coordinate's span. -/
@@ -315,16 +371,18 @@ theorem not_asked_of_apart {s : Sieve} {p : Point} (h : apartRulesOut s p = true
 def pointRuledOut (s : Sieve) (p : Point) : Bool :=
   s.cons.any (fun k => constraintRulesOut s k p) ||
     (List.range p.length).any (fun i => derivedRulesOut s i p) ||
-    neverRulesOut s p || apartRulesOut s p
+    neverRulesOut s p || apartRulesOut s p ||
+    (List.range p.length).any (fun i => daysRulesOut s i p)
 
 theorem not_asked_of_pointRuledOut {s : Sieve} {p : Point} (h : pointRuledOut s p = true) :
     ¬ s.asked p := by
   simp only [pointRuledOut, Bool.or_eq_true, List.any_eq_true] at h
-  rcases h with ((⟨k, hk, hkr⟩ | ⟨i, _, hir⟩) | hn) | hab
+  rcases h with (((⟨k, hk, hkr⟩ | ⟨i, _, hir⟩) | hn) | hab) | ⟨i, _, hdy⟩
   · exact not_asked_of_constraint hk hkr
   · exact not_asked_of_derived hir
   · exact not_asked_of_never (by simpa [neverRulesOut] using hn)
   · exact not_asked_of_apart (by simpa [apartRulesOut] using hab)
+  · exact not_asked_of_days hdy
 
 
 /-! ## A whole box, not one corner of it
@@ -360,6 +418,14 @@ theorem derivedRulesOut_mono {s : Sieve} {i : Nat} {path p : Point}
   case _ c I hp hri => rw [prefix_getElem? hpre (lt_of_getElem? hp), hp, hri]; exact h
   case _ => exact absurd h (by simp)
 
+theorem daysRulesOut_mono {s : Sieve} {i : Nat} {path p : Point}
+    (hpre : path <+: p) (h : daysRulesOut s i path = true) :
+    daysRulesOut s i p = true := by
+  unfold daysRulesOut at h ⊢
+  split at h
+  case _ c D hp hD => rw [prefix_getElem? hpre (lt_of_getElem? hp), hp, hD]; exact h
+  case _ => exact absurd h (by simp)
+
 theorem neverRulesOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
     (h : neverRulesOut s path = true) : neverRulesOut s p = true := by
   simp only [neverRulesOut, List.any_eq_true, beq_iff_eq] at h ⊢
@@ -376,11 +442,12 @@ theorem apartRulesOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
 theorem pointRuledOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
     (h : pointRuledOut s path = true) : pointRuledOut s p = true := by
   simp only [pointRuledOut, Bool.or_eq_true, List.any_eq_true, List.mem_range] at h ⊢
-  rcases h with ((⟨k, hk, hkr⟩ | ⟨i, hi, hir⟩) | hn) | hab
-  · exact Or.inl (Or.inl (Or.inl ⟨k, hk, constraintRulesOut_mono hpre hkr⟩))
-  · exact Or.inl (Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, derivedRulesOut_mono hpre hir⟩))
-  · exact Or.inl (Or.inr (by simpa [neverRulesOut] using neverRulesOut_mono hpre (by simpa [neverRulesOut] using hn)))
-  · exact Or.inr (by simpa [apartRulesOut] using apartRulesOut_mono hpre (by simpa [apartRulesOut] using hab))
+  rcases h with (((⟨k, hk, hkr⟩ | ⟨i, hi, hir⟩) | hn) | hab) | ⟨i, hi, hdy⟩
+  · exact Or.inl (Or.inl (Or.inl (Or.inl ⟨k, hk, constraintRulesOut_mono hpre hkr⟩)))
+  · exact Or.inl (Or.inl (Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, derivedRulesOut_mono hpre hir⟩)))
+  · exact Or.inl (Or.inl (Or.inr (by simpa [neverRulesOut] using neverRulesOut_mono hpre (by simpa [neverRulesOut] using hn))))
+  · exact Or.inl (Or.inr (by simpa [apartRulesOut] using apartRulesOut_mono hpre (by simpa [apartRulesOut] using hab)))
+  · exact Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, daysRulesOut_mono hpre hdy⟩
 
 /-- Every point the path opens onto. The walk stops where the axes do, so the list is the
     box below the path and nothing else. -/
@@ -488,13 +555,18 @@ def witnessOk (s : Sieve) (p : Point) (v : List Rat) : Bool :=
     | _, _ => false) &&
   s.never.all (fun q => !(p[q.1]? == some q.2)) &&
   s.apart.all (fun qr => !(p[qr.1.1]? == some qr.1.2 && p[qr.2.1]? == some qr.2.2)) &&
-  s.facts.all (fun q => q.holdsB v)
+  s.facts.all (fun q => q.holdsB v) &&
+  (List.range s.days.length).all (fun i =>
+    match s.days[i]?, v[i]? with
+    | some (some D), some w => decide (w ∈ D)
+    | some none, _ => true
+    | _, _ => false)
 
 theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     (h : witnessOk s p v = true) : s.asked p := by
   simp only [witnessOk, Bool.and_eq_true] at h
-  obtain ⟨⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩, hfa⟩ := h
-  refine ⟨v, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  obtain ⟨⟨⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩, hfa⟩, hdy⟩ := h
+  refine ⟨v, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro i c x hp hx
     have hi := List.all_eq_true.1 hco i (List.mem_range.2 (lt_of_getElem? hp))
     cases hv : v[i]? with
@@ -530,6 +602,13 @@ theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     · exact h1 hboth.2
   · intro q hq
     exact LinIneq.holds_of_holdsB (List.all_eq_true.1 hfa q hq)
+  · intro i D hD
+    have hi := List.all_eq_true.1 hdy i (List.mem_range.2 (lt_of_getElem? hD))
+    cases hv : v[i]? with
+    | none => simp [hD, hv] at hi
+    | some w =>
+      simp only [hD, hv] at hi
+      exact ⟨w, rfl, of_decide_eq_true hi⟩
 
 /-! ## A box the linear model leaves no values in (§15.141)
 
@@ -674,7 +753,7 @@ theorem refIneqs_hold {s : Sieve} {box : Box} {p : Point} {v : List Rat}
 /-- **A box the linear model leaves no values in holds no point the rule is asked about.** -/
 theorem not_asked_of_farkas {s : Sieve} {box : Box} {refs : List (Ref × Rat)} {p : Point}
     (h : farkasRuledOut s box refs = true) (hin : inBox box p = true) : ¬ s.asked p := by
-  rintro ⟨v, hf, _, _, _, _, hfa⟩
+  rintro ⟨v, hf, _, _, _, _, hfa, _⟩
   unfold farkasRuledOut at h
   split at h
   · rename_i ps hps
@@ -740,5 +819,50 @@ theorem inBox_pairBox : ∀ {a b : Box} {p : Point}, inBox a p = true → inBox 
   | _ :: _, [], [], ha, _ => by simp [inBox] at ha
   | _ :: _, [], _ :: _, _, hb => by simp [inBox] at hb
   | _ :: _, _ :: _, [], ha, _ => by simp [inBox] at ha
+
+/-! ## Two rows koyomi's days part (rulec's §15.174) -/
+
+/-- On the axis `i`, the coordinate `c` holds no day of the axis's set: no value it stands for is
+    one of the days. -/
+def daysCoordOut (s : Sieve) (i c : Nat) : Bool :=
+  match s.days[i]?, s.coordAt i c with
+  | some (some D), some x => D.all (fun d => !coordHoldsB x d)
+  | _, _ => false
+
+/-- Two boxes part on koyomi's days of axis `i`: every coordinate both take there holds none of
+    the days. -/
+def daysPart (s : Sieve) (a b : Box) (i : Nat) : Bool :=
+  match a[i]?, b[i]? with
+  | some xs, some ys => xs.all (fun c => !ys.contains c || daysCoordOut s i c)
+  | _, _ => false
+
+theorem daysRulesOut_of_coord {s : Sieve} {i c : Nat} {p : Point} (hp : p[i]? = some c)
+    (h : daysCoordOut s i c = true) : daysRulesOut s i p = true := by
+  unfold daysCoordOut at h
+  unfold daysRulesOut
+  split at h
+  case _ D x hD hx => rw [hp, hD]; simp only [hx]; exact h
+  case _ => exact absurd h (by simp)
+
+/-- **No point the rule is asked about lies in two boxes koyomi's days part.** -/
+theorem not_asked_of_daysPart {s : Sieve} {a b : Box} {i : Nat} {p : Point}
+    (h : daysPart s a b i = true) (ha : inBox a p = true) (hb : inBox b p = true) : ¬ s.asked p := by
+  unfold daysPart at h
+  cases hx : a[i]? with
+  | none => rw [hx] at h; simp at h
+  | some xs =>
+    cases hy : b[i]? with
+    | none => rw [hx, hy] at h; simp at h
+    | some ys =>
+      rw [hx, hy] at h
+      obtain ⟨c, hc, hcx⟩ := inBox_getElem ha hx
+      obtain ⟨d, hd, hdy⟩ := inBox_getElem hb hy
+      have : c = d := by rw [hc] at hd; exact Option.some.inj hd
+      subst this
+      have hall := List.all_eq_true.1 h c (by simpa using hcx)
+      simp only [Bool.or_eq_true, Bool.not_eq_true'] at hall
+      rcases hall with hno | hout
+      · rw [hdy] at hno; exact absurd hno (by simp)
+      · exact not_asked_of_days (daysRulesOut_of_coord hc hout)
 
 end RulecCert

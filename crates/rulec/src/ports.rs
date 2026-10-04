@@ -30,6 +30,9 @@ pub struct Engine {
     reports: std::sync::Mutex<std::collections::HashMap<(std::path::PathBuf, String), (String, RLang, std::sync::Arc<crate::Report>)>>,
     /// How many times a rule's text has been checked whole (what [`Engine::checks`] says).
     checks: std::sync::atomic::AtomicUsize,
+    /// The port of dates a rule's `range from koyomi` is read through (§15.174); None where no
+    /// koyomi is joined.
+    dates: Option<crate::days::Port>,
 }
 
 /// The file a path names, its links followed and `..` folded: how the reports are kept.
@@ -110,6 +113,7 @@ fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Precondition> {
             crate::verify::Pre::Rel { left, op, right } => Precondition::Relation { left, op: op.to_string(), right },
             crate::verify::Pre::Sum { name, over, of, max } => Precondition::Sum { name, over, of, max },
             crate::verify::Pre::Length { sequence, max } => Precondition::Length { sequence, max },
+            crate::verify::Pre::Days { input, file, date, days } => Precondition::Days { input, file, date, days: days.into_iter().collect() },
         })
         .collect()
 }
@@ -119,9 +123,24 @@ impl Engine {
         Engine::default()
     }
 
+    /// The engine with koyomi joined: a rule whose range is a date of a koyomi file reads its
+    /// days through `dates` (§15.174).
+    pub fn with_dates(dates: crate::days::Port) -> Engine {
+        Engine { dates: Some(dates), ..Engine::default() }
+    }
+
+    /// Runs `f` with this engine's port of dates joined on the thread.
+    fn joined<R>(&self, f: impl FnOnce() -> R) -> R {
+        crate::days::with(self.dates.clone(), f)
+    }
+
     /// The rule at `rule`, checked: read again when its text has changed. A report `check` already
     /// made of the same text says whether the rule passes, so it is not checked a second time.
     fn rule(&self, rule: &Path) -> Result<(String, String, Checked2), Vec<Said>> {
+        self.joined(|| self.rule_here(rule))
+    }
+
+    fn rule_here(&self, rule: &Path) -> Result<(String, String, Checked2), Vec<Said>> {
         let (path, src) = read(rule)?;
         let key = (path.clone(), crate::sha256::hex(src.as_bytes()));
         let reported = self.reports.lock().unwrap_or_else(|e| e.into_inner()).get(&(the_file(&path), key.1.clone())).map(|(_, _, r)| r.clone());
@@ -155,7 +174,7 @@ impl Engine {
             return r.clone();
         }
         self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let r = std::sync::Arc::new(i18n::with(lang, || crate::report(src, path)));
+        let r = std::sync::Arc::new(self.joined(|| i18n::with(lang, || crate::report(src, path))));
         reports.insert(key, (path.to_string(), lang, r.clone()));
         r
     }
@@ -201,7 +220,15 @@ impl Engine {
                     })
                     .collect();
                 parts.push(Part::Text(i18n::with(rl, || crate::check_tail(&r.shadow, &r.diags, path, 0))));
-                let verdict = if crate::has_error(&r.diags) { Verdict::Fails } else { Verdict::Passes };
+                // E129: no koyomi is joined to read the rule's range from (§15.174), which the
+                // command exits 2 for.
+                let verdict = if r.diags.iter().any(|d| d.code == "E129") {
+                    Verdict::Unchecked
+                } else if crate::has_error(&r.diags) {
+                    Verdict::Fails
+                } else {
+                    Verdict::Passes
+                };
                 Checked { label: path.clone(), parts, verdict }
             })
             .collect()
@@ -308,7 +335,7 @@ impl ritsu_ports::Rules for Engine {
     /// pair exactly when it holds for the pair at the corner that tries it hardest, and that pair
     /// is the example when it does not. The bounds on a list's total and length are about a list
     /// whose length the question does not carry, and are not decided.
-    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
+    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)], max_len: Option<i128>) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>> {
         let (_, _, got) = self.rule(rule)?;
         let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
         let range = |name: &str| -> (Option<Rat>, Option<Rat>) {
@@ -339,13 +366,40 @@ impl ritsu_ports::Rules for Engine {
                             )),
                         }
                     }
-                    Precondition::Sum { name, over, .. } => Answer::Undecided(ritsu_base::tr!(
-                        "`{name}` は `{over}` の合計の上限です。問いが並びの長さの範囲を持たないので、決められません",
-                        "`{name}` bounds a total over `{over}`, and the question carries no range for the list's length, so it cannot be decided"
-                    )),
-                    Precondition::Length { sequence, .. } => Answer::Undecided(ritsu_base::tr!(
-                        "`{sequence}` の長さの上限です。問いが並びの長さの範囲を持たないので、決められません",
-                        "it bounds the length of `{sequence}`, and the question carries no range for the list's length, so it cannot be decided"
+                    // The total is largest with the list as long as it gets and every element at
+                    // the top of its range (none when that top is below zero: the empty list's
+                    // total, 0, is then the largest).
+                    Precondition::Sum { name, over, of, max } => match (max_len, range(of).1) {
+                        (Some(n), Some(hi)) => {
+                            let top = crate::types::wire_int(hi, c.wire_scale(of));
+                            let most = if top > 0 { top.saturating_mul(n) } else { 0 };
+                            if most <= *max {
+                                Answer::Holds
+                            } else {
+                                let one = vec![(of.clone(), Value::Int(top))];
+                                Answer::Fails(vec![(over.clone(), Value::List(vec![one; n.clamp(0, 10_000) as usize]))])
+                            }
+                        }
+                        (None, _) => Answer::Undecided(ritsu_base::tr!(
+                            "`{name}` は `{over}` の合計の上限です。並びの長さの上限が分からないので、決められません",
+                            "`{name}` bounds a total over `{over}`, and how long the list can be is not known, so it cannot be decided"
+                        )),
+                        (Some(_), None) => Answer::Undecided(ritsu_base::tr!(
+                            "`{name}` は `{over}` の `{of}` の合計の上限です。`{of}` の範囲に上の端が無いので、決められません",
+                            "`{name}` bounds the total of `{of}` over `{over}`, and the range of `{of}` has no upper end, so it cannot be decided"
+                        )),
+                    },
+                    Precondition::Length { sequence, max } => match max_len {
+                        Some(n) if n <= *max => Answer::Holds,
+                        Some(_) => Answer::Fails(vec![(sequence.clone(), Value::List(vec![Vec::new(); (*max + 1).clamp(0, 10_000) as usize]))]),
+                        None => Answer::Undecided(ritsu_base::tr!(
+                            "`{sequence}` の長さの上限です。並びの長さの上限が分からないので、決められません",
+                            "it bounds the length of `{sequence}`, and how long the list can be is not known, so it cannot be decided"
+                        )),
+                    },
+                    Precondition::Days { input, .. } => Answer::Undecided(ritsu_base::tr!(
+                        "`{input}` は koyomi の日付がとる日だけをとります。問いは範囲だけを持ち、渡す日がその日のどれかであることは言えません",
+                        "`{input}` takes only the days of a koyomi date, and a range alone cannot show that the day given is one of them"
                     )),
                 };
                 (p, a)
@@ -353,13 +407,91 @@ impl ritsu_ports::Rules for Engine {
             .collect())
     }
 
-    fn checked_over(&self, rule: &Path, input: &str, _days: &DaySet) -> Result<Answer<Text>, Vec<Said>> {
+    /// The rule checked again with the date input `input` taking only `days` (inside what the
+    /// rule declares for it), as a rule whose range is a koyomi date is checked over its days
+    /// (§15.174): its tables complete, without overlap, every row reached. The first error that
+    /// says otherwise is the example; a rule that does not pass its own check is refused.
+    fn checked_over(&self, rule: &Path, input: &str, days: &DaySet) -> Result<Answer<Text>, Vec<Said>> {
+        let (path, src, got) = self.rule(rule)?;
+        let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        if !f.inputs.iter().any(|i| i.name.text == input) || c.ty_of(input) != Some(Ty::Date) {
+            return Ok(Answer::Undecided(ritsu_base::tr!("`{input}` は、この規則の日付の入力ではありません", "`{input}` is not a date input of this rule")));
+        }
+        let given: Vec<i64> = days.iter().copied().collect();
+        let both = |l: RLang| self.joined(|| crate::days::over(input, given.clone(), || i18n::with(l, || crate::report(&src, &path).diags)));
+        let (ja, en) = (both(RLang::Ja), both(RLang::En));
+        let first = ja.iter().zip(&en).find(|(d, _)| d.severity == crate::diag::Severity::Error && matches!(d.code, "E101" | "E102" | "E105"));
+        Ok(match first {
+            None => Answer::Holds,
+            Some((j, e)) => {
+                let line = |d: &crate::diag::Diag| d.marks.first().map(|m| format!(":{}", m.span.line)).unwrap_or_default();
+                Answer::Fails(Text::new(format!("[{}] {path}{}: {}", j.code, line(j), j.title), format!("[{}] {path}{}: {}", e.code, line(e), e.title)))
+            }
+        })
+    }
+
+    /// The output's range is the interval rulec holds it to (a table's rows, a derive's
+    /// arithmetic); where every row that decides it writes a number, those numbers, each with an
+    /// input from the rule's vectors (which take every row) that comes to it.
+    fn output_values(&self, rule: &Path, output: &str) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
+        use crate::ast::{Lit, OutCell};
         let (_, _, got) = self.rule(rule)?;
-        got.as_ref().as_ref().map_err(|e| e.clone())?;
-        Ok(Answer::Undecided(ritsu_base::tr!(
-            "rulec の検査は、入力 `{input}` を日付の集合に限って表を確かめる形をまだ持っていません",
-            "rulec's check cannot yet hold the tables to the input `{input}` taking only a set of days"
-        )))
+        let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        if !f.outputs.iter().any(|o| o.name.text == output) || !c.ty_of(output).is_some_and(|t| t.is_numeric()) {
+            return Ok(ritsu_ports::Found::Undecided(ritsu_base::tr!("`{output}` は、この規則の数の出力ではありません", "`{output}` is not a numeric output of this rule")));
+        }
+        let sc = c.wire_scale(output);
+        let (lo, hi) = c.ranges.get(output).copied().unwrap_or((None, None));
+        // every number the rows that decide the output write, if each writes one
+        let ty = c.ty_of(output).unwrap_or(Ty::Unknown);
+        let mut literal: Option<Vec<i128>> = Some(Vec::new());
+        for set in &c.sets {
+            let Some(oi) = set.table.outputs.iter().position(|o| o.name.text == output) else { continue };
+            for row in &set.table.rows {
+                match row.outs.get(oi) {
+                    Some(OutCell::Lit(Lit::Num(n))) => match crate::types::lit_value_in_pub(n, &ty) {
+                        Some(v) => {
+                            if let Some(vs) = literal.as_mut() {
+                                vs.push(crate::types::wire_int(v, sc));
+                            }
+                        }
+                        None => literal = None,
+                    },
+                    _ => literal = None,
+                }
+            }
+        }
+        let values = literal.filter(|v| !v.is_empty()).map(|mut v| {
+            v.sort_unstable();
+            v.dedup();
+            v
+        });
+        let (min, max) = (lo.map(|v| crate::types::wire_int(v, sc)), hi.map(|v| crate::types::wire_int(v, sc)));
+        // an input for each value, from the vectors
+        let mut wanted: Vec<i128> = min.into_iter().chain(max).collect();
+        wanted.extend(values.iter().flatten().copied());
+        wanted.dedup();
+        let mut examples: Vec<(i128, Values)> = Vec::new();
+        let vectors = self.joined(|| crate::vectors::generate(f, c));
+        for w in wanted {
+            if examples.iter().any(|(v, _)| *v == w) {
+                continue;
+            }
+            let hit = vectors.iter().find(|v| v.outputs.iter().any(|(n, x)| n == output && matches!(x, Some(crate::eval::Val::Num(r)) if crate::types::wire_int(*r, sc) == w)));
+            if let Some(v) = hit {
+                let inputs: Values = v.input.iter().map(|(n, x)| (n.clone(), from_val(c, n, x))).collect();
+                examples.push((w, inputs));
+            }
+        }
+        Ok(ritsu_ports::Found::Value(ritsu_ports::OutputValues { min, max, values, examples }))
+    }
+
+    fn date_range(&self, rule: &Path, input: &str) -> Result<(Option<i64>, Option<i64>), Vec<Said>> {
+        let (_, _, got) = self.rule(rule)?;
+        let (_, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        let (lo, hi) = c.ranges.get(input).copied().unwrap_or((None, None));
+        let day = |r: Option<Rat>| r.map(|v| (v.num / v.den) as i64);
+        Ok((day(lo), day(hi)))
     }
 
     fn eval(&self, rule: &Path, inputs: &Values) -> Result<Values, RuleError> {
@@ -432,7 +564,7 @@ impl ritsu_ports::Rules for Engine {
 
     fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>> {
         let (path, src) = read(rule)?;
-        i18n::with(rlang(lang), || {
+        self.joined(|| i18n::with(rlang(lang), || {
             let (f, c) = checked(&path, &src)?;
             Ok(if html {
                 let js = crate::codegen::Gen::new(&f, &c, &src, &path).javascript();
@@ -440,7 +572,7 @@ impl ritsu_ports::Rules for Engine {
             } else {
                 crate::doc::render_named(&f, &c, &src, &path, shown)
             })
-        })
+        }))
     }
 }
 
@@ -558,8 +690,9 @@ impl ritsu_ports::Items for Engine {
 impl ritsu_ports::References for Engine {
     /// The files a rule names: the `.proto` or JSON Schema an enum's values come from
     /// (`import proto`, `import jsonschema`), the contract a `shape` reads its inputs out of, a
-    /// rule it applies (`apply`), and a document a `source` copies (`source … file`). An enum or
-    /// a message of a `.proto` is named from the file's package.
+    /// rule it applies (`apply`), a document a `source` copies (`source … file`), and the koyomi
+    /// date an input takes its days from (`range from koyomi`, §15.174). An enum or a message of
+    /// a `.proto` is named from the file's package.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let disk = ritsu_base::paths::on_disk(root, file);
         let (path, src) = read(&disk)?;
@@ -602,6 +735,13 @@ impl ritsu_ports::References for Engine {
                 && let Some(p) = from_root(file, written)
             {
                 out.push(Reference { line: s.span.line, target: Naming::file(Tool::File, &p), how: "source".into() });
+            }
+        }
+        for i in &f.inputs {
+            if let Some(d) = i.range.as_ref().and_then(|r| r.days.as_ref())
+                && let Some(p) = from_root(file, &d.file)
+            {
+                out.push(Reference { line: d.span.line, target: Naming::file(Tool::Koyomi, &p).with("date", &d.date), how: "range from koyomi".into() });
             }
         }
         out.sort_by_key(|r| r.line);

@@ -93,6 +93,29 @@ pub fn check(m: &Model) -> Vec<Diag> {
     out
 }
 
+/// Every call of a rule in the flow (ritsu's port of flows, DESIGN 7.4 X2): its line, the rule,
+/// and for each input it gives, the value as written, the range that value can be in when every
+/// place it comes from has one, and a place it comes from that has none.
+#[allow(clippy::type_complexity)]
+pub fn rule_calls(m: &Model) -> Vec<(usize, usize, Vec<(String, String, Option<Range>, Option<Text>)>)> {
+    let vars = variables(m);
+    let mut out = Vec::new();
+    for s in m.all_stmts() {
+        if let TK::Call { callee: Callee::Rule(r), args, .. } = &s.kind {
+            let given = args
+                .iter()
+                .map(|(p, e)| {
+                    let est = estimate(m, &vars, e);
+                    let range = if est.unknown.is_none() { est.known } else { None };
+                    (p.clone(), e.show(), range, est.unknown.clone())
+                })
+                .collect();
+            out.push((s.line, *r, given));
+        }
+    }
+    out
+}
+
 /// The diagnostic for giving `e` to a place whose range is `want`, if it may not fit.
 fn fit(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, want: Range, line: usize, place_en: &str, place_ja: &str) -> Option<Diag> {
     let est = estimate(m, vars, e);

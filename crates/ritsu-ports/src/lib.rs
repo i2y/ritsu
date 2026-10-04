@@ -19,6 +19,8 @@
 //!   that a naming is looked up in one place.
 //! - [`Sources`]: the sources a rule or a calendar copies and pins, which yuen borrows and holds
 //!   its own copies to.
+//! - [`Flows`]: the calls a workflow makes to rules, with what dandori knows of each value it
+//!   gives (its range), for the checks across the border to hold the rule's preconditions to.
 //! - [`Checked`]: what a language's own `check` prints for a unit it checks, a diagnostic at a
 //!   time, the text and the JSON, as `ritsu check` prints it again (DESIGN 8.3).
 //!
@@ -30,6 +32,7 @@ mod books;
 mod check;
 mod claims;
 mod dates;
+mod flows;
 mod index;
 mod rules;
 mod sources;
@@ -40,7 +43,8 @@ pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, Re
 pub use sources::{Source, SourceKind, Sources};
 pub use dates::{DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet};
 pub use index::{Index, Item, Items, Lookup, Reference, References};
-pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
+pub use flows::{CallArg, Flows, RuleCall};
+pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
 
 use ritsu_base::text::Text;
 

@@ -32,6 +32,9 @@ pub mod child;
 /// The `rulec` command, as a function: the binary runs it, and so does `ritsu rulec`.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
+/// The days a date input takes from a koyomi file (`range from koyomi …`, §15.174), read
+/// through ritsu's port of dates.
+pub mod days;
 pub mod defset;
 pub mod diag;
 pub mod doc;

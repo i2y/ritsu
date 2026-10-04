@@ -7,11 +7,17 @@
 //! and hands over the project and its index. What each check comes to is one of P5's three — shown
 //! to hold, an example where it does not, or undecided — and [`Borders`] counts them.
 //!
-//! In the first part of stage E there is one check: the `.proto` files of a project, which no
-//! language checks on its own, read with ritsu's one reader ([`codes`]'s E101). The checks of the
-//! borders between the languages (DESIGN 7.2, X1–X7) come in its second part (PLAN E.4).
+//! The checks: the `.proto` files of a project, which no language checks on its own, read with
+//! ritsu's one reader (E101); and the borders between the languages (DESIGN 7.2). Of those, X2
+//! (a rule's preconditions where a workflow calls it, E201 and W201) reaches a project now; X3 (a),
+//! X4 and X6 ([`borders`]) are decided over what koyomi, chobo and rulec hand over, and reach a
+//! project once dandori calls koyomi and chobo (PLAN E.5). X1, the units at a border, is the
+//! languages' own check (dandori's E003, rulec's E065), and X3 (b) is rulec's (`range from
+//! koyomi`, rulec's §15.174).
 
+pub mod borders;
 pub mod codes;
+mod preconditions;
 mod protos;
 
 use ritsu_base::text::Lang;
@@ -44,8 +50,25 @@ pub struct Crossed {
 
 /// Every check ritsu makes of a project across its languages, in `lang`. `joined` is what every
 /// check of a border will read the languages through (PLAN E.4).
-pub fn check(project: &Project, _joined: &Joined, lang: Lang) -> Crossed {
+pub fn check(project: &Project, joined: &Joined, lang: Lang) -> Crossed {
     let mut findings = Vec::new();
+    let mut borders = Borders::default();
     findings.extend(protos::unread(project, lang));
-    Crossed { findings, borders: Borders::default() }
+    findings.extend(preconditions::check(project, joined, lang, &mut borders));
+    days_held(project, joined, &mut borders);
+    Crossed { findings, borders }
+}
+
+/// X3 (b): each rule input of the project whose range is a koyomi date (`range from koyomi`,
+/// rulec's §15.174) is a border rulec checked in its own check, over the days koyomi handed it
+/// through the port; a rule that passes counts it as held. One that does not is rulec's to say
+/// (E129, E130, or the table's own errors over the days), and is not counted here.
+fn days_held(project: &Project, joined: &Joined, borders: &mut Borders) {
+    use ritsu_ports::Rules;
+    for f in project.of(ritsu_base::naming::Tool::Rulec) {
+        let disk = ritsu_base::paths::on_disk(&project.root, &f.rel);
+        if let Ok(facts) = joined.rulec.facts(&disk) {
+            borders.held += facts.preconditions.iter().filter(|p| matches!(p, ritsu_ports::Precondition::Days { .. })).count();
+        }
+    }
 }

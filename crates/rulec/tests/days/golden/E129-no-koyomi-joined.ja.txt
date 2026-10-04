@@ -1,0 +1,8 @@
+error[E129]: この rulec は koyomi のファイルを読めません
+  --> variant.rule:7
+  |
+7 |   pay_day : date  range from koyomi "payment_terms.cal" date payment
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ pay_day の範囲は koyomi "payment_terms.cal" date payment がとる日です
+  |
+ rulec のクレートのバイナリ（とブラウザで試すページ）は、koyomi をつないでいません。`ritsu rulec check …` か `ritsu check …` で走らせると、koyomi の口から日の集合を受け取って確かめます。
+

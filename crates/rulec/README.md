@@ -145,6 +145,13 @@ nothing is generated. A rule that is one step of a state machine has its claims 
 sequence of calls proved as well: a case never leaves a final state, can always still finish,
 and never does what its `never` and `once` lines forbid.
 
+"Every input" is every input of the declared ranges. A date input can take its range from
+another file instead: `pay_day : date  range from koyomi "payment_terms.cal" date payment` is
+the set of days a koyomi date comes to, which koyomi computes exactly, and the five proofs, the
+examples and the certificate are then over those days only, while the generated code refuses
+any other day. The set is read through [ritsu](https://github.com/i2y/ritsu), so a rule like
+this is checked with `ritsu rulec check` (the [reference](docs/reference.md) has the details).
+
 What is **not** proved matters just as much.
 
 1. **That the table matches reality.** Cite the document a table was transcribed from
@@ -251,14 +258,14 @@ website/          the documentation site (Zensical): docs/ English, docs-ja/ Jap
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
-src/              52 modules, and 6 more under codegen/
+src/              53 modules, and 6 more under codegen/
 tests/corpus/     50 rules, and the copies of the documents they cite
 tests/mutants/    109 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 53 in Japanese, 42 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
-50 rules — 22 transcribed from a published source, 28 written to reach the rest of the language — are checked, generated and run on every commit, and all 109 diagnostics are implemented.
+50 rules — 22 transcribed from a published source, 28 written to reach the rest of the language — are checked, generated and run on every commit, and all 112 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as

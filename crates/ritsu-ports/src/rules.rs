@@ -131,6 +131,9 @@ pub enum Precondition {
     Sum { name: String, over: String, of: String, max: i128 },
     /// How many elements the list may have.
     Length { sequence: String, max: i128 },
+    /// A date input that takes only the days of a koyomi date (`range from koyomi`, rulec's
+    /// §15.174): the file and the date as the rule names them, and the days.
+    Days { input: String, file: String, date: String, days: crate::DaySet },
 }
 
 /// The rule's Connect service (rulec's §15.112).
@@ -209,6 +212,20 @@ pub struct CallEnum {
     pub values: Vec<(String, String)>,
 }
 
+/// What a numeric output of a rule comes to (`Rules::output_values`), on the wire.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutputValues {
+    /// The fewest and the most, as rulec's intervals read them; None at an end it has none for.
+    pub min: Option<i128>,
+    pub max: Option<i128>,
+    /// Each number the output comes to, when every row that decides it writes one; None when
+    /// some row computes it.
+    pub values: Option<Vec<i128>>,
+    /// For a value the output comes to, an input that reaches it (from rulec's vectors), in the
+    /// order of the values; the fewest and the most first.
+    pub examples: Vec<(i128, Values)>,
+}
+
 /// A value across the border, as it goes on the wire.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -248,14 +265,29 @@ pub trait Rules {
     /// What rulec knows of the rule, when it passes check; else what check says.
     fn facts(&self, rule: &Path) -> Result<RuleFacts, Vec<Said>>;
 
-    /// Whether each precondition holds for every value the inputs may take, each input within
-    /// the range given (the integers on the wire), or the rule's own range for an input left
-    /// out (DESIGN 7.4, X2).
-    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>>;
+    /// Whether each precondition holds for every value the inputs may take, each input (or a
+    /// field of the list the rule walks) within the range given (the integers on the wire), or
+    /// the rule's own range for one left out (DESIGN 7.4, X2); and the list the rule walks no
+    /// longer than `max_len`, when the caller knows how long it can be (None: not known, and a
+    /// bound on the list's total or length is not decided).
+    fn preconditions_hold(&self, rule: &Path, ranges: &[(String, Option<i128>, Option<i128>)], max_len: Option<i128>) -> Result<Vec<(Precondition, Answer<Values>)>, Vec<Said>>;
+
+    /// What a numeric output comes to over every input the rule takes (DESIGN 7.6, X4): its
+    /// fewest and most, and, where every row that decides it writes a number, each of those
+    /// numbers with an input that reaches it.
+    fn output_values(&self, rule: &Path, output: &str) -> Result<crate::Found<OutputValues>, Vec<Said>>;
 
     /// Whether the rule's tables are complete, without overlap and without a row nothing
     /// reaches, when the date input `input` takes only the days in `days` (DESIGN 7.5 (b), X3).
     fn checked_over(&self, rule: &Path, input: &str, days: &crate::DaySet) -> Result<Answer<Text>, Vec<Said>>;
+
+    /// The range a date input declares, as day numbers (DESIGN 7.5 (a), X3): both ends, or None
+    /// at an open one; for an input whose range is a koyomi date, the hull of its days. The
+    /// default answers nothing known, for a port that does not read ranges of dates.
+    fn date_range(&self, rule: &Path, input: &str) -> Result<(Option<i64>, Option<i64>), Vec<Said>> {
+        let _ = (rule, input);
+        Ok((None, None))
+    }
 
     /// The outputs for these inputs (rulec's reference evaluator), refusing what the generated
     /// code refuses.
