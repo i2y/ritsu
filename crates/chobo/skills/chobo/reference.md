@@ -8,7 +8,7 @@ writes, [targets.md](targets.md) what `chobo build` writes for PostgreSQL and Ti
 
 ## A book
 
-The inventory example ([examples/inventory/inventory.book](https://github.com/i2y/chobo/blob/main/examples/inventory/inventory.book)):
+The inventory example ([examples/inventory/inventory.book](https://github.com/i2y/ritsu/blob/main/crates/chobo/examples/inventory/inventory.book)):
 
 ```book
 book inventory v1
@@ -105,7 +105,7 @@ account, so the write that changes the account can check it, with nothing else t
 between. A rule over two accounts, *a refund never exceeds the sale*, becomes the bound of an
 account of its own: what is left to refund on each order, which the sale fills and a refund
 takes from, and which never goes below 0
-([examples/refunds](https://github.com/i2y/chobo/blob/main/examples/refunds/refunds.book)).
+([examples/refunds](https://github.com/i2y/ritsu/blob/main/crates/chobo/examples/refunds/refunds.book)).
 
 ## Transfers
 

@@ -54,7 +54,7 @@ $ chobo scenarios examples/inventory/inventory.book
   `pass:`, `moves:`, `together:` or `same_account:`. The string values are the parameter's name
   and a number, numbered in the order they first appear, so that no two values meet by chance.
 - A scenario written by hand beside a book, as `<book>.more.json`, runs on every target too
-  ([examples/refunds/refunds.more.json](https://github.com/i2y/chobo/blob/main/examples/refunds/refunds.more.json)).
+  ([examples/refunds/refunds.more.json](https://github.com/i2y/ritsu/blob/main/crates/chobo/examples/refunds/refunds.more.json)).
 
 ## The result of a scenario
 

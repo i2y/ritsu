@@ -222,4 +222,4 @@ the code can be held to the reference interpreter wherever it is copied.
 | [codes.md](codes.md) | every diagnostic: when it appears, how to fix it, a reproduction |
 | [generated-code.md](generated-code.md) | what each target writes, its functions and errors, and the runners |
 
-They are copies of the pages under `docs/` in the koyomi repository, https://github.com/i2y/koyomi.
+They are copies of the pages under `crates/koyomi/docs/` in the ritsu repository, https://github.com/i2y/ritsu.

@@ -8,5 +8,5 @@
 | [generated-code.md](generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
 | [backends.md](backends.md) | targeting a language rulec does not generate, without losing the comparison |
 | `rulec explain <CODE>` | one diagnostic: when it appears, how to fix it, a runnable reproduction. `--all` for every one, `--format json` for data |
-| <https://github.com/i2y/rulec> | the source and the design document |
+| <https://github.com/i2y/ritsu/tree/main/crates/rulec> | the source and the design document, in the ritsu repository |
 | <https://i2y.github.io/rulec/> | the documentation site: the tour and the worked rules written for a person — English, and Japanese under `/ja/` |

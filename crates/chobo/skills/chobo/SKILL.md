@@ -225,5 +225,5 @@ than the reference interpreter.
 | [targets.md](targets.md) | what `chobo build` writes for PostgreSQL and TigerBeetle, and how to call it |
 | [codes.md](codes.md) | every diagnostic code, as `chobo explain --all` prints it |
 
-They are copies of the pages under `docs/` in <https://github.com/i2y/chobo>, where the examples
-and their pages are too.
+They are copies of the pages under `crates/chobo/docs/` in <https://github.com/i2y/ritsu>, where
+the examples and their pages are too.

@@ -12,7 +12,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 out=${1:-$here/chobo}
 docs=$here/../docs
-repo=https://github.com/i2y/chobo/blob/main
+repo=https://github.com/i2y/ritsu/blob/main/crates/chobo
 mkdir -p "$out"
 
 page() {

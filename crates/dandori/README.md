@@ -15,7 +15,7 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
   answered: an API, an agent (OpenAI's models, Claude, or any Open Responses endpoint) whose
   answer comes back in a declared type, TypeSafe's Jev, which answers typed questions with how sure
   it is, your own code, a person's approval. A decision that must
-  have no gaps can be a table in [rulec](https://github.com/i2y/rulec), which proves it complete
+  have no gaps can be a table in [rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec), which proves it complete
   and free of overlaps, and a rule's state machine can be the type of the thing a workflow drives.
 - **Due dates and stock come from outside too.** A due date can be a date of koyomi's, checked on
   every day of its range, and stock a book of chobo's, whose bounds hold in every write. A workflow

@@ -99,8 +99,8 @@ and in JavaScript's `Date`. Holidays change by law, and the official table grows
 February. And the person who writes the code is not the person who decides the terms, who reads the
 contract rather than the code.
 
-koyomi takes what its siblings [rulec](https://github.com/i2y/rulec) (business rules, as tables
-it proves complete) and [dandori](https://github.com/i2y/dandori) (typed workflows that call
+koyomi takes what its siblings [rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec) (business rules, as tables
+it proves complete) and [dandori](https://github.com/i2y/ritsu/tree/main/crates/dandori) (typed workflows that call
 them) leave outside on purpose: rulec keeps dates ordered and nothing more, and dandori waits
 until a time it is given. The way of working is theirs: pin the documents a file is written
 against, check it before anything is generated, give the person who approves it a page they can
