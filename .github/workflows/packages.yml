@@ -1,0 +1,67 @@
+name: packages
+
+# What a release hands out, built and tried on every push (DESIGN 13.2), so that a release is not
+# the first time it runs: the musl binary of ritsu, the archive with its seven links (unpacked, and
+# run under all eight names), and the .deb and the .rpm (each installed on Debian and on Fedora,
+# run, and removed). release.yml does the same on the four platforms, on a tag.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-packages-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-packages-${{ runner.os }}-
+
+      - name: musl linker
+        run: sudo apt-get update -q && sudo apt-get install -y -q musl-tools
+
+      - name: Build
+        run: cargo build --release --locked --target x86_64-unknown-linux-musl -p ritsu
+
+      - name: The archive unpacks, and every name reads its example
+        run: |
+          set -eu
+          bin=target/x86_64-unknown-linux-musl/release/ritsu
+          sh packaging/archive.sh "v$("$bin" --version | cut -d' ' -f2)" x86_64-unknown-linux-musl "$bin" "$RUNNER_TEMP/dist"
+          d=$(mktemp -d)
+          tar -xzf "$RUNNER_TEMP"/dist/ritsu-v*-x86_64-unknown-linux-musl.tar.gz -C "$d"
+          ls -l "$d"
+          sh packaging/smoke.sh "$d" crates
+
+      - name: The .deb and the .rpm install, run and uninstall
+        run: |
+          set -eu
+          bin=target/x86_64-unknown-linux-musl/release/ritsu
+          sh packaging/linux.sh "$("$bin" --version | cut -d' ' -f2)" x86_64-unknown-linux-musl "$bin" "$RUNNER_TEMP/dist"
