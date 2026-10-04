@@ -6,7 +6,9 @@
 //!
 //! The entries are the language's own; how they are written out is here. A reproduction is a
 //! file with what has to be beside it (koyomi's and yuen's), or files laid in one directory and
-//! a command run there (sakai's).
+//! a command run there (sakai's). An entry can hold two reproductions, one in English names and
+//! one in Japanese ones (an entry's [`Entry::repro_ja`]): `explain` shows the one of the language
+//! it is asked in, and [`check_every`] runs both.
 
 use crate::diag::Severity;
 use crate::json::Json;
@@ -38,14 +40,42 @@ pub struct Entry {
     pub when: Text,
     /// How to get rid of it, down to what to write.
     pub fix: Text,
+    /// The reproduction shown in English, and shown in Japanese too when [`Entry::repro_ja`] is
+    /// none.
     pub repro: Repro,
+    /// The reproduction shown in Japanese, when its names are Japanese where `repro`'s are English.
+    pub repro_ja: Option<Repro>,
     pub related: &'static [&'static str],
 }
 
 impl Entry {
     /// An entry whose severity is read from its code's first letter.
     pub fn new(code: &'static str, title: Text, when: Text, fix: Text, repro: Repro, related: &'static [&'static str]) -> Entry {
-        Entry { code, severity: Severity::of(code), title, when, fix, repro, related }
+        Entry { code, severity: Severity::of(code), title, when, fix, repro, repro_ja: None, related }
+    }
+
+    /// The same entry, its reproduction in Japanese being `repro` and the one it had until now,
+    /// shown in English only: `english` is the reproduction with English names. The output of
+    /// `explain` in Japanese is what it was.
+    pub fn english(mut self, english: Repro) -> Entry {
+        self.repro_ja = Some(std::mem::replace(&mut self.repro, english));
+        self
+    }
+
+    /// The reproduction shown in a language.
+    pub fn repro_in(&self, lang: Lang) -> &Repro {
+        match (lang, &self.repro_ja) {
+            (Lang::Ja, Some(ja)) => ja,
+            _ => &self.repro,
+        }
+    }
+
+    /// The entry with the reproduction shown in `lang` as its only one: what a test runs.
+    pub fn shown_in(&self, lang: Lang) -> Entry {
+        let mut e = self.clone();
+        e.repro = self.repro_in(lang).clone();
+        e.repro_ja = None;
+        e
     }
 
     /// The same entry with what has to be beside its file (koyomi's and yuen's `with`). An entry
@@ -136,7 +166,7 @@ impl Ledger {
         let repro = self.repro_heading.get(lang);
         let mut o = format!("{} ({}) — {}\n\n", e.code, e.severity.word(lang), e.title.get(lang));
         o.push_str(&format!("{when}: {}\n\n{fix}: {}\n\n{repro}:\n", e.when.get(lang), e.fix.get(lang)));
-        match &e.repro {
+        match e.repro_in(lang) {
             Repro::Later => o.push_str(&format!("    {}\n", self.later_text.get(lang))),
             Repro::Retired(why) => o.push_str(&format!("    {}\n", retired_text(why, lang))),
             Repro::File { body, beside } => {
@@ -178,7 +208,7 @@ impl Ledger {
         let repro = self.repro_heading.get(lang);
         let mut o = format!("<a id=\"{}\"></a>\n\n## {} — {}\n\n", e.code.to_lowercase(), e.code, e.title.get(lang));
         o.push_str(&format!("**{when}**: {}\n\n**{fix}**: {}\n\n**{repro}**:", e.when.get(lang), e.fix.get(lang)));
-        match &e.repro {
+        match e.repro_in(lang) {
             Repro::Later => o.push_str(&format!(" {}\n", self.later_markdown.get(lang))),
             Repro::Retired(why) => o.push_str(&format!(" {}\n", retired_text(why, lang))),
             Repro::File { body, beside } => {
@@ -223,7 +253,7 @@ impl Ledger {
     /// One code for a program: `code`, `severity`, `title`, `when`, `fix`, `repro` and
     /// `related`, in that order.
     pub fn to_json(&self, e: &Entry, lang: Lang) -> Json {
-        let repro = match &e.repro {
+        let repro = match e.repro_in(lang) {
             Repro::Later => Json::Null,
             Repro::Retired(why) => Json::obj([("retired", Json::str(why.get(lang)))]),
             Repro::File { body, beside } => {
@@ -278,25 +308,33 @@ impl Ledger {
 }
 
 /// Every reproduction prints its code: each is laid out in a fresh directory under `scratch`
-/// and handed to `run`, which answers the codes it printed. The failures, one a line (an entry
-/// that is [`Repro::Later`] or [`Repro::Retired`] is passed over). The directories are removed.
+/// and handed to `run`, which answers the codes it printed. An entry with a reproduction in
+/// Japanese as well ([`Entry::repro_ja`]) is handed to `run` twice, the second time as an entry
+/// whose reproduction is the Japanese one. The failures, one a line (an entry that is
+/// [`Repro::Later`] or [`Repro::Retired`] is passed over). The directories are removed.
 pub fn check_every(ledger: &Ledger, scratch: &Path, mut run: impl FnMut(&Entry, &Path) -> Vec<String>) -> Vec<String> {
     let mut failures = Vec::new();
     for e in &ledger.entries {
         if matches!(e.repro, Repro::Later | Repro::Retired(_)) {
             continue;
         }
-        let dir = scratch.join(e.code);
-        let _ = std::fs::remove_dir_all(&dir);
-        if let Err(err) = ledger.lay_out(e, &dir) {
-            failures.push(format!("{}: cannot lay out the reproduction: {err}", e.code));
-            continue;
+        let mut variants = vec![(e.shown_in(Lang::En), "")];
+        if e.repro_ja.is_some() {
+            variants.push((e.shown_in(Lang::Ja), "-ja"));
         }
-        let codes = run(e, &dir);
-        if !codes.iter().any(|c| c == e.code) {
-            failures.push(format!("{}: the reproduction printed {codes:?}", e.code));
+        for (entry, tag) in variants {
+            let dir = scratch.join(format!("{}{tag}", e.code));
+            let _ = std::fs::remove_dir_all(&dir);
+            if let Err(err) = ledger.lay_out(&entry, &dir) {
+                failures.push(format!("{}{tag}: cannot lay out the reproduction: {err}", e.code));
+                continue;
+            }
+            let codes = run(&entry, &dir);
+            if !codes.iter().any(|c| c == e.code) {
+                failures.push(format!("{}{tag}: the reproduction printed {codes:?}", e.code));
+            }
+            let _ = std::fs::remove_dir_all(&dir);
         }
-        let _ = std::fs::remove_dir_all(&dir);
     }
     failures
 }

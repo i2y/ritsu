@@ -198,3 +198,58 @@ fn every_reproduction_is_laid_out_and_run() {
     assert!(failures.is_empty(), "{failures:?}");
     assert!(std::fs::read_dir(dir.path()).unwrap().next().is_none(), "the directories are removed");
 }
+
+/// An entry with a reproduction in English names and one in Japanese names: `explain` shows the one
+/// of the language it is asked in (text, Markdown and JSON), an entry with one reproduction shows
+/// it in both, and `check_every` runs each of the two.
+#[test]
+fn an_entry_shows_the_reproduction_of_the_language_it_is_asked_in() {
+    let both = e("E001", tr!("読めない字句があります", "Something cannot be read"), tr!("いつ", "When"), tr!("直し方", "Fix"), "dates 例 v1\n", &[])
+        .english(Repro::File { body: "dates example v1\n", beside: &[("holidays.csv", b"2026-01-01,New Year's Day\n")] });
+    let one = e("E002", tr!("ほかの字句です", "Another thing"), tr!("いつ", "When"), tr!("直し方", "Fix"), "dates t v1\n", &[]);
+    let ledger = Ledger {
+        tool: "koyomi",
+        example_file: "example.cal",
+        fence: "cal",
+        repro_heading: tr!("再現", "Example"),
+        later_text: Text::default(),
+        later_markdown: Text::default(),
+        entries: vec![both, one],
+    };
+    let (both, one) = (ledger.find("E001").unwrap(), ledger.find("E002").unwrap());
+    let en = ledger.render_text(both, Lang::En);
+    assert!(en.contains("    dates example v1\n") && en.contains("beside it: holidays.csv") && !en.contains('例'), "{en}");
+    let ja = ledger.render_text(both, Lang::Ja);
+    assert!(ja.contains("    dates 例 v1\n") && !ja.contains("holidays.csv") && !ja.contains("example v1"), "{ja}");
+    assert!(ledger.render_markdown_one(both, Lang::En).contains("```cal\ndates example v1\n```"));
+    assert!(ledger.render_markdown_one(both, Lang::Ja).contains("```cal\ndates 例 v1\n```"));
+    let files = |lang| {
+        let j = ledger.to_json(both, lang);
+        let files = j.get("repro").and_then(|r| r.get("files")).and_then(|f| f.as_arr()).unwrap().to_vec();
+        files.iter().filter_map(|f| f.get("text").and_then(|t| t.as_str()).map(String::from)).collect::<Vec<_>>()
+    };
+    assert_eq!(files(Lang::En)[0], "dates example v1\n");
+    assert_eq!(files(Lang::Ja), ["dates 例 v1\n"]);
+    // an entry with one reproduction shows it in both languages, as before
+    assert_eq!(ledger.render_text(one, Lang::En).matches("dates t v1").count(), 1);
+    assert_eq!(ledger.render_text(one, Lang::Ja).matches("dates t v1").count(), 1);
+    // check_every runs the English reproduction and then the Japanese one, each laid out whole
+    let dir = ritsu_testkit::TempDir::new("ledger-two");
+    let mut seen = Vec::new();
+    let failures = ledger::check_every(&ledger, dir.path(), |entry, d| {
+        let body = std::fs::read_to_string(d.join("example.cal")).unwrap();
+        seen.push((entry.code, body, d.join("holidays.csv").is_file()));
+        vec![entry.code.to_string()]
+    });
+    assert!(failures.is_empty(), "{failures:?}");
+    assert_eq!(
+        seen,
+        [("E001", "dates example v1\n".to_string(), true), ("E001", "dates 例 v1\n".to_string(), false), ("E002", "dates t v1\n".to_string(), false)]
+    );
+    // a reproduction that prints another code is told with the language it is in
+    let failures = ledger::check_every(&ledger, dir.path(), |entry, _| {
+        let english = matches!(&entry.repro, Repro::File { body, .. } if body.contains("example"));
+        vec![if english || entry.code == "E002" { entry.code.to_string() } else { "E999".to_string() }]
+    });
+    assert_eq!(failures, vec![r#"E001-ja: the reproduction printed ["E999"]"#.to_string()]);
+}
