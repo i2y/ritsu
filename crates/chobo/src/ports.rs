@@ -64,7 +64,7 @@ impl ritsu_ports::Books for Engine {
             name: book.name.clone(),
             version: book.version,
             sha256: crate::ids::hex(&crate::ids::sha256(src.as_bytes())),
-            units: book.units.iter().map(|u| BookUnit { name: u.name.clone(), scale: u.scale }).collect(),
+            units: book.units.iter().map(|u| BookUnit { name: u.name.clone(), scale: u.scale, unit: u.ty.clone() }).collect(),
             accounts: book
                 .accounts
                 .iter()

@@ -15,6 +15,7 @@ Every code chobo prints, when it appears, and how to fix it. For one of them: `c
 | [E011](#e011) | error | A number that does not fit its unit |
 | [E012](#e012) | error | A move from an account to the same account |
 | [E013](#e013) | error | A transfer with no move |
+| [E014](#e014) | error | A tax on a unit that is not money |
 | [E020](#e020) | error | An account with no bound |
 | [E021](#e021) | error | An outside account with a bound |
 | [E022](#e022) | error | Bounds that leave no balance |
@@ -223,6 +224,25 @@ account stock(sku: string) : pcs
 transfer count(note: string)
   key note
 ```
+
+## E014
+
+`error` — **A tax on a unit that is not money**
+
+**When.** A `unit` line ends with `incl_tax` or `excl_tax`, and the unit is not money. A unit of money is named for a currency (`円`, `JPY`, an ISO 4217 code): yen and JPY with scale 0, any other currency with scale 0 or 2. Any other unit (`pcs`, `kg`, yen with scale 2) is neither with tax nor without.
+
+**Fix.** Take `incl_tax` or `excl_tax` off, or name the unit for a currency (`unit JPY incl_tax`, `unit USD scale 2 excl_tax`). Whether it is with tax or without is written so that an amount handed over from a rule or a workflow is taken only when it says the same.
+
+**Smallest reproduction**:
+
+```book
+book shop v1
+unit pcs incl_tax
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+```
+
+Related codes: [E010](#e010)
 
 ## E020
 

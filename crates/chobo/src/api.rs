@@ -288,7 +288,19 @@ pub fn targets(book: &Book, stem: &str) -> Value {
 }
 
 pub fn api(book: &Book, src: &str, rep: &check::Report, stem: &str) -> Value {
-    let units: Vec<Value> = book.units.iter().map(|u| json!({"name": u.name, "scale": u.scale, "ledger": ids::ledger(u)})).collect();
+    // `tax` only on a unit that writes one (ritsu's DESIGN 5.4), so that a book without it has the
+    // api it had.
+    let units: Vec<Value> = book
+        .units
+        .iter()
+        .map(|u| {
+            let mut v = json!({"name": u.name, "scale": u.scale, "ledger": ids::ledger(u)});
+            if let Some(t) = u.tax {
+                v.as_object_mut().unwrap().insert("tax".into(), json!(t.word()));
+            }
+            v
+        })
+        .collect();
     let accounts: Vec<Value> = book
         .accounts
         .iter()

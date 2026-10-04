@@ -98,6 +98,12 @@ transfer count(note: string)
   key note
 ";
 
+const X_E014: &str = "book shop v1
+unit pcs incl_tax
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+";
+
 const X_E020: &str = "book shop v1
 unit pcs
 account stock(sku: string) : pcs
@@ -493,6 +499,20 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E013,
             &[],
+        ),
+        e(
+            "E014",
+            tr!("お金でない単位に、税込か税抜を書いています", "A tax on a unit that is not money"),
+            tr!(
+                "`unit` の行の最後の `incl_tax` か `excl_tax` が、お金の単位でない単位に付いているときに出ます。お金の単位は、通貨の名前（`円`、`JPY`、ISO 4217 のコード）の単位で、円と JPY は scale 0、ほかの通貨は scale 0 か 2 のものです。ほかの単位（`個`、`kg`、scale 2 の円）には、税込も税抜もありません。",
+                "A `unit` line ends with `incl_tax` or `excl_tax`, and the unit is not money. A unit of money is named for a currency (`円`, `JPY`, an ISO 4217 code): yen and JPY with scale 0, any other currency with scale 0 or 2. Any other unit (`pcs`, `kg`, yen with scale 2) is neither with tax nor without."
+            ),
+            tr!(
+                "`incl_tax` か `excl_tax` を外すか、通貨の名前の単位にします（`unit 円 incl_tax`、`unit USD scale 2 excl_tax`）。税込か税抜かは、規則やワークフローから額を受け取るときに、同じ区別の額だけを受け取るために書きます。",
+                "Take `incl_tax` or `excl_tax` off, or name the unit for a currency (`unit JPY incl_tax`, `unit USD scale 2 excl_tax`). Whether it is with tax or without is written so that an amount handed over from a rule or a workflow is taken only when it says the same."
+            ),
+            X_E014,
+            &["E010"],
         ),
         e(
             "E020",

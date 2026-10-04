@@ -1,0 +1,24 @@
+book 税区分 v1
+description "お金の単位だけが、税込か税抜かを書ける。個は数えるだけの単位で、税込も税抜もない"
+unit 円 incl_tax
+unit 個 incl_tax
+
+account 財布(会員: string) : 円
+  at least 0 refused as 残高不足
+account 入金元 : 円 outside
+account 在庫(sku: string) : 個
+  at least 0 refused as 在庫切れ
+account 仕入先 : 個 outside
+
+transfer 入金(伝票: string, 会員: string, 額: 円)
+  key 伝票
+  move 額 from 入金元 to 財布(会員)
+transfer 支払(伝票: string, 会員: string, 額: 円)
+  key 伝票
+  move 額 from 財布(会員) to 入金元
+transfer 入荷(伝票: string, sku: string, 数: 個)
+  key 伝票
+  move 数 from 仕入先 to 在庫(sku)
+transfer 出荷(伝票: string, sku: string, 数: 個)
+  key 伝票
+  move 数 from 在庫(sku) to 仕入先

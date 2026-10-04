@@ -1,0 +1,4 @@
+error[E014]: 税区分.book:4:8: the unit `個` is not money, so it takes no `incl_tax`
+     4 | unit 個 incl_tax
+  hint: take `incl_tax` off: only a unit named for a currency says whether it is with tax or without (yen and JPY with scale 0, any other currency with scale 0 or 2)
+税区分.book: 1 error(s), 0 warning(s)

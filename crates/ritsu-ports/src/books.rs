@@ -3,6 +3,7 @@
 
 use crate::{Found, Machine, Said};
 use ritsu_base::text::Text;
+use ritsu_units::Unit;
 use std::path::Path;
 
 /// What chobo knows of one book that passes its check.
@@ -16,12 +17,24 @@ pub struct BookFacts {
     pub transfers: Vec<Transfer>,
 }
 
-/// A unit of the book: its name, and how many places a stored amount counts past its point
-/// (`unit USD scale 2` counts cents).
+impl BookFacts {
+    /// The unit of ritsu a unit of the book is, by the book's name for it (the name an account
+    /// and an amount parameter give).
+    pub fn unit(&self, name: &str) -> Option<&Unit> {
+        self.units.iter().find(|u| u.name == name).map(|u| &u.unit)
+    }
+}
+
+/// A unit of the book: its name, how many places a stored amount counts past its point
+/// (`unit USD scale 2` counts cents), and the unit it is as ritsu's languages share it (DESIGN
+/// 5.4): money in a currency, with tax or without when the book says (`unit 円 incl_tax` is
+/// `money[円, incl_tax]`, `unit USD scale 2` is `money[USDc]`), a quantity of the table
+/// (`unit kg`), or a count that has a name and nothing else (`unit 個`, a `Dim::Count`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct BookUnit {
     pub name: String,
     pub scale: u32,
+    pub unit: Unit,
 }
 
 /// A kind of account: its name, the parameters that make one account of it, its unit, whether it

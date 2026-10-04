@@ -266,7 +266,9 @@ $ chobo api examples/refunds/refunds.book
 …
 ```
 
-- `units`, `accounts` and `transfers` are the book; a transfer has its `operations`, each with
+- `units`, `accounts` and `transfers` are the book; a unit that says whether it is with tax or
+  without has its `tax` (`incl_tax` or `excl_tax`), and one that does not has no such key; a
+  transfer has its `operations`, each with
   its `refusals` as the report has them, its `code`, and its `definition`, the hash of what it
   moves, which a target keeps beside each key.
 - `machines` has one state machine a transfer that holds: the states, the events, which of them

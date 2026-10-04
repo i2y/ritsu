@@ -1,7 +1,7 @@
 //! The book with its names and units resolved (PLAN B4). Every error of how the book is
 //! written is found here; what only shows when the book is called is `check`'s.
 
-use crate::diag::{self, Diag};
+use crate::diag::{self, Diag, DiagExt};
 use ritsu_base::text::Text;
 use crate::parse::{self, AmountExpr, ArgExpr, PendingKind};
 use std::collections::BTreeMap;
@@ -32,8 +32,52 @@ pub struct Book {
 pub struct Unit {
     pub name: String,
     pub scale: u32,
+    /// Whether an amount of money is with tax or without, when the unit says (`unit 円 incl_tax`).
+    pub tax: Option<ritsu_units::Tax>,
+    /// The unit as ritsu's languages share it (ritsu's DESIGN 5.4): money in a currency of the
+    /// table, a quantity of the table, or a count that has a name and nothing else.
+    pub ty: ritsu_units::Unit,
     pub line: usize,
     pub col: usize,
+}
+
+impl Unit {
+    /// The unit as the book writes it, with its tax when it says one (`円 incl_tax`): what a
+    /// page shows of an account's unit.
+    pub fn shown(&self) -> String {
+        match self.tax {
+            Some(t) => format!("{} {}", self.name, t.word()),
+            None => self.name.clone(),
+        }
+    }
+}
+
+/// The unit of ritsu a unit of chobo is (ritsu's DESIGN 5.4). A name in the table of currencies
+/// is money: counted in whole units with scale 0, in hundredths with scale 2 (`USD scale 2` is
+/// `money[USDc]`), but yen only in whole yen (its hundredth is `銭`). A unit of the table's
+/// quantities (`g`, `kg`, `L`) with scale 0 is that unit. Anything else is a count with its name
+/// only, the same as itself and nothing else, so that seats are not counted as items. Err when
+/// a tax is written on a unit that is not money (E014).
+pub fn unit_type(name: &str, scale: u32, tax: Option<ritsu_units::Tax>) -> Result<ritsu_units::Unit, ()> {
+    use ritsu_units::{Rat, Unit as U, table};
+    let money = match (table::money(name), scale) {
+        (Some(_), 0) => U::money(name, tax),
+        (Some((_, f)), 2) if f == Rat::int(1) && name != "円" && name != "JPY" => U::money(&format!("{name}c"), tax),
+        _ => None,
+    };
+    if let Some(m) = money {
+        return Ok(m);
+    }
+    if tax.is_some() {
+        return Err(());
+    }
+    // a quantity moves between accounts as an amount; a temperature or a level of sound is
+    // ordered and does not add up, so it is no amount, and is a count of its own name here
+    use ritsu_units::Dim;
+    Ok(match table::unit(name) {
+        Some((dim @ (Dim::Mass | Dim::Length | Dim::Area | Dim::Volume | Dim::Duration), _)) if scale == 0 => U { dim, unit: name.to_string(), tax: None, step: None },
+        _ => U::count(name),
+    })
 }
 
 #[derive(Clone, Debug)]
@@ -247,8 +291,20 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                 }
             },
         };
+        let tax = u.tax.as_ref().and_then(|(w, _)| ritsu_units::Tax::parse(w));
+        let ty = match unit_type(&u.name.text, scale, tax) {
+            Ok(t) => t,
+            Err(()) => {
+                let (n, (w, sp)) = (&u.name.text, u.tax.as_ref().expect("a tax was written"));
+                d.push(diag::error("E014", sp.line, sp.col, tr!("単位 `{n}` はお金の単位ではないので、`{w}` を書けません", "the unit `{n}` is not money, so it takes no `{w}`")).hint(tr!(
+                    "`{w}` を外します。税込か税抜かを書けるのは、通貨の名前の単位（円と JPY は scale 0、ほかの通貨は scale 0 か 2）だけです",
+                    "take `{w}` off: only a unit named for a currency says whether it is with tax or without (yen and JPY with scale 0, any other currency with scale 0 or 2)"
+                )));
+                ritsu_units::Unit::count(&u.name.text)
+            }
+        };
         unit_ix.insert(u.name.text.clone(), units.len());
-        units.push(Unit { name: u.name.text.clone(), scale, line: u.line, col: u.name.span.col });
+        units.push(Unit { name: u.name.text.clone(), scale, tax, ty, line: u.line, col: u.name.span.col });
     }
 
     // account kinds

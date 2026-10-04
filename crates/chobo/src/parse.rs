@@ -31,6 +31,8 @@ pub struct Book {
 pub struct Unit {
     pub name: Name,
     pub scale: Option<(String, Span)>,
+    /// `incl_tax` or `excl_tax`, as written (ritsu's DESIGN 5.4).
+    pub tax: Option<(String, Span)>,
     pub line: usize,
 }
 
@@ -128,7 +130,10 @@ fn form_description() -> Text {
     tr!("`description \"<説明>\"`", "`description \"<text>\"`")
 }
 fn form_unit() -> Text {
-    tr!("`unit <名前>` か `unit <名前> scale <小数の桁数>`", "`unit <name>` or `unit <name> scale <decimal places>`")
+    tr!(
+        "`unit <名前>`、`unit <名前> scale <小数の桁数>`。お金の単位は、最後に税込か税抜（`incl_tax`、`excl_tax`）を書ける",
+        "`unit <name>` or `unit <name> scale <decimal places>`; a unit of money may end with whether it is with tax or without (`incl_tax`, `excl_tax`)"
+    )
 }
 fn form_account() -> Text {
     tr!(
@@ -510,8 +515,13 @@ fn unit_line(l: &Line) -> Result<Unit, Diag> {
     } else {
         None
     };
+    let tax = ["incl_tax", "excl_tax"].into_iter().find(|w| c.at_word(w)).map(|w| {
+        let s = c.here();
+        c.i += 1;
+        (w.to_string(), s)
+    });
     c.end()?;
-    Ok(Unit { name, scale, line: l.no })
+    Ok(Unit { name, scale, tax, line: l.no })
 }
 
 fn account_head(l: &Line) -> Result<Account, Diag> {

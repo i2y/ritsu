@@ -10,6 +10,7 @@ repository = "https://github.com/i2y/chobo"
 ritsu-base = { path = "../ritsu-base" }
 ritsu-emit = { path = "../ritsu-emit" }
 ritsu-ports = { path = "../ritsu-ports" }
+ritsu-units = { path = "../ritsu-units" }
 serde_json = { version = "1", features = ["preserve_order"] }
 
 [dev-dependencies]

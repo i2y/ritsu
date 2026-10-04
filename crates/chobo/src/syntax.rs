@@ -26,6 +26,8 @@ pub const KEYWORDS: &[(&str, Place)] = &[
     ("pending", Place::Line),
     ("move", Place::Line),
     ("scale", Place::Modifier),
+    ("incl_tax", Place::Modifier),
+    ("excl_tax", Place::Modifier),
     ("outside", Place::Modifier),
     ("at least", Place::Modifier),
     ("at most", Place::Modifier),

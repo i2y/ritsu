@@ -59,6 +59,24 @@ The account a move takes from, the account it puts into, and its amount are in o
 chobo converts nothing: an exchange is two moves, one in each unit, each through an account
 outside the book, with both amounts worked out by the caller.
 
+```book
+unit 円 incl_tax
+```
+
+A unit of money may end with whether its amounts are with tax or without: `incl_tax` or
+`excl_tax`. Nothing in the book changes with it; it is for amounts handed over from a rule or a
+workflow, which are to say the same. The book hands its units to ritsu's other languages as the
+units rulec writes:
+
+| Unit | As the other languages see it |
+|---|---|
+| a currency's name (`円`, `JPY`, an ISO 4217 code, `銭`, `USDc`) with scale 0 | that money: `money[円]`, or with its tax `money[円, incl_tax]` |
+| a currency's name other than `円` and `JPY`, with scale 2 | its hundredth: `unit USD scale 2` is `money[USDc]` |
+| a unit of mass, length, area, volume or time (`g`, `kg`, `L`, `h`) with scale 0 | that unit: `mass[kg]` |
+| anything else (`pcs`, `seats`, `pt`, yen with scale 2) | a count with its name and nothing else, the same only as itself |
+
+Only the money of the first two rows takes a tax (E014); the hundredth of a yen is `銭`.
+
 ## Accounts
 
 ```book
@@ -236,7 +254,7 @@ an accent written as a character of its own) is refused (E001), to be written pr
 | Where | Keywords |
 |---|---|
 | at the start of a line | `book` `description` `unit` `account` `transfer` `key` `pending` `move` |
-| within a line | `scale` `outside` `at least` `at most` `refused as` `expires after` `never expires` `from` `to` |
+| within a line | `scale` `incl_tax` `excl_tax` `outside` `at least` `at most` `refused as` `expires after` `never expires` `from` `to` |
 | as a type | `string` |
 | after `expires after <n>`, and only there | `second` `seconds` `minute` `minutes` `hour` `hours` `day` `days` |
 
@@ -247,5 +265,5 @@ No name may be a word of the first three rows. The words of durations are keywor
 
 Every diagnostic has a code, the line it is about, and, when it only shows when the book is
 called, the operations that get there, which the checker ran in the reference interpreter before
-saying so. [codes.md](codes.md) has all 28 codes, as `chobo explain --all` prints them, and
+saying so. [codes.md](codes.md) has all 29 codes, as `chobo explain --all` prints them, and
 `chobo explain <code>` prints one.

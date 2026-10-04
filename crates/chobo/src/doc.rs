@@ -399,7 +399,7 @@ fn mermaid_label(lines: &[String]) -> String {
 /// The lines of an account's box: its name and parameters, its unit, and its bounds.
 pub fn node_lines(book: &Book, k: usize, lang: Lang) -> Vec<String> {
     let a = &book.accounts[k];
-    let unit = &book.units[a.unit].name;
+    let unit = &book.units[a.unit].shown();
     let mut lines = vec![kind_text(a)];
     if a.outside {
         lines.push(tr!("{unit}・外の勘定", "{unit} · outside").get(lang).to_string());
@@ -545,7 +545,7 @@ pub fn markdown(i: &Input) -> String {
                 let ps = and_list(&ps, lang);
                 tr!("{ps} ごと", "{ps}").get(lang).to_string()
             };
-            vec![code(&a.name), per, book.units[a.unit].name.clone(), bounds_lines(book, k, lang).join("\n"), a.description.clone().unwrap_or_default()]
+            vec![code(&a.name), per, book.units[a.unit].shown(), bounds_lines(book, k, lang).join("\n"), a.description.clone().unwrap_or_default()]
         })
         .collect();
     o.push_str(&md_table(&head, &rows));

@@ -96,7 +96,7 @@ language.
 
 ```text
 book <name> v<N>                       then description "<text>"
-unit <name> [scale <digits>]           an amount is a whole number of the smallest step: scale 2 counts cents
+unit <name> [scale <digits>] [incl_tax|excl_tax]    an amount is a whole number of the smallest step: scale 2 counts cents; money may say with tax or without
 account <name>[(<param>: string, …)] : <unit> [outside]
   description "<text>"
   at least <n> refused as <reason>     a bound, and the reason a call that would break it gets

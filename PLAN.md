@@ -443,6 +443,15 @@ sakai の PLAN の C.1〜C.5 を、口で作るように書き直してから作
 
 DESIGN 5.4。chobo の単位を単位の型に載せ、お金の単位に税込と税抜の区別（`unit 円 incl_tax`）を書けるようにする。区別の無い chobo の単位は、区別の無い額だけを受け取る。chobo の README（英語と日本語）、DESIGN.md、スキル、`explain` の台帳に、新しい書き方を載せる。
 
+D.9 でしたこと（2026-10-04、D の最後の部分）：
+
+- chobo の単位の行は `unit <名前> [scale <桁>] [incl_tax | excl_tax]` になった。税の語は最後に一つだけ書く（`scale` より前に書けば E001）。chobo の `model::unit_type` が単位を ritsu の単位の型にする（DESIGN 5.4 の三つの決まり。通貨の名前で `scale 0` はその通貨、円と JPY のほかの通貨で `scale 2` は `<コード>c`、足し引きのできる次元の単位の綴りで `scale 0` はその単位、ほかは `Dim::Count(名前)`）。お金でない単位に税の語を書けば、新しいコード E014。chobo は ritsu-units に依存するようになった（言語のクレートが土台に依存するのは 3.1 のとおり）。
+- 口の `BookUnit` に、ritsu の単位の型 `unit` を足し、`BookFacts::unit(名前)` で引けるようにした。`chobo api` は税の語を書いた単位にだけ `tax` を出す。`chobo doc` は勘定の単位を `円 incl_tax` のように書く。税の語は帳簿の中の意味も生成するコードも変えない（TigerBeetle の ledger の番号は単位の名前と `scale` から作り、税の語は入らない）。
+- 「区別の無い chobo の単位は、区別の無い額だけを受け取る」は、ritsu-units の `Unit::same` が税の区別まで比べることで成り立つ（`unit 円` の型は `money[円]` で、`money[円, incl_tax]` とも `money[円, excl_tax]` とも同じでない）。受け取るところで確かめる検査は E の X4（DESIGN 7.6）で、D では単位の型を渡すところまでにした。
+- 文書：chobo の DESIGN（1.2 に税込と税抜と ritsu の単位の型の表、1.6 のキーワード、3.1 の E014、5 章の api の `tax`、8.1 に D.9 の段落）、README.md（「Money with tax or without」の節、いまの状態、コードの数 29）、README.ja.md（「税込と税抜」の節、いまの状態、コードの数）、`docs/reference.md`（単位の節とキーワードの表）、`docs/formats.md`、`docs/codes.md` と `docs/codes.ja.md`（`explain` の出力そのもの）、スキル（`SKILL.md` の単位の行と、`sync.sh` で写す三つ）。
+- テスト：chobo の `tests/units.rs`（四本。単位の型、税の区別が同じかどうか、E014 と税の語の書き方の誤り、口の事実と api の `tax`）、`tests/fixtures/税区分.book`（E014 の golden、英語と日本語）、`tests/ids.rs`（税の語で ledger の番号が変わらないこと）。
+- 確かめたこと：例とテストの帳簿の全部のコマンドの出力（277 回）と、例を七つの組み合わせに生成したファイル（72 個）を、替える前と後のバイナリで比べた。違ったのは、E014 が増えた `--help` の三つ（`check --help` の英語と日本語、知らないフラグに添える `--help`）と `explain --all` の四つ、新しいテストの帳簿 `税区分.book` の四つ（替える前は E001）だけで、生成したファイルは 72 個とも一バイトも変わらない。yuen の端になる chobo の定義の文（DESIGN 6.4）も、税の語を書かない帳簿では変わらない（`返金` は 1,206 バイトで `84e9ce254075c697` のまま）。
+
 ### D.10 rulec と dandori を `ritsu-proto` に
 
 二つの `src/proto.rs` を `ritsu-proto` に替える。rulec の契約の検査（コーパスと変異）、dandori の `connect`・`implements`・proto から作る型（`tests/protos.rs` と例）の結果が、替える前と同じであること。

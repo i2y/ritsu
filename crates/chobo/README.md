@@ -74,7 +74,7 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
   hint: write the move that puts into shop_balance(shop) first
 ```
 
-[docs/codes.md](docs/codes.md) has all 28 codes, as `chobo explain --all` prints them.
+[docs/codes.md](docs/codes.md) has all 29 codes, as `chobo explain --all` prints them.
 
 ## Two refunds at the same time
 
@@ -105,6 +105,23 @@ outcome 2:
 
 Whichever comes first is held, the other is refused, and a refund of the 10.00 left still goes
 through. Each database must answer one of these outcomes, and the tests see that it does.
+
+## Money with tax or without
+
+A unit named for a currency is money, and it may end with whether its amounts are with tax or
+without:
+
+```book
+unit 円 incl_tax
+```
+
+Inside the book nothing changes: amounts are counted, bounded and built as they are without it.
+It is for where an amount comes into the book from a rule or a workflow of the same toolchain.
+The book hands its units over as the units the rules use, so a unit with tax is a rule's
+`money[円, incl_tax]`: it is to take amounts with tax, a unit without tax amounts without, and a
+unit that says neither amounts that say neither, so that one account does not end up holding
+both. A unit that is not money takes neither (E014): `pcs` and `seats` are counts with a name and
+nothing else, never the same as each other, and `kg` is the kilogram the rules know.
 
 ## Targets
 
@@ -207,7 +224,8 @@ and prints a `SKIP:` line for each it does not find.
 ## Status
 
 Early. Not yet: changing the bound of an account kind that already has balances (a new kind and
-a transfer that moves the balance do it for now); dandori's side, a workflow that calls a book's
+a transfer that moves the balance do it for now); the check that holds an amount a rule hands over
+to the tax of the unit it goes into (the units carry the tax already); dandori's side, a workflow that calls a book's
 transfers as tasks and follows its holds as cases (`chobo api` writes the state machine for it);
 databases other than PostgreSQL and TigerBeetle; TigerBeetle in its production layout of six
 replicas (the tests use one, started with `--development`), and how much the IDs made from keys

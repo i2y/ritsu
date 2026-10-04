@@ -38,8 +38,12 @@ fn ids_match_the_table() {
     for (parts, want) in cases {
         assert_eq!(ids::id_hex(ids::id(parts)), *want, "{parts:?}");
     }
-    assert_eq!(ids::ledger(&Unit { name: "個".into(), scale: 0, line: 0, col: 0 }), 1653847866);
-    assert_eq!(ids::ledger(&Unit { name: "USD".into(), scale: 2, line: 0, col: 0 }), 1838891465);
+    let unit = |name: &str, scale: u32, tax: Option<ritsu_units::Tax>| Unit { name: name.into(), scale, tax, ty: chobo::model::unit_type(name, scale, tax).unwrap(), line: 0, col: 0 };
+    assert_eq!(ids::ledger(&unit("個", 0, None)), 1653847866);
+    assert_eq!(ids::ledger(&unit("USD", 2, None)), 1838891465);
+    // whether a unit is with tax or without is not the book's business, and not the ledger's:
+    // what a book builds does not change with it
+    assert_eq!(ids::ledger(&unit("USD", 2, Some(ritsu_units::Tax::Excl))), 1838891465);
     assert_eq!(ids::code("在庫", "transfer", "引当"), 47038);
     assert_eq!(ids::code("在庫", "account", "在庫"), 48630);
     // the ID of a room account from the ID of its account, as the client works it out
