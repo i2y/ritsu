@@ -1,7 +1,7 @@
 ---
 name: koyomi
 description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust and PostgreSQL. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W101-W202) has to be fixed; when such a rule has to be shown to the people who read it; or when its generated code has to be called.
-compatibility: Requires the `koyomi` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked koyomi`, or `ritsu` in its place for all seven languages, where it is run as `ritsu koyomi …`). `koyomi source fetch` and `koyomi source outdated` also need `curl`.
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run koyomi as `ritsu koyomi <command>`, or as `koyomi <command>` through a link to ritsu named for it. `ritsu koyomi source fetch` and `source outdated` also need `curl`.
 license: MIT OR Apache-2.0
 ---
 
@@ -25,7 +25,7 @@ front.
 
 # Working with koyomi
 
-Your part is to write the `.cal`, get it past `koyomi check`, show it to a person, and generate the
+Your part is to write the `.cal`, get it past `ritsu koyomi check`, show it to a person, and generate the
 code. Two things stay with people:
 
 - **what the terms and the calendar are**: which days are closed, which table of holidays, what a
@@ -33,9 +33,11 @@ code. Two things stay with people:
 - **the code around the generated functions**: where they are called, what an input outside the
   range means for the caller.
 
-Everything is reachable from the command line: `koyomi --help` lists the commands, `koyomi explain
-<CODE>` explains a diagnostic, and `koyomi check --format json` gives the diagnostics as data (§5).
-There is no step where you have to read koyomi's source.
+Run every command here as `ritsu koyomi <command>` (through a link to ritsu named koyomi,
+`koyomi <command>` is the same). Everything is reachable from the command line:
+`ritsu koyomi --help` lists the commands, `ritsu koyomi explain <CODE>` explains a diagnostic, and
+`ritsu koyomi check --format json` gives the diagnostics as data (§5). There is no step where you
+have to read koyomi's source.
 
 ## 1. The loop
 
@@ -45,21 +47,26 @@ There is no step where you have to read koyomi's source.
    person: every input in it will be computed.
 2. **Write the calendar**, or use one (`use calendar "calendars/<file>.cal"`): closed days of the
    week, days every year, a table of holidays pinned by its digest, given days, `open` days.
-   `koyomi source fetch` takes a table from its `url`, and `koyomi source pin` writes its digest.
+   `ritsu koyomi source fetch` takes a table from its `url`, and `ritsu koyomi source pin` writes its digest.
 3. **Write the dates file** (§2): `inputs`, the dates, one operation a line, `claims`, `examples`.
-4. **Check it:** `koyomi check <file.cal>`. A diagnostic comes with the input that gets there and
-   its computation, step by step; fix it (§4) and check again, until it prints
-   `<file.cal>: ok — …`. A warning does not stop anything, but it says something true.
-5. **Look at one input:** `koyomi eval <file.cal> <input>=<date>` prints every date of that input,
+4. **Check it:** `ritsu koyomi check <file.cal>`. A diagnostic comes with the input that gets there and
+   its computation, step by step; fix it (§4; `ritsu koyomi explain <CODE>` explains one code) and
+   check again, until it prints `<file.cal>: ok — …`. A warning does not stop anything, but it says
+   something true.
+5. **Look at one input:** `ritsu koyomi eval <file.cal> <input>=<date>` prints every date of that input,
    a step a line, and what each claim says of it.
-6. **Show it to a person:** `koyomi doc <file.cal> > <file>.md` (or `--format html`) writes the page
-   for the people who read the terms: every operation in words beside its line, the claims and their
+6. **Show it to a person:** `ritsu koyomi doc <file.cal> > <file>.md` (or `--format html`) writes the page
+   for people, for those who read the terms: every operation in words beside its line, the claims and their
    least room, the edge cases, the months with the holidays named and the failing input days
    marked. A file whose claims fail still gets its page; the failing days are the point of it.
-7. **Generate the code:** `koyomi gen <file.cal> --out generated` writes TypeScript, Python, Go,
-   Rust and SQL, each with a runner. `koyomi gen --check` in CI says when the code is stale.
-   `koyomi api <file.cal>` gives the functions, their inputs and ranges, and the signatures in each
+7. **Generate the code:** `ritsu koyomi gen <file.cal> --out generated` writes TypeScript, Python, Go,
+   Rust and SQL, each with a runner. `ritsu koyomi gen --check` in CI says when the code is stale.
+   `ritsu koyomi api <file.cal>` gives the functions, their inputs and ranges, and the signatures in each
    language, without reading the code. [generated-code.md](generated-code.md) says how to call it.
+8. **In a project with rules or workflows**, `ritsu check` checks the `.cal` files with the rest,
+   and across them: a rule input can take a date's days as its range (`range from koyomi`), and
+   where a workflow calls a date or gives its day to a rule, the days are held to the ranges
+   (ritsu's E202 and E205; the ritsu skill has them).
 
 ## 2. The language on one page
 
@@ -147,7 +154,7 @@ Ask instead of guessing:
 
 Ask with the input the check gives, in the reader's terms: "Received on 2026-05-01, the payment
 falls on 2026-07-31, 91 days later. The claim allows 60. Are the terms or the claim wrong?" The
-page `koyomi doc` writes shows the same days on a calendar, when a person would rather see them.
+page `ritsu koyomi doc` writes shows the same days on a calendar, when a person would rather see them.
 
 ## 4. From a diagnostic to a fix
 
@@ -169,7 +176,7 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
 | E001 to E006 | words, lines, the order of sections, indentation, dates that do not exist | what the message says |
 | E007 to E014 | names twice or undeclared, aliases, types, the one date input, ranges, dates that start from each other | what the message says |
 | E015 | a `use calendar` that cannot be used | the path is from the `.cal`'s directory |
-| E101 to E106 | a table's copy missing, unpinned, changed, unreadable, or outside its `covers` | `koyomi source fetch`, read what changed, `koyomi source pin` |
+| E101 to E106 | a table's copy missing, unpinned, changed, unreadable, or outside its `covers` | `ritsu koyomi source fetch`, read what changed, `ritsu koyomi source pin` |
 | E107 | a time zone's name as the offset | write `+09:00`; for a zone with daylight saving time, give dates only |
 | E108 to E111 | no business day; an operation needs a calendar; `at` needs an offset; a citation | what the message says |
 | E201, W201 | a missing day's handling not said, or said where it cannot happen | ask (§3), then write `else …`; or delete it |
@@ -186,13 +193,13 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
 
 ## 5. For a machine
 
-- `koyomi check --format json <file.cal>…` prints one JSON object a file:
+- `ritsu koyomi check --format json <file.cal>…` prints one JSON object a file:
   `{"file", "ok", "summary", "diagnostics": [{"code", "severity", "file", "line", "col",
   "message", "notes", "inputs", "steps", "fails", "fix"}]}`. `inputs` is the example's input as
-  `koyomi eval` takes it, `fails` every input it fails on (as runs of days), `fix` the line to
+  `ritsu koyomi eval` takes it, `fails` every input it fails on (as runs of days), `fix` the line to
   paste, when there is one.
-- `koyomi eval --format json` and `koyomi api` give the computation and the functions as JSON;
-  `koyomi vectors` gives every input's result as JSON Lines.
+- `ritsu koyomi eval --format json` and `ritsu koyomi api` give the computation and the functions as JSON;
+  `ritsu koyomi vectors` gives every input's result as JSON Lines.
 - The exit code is 0 with no error (warnings may be), 1 with one, and 2 for bad arguments or a file
   that cannot be read. An unknown flag is refused with 2, never ignored.
 - `--lang ja`, or `KOYOMI_LANG=ja`, gives the messages in Japanese. `check` never reads the
@@ -211,7 +218,7 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
 Each date is a function named by its alias, taking only the inputs it uses; a date with `at` has
 `<alias>_at`, giving its time in RFC 3339 UTC; a file with a calendar has `is_open`. An error has a
 kind: `range` (an input outside its range), `data` (a day the calendar does not know), `reject`,
-`date`. The runner beside each file reads `koyomi vectors` and prints what the functions give, so
+`date`. The runner beside each file reads `ritsu koyomi vectors` and prints what the functions give, so
 the code can be held to the reference interpreter wherever it is copied.
 
 ## 7. The files bundled with this skill

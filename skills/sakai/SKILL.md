@@ -1,7 +1,7 @@
 ---
 name: sakai
 description: Write, check and fix sakai files (`.ctx`), the checkable part of a context map — which bounded context owns each artifact, which relationships (conformist, anticorruption layer, customer and supplier, shared kernel, partnership, separate ways) let a reference cross a boundary, and how an anticorruption layer maps the enum values and terms that cross — held to real rules, workflows, calendars, books, `.proto` files and code. Use when a context map has to be written or changed as `.ctx` files; when a sakai diagnostic (E001-E502, W101-W402) has to be fixed; when the settings of import-linter, dependency-cruiser, ArchUnit or go-arch-lint have to be written from the map; or when the map's page has to be shown to the people who check what the code is to do.
-compatibility: Requires ritsu on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`), run as `ritsu sakai` or through a link named `sakai`. The import linters themselves run in the project's CI, not in sakai.
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run sakai as `ritsu sakai <command>`, or as `sakai <command>` through a link to ritsu named for it. The import linters themselves run in the project's CI, not in sakai.
 license: MIT OR Apache-2.0
 ---
 
@@ -20,7 +20,7 @@ Read them when you need them, not all up front.
 
 # Working with sakai
 
-Your part is to write the map, get it past `sakai check`, write the linters' settings and the page.
+Your part is to write the map, get it past `ritsu sakai check`, write the linters' settings and the page for people.
 Two things stay with people:
 
 1. **Where the boundaries are, and who owns each context.** Never invent a context, a relationship or an owner to make the check pass.
@@ -30,18 +30,18 @@ Two things stay with people:
 
 1. Read what is there: the directories, the `.proto` files, the rules, workflows, calendars and books. Each artifact must end up in exactly one context.
 2. Write the map (`map`), one context file per context (`context`), then the relationships, each in the downstream's file.
-3. Run the check and fix what it says, one diagnostic at a time, from the top.
-4. Write the settings of the import linters, and have CI run them with `sakai build … --check`.
-5. Write the page with `sakai doc`, and show it to the people who check what the code is to do.
+3. Run the check (`ritsu sakai check`, or `ritsu check` for the whole project) and fix what it says, one diagnostic at a time, from the top; `ritsu sakai explain <code>` says how.
+4. Write the settings of the import linters, and have CI run them with `ritsu sakai build … --check`.
+5. Write the page for people with `ritsu sakai doc`, and show it to the people who check what the code is to do.
 
 ```console
-$ sakai check examples/shop/shop.ctx
-$ sakai explain E401
-$ sakai build examples/shop/shop.ctx --target import-linter
-$ sakai doc examples/shop/shop.ctx --format html --out site
+$ ritsu sakai check examples/shop/shop.ctx
+$ ritsu sakai explain E401
+$ ritsu sakai build examples/shop/shop.ctx --target import-linter
+$ ritsu sakai doc examples/shop/shop.ctx --format html --out site
 ```
 
-Use `ritsu sakai` (or the link `sakai`) for a map that holds rules, calendars or workflows: the binary of sakai's own crate reads no other language and stops with E104.
+Run every command here as `ritsu sakai <command>` (through a link to ritsu named sakai, `sakai <command>` is the same): it reads the rules, calendars and workflows a map refers to in the same process, where sakai built alone from its crate reads no other language and stops with E104.
 Add `--lang ja` for Japanese.
 
 ## 2. The language on one page
@@ -103,7 +103,7 @@ separate ways from Billing
 
 ## 4. From a diagnostic to a fix
 
-`sakai explain <code>` (and `codes.md`) gives each code's cause, its fix and its smallest reproduction.
+`ritsu sakai explain <code>` (and `codes.md`) gives each code's cause, its fix and its smallest reproduction.
 The usual ones:
 
 | Code | What it means | What to do |
@@ -116,15 +116,15 @@ The usual ones:
 | E207 | a call to a service that is not an open host service | the upstream lists it under `open host service`, or the call goes |
 | E401 | an upstream value with no mapping | add the line the note shows, with the value the team decides |
 | E406, E407 | one word in two meanings crosses | rename, `as`, or map it in an anticorruption layer (ask) |
-| E502 | the linter's settings are not what the map writes | run `sakai build` again with the same `--lang`, and commit |
+| E502 | the linter's settings are not what the map writes | run `ritsu sakai build` again with the same `--lang`, and commit |
 
 Fix the first diagnostic first: an error of words or ownership stops what comes after it.
 
 ## 5. The linters and the page
 
-`sakai build --target import-linter|dependency-cruiser|archunit|go-arch-lint` writes the settings where the map's `code` line puts the language; CI runs the linter and `sakai build … --check`.
+`ritsu sakai build --target import-linter|dependency-cruiser|archunit|go-arch-lint` writes the settings where the map's `code` line puts the language; CI runs the linter and `ritsu sakai build … --check`.
 Run dependency-cruiser with `--output-type err`, and with TypeScript below 6 (with TypeScript 6 or later, dependency-cruiser 16 reads nothing and passes).
 `targets.md` has the settings and what each tool catches.
 
-`sakai doc` writes the page, Markdown with a Mermaid map or one HTML file, for those who run the business, those who run the systems, and the developers who read the code.
-`sakai export cml` writes the map for Context Mapper.
+`ritsu sakai doc` writes the page for people, Markdown with a Mermaid map or one HTML file, for those who run the business, those who run the systems, and the developers who read the code.
+`ritsu sakai export cml` writes the map for Context Mapper.

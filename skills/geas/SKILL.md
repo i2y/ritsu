@@ -1,7 +1,7 @@
 ---
 name: geas
-description: Hold code to claims a person has read, with geas. A `.geas` file holds claims about what a program does as anyone could observe it from outside (what a command prints and exits with, what an HTTP service answers, what a screen shows), and geas runs every claim against the real program, whatever language it is written in. Use when writing or changing code that a `.geas` claims file holds; when running the gate on a change (`geas check`, `geas drift`, `geas map` and `geas affected`); when a claim fails or a geas diagnostic (E001-E081, W060-W061) has to be fixed; or when behavior no claim covers has to be proposed to the person as new claims.
-compatibility: Requires the `geas` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked geas`, or `ritsu` in its place for all seven languages, where it is run as `ritsu geas …`), and whatever the project's own programs need to run. `geas map` records Python 3.12 and later, Node, Go built with `-cover`, and Rust built with `-C instrument-coverage` (with rustup's llvm-tools). A page in a browser needs Chrome or Chromium; a pixie target needs a built pixie app.
+description: Hold code to claims a person has read, with geas. A `.geas` file holds claims about what a program does as anyone could observe it from outside (what a command prints and exits with, what an HTTP service answers, what a screen shows), and geas runs every claim against the real program, whatever language it is written in. Use when writing or changing code that a `.geas` claims file holds; when running the gate on a change (`ritsu geas check`, `drift`, `map` and `affected`); when a claim fails or a geas diagnostic (E001-E081, W060-W061) has to be fixed; or when behavior no claim covers has to be proposed to the person as new claims.
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run geas as `ritsu geas <command>`, or as `geas <command>` through a link to ritsu named for it. The project's own programs need whatever they need to run. `ritsu geas map` records Python 3.12 and later, Node, Go built with `-cover`, and Rust built with `-C instrument-coverage` (with rustup's llvm-tools). A page in a browser needs Chrome or Chromium; a pixie target needs a built pixie app.
 license: MIT OR Apache-2.0
 ---
 
@@ -10,7 +10,7 @@ license: MIT OR Apache-2.0
 The project keeps a **claims file** (`*.geas`) beside its code, or a person wants one. Each claim
 says what the program does as anyone could see it from outside: what a command prints and exits
 with, what an HTTP service answers, what a screen shows to a screen reader. The person reads and
-accepts the claims; you write the code; `geas check` runs every claim against the real program and
+accepts the claims; you write the code; `ritsu geas check` runs every claim against the real program and
 says which hold.
 
 It does not apply to tests of internal functions: a claim never names a file, a function, a class,
@@ -36,31 +36,32 @@ holds the code to the claims. That split is the whole point, so keep to it.
 - **A failing claim is fixed in the code**, unless the person says the claim is wrong. A claim
   that cannot be true of any sensible program is a question for the person, not something to
   loosen.
-- **A missing claim is proposed, not written.** When `geas affected` lists changed code no claim
-  runs, when `geas drift` lists a change no claim covers, or when the person asks for behavior no
+- **A missing claim is proposed, not written.** When `ritsu geas affected` lists changed code no claim
+  runs, when `ritsu geas drift` lists a change no claim covers, or when the person asks for behavior no
   claim states, write the claim you propose, say why, and let the person accept it.
-- **A new baseline and a new mask are asked for.** `geas snap` changes what `drift` compares
+- **A new baseline and a new mask are asked for.** `ritsu geas snap` changes what `drift` compares
   against, and a `mask` line stops drift from looking at a field; both can hide a change, so the
   person decides.
 - **The files under `.geas/` are geas's.** The journal, the baseline and the record are written
   by geas; never edit them by hand.
 
-Everything is reachable from the command line: `geas --help` lists the commands, `geas explain
-<code>` explains a diagnostic, and the commands that report take `--json`. There is no step where
-you have to read geas's source.
+Run every command here as `ritsu geas <command>` (through a link to ritsu named geas,
+`geas <command>` is the same). Everything is reachable from the command line: `ritsu geas --help`
+lists the commands, `ritsu geas explain <code>` explains a diagnostic, and the commands that report
+take `--json`. There is no step where you have to read geas's source.
 
 ## 2. The loop
 
-1. **Check:** `geas check <spec.geas>` runs every claim. Read each `not ok` (§4), fix the code,
+1. **Check:** `ritsu geas check <spec.geas>` runs every claim. Read each `not ok` (§4), fix the code,
    and check again until every claim holds (exit 0).
-2. **Snap, once the person accepts the behavior:** `geas snap <spec.geas>` runs the claims and
+2. **Snap, once the person accepts the behavior:** `ritsu geas snap <spec.geas>` runs the claims and
    keeps every observation, not only what the checks look at, as the baseline in
    `.geas/<stem>.baseline.jsonl`. Ask before you snap.
 3. **On every later change:**
-   - `geas check <spec.geas>`: every claim still holds.
-   - `geas drift <spec.geas>`: what changed since the baseline. A change marked `[unclaimed]`
+   - `ritsu geas check <spec.geas>`: every claim still holds.
+   - `ritsu geas drift <spec.geas>`: what changed since the baseline. A change marked `[unclaimed]`
      is behavior no claim promises; tell the person, with a claim to add or a reason not to.
-   - `geas map <spec.geas>`, then `git diff | geas affected <spec.geas> -`: which claims the
+   - `ritsu geas map <spec.geas>`, then `git diff | ritsu geas affected <spec.geas> -`: which claims the
      change touches, and which changed lines no claim runs. `map` runs the claims with coverage
      on and records, for each claim, the lines it ran; `affected` reads the diff and that record
      and runs nothing. Run `map` on the changed code: added lines need a record of the code after
@@ -72,7 +73,8 @@ you have to read geas's source.
 
 `check`, `snap`, `drift` and `map` take several specs; `--jobs N` runs up to N claims at once
 (§8). Exit codes: 0 all held or nothing to report, 1 something failed or changed, 2 the spec, a
-file or the arguments are wrong.
+file or the arguments are wrong. In a project that also holds the other languages' files,
+`ritsu check` runs the claims of every `.geas` with the rest (the ritsu skill).
 
 ## 3. The language on one page
 
@@ -171,7 +173,7 @@ has every form, with what each one means.
 
 ## 4. Reading the answers
 
-`geas check` prints one line a claim, `ok` or `not ok`, then a summary. A failed check says what it
+`ritsu geas check` prints one line a claim, `ok` or `not ok`, then a summary. A failed check says what it
 expected and what came back, with the line of the spec and the run that gets there:
 
 ```text
@@ -188,7 +190,7 @@ as a diagnostic with its code, and the notes say what geas saw. A failed `screen
 screen it looked at, one node a line. With `--json`, the report is one object a spec:
 `{"geas":1,"ok":…,"file":…,"claims":[{"name","line","status","error","checks","run"}]}`.
 
-`geas drift` prints each change under the `when` it comes from: `+` appeared, `-` disappeared, `~`
+`ritsu geas drift` prints each change under the `when` it comes from: `+` appeared, `-` disappeared, `~`
 changed, then the tag. `[claimed — `geas check` is the authority]` means some check looks at that
 field; `[unclaimed]` means no claim promises anything about it:
 
@@ -197,7 +199,7 @@ claim "greets by name" when#1 api.get("/greet?name=Alice")
   + body json ".debug": appeared: {"handler":"greet_v2"}   [unclaimed]
 ```
 
-`geas affected` lists the claims the change touches, each with the changed lines it runs. Lines
+`ritsu geas affected` lists the claims the change touches, each with the changed lines it runs. Lines
 that every claim starting a target runs (imports, route tables) are listed once, under `every claim
 that starts` the target. Then come the changed code no claim runs, deleted files, files outside the
 record, and changes to the spec or its baseline. `removed 10-11 (next to lines they run)` is a
@@ -221,17 +223,17 @@ A diagnostic has a code, a place, notes (`= …`) and the run that gets there.
 | E012, E013 | another target's `when` between two pixie actions; an argument an action cannot take there | move the `when`; see [gui.md](gui.md) |
 | E030 to E033 | a program that would not start, a `run` over 5 s, a service that never opened its port, an HTTP exchange that failed | fix the program or the target's command; the notes hold its stderr |
 | E034 to E037 | no Chrome; an action the app refused; a page that did not load or settle; a GUI driver geas cannot read | the notes show the screen and what it could reach |
-| E050, E051 | no baseline, or one that cannot be read | ask the person, then `geas snap` |
-| E060 to E064 | no record, a record of another spec, a stale record, added lines with only a record of the code before, a diff that fits neither side | `geas map` on the code the diff ends at |
+| E050, E051 | no baseline, or one that cannot be read | ask the person, then `ritsu geas snap` |
+| E060 to E064 | no record, a record of another spec, a stale record, added lines with only a record of the code before, a diff that fits neither side | `ritsu geas map` on the code the diff ends at |
 | E065, E066 | a coverage tool missing or failing; a service that stopped without writing its record | [map.md](map.md) |
 | E080, E081 | arguments the command does not take; a file that cannot be read or written | `geas --help` |
 | W060, W061 | a target that gave `map` no record; a Rust profile from a program geas did not start | build it with coverage; start the binary itself |
 
-`geas explain <code>` prints when a code appears, what usually fixes it, and the smallest spec that
+`ritsu geas explain <code>` prints when a code appears, what usually fixes it, and the smallest spec that
 gives it; [codes.md](codes.md) has every one. `--lang ja` (or `GEAS_LANG=ja`) gives the messages in
 Japanese, for a person who reads them in Japanese.
 
-## 6. What `geas map` needs from each language
+## 6. What `ritsu geas map` needs from each language
 
 `map` sets every switch below on every process it starts, and each runtime picks up its own. A
 target does not say what it is written in.
@@ -298,7 +300,7 @@ other. A target whose claims share state geas cannot see (a file, a database) ne
 - **New claims.** For each line `affected` calls unclaimed and each unclaimed change from `drift`:
   the claim you propose, or why none is needed (logging, a refactor that changes nothing a person
   sees).
-- **A new baseline**, after a change the person has accepted: `geas snap` replaces what drift
+- **A new baseline**, after a change the person has accepted: `ritsu geas snap` replaces what drift
   compares against.
 - **A mask**, for a field that changes by nature (a date, a request id), with the drift that shows
   it.
@@ -316,8 +318,8 @@ service refuse it, or is the claim wrong?"
 | [commands.md](commands.md) | the commands, their options, exit codes, environment variables, and the files and JSON geas writes |
 | [codes.md](codes.md) | every diagnostic: when it appears, how to fix it, the smallest spec that gives it |
 | [gui.md](gui.md) | the screen, the actions, pixie, Chrome, and the driver protocol |
-| [map.md](map.md) | recording what each claim runs, `geas affected` in full, each language's needs, CI recipes |
-| [examples.md](examples.md) | the examples in the geas repository, and what each shows |
+| [map.md](map.md) | recording what each claim runs, `ritsu geas affected` in full, each language's needs, CI recipes |
+| [examples.md](examples.md) | the examples beside geas in the ritsu repository, and what each shows |
 
-`geas skill` prints this file, and `geas skill --install <dir>` writes the whole folder as
+`ritsu geas skill` prints this file, and `ritsu geas skill --install <dir>` writes the whole folder as
 `<dir>/geas/`.

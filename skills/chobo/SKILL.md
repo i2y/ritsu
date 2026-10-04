@@ -1,7 +1,7 @@
 ---
 name: chobo
 description: Write, check and build chobo books (`.book` files), a small language for the things counted and moved between accounts (stock, money, points, seats), whose only conditions are the lower and upper bounds of accounts, each kept in one write on PostgreSQL or TigerBeetle. Use when stock has to be reserved without selling more than there is, a wallet or points kept from going below 0, refunds kept within the sale, a payment split between parties all or none, or a hold that must be posted or voided; when a chobo diagnostic (E001-E061, W101-W107) has to be fixed; when a book has to be shown to the people who keep the accounts; or when a book has to be built for PostgreSQL or TigerBeetle and its client (TypeScript, Python or Go) called.
-compatibility: Requires the `chobo` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked chobo`, or `ritsu` in its place for all seven languages, where it is run as `ritsu chobo …`). The code it builds needs PostgreSQL, or TigerBeetle with its official client 0.17.9, in the program that calls it.
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run chobo as `ritsu chobo <command>`, or as `chobo <command>` through a link to ritsu named for it. The code it builds needs PostgreSQL, or TigerBeetle with its official client 0.17.9, in the program that calls it.
 license: MIT OR Apache-2.0
 ---
 
@@ -26,7 +26,7 @@ front.
 
 # Working with chobo
 
-Your part is to write the `.book`, get it past `chobo check`, and build it. Two things stay with
+Your part is to write the `.book`, get it past `ritsu chobo check`, and build it. Two things stay with
 people:
 
 - **the numbers and the names of the business**: the bounds, the reasons a refusal gives, what
@@ -34,8 +34,10 @@ people:
 - **the code around the book**: where the amounts come from, who posts and voids a hold, the
   connection to the database.
 
-Everything is reachable from the command line: `chobo --help` lists the commands, and
-`chobo check --format json` gives the diagnostics and the report as data (§6).
+Run every command here as `ritsu chobo <command>` (through a link to ritsu named chobo,
+`chobo <command>` is the same). Everything is reachable from the command line: `ritsu chobo --help`
+lists the commands, and `ritsu chobo check --format json` gives the diagnostics and the report as
+data (§6).
 
 ## 1. The loop
 
@@ -46,23 +48,28 @@ Everything is reachable from the command line: `chobo --help` lists the commands
    cannot be written; add the account that holds what the condition is about.
 3. **Write the book** (§2): the units, the accounts with their bounds, then the transfers with
    their keys, holds and moves.
-4. **Check it:** `chobo check <file.book>` until it prints `<file.book>: ok` with no warning.
+4. **Check it:** `ritsu chobo check <file.book>` until it prints `<file.book>: ok` with no warning;
+   fix each diagnostic as §5 says (`ritsu chobo explain <code>` for one code).
    Under it, the checker lists what each operation can be refused with; each reason is there
    because the checker found operations that get there, and `--format json` gives them.
-5. **Watch it run:** `chobo scenarios <file.book> --out <dir>` writes scenarios (`001.json`, …)
+5. **Watch it run:** `ritsu chobo scenarios <file.book> --out <dir>` writes scenarios (`001.json`, …)
    that take every bound before, at and past it, every key twice, every way a hold ends, and two
-   callers after the last of something; `chobo run <file.book> --scenario <dir>/001.json` plays
+   callers after the last of something; `ritsu chobo run <file.book> --scenario <dir>/001.json` plays
    one in the reference interpreter, and with two callers at once gives every way it can come
    out.
-6. **Show it to a person:** `chobo doc <file.book> > <file>.md` writes the page for whoever keeps
-   the accounts: the bounds, a chart of the moves, what each operation can be refused with, the
+6. **Show it to a person:** `ritsu chobo doc <file.book> > <file>.md` writes the page for people, for
+   whoever keeps the accounts: the bounds, a chart of the moves, what each operation can be refused with, the
    life of a hold, and every scenario with the balances after each step. `--format html` writes
    one page whose scenarios can be stepped through; `--lang ja` writes it in Japanese.
-7. **Build it:** `chobo build <file.book> --target <target> --out <dir>` (§7). A build stops when
+7. **Build it:** `ritsu chobo build <file.book> --target <target> --out <dir>` (§7). A build stops when
    a target cannot take the book (E060, E061).
 8. **Call it:** a refusal is an answer, not an exception: handle each reason the check listed. A
    retry with the same arguments is safe; the key makes it `done_before`. On PostgreSQL, call
    `expire()` from a job, one at a time.
+9. **In a project with workflows and rules**, `ritsu check` checks where a workflow calls the
+   book: an amount a rule gives a transfer stays within 0 to 2⁶³ − 1 (0 is taken), every reason
+   the transfer can be refused with is an error the task handles, and a hold has not always
+   expired by the time it is posted or voided (ritsu's E203, E204 and E206; the ritsu skill).
 
 ## 2. The language on one page
 
@@ -149,9 +156,9 @@ Ask instead of guessing:
 - **Who works out the amounts** of a transfer with more than one move (the shop's part and the
   fee), since chobo computes nothing.
 
-Ask with the scenario the checker or `chobo run` gives, in the reader's terms: "Two refunds of
+Ask with the scenario the checker or `ritsu chobo run` gives, in the reader's terms: "Two refunds of
 20.00 come at once for a sale of 30.00; one is held and the other refused with
-`refund_exceeds_sale`. Is that the rule, or should a refund wait?" The page of `chobo doc` shows
+`refund_exceeds_sale`. Is that the rule, or should a refund wait?" The page of `ritsu chobo doc` shows
 it step by step, when a person would rather see it.
 
 ## 5. From a diagnostic to a fix
@@ -186,16 +193,16 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
 | W104 | a hold that counts on what another of its moves puts in | have it there beforehand, or a second transfer after the post |
 | W105, W106 | something never used, a bound that never matters | remove it, or write what uses it |
 
-[codes.md](codes.md) has every code with the smallest book that shows it, as `chobo explain
+[codes.md](codes.md) has every code with the smallest book that shows it, as `ritsu chobo explain
 <code>` prints it.
 
 ## 6. For a machine
 
-- `chobo check --format json <file.book>…` prints `{"v": 2, "files": [...]}`: each file's
+- `ritsu chobo check --format json <file.book>…` prints `{"v": 2, "files": [...]}`: each file's
   `diagnostics` (`code`, `severity`, `file`, `line`, `col`, `message`, `notes`, `excerpt`,
   `operations`, `hint`, `fix`) and its `report` (each operation's `refusals`, each with an
   `example` that gets there).
-- `chobo api <file.book>` prints how to call the book, the reasons of each operation, the life of
+- `ritsu chobo api <file.book>` prints how to call the book, the reasons of each operation, the life of
   a hold as a state machine, how IDs are made, and what each target names things.
 - The exit code is 0 when there is no error (warnings may be), 1 when there is, and 2 for a
   mistake in how chobo is called or a file it cannot read. A flag chobo does not know is exit 2.
@@ -222,8 +229,8 @@ than the reference interpreter.
 |---|---|
 | [reference.md](reference.md) | the whole language: units, accounts and bounds, transfers, operations, keys, holds, versions |
 | [formats.md](formats.md) | the JSON of scenarios, results, `check --format json`, `api` and `run --show` |
-| [targets.md](targets.md) | what `chobo build` writes for PostgreSQL and TigerBeetle, and how to call it |
-| [codes.md](codes.md) | every diagnostic code, as `chobo explain --all` prints it |
+| [targets.md](targets.md) | what `ritsu chobo build` writes for PostgreSQL and TigerBeetle, and how to call it |
+| [codes.md](codes.md) | every diagnostic code, as `ritsu chobo explain --all` prints it |
 
 They are copies of the pages under `crates/chobo/docs/` in <https://github.com/i2y/ritsu>, where
 the examples and their pages are too.

@@ -1,7 +1,7 @@
 ---
 name: rulec
 description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E065, E101-E130, W105, W110, W111, W114-W127) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
-compatibility: Requires the `rulec` binary on PATH (`brew install i2y/tap/rulec`, or https://i2y.github.io/rulec/install/).
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
 
@@ -20,13 +20,10 @@ keeps the state. It does **not** apply to running a workflow, to judgements abou
 scoring and optimisation. Flatten collection facts at the boundary and pass the scalar in;
 keep iteration in the caller.
 
-`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm.
-A language only goes in once its output can be held against the reference evaluator byte for
-byte, so whatever `rulec gen` writes is covered by `rulec test`.
-
-The files bundled with this skill are listed under §7 at the end: read them on demand, not
-all up front. Every diagnostic is `rulec explain <CODE>`, which is always current, so none of
-them are bundled here.
+Every command here is rulec's: run it as `ritsu rulec <command>` (through a link to ritsu named
+rulec, `rulec <command>` is the same). Whatever `gen` writes is held to the reference evaluator
+byte for byte by `test`. The files bundled with this skill are listed under §7: read them on
+demand. Every diagnostic is `ritsu rulec explain <CODE>`, always current, so none are bundled.
 
 ---
 
@@ -176,6 +173,10 @@ A few shapes are worth knowing before the first draft:
   agree, a value that no row names and no `default` marks is E033 — not the warning W111, because
   a value that arrived through the contract is a change nobody has read yet, and a table with a
   `-` row would pass completeness while the new value quietly takes the default amount.
+- **A place is an enum rulec has.** `import std/<country>/<kind>` brings in a country's first-level
+  divisions (`std/us/states`, `std/jp/prefectures`, … in [reference.md](reference.md)); `import std/都道府県` spells Japan's in Japanese.
+- **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
+  `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 
 When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first draft from
 the workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first
@@ -316,7 +317,7 @@ dependencies; `proofs/` proves in Lean 4 that those checks imply the claims and 
 Runs every generated language over the vectors and compares them with the reference
 evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
 `node`, `rustc`, `ruby`, `php`, `go`, `swiftc` and a JDK, plus the `wasm32-unknown-unknown` target for the
-Wasm side, `numpy` under `python3` for the NumPy one, a `psql` that reaches a PostgreSQL for the function beside the query, and, under `--proofs`, `kani` for the proof harnesses `gen` writes beside the `rustc` module (§15.95 — that pass is not vectors: it holds the generated code over **every** input in the declared domain, and costs seconds per rule where the vectors cost milliseconds, which is why it is asked for), and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
+Wasm side, `numpy` under `python3` for the NumPy one, a `psql` that reaches a PostgreSQL for the function beside the query, and, under `--proofs`, `kani` for the proof harnesses `gen` writes beside the `rustc` module (that pass is not vectors: it holds the generated code over **every** input in the declared domain, and costs seconds per rule where the vectors cost milliseconds, which is why it is asked for), and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
 skipped and **`--require-all` fails when any was** — that is the form for CI, where green has
 to mean the agreement held across all of them.
 
@@ -324,7 +325,7 @@ to mean the agreement held across all of them.
 
 ```yaml
 - uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
-- uses: i2y/rulec@v0.22.1                     # the release binary, verified against its checksum
+- uses: i2y/ritsu@v0.23.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
@@ -362,15 +363,14 @@ what gets posted and `--terse` keeps record values out; [formats.md](formats.md)
 
 ### For people: `rulec doc`
 
-`rulec doc <file> --lang ja` renders the rule as markdown with the facts the checker knows
-that the text does not show — that a group of six values and its complement of 41 really do
-cover all 47, which rows shadow which, where a rounding was assumed rather than sourced. It
-is rendered in CI and pasted into the PR, never committed: a stale rendering that still looks
-authoritative is the danger it is designed against. `--format html` renders the same document
-as one page with a form on it: a reader types a case, the rows that matched light up, the
-outputs appear, and the line the generated code would log is shown — it is the generated
-JavaScript itself that runs, so the page says nothing the code does not. Same rule: built in
-CI per change, never committed.
+`rulec doc <file> --lang ja` renders the page for people: the rule in markdown with the facts the
+checker knows that the text does not show — that a group of six values and its complement of 41
+really do cover all 47, which rows shadow which, where a rounding was assumed rather than sourced.
+`--format html` renders the same page with a form on it: a reader types a case, the rows that
+matched light up, the outputs appear, and the line the generated code would log is shown — it is
+the generated JavaScript itself that runs, so the page says nothing the code does not. Either is
+rendered in CI per change and pasted into the PR, never committed: a stale rendering that still
+looks authoritative is the danger it is designed against.
 
 ### For the customer: `rulec doc --audience customer`
 
@@ -494,6 +494,6 @@ overrule them will see them.
 | [formats.md](formats.md) | every machine-readable format: `--format json`, vectors, fixtures, the manifest, the adapter protocol |
 | [generated-code.md](generated-code.md) | the shape and guarantees of the generated code in each language, and how to call it |
 | [backends.md](backends.md) | targeting a language rulec does not generate, without losing the comparison |
-| `rulec explain <CODE>` | one diagnostic: when it appears, how to fix it, a runnable reproduction. `--all` for every one, `--format json` for data |
+| `ritsu rulec explain <CODE>` | one diagnostic: when it appears, how to fix it, a runnable reproduction. `--all` for every one, `--format json` for data |
 | <https://github.com/i2y/ritsu/tree/main/crates/rulec> | the source and the design document, in the ritsu repository |
 | <https://i2y.github.io/rulec/> | the documentation site: the tour and the worked rules written for a person — English, and Japanese under `/ja/` |

@@ -1,7 +1,7 @@
 ---
 name: rulec
 description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E065, E101-E130, W105, W110, W111, W114-W127) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
-compatibility: Requires the `rulec` binary on PATH (`brew install i2y/tap/rulec`, or https://i2y.github.io/rulec/install/).
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
 
@@ -20,13 +20,10 @@ keeps the state. It does **not** apply to running a workflow, to judgements abou
 scoring and optimisation. Flatten collection facts at the boundary and pass the scalar in;
 keep iteration in the caller.
 
-`rulec gen` writes Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm.
-A language only goes in once its output can be held against the reference evaluator byte for
-byte, so whatever `rulec gen` writes is covered by `rulec test`.
-
-The files bundled with this skill are listed under §7 at the end: read them on demand, not
-all up front. Every diagnostic is `rulec explain <CODE>`, which is always current, so none of
-them are bundled here.
+Every command here is rulec's: run it as `ritsu rulec <command>` (through a link to ritsu named
+rulec, `rulec <command>` is the same). Whatever `gen` writes is held to the reference evaluator
+byte for byte by `test`. The files bundled with this skill are listed under §7: read them on
+demand. Every diagnostic is `ritsu rulec explain <CODE>`, always current, so none are bundled.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: dandori
 description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents, TypeSafe's Jev, koyomi's dates, chobo's books and code of your own, checked before they run and built for Temporal (TypeScript, Python or Go), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W032, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
-compatibility: Requires the `dandori` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked dandori`). A workflow that uses rules (`use rule`), dates (`use dates`) or books (`use book`) runs as `ritsu dandori`, which reads them with rulec, koyomi and chobo in the same process (the package `ritsu` in the command above installs it).
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run dandori as `ritsu dandori <command>`, or as `dandori <command>` through a link to ritsu named for it. Either way the rules (`use rule`), dates (`use dates`) and books (`use book`) a workflow uses are read with rulec, koyomi and chobo in the same process.
 license: MIT OR Apache-2.0
 ---
 
@@ -26,7 +26,7 @@ front.
 
 # Working with dandori
 
-Your part is to write the `.flow`, get it past `dandori check`, and build it. Two things stay with
+Your part is to write the `.flow`, get it past `ritsu dandori check`, and build it. Two things stay with
 people:
 
 - **what the other systems guarantee**: whether a call can be repeated safely, which errors it
@@ -35,11 +35,14 @@ people:
 - **the platform and the code around the workflow**: which platform runs it, the credentials, and
   the code of the tasks that are yours to write.
 
-Everything is reachable from the command line: `dandori --help` lists the commands, and
-`dandori check --format json` gives the diagnostics as data (§5). There is no step where you have
-to read dandori's source. For a workflow that uses rules, dates files or books, run every command
-as `ritsu dandori <command>` (`ritsu dandori check …`): it reads them in the same process, and the
-`dandori` binary alone says to run it that way (E018).
+Run every command here as `ritsu dandori <command>` (through a link to ritsu named dandori,
+`dandori <command>` is the same). It reads the rules, dates files and books a workflow uses in the
+same process; dandori built alone from its crate reads none of them and says so (E018). Everything
+is reachable from the command line: `ritsu dandori --help` lists the commands, and
+`ritsu dandori check --format json` gives the diagnostics as data (§5). There is no step where you
+have to read dandori's source. In a project with rules, dates or books, `ritsu check` checks the
+`.flow` files with them and across them: whether a call keeps a rule's preconditions, a date's days,
+a transfer's amounts, refusals and holds (the ritsu skill has the codes).
 
 ## 1. The loop
 
@@ -47,27 +50,30 @@ as `ritsu dandori <command>` (`ritsu dandori check …`): it reads them in the s
    in other systems whose state it moves (a PaymentIntent, an order). Settle the platform (§6);
    Temporal is the main one.
 2. **Write the `.flow`** (§2): the types, the tasks and the cases first, then the flow.
-3. **Check it:** `dandori check <file.flow>`. Every diagnostic comes with the run that gets there;
-   fix it (§4) and check again, until it prints `<file.flow>: ok`. A warning does not stop a
-   build, but it says something true about the workflow.
-4. **Watch it run:** `dandori scenarios <file.flow> --out <dir>` writes scenarios (`001.json`,
+3. **Check it:** `ritsu dandori check <file.flow>`. Every diagnostic comes with the run that gets there;
+   fix it (§4; `ritsu dandori explain <CODE>` explains one code) and check again, until it prints
+   `<file.flow>: ok`. A warning does not stop a build, but it says something true about the workflow.
+4. **Watch it run:** `ritsu dandori scenarios <file.flow> --out <dir>` writes scenarios (`001.json`,
    `002.json`, …) that together take every arm, every handler of an error, and every way a case
-   can move. `dandori run <file.flow> --scenario <dir>/001.json` plays one in the reference
+   can move. `ritsu dandori run <file.flow> --scenario <dir>/001.json` plays one in the reference
    interpreter and prints each call with its answer, and how the run ended.
-5. **Show it to a person:** `dandori doc <file.flow> > <file>.md` draws the flow as Mermaid
+5. **Show it to a person:** `ritsu dandori doc <file.flow> > <file>.md` draws the flow as Mermaid
    charts, with a table of every call (what it calls, its retries, where each of its errors goes)
    and of every way the workflow can end, with the state each case is left in, and the rules it
-   calls as `rulec doc` renders them. Put it in the pull request, where GitHub draws the charts, for
+   calls as `ritsu rulec doc` renders them, each a page for people. Put it in the pull request, where GitHub draws the charts, for
    the person who reviews the workflow. `--format html` writes one page on which each scenario
    lights up the way its run goes, and each rule's page opens with a case to try on it.
    [diagrams.md](diagrams.md) says what is on the picture.
-6. **Build it:** `dandori build <file.flow> --target temporal --out <dir>`. A build refuses what its
+6. **Build it:** `ritsu dandori build <file.flow> --target temporal --out <dir>`. A build refuses what its
    platform cannot do (E050) and a run that can outgrow the platform (E040).
 7. **Wire it up:** write the tasks that are yours (the `OwnTasks` the generated code asks for), give
    the `Transport` (`io.ts`, `io.py`) its credentials, and start the generated worker, or deploy what
    the target wrote. When the
-   workflow calls rules, `rulec gen <rule> --out rulec` writes the code the generated wrappers
-   import. [platforms.md](platforms.md) says what each target writes.
+   workflow calls rules, `ritsu rulec gen <rule> --out rulec` writes the code the generated wrappers
+   import (`ritsu gen` writes a whole project as one package instead). A precondition of a rule
+   that `ritsu check` could not decide (its W201) is checked by the built workflow when it runs,
+   and a run that breaks it fails with `Dandori.BrokenPrecondition`.
+   [platforms.md](platforms.md) says what each target writes.
 
 ## 2. The language on one page
 
@@ -338,7 +344,7 @@ Ask instead of guessing:
 
 Ask with the run the checker gives, in the reader's terms: "If the card is declined, the workflow
 fails with the PaymentIntent still requires_payment_method. Should it cancel the PaymentIntent
-first, or hand it to staff as it is?" The page `dandori doc --format html` writes lights that run
+first, or hand it to staff as it is?" The page `ritsu dandori doc --format html` writes lights that run
 up on the picture, when a person would rather see it.
 
 ## 4. From a diagnostic to a fix
@@ -386,23 +392,22 @@ code dandori writes around the rule uses already (`rules`, `args`, `out`, `activ
 `ctx`, …), two rules of one alias, and a task named `rule_<rule>`: change the alias in the rule's
 file, or rename the task.
 
-`dandori explain <CODE>` prints one code's page: when it comes, how to fix it, and the smallest
+`ritsu dandori explain <CODE>` prints one code's page: when it comes, how to fix it, and the smallest
 `.flow` that gets it. [codes.md](codes.md) has the whole list, and [checks.md](checks.md) what the
 checker looks at.
 
 ## 5. For a machine
 
-- `dandori check --format json <file.flow>…` prints one JSON object per file, one after another:
+- `ritsu dandori check --format json <file.flow>…` prints one JSON object per file, one after another:
   `{"file": …, "diagnostics": [{"code", "severity", "line", "col", "message", "notes", "path"}]}`,
   where `path` is the run that gets there, as `[{"line", "step"}]`.
 - The exit code is 0 when there is no error (warnings may be), 1 when there is, and 2 for bad
   arguments or a file that cannot be read.
 - `--lang ja`, or `DANDORI_LANG=ja`, gives the messages in Japanese.
-- `dandori explain --all --format json` prints every code as `[{"code", "severity", "title",
+- `ritsu dandori explain --all --format json` prints every code as `[{"code", "severity", "title",
   "when", "fix", "repro", "related"}]`, where `repro` holds the files of the smallest example.
 - A workflow that uses rules, dates files or books (`use rule`, `use dates`, `use book`) runs as
-  `ritsu dandori <command>`, which reads them in the same process; the `dandori` binary alone reads
-  none of them.
+  `ritsu dandori <command>` (or through the link `dandori`), which reads them in the same process.
 
 ## 6. Platforms
 
@@ -431,7 +436,7 @@ written for Temporal, for AWS and for pydantic-graph, and one that runs as it is
 | [dates-and-books.md](dates-and-books.md) | koyomi's dates and chobo's books: calling a date, `now`, a book's operations, a hold as a case, what each platform writes |
 | [checks.md](checks.md) | what the checker looks at, with a diagnostic |
 | [codes.md](codes.md) | every diagnostic code and what it finds |
-| [diagrams.md](diagrams.md) | `dandori doc`: the workflow drawn for the person who reviews it |
+| [diagrams.md](diagrams.md) | `ritsu dandori doc`: the workflow drawn for the person who reviews it |
 | [commands.md](commands.md) | the commands, the flags, the exit codes |
 | [platforms.md](platforms.md) | what each target writes and how it runs |
 | [examples.md](examples.md) | the six examples and how their versions differ |

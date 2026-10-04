@@ -1,7 +1,7 @@
 ---
 name: ritsu
 description: Work on a project that holds files of more than one of ritsu's seven small languages, which are rules (`.rule`, rulec), workflows (`.flow`, dandori), dates (`.cal`, koyomi), ledgers (`.book`, chobo), claims about code (`.geas`, geas), requirements and their sources (`.req`, yuen) and maps of bounded contexts (`.ctx`, sakai). `ritsu check` checks each file with its own language and then across them, which shows that a workflow's call keeps a rule's preconditions, that the days a date comes to fit a rule's range, that a rule's output is an amount a ledger takes, and that a hold has not always expired by the time it is posted. Use when a project has files of two or more of these languages, when `ritsu check` prints a diagnostic of ritsu's own (E101, E201-E206, W201-W206), when a workflow has to be run with its rules, dates and books computed, or when one package of TypeScript, Python or Go has to be generated for the whole project. To write the files of one language, read that language's own skill.
-compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`). That installs `ritsu` alone, so a language's own command is `ritsu <language> …`; a release archive also holds a link to it named for each language (`rulec`, `dandori`, …).
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`), which runs each language as `ritsu <language> …`; a link to ritsu named for a language (`rulec`, `dandori`, …), as a release archive holds, runs the same. `ritsu skills install` writes the eight skills into a project's `.claude/skills/`.
 license: MIT OR Apache-2.0
 ---
 
@@ -45,15 +45,18 @@ and bounds are, which warnings to leave, and what a fix would change in the mean
    many checks between the languages were made and how many could not be decided (§2).
 3. **Fix what a language says** with that language's skill. A diagnostic's heading names the tool,
    `error[rulec E101]`, because every language numbers its own codes: `ritsu rulec explain E101`
-   explains that one (`rulec explain E101` is the same where the link `rulec` exists).
+   explains that one (through a link to ritsu named rulec, `rulec explain E101` is the same).
 4. **Fix what ritsu says across the languages** (§3). `ritsu explain E201` explains one with the
    smallest files that print it.
 5. **Check again**, until it ends `all pass`. A warning does not fail the check; it says what could
    not be decided, and why.
 6. **Then run and generate**: `ritsu run` plays a workflow with its rules, dates and books worked
-   out (§4); `ritsu gen [<path>...]` writes one package for the whole project (§4); each
-   language's pages (`rulec doc`, `dandori doc`, `koyomi doc`, `chobo doc`, `yuen trace`) are for
-   whoever has to understand what the code is to carry out and check it against what they know.
+   out (§4); `ritsu gen [<path>...]` writes one package for the whole project (§4); the pages
+   for people that the languages write (`rulec doc`, `dandori doc`, `koyomi doc`, `chobo doc`,
+   `yuen doc`, `sakai doc`, each run as `ritsu <language> doc`) are for whoever has to understand
+   what the code is to carry out and check it against what they know.
+7. **Have a person confirm it.** Hand those pages to the people who own what they say (§7). What
+   they find wrong you fix in the file of its language, and the loop starts again.
 
 ## 2. Reading what `ritsu check` prints
 
@@ -95,7 +98,7 @@ comes with an example that breaks it; a warning says what could not be decided.
 |---|---|---|
 | E101 | a `.proto` of the project does not read as proto3 | correct it where it points; a file `buf build` builds, ritsu reads |
 | E201 | a workflow's call of a rule can give it values that break one of its preconditions (a `constraint`), or a koyomi date's days one of the rule's | branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or of a task's result); if the precondition is what is wrong, correct the rule's `constraint` |
-| W201 | whether a call keeps a precondition cannot be decided: a value comes from a place with no range, or the precondition bounds a total or a length | give the place a range; where none can be given, leave it, and the workflow's code checks it when it runs |
+| W201 | whether a call keeps a precondition cannot be decided: a value comes from a place with no range, or the precondition bounds a total or a length | give the place a range; where none can be given, leave it: the workflow `ritsu dandori build` writes checks it when it runs, and fails a run that breaks it with `Dandori.BrokenPrecondition` |
 | E202 | the days a koyomi date comes to fall outside the range of the rule input they are given to | widen the input's range, or make it `range from koyomi`, so that koyomi's days are the range |
 | W202 | whether those days stay inside the range cannot be decided: the value can also come from an input, a task's answer or `now` | give the input days of koyomi dates only; or narrow the inputs of its file |
 | E203 | a rule's output, given to a chobo transfer as its amount, can be below 0 or above 2⁶³ − 1 (chobo takes 0 to 2⁶³ − 1) | make the amounts 0 or more (a negative one, a refund say, is a transfer the other way), or branch before the transfer |
@@ -168,9 +171,10 @@ that language's code alone (`rulec gen`, `koyomi gen`, `chobo build`, `dandori b
 ## 5. Which skill to read
 
 Each language has a skill of its own, with the language on one page, what to ask a person, and the
-fix for each of the language's own diagnostics. They are in this repository at the paths below;
-copy the folders you need into `~/.claude/skills/`, or a project's `.claude/skills/`, beside this
-one.
+fix for each of the language's own diagnostics. `ritsu skills install` writes all eight into the
+project's `.claude/skills/` (`--user` for `~/.claude/skills/`, `--dir <dir>` for another agent's
+folder; name the ones you want, `ritsu skills install rulec dandori`). They are also in ritsu's
+repository at the paths below, to copy beside this one.
 
 | Language | Files | Skill | Read it to |
 |---|---|---|---|
@@ -186,10 +190,11 @@ one.
 
 `ritsu <language> …` is that language's own command, with the languages it reads joined in the same
 process. `dandori`, `yuen` and `sakai` read others, so a command of theirs on a file that uses
-another language's files is run as `ritsu dandori …`, `ritsu yuen …` or `ritsu sakai …`. Installed
-alone, each reads no other language and says so: dandori's E018, yuen's E206 and sakai's E104 name
-the command to run instead. `rulec` reads koyomi's days (`range from koyomi`), so
-`ritsu rulec check` is what checks such a rule.
+another language's files is run as `ritsu dandori …`, `ritsu yuen …` or `ritsu sakai …`. A link to
+ritsu named for the language does the same. Built alone from its own crate, each reads no other
+language and says so: dandori's E018, yuen's E206 and sakai's E104 name the command to run
+instead. `rulec` reads koyomi's days (`range from koyomi`), so `ritsu rulec check` is what checks
+such a rule.
 
 ## 7. What stays with people
 
@@ -201,7 +206,10 @@ the command to run instead. `rulec` reads koyomi's days (`range from koyomi`), s
 - **What a fix would change.** E201's other fix, correcting a rule's `constraint`, changes what the
   rule promises everyone who calls it; E206's, a longer hold, changes how long stock or money is
   set aside.
-- **Reading the pages.** The pages the languages draw are for whoever has to understand what the
-  code is to carry out and check it against what they know: the people who run the business,
+- **Reading the pages.** The pages for people that the languages write are for whoever has to
+  understand what the code is to carry out and check it against what they know: the people who run the business,
   finance and legal, operators and the developers reviewing the code. Hand them the page; what they
-  find wrong is for you to fix.
+  find wrong is for you to fix. ritsu's site also runs ritsu in the browser
+  (<https://i2y.github.io/ritsu/playground/>): a person can open a project there and see what
+  `ritsu check` says, the generated code and the pages for people, with nothing installed and
+  nothing sent anywhere.

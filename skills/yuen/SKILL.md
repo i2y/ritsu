@@ -1,7 +1,7 @@
 ---
 name: yuen
 description: Write and check yuen files (`.req`), which say where each requirement comes from — an article of a law (e-Gov or the eCFR), a file, or a person's decision — who owns it, what meets it (a rulec rule, a koyomi date, a chobo account or transfer, a dandori workflow, a `.proto`, a file of code) and what checks it (a geas or koyomi claim, a tool's own check), with each link recorded under the hashes of its two ends when a person looked. Use when a requirement and its provenance have to be written or changed as a `.req`; when `yuen check` stops on a yuen diagnostic (E001-E409, W101-W401), above all a mark (E301-E304) that shows what changed; when a diff has to be traced to the requirements and owners it touches; or when the page of a project has to be made for the people who check what the code is meant to do.
-compatibility: Requires `ritsu` on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run yuen as `ritsu yuen`. `yuen source fetch` and `yuen source outdated` also need `curl`.
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run yuen as `ritsu yuen <command>`, or as `yuen <command>` through a link to ritsu named for it. `ritsu yuen source fetch` and `source outdated` also need `curl`.
 license: MIT OR Apache-2.0
 ---
 
@@ -20,8 +20,9 @@ dandori or the code itself. yuen never reads what a requirement means.
 # Working with yuen
 
 Run yuen as `ritsu yuen <command>`, so the other languages a project names are read in the same
-process (`yuen`, the link ritsu installs, is the same). Give `check` one project: a `.req`, or a
-directory of them.
+process (through a link to ritsu named yuen, `yuen <command>` is the same). Give `check` one
+project: a `.req`, or a directory of them. In a project with the other languages' files,
+`ritsu check` checks the `.req` files with the rest.
 
 ## 1. The loop
 
@@ -34,8 +35,8 @@ directory of them.
 4. **The person looks.** If they ask, run `ritsu yuen review <path> --at <file.req>:<line> --by
    <their role>` for exactly what they looked at, so the record carries their role and today's
    date.
-5. **`ritsu yuen check`** again, and **`ritsu yuen doc`** for the people who have to understand and
-   check what the code is meant to do.
+5. **`ritsu yuen check`** again, and **`ritsu yuen doc`**, the page for people: for those who have
+   to understand and check what the code is meant to do.
 
 When code changes, `ritsu yuen affected <path> --diff <file>` answers which requirements the diff
 touches and whom to ask (the owners), following the code through geas's records to the claims.
@@ -70,7 +71,7 @@ requirement extinguisher_distance
   requirement in order: `text`, `in force`, `owner`, `replaces`, `from`, `decided`, `satisfied
   by`/`not satisfied`, `verified by`/`not verified`.
 - **Sources**: `law "<e-Gov ID>" asof <date>` or `law ecfr "<title> CFR <part>" asof <date>`, an
-  article pinned per line (`yuen source fetch` copies, `yuen source pin` writes the pins); `file
+  article pinned per line (`ritsu yuen source fetch` copies, `ritsu yuen source pin` writes the pins); `file
   "<path>" sha256:<16>`; or borrowed from a rule or a calendar that already pins it:
   `source 民法 = koyomi "civil_code_period_end.ja.cal" source 民法`. Borrow rather than copy twice.
 - **Namings**: `<tool> "<path>" [<kind> <name>]`, the path from the `.req`'s directory:
@@ -81,7 +82,7 @@ requirement extinguisher_distance
   (`rulec "x.rule"`), or a test file.
 - A name that is not ASCII carries an alias: `requirement 満了日_142条(last_day_142)`. Versions
   `v1`, `v2` each have `in force`, back to back with no gap.
-- Never write `reviewed` or `approved` lines by hand, nor a hash: `yuen review` writes them.
+- Never write `reviewed` or `approved` lines by hand, nor a hash: `ritsu yuen review` writes them.
 
 The whole language is in [reference.md](reference.md).
 
@@ -94,9 +95,9 @@ Ask; do not guess:
 - **the owner**, a declared role;
 - **the reason for a waiver** (`not satisfied` / `not verified`): who accepts that nothing meets or
   checks it, and why;
-- **who looked**: the role passed to `yuen review --by`.
+- **who looked**: the role passed to `ritsu yuen review --by`.
 
-**Do not run `yuen review` on your own judgment**, not even to clear a mark you are sure about. A
+**Do not run `ritsu yuen review` on your own judgment**, not even to clear a mark you are sure about. A
 record says that a person, in that role, looked at both ends on that day; written by an agent, it
 says something that did not happen and silences the check that exists to make a person look. Run
 it only when the person who looked asks, with their role, and only for what they looked at (`--at`
@@ -146,9 +147,11 @@ the decision changes is theirs to say.
 
 `ritsu yuen check --format json` gives one object with the diagnostics and their diffs;
 `ritsu yuen api` gives the whole graph (requirements, links and their states, artifacts, scopes);
-`ritsu yuen trace --format json` and `ritsu yuen affected --format json` give their answers as
-JSON. Exit codes: 0 no errors, 1 errors (a mark is one), 2 bad arguments, a file that cannot be
-read, or a language not joined.
+`ritsu yuen trace --format json` and `ritsu yuen affected --format json` give their answers as JSON.
+`ritsu yuen export prov <path>` writes the project as W3C PROV (PROV-N, or `--format json`), its
+words under `https://i2y.github.io/ritsu/ns/yuen#`, where opening one shows what it means;
+`ritsu yuen export reqif <path>` writes ReqIF 1.2 for requirements tools. Exit codes: 0 no errors, 1
+errors (a mark is one), 2 bad arguments, a file that cannot be read, or a language not joined.
 
 ## 6. The files bundled with this skill
 

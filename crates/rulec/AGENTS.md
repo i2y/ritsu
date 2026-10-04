@@ -144,6 +144,10 @@ A few shapes are worth knowing before the first draft:
   agree, a value that no row names and no `default` marks is E033 — not the warning W111, because
   a value that arrived through the contract is a change nobody has read yet, and a table with a
   `-` row would pass completeness while the new value quietly takes the default amount.
+- **A place is an enum rulec has.** `import std/<country>/<kind>` brings in a country's first-level
+  divisions (`std/us/states`, `std/jp/prefectures`, … in [docs/reference.md](docs/reference.md)); `import std/都道府県` spells Japan's in Japanese.
+- **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
+  `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 
 When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first draft from
 the workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first
@@ -284,7 +288,7 @@ dependencies; `proofs/` proves in Lean 4 that those checks imply the claims and 
 Runs every generated language over the vectors and compares them with the reference
 evaluator, byte for byte. This is the only step that reaches outside: it wants `python3`,
 `node`, `rustc`, `ruby`, `php`, `go`, `swiftc` and a JDK, plus the `wasm32-unknown-unknown` target for the
-Wasm side, `numpy` under `python3` for the NumPy one, a `psql` that reaches a PostgreSQL for the function beside the query, and, under `--proofs`, `kani` for the proof harnesses `gen` writes beside the `rustc` module (§15.95 — that pass is not vectors: it holds the generated code over **every** input in the declared domain, and costs seconds per rule where the vectors cost milliseconds, which is why it is asked for), and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
+Wasm side, `numpy` under `python3` for the NumPy one, a `psql` that reaches a PostgreSQL for the function beside the query, and, under `--proofs`, `kani` for the proof harnesses `gen` writes beside the `rustc` module (that pass is not vectors: it holds the generated code over **every** input in the declared domain, and costs seconds per rule where the vectors cost milliseconds, which is why it is asked for), and skips-and-reports the side whose toolchain is missing. A skipped language narrows what the run proved, so the summary says how many were
 skipped and **`--require-all` fails when any was** — that is the form for CI, where green has
 to mean the agreement held across all of them.
 
@@ -292,7 +296,7 @@ to mean the agreement held across all of them.
 
 ```yaml
 - uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
-- uses: i2y/rulec@v0.22.1                     # the release binary, verified against its checksum
+- uses: i2y/ritsu@v0.23.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check
@@ -330,15 +334,14 @@ what gets posted and `--terse` keeps record values out; [formats.md](docs/format
 
 ### For people: `rulec doc`
 
-`rulec doc <file> --lang ja` renders the rule as markdown with the facts the checker knows
-that the text does not show — that a group of six values and its complement of 41 really do
-cover all 47, which rows shadow which, where a rounding was assumed rather than sourced. It
-is rendered in CI and pasted into the PR, never committed: a stale rendering that still looks
-authoritative is the danger it is designed against. `--format html` renders the same document
-as one page with a form on it: a reader types a case, the rows that matched light up, the
-outputs appear, and the line the generated code would log is shown — it is the generated
-JavaScript itself that runs, so the page says nothing the code does not. Same rule: built in
-CI per change, never committed.
+`rulec doc <file> --lang ja` renders the page for people: the rule in markdown with the facts the
+checker knows that the text does not show — that a group of six values and its complement of 41
+really do cover all 47, which rows shadow which, where a rounding was assumed rather than sourced.
+`--format html` renders the same page with a form on it: a reader types a case, the rows that
+matched light up, the outputs appear, and the line the generated code would log is shown — it is
+the generated JavaScript itself that runs, so the page says nothing the code does not. Either is
+rendered in CI per change and pasted into the PR, never committed: a stale rendering that still
+looks authoritative is the danger it is designed against.
 
 ### For the customer: `rulec doc --audience customer`
 
