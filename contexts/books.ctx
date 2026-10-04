@@ -1,0 +1,12 @@
+context Books(chobo) v1
+description "Books of stock, money, points and booking slots, and what a transfer may refuse (chobo)"
+
+owns
+  dir "../crates/chobo"
+
+published language chobo
+  crate "../crates/chobo"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports

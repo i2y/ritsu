@@ -1,0 +1,6 @@
+エラー[E202]: orders/Cargo.toml:8:1: 「Orders」の orders/Cargo.toml が、「Stock」の内側の stock-ledger に依存しています（dependencies）
+     8 | stock-ledger = { path = "../stock-ledger" }
+  = stock-ledger のクレートは「Stock」の公表された言語に入っていません。境界の向こうのクレートに依存できるのは、「Stock」がそのクレートを公表された言語（`published language` の下の `crate "…"`）に入れたときと、二つの共有カーネルに並べたときだけです。
+  関わるもの:
+      Orders  orders/Cargo.toml:8             stock-ledger = { path = "../stock-ledger" }
+      Stock   file "stock-ledger/Cargo.toml"  「Stock」の内側のクレート

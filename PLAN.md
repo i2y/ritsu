@@ -608,6 +608,26 @@ DESIGN 9.3。TypeScript、Python、Go の一つのパッケージ。テストは
 
 DESIGN 3.4、7.13。sakai が Rust のクレートの依存を確かめられるようにし（cargo-deny の `wrappers` を書く形を試し、効かなければ `cargo metadata` を読む形）、`ritsu.ctx` を根に置く。わざと言語のクレートに別の言語のクレートを依存させた変異で、sakai がその行を名指すこと。CI の `fast` のジョブに足す。
 
+**したこと**（E の最初の部分）：
+
+- sakai が Rust のクレートの依存を確かめるようにした（sakai の DESIGN 7.7）。地図の `code rust "<パス>"`（ワークスペースの `Cargo.toml` のあるディレクトリ）、公表された言語の `crate "<ディレクトリ>"`（見出しはクレートの名前の `-` を `_` にしたもの。1.4）、成果物の `.rs` とクレートの `Cargo.toml`。依存は `cargo metadata --format-version 1 --no-deps --offline` に尋ね、パスで書いた `[dependencies]` と `[build-dependencies]` を、依存を書いたマニフェストの行からの参照として、ほかの言語と同じ境界の検査（E201〜E206）にかける。Cargo に尋ねられなければ E107（新しいコード）。sakai の `src/cargo.rs`（依存の行を探すところを含む）、`refs.rs` の `Kind::Crate` と `crate_crossings`、`patterns.rs` のクレートの E302 と E301。
+- sakai のテストの土台の地図に `tests/maps/rust`（英語の名前の、四つのクレートのワークスペース）を足し、変異を四つ（`E107_no_cargo_manifest`、`E201_a_crate_with_no_relationship`、`E202_a_crate_inside_another_context`、`E302_a_crate_named_otherwise`）と、その golden を英語と日本語で足した。台帳の E107 の再現は、Rust のコードを持つ一つのコンテキストの地図（英語）。
+- `ritsu.ctx` を根に、12 のコンテキストのファイルを `contexts/` に置いた（DESIGN 3.4）。`ritsu check ritsu.ctx` は `ritsu.ctx: ok — 12 contexts, 27 relationships; 356 artifacts, each in one context; 50 crossings checked (rust 50)` と言い、0.03 秒ほどで終わる。
+- `crates/ritsu/tests/map.rs`：リポジトリの地図が通ること。ワークスペースのマニフェストと地図を一時ディレクトリに写し、koyomi のクレートが rulec のクレートに依存する変異を入れると、sakai が `crates/koyomi/Cargo.toml` の足した行を E201 で名指すこと（英語と日本語）、同じ依存を `[dev-dependencies]` に書けば通ること、土台（`ritsu-units`）が言語（`chobo`）に依存しても名指すこと。
+- CI の `fast` のジョブに `cargo run --locked -q -p ritsu -- check ritsu.ctx` を足した（`cargo xtask deps` の次）。
+- `ritsu check` の要約で、地図が言語のものでないファイル（`Cargo.toml`）のせいで通らないとき、地図のファイルを「通らない」と数えるようにした（E.2 の形では、エラーの数は出るのに `all pass` と言っていた。終了コードは前から 1）。
+
+**決めたこと**：
+
+- ★ 依存は、cargo-deny の `wrappers` の設定を書く形ではなく、sakai が `cargo metadata` に尋ねる形で読む。cargo-deny 0.20.2 は、`exclude-dev = true` を書けばワークスペースの中の依存にも効いたが、指す行が `deny.toml` の行で、「どのクレートも依存してはいけない」クレートを書けず、CI で取ってくる必要がある（DESIGN 3.4、sakai の DESIGN 7.7）。そのかわり、sakai の `check` が、地図に `code rust` があるときだけ子プロセスを一つ走らせる（sakai の DESIGN 6 章の例外。ネットワークにはつながない）。
+- ★ sakai に、Rust のクレートを公表された言語にする書き方 `crate "…"` と、地図の `code rust` を足した。キーワードに `rust` と `crate` が増え、名前に使えなくなる。
+- dev-dependency は数えない（DESIGN 3.3 が許すもので、cargo-deny の `exclude-dev` と同じ）。ワークスペースのためだけのマニフェスト（`[package]` の無いもの）は成果物にしない。
+- 地図の範囲は `crates` から、言語がわざと通らないファイルを持つ 17 のディレクトリ（言語の `tests` と `examples`、rulec の `experiments` と `website`、sakai の `tools`）を除いたもの。確かめるコマンドは `ritsu check .` ではなく `ritsu check ritsu.ctx` にした（DESIGN 7.13 を直した）。
+- 土台の五つのクレートは一つのコンテキスト（`Base`）にした。土台の中の向きと外のクレートは、`cargo xtask deps` が確かめる。
+- コンテキストの名前は英語にした（作者の決まり）。言語のコンテキストは扱うものの名前（`Rules`、`Workflows`、`Calendars`、`Books`、`Claims`、`Requirements`、`ContextMaps`）で、別名がクレートの名前である。言語の名前（`rulec` など）は sakai のツールの語なので、コンテキストの名前にはできない。
+
+**確かめたこと**：sakai と ritsu のテストを一度回し、114 件が通った（SKIP 0）。`cargo xtask deps` は 17 のクレートで通る。sakai の B〜D の変異の golden は一字も変わらない（Rust のコードを書かない地図の振る舞いは変えていない）。
+
 ### E.9 E の完了の条件
 
 1. 根から `cargo test --workspace --no-fail-fast -- --nocapture` が全部通り、この機械で SKIP は 0（B.8 で許したものを除く）。dandori の `platforms` の段も、ほかと同時でなく一度通す。

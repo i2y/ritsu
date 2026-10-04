@@ -347,7 +347,9 @@ C.11 で rulec と dandori が `copies` の表を読むようになったので�
 ### 3.4 決まりの確かめ方
 
 - C の段階：`xtask` に、`cargo metadata` を読んで 3.1 の表と突き合わせる確かめを置き、CI の `fast` のジョブで走らせる。破れば落ちる。C.3 で `cargo xtask deps` として作った（10.9）。
-- E の段階：この処理系そのものの地図 `ritsu.ctx` を sakai で書く。クレートをコンテキストに、`ritsu-ports` と `ritsu-units` と `ritsu-base` を言語のクレートの上流の公表された言語にし、言語のクレートどうしの参照を許さない。Rust では、`use` できるクレートは `Cargo.toml` の依存に限られ、コンパイラがそれ以外を断るので、境界を越える参照は `Cargo.toml` の依存として読める。sakai の決まり（sakai の P6「コードの import は、各言語の既存のツールの設定にして、そのツールで確かめる」）に合わせて、cargo-deny の `[bans]` の `wrappers`（そのクレートに依存してよいクレートを並べる）の設定を `sakai build --target cargo-deny` で書く形を第一の案にする。cargo-deny がワークスペースの中のクレートどうしの依存にも効くかは、E の段階で確かめる。効かなければ、sakai が `cargo metadata` の JSON を読む形にする。どちらでも `ritsu check .` が ritsu のリポジトリに地図を当て、CI で走らせる（7.13）。
+- E の段階（E.8 で作った）：この処理系そのものの地図 `ritsu.ctx` を根に置き、コンテキストのファイルを `contexts/` に置いた。Rust では、`use` できるクレートは `Cargo.toml` の依存に限られ、コンパイラがそれ以外を断るので、境界を越える参照は `Cargo.toml` の依存として読める。コンテキストは 12 個で、土台の五つのクレート（`Base`）、七つの言語（`Rules`、`Workflows`、`Calendars`、`Books`、`Claims`、`Requirements`、`ContextMaps`）、`ritsu-project`（`Project`）、`ritsu-cross`（`Borders`）、入口の `ritsu`（`Entry`）、`ritsu-testkit` と `xtask`（`Testing`）である。土台の五つのクレートを `Base` の公表された言語にし（sakai の `crate "…"`）、七つの言語と `Project`、`Borders`、`Entry` は `Base` に順応する（`upstream Base conformist`）。言語のクレートも、それぞれ自分のクレートを公表された言語にするが、それに関係を書くのは `Project` と `Entry` だけで、言語どうしには関係を書かない。だから、言語のクレートが別の言語のクレートに依存すれば、sakai が E201 で、依存を書いた `Cargo.toml` の行を名指す。土台が言語に依存するとき、`ritsu-cross` が言語のクレートに依存するとき（言語は口の実装を通してだけ使う）、どれかのクレートが `ritsu-testkit` や `ritsu` を `[dependencies]` に書くときも同じである（`Testing` と `Entry` は何も公表しない。dev-dependency は sakai が数えない）。
+  - 依存の読み方は、sakai の決まり（sakai の P6「コードの import は、各言語の既存のツールの設定にして、そのツールで確かめる」）に合わせて、cargo-deny 0.20.2 の `[bans]` の `wrappers`（そのクレートに依存してよいクレートを並べる）の設定を書く形をまず試し、sakai が Cargo に尋ねる形（`cargo metadata --format-version 1 --no-deps --offline`）にした（sakai の DESIGN 7.7）。cargo-deny は、`[graph]` に `exclude-dev = true` を書けばワークスペースの中の依存にも効き、言語のクレートに別の言語のクレートを足した変異も止めたが、指す行は `deny.toml` の行で、依存を足した `Cargo.toml` の行ではなかった。「どのクレートも依存してはいけない」クレート（`ritsu`、`xtask`）は書けず（`wrappers = []` ではクレートそのものが禁止になり、自分を並べると `unused-wrapper` の警告が残る）、CI で取ってくる必要もある。
+  - 地図は 3.1 の表より粗い。土台の中の向き（`ritsu-base` は std だけ、など）と、外のクレートが serde_json だけであることは、`cargo xtask deps` だけが確かめる。二つとも CI の `fast` のジョブで走らせる（7.13）。
 
 ### 3.5 捨てたもの
 
@@ -774,7 +776,7 @@ dandori に、期日と帳簿を読む宣言を足す（E の段階。dandori �
 
 ### 7.13 処理系自身の依存（X13）
 
-3.4 の地図 `ritsu.ctx` を ritsu のリポジトリに置き、`ritsu check .` で確かめる。言語のクレートが別の言語のクレートを `[dependencies]` に足せば、sakai がその行を名指して止める。CI の `fast` のジョブで走らせる。
+3.4 の地図 `ritsu.ctx` を ritsu のリポジトリの根に置き、`ritsu check ritsu.ctx` で確かめる（E.8 で作った）。`ritsu check .` にしないのは、リポジトリには、言語が自分を試すためにわざと通らないファイル（変異、エラーの例）があり、地図の `except` もそれを範囲から外しているからである。言語のクレートが別の言語のクレートを `[dependencies]` に足せば、sakai がその行を名指して止める（`crates/ritsu/tests/map.rs` の変異。koyomi のクレートに rulec を足すと、`error[sakai E201]: crates/koyomi/Cargo.toml:10:1: The file crates/koyomi/Cargo.toml of Calendars depends on crates/rulec of Rules (dependencies), which Calendars has no relationship with`）。CI の `fast` のジョブで走らせる。2026-10-04 の地図は、`ritsu.ctx: ok — 12 contexts, 27 relationships; 356 artifacts, each in one context; 50 crossings checked (rust 50)` で通る。
 
 ## 8. 一つの CLI
 
@@ -1020,7 +1022,7 @@ ritsu のリモートを作るまで（作者が決める）、CI は走らな�
 
 | ジョブ | いつ | すること |
 |---|---|---|
-| `fast` | push と pull request のたび | `cargo build --workspace --locked`、`RITSU_TEST_LEVEL=fast cargo test --workspace --locked`、依存の決まりの確かめ（3.4） |
+| `fast` | push と pull request のたび | `cargo build --workspace --locked`、`RITSU_TEST_LEVEL=fast cargo test --workspace --locked`、依存の決まりの確かめ（3.4。`cargo xtask deps` と、ritsu 自身の地図の `ritsu check ritsu.ctx`） |
 | `tools` | main への push、コードを変えた pull request、毎晩 | ツールを入れ（rulec の `ci.yml` の一覧に、koyomi、chobo、geas、yuen、sakai、dandori のものを足す。PostgreSQL は、rulec にはサービスで、ほかには使い捨てのクラスタで）、クレートの組ごとに並べて `RITSU_TEST_LEVEL=tools` で回す。許す SKIP は、CI で用意できない pixie の greeter の四つだけ（下） |
 | `proofs` | `proofs/` か、証明書とモデルにかかわるコードを変えたとき | `lake build`、コーパスの証明書の再検査、Lean のモデルとの突き合わせ（11 章） |
 | `kani` | 毎晩と、rulec の生成器を変えたとき | rulec の CI の Kani の段（生成した Rust のハーネス） |

@@ -1,0 +1,3 @@
+[workspace]
+resolver = "2"
+members = ["orders", "stock", "stock-ledger", "billing"]

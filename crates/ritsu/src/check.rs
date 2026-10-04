@@ -52,6 +52,12 @@ impl Report<'_> {
         if error_in_it || (own && unit(f.tool).any(|u| u.label == f.shown && u.verdict == Verdict::Fails)) {
             return Status::Fails;
         }
+        // A map (or a yuen project) given by this file that fails for a file of no language's,
+        // such as a crate's Cargo.toml (sakai's DESIGN 7.7): the failure is the file's given.
+        let in_project = |x: &Finding| x.file.as_deref().is_some_and(|p| self.project.holds(p).is_some());
+        if !own && unit(f.tool).any(|u| u.label == f.shown && u.verdict == Verdict::Fails && !u.findings().any(|x| x.severity == Severity::Error && in_project(x))) {
+            return Status::Fails;
+        }
         Status::Passes
     }
 

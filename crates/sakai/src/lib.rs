@@ -12,6 +12,8 @@ pub mod kw;
 pub mod lex;
 pub mod parse;
 pub mod proto;
+/// The crates of the map's Rust code, as Cargo says them (DESIGN 7.7).
+pub mod cargo;
 pub mod check;
 pub mod elements;
 pub mod mapping;

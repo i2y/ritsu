@@ -1,0 +1,35 @@
+context Entry(entry) v1
+description "The one command, ritsu, and each language's own command after its name (ritsu)"
+
+owns
+  dir "../crates/ritsu"
+
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports
+
+upstream Project conformist
+  through ritsu_project
+
+upstream Borders conformist
+  through ritsu_cross
+
+upstream Rules conformist
+  through rulec
+
+upstream Workflows conformist
+  through dandori
+
+upstream Calendars conformist
+  through koyomi
+
+upstream Books conformist
+  through chobo
+
+upstream Claims conformist
+  through geas
+
+upstream Requirements conformist
+  through yuen
+
+upstream ContextMaps conformist
+  through sakai

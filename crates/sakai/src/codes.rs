@@ -4,7 +4,8 @@
 //!
 //! A reproduction is a directory of files: the files of [`BASE`] (a map of two contexts, each
 //! with a `.proto`) with the entry's own files laid over them. `sakai check` on that directory
-//! gives the code (`sakai build …` for the codes of the settings). The codes that read another
+//! gives the code (`sakai build …` for the codes of the settings). E107's is a map of Rust code
+//! of its own ([`RUST`]), which the base has none of. The codes that read another
 //! language (E105, E207, E208, E209, E405) come out of `ritsu sakai check`, with every language
 //! joined; E104 comes out of the binary of sakai's own crate, which joins none. N101 is retired:
 //! its entry stays, and its number is given to nothing else.
@@ -26,6 +27,15 @@ pub const BASE: &[(&str, &str)] = &[
         "b/v1/b.proto",
         "syntax = \"proto3\";\npackage b.v1;\nenum Kind {\n  KIND_UNSPECIFIED = 0;\n  KIND_ONE = 1;\n  KIND_TWO = 2;\n}\nmessage B { Kind kind = 1; }\nmessage Plain { string id = 1; }\nservice BService { rpc Get(B) returns (B); }\n",
     ),
+];
+
+/// A map of one context whose Rust code has no workspace manifest at its `code rust` place
+/// (E107): the reproduction of the one code that reads Rust's crates.
+const RUST: &[(&str, &str)] = &[
+    ("shop.ctx", "map Shop(shop) v1\nuse context \"orders.ctx\"\ncovers \".\"\ncode rust \".\"\n"),
+    ("orders.ctx", "context Orders(orders) v1\nowns\n  dir \"orders\"\n"),
+    ("orders/Cargo.toml", "[package]\nname = \"orders\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+    ("orders/src/lib.rs", "pub fn reserve() {}\n"),
 ];
 
 const A_USES_B: (&str, &str) = ("a/a.proto", "syntax = \"proto3\";\npackage a;\nimport \"b/v1/b.proto\";\nmessage A { b.v1.B b = 1; }\n");
@@ -198,8 +208,8 @@ pub fn ledger() -> Ledger {
             "E009",
             tr!("書いたパスがありません", "A path written is not there"),
             tr!(
-                "`use context`、`covers`、`except`、`proto root`、`code`、`owns`、公表された言語の `proto` と `generated dir`、`layer`、共有カーネル、`means` のパスが、ディスクに無いとき。パスは、書いたファイルのディレクトリから数えます。",
-                "A path of `use context`, `covers`, `except`, `proto root`, `code`, `owns`, a published language's `proto` and `generated dir`, `layer`, a shared kernel or `means` is not on the disk. A path counts from the directory of the file it is in."
+                "`use context`、`covers`、`except`、`proto root`、`code`、`owns`、公表された言語の `proto` と `crate` と `generated dir`、`layer`、共有カーネル、`means` のパスが、ディスクに無いとき。パスは、書いたファイルのディレクトリから数えます。",
+                "A path of `use context`, `covers`, `except`, `proto root`, `code`, `owns`, a published language's `proto`, `crate` and `generated dir`, `layer`, a shared kernel or `means` is not on the disk. A path counts from the directory of the file it is in."
             ),
             tr!("パスを直します。", "Correct the path."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\", \"nowhere\"\n")],
@@ -217,8 +227,8 @@ pub fn ledger() -> Ledger {
             "E011",
             tr!("成果物の名指しの形が違います", "The name of an artifact is not of the right form"),
             tr!(
-                "ツールの語と拡張子が合わないとき、`dir` の先がファイルのとき、ツールの語の先がディレクトリのとき、知らないツールの語や、そのツールに無い種類の語を書いたとき、子の種類（`value`、`field`、`method`）が親のすぐあとにないとき、`file` に種類を書いたとき。対応の先が列挙でないときも。",
-                "The tool and the extension do not agree, a `dir` is a file or a tool's file a directory, a tool or a kind is not one the tool has, a child kind (`value`, `field`, `method`) does not come right after its parent, or a `file` is given a kind; also a mapping's target that is not an enum."
+                "ツールの語と拡張子が合わないとき、`dir` や公表された言語の `crate` の先がファイルのとき、ツールの語の先がディレクトリのとき、知らないツールの語や、そのツールに無い種類の語を書いたとき、子の種類（`value`、`field`、`method`）が親のすぐあとにないとき、`file` に種類を書いたとき。対応の先が列挙でないときも。",
+                "The tool and the extension do not agree, a `dir` or a published language's `crate` is a file or a tool's file a directory, a tool or a kind is not one the tool has, a child kind (`value`, `field`, `method`) does not come right after its parent, or a `file` is given a kind; also a mapping's target that is not an enum."
             ),
             tr!("`<ツール> \"<パス>\" [<種類> <名前>]…` の形で書きます。", "Write it in the form `<tool> \"<path>\" [<kind> <name>]...`."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  rulec \"a/a.proto\"\n")],
@@ -304,6 +314,20 @@ pub fn ledger() -> Ledger {
             tr!("範囲の `.proto` を、sakai の読み手が読めないとき（構文の誤り、proto2 の `group`）。", "sakai's reader cannot read a `.proto` of the scope: a syntax error, or a proto2 `group`."),
             tr!("示された位置を直します。", "Correct it where it points."),
             &[("b/v1/b.proto", "syntax = \"proto3\";\npackage b.v1;\nenum Kind {\n  KIND_UNSPECIFIED = 0;\n  KIND_ONE = 1;\n  KIND_TWO = 2;\n}\nmessage B { Kind kind = ; }\nmessage Plain { string id = 1; }\nservice BService { rpc Get(B) returns (B); }\n")],
+            &[],
+        ),
+        Entry::new(
+            "E107",
+            tr!("Cargo から Rust のクレートを読めません", "Cargo cannot say the crates of the Rust code"),
+            tr!(
+                "地図が `code rust` を書いていて、その場所に `Cargo.toml` が無いか、`cargo metadata` が失敗したとき（cargo が無い、マニフェストが読めない、など）。sakai は、Rust のクレートとその依存を Cargo から読みます（DESIGN 7.7）。読めなければ、Rust のクレートの依存は確かめられません。",
+                "The map writes `code rust`, and there is no `Cargo.toml` at its place, or `cargo metadata` fails (cargo is not there, a manifest does not read, and the like). sakai reads Rust's crates and their dependencies from Cargo (DESIGN 7.7); when it cannot, the dependencies of the crates are not checked."
+            ),
+            tr!(
+                "`code rust` に、ワークスペースの（クレートが一つなら、そのクレートの）`Cargo.toml` のあるディレクトリを書きます。そこで `cargo metadata --no-deps --offline` が通ることを確かめます。",
+                "Write under `code rust` the directory of the workspace's `Cargo.toml` (for one crate, of its own), and see that `cargo metadata --no-deps --offline` passes there."
+            ),
+            Repro::Dir { files: RUST.to_vec(), command: vec!["check", "."] },
             &[],
         ),
         e(
@@ -461,7 +485,7 @@ pub fn ledger() -> Ledger {
         e(
             "E301",
             tr!("公開ホストサービスが、公表された言語に無いサービスです", "An open host service is not in the published language"),
-            tr!("`open host service` に並べたサービスが、その公表された言語の proto に無いとき。", "A service under `open host service` is not in the proto files of the published language."),
+            tr!("`open host service` に並べたサービスが、その公表された言語の proto に無いとき。Rust のクレートの公表された言語に `open host service` を書いたときも（クレートはサービスを持ちません）。", "A service under `open host service` is not in the proto files of the published language; also any under the published language of a Rust crate, which has no service."),
             tr!("サービスの名前を直すか、proto にサービスを足します。", "Correct the service's name, or add the service to the proto."),
             &[(
                 "乙.ctx",
@@ -472,7 +496,10 @@ pub fn ledger() -> Ledger {
         e(
             "E302",
             tr!("公表された言語のファイルが、そのコンテキストのものでないか、package が違います", "A file of a published language is not the context's, or has another package"),
-            tr!("公表された言語の proto、規則、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package が見出しの package と違うときも。", "A proto, a rule or the place of the generated code of a published language does not belong to the context, or a proto's package is not the one the heading names."),
+            tr!(
+                "公表された言語の proto、規則、Rust のクレート、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときも。",
+                "A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`."
+            ),
             tr!("見出しの package を直すか、そのコンテキストのファイルを並べます。", "Correct the heading's package, or list the context's own files."),
             &[(
                 "乙.ctx",

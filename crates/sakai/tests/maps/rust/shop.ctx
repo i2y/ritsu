@@ -1,0 +1,9 @@
+map Shop(shop) v1
+description "A small shop written in Rust: orders take stock, and billing bills the orders"
+
+use context "contexts/orders.ctx"
+use context "contexts/stock.ctx"
+use context "contexts/billing.ctx"
+
+covers "."
+code rust "."

@@ -1,0 +1,12 @@
+context Rules(rulec) v1
+description "Business rules, checked complete and free of overlaps, and the code made from them (rulec)"
+
+owns
+  dir "../crates/rulec"
+
+published language rulec
+  crate "../crates/rulec"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports

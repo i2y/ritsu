@@ -1,0 +1,12 @@
+context Requirements(yuen) v1
+description "Where requirements come from, and what of the other languages each one names (yuen)"
+
+owns
+  dir "../crates/yuen"
+
+published language yuen
+  crate "../crates/yuen"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports

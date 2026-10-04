@@ -1,0 +1,4 @@
+エラー[E107]: shop.ctx:9:1: "." の Rust のクレートを、Cargo から読めません: Cargo.toml がありません
+     9 | code rust "."
+  = `code rust` には、ワークスペースの（クレートが一つなら、そのクレートの）`Cargo.toml` のあるディレクトリを書きます。
+  = `code rust` の場所のワークスペースのクレートとその依存は、`cargo metadata --format-version 1 --no-deps --offline` に尋ねます。マニフェストを読むだけで、ビルドもネットワークへの接続もしません。

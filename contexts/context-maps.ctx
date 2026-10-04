@@ -1,0 +1,12 @@
+context ContextMaps(sakai) v1
+description "Bounded contexts, and the crossings between them (sakai)"
+
+owns
+  dir "../crates/sakai"
+
+published language sakai
+  crate "../crates/sakai"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports

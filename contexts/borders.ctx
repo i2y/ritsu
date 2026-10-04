@@ -1,0 +1,14 @@
+context Borders(cross) v1
+description "The checks across the borders of the languages, and ritsu's own codes; it reads the languages only through the ports (ritsu-cross)"
+
+owns
+  dir "../crates/ritsu-cross"
+
+published language ritsu_cross
+  crate "../crates/ritsu-cross"
+
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports
+
+upstream Project conformist
+  through ritsu_project

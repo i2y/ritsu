@@ -1,0 +1,9 @@
+context Orders(orders) v1
+description "Takes the orders and reserves their stock"
+owner "Orders team"
+
+owns
+  dir "../orders"
+
+upstream Stock conformist
+  through stock

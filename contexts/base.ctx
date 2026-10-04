@@ -1,0 +1,21 @@
+context Base(base) v1
+description "What every language stands on: text in two languages, diagnostics, paths, units, the ports the languages answer through, the one reader of .proto and the table of reserved words"
+
+owns
+  dir "../crates/ritsu-base", "../crates/ritsu-units", "../crates/ritsu-proto"
+  dir "../crates/ritsu-emit", "../crates/ritsu-ports"
+
+published language ritsu_base
+  crate "../crates/ritsu-base"
+
+published language ritsu_units
+  crate "../crates/ritsu-units"
+
+published language ritsu_proto
+  crate "../crates/ritsu-proto"
+
+published language ritsu_emit
+  crate "../crates/ritsu-emit"
+
+published language ritsu_ports
+  crate "../crates/ritsu-ports"

@@ -1,0 +1,6 @@
+error[E201]: billing/Cargo.toml:7:1: The file billing/Cargo.toml of Billing depends on orders of Orders (dependencies), which Billing has no relationship with
+     7 | orders = { path = "../orders" }
+  = A reference across the boundary needs a relationship: upstream and downstream (the downstream writes `upstream`), a partnership, or a shared kernel.
+  involved:
+      Billing  billing/Cargo.toml:7      orders = { path = "../orders" }
+      Orders   file "orders/Cargo.toml"  a crate inside Orders

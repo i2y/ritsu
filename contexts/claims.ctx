@@ -1,0 +1,12 @@
+context Claims(geas) v1
+description "Claims a person has read, held over the code (geas)"
+
+owns
+  dir "../crates/geas"
+
+published language geas
+  crate "../crates/geas"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports

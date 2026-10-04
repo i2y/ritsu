@@ -24,6 +24,7 @@ pub const OPEN: &str = "open";
 pub const HOST: &str = "host";
 pub const SERVICE: &str = "service";
 pub const GENERATED: &str = "generated";
+pub const CRATE: &str = "crate";
 pub const TERMS: &str = "terms";
 pub const MEANS: &str = "means";
 pub const AS: &str = "as";
@@ -50,14 +51,16 @@ pub const FIELD: &str = "field";
 pub const VALUE: &str = "value";
 pub const METHOD: &str = "method";
 
-/// The languages a map can say where the code is (`code python "py"`).
-pub const LANGUAGES: &[&str] = &["python", "typescript", "java", "go"];
+/// The languages a map can say where the code is (`code python "py"`). The imports of the first
+/// four are held to the map by the settings `build` writes (DESIGN 7); the dependencies of Rust's
+/// crates, `check` reads from Cargo itself (DESIGN 7.7).
+pub const LANGUAGES: &[&str] = &["python", "typescript", "java", "go", "rust"];
 
 /// The words, by where they are written, as DESIGN 1.2 lists them. A keyword of several words is
 /// one entry.
 pub const TABLE: &[(&str, &[&str])] = &[
-    ("map file", &["map", "description", "use context", "covers", "except", "proto root", "code", "python", "typescript", "java", "go", "test"]),
-    ("context file", &["context", "description", "owner", "also", "owns", "dir", "published language", "open host service", "generated dir", "terms", "means", "as"]),
+    ("map file", &["map", "description", "use context", "covers", "except", "proto root", "code", "python", "typescript", "java", "go", "rust", "test"]),
+    ("context file", &["context", "description", "owner", "also", "owns", "dir", "published language", "crate", "open host service", "generated dir", "terms", "means", "as"]),
     (
         "relationship",
         &[

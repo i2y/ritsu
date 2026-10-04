@@ -75,7 +75,9 @@ pub struct Item {
     pub path: Str,
 }
 
-/// `published language <package>` and the lines under it (DESIGN 1.4).
+/// `published language <package>` and the lines under it (DESIGN 1.4): the `.proto` files that
+/// declare the package, a rule whose Connect service it is, or a Rust crate (`crate "…"`, the
+/// directory of its `Cargo.toml`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Published {
     pub package: String,
@@ -83,6 +85,7 @@ pub struct Published {
     pub package_pos: Pos,
     pub protos: Vec<Str>,
     pub rulec: Option<Str>,
+    pub krate: Option<Str>,
     pub services: Vec<(String, Pos)>,
     pub generated: Vec<Str>,
 }

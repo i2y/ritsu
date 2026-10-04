@@ -37,8 +37,19 @@ pub fn code_extensions(language: &str) -> &'static [&'static str] {
         "typescript" => &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"],
         "java" => &["java"],
         "go" => &["go"],
+        "rust" => &["rs"],
         _ => &[],
     }
+}
+
+/// The file of a crate's manifest, an artifact of the code of Rust beside its `.rs` files: the
+/// dependencies that cross a boundary are its lines (DESIGN 1.3, 7.7). A workspace's manifest
+/// that is no crate's (no `[package]`) is in no context, as a table of holidays is in none.
+pub const MANIFEST: &str = "Cargo.toml";
+
+/// Whether the manifest `p` (a path from the root) is a crate's: it has a `[package]` table.
+fn is_crate_manifest(m: &Model, p: &str) -> bool {
+    std::fs::read_to_string(paths::on_disk(&m.root, p)).is_ok_and(|s| s.lines().any(|l| l.trim_start().starts_with("[package]")))
 }
 
 /// Whether a `.proto` is one of the files known without being read (`google/protobuf/…`,
@@ -60,7 +71,8 @@ pub fn artifact_tool(m: &Model, p: &str) -> Option<Tool> {
         return Some(t);
     }
     let ext = p.rsplit_once('.').map(|(_, e)| e)?;
-    m.map.code.iter().any(|c| paths::contains(&c.path, p) && code_extensions(&c.language).contains(&ext)).then_some(Tool::File)
+    let manifest = p.rsplit('/').next() == Some(MANIFEST);
+    m.map.code.iter().any(|c| paths::contains(&c.path, p) && (code_extensions(&c.language).contains(&ext) || (manifest && c.language == "rust" && is_crate_manifest(m, p)))).then_some(Tool::File)
 }
 
 /// Every artifact of the scope, in path order: under `covers`, not under `except`, and with no

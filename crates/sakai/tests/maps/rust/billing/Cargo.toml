@@ -1,0 +1,8 @@
+[package]
+name = "billing"
+version = "0.1.0"
+edition = "2021"
+
+# The tests make orders to bill; what only the tests use is no dependency of the crate.
+[dev-dependencies]
+orders = { path = "../orders" }

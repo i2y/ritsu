@@ -1,10 +1,10 @@
 # sakai 設計文書
 
-境界づけられたコンテキストと、そのあいだの関係を書く小さな言語。ファイルは `.ctx`、コマンドは `sakai`。どの成果物がどのコンテキストに属するか、境界を越える参照が宣言した関係と公表された言語を通っているか、腐敗防止層が上流の列挙のどの値も読み替えているか、同じ語が違う意味のまま境界を越えていないかを、一式の成果物（rulec・dandori・koyomi・chobo・geas）、proto、コードの import に照らして確かめる。コードの import は、各言語の既存のツール（Python は import-linter、JavaScript と TypeScript は dependency-cruiser、Java は ArchUnit、Go は go-arch-lint）の設定にして、そのツールで確かめる。Context Mapper の CML にも書き出す。
+境界づけられたコンテキストと、そのあいだの関係を書く小さな言語。ファイルは `.ctx`、コマンドは `sakai`。どの成果物がどのコンテキストに属するか、境界を越える参照が宣言した関係と公表された言語を通っているか、腐敗防止層が上流の列挙のどの値も読み替えているか、同じ語が違う意味のまま境界を越えていないかを、一式の成果物（rulec・dandori・koyomi・chobo・geas）、proto、コードの import に照らして確かめる。コードの import は、各言語の既存のツール（Python は import-linter、JavaScript と TypeScript は dependency-cruiser、Java は ArchUnit、Go は go-arch-lint）の設定にして、そのツールで確かめる。Rust のクレートの依存は、Cargo が言うものを sakai が確かめる（7.7）。Context Mapper の CML にも書き出す。
 
 名前は境（さかい）から取った。
 
-この文書は設計の段階（A）で書き、言語の芯と地図の検査を作った段階（B）と、例とコードの import の検査の設定と CML を作った段階（C の一部）で、作ったものに合わせて直した。C の段階のうち、一式の成果物を読むところ（PLAN の C.1〜C.5）は、一式の言語を一つの処理系（ritsu）にまとめると決まってから、子プロセスと JSON ではなく ritsu の口で作った（ritsu の D.8。4.1、4.7、12.2）。作ったもの（`.ctx` の構文、`check`、`api`、`explain`、`build`、`export cml`、診断）について貼った sakai の出力と、7 章のツールの出力は、どれも実際に出したもので、`tests/design.rs` が実物と同じかを確かめる。D の段階の doc の形は、まだ案である。一方、一式のツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1、dandori 0.1.0）と外のツール（import-linter 2.15、dependency-cruiser 16.10.4、ArchUnit 1.5.1、go-arch-lint v1.19.0、depguard v2.2.1、Spring Modulith 2.1.1、Context Mapper CLI 6.12.0、buf 1.54.0）の振る舞いとして書いたことは、2026-10-03 にこの機械（macOS arm64）で実際に走らせて確かめたもので、出力を貼るときは版を添える。外のツールの出力からは、この機械の場所を示すパスと、端末の色の制御文字と、行頭の字下げを省いた。
+この文書は設計の段階（A）で書き、言語の芯と地図の検査を作った段階（B）と、例とコードの import の検査の設定と CML を作った段階（C の一部）で、作ったものに合わせて直した。C の段階のうち、一式の成果物を読むところ（PLAN の C.1〜C.5）は、一式の言語を一つの処理系（ritsu）にまとめると決まってから、子プロセスと JSON ではなく ritsu の口で作った（ritsu の D.8。4.1、4.7、12.2）。作ったもの（`.ctx` の構文、`check`、`api`、`explain`、`build`、`export cml`、診断）について貼った sakai の出力と、7 章のツールの出力は、どれも実際に出したもので、`tests/design.rs` が実物と同じかを確かめる。D の段階の doc の形は、まだ案である。一方、一式のツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1、dandori 0.1.0）と外のツール（import-linter 2.15、dependency-cruiser 16.10.4、ArchUnit 1.5.1、go-arch-lint v1.19.0、depguard v2.2.1、Spring Modulith 2.1.1、Context Mapper CLI 6.12.0、buf 1.54.0）の振る舞いとして書いたことは、2026-10-03 にこの機械（macOS arm64）で実際に走らせて確かめたもので、出力を貼るときは版を添える。外のツールの出力からは、この機械の場所を示すパスと、端末の色の制御文字と、行頭の字下げを省いた。Rust のクレートの依存（7.7）のために試した cargo 1.94.1 と cargo-deny 0.20.2 は、2026-10-04 に同じ機械で走らせた。
 
 ## 0. 全体像
 
@@ -228,7 +228,7 @@ partnership with 受注
 | `terms` | 用語集 |
 | `refuse` | 断る |
 
-ほかのキーワードは、`description`、`owner`、`also`、`use`、`covers`、`except`、`proto root`、`code`、`python`、`typescript`、`java`、`go`、`test`、`owns`、`dir`、`generated`、`through`、`layer`、`means`、`as`、`enum`、`term`、`with`、`from`、成果物のツールの語（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`）と要素の種類の語（2 章）。表は B の段階の `src/kw.rs` に一枚で置く。
+ほかのキーワードは、`description`、`owner`、`also`、`use`、`covers`、`except`、`proto root`、`code`、`python`、`typescript`、`java`、`go`、`rust`、`test`、`owns`、`dir`、`crate`、`generated`、`through`、`layer`、`means`、`as`、`enum`、`term`、`with`、`from`、成果物のツールの語（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`）と要素の種類の語（2 章）。表は B の段階の `src/kw.rs` に一枚で置く。
 
 **決定**：地図とコンテキストには ASCII の別名を必ず書く（`受注(ordering)`。無ければ E008）。形は `[A-Za-z_][A-Za-z0-9_]*`。
 
@@ -252,7 +252,7 @@ owns
 
 - 一式の成果物：`.rule`、`.flow`、`.cal`、`.book`、`.geas`
 - `.proto`
-- 地図の `code` で宣言した言語のコードで、その言語の置き場所の下にあるもの：Python は `.py`、TypeScript は `.ts`・`.tsx`・`.mts`・`.cts`・`.js`・`.jsx`・`.mjs`・`.cjs`、Java は `.java`、Go は `.go`
+- 地図の `code` で宣言した言語のコードで、その言語の置き場所の下にあるもの：Python は `.py`、TypeScript は `.ts`・`.tsx`・`.mts`・`.cts`・`.js`・`.jsx`・`.mjs`・`.cjs`、Java は `.java`、Go は `.go`、Rust は `.rs` と、クレートのマニフェスト（`[package]` のある `Cargo.toml`。ワークスペースのためだけのマニフェストは、どのクレートのものでもないので成果物にしない。7.7）
 
 `.ctx` は成果物にしない。祝日の表（koyomi の `data/`）、法令の写し（rulec と koyomi の `sources/`）、OpenAPI や Smithy の記述（dandori の `specs/`）も、それを読む成果物の一部として扱い、属し方を問わない。
 
@@ -289,10 +289,11 @@ published language rulec.urgency.v1
 - `rulec "…"`：`rulec gen` がその規則のために書く Connect のサービス（rulec の DESIGN 15.112）を、公表された言語にする。package は、rulec が口（`Rules`）で言う Connect のパス（`/rulec.urgency.v1.UrgencyService/Decide`）の package（`rulec.urgency.v1`）で、見出しと同じであること（E302）。規則はそのコンテキストに属すること。
 - `open host service <サービス>`：公開ホストサービスにするサービスを、package の中の名前で並べる。そのサービスが塊の proto にあること（rulec なら、Connect のパスのサービスと同じこと）。無ければ E301。
 - `generated dir "…"`：その package の proto から生成したコードの置き場所。コードの import の検査で、ほかのコンテキストが import してよいところになる（7 章）。そのコンテキストに属するディレクトリであること（E302）。
+- `crate "…"`：Rust のクレート（その `Cargo.toml` のあるディレクトリ）を、公表された言語にする（7.7）。見出しは、コードが書くクレートの名前（クレートの名前の `-` を `_` にしたもの。`ritsu-ports` なら `ritsu_ports`）で、違えば E302。クレートはそのコンテキストに属し、地図の `code rust` のワークスペースのメンバーであること（E302）。クレートは境界の向こうから呼ぶサービスを持たないので、`open host service` は書けない（E301）。一つの塊に一つのクレートで、proto や規則とは混ぜない（E004）。
 
-公表された言語の要素は、塊の proto で定義されたもの全部（メッセージ、そのフィールド、列挙、その値、サービス、そのメソッド）である。rulec の塊なら、rulec が口で名前を言うもの（規則の入力、出力、列挙と値）である。
+公表された言語の要素は、塊の proto で定義されたもの全部（メッセージ、そのフィールド、列挙、その値、サービス、そのメソッド）である。rulec の塊なら、rulec が口で名前を言うもの（規則の入力、出力、列挙と値）である。Rust のクレートの塊は要素を持たない（sakai はクレートの中の型を読まず、依存をクレートの単位で確かめる）。
 
-**理由**：package を単位にしたのは、proto の世界で、package が言語の名前とバージョンを兼ねているからである（`warehouse.v1`、`rulec.urgency.v1`）。互換が崩れたときは package のバージョンが上がり（buf の `breaking` がそれを止める）、地図では、下流がどのバージョンを通るかが `through` に書いてある。rulec の Connect のサービスを公表された言語に入れたのは、規則を一か所のサービスに置いて、ほかのコンテキストから Connect で呼ぶ形が、一式の中にもうあるからである（dandori の DESIGN 1.13）。
+**理由**：package を単位にしたのは、proto の世界で、package が言語の名前とバージョンを兼ねているからである（`warehouse.v1`、`rulec.urgency.v1`）。互換が崩れたときは package のバージョンが上がり（buf の `breaking` がそれを止める）、地図では、下流がどのバージョンを通るかが `through` に書いてある。rulec の Connect のサービスを公表された言語に入れたのは、規則を一か所のサービスに置いて、ほかのコンテキストから Connect で呼ぶ形が、一式の中にもうあるからである（dandori の DESIGN 1.13）。Rust のクレートを入れたのは、Rust では、クレートがほかのクレートに見せる型とトレイトの集まりで、ほかのクレートは、それを依存に書いたときだけ使えるからである。ritsu では、言語のクレートが共通に使う `ritsu-ports` などが、言語のクレートの上流の公表された言語にあたる（ritsu の DESIGN 3.4）。
 
 公開ホストサービスと公表された言語を分けたのは、DDD での意味が違うからである。公表された言語は、やりとりする型の言語で、イベントやメッセージとして型だけを公表することもある。公開ホストサービスは、だれでも呼べるように開いたサービスで、公表された言語を使う。sakai では、サービスを呼ぶ参照には公開ホストサービスが要り、型を使うだけの参照には公表された言語が要る（3.3）。公開ホストサービスを `published language` の塊の中に書くので、公表された言語の無い公開ホストサービスは書けない。塊の proto に無いサービスを並べたときに E301 になる。
 
@@ -569,7 +570,7 @@ B の段階のあとで、二つの言語の細かい形をもう一度そろえ
 |---|---|---|
 | 1 | 字句、構文、節の順序、名前、別名、パスがあるか | E001〜E012 |
 | 2 | 属し方：範囲の成果物がどれもちょうど一つのコンテキストに属するか | E101、E102、E103、W101、W103 |
-| 3 | 成果物を読む：proto と、rulec・koyomi・dandori が口で答えるもの（4.1）。そのあとで、地図が名指す要素（`means`、対応の列挙）を、読んだ proto と rulec の事実で引く | E104、E105、E106、W102、E103（範囲の外の import や参照）、E007・E011（要素） |
+| 3 | 成果物を読む：proto と、rulec・koyomi・dandori が口で答えるもの（4.1）と、Rust のクレートとその依存（Cargo が言うもの。7.7）。そのあとで、地図が名指す要素（`means`、対応の列挙）を、読んだ proto と rulec の事実で引く | E104、E105、E106、E107、W102、E103（範囲の外の import や参照）、E007・E011（要素） |
 | 4 | パターンどうしの整合 | E301〜E313、W301 |
 | 5 | 境界を越える参照 | E201〜E209 |
 | 6 | 対応の網羅と同じ語 | E401〜E410、W401、W402 |
@@ -596,7 +597,7 @@ $ ritsu sakai check examples/通販/通販.ctx --lang ja
 examples/通販/通販.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）
 ```
 
-境界を越える参照の 9 件は、proto の import が一つ（受注の `fulfillment.proto` から在庫の `stock.proto` へ）、rulec が二つ（請求の `請求の要否.rule` の `import proto` が受注の `OrderStatus` へ、`出荷の送料.rule` の `shape` が配送の `CreateShipmentRequest` へ）、koyomi が一つ（配送の `出荷日.cal` が、請求と配送の共有カーネルの `東京の営業日.cal` を `use calendar` で読む）、dandori が五つ（受注の `受注.flow` が、配送の規則 `出荷の急ぎ` を `use rule … connect` で、在庫の `stock.proto` を `use proto` で読み、その `StockService` の `Reserve` と `Release` を `connect` で呼び、配送の `配送の手配.flow` を子として走らせる）である。括弧の中は、参照のもとの言語ごとの数で、proto、rulec、koyomi、dandori の順に並べ、一つも無い言語は書かない。
+境界を越える参照の 9 件は、proto の import が一つ（受注の `fulfillment.proto` から在庫の `stock.proto` へ）、rulec が二つ（請求の `請求の要否.rule` の `import proto` が受注の `OrderStatus` へ、`出荷の送料.rule` の `shape` が配送の `CreateShipmentRequest` へ）、koyomi が一つ（配送の `出荷日.cal` が、請求と配送の共有カーネルの `東京の営業日.cal` を `use calendar` で読む）、dandori が五つ（受注の `受注.flow` が、配送の規則 `出荷の急ぎ` を `use rule … connect` で、在庫の `stock.proto` を `use proto` で読み、その `StockService` の `Reserve` と `Release` を `connect` で呼び、配送の `配送の手配.flow` を子として走らせる）である。括弧の中は、参照のもとの言語ごとの数で、proto、rulec、koyomi、dandori、rust（Rust のクレートのマニフェスト。7.7）の順に並べ、一つも無い言語は書かない。
 
 ### 3.2 属し方
 
@@ -615,7 +616,8 @@ examples/通販/通販.ctx: ok — コンテキスト 5、関係 7。成果物 7
 | koyomi の dates とカレンダー | koyomi の `References` の `use calendar`（行と、カレンダー） | koyomi のカレンダー |
 | dandori のワークフロー | dandori の `References` の `use rule`（呼び方の語を添えて）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7 | 規則、proto のファイルとサービスとメソッド、ワークフロー |
 | chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
-| コード | sakai は読まない。7 章の設定で各ツールが確かめる | |
+| Rust のクレート（`[package]` のある `Cargo.toml`） | Cargo が言う、パスで書いたほかのクレートへの依存（`[dependencies]` と `[build-dependencies]`。行は依存を書いたマニフェストの行）。7.7 | クレート（その `Cargo.toml`） |
+| ほかの言語のコード | sakai は読まない。7 章の設定で各ツールが確かめる | |
 
 ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` の写し、dandori の `use openapi` と `use smithy`）は、境界を越える参照に数えない。JSON Schema、出典の写し、祝日の表、OpenAPI と Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。
 
@@ -624,7 +626,7 @@ examples/通販/通販.ctx: ok — コンテキスト 5、関係 7。成果物 7
 1. 先が、二つのあいだの共有カーネルに並べた成果物（の中）にある。
 2. 先が、相手の公表された言語の要素で、関係がそれを許す（1.5 の表）。
 
-先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）とカレンダー（`use calendar`）は、どの公表された言語のものでもない。
+先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。Rust のクレートの依存は、その先のクレートを並べた `published language` の塊（`crate "…"`）のものである。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）とカレンダー（`use calendar`）は、どの公表された言語のものでもない。
 
 診断は、関係が無ければ E201、相手の内側（公表された言語でない proto、規則そのもの、カレンダー）を参照していれば E202、関係はあるが `through` に無い package なら E203、腐敗防止層の `layer` の外からの参照なら E204、腐敗防止層の公表された言語に上流の型が出ていれば E205、別々の道の相手なら E206、相手の公開ホストサービスでないサービスを呼んでいれば E207、境界の向こうのワークフローを子として走らせていれば E209（4.7）。ワークフローの `implements` は境界を越える参照ではなく、実装するサービスが自分の公表された言語の公開ホストサービスであることを確かめる（E208。4.7）。
 
@@ -663,6 +665,8 @@ proto のフィールドやメソッドが使うメッセージと、rulec の `
 - 実行時にしか見えない呼び出し：URL を文字列で持つ HTTP、メッセージのキュー、データベースの共有、リフレクションと動的な import。どれも成果物にも import にも現れない。
 - 公表された言語から生成したコード（`generated dir`）が、本当にその proto から生成したものか。
 - 語の定義の文の中身（P5）。
+- Rust の `[dev-dependencies]`（テスト、例、ベンチマークだけが使い、クレートの中には入らない。ritsu では、受け取る側のクレートのテストが、出す側のクレートを本物のままつなぐために dev-dependency に持つ。ritsu の DESIGN 3.3）と、レジストリや git のクレートへの依存（どのコンテキストのものでもない）。7.7。
+- Rust のクレートの中のファイルどうしの参照。クレートの依存はクレートの単位なので、クレートの `.rs` のファイルをマニフェストと別のコンテキストに属させても、その境界は確かめない（Rust では、どのモジュールも、クレートの依存の全部を使える）。
 
 ## 4. 一式とのつなぎ方
 
@@ -802,7 +806,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 
 ### 5.2 台帳
 
-番号と意味はこの表で決め、`src/codes.rs` の台帳と一致させる（`tests/codes.rs` が表と台帳を突き合わせる）。各コードは、いつ出るか、どう直すか、最小の再現を持ち、`sakai explain <コード>` が引く。再現は複数のファイルになるので、台帳は、二つのコンテキスト（甲と乙）の検査を通る地図を土台に持ち、各コードはその上に置き換えるファイルを持つ（rulec の DESIGN 15.59 が、隣に置くファイルを台帳に持たせたのと同じ考え）。テストは全コードの再現を一時ディレクトリに書き、そこで走らせて、そのコードが出ることを確かめる。走らせるのはたいてい `check .` で、`build` が出す E501 と E502 は、再現に `sakai build …` のコマンドを持つ（`sakai explain` もそのコマンドを言う）。ほかの言語の成果物を含む再現（E105、E207、E208、E209、E405）は `ritsu sakai check .` で走らせ（`sakai explain` もそう言う）、E104 の再現は、何もつながない sakai のクレートのバイナリの `sakai check .` で走らせる。退いたコード（N101）は、台帳に残して `sakai explain` で引けるようにし、退いた理由と版を書く。番号はほかのものに使い回さない（ritsu の DESIGN 7.10）。
+番号と意味はこの表で決め、`src/codes.rs` の台帳と一致させる（`tests/codes.rs` が表と台帳を突き合わせる）。各コードは、いつ出るか、どう直すか、最小の再現を持ち、`sakai explain <コード>` が引く。再現は複数のファイルになるので、台帳は、二つのコンテキスト（甲と乙）の検査を通る地図を土台に持ち、各コードはその上に置き換えるファイルを持つ（rulec の DESIGN 15.59 が、隣に置くファイルを台帳に持たせたのと同じ考え）。テストは全コードの再現を一時ディレクトリに書き、そこで走らせて、そのコードが出ることを確かめる。走らせるのはたいてい `check .` で、`build` が出す E501 と E502 は、再現に `sakai build …` のコマンドを持つ（`sakai explain` もそのコマンドを言う）。E107 の再現は、土台が Rust のコードを持たないので、Rust のコードを持つ一つのコンテキストの地図を自分で持つ。ほかの言語の成果物を含む再現（E105、E207、E208、E209、E405）は `ritsu sakai check .` で走らせ（`sakai explain` もそう言う）、E104 の再現は、何もつながない sakai のクレートのバイナリの `sakai check .` で走らせる。退いたコード（N101）は、台帳に残して `sakai explain` で引けるようにし、退いた理由と版を書く。番号はほかのものに使い回さない（ritsu の DESIGN 7.10）。
 
 | コード | いつ出るか |
 |---|---|
@@ -814,9 +818,9 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E006 | 同じ名前を二度宣言している（コンテキスト、別名、語、`published language` の package、同じ相手への同じ関係） |
 | E007 | 宣言されていない名前（コンテキスト、語、package、要素。名指した proto にその要素が無いときも）。短い書き方の名前が二つの package に当たるときも |
 | E008 | 地図かコンテキストに ASCII の別名が無い、または形が違う |
-| E009 | 書いたパスが無い（`use context`、`owns`、`proto`、`generated dir`、`layer`、`covers`、`code`） |
+| E009 | 書いたパスが無い（`use context`、`owns`、`proto`、`crate`、`generated dir`、`layer`、`covers`、`code`） |
 | E010 | `use context` の先が context のファイルでない、同じファイルを二度読む |
-| E011 | 成果物の名指しの形が違う（ツールの語と拡張子が合わない、`dir` の先がファイル、知らないツールや種類の語、親のすぐあとでない子、`file` の種類、列挙でない対応の先） |
+| E011 | 成果物の名指しの形が違う（ツールの語と拡張子が合わない、`dir` や `crate` の先がファイル、知らないツールや種類の語、親のすぐあとでない子、`file` の種類、列挙でない対応の先） |
 | E012 | 絶対パス、ルートの外に出るパス、空のパス（2.4） |
 | E101 | どのコンテキストにも属さない成果物 |
 | E102 | 二つのコンテキストが同じ深さで持つ成果物 |
@@ -824,6 +828,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E104 | 地図が含む成果物の言語がつながっていない（sakai のクレートのバイナリ。`ritsu sakai` で走らせる。exit 2） |
 | E105 | 成果物が、その言語の検査を通らないか、読めない（その言語の診断を注に添える） |
 | E106 | proto が読めない |
+| E107 | 地図が `code rust` を書いていて、その場所のクレートを Cargo から読めない（`Cargo.toml` が無い、`cargo metadata` が失敗する。7.7） |
 | W101 | `owns` の項が成果物を一つも含まない |
 | W102 | 見つからない proto の import（範囲の外のものとして扱う） |
 | W103 | どの地図にも読まれない context のファイル（`check` にディレクトリを渡したときだけ） |
@@ -837,8 +842,8 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E207 | ワークフローが、境界の向こうの、相手の公開ホストサービスでないサービスを呼んでいる（`connect`、`use rule … connect`） |
 | E208 | ワークフローが `implements` で実装するサービスが、自分の公表された言語の公開ホストサービスでない |
 | E209 | ワークフローが、境界の向こうのワークフローを子として走らせている（パートナーでなく、共有カーネルになく、子が相手の公開ホストサービスを実装していない） |
-| E301 | 公開ホストサービスのサービスが、公表された言語に無い |
-| E302 | 公表された言語の proto や規則や生成したコードの置き場所が、そのコンテキストのものでない、または package が見出しと違う |
+| E301 | 公開ホストサービスのサービスが、公表された言語に無い（Rust のクレートの公表された言語に `open host service` を書いたときも） |
+| E302 | 公表された言語の proto や規則やクレートや生成したコードの置き場所が、そのコンテキストのものでない、package やクレートの名前が見出しと違う、`crate` の先がワークスペースのクレートでない、地図に `code rust` が無いのにクレートを公表している |
 | E303 | 顧客／供給者が片側だけ |
 | E304 | 順応者に対応か `layer` がある |
 | E305 | 腐敗防止層でないのに、対応か `layer` がある |
@@ -1026,7 +1031,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 
 **決定**：コマンドとフラグの定義を `src/cli.rs` の一枚の表に置き、`--help` の表示と引数の読み取りが同じ表を引く（rulec の 12.1、koyomi、chobo と同じ）。知らないフラグ、閉じた集合の外の値（`--target depguard`）、値の無いフラグ、二度書いたフラグは exit 2 で止める。黙って無視すると、エージェントはフラグが効いたと信じて次に進むからである。
 
-`check`、`api`、`doc`、`export` は、通信も子プロセスもしない（ほかの言語には、同じプロセスの中で口で問う。4.1）。`build` も、設定を書くだけで、import の検査のツールは走らせない。ツールを走らせるのは利用者の CI で、sakai のテストはツールを本当に走らせて設定を確かめる（7.6）。
+`check`、`api`、`doc`、`export` は、通信も子プロセスもしない（ほかの言語には、同じプロセスの中で口で問う。4.1）。例外は、地図が `code rust` を書くときに、Rust のクレートを尋ねる `cargo metadata` の一回である（7.7。マニフェストを読むだけで、ビルドもネットワークへの接続もしない）。`build` も、設定を書くだけで、import の検査のツールは走らせない。ツールを走らせるのは利用者の CI で、sakai のテストはツールを本当に走らせて設定を確かめる（7.6）。
 
 ## 7. コードの import の検査（build）
 
@@ -1237,6 +1242,42 @@ depguard の利点は、golangci-lint に入っていて、多くのチームが
 
 ツールの置き場所は sakai の `tools/` の下で、git に入れない（版を書いたファイルと取ってくるスクリプトだけを入れる。入れ方は `tools/README.md`）。環境変数でほかの場所のものも使える。ツールが無ければ、そのテストは `SKIP: sakai: <理由>` の一行を出して通す（PLAN の 0 章）。
 
+### 7.7 Rust：Cargo に尋ねて、sakai が確かめる（cargo-deny と比べて）
+
+**決定**：Rust のコードは、地図の `code rust "<パス>"` に、ワークスペースの（クレートが一つなら、そのクレートの）`Cargo.toml` のあるディレクトリを書く。境界を越える参照は、クレートの依存として読む。Rust では、コードが `use` できるほかのクレートは `Cargo.toml` の依存に書いたものだけで、それ以外はコンパイラが断るので、クレートの依存を確かめれば、コードがほかのクレートを参照するところを全部確かめたことになる。依存は、`check` のたびに sakai が Cargo に尋ねる（`cargo metadata --format-version 1 --no-deps --offline`。マニフェストを読むだけで、ビルドもネットワークへの接続もしない）。Cargo が言うワークスペースのクレートの依存のうち、パスで書いたもの（`[dependencies]` と `[build-dependencies]`）を、依存を書いたマニフェストの行から、依存先のクレートのマニフェストへの参照として、3.3 の検査にかける。設定を書いてほかのツールに任せる `build` の形（7.1〜7.5）にはしない。
+
+`tests/maps/rust` の Billing のクレートに、関係の無い Orders のクレートを `[dependencies]` で足すと（変異の `E201_a_crate_with_no_relationship`）、次のように言う。
+
+```
+error[E201]: billing/Cargo.toml:7:1: The file billing/Cargo.toml of Billing depends on orders of Orders (dependencies), which Billing has no relationship with
+     7 | orders = { path = "../orders" }
+  = A reference across the boundary needs a relationship: upstream and downstream (the downstream writes `upstream`), a partnership, or a shared kernel.
+  involved:
+      Billing  billing/Cargo.toml:7      orders = { path = "../orders" }
+      Orders   file "orders/Cargo.toml"  a crate inside Orders
+```
+
+- クレートは、そのマニフェスト（`[package]` のある `Cargo.toml`）が属するコンテキストのものとする。クレートの `.rs` のファイルも成果物で、どれかのコンテキストに属する（E101）。ワークスペースのためだけのマニフェスト（`[package]` の無い `Cargo.toml`）は、どのクレートのものでもないので成果物にしない。
+- 境界の向こうのクレートに依存してよいのは、そのクレートが相手の公表された言語で（`published language` の下の `crate "…"`。1.4）関係がそれを許すとき（3.3）と、二つの共有カーネルに並べたクレートのときだけである。公表された言語に無いクレートなら E202、関係が無ければ E201 になる。
+- 数えないもの：`[dev-dependencies]`（テスト、例、ベンチマークだけが使い、クレートの中に入らない）、レジストリや git のクレートへの依存（どのコンテキストのものでもない）、ルートの外のクレート。ワークスペースのメンバーでないクレートの依存は、Cargo が言わないので分からない。範囲の外のクレートに依存していれば E103 で、Cargo に尋ねられなければ（`Cargo.toml` が無い、cargo が無い、マニフェストが読めない）E107 である。E107 のときは、クレートの依存も、クレートの公表された言語の名前も確かめない。
+- Cargo は依存を書いた行を言わないので、行は sakai がマニフェストから探す。`[dependencies]`、`[build-dependencies]`、`[target.<…>.dependencies]` の下で、依存のキー（別名を付けたものは別名）で始まる行か、`[dependencies.<キー>]` の表の見出しの行である。
+- 要約の括弧の中では、`rust` が、クレートのマニフェストからの参照の数である（3.1）。api の `crossings[].via` は、`dependencies` か `build-dependencies` になる（9 章）。
+
+**理由**：sakai の決まり（P6）では、コードの import は各言語の既存のツールの設定にして、そのツールで確かめる。Rust でも、cargo-deny 0.20.2 の `[bans]` の `wrappers`（そのクレートに依存してよいクレートを並べる）の設定を `sakai build --target cargo-deny` で書く形を、まず試した（ritsu の DESIGN 3.4。ritsu のワークスペースのマニフェストを写したもので、2026-10-04）。分かったことは次の四つである。
+
+- ワークスペースの中の、パスで書いた依存にも効く。ただし `[graph]` に `exclude-dev = true` が要る。無いと dev-dependency も数え、yuen、sakai、dandori のテストが rulec を dev-dependency に持つことを、`unmatched-wrapper` の警告と `banned` のエラーで言う。
+- 言語のクレートに別の言語のクレートを足した変異（koyomi が rulec に依存する）は、`error[banned]: crate 'rulec = 0.22.1' is explicitly banned` と、`direct parent 'koyomi = 0.1.0' of banned crate 'rulec = 0.22.1' was not marked as a wrapper` を出して止める。ただし、指す行は `deny.toml` の `{ crate = "rulec", wrappers = [...] }` の行で、依存を足した `Cargo.toml` の行ではない。
+- 「どのクレートも依存してはいけない」クレート（ritsu の入口の `ritsu` や `xtask`）を書けない。`wrappers = []` にすると、依存するものが無くても、クレートそのものが `banned` になる。自分を `wrappers` に並べると通るが、`unused-wrapper` の警告が残る。
+- CI では、cargo-deny を取ってくる必要がある（Rust のツールチェーンには入っていない）。
+
+Cargo に尋ねる形なら、依存を足したマニフェストの行を名指せ、ほかの言語の境界と同じ診断（E201〜E206）とコードと文になり、Rust のツールチェーンのほかに何も要らない。sakai がコードの import の読み手を書くことにもならない。依存を言うのは Cargo で、sakai は `use` の文を読まない（13 章の「sakai がコードの import を読むこと」には当たらない）。
+
+**捨てたもの**：
+
+- cargo-deny の設定を `sakai build` で書く形（上の四つ）。
+- sakai が `Cargo.toml` を自分で読み解く形。TOML の読み手を持つことになり、ワークスペースから継いだ依存（`workspace = true`）、別名（`package = "…"`）、プラットフォームごとの依存を、Cargo と同じに解かなければならない。sakai が自分で読むのは、診断が指す行を探すところだけにした。
+- `.rs` の `use` を読む形。クレートを越える参照は依存に書いたものに限られ、コンパイラが確かめている。
+
 ## 8. CML への出力
 
 **決定**：`sakai export cml` は、地図を Context Mapper の CML にする。
@@ -1389,10 +1430,10 @@ BoundedContext ordering {
     },
 ```
 
-- `contexts[]`：名前、別名、版、ファイル、ファイルの SHA-256、説明、持ち主、`also`、`owns`（ディレクトリは `{"dir": "<パス>"}`、ファイルは `{"name": <名指し>}`）、`published`（package、`from` に proto か規則の名指し、`services`、`generated`）、`terms`（名前、定義、`also`、`means` の名指し、`as`）。
+- `contexts[]`：名前、別名、版、ファイル、ファイルの SHA-256、説明、持ち主、`also`、`owns`（ディレクトリは `{"dir": "<パス>"}`、ファイルは `{"name": <名指し>}`）、`published`（package、`from` に proto か規則の名指し（Rust のクレートなら、その `Cargo.toml` の `file` の名指し）、`services`、`generated`）、`terms`（名前、定義、`also`、`means` の名指し、`as`）。
 - `relationships[]`：`kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。上流と下流の関係は、`roles` の `upstream`（`supplier`、`open_host_service`、`published_language`）と `downstream`（`conformist`、`anticorruption_layer`、`customer`）、`through`、`layer`、`enums`（上流の列挙の名指し、先、`checked`、値の対応）、`terms`、`declared`（宣言した `.ctx` の行）を持つ。対応の先が名前だけなら `"to": {"name": "出荷の可否"}` で、`checked` は false になる。共有カーネルは `sides` に両側の並びを持つ。
 - `artifacts[]`：範囲の成果物の全部。名指しと、属するコンテキストと、それを決めた `owns` の行と、ファイルの SHA-256（先頭 16 桁）。yuen が、成果物の定義が変わったかを知るのに使える。
-- `crossings[]`：境界を越える参照の全部。もとと先の名指し、行、二つのコンテキスト、参照の仕方（`via`。proto の import は `proto import`、ほかは、もとの言語が口で言う語：`import proto`、`shape`、`apply`、`use calendar`、`use rule`、`use rule … connect` など、`use proto`、`connect`、`flow`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3。proto の import と、規則の `import proto` と `shape` のほかは空）、許した関係（`allowed_by`）。
+- `crossings[]`：境界を越える参照の全部。もとと先の名指し、行、二つのコンテキスト、参照の仕方（`via`。proto の import は `proto import`、Rust のクレートの依存は、依存を書いた表の名前の `dependencies` か `build-dependencies`、ほかは、もとの言語が口で言う語：`import proto`、`shape`、`apply`、`use calendar`、`use rule`、`use rule … connect` など、`use proto`、`connect`、`flow`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3。proto の import と、規則の `import proto` と `shape` のほかは空）、許した関係（`allowed_by`）。
 - 確かめていない成果物を並べる `not_checked[]` は、ritsu の段階 E で消した。ritsu の口で一式を読むようになってから、いつも空の並びだったからである。ほかの言語の成果物を読めなければ、検査が E104 か E105 を出し、api は検査を通らない地図には出さないので、api を出すときには、確かめていない成果物は無い。言語をまたいで決められなかったこと（ritsu の口の答えの `Undecided`）は、sakai が尋ねる口（`Rules` の事実、索引の `References` と `Items`、`Books` の事実）には無く、言語の境目の検査（ritsu の DESIGN 7 章）の結果として `ritsu check` が言う（要約の境目の数と JSON の `borders`、`tool` が `ritsu` の診断）。実行のときにしか見えない呼び出し（3.7）は成果物ごとのものではなく、doc の「確かめていないこと」に書く（10 章）。いつも空のキーを残すと、読む人がそこに何かが入ると思って待つことになる。
 
 ## 10. doc
@@ -1508,13 +1549,14 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 - `ritsu check` のために、`sakai::run::checked` が、`sakai check` が地図ごとに印字するもの（診断一つずつのテキストと `--format json` のオブジェクト、通った地図の `ok —` の行）を、コマンドと同じ関数で作って渡す（ritsu の DESIGN 8.3）。ルートの決め方と、パスをルートからの相対にする部分は、コマンドと同じ関数を使う（`run::root_from`、`run::from_root`）。コマンドの振る舞いは変えていない。
 - E104 で止まったときの exit code を 1 から 2 にした（`check`、`api`、`build`、`export`。4.1）。ritsu の受け取る側の三つの言語（dandori の E018、yuen の E206）と同じ断り方にそろえた（ritsu の DESIGN 2.3）。sakai のクレートのバイナリで、規則、カレンダー、ワークフローを含む地図を渡したときの終了コードだけが変わる。台帳の E104 の説明と、`check --help` と `sakai --help` の終了コードの行にも書いた。
 - api から `not_checked` を消した（9 章に理由）。api の JSON のキーが一つ減る。`tests/golden/api/` の二つを取り直した。
+- Rust のクレートの依存を確かめるようにした（ritsu の PLAN の E.8。ritsu の地図 `ritsu.ctx` のため）。地図の `code rust`、公表された言語の `crate "…"`、成果物の `.rs` とクレートの `Cargo.toml`、Cargo に尋ねる `cargo metadata` の一回（6 章の例外）、E107（7.7）。キーワードに `rust` と `crate` が増え、名前に使えなくなった（`code` の後の言語を誤ったときの注と、公表された言語の下に書けるものの注に、Rust を足した）。Rust のコードを書かない地図の振る舞いは変えていない。テストの土台の地図に `tests/maps/rust`（英語の名前で書いた、四つのクレートのワークスペース）を足し、変異を四つ（E107、E201、E202、E302）足した。
 
 ## 13. 捨てたもの
 
 ここまでの節に書いたもののほかに、次を捨てた。
 
 - **書いても確かめられない項目**（Bounded Context Canvas の戦略上の分類、ドメインでの役割、ビジネス上の決定、仮定、指標）：0.1。
-- **sakai がコードの import を読むこと**：四つの言語の import の読み手を書くことになる。どの言語にも成熟したツールがあり、チームはそれをもう CI で走らせている。sakai は地図からその設定を書くほうに回る（P6）。
+- **sakai がコードの import を読むこと**：四つの言語の import の読み手を書くことになる。どの言語にも成熟したツールがあり、チームはそれをもう CI で走らせている。sakai は地図からその設定を書くほうに回る（P6）。Rust のクレートの依存を sakai が確かめるのは、これに当たらない。依存を言うのは Cargo で、sakai は `use` の文を読まない（7.7）。
 - **`.flow` を sakai が読むこと**：dandori の構文を二か所で持つことになる。dandori が口（`References`）で言うものを読む（4.7）。
 - **一式のツールを子プロセスで呼び、JSON を読むこと**（C の段階の計画）：一式を ritsu にまとめたので、口で読む（4.1）。
 - **定義の文が同じなら同じ意味とすること**：1.6。
@@ -1538,6 +1580,7 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 - OpenAPI と JSON Schema の列挙を、対応の網羅に使うこと（rulec の `import jsonschema` と同じ形で）。外のシステム（Stripe、AWS）を、OpenAPI や Smithy の記述を公表された言語に持つコンテキストとして書くこと。
 - 腐敗防止層の対応から、翻訳のコードを生成すること（1.7）。
 - 実行時の呼び出し（HTTP の URL、キュー、データベース）を成果物として書くこと。
+- Rust のクレートの中の、モジュールの単位の境界（7.7。いまはクレートの単位で確かめる）。
 
 出力：
 

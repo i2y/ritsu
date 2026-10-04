@@ -1,0 +1,24 @@
+# The map of ritsu itself (DESIGN 3.4, 7.13): the contexts its crates belong to, and which crate
+# may depend on which. `ritsu check ritsu.ctx` holds the dependencies every crate's Cargo.toml
+# writes to it, as Cargo says them; CI's fast job runs it.
+map Ritsu(ritsu) v1
+description "Seven small languages, one toolchain: its crates, and what each may depend on"
+
+use context "contexts/base.ctx"
+use context "contexts/rules.ctx"
+use context "contexts/workflows.ctx"
+use context "contexts/calendars.ctx"
+use context "contexts/books.ctx"
+use context "contexts/claims.ctx"
+use context "contexts/requirements.ctx"
+use context "contexts/context-maps.ctx"
+use context "contexts/project.ctx"
+use context "contexts/borders.ctx"
+use context "contexts/entry.ctx"
+use context "contexts/testing.ctx"
+
+covers "crates"
+# What the languages test themselves with, show and try out holds files of the languages that
+# fail on purpose, and no crate.
+except "crates/chobo/examples", "crates/chobo/tests", "crates/dandori/examples", "crates/dandori/tests", "crates/geas/examples", "crates/geas/tests", "crates/koyomi/examples", "crates/koyomi/tests", "crates/ritsu-proto/tests", "crates/ritsu/tests", "crates/rulec/experiments", "crates/rulec/tests", "crates/rulec/website", "crates/sakai/examples", "crates/sakai/tests", "crates/sakai/tools", "crates/yuen/tests"
+code rust "."

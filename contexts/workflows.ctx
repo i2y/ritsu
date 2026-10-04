@@ -1,0 +1,12 @@
+context Workflows(dandori) v1
+description "Workflows that call the rules, made into Temporal, Step Functions, Argo and more (dandori)"
+
+owns
+  dir "../crates/dandori"
+
+published language dandori
+  crate "../crates/dandori"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports

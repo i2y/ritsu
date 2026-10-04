@@ -1,0 +1,32 @@
+context Project(project) v1
+description "Reads a project once, joins the languages through their ports, and checks each file with its language's check (ritsu-project)"
+
+owns
+  dir "../crates/ritsu-project"
+
+published language ritsu_project
+  crate "../crates/ritsu-project"
+
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports
+
+upstream Rules conformist
+  through rulec
+
+upstream Workflows conformist
+  through dandori
+
+upstream Calendars conformist
+  through koyomi
+
+upstream Books conformist
+  through chobo
+
+upstream Claims conformist
+  through geas
+
+upstream Requirements conformist
+  through yuen
+
+upstream ContextMaps conformist
+  through sakai

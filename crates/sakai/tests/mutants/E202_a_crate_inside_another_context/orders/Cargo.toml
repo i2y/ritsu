@@ -1,0 +1,8 @@
+[package]
+name = "orders"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+stock = { path = "../stock" }
+stock-ledger = { path = "../stock-ledger" }

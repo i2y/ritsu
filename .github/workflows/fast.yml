@@ -56,5 +56,10 @@ jobs:
       - name: The dependencies keep to the layers
         run: cargo xtask deps
 
+      # ritsu's own map (DESIGN 3.4, 7.13): sakai holds every crate's dependencies, as Cargo says
+      # them, to the contexts of ritsu.ctx, and names the line of a Cargo.toml that goes against it.
+      - name: The crates keep to ritsu's own map
+        run: cargo run --locked -q -p ritsu -- check ritsu.ctx
+
       - name: The tests of the fast level
         run: cargo xtask test --level fast

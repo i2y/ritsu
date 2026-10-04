@@ -1,0 +1,3 @@
+error[E302]: contexts/stock.ctx:12:9: The crate at stock-ledger is named stock-ledger, not ledger as the heading says
+    12 |   crate "../stock-ledger"
+  = The published language of a crate is named as code writes the crate: its name, with `-` written `_`.

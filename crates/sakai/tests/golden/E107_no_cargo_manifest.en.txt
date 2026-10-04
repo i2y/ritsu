@@ -1,0 +1,4 @@
+error[E107]: shop.ctx:9:1: Cargo cannot say the crates of the Rust code at ".": there is no Cargo.toml
+     9 | code rust "."
+  = `code rust` names the directory of the workspace's `Cargo.toml` (or, for one crate, of its own).
+  = The crates of the workspace at the `code rust` place and their dependencies are asked of `cargo metadata --format-version 1 --no-deps --offline`, which reads the manifests, and neither builds nor reaches the network.

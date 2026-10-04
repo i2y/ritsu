@@ -242,13 +242,24 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
                 }
                 Some((x, rf.pos))
             });
+            let krate = p.krate.as_ref().and_then(|kf| {
+                let x = r.path(f, s, &cdir, kf, None)?;
+                if !paths::on_disk(r.root, &x).is_dir() {
+                    let v = &kf.value;
+                    r.at("E011", f, s, kf.pos, tr!("crate の行に書けるのは、Rust のクレートのディレクトリです（\"{v}\" はファイルです）", "A crate line names the directory of a Rust crate (\"{v}\" is a file)"))
+                        .notes
+                        .push(tr!("`Cargo.toml` のあるディレクトリを書きます。", "Write the directory its `Cargo.toml` is in."));
+                    return None;
+                }
+                Some((x, kf.pos))
+            });
             let mut generated = Vec::new();
             for g in &p.generated {
                 if let Some(x) = r.path(f, s, &cdir, g, Some(true)) {
                     generated.push((x, g.pos));
                 }
             }
-            published.push(Pub { package: p.package.clone(), pos: p.pos, package_pos: p.package_pos, protos, rulec, services: p.services.clone(), generated });
+            published.push(Pub { package: p.package.clone(), pos: p.pos, package_pos: p.package_pos, protos, rulec, krate, services: p.services.clone(), generated });
         }
         // E006: the terms and their other names all differ.
         let mut seen: Vec<String> = Vec::new();

@@ -58,7 +58,7 @@ fn kernel(m: &Model, a: usize, b: usize) -> Option<(&Rel, &Vec<Own>)> {
     })
 }
 
-pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Read) -> Vec<Diag> {
+pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Read, crates: Option<&crate::cargo::Crates>) -> Vec<Diag> {
     let mut p = P { m, diags: Vec::new() };
     let owner = |path: &str| arts.iter().find(|a| a.path == path).and_then(|a| a.ctx());
     // E301 and E302: the published languages.
@@ -126,7 +126,52 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                     }
                 }
             }
-            if pl.rulec.is_none() {
+            // A crate's published language (DESIGN 1.4, 7.7): a crate of the workspace at the map's
+            // `code rust` place, of the context, named as code writes it; a crate has no service.
+            if let Some((d, at)) = &pl.krate {
+                let (me, sd) = (&c.name, paths::shown(d));
+                if !m.map.code.iter().any(|x| x.language == "rust") {
+                    p.at(ci, *at, "E302", tr!("公表された言語 {k} は Rust のクレート {sd} ですが、地図に `code rust` がありません", "The published language {k} is the Rust crate at {sd}, and the map has no `code rust`"))
+                        .notes
+                        .push(tr!("地図に `code rust \"<パス>\"` を書くと、そのワークスペースのクレートを公表された言語にできます。", "Write `code rust \"<path>\"` in the map; the crates of that workspace can then be published languages."));
+                } else {
+                    let mf = crate::cargo::manifest_of(d);
+                    match owner(&mf) {
+                        Some(o) if o == ci => {}
+                        o => {
+                            let whose = match o {
+                                Some(o) => tr!("「{}」のものです", "it belongs to {}", m.contexts[o].name; m.contexts[o].name),
+                                None => tr!("どのコンテキストにも属しません", "it belongs to no context"),
+                            };
+                            p.at(ci, *at, "E302", tr!("公表された言語 {k} のクレート {sd} は「{me}」のものではありません（{}）", "The published language {k} is the crate at {sd}, which is not {me}'s ({})", whose.ja; whose.en))
+                                .notes
+                                .push(tr!("公表された言語のクレートは、それを公表するコンテキストに属します（そのクレートの Cargo.toml で決まります）。", "The crate of a published language belongs to the context that publishes it (as its Cargo.toml does)."));
+                        }
+                    }
+                    match crates.map(|cs| cs.by_dir(d)) {
+                        // Cargo could not say (E107): nothing to hold the crate to
+                        None => {}
+                        Some(None) => {
+                            p.at(ci, *at, "E302", tr!("公表された言語 {k} の {sd} は、`code rust` のワークスペースのクレートではありません", "The published language {k} names {sd}, which is no crate of the workspace at the `code rust` place"))
+                                .notes
+                                .push(tr!("`crate` には、Cargo がワークスペースのメンバーと言うクレートの、Cargo.toml のあるディレクトリを書きます。", "A crate line names the directory of the Cargo.toml of a crate Cargo says is a member of the workspace."));
+                        }
+                        Some(Some(cr)) if cr.name.replace('-', "_") != *k => {
+                            let got = &cr.name;
+                            p.at(ci, *at, "E302", tr!("{sd} のクレートの名前は {got} で、見出しの {k} と違います", "The crate at {sd} is named {got}, not {k} as the heading says"))
+                                .notes
+                                .push(tr!("クレートの公表された言語の名前は、コードが書くクレートの名前（`-` を `_` にしたもの）です。", "The published language of a crate is named as code writes the crate: its name, with `-` written `_`."));
+                        }
+                        Some(Some(_)) => {}
+                    }
+                }
+                for (s, at) in &pl.services {
+                    p.at(ci, *at, "E301", tr!("公開ホストサービス {s} が、Rust のクレートの公表された言語 {k} にあります", "The open host service {s} is under {k}, the published language of a Rust crate"))
+                        .notes
+                        .push(tr!("Rust のクレートは、境界の向こうから呼ぶサービスを持ちません。サービスは proto で公表します。", "A Rust crate has no service to call across a boundary; a service is published in a proto."));
+                }
+            }
+            if pl.rulec.is_none() && pl.krate.is_none() {
                 let services: Vec<&str> = pl.protos.iter().filter_map(|(f, _)| ps.files.get(f)).flat_map(|pf| pf.services.iter().map(|s| s.name.as_str())).collect();
                 for (s, at) in &pl.services {
                     if !services.contains(&s.as_str()) && pl.protos.iter().all(|(f, _)| ps.files.contains_key(f)) {

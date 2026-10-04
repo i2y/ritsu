@@ -67,6 +67,8 @@ pub struct Pub {
     /// The proto files, and where each is written.
     pub protos: Vec<(String, Pos)>,
     pub rulec: Option<(String, Pos)>,
+    /// The directory of a Rust crate (DESIGN 1.4, 7.7).
+    pub krate: Option<(String, Pos)>,
     pub services: Vec<(String, Pos)>,
     pub generated: Vec<(String, Pos)>,
 }

@@ -4,7 +4,8 @@
 //! 1. the words, the sections, the names and the paths (E001 to E012);
 //! 2. who owns what (E101 to E103, W101);
 //! 3. the `.proto` files (E106, W102, E103), what the other languages say of their artifacts
-//!    through ritsu's ports (E104, E105), then the elements the map names (E007, E011);
+//!    through ritsu's ports (E104, E105), the crates of the Rust code as Cargo says them (E107),
+//!    then the elements the map names (E007, E011);
 //! 4. the patterns (E301 to E313, W301);
 //! 5. the references that cross a boundary (E201 to E209);
 //! 6. the mappings and the glossaries (E401 to E410, W401, W402).
@@ -127,17 +128,22 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 }
 
 /// The line `check` prints when nothing is wrong (DESIGN 3.1): the crossings counted by the
-/// language of the artifact that refers, in the order proto, rulec, koyomi, dandori.
+/// language of the artifact that refers, in the order proto, rulec, koyomi, dandori, rust (the
+/// manifests of Rust's crates).
 pub fn summary(m: &Model, arts: &[Artifact], crossings: &[Crossing]) -> Text {
     use crate::naming::Tool;
     let (c, r, a, x) = (m.contexts.len(), relationship_count(m), arts.len(), crossings.len());
-    let by: Vec<String> = [Tool::Proto, Tool::Rulec, Tool::Koyomi, Tool::Dandori]
+    let mut by: Vec<String> = [Tool::Proto, Tool::Rulec, Tool::Koyomi, Tool::Dandori]
         .iter()
         .filter_map(|t| {
             let n = crossings.iter().filter(|c| c.tool() == *t).count();
             (n > 0).then(|| format!("{} {n}", t.word()))
         })
         .collect();
+    let rust = crossings.iter().filter(|c| matches!(c.kind, crate::refs::Kind::Crate { .. })).count();
+    if rust > 0 {
+        by.push(format!("rust {rust}"));
+    }
     let by = by.join(", ");
     let by_ja = by.replace(", ", "、");
     let en = format!(
@@ -180,15 +186,20 @@ pub fn check_map_with(root: &Path, map: &str, suite: &crate::suite::Suite) -> Re
     diags.extend(sorted(proto_diags(&m, &issues)));
     let (read, d3b) = crate::suite::read(&m, &arts, suite);
     diags.extend(sorted(d3b));
+    let (crates, d3c) = crate::cargo::read(&m);
+    diags.extend(sorted(d3c));
     let (el, d3) = elements::resolve(&m, &ps, &arts, &read);
     diags.extend(sorted(d3));
     // 4. The patterns.
-    diags.extend(sorted(patterns::check(&m, &ps, &arts, &read)));
+    diags.extend(sorted(patterns::check(&m, &ps, &arts, &read, crates.as_ref())));
     // 5. The crossings.
     let mut crossings = refs::proto_crossings(&ps, &arts);
     let (more, d5) = refs::suite_crossings(&m, &ps, &arts, &read);
     crossings.extend(more);
+    let (more, d5c) = refs::crate_crossings(&m, &arts, crates.as_ref());
+    crossings.extend(more);
     let mut d5 = d5;
+    d5.extend(d5c);
     d5.extend(refs::check(&m, &mut crossings, &read));
     d5.extend(refs::implements(&m, &arts, &read));
     diags.extend(sorted(d5));

@@ -2,9 +2,11 @@
 //! the `.proto` files, and what the other languages say their artifacts name: a rule's `import
 //! proto` and `shape` (rulec's `Rules` and `References`), a calendar's `use calendar` (koyomi's
 //! `References`), and a workflow's rules, APIs, methods and child workflows (dandori's
-//! `References`). A crossing is allowed by a shared kernel both sides write, or by a relationship
-//! that lets the one side reach the other's published language (DESIGN 1.5's table); anything
-//! else is E201 to E206, or for a workflow E207 to E209, at the line of the reference.
+//! `References`), and the dependencies of Rust's crates on each other (the lines of their
+//! `Cargo.toml`, as Cargo says them; DESIGN 7.7). A crossing is allowed by a shared kernel both
+//! sides write, or by a relationship that lets the one side reach the other's published language
+//! (DESIGN 1.5's table); anything else is E201 to E206, or for a workflow E207 to E209, at the
+//! line of the reference.
 
 use crate::ast::Role;
 use crate::diag::{self, Diag, DiagExt, Ref};
@@ -50,6 +52,9 @@ pub enum Kind {
     FlowConnect,
     /// A task's child `flow`.
     FlowChild,
+    /// A Rust crate's dependency on another crate by its path, in its manifest's
+    /// `[dependencies]` or `[build-dependencies]` (the table's name).
+    Crate { table: &'static str },
 }
 
 impl Kind {
@@ -65,6 +70,7 @@ impl Kind {
             Kind::FlowProto => "use proto".into(),
             Kind::FlowConnect => "connect".into(),
             Kind::FlowChild => "flow".into(),
+            Kind::Crate { table } => table.to_string(),
         }
     }
 }
@@ -263,6 +269,53 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
     (out, diags)
 }
 
+/// The dependencies of the Rust crates on each other, as crossings (DESIGN 7.7): from the line of
+/// the manifest of one crate to the manifest of the crate it depends on, when the two belong to
+/// different contexts. A crate outside the map's scope that one in it depends on is E103; one
+/// outside the root, or in the scope and no artifact (under no `code rust` place), is in no context.
+pub fn crate_crossings(m: &Model, arts: &[Artifact], crates: Option<&crate::cargo::Crates>) -> (Vec<Crossing>, Vec<Diag>) {
+    let owner = |p: &str| arts.iter().find(|a| a.path == p).and_then(|a| a.ctx());
+    let (mut out, mut diags) = (Vec::new(), Vec::new());
+    for c in crates.map(|c| c.list.as_slice()).unwrap_or_default() {
+        let Some(x) = owner(&c.manifest) else { continue };
+        for d in &c.deps {
+            let Some(dir) = &d.dir else { continue };
+            let to = crate::cargo::manifest_of(dir);
+            let Some(y) = owner(&to) else {
+                if !crate::owners::in_scope(m, &to) {
+                    let (f, t) = (shown(&c.manifest), shown(dir));
+                    let src = std::fs::read_to_string(crate::paths::on_disk(&m.root, &c.manifest)).unwrap_or_default();
+                    diags.push(
+                        diag::at("E103", &c.manifest, d.line, d.col, tr!("{f} が、地図の範囲の外のクレート {t} に依存しています（{}）", "The file {f} depends on the crate at {t}, which is outside the map's scope ({})", d.table; d.table))
+                            .source(&src)
+                            .note(crate::owners::scope_note(m)),
+                    );
+                }
+                continue;
+            };
+            if x == y {
+                continue;
+            }
+            out.push(Crossing {
+                from: c.manifest.clone(),
+                from_tool: Tool::File,
+                from_ctx: x,
+                to: to.clone(),
+                to_ctx: y,
+                target: Name::file(Tool::File, to),
+                kind: Kind::Crate { table: d.table },
+                line: d.line,
+                col: d.col,
+                import: d.text.clone(),
+                uses: vec![],
+                reach: vec![],
+                allowed: None,
+            });
+        }
+    }
+    (out, diags)
+}
+
 /// A workflow's `implements` (DESIGN 4.7): the service it implements is an open host service of a
 /// published language of its own context (E208).
 pub fn implements(m: &Model, arts: &[Artifact], read: &Read) -> Vec<Diag> {
@@ -303,10 +356,20 @@ pub fn published_package(m: &Model, c: usize, file: &str) -> Option<String> {
     m.contexts[c].published.iter().find(|p| p.protos.iter().any(|(f, _)| f == file)).map(|p| p.package.clone())
 }
 
-/// The published package whose `.proto` files or rule hold the file: for the referring side of an
-/// anticorruption layer (E205), whose own published language may be a rule's service.
+/// The published package whose `.proto` files, rule or crate hold the file: for the referring
+/// side of an anticorruption layer (E205), whose own published language may be a rule's service
+/// or a crate.
 fn published_package_any(m: &Model, c: usize, file: &str) -> Option<String> {
-    m.contexts[c].published.iter().find(|p| p.protos.iter().any(|(f, _)| f == file) || p.rulec.as_ref().is_some_and(|(f, _)| f == file)).map(|p| p.package.clone())
+    m.contexts[c]
+        .published
+        .iter()
+        .find(|p| p.protos.iter().any(|(f, _)| f == file) || p.rulec.as_ref().is_some_and(|(f, _)| f == file) || p.krate.as_ref().is_some_and(|(d, _)| crate::cargo::manifest_of(d) == file))
+        .map(|p| p.package.clone())
+}
+
+/// The published package of the context's that is the crate of the manifest `file`, if any.
+fn published_crate(m: &Model, c: usize, file: &str) -> Option<String> {
+    m.contexts[c].published.iter().find(|p| p.krate.as_ref().is_some_and(|(d, _)| crate::cargo::manifest_of(d) == file)).map(|p| p.package.clone())
 }
 
 /// Whether both sides write a shared kernel toward each other that holds `file`.
@@ -352,13 +415,22 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
         let (xn, yn) = (m.contexts[x].name.clone(), m.contexts[y].name.clone());
         let src = std::fs::read_to_string(crate::paths::on_disk(&m.root, &c.from)).unwrap_or_default();
         let (p, q) = (c.from.clone(), c.to.clone());
-        let (sp, sq) = (shown(&p), shown(&q));
+        let krate = matches!(c.kind, Kind::Crate { .. });
+        // a crate is shown by its directory, as a dependency by its path writes it
+        let (sp, sq) = (shown(&p), if krate { shown(&ritsu_base::paths::parent(&q)) } else { shown(&q) });
         let from_ref = c.from_ref(&xn);
-        // what a reference does, after what it refers to: a `.proto` imports, the rest refer
+        // what a reference does, after what it refers to: a `.proto` imports, a crate depends,
+        // the rest refer
         let via = c.kind.via();
         let proto = c.kind == Kind::ProtoImport;
-        let tail_ja = if proto { " を import しています".to_string() } else { format!(" を参照しています（{via}）") };
-        let act_en = |obj: &str| if proto { format!("imports {obj}") } else { format!("refers to {obj} ({via})") };
+        let tail_ja = if proto {
+            " を import しています".to_string()
+        } else if krate {
+            format!(" に依存しています（{via}）")
+        } else {
+            format!(" を参照しています（{via}）")
+        };
+        let act_en = |obj: &str| if proto { format!("imports {obj}") } else if krate { format!("depends on {obj} ({via})") } else { format!("refers to {obj} ({via})") };
         // The file a reference lands on for the published languages: a child workflow that
         // implements an open host service lands on that service's `.proto`.
         let mut lands = q.clone();
@@ -374,6 +446,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
             Kind::FlowRule { connect: true, .. } => m.contexts[y].published.iter().find(|pl| pl.rulec.as_ref().is_some_and(|(f, _)| *f == q)).map(|pl| pl.package.clone()),
             Kind::FlowRule { connect: false, .. } | Kind::RuleApply | Kind::CalendarUse => None,
             Kind::FlowChild if !child_published => None,
+            Kind::Crate { .. } => published_crate(m, y, &q),
             _ => published_package(m, y, &lands),
         };
         let to_what = match &pkg {
@@ -384,6 +457,11 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
             match &pkg {
                 Some(k) => tr!("公表された言語 {k} のファイル", "a file of the published language {k}"),
                 None => tr!("「{yn}」の内側のファイル", "a file inside {yn}"),
+            }
+        } else if krate {
+            match &pkg {
+                Some(k) => tr!("公表された言語 {k} のクレート", "the crate of the published language {k}"),
+                None => tr!("「{yn}」の内側のクレート", "a crate inside {yn}"),
             }
         } else {
             to_what
@@ -462,6 +540,10 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
                 Kind::CalendarUse => tr!(
                     "カレンダーは公表された言語にできません（DESIGN 1.4）。境界の向こうのカレンダーを読めるのは、二つの共有カーネルに並べたときだけです。",
                     "A calendar cannot be a published language (DESIGN 1.4); a calendar across the boundary is read only from the two's shared kernel."
+                ),
+                Kind::Crate { .. } => tr!(
+                    "{sq} のクレートは「{yn}」の公表された言語に入っていません。境界の向こうのクレートに依存できるのは、「{yn}」がそのクレートを公表された言語（`published language` の下の `crate \"…\"`）に入れたときと、二つの共有カーネルに並べたときだけです。",
+                    "The crate at {sq} is in no published language of {yn}; a crate across the boundary is depended on only once {yn} puts it in a published language (`crate \"…\"` under a `published language`), or from the two's shared kernel."
                 ),
                 Kind::RuleApply => tr!(
                     "`apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「{yn}」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「{yn}」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼びます。",

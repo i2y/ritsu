@@ -54,6 +54,9 @@ pub fn api(c: &Checked) -> Value {
                     if let Some((f, _)) = &p.rulec {
                         from.push(value(&Name::file(Tool::Rulec, f.clone()).to_json()));
                     }
+                    if let Some((d, _)) = &p.krate {
+                        from.push(value(&Name::file(Tool::File, crate::cargo::manifest_of(d)).to_json()));
+                    }
                     json!({
                         "package": p.package,
                         "from": from,

@@ -502,7 +502,7 @@ impl<'a> P<'a> {
                 let col = l.tokens.get(1).map(|t| t.col).unwrap_or(l.tokens[0].end);
                 let w = other.unwrap_or("").to_string();
                 self.push("E002", l, col, tr!("`code` のあとの言語 `{w}` は知りません", "`{w}` after `code` is not a language sakai knows"));
-                self.note(tr!("書けるのは python、typescript、java、go です。", "The languages are python, typescript, java and go."));
+                self.note(tr!("書けるのは python、typescript、java、go、rust です。", "The languages are python, typescript, java, go and rust."));
                 return None;
             }
         };
@@ -613,29 +613,35 @@ impl<'a> P<'a> {
         if !is_package(&pkg) {
             self.push("E002", l, t.col, tr!("ここには proto の package を書きます", "A proto package goes here"));
             self.note(tr!(
-                "package は `warehouse.v1` のように、ASCII の名前を `.` でつないだものです。公表された言語は proto の package を単位にします。",
-                "A package is ASCII names joined with `.`, like `warehouse.v1`; a published language is one proto package."
+                "package は `warehouse.v1` のように、ASCII の名前を `.` でつないだものです。公表された言語は proto の package を単位にします（Rust のクレートなら、コードが書くクレートの名前 `ritsu_ports`）。",
+                "A package is ASCII names joined with `.`, like `warehouse.v1`; a published language is one proto package (for a Rust crate, the crate's name as code writes it, `ritsu_ports`)."
             ));
             return None;
         }
         self.end(l, 3);
-        let mut p = Published { package: pkg, pos: pos(l, &l.tokens[0]), package_pos: pos(l, t), protos: vec![], rulec: None, services: vec![], generated: vec![] };
+        let mut p = Published { package: pkg, pos: pos(l, &l.tokens[0]), package_pos: pos(l, t), protos: vec![], rulec: None, krate: None, services: vec![], generated: vec![] };
         let mut said_services = false;
         let before = self.diags.len();
         for ch in &n.children {
             let cl = self.line(ch);
             let t0 = &cl.tokens[0];
             if t0.is("proto") {
-                if p.rulec.is_some() {
+                if p.rulec.is_some() || p.krate.is_some() {
                     self.mixed(cl);
                 } else if let Some(ss) = self.strings(cl, 1) {
                     p.protos.extend(ss);
                 }
             } else if t0.is("rulec") {
-                if !p.protos.is_empty() || p.rulec.is_some() {
+                if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() {
                     self.mixed(cl);
                 } else {
                     p.rulec = self.one_string(cl, 1);
+                }
+            } else if t0.is(kw::CRATE) {
+                if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() {
+                    self.mixed(cl);
+                } else {
+                    p.krate = self.one_string(cl, 1);
                 }
             } else if t0.is(kw::OPEN) && cl.tokens.get(1).is_some_and(|t| t.is(kw::HOST)) && cl.tokens.get(2).is_some_and(|t| t.is(kw::SERVICE)) {
                 if said_services {
@@ -653,28 +659,28 @@ impl<'a> P<'a> {
                 let w = cl.rest_from(t0.col).trim().to_string();
                 self.push("E002", cl, t0.col, tr!("ここに `{w}` は書けません", "`{w}` does not belong here"));
                 self.note(tr!(
-                    "公表された言語の下には、`proto \"<パス>\"` か `rulec \"<パス>\"`、`open host service <サービス>`、`generated dir \"<パス>\"` を書きます。",
-                    "Under a published language go `proto \"<path>\"` or `rulec \"<path>\"`, `open host service <service>`, and `generated dir \"<path>\"`."
+                    "公表された言語の下には、`proto \"<パス>\"` か `rulec \"<パス>\"` か `crate \"<パス>\"`、`open host service <サービス>`、`generated dir \"<パス>\"` を書きます。",
+                    "Under a published language go `proto \"<path>\"`, `rulec \"<path>\"` or `crate \"<path>\"`, `open host service <service>`, and `generated dir \"<path>\"`."
                 ));
             }
             self.leaf(ch, cl.tokens[0].word().unwrap_or(""));
         }
-        if p.protos.is_empty() && p.rulec.is_none() && self.diags.len() == before {
+        if p.protos.is_empty() && p.rulec.is_none() && p.krate.is_none() && self.diags.len() == before {
             let pk = p.package.clone();
-            self.push("E004", l, l.tokens[0].col, tr!("公表された言語 {pk} に、proto も rulec の規則もありません", "The published language {pk} has no proto and no rule"));
+            self.push("E004", l, l.tokens[0].col, tr!("公表された言語 {pk} に、proto も rulec の規則も Rust のクレートもありません", "The published language {pk} has no proto, no rule and no crate"));
             self.note(tr!(
-                "下に `proto \"<パス>\"`（その package を宣言する proto のファイル）か、`rulec \"<パス>\"`（Connect のサービスを公表する規則）を書きます。",
-                "Write under it `proto \"<path>\"` (the proto files that declare the package) or `rulec \"<path>\"` (a rule whose Connect service it publishes)."
+                "下に `proto \"<パス>\"`（その package を宣言する proto のファイル）か、`rulec \"<パス>\"`（Connect のサービスを公表する規則）か、`crate \"<パス>\"`（公表する Rust のクレートのディレクトリ）を書きます。",
+                "Write under it `proto \"<path>\"` (the proto files that declare the package), `rulec \"<path>\"` (a rule whose Connect service it publishes) or `crate \"<path>\"` (the directory of a Rust crate it publishes)."
             ));
         }
         Some(p)
     }
 
     fn mixed(&mut self, l: &Line) {
-        self.push("E004", l, l.tokens[0].col, tr!("一つの公表された言語に、proto と rulec を混ぜたり、規則を二つ書いたりはできません", "One published language cannot mix proto and rulec, or hold two rules"));
+        self.push("E004", l, l.tokens[0].col, tr!("一つの公表された言語に、proto と rulec と Rust のクレートを混ぜたり、規則やクレートを二つ書いたりはできません", "One published language cannot mix proto, rulec and a crate, or hold two rules or two crates"));
         self.note(tr!(
-            "rulec の規則は、規則ごとに一つの Connect のサービスを公表するので、規則ごとに `published language rulec.<別名>.v<版>` を分けます。",
-            "A rule publishes one Connect service of its own, so each rule gets its own `published language rulec.<alias>.v<n>`."
+            "rulec の規則は、規則ごとに一つの Connect のサービスを公表するので、規則ごとに `published language rulec.<別名>.v<版>` を分けます。Rust のクレートも、クレートごとに一つの公表された言語にします。",
+            "A rule publishes one Connect service of its own, so each rule gets its own `published language rulec.<alias>.v<n>`; a Rust crate, too, is a published language of its own."
         ));
     }
 

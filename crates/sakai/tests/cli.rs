@@ -128,7 +128,7 @@ fn check_exit_codes_and_formats() {
     assert_eq!(code(&o), 0, "{}", err(&o));
     let lines: Vec<serde_json::Value> = out(&o).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
     let files: Vec<&str> = lines.iter().map(|v| v["file"].as_str().unwrap()).collect();
-    assert_eq!(files, ["パターン/パターン.ctx", "入れ子/入れ子.ctx", "基本/基本.ctx"]);
+    assert_eq!(files, ["rust/shop.ctx", "パターン/パターン.ctx", "入れ子/入れ子.ctx", "基本/基本.ctx"]);
     assert!(lines.iter().all(|v| v["root"] == "tests/maps"));
     assert!(lines.iter().all(|v| v["ok"] == true && v["diagnostics"].as_array().unwrap().is_empty()));
 }

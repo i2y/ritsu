@@ -1,0 +1,12 @@
+context Calendars(koyomi) v1
+description "Closing days, payment days and business days, checked on every day of their range (koyomi)"
+
+owns
+  dir "../crates/koyomi"
+
+published language koyomi
+  crate "../crates/koyomi"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports

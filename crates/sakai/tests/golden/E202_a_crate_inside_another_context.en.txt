@@ -1,0 +1,6 @@
+error[E202]: orders/Cargo.toml:8:1: The file orders/Cargo.toml of Orders depends on stock-ledger (dependencies), which is inside Stock
+     8 | stock-ledger = { path = "../stock-ledger" }
+  = The crate at stock-ledger is in no published language of Stock; a crate across the boundary is depended on only once Stock puts it in a published language (`crate "…"` under a `published language`), or from the two's shared kernel.
+  involved:
+      Orders  orders/Cargo.toml:8             stock-ledger = { path = "../stock-ledger" }
+      Stock   file "stock-ledger/Cargo.toml"  a crate inside Stock

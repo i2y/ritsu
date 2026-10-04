@@ -1,0 +1,12 @@
+context Stock(stock) v1
+description "Keeps the count of what is on the shelves"
+owner "Warehouse team"
+
+owns
+  dir "../stock", "../stock-ledger"
+
+published language stock
+  crate "../stock"
+
+published language ledger
+  crate "../stock-ledger"
