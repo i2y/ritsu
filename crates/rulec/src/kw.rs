@@ -193,7 +193,8 @@ pub const HALF_DOWN: &str = "half_down";
 pub const MIN: &str = "min";
 pub const MAX: &str = "max";
 
-// --- The built-in namespace (`import std/都道府県`)
+// --- The built-in namespace (`import std/us/states`, `import std/都道府県`; the paths are the
+// prelude's, §15.182)
 pub const STD: &str = "std";
 /// The other kind of import names the file an enum's value set is declared in (§15.59,
 /// §15.60): `import proto "<file>" <Enum> -> <enum>` and `import jsonschema "<file>"

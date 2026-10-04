@@ -123,6 +123,12 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
     if diags.iter().any(|d| d.severity == Severity::Error && d.code != "E040") {
         return Report { diags, quiet, shadow, nodes };
     }
+    // Every spelling of an imported division becomes the one value it stands for (§15.182).
+    let spelled = prelude::normalize(&mut f, path);
+    if has_error(&spelled) {
+        diags.extend(spelled);
+        return Report { diags, quiet, shadow, nodes };
+    }
     let f = &f;
 
     let t = types::check(f, path);
@@ -319,6 +325,10 @@ fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleF
     let Some(mut f) = parsed.file else { return Err(Vec::new()) };
     let ds = apply::expand(&mut f, path);
     if ds.iter().any(|d| d.severity == Severity::Error && !(tolerate_pin && d.code == "E040")) {
+        return Err(ds);
+    }
+    let ds = prelude::normalize(&mut f, path);
+    if has_error(&ds) {
         return Err(ds);
     }
     let t = types::check(&f, path);

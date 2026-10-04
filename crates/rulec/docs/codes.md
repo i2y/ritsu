@@ -357,9 +357,9 @@ Related codes: [E009](#e009), [E012](#e012)
 
 `error` — **The name is not declared**
 
-**When.** A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it.
+**When.** A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. And it appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia).
 
-**Fix.** Match the spelling to the declaration, or declare the input, derived value or definition above.
+**Fix.** Match the spelling to the declaration, or declare the input, derived value or definition above. For a spelling two countries share, write the value's name (`Washington` or `Western_Australia`).
 
 **Smallest reproduction**:
 
@@ -384,16 +384,16 @@ Related codes: [E011](#e011), [E013](#e013)
 
 `error` — **No such import**
 
-**When.** The target of `import` is not there. There are three kinds: the built-in namespace (`std/都道府県`, 47 values, is the only one for now), an enum in a `.proto` (`import proto "<file>" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema "<file>" "<pointer>" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it.
+**When.** The target of `import` is not there. There are three kinds: the built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese), an enum in a `.proto` (`import proto "<file>" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema "<file>" "<pointer>" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`).
 
-**Fix.** Correct it to `import std/都道府県`, or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there.
+**Fix.** Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there.
 
 **Smallest reproduction**:
 
 ```rule
 rule t(t) v1
 
-import std/nope
+import std/us/state
 ```
 
 Related codes: [E012](#e012), [E032](#e032)

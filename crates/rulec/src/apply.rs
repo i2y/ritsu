@@ -315,6 +315,44 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             continue;
         }
 
+        // The divisions of a country (§15.182). A binding may name one in any of its
+        // spellings, and both sides of a `with` too; read as the values they stand for, they
+        // are what the rest of this function and `check` compare. The same country imported
+        // under its other name here (`std/都道府県` against `std/jp/prefectures`) maps division
+        // by division, as a value spelled the same on both sides does.
+        for b in &mut a.bindings {
+            let Some(cin) = cf.inputs.iter().find(|i| i.name.text == b.input) else { continue };
+            let Some(theirs) = crate::prelude::import_of(&cf, &cin.ty.base) else { continue };
+            match &mut b.value {
+                BindValue::Name(w) | BindValue::Lit(Lit::Word(w)) if !declares(f, w) => {
+                    if let Some(v) = theirs.resolve(w) {
+                        *w = v.to_string();
+                    }
+                }
+                _ => {}
+            }
+            let ours = match &b.value {
+                BindValue::Name(n) if declares(f, n) => caller_import(f, n),
+                _ => None,
+            };
+            for (from, to) in &mut b.map {
+                if let Some(v) = theirs.resolve(to) {
+                    *to = v.to_string();
+                }
+                if let Some(v) = ours.and_then(|im| im.resolve(from)) {
+                    *from = v.to_string();
+                }
+            }
+            if let Some(ours) = ours.filter(|o| o.ns.country == theirs.ns.country && o.japanese != theirs.japanese) {
+                for d in ours.ns.divisions {
+                    let from = ours.value(d).to_string();
+                    if !b.map.iter().any(|(x, _)| *x == from) {
+                        b.map.push((from, theirs.value(d).to_string()));
+                    }
+                }
+            }
+        }
+
         // The renamer: subs, maps, groups.
         let mut subs: HashMap<String, Sub> = HashMap::new();
         let mut maps: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
@@ -489,9 +527,13 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 base: Some(cp.clone()),
             });
         }
-        // Prefectures the callee's cells name need the enum here too.
+        // The divisions the callee's cells name need the enum here too — unless this rule
+        // imports the same country already, under the other name (`std/都道府県` and
+        // `std/jp/prefectures`): its cells are then spelled this rule's way (§15.182).
         for (p, sp) in &cf.imports {
-            if !f.imports.iter().any(|(q, _)| q == p) {
+            let country = crate::prelude::lookup(p).map(|i| i.ns.country);
+            let held = f.imports.iter().any(|(q, _)| q == p || (country.is_some() && crate::prelude::lookup(q).map(|i| i.ns.country) == country));
+            if !held {
                 f.imports.push((p.clone(), sp.clone()));
             }
         }
@@ -508,7 +550,9 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 .map(|i| CalleeInput { name: i.name.text.clone(), ty: cc.ty_of(&i.name.text).unwrap_or(Ty::Unknown), range: i.range.clone() })
                 .collect(),
             constraints: cf.constraints.clone(),
-            enums: cf.enums.iter().map(|e| (e.name.text.clone(), e.values.iter().map(|v| v.text.clone()).collect())).collect(),
+            // Every enum the callee's inputs can take, an imported one too (§15.182): a binding
+            // between two inputs of the built-in divisions is checked against these values.
+            enums: cc.enum_order.iter().filter_map(|e| cc.enums.get(e).map(|vs| (e.clone(), vs.clone()))).collect(),
         });
         shift += n;
         done.push(a);
@@ -664,6 +708,12 @@ fn prune(items: &mut Vec<Item>, roots: &[String], result: Option<Expr>) {
     }
 }
 
+/// The built-in namespace an input of this rule takes its values from (§15.182).
+fn caller_import(f: &RuleFile, name: &str) -> Option<crate::prelude::Import> {
+    let base = f.inputs.iter().find(|i| i.name.text == name).map(|i| i.ty.base.clone())?;
+    crate::prelude::import_of(f, &base)
+}
+
 /// The values of the enum a name of this rule has, when that is knowable before the rule
 /// is typed: an input, or an output column of a table declared with its type.
 fn caller_enum_values(f: &RuleFile, name: &str) -> Option<Vec<String>> {
@@ -678,8 +728,8 @@ fn caller_enum_values(f: &RuleFile, name: &str) -> Option<Vec<String>> {
                 _ => None,
             })
         })?;
-    if base == "都道府県" {
-        return crate::prelude::lookup("std/都道府県").map(|(_, vs)| vs);
+    if let Some(im) = crate::prelude::import_of(f, &base) {
+        return Some(im.values());
     }
     f.enums.iter().find(|e| e.name.text == base).map(|e| e.values.iter().map(|v| v.text.clone()).collect())
 }

@@ -393,7 +393,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
             }
         }
         for (im, _) in &f.imports {
-            let name = im.rsplit('/').next().unwrap_or(im);
+            let name = crate::prelude::lookup(im).map(|i| i.ty).unwrap_or_else(|| im.rsplit('/').next().unwrap_or(im));
             let n = c.enums.get(name).map(|v| v.len()).unwrap_or(0);
             o.push_str(&tr!(
                 "- **{}**（{}）— 組み込み（`{} {}`）\n",

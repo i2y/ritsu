@@ -23,6 +23,7 @@ include = [
     "/README.md",
     "/LICENSE-MIT",
     "/LICENSE-APACHE",
+    "/THIRD_PARTY_NOTICES",
 ]
 
 # ritsu's base layer, nothing outside the workspace (ritsu's DESIGN 3.1, 4.9): rulec still

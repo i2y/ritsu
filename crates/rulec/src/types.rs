@@ -338,6 +338,8 @@ pub enum SymKind {
 }
 
 pub struct Checked {
+    /// The built-in namespaces the rule imports (§15.182), for the hints of E012.
+    pub imported: Vec<crate::prelude::Import>,
     pub syms: HashMap<String, Sym>,
     /// Output name → rounding (mode and grid). E106 checks that literals sit on this grid.
     pub roundings: HashMap<String, (RoundMode, Rat)>,
@@ -506,6 +508,7 @@ pub fn element_scoped(f: &RuleFile) -> HashSet<String> {
 
 pub fn check(f: &RuleFile, path: &str) -> Checked {
     let mut c = Checked {
+        imported: crate::prelude::imports(f),
         syms: HashMap::new(),
         roundings: HashMap::new(),
         ranges: HashMap::new(),
@@ -558,19 +561,41 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
 
     let at = |line: usize| format!("{path}:{line}");
 
-    // std/都道府県 is the only import the corpus needs; its 47 values come from the
-    // prelude (§2.2). Until the prelude is a real file, accept any value for it.
+    // The built-in namespace: the first-level divisions of thirteen countries, their values
+    // from the prelude (§2.2, §15.182). Every other spelling of a division was already written
+    // as its value (`prelude::normalize`).
+    let mut seen: Vec<(&str, &str)> = Vec::new();
     for (p, sp) in &f.imports {
         match crate::prelude::lookup(p) {
-            Some((name, values)) => {
-                c.enum_order.push(name.clone());
-                c.enums.insert(name, values);
+            Some(im) => {
+                // `std/都道府県` and `std/jp/prefectures` are the same 47 prefectures, spelled two
+                // ways: both in one rule would be two enums of one generated type.
+                if let Some((q, _)) = seen.iter().find(|(_, c)| *c == im.ns.country) {
+                    c.diags.push(
+                        Diag::error("E013", tr!("`{p}` は `{q}` と同じ区分です", "`{p}` holds the same divisions as `{q}`"))
+                            .at(at(sp.line))
+                            .mark(sp.clone(), "")
+                            .note(tr!(
+                                "一つの国の区分は、一つの名前で取り込んでください。`std/都道府県` は値を日本語で、`std/jp/prefectures` は英語で書きます。どちらの綴りも、どちらの取り込みでも書けます。",
+                                "Import one country's divisions under one name. `std/都道府県` spells the values in Japanese and `std/jp/prefectures` in English; either import accepts both spellings."
+                            )),
+                    );
+                    continue;
+                }
+                seen.push((p.as_str(), im.ns.country));
+                c.enum_order.push(im.ty.to_string());
+                c.enums.insert(im.ty.to_string(), im.values());
             }
             None => c.diags.push(
                 Diag::error("E013", tr!("`{p}` という取込先はありません", "There is no import named `{p}`"))
                     .at(at(sp.line))
                     .mark(sp.clone(), "")
-                    .note(tr!("組み込みは 標準/都道府県 だけです（§2.2）。", "The only built-in module is std/都道府県 (§2.2).")),
+                    .maybe_note(crate::prelude::nearest_path(p).map(|q| tr!("`{q}` のことですか。", "Did you mean `{q}`?")))
+                    .note(tr!(
+                        "組み込みの名前空間は、十三か国の一段目の区分です（§2.2）: {}。",
+                        "The built-in namespaces are the first-level divisions of thirteen countries (§2.2): {}.",
+                        crate::prelude::paths().join(", ")
+                    )),
             ),
         }
     }
@@ -592,6 +617,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     Diag::error("E012", tr!("`{}` はどの列挙の値でもありません", "`{}` is not a value of any enum", m.text))
                         .at(at(m.span.line))
                         .mark(m.span.clone(), tr!("群の一員として書かれています", "written as a member of this group"))
+                        .maybe_note(crate::prelude::hint(&m.text, &c.imported))
                         .note(tr!(
                             "群は列挙の値の部分集合です。綴りを直すか、その値を列挙に足してください。読めない一員は黙って外され、群は一つ小さくなります。",
                             "A group is a subset of an enum's values. Correct the spelling, or add the value to the enum. A member that names nothing was dropped in silence, leaving the group one value smaller."
@@ -2834,6 +2860,7 @@ impl Checked {
                                 Diag::error("E012", tr!("`{w}` は値の名前としても、宣言された名前としても見つかりません", "`{w}` is found neither as a value nor as a declared name"))
                                     .at(at(row.span.line))
                                     .mark(osp.clone(), "")
+                                    .maybe_note(crate::prelude::hint(w, &self.imported))
                                     .note(tr!("出力セルに書けるのは リテラルか名前（入力・導出・定義）だけです（§3.2）。式は書けません。", "An output cell holds only a literal or a name (an input, derived value, or definition) (§3.2). Expressions are not allowed.")),
                             );
                         }
@@ -2968,7 +2995,8 @@ impl Checked {
                             self.diags.push(
                                 Diag::error("E012", tr!("`{w}` は値の名前としても、宣言された名前としても見つかりません", "`{w}` is found neither as a value nor as a declared name"))
                                     .at(at(row.span.line))
-                                    .mark(osp, ""),
+                                    .mark(osp, "")
+                                    .maybe_note(crate::prelude::hint(w, &self.imported)),
                             );
                         }
                     }
@@ -3401,7 +3429,8 @@ impl Checked {
                     (None, _) => s.diags.push(
                         Diag::error("E012", tr!("`{w}` は値としてもグループとしても見つかりません", "`{w}` is found neither as a value nor as a group"))
                             .at(at.to_string())
-                            .mark(span.clone(), ""),
+                            .mark(span.clone(), "")
+                            .maybe_note(crate::prelude::hint(w, &s.imported)),
                     ),
                     (Some(e), _) => s.diags.push(
                         Diag::error("E103", tr!("この列は {want} ですが `{w}`（{e} の値）が書かれています", "This column is {want}, but `{w}` (a value of {e}) is written here"))

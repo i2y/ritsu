@@ -117,8 +117,10 @@ fn 英語の再現は日本語の再現と同じ診断を同じ行に出す() {
         assert_eq!(printed(&e, en), printed(&e, e.repro(Lang::Ja)), "{} の英語の例が日本語の例と違う診断を出す", e.code);
     }
     // The twins are the reproductions that had Japanese names, strings or units: 61 of the 112
-    // entries, less the six that stay as they are (below).
-    assert_eq!(twins, 55, "英語の再現を持つ項目の数が変わった: {twins}");
+    // entries, less the six that stay as they are (below); and E013, whose Japanese
+    // reproduction misspells `std/都道府県` and whose English one misspells `std/us/states`
+    // (DESIGN §15.182).
+    assert_eq!(twins, 56, "英語の再現を持つ項目の数が変わった: {twins}");
 }
 
 /// Japanese is left in a reproduction shown in English only where being Japanese is the point of

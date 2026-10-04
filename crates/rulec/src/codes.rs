@@ -148,7 +148,8 @@ const X_E011: &str = "rule t(t) v1\n\ninputs\n  重量 : bool\n\noutputs\n  r(r)
                       table j(j)\npolicy unique\n| 重量 | -> r(r) : bool |\n| -    | true           |\n";
 const X_E012: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| y | -> r(r) : bool |\n| - | true           |\n";
-const X_E013: &str = "rule t(t) v1\n\nimport std/nope\n";
+const X_E013: &str = "rule t(t) v1\n\nimport std/都道府\n";
+const X_E013_EN: &str = "rule t(t) v1\n\nimport std/us/state\n";
 
 /// The `.proto` that E032 and E033 are read against. Two values and proto3's zero value,
 /// which is "not set" and not a value a table answers for.
@@ -1666,12 +1667,12 @@ pub fn ledger() -> Vec<Entry> {
             "E012",
             tr!("宣言されていない名前です", "The name is not declared"),
             tr!(
-                "表の列や式が、どこにも宣言されていない名前を指しているとき。前方参照は書けないので、名前はそれを使う行より上で宣言します。",
-                "A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it."
+                "表の列や式が、どこにも宣言されていない名前を指しているとき。前方参照は書けないので、名前はそれを使う行より上で宣言します。セルや群に書いた値がどの列挙の値でもないときも出ます。組み込みの区分（`std/us/states` など）を取り込んでいれば、似た綴りの値か、その語を値に持つ別の国の名前空間を添えます。取り込んだ二つの国が同じ綴り（`WA` はワシントン州と西オーストラリア州の符号）を持つ語を書いたときも、これです。",
+                "A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. And it appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia)."
             ),
             tr!(
-                "綴りを宣言に合わせるか、その入力・導出・定義を上に宣言してください。",
-                "Match the spelling to the declaration, or declare the input, derived value or definition above."
+                "綴りを宣言に合わせるか、その入力・導出・定義を上に宣言してください。二つの国が共有する綴りなら、値の名前（`Washington` か `Western_Australia`）で書きます。",
+                "Match the spelling to the declaration, or declare the input, derived value or definition above. For a spelling two countries share, write the value's name (`Washington` or `Western_Australia`)."
             ),
             X_E012,
             &["E011", "E013"],
@@ -1680,16 +1681,17 @@ pub fn ledger() -> Vec<Entry> {
             "E013",
             tr!("取込先がありません", "No such import"),
             tr!(
-                "`import` の先が無いとき。取込先は三つあります。組み込みの名前空間（いまは `std/都道府県`、47 値）、`.proto` の列挙（`import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`）、JSON Schema の列挙（`import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`、OpenAPI も同じ）です。あとの二つは、ファイルを読めないとき、その列挙がファイルに無いとき、行の形が違うときに出ます。YAML は読まないので、JSON にしたものを指してください。",
-                "The target of `import` is not there. There are three kinds: the built-in namespace (`std/都道府県`, 47 values, is the only one for now), an enum in a `.proto` (`import proto \"<file>\" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema \"<file>\" \"<pointer>\" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it."
+                "`import` の先が無いとき。取込先は三つあります。組み込みの名前空間（十三か国の一段目の区分。`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本の都道府県は `std/都道府県` でも取り込めて、そのときは値を日本語で書きます）、`.proto` の列挙（`import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`）、JSON Schema の列挙（`import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`、OpenAPI も同じ）です。あとの二つは、ファイルを読めないとき、その列挙がファイルに無いとき、行の形が違うときに出ます。YAML は読まないので、JSON にしたものを指してください。一つの国の区分を二つの名前で取り込んだとき（`std/都道府県` と `std/jp/prefectures`）も出ます。",
+                "The target of `import` is not there. There are three kinds: the built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese), an enum in a `.proto` (`import proto \"<file>\" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema \"<file>\" \"<pointer>\" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`)."
             ),
             tr!(
-                "`import std/都道府県` に直すか、その列挙を `enum` でこのファイルに書いてください。ファイルから取り込むなら、パスは規則ファイルのある場所からたどるので、そこからの相対で書きます。JSON Schema のポインタは `#/components/schemas/<名前>` の形で、届かなかったときは、そこにある鍵が並びます。",
-                "Correct it to `import std/都道府県`, or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there."
+                "名前空間の綴りを直すか（似た綴りがあれば注に出ます）、その列挙を `enum` でこのファイルに書いてください。ファイルから取り込むなら、パスは規則ファイルのある場所からたどるので、そこからの相対で書きます。JSON Schema のポインタは `#/components/schemas/<名前>` の形で、届かなかったときは、そこにある鍵が並びます。",
+                "Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there."
             ),
             X_E013,
             &["E012", "E032"],
-        ),
+        )
+        .english(X_E013_EN),
         err(
             "E014",
             tr!("出力のセルに式は書けません", "An output cell cannot hold an expression"),

@@ -368,10 +368,11 @@ impl<'a> Gen<'a> {
                 value_names.insert((e.name.text.clone(), v.text.clone()), (ty.clone(), pascal(&pub_name(v))));
             }
         }
-        if f.imports.iter().any(|(p, _)| p.ends_with("都道府県")) {
-            enum_names.insert("都道府県".into(), "Prefecture".into());
-            for (j, r) in crate::prelude::PREFECTURES {
-                value_names.insert(("都道府県".into(), (*j).into()), ("Prefecture".into(), (*r).into()));
+        // The built-in namespaces: the generated names are frozen in the prelude (§15.182).
+        for im in crate::prelude::imports(f) {
+            enum_names.insert(im.ty.to_string(), im.ns.generated.to_string());
+            for d in im.ns.divisions {
+                value_names.insert((im.ty.to_string(), im.value(d).to_string()), (im.ns.generated.to_string(), d.member.to_string()));
             }
         }
         let mut w114: BTreeMap<String, Vec<(usize, usize)>> = BTreeMap::new();
@@ -5197,8 +5198,8 @@ impl<'a> Gen<'a> {
         if let Some(e) = self.f.enums.iter().find(|e| e.name.text == n) {
             return e.values.iter().map(|v| self.rs_value(&v.text, &Ty::Enum(n.to_string()))).collect();
         }
-        if n == "都道府県" {
-            return crate::prelude::PREFECTURES.iter().map(|(j, _)| self.rs_value(j, &Ty::Enum(n.to_string()))).collect();
+        if let Some(im) = crate::prelude::import_of(self.f, n) {
+            return im.values().iter().map(|v| self.rs_value(v, &Ty::Enum(n.to_string()))).collect();
         }
         Vec::new()
     }
