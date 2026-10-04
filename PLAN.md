@@ -507,6 +507,15 @@ D.10 でしたこと（2026-10-04）：
 5. yuen の C.1〜C.9 と sakai の C.1〜C.5 が、書き直した計画の完了の条件を満たす。
 6. 報告に、変えた golden の一覧と、yuen の取り直したハッシュの一覧を書く。
 
+D.11 でしたこと（2026-10-04、D の最後の部分）：
+
+1. 根から `cargo test --workspace --no-fail-fast -- --nocapture`（dandori の重い十二を `--skip` で外したもの）が、10 分 54 秒で 1,576 件通った（ignored 1、rulec の一つ）。SKIP は 0 で、dandori の Jev も、作者の環境の TypeSafe の鍵で TypeSafe に送って回した。外した十二は一つずつ `cargo test -p dandori -- --exact <名前>` で回し、全部が一度で通った（durable 16 秒、pydantic-graph 4 秒、記録した履歴の再生 16 秒、LocalStack 69 秒、Temporal の TypeScript 74 秒・Python 63 秒・Go 72 秒・言語をまたぐ 106 秒・Worker Versioning 17 秒・子のフロー 13 秒、Argo 126 秒、Ollama 25 秒。回し直しは無し）。合わせて 1,588 件で、クレートごとには rulec 744（ignored 1）、geas 231、yuen 118、koyomi 104、dandori 102（重い十二を含む）、sakai 95、chobo 70、ritsu-base 66、ritsu-testkit 15、ritsu-proto 14、ritsu-units 9、ritsu 7、xtask 6、ritsu-emit 5、ritsu-ports 2。コンパイラの警告は rulec のテスト関数の名前の七つだけ（前と同じ）。一度目に回したとき、`ritsu-proto` の `tests/readers.rs` の三つが落ちた。D.8 で足した sakai の変異（`E105_取り込みが合わない規則`）の `.proto` が、三つの読み手で読む `.proto` の一覧に加わったからで、golden（`tests/golden/` の `rulec.txt`、`dandori.txt`、`sakai.txt`）に、そのファイルの行を足した（ほかの行は変わらない）。
+2. ritsu のツールどうしが子プロセスで呼び合うところは無い。`crates/*/src` の `Command::new` の相手は、git、go、rustc、python3、psql、curl、Chrome、PostgreSQL、TigerBeetle、kill と ps などの外のもの、rulec が生成したコード、利用者が渡すアダプタと抽出器、geas が外から叩くプログラムである。ritsu の言語のバイナリを走らせるのは、rulec の MCP サーバーが、MCP のツールを呼ばれるたびに自分自身（`current_exe`）を走らせるところだけで、言語どうしではない（rulec の §15.163）。テストでは、各クレートが自分のバイナリ（`CARGO_BIN_EXE_<名前>`）を、`crates/ritsu/tests/` が `ritsu` を走らせる（テストのランナー）。ほかの言語のバイナリを走らせるテストは、D.8 で sakai の最後のもの（例の写しの確かめ）を口に替えて、無くなった。
+3. D.3 の突き合わせは、JSON の読み手を消す前に、rulec のコーパスの 50 本と dandori の 14 本の規則で、dandori が読む 1,939 の項目を比べて通した（違った 7 か所はどれも JSON の側の読み違え。D の二つ目の部分。DESIGN 3.2）。
+4. DESIGN 1.4 の二つの例は直っている。`hold.flow` は通り（dandori の `tests/units.rs` の `an_amount_in_jpy_goes_where_yen_is_taken`）、dandori は率の刻みを、説明の文からではなく口の事実の型から読む（D.3、D.4）。
+5. yuen の C.1〜C.9 は、書き直した計画の完了の条件（yuen の PLAN の C.13）を満たした。sakai の C.1〜C.5 は、書き直した計画の完了の条件（sakai の PLAN の C.15 の表の、例の `check`、一式の言語、変異、台帳、文書の行）を満たした。
+6. 報告に、変えた golden の一覧と、yuen の取り直したハッシュの一覧を書いた（ハッシュは yuen の PLAN の C.13 と DESIGN 19 章にもある）。
+
 ## 5. 段階 E：言語をまたぐ検査と一つの入口
 
 大きい段階なので、指示する側が二人に分けてよい。分けるなら E-a（E.1〜E.4 と E.8）を先に、E-b（E.5〜E.7）をそのあとにする（E-b は E.1 の読み込みを使う）。
@@ -720,3 +729,18 @@ DESIGN 11 章。`crates/rulec/proofs/` を根の `proofs/` に移し、rulec の
 - 見つけたこと（直していない）：rulec が order_state.rule のために生成する TypeScript は、`tsc --strict`（TypeScript 7）を通らない（`Event` を、絞り込んだ値の型に渡しているところが三つ）。dandori のフローで order_state を関数として呼ぶものが無かったので、表に出ていなかった。rulec の生成器の問題である。（D の最後の部分で直した。rulec の §15.171、PLAN の D.11）
 - 片づけ：`env-full.sh` が `DANDORI_RULEC` を書いているが、dandori はもう読まない（害は無い）。テストのあとの OS の一時ディレクトリは、この部分の報告に前と後の数を書いた。
 - テストの回し方：7.5 と同じ。dandori のテストは rulec のバイナリを要らない（ライブラリの口で読む）。`cargo xtask test --level platforms -p dandori -- --exact <名前>` で重いテストを一つずつ回す。sakai の `what_was_copied_passes_the_suite` は、dandori のワークフローを `ritsu dandori check` で確かめるようになった（dandori のクレートのバイナリは規則を読まないため。D.3 のあとで落ちていたのを、この部分の終わりに直した）。`SAKAI_DANDORI` の代わりに `SAKAI_RITSU` を読み、無ければワークスペースの `target/debug/ritsu` を使う。CI の `tools` も `SAKAI_RITSU` を渡す。
+
+### 7.8 D から E へ（D の最後の部分の終わりに書いた）
+
+- 済んだもの：段階 D の全部（D.1〜D.11）。この部分では D.7（yuen の一式の読み込み）、D.8（sakai の一式の読み込み）、D.9（chobo の単位）、D.11 の確かめをした。入口の最小の形に `ritsu yuen` と `ritsu sakai` を足した（DESIGN 8.6）。7.7 に書いた「見つけたこと」の、rulec が生成する TypeScript が `tsc --strict` を通らないことも直した（rulec の §15.171。コーパスの 50 本の TypeScript を `tsc --strict` にかけるテストを rulec に足した）。言語のクレートで、ほかの言語を読むものは dandori、yuen、sakai の三つで、どれもほかの言語を口で受け取り、自分のクレートのバイナリはほかの言語を持たない（DESIGN 2.3）。
+- E の手がかり：
+  - 入口：`ritsu` が持つのは `ritsu dandori`、`ritsu yuen`、`ritsu sakai` と `--help`、`--version` だけで、ほかの四つの言語の名前には、まだ無いと言って 2 で終わる。三つの口のつなぎ方は `crates/ritsu/src/main.rs` の `yuen_suite` と `sakai_suite`（dandori は `rulec::ports::Engine` を一つ渡す）にある。E.1 の `ritsu-project` が出す側の実装を作って渡すようになれば、ここは消える。そのとき、同じ規則を yuen と sakai と dandori が別々に読むこと（三つがそれぞれ `rulec::ports::Engine::new()` を持ち、覚えた事実を分け合わない）も無くなる。
+  - 名指し（7.10 の X10）：`Items` と `References` は七つの言語の全部が答えるようになった（sakai は `References` を受け取る側でもある）。yuen は名指しを `src/ends.rs` で、sakai は `src/elements.rs` と `src/suite.rs` で、それぞれ自分で引いている。索引に引き方を替えるのは、この二か所である。
+  - 断り方：yuen のクレートのバイナリは、ほかの言語のものを名指すプロジェクトに exit 2 で断り（`ritsu yuen` に同じコマンドを続けた形を言う）、sakai のクレートのバイナリは、規則、カレンダー、ワークフローを含む地図に E104 を出す（exit 1）。どちらも言語のクレートのバイナリのためのもので、リリースのリンクの名前（DESIGN 2.3）がすべての口をつないで動くようになれば出なくなる。台帳の E104 は残す。
+  - 確かめていないこと：sakai の api の `not_checked` は、いつも空の並びのまま残した（sakai の DESIGN 9 章）。`ritsu check` が「確かめていないこと」を一つの形で言うなら、それに合わせて決め直す。
+  - X4：chobo の単位は ritsu の単位の型になり、口の `BookUnit` が持つ（D.9）。受け取るところ（dandori の `use book`、規則の出力から振替の額へ）で単位と税の区別を確かめる検査は E の X4 である。
+  - sakai の doc（sakai の PLAN の D.1）は、chobo の勘定と振替を `Books` で読むところ（`suite::book_names`）まで作った。
+  - yuen の `affected` は、geas の記録を二つ渡すと、記録がどちらの側のものかを差分と突き合わせて決める（yuen の DESIGN 8 章）。`ritsu check` が差分を受け取るなら、同じ口（`Claims::affected`）を使う。
+- 見つけたこと（直していない）：rulec のテスト関数の名前のうち七つが、Rust の `non_snake_case` の警告を出す（C の前からある。C.13）。
+- 片づけ：sakai の環境変数 `SAKAI_RULEC`・`SAKAI_KOYOMI`・`SAKAI_CHOBO`・`SAKAI_RITSU` は、どのテストも読まなくなった（作業場所の `env.sh` には残っていても害は無い）。OS の一時ディレクトリは、テストを回す前と後で、`rulec-*`・`dandori-*`・`TemporaryDirectory.*` は 0 個と 0 個、`com.google.Chrome.*` は 2,391 個と 2,391 個（そのうち今日のものは 18 個と 18 個）、親のいない MCP のサーバーは 0 個と 0 個だった。dandori の Ollama のテストが残す `ritsu-test-*`（四つ、約 106 MB）は、決めたとおりプロセスが終わるまで持つもので、次にテストを回したときに消える（dandori の `tests/examples.rs` の `scratch`）。
+- テストの回し方：7.5 と同じ。根から `cargo test --workspace --no-fail-fast -- --nocapture` に、dandori の重い十二を外す `--skip` を付け、十二は `cargo test -p dandori -- --exact <名前>` で一つずつ回す（`cargo xtask test` でも同じ）。rulec の PostgreSQL は使い捨てのクラスタを `PG*` で渡す。yuen と sakai のテストは、ほかの言語のバイナリを要らない（同じプロセスでつなぐ）。TypeSafe の鍵は、手元では作者の環境のものを使い、Jev のテストも回す。CI には鍵を置かない（DESIGN 10.5）。
