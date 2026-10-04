@@ -27,6 +27,15 @@ const LAW_142: (&str, &[u8]) = (
     include_bytes!("../examples/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml"),
 );
 
+// ── The same, with English names (what `explain` shows in English) ──
+
+const HOLIDAYS_EN: (&str, &[u8]) = ("holidays.csv", "2026-01-01,New Year's Day\n2026-05-04,Greenery Day\n".as_bytes());
+const HOLIDAYS_BAD_EN: (&str, &[u8]) = ("holidays.csv", "2026-01-01,New Year's Day\n2026-13-01,Day off\n".as_bytes());
+const HOLIDAYS_GAP_EN: (&str, &[u8]) = ("holidays.csv", "2025-01-01,New Year's Day\n2027-01-01,New Year's Day\n".as_bytes());
+const WEEKENDS_EN: (&str, &[u8]) = ("weekends.cal", "calendar weekends v1\noffset +09:00\n\nclosed weekly sat, sun\n".as_bytes());
+const WEEKENDS_NO_OFFSET_EN: (&str, &[u8]) = ("weekends.cal", "calendar weekends v1\n\nclosed weekly sat, sun\n".as_bytes());
+const TABLE_2026_EN: (&str, &[u8]) = ("closed_days.cal", "calendar closed_days v1\n\nsource holidays = file \"holidays.csv\" sha256:899aee90fcd554a9\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed weekly sat, sun\nclosed holidays\n".as_bytes());
+
 const RANGE_JAN: &str = "range >=2026-01-01 <=2026-01-31";
 
 pub fn ledger() -> Ledger {
@@ -46,7 +55,8 @@ pub fn ledger() -> Ledger {
             ),
             "dates t v1\ndescription \"閉じていない\n",
             &["E006"],
-        ),
+        )
+        .english(Repro::File { body: "dates t v1\ndescription \"not closed\n", beside: &[] }),
         e(
             "E002",
             tr!("この位置に書けない語があります", "A word is written where it does not belong"),
@@ -138,7 +148,8 @@ pub fn ledger() -> Ledger {
             tr!("別の名前か別名にします。", "Choose another name or alias."),
             "dates t v1\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate 期日(select) = d\n  + 1 day\n",
             &["E010"],
-        ),
+        )
+        .english(Repro::File { body: "dates t v1\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate select = d\n  + 1 day\n", beside: &[] }),
         e(
             "E010",
             tr!("公開する名前に ASCII の別名がありません", "A public name has no ASCII alias"),
@@ -146,10 +157,11 @@ pub fn ledger() -> Ledger {
                 "ファイルの見出し、入力、日付の名前が `[a-z][a-z0-9_]*` の形でなく、丸括弧の別名も無いとき。別名の形が違うときも。",
                 "The name of the heading, an input or a date is not of the form `[a-z][a-z0-9_]*` and has no alias in parentheses, or its alias is not of that form."
             ),
-            tr!("`受領日(received)` のように、生成したコードの識別子になる別名を付けます。", "Add the alias the generated code will use, like `受領日(received)`."),
+            tr!("`受領日(received)` のように、生成したコードの識別子になる別名を付けます。", "Add the alias the generated code will use, like `Received(received)`."),
             "dates t v1\n\ninputs\n  受領日 : date  range >=2026-01-01 <=2026-01-31\n",
             &["E009"],
-        ),
+        )
+        .english(Repro::File { body: "dates t v1\n\ninputs\n  Received : date  range >=2026-01-01 <=2026-01-31\n", beside: &[] }),
         e(
             "E011",
             tr!("型が合いません", "A type does not fit"),
@@ -216,7 +228,8 @@ pub fn ledger() -> Ledger {
             tr!("`koyomi source fetch` で写しを取ってくるか、パスを直します。", "Take the copy with `koyomi source fetch`, or correct the path."),
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:56ebcd2f1e91e0a1\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &["E102", "E103"],
-        ),
+        )
+        .english(Repro::File { body: "calendar t v1\n\nsource holidays = file \"holidays.csv\" sha256:899aee90fcd554a9\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed holidays\n", beside: &[] }),
         e(
             "E102",
             tr!("出典が固定されていません", "A source is not pinned"),
@@ -225,7 +238,8 @@ pub fn ledger() -> Ledger {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\"\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &["E101", "E103"],
         )
-        .beside(&[HOLIDAYS]),
+        .beside(&[HOLIDAYS])
+        .english(Repro::File { body: "calendar t v1\n\nsource holidays = file \"holidays.csv\"\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed holidays\n", beside: &[HOLIDAYS_EN] }),
         e(
             "E103",
             tr!("写しが固定と違います", "A copy does not match its pin"),
@@ -234,7 +248,8 @@ pub fn ledger() -> Ledger {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:0123456789abcdef\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &["E102"],
         )
-        .beside(&[HOLIDAYS]),
+        .beside(&[HOLIDAYS])
+        .english(Repro::File { body: "calendar t v1\n\nsource holidays = file \"holidays.csv\" sha256:0123456789abcdef\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed holidays\n", beside: &[HOLIDAYS_EN] }),
         e(
             "E104",
             tr!("写しが読めません", "A copy cannot be read"),
@@ -246,7 +261,8 @@ pub fn ledger() -> Ledger {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:72fa28860be08f0a\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &[],
         )
-        .beside(&[HOLIDAYS_BAD]),
+        .beside(&[HOLIDAYS_BAD])
+        .english(Repro::File { body: "calendar t v1\n\nsource holidays = file \"holidays.csv\" sha256:6467b916662fb97a\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed holidays\n", beside: &[HOLIDAYS_BAD_EN] }),
         e(
             "E105",
             tr!("表の行が `covers` の外にあります", "A row of a table is outside `covers`"),
@@ -255,7 +271,8 @@ pub fn ledger() -> Ledger {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:56ebcd2f1e91e0a1\n  format csv\n  covers 2026-01-01..2026-03-31\n\nclosed 休み\n",
             &["E106"],
         )
-        .beside(&[HOLIDAYS]),
+        .beside(&[HOLIDAYS])
+        .english(Repro::File { body: "calendar t v1\n\nsource holidays = file \"holidays.csv\" sha256:899aee90fcd554a9\n  format csv\n  covers 2026-01-01..2026-03-31\n\nclosed holidays\n", beside: &[HOLIDAYS_EN] }),
         e(
             "E106",
             tr!("`covers listed years` で、行の無い年があります", "`covers listed years`, and a year has no rows"),
@@ -264,7 +281,8 @@ pub fn ledger() -> Ledger {
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:bec0e9a9279b388d\n  format csv\n  covers listed years\n\nclosed 休み\n",
             &["E105"],
         )
-        .beside(&[HOLIDAYS_GAP]),
+        .beside(&[HOLIDAYS_GAP])
+        .english(Repro::File { body: "calendar t v1\n\nsource holidays = file \"holidays.csv\" sha256:cf519bbe72d28ea7\n  format csv\n  covers listed years\n\nclosed holidays\n", beside: &[HOLIDAYS_GAP_EN] }),
         e(
             "E107",
             tr!("オフセットが `±HH:MM` の形ではありません", "The offset is not of the form `±HH:MM`"),
@@ -300,7 +318,8 @@ pub fn ledger() -> Ledger {
             "dates t v1\nuse calendar \"weekends.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  roll following\n  at 09:00\n",
             &["E107"],
         )
-        .beside(&[WEEKENDS_NO_OFFSET]),
+        .beside(&[WEEKENDS_NO_OFFSET])
+        .english(Repro::File { body: "dates t v1\nuse calendar \"weekends.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  roll following\n  at 09:00\n", beside: &[WEEKENDS_NO_OFFSET_EN] }),
         e(
             "E111",
             tr!("法令の引用が使えません", "A citation of a law cannot be used"),
@@ -322,7 +341,8 @@ pub fn ledger() -> Ledger {
             tr!("日付の書き違いでなければ、その行を消します。", "Unless the date is a slip, delete the line."),
             "calendar t v1\n\nclosed weekly sat, sun\nopen 2026-12-28 \"臨時営業\"\n",
             &[],
-        ),
+        )
+        .english(Repro::File { body: "calendar t v1\n\nclosed weekly sat, sun\nopen 2026-12-28 \"Special opening\"\n", beside: &[] }),
         e(
             "W102",
             tr!("固定した条が、どこからも引かれていません", "A pinned article is cited nowhere"),
@@ -366,7 +386,8 @@ pub fn ledger() -> Ledger {
             "dates t v1\nuse calendar \"closed_days.cal\"\n\ninputs\n  d : date  range >=2026-12-01 <=2026-12-31\n\ndate x = d\n  + 5 business days\n",
             &["E108"],
         )
-        .beside(&[TABLE_2026, HOLIDAYS]),
+        .beside(&[TABLE_2026, HOLIDAYS])
+        .english(Repro::File { body: "dates t v1\nuse calendar \"closed_days.cal\"\n\ninputs\n  d : date  range >=2026-12-01 <=2026-12-31\n\ndate x = d\n  + 5 business days\n", beside: &[TABLE_2026_EN, HOLIDAYS_EN] }),
         e(
             "E204",
             tr!("計算した日付が 0001-01-01〜9999-12-31 の外に出ます", "A computed date falls outside 0001-01-01..9999-12-31"),
@@ -406,7 +427,8 @@ pub fn ledger() -> Ledger {
             "dates t v1\nuse calendar \"weekends.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  + 1 day\n\nclaims\n  営業日 : x is open\n",
             &["E302"],
         )
-        .beside(&[WEEKENDS]),
+        .beside(&[WEEKENDS])
+        .english(Repro::File { body: "dates t v1\nuse calendar \"weekends.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  + 1 day\n\nclaims\n  business_day : x is open\n", beside: &[WEEKENDS_EN] }),
         e(
             "E302",
             tr!("日付が単調ではありません", "A date is not monotonic"),
@@ -415,7 +437,8 @@ pub fn ledger() -> Ledger {
             "dates t v1\nuse calendar \"weekends.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  if closed + 3 days\n\nclaims\n  遅いほど遅い : x is monotonic\n",
             &["E301"],
         )
-        .beside(&[WEEKENDS]),
+        .beside(&[WEEKENDS])
+        .english(Repro::File { body: "dates t v1\nuse calendar \"weekends.cal\"\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d\n  if closed + 3 days\n\nclaims\n  later_is_later : x is monotonic\n", beside: &[WEEKENDS_EN] }),
         e(
             "E303",
             tr!("例の値が違います", "An example has a different value"),

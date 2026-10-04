@@ -14,7 +14,7 @@ Written by `koyomi explain --all --format markdown`; do not edit.
 
 ```cal
 dates t v1
-description "閉じていない
+description "not closed
 ```
 
 See also: [E006](#e006)
@@ -175,7 +175,7 @@ dates t v1
 inputs
   d : date  range >=2026-01-01 <=2026-01-31
 
-date 期日(select) = d
+date select = d
   + 1 day
 ```
 
@@ -187,7 +187,7 @@ See also: [E010](#e010)
 
 **When**: The name of the heading, an input or a date is not of the form `[a-z][a-z0-9_]*` and has no alias in parentheses, or its alias is not of that form.
 
-**Fix**: Add the alias the generated code will use, like `受領日(received)`.
+**Fix**: Add the alias the generated code will use, like `Received(received)`.
 
 **Example**:
 
@@ -195,7 +195,7 @@ See also: [E010](#e010)
 dates t v1
 
 inputs
-  受領日 : date  range >=2026-01-01 <=2026-01-31
+  Received : date  range >=2026-01-01 <=2026-01-31
 ```
 
 See also: [E009](#e009)
@@ -311,11 +311,11 @@ inputs
 ```cal
 calendar t v1
 
-source 休み = file "holidays.csv" sha256:56ebcd2f1e91e0a1
+source holidays = file "holidays.csv" sha256:899aee90fcd554a9
   format csv
   covers 2026-01-01..2026-12-31
 
-closed 休み
+closed holidays
 ```
 
 See also: [E102](#e102), [E103](#e103)
@@ -333,18 +333,18 @@ See also: [E102](#e102), [E103](#e103)
 ```cal
 calendar t v1
 
-source 休み = file "holidays.csv"
+source holidays = file "holidays.csv"
   format csv
   covers 2026-01-01..2026-12-31
 
-closed 休み
+closed holidays
 ```
 
 `holidays.csv`:
 
 ```
-2026-01-01,元日
-2026-05-04,みどりの日
+2026-01-01,New Year's Day
+2026-05-04,Greenery Day
 ```
 
 See also: [E101](#e101), [E103](#e103)
@@ -362,18 +362,18 @@ See also: [E101](#e101), [E103](#e103)
 ```cal
 calendar t v1
 
-source 休み = file "holidays.csv" sha256:0123456789abcdef
+source holidays = file "holidays.csv" sha256:0123456789abcdef
   format csv
   covers 2026-01-01..2026-12-31
 
-closed 休み
+closed holidays
 ```
 
 `holidays.csv`:
 
 ```
-2026-01-01,元日
-2026-05-04,みどりの日
+2026-01-01,New Year's Day
+2026-05-04,Greenery Day
 ```
 
 See also: [E102](#e102)
@@ -391,18 +391,18 @@ See also: [E102](#e102)
 ```cal
 calendar t v1
 
-source 休み = file "holidays.csv" sha256:72fa28860be08f0a
+source holidays = file "holidays.csv" sha256:6467b916662fb97a
   format csv
   covers 2026-01-01..2026-12-31
 
-closed 休み
+closed holidays
 ```
 
 `holidays.csv`:
 
 ```
-2026-01-01,元日
-2026-13-01,休み
+2026-01-01,New Year's Day
+2026-13-01,Day off
 ```
 
 <a id="e105"></a>
@@ -418,18 +418,18 @@ closed 休み
 ```cal
 calendar t v1
 
-source 休み = file "holidays.csv" sha256:56ebcd2f1e91e0a1
+source holidays = file "holidays.csv" sha256:899aee90fcd554a9
   format csv
   covers 2026-01-01..2026-03-31
 
-closed 休み
+closed holidays
 ```
 
 `holidays.csv`:
 
 ```
-2026-01-01,元日
-2026-05-04,みどりの日
+2026-01-01,New Year's Day
+2026-05-04,Greenery Day
 ```
 
 See also: [E106](#e106)
@@ -447,18 +447,18 @@ See also: [E106](#e106)
 ```cal
 calendar t v1
 
-source 休み = file "holidays.csv" sha256:bec0e9a9279b388d
+source holidays = file "holidays.csv" sha256:cf519bbe72d28ea7
   format csv
   covers listed years
 
-closed 休み
+closed holidays
 ```
 
 `holidays.csv`:
 
 ```
-2025-01-01,元日
-2027-01-01,元日
+2025-01-01,New Year's Day
+2027-01-01,New Year's Day
 ```
 
 See also: [E105](#e105)
@@ -545,7 +545,7 @@ date x = d
 `weekends.cal`:
 
 ```
-calendar 土日(weekends) v1
+calendar weekends v1
 
 closed weekly sat, sun
 ```
@@ -588,7 +588,7 @@ See also: [W102](#w102), [E101](#e101)
 calendar t v1
 
 closed weekly sat, sun
-open 2026-12-28 "臨時営業"
+open 2026-12-28 "Special opening"
 ```
 
 <a id="w102"></a>
@@ -680,21 +680,21 @@ date x = d
 `closed_days.cal`:
 
 ```
-calendar 休み(closed_days) v1
+calendar closed_days v1
 
-source 休み = file "holidays.csv" sha256:56ebcd2f1e91e0a1
+source holidays = file "holidays.csv" sha256:899aee90fcd554a9
   format csv
   covers 2026-01-01..2026-12-31
 
 closed weekly sat, sun
-closed 休み
+closed holidays
 ```
 
 `holidays.csv`:
 
 ```
-2026-01-01,元日
-2026-05-04,みどりの日
+2026-01-01,New Year's Day
+2026-05-04,Greenery Day
 ```
 
 See also: [E108](#e108)
@@ -782,13 +782,13 @@ date x = d
   + 1 day
 
 claims
-  営業日 : x is open
+  business_day : x is open
 ```
 
 `weekends.cal`:
 
 ```
-calendar 土日(weekends) v1
+calendar weekends v1
 offset +09:00
 
 closed weekly sat, sun
@@ -817,13 +817,13 @@ date x = d
   if closed + 3 days
 
 claims
-  遅いほど遅い : x is monotonic
+  later_is_later : x is monotonic
 ```
 
 `weekends.cal`:
 
 ```
-calendar 土日(weekends) v1
+calendar weekends v1
 offset +09:00
 
 closed weekly sat, sun
