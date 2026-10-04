@@ -90,4 +90,11 @@ pub trait Dates {
     /// Every date for one input (each input by name: a date as its day count, an integer as
     /// itself), in the order written.
     fn eval(&self, file: &Path, inputs: &[(String, i64)]) -> Result<Vec<(String, DateValue)>, Vec<Said>>;
+
+    /// Whether koyomi is joined at all: false for the port the binary of a receiving language's own
+    /// crate holds, which reads no dates file (DESIGN 2.3), so that the language can say so once,
+    /// as with rules (`Rules::joined`).
+    fn joined(&self) -> bool {
+        true
+    }
 }

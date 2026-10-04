@@ -34,7 +34,7 @@ mod index;
 mod rules;
 mod sources;
 
-pub use books::{Account, Balance, BookCall, BookFacts, BookOutcome, BookUnit, Bound, Books, Expiry, Ledger, Move, MoveAmount, MoveRef, Transfer, TransferParam};
+pub use books::{Account, Balance, BookCall, BookClient, BookFacts, BookOutcome, BookUnit, Bound, Books, ClientTransfer, Expiry, Ledger, Move, MoveAmount, MoveRef, Transfer, TransferParam};
 pub use check::{Checked, Finding, Part, Verdict};
 pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, RecordRan, Touched, TouchedLines, Untouched};
 pub use sources::{Source, SourceKind, Sources};

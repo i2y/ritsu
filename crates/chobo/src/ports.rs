@@ -18,11 +18,22 @@ pub struct Engine;
 /// The book, checked as `chobo check` checks it; else what check says.
 fn checked(file: &Path) -> Result<(String, Book, Checked), Vec<Said>> {
     let path = file.to_string_lossy().to_string();
-    let (src, c) = check::check_file(file).map_err(|e| vec![Said::unreadable(&path, &e)])?;
+    // read here, so that what cannot be read says why once (check_file's error says it cannot read too)
+    let src = std::fs::read_to_string(file).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let c = check::check_source(&src);
     let errors: Vec<Said> = c.diags.iter().filter(|d| d.is_error()).map(|d| Said { file: path.clone(), ..Said::of(d) }).collect();
     match &c.book {
         Some(b) if errors.is_empty() => Ok((src, b.clone(), c)),
         _ => Err(errors),
+    }
+}
+
+/// How one language's clients name the transfers of `book` (DESIGN 4.3): the members of the book
+/// value, and each parameter as `param` names it.
+fn clients(book: &Book, module: &str, members: Vec<String>, param: impl Fn(&TransferKind, &TParam) -> String) -> ritsu_ports::BookClient {
+    ritsu_ports::BookClient {
+        module: module.to_string(),
+        transfers: book.transfers.iter().zip(members).map(|(t, member)| ritsu_ports::ClientTransfer { member, params: t.params.iter().map(|p| param(t, p)).collect() }).collect(),
     }
 }
 
@@ -154,6 +165,17 @@ impl ritsu_ports::Books for Engine {
                     machine: t.is_pending().then(|| hold_machine(t)),
                 })
                 .collect(),
+            typescript: clients(&book, &book.name, crate::client::typescript::members(&book), |_, p| p.name.clone()),
+            python: clients(&book, &book.name, crate::client::python::members(&book), |_, p| crate::client::python::name(&p.name)),
+            go: {
+                let stem = file.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                let mut c = clients(&book, &crate::client::go::package(&book, &stem), crate::client::go::members(&book), |_, _| String::new());
+                for (ct, t) in c.transfers.iter_mut().zip(&book.transfers) {
+                    let all: Vec<usize> = (0..t.params.len()).collect();
+                    ct.params = crate::client::go::fields(t, &all);
+                }
+                c
+            },
         })
     }
 

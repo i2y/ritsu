@@ -15,6 +15,31 @@ pub struct BookFacts {
     pub units: Vec<BookUnit>,
     pub accounts: Vec<Account>,
     pub transfers: Vec<Transfer>,
+    /// How the clients chobo writes for the book name what a caller reaches, in TypeScript,
+    /// Python and Go (`chobo api`'s `targets`), so that code that calls them is written without
+    /// reading them.
+    pub typescript: BookClient,
+    pub python: BookClient,
+    pub go: BookClient,
+}
+
+/// How the clients of one language name a book's transfers and their parameters: both of the
+/// language's clients (PostgreSQL's and TigerBeetle's) name them alike.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BookClient {
+    /// The module each client is (`inventory` for `inventory.ts`), or Go's package.
+    pub module: String,
+    /// One for each transfer, in the book's order.
+    pub transfers: Vec<ClientTransfer>,
+}
+
+/// A transfer as a client names it: the member of the book value it is reached by
+/// (`book.reserve`, Go's `b.Reserve`), and each of its parameters, in the transfer's order (the
+/// key a Python method takes it by, the field of a Go struct).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ClientTransfer {
+    pub member: String,
+    pub params: Vec<String>,
 }
 
 impl BookFacts {
@@ -162,4 +187,11 @@ pub trait Books {
 
     /// The book with nothing in it yet, to run operations on.
     fn open(&self, file: &Path) -> Result<Box<dyn Ledger>, Vec<Said>>;
+
+    /// Whether chobo is joined at all: false for the port the binary of a receiving language's own
+    /// crate holds, which reads no book (DESIGN 2.3), so that the language can say so once, as with
+    /// rules (`Rules::joined`).
+    fn joined(&self) -> bool {
+        true
+    }
 }
