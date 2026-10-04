@@ -5,9 +5,9 @@ Closes at the end of the month; pays at the end of the month two months later, o
 - ファイル: `close_eom_pay_two_months_on.cal`（dates close_eom_pay_two_months_on v1、sha256:d79271982e9e1200）
 - カレンダー: `calendars/england_and_wales.cal`（calendar england_and_wales v1、sha256:00a0d8a87344f4f4）
 - 表: bank_holidays = `calendars/data/bank-holidays.json`（sha256:538b3482c28b85ec、https://www.gov.uk/bank-holidays.json の写し、covers listed years = 2019-01-01..2028-12-31）
-- koyomi: 0.1.0
+- koyomi: 0.23.0
 
-上のファイルを koyomi 0.1.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!WARNING]
 > 条件「within_60_days_of_receipt」が、received 1,035 日のうち 1,008 日で成り立ちません。

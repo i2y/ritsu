@@ -19,7 +19,10 @@ set -eu
 cd "$(dirname "$0")/.."
 target=wasm32-unknown-unknown
 rustup target list --installed | grep -qx "$target" || rustup target add "$target"
-RUSTFLAGS="-C opt-level=z -C codegen-units=1 -C strip=symbols" \
+cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+# the directory Cargo builds in: the workspace's target/ (ritsu's root), or CARGO_TARGET_DIR
+built="${CARGO_TARGET_DIR:-$(cd ../../.. && pwd)/target}"
+RUSTFLAGS="-C opt-level=z -C codegen-units=1 -C strip=symbols --remap-path-prefix=$cargo_home=/cargo" \
   cargo rustc --manifest-path ../Cargo.toml --lib --release --target "$target" --crate-type cdylib
-cp "../target/$target/release/rulec.wasm" docs/playground/rulec.wasm
+cp "$built/$target/release/rulec.wasm" docs/playground/rulec.wasm
 ls -l docs/playground/rulec.wasm

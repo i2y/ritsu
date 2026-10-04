@@ -5,9 +5,9 @@
 - ファイル: `eom_close_two_months_later.ja.cal`（dates 月末締め翌々月末払い v1、sha256:77b908bfcae37887）
 - カレンダー: `calendars/東京の営業日.cal`（calendar 東京の営業日 v1、sha256:d7b6134e23a8cb9f）
 - 表: 祝日 = `calendars/data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写し、covers 1955-01-01..2027-12-31）
-- koyomi: 0.1.0
+- koyomi: 0.23.0
 
-上のファイルを koyomi 0.1.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!WARNING]
 > 条件「受領から60日以内」が、受領日 669 日のうち 648 日で成り立ちません。

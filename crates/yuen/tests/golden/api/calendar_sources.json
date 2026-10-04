@@ -1,5 +1,5 @@
 {
-  "yuen": "0.1.0",
+  "yuen": "0.23.0",
   "root": "tests/fixtures/calendar_sources",
   "files": [
     {

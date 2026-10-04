@@ -1,6 +1,6 @@
 [package]
 name = "dandori"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "A small typed language for workflows that call business rules, checked before it runs and compiled to AWS Step Functions, Temporal, Lambda durable functions, Argo Workflows and pydantic-graph"
 license = "MIT OR Apache-2.0"

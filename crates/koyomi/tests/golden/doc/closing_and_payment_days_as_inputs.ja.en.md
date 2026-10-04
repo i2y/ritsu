@@ -5,9 +5,9 @@
 - File: `closing_and_payment_days_as_inputs.ja.cal` (dates 締め日と支払日を受け取る v1, sha256:b9ecb83d731da674)
 - Calendar: `calendars/東京の営業日.cal` (calendar 東京の営業日 v1, sha256:d7b6134e23a8cb9f)
 - Table: 祝日 = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
-- koyomi: 0.1.0
+- koyomi: 0.23.0
 
-koyomi 0.1.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.23.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 > [!NOTE]
 > 3 claims hold on all 871,596 combinations of 受領日 (2026-01-01..2027-10-01), 締め日 (1..31), 支払の月 (1..2) and 支払の日 (10..31).

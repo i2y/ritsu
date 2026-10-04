@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.1.0",
+  "ritsu": "0.23.0",
   "root": "tests/projects/shop",
   "ok": true,
   "files": [

@@ -5,9 +5,9 @@
 - ファイル: `payment_20th_close_next_10th.ja.cal`（dates 支払条件 v1、sha256:75482b2e796019d0）
 - カレンダー: `calendars/東京の営業日.cal`（calendar 東京の営業日 v1、sha256:d7b6134e23a8cb9f）
 - 表: 祝日 = `calendars/data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写し、covers 1955-01-01..2027-12-31）
-- koyomi: 0.1.0
+- koyomi: 0.23.0
 
-上のファイルを koyomi 0.1.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!NOTE]
 > 3 つの条件が、受領日 2026-01-01〜2027-11-20 の 689 日のすべてで成り立ちます。例 2 行も合っています。

@@ -5,9 +5,9 @@ Takes the closing day, the month of payment and the day of payment as integers, 
 - File: `close_and_pay_on_given_days.cal` (dates close_and_pay_on_given_days v1, sha256:f5323722663873b0)
 - Calendar: `calendars/england_and_wales.cal` (calendar england_and_wales v1, sha256:00a0d8a87344f4f4)
 - Table: bank_holidays = `calendars/data/bank-holidays.json` (sha256:538b3482c28b85ec, a copy of https://www.gov.uk/bank-holidays.json, covers listed years = 2019-01-01..2028-12-31)
-- koyomi: 0.1.0
+- koyomi: 0.23.0
 
-koyomi 0.1.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.23.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 > [!NOTE]
 > 3 claims hold on all 872,960 combinations of received (2027-01-01..2028-10-01), closing_day (1..31), payment_month (1..2) and payment_day (10..31).

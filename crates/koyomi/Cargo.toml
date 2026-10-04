@@ -1,6 +1,6 @@
 [package]
 name = "koyomi"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "A small language for closing days, payment days, business days and month arithmetic, checked on every day of its range and compiled to TypeScript, Python, Go, Rust and SQL"
