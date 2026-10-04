@@ -31,7 +31,7 @@
 
 **最初に開くのは、受注が契約に値を一つ足したばかりの小さな通販**です。`proto/shop/v1/order.proto` に `ORDER_STATUS_RETURNED = 5;` が増えました。請求の規則はこの列挙を取り込み、`requirements/billing.req` の要件は規則の表を名指し、地図は規則を受注に対する請求の腐敗防止層として名指しています。一つのファイルの一行に、三つの言語がそれぞれ答えます。英語の名前のプロジェクトですが、出力は日本語です。
 
-1. **指摘を読む。** 見出しには、それを言ったツールが入っています。rulec は「列挙 order_status が ../../proto/shop/v1/order.proto の OrderStatus と一致していません」と言い、規則に無い値を示します。yuen は「rulec が rulec "billing/rules/billing_need.rule" table decide について答えられません」と言います。要件の端のハッシュを取れなくなったからです。sakai は「billing/rules/billing_need.rule が rulec の検査を通らないか、読めません」と言います。`billing/rules/billing_need.rule:5` のような指摘の場所をクリックすると、その行に移ります。
+1. **指摘を読む。** 見出しには、それを言ったツールが入っています。rulec は「列挙 order_status が ../../proto/shop/v1/order.proto の OrderStatus と一致していません」と言い、規則に無い値を示します。yuen は「rulec から rulec "billing/rules/billing_need.rule" table decide の情報を得られません」と言います。規則が rulec の検査を通らないので、yuen がその表のハッシュを取れなくなったからです。sakai は「billing/rules/billing_need.rule が rulec の検査を通らないか、読めません」と言います。`billing/rules/billing_need.rule:5` のような指摘の場所をクリックすると、その行に移ります。
 2. **契約の側で直す。** `.proto` からその行を消すと、どのファイルも検査を通ります。
 3. **規則の側で直す。** 「編集を取り消す」を押してから、`billing/rules/billing_need.rule` の列挙の最後に `| returned` を足します。rulec は「取り込んだ列挙 order_status の値に、行も `default` もありません」と言います。`cancelled` の行の下に `| returned  | skip        |` を足すと rulec は通りますが、今度は yuen が、表が「2026-10-04 に accounts がこのリンクを確かめたあとで変わりました」と言い、増えた行を見せます。検査を通った規則が、そのまま誰かの確かめた規則になるわけではありません。
 4. **ワークフローと規則の境目を壊す。** `ordering/rules/urgency.rule` の出力 `carrier` を、`outputs` と、表と例の見出しで `courier` に変えます。rulec は通ります。dandori は規則の出力を同じプロセスの中で rulec から読むので、`ordering/ship_order.flow` でその出力を読む二つの行に「`urgency.outputs` にフィールド `carrier` はありません（urgent・courier）」と言います。
