@@ -965,6 +965,8 @@ chobo は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 段階 E の最初の部分で、コマンドの本体を `src/main.rs` からライブラリの `chobo::run::run` に移した。クレートのバイナリと ritsu の `ritsu chobo`（ritsu の DESIGN 8.2）が、同じ関数を呼ぶ。`ritsu check` のために、`chobo::ports::Engine::checked` が、`chobo check` が印字するもの（診断一つずつのテキストと `--format json` のオブジェクト、要約の行と報告）を、コマンドと同じ関数で作って渡す（ritsu の DESIGN 8.3）。そのために、`check::render` の診断のあとの部分を `check::render_tail` に分けた。コマンドの振る舞いは変えていない。
 
+段階 E の二つ目の部分で、ritsu の `ritsu run`（ritsu の DESIGN 7.9）のために、口の `Ledger` に問いを二つ足した。`accounts`（`do` と `hold` が名指した勘定の全部と、その残高。断られた操作が名指した勘定も入る）と `holds`（仮押さえの全部と、いまの状態）で、どちらも `chobo run` がシナリオの終わりに出す勘定と仮押さえと同じものを、同じ順に返す。`ritsu run` は、ワークフローが動かした帳簿の終わりを、これで見せる。`crates/ritsu/tests/run.rs` が、走らせる前の操作と実行の中の操作を、そのあいだにたった時間と一緒に `chobo run` のシナリオにして流し、操作ごとの結果と、終わりの勘定と仮押さえが同じであることを確かめる。コマンドの振る舞いは変えていない。
+
 ## 9. 捨てたもの
 
 - **残高を読んで額を決める振替**（Numscript の順に取る元、`max`、`balance()`。TigerBeetle の `balancing_debit`）：額が処理した時点の残高で決まり、結果が「通すか、断るか」の二つに収まらない。呼ぶ側が残高を読んで額を決め、そのあと変わっていれば断られる、という形にする（P6）。
