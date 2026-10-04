@@ -109,6 +109,7 @@ dependencies = [
  "geas",
  "koyomi",
  "ritsu-base",
+ "ritsu-ports",
  "ritsu-project",
  "ritsu-testkit",
  "rulec",

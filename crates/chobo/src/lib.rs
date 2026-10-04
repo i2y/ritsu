@@ -24,6 +24,8 @@ pub mod parse;
 pub mod ports;
 pub mod postgres;
 pub mod render;
+/// The `chobo` command, as a function: the binary runs it, and so does `ritsu chobo`.
+pub mod run;
 pub mod scenario;
 pub mod scenarios;
 pub mod syntax;

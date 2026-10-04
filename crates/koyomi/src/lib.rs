@@ -27,6 +27,8 @@ pub mod parse;
 pub mod ports;
 pub mod reserved;
 pub mod resolve;
+/// The `koyomi` command, as a function: the binary runs it, and so does `ritsu koyomi`.
+pub mod run;
 pub mod sjis;
 pub mod sjis_table;
 pub mod sources;

@@ -515,7 +515,8 @@ fn importのoutputsは末尾の列を出力にする() {
 #[test]
 fn 宣言したフラグは全部どこかのテストが渡している() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let main = std::fs::read_to_string(root.join("src/main.rs")).unwrap();
+    // the command's table is `src/cli.rs` (§15.173)
+    let main = std::fs::read_to_string(root.join("src/cli.rs")).unwrap();
     // The CLI surface is what the `flag(...)` helper declares; a `--word` inside a call to
     // some other program (git, say) is not one.
     let mut declared: Vec<String> = Vec::new();

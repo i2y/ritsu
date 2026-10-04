@@ -1,0 +1,167 @@
+{
+  "ritsu": "0.1.0",
+  "root": ".",
+  "ok": false,
+  "files": [
+    {
+      "tool": "rulec",
+      "file": "billing/rules/出荷の送料.rule",
+      "ok": true
+    },
+    {
+      "tool": "rulec",
+      "file": "billing/rules/決済手数料.rule",
+      "ok": true
+    },
+    {
+      "tool": "rulec",
+      "file": "billing/rules/請求の要否.rule",
+      "ok": false
+    },
+    {
+      "tool": "rulec",
+      "file": "delivery/rules/出荷の急ぎ.rule",
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "billing/支払条件.cal",
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "calendars/東京の営業日.cal",
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "delivery/出荷日.cal",
+      "ok": true
+    },
+    {
+      "tool": "chobo",
+      "file": "inventory/在庫の引当.book",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/dandori/v1/options.proto",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/shop/delivery/v1/shipment.proto",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/shop/ordering/v1/fulfillment.proto",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/shop/ordering/v1/order.proto",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/warehouse/v1/stock.proto",
+      "ok": true
+    },
+    {
+      "tool": "dandori",
+      "file": "delivery/配送の手配.flow",
+      "ok": true
+    },
+    {
+      "tool": "dandori",
+      "file": "ordering/受注.flow",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/レビュー.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/受注.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/在庫.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/請求.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/配送.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "通販.ctx",
+      "ok": true
+    }
+  ],
+  "diagnostics": [
+    {
+      "tool": "rulec",
+      "v": 2,
+      "severity": "error",
+      "code": "E032",
+      "file": "billing/rules/請求の要否.rule",
+      "line": 5,
+      "column": 6,
+      "title": "Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto",
+      "notes": [
+        "In ../../proto/shop/ordering/v1/order.proto but not in this enum: returned",
+        "The form to add: `<name>(returned)`. The name is yours to decide — the file carries no Japanese.",
+        "A value appeared through the contract, not through this rule. What the new value costs is a decision nobody has made yet (§15.59)."
+      ],
+      "where": {
+        "file": "billing/rules/請求の要否.rule",
+        "line": 5,
+        "column": 6
+      },
+      "spans": [
+        {
+          "line": 5,
+          "column": 6,
+          "length": 15,
+          "label": ""
+        }
+      ],
+      "witness": {},
+      "rows": [],
+      "fix": {
+        "kind": "none"
+      }
+    },
+    {
+      "tool": "sakai",
+      "code": "E105",
+      "severity": "error",
+      "file": "billing/rules/請求の要否.rule",
+      "line": 5,
+      "col": 1,
+      "message": "The file billing/rules/請求の要否.rule does not pass rulec's check, or cannot be read",
+      "notes": [
+        "What rulec says: [E032] billing/rules/請求の要否.rule:5: Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto",
+        "Make the file pass rulec's check; the references of a file that cannot be read cannot be checked."
+      ],
+      "references": [],
+      "fix": null
+    }
+  ],
+  "borders": {
+    "held": 0,
+    "failed": 0,
+    "undecided": 0
+  }
+}

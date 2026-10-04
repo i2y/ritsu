@@ -1,6 +1,5 @@
 //! `ritsu dandori` (DESIGN 8.6): dandori's command, with rulec's answer to the port of rules joined
-//! in, so that a workflow reads its rules in the same process. The rest of `ritsu` comes in stage E;
-//! what it does not have yet, it says.
+//! in, so that a workflow reads its rules in the same process.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -39,20 +38,12 @@ fn ritsu_dandori_reads_the_rules_of_a_flow() {
     assert_eq!(code, 0, "{err}");
 }
 
-/// What `ritsu` has in stage D, and what it says of what it has not.
+/// The words after `dandori` are dandori's, and its help says that a workflow that uses rules runs
+/// here.
 #[test]
-fn ritsu_says_what_it_has() {
-    let (code, out, _) = ritsu(&["--version"]);
-    assert_eq!((code, out), (0, format!("ritsu {}\n", env!("CARGO_PKG_VERSION"))));
-    let (code, out, err) = ritsu(&["--help"]);
-    assert!(code == 0 && out.contains("ritsu dandori <command> ...") && err.is_empty(), "{out}");
-    let (code, out, _) = ritsu(&["--lang", "ja", "--help"]);
-    assert!(code == 0 && out.contains("ritsu dandori <コマンド> ..."), "{out}");
-    let (code, out, err) = ritsu(&[]);
-    assert!(code == 2 && out.is_empty() && err.contains("Usage:"), "{err}");
-    assert_eq!(ritsu(&["rulec", "check", "x.rule"]), (2, String::new(), "error: there is no `ritsu rulec` yet; run the `rulec` command itself\n".into()));
-    assert_eq!(ritsu(&["nope"]), (2, String::new(), "error: there is no command `nope`; run `ritsu --help`\n".into()));
-    // the words after `dandori` are dandori's
+fn the_words_after_dandori_are_dandori_s() {
     let (code, out, _) = ritsu(&["dandori", "--version"]);
     assert!(code == 0 && out.starts_with("dandori ") && out.lines().count() == 1, "{out}");
+    let (code, out, _) = ritsu(&["dandori", "--help"]);
+    assert!(code == 0 && out.contains("A workflow that uses rules runs as `ritsu dandori`"), "{out}");
 }

@@ -19,12 +19,15 @@
 //!   that a naming is looked up in one place.
 //! - [`Sources`]: the sources a rule or a calendar copies and pins, which yuen borrows and holds
 //!   its own copies to.
+//! - [`Checked`]: what a language's own `check` prints for a unit it checks, a diagnostic at a
+//!   time, the text and the JSON, as `ritsu check` prints it again (DESIGN 8.3).
 //!
 //! Every check across a border answers with an [`Answer`]: shown to hold, an example where it
 //! does not, or why it cannot be decided (P5). A question that asks for a value answers with a
 //! [`Found`]: the value, or why it cannot be had. Nothing undecided passes as decided.
 
 mod books;
+mod check;
 mod claims;
 mod dates;
 mod index;
@@ -32,6 +35,7 @@ mod rules;
 mod sources;
 
 pub use books::{Account, Balance, BookCall, BookFacts, BookOutcome, BookUnit, Bound, Books, Expiry, Ledger, Move, MoveAmount, MoveRef, Transfer, TransferParam};
+pub use check::{Checked, Finding, Part, Verdict};
 pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, RecordRan, Touched, TouchedLines, Untouched};
 pub use sources::{Source, SourceKind, Sources};
 pub use dates::{DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet};

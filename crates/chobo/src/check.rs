@@ -517,7 +517,14 @@ pub fn render(file: &str, src: &str, c: &Checked, lang: Lang) -> String {
     for d in &c.diags {
         out.push_str(&d.shown(file, src, lang));
     }
-    out.push_str(&diag::summary(file, &c.diags, lang));
+    out.push_str(&render_tail(file, c, lang));
+    out
+}
+
+/// What `chobo check` prints for one file after its diagnostics: the line that sums them up, and
+/// the report of a book that passes.
+pub fn render_tail(file: &str, c: &Checked, lang: Lang) -> String {
+    let mut out = diag::summary(file, &c.diags, lang);
     out.push('\n');
     if let (Some(b), Some(r)) = (&c.book, &c.report) {
         out.push_str(&render_report(b, r, lang));

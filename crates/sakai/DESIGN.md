@@ -1500,6 +1500,13 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 テストは、rulec、koyomi、chobo、dandori を `[dev-dependencies]` に持ち、`ritsu sakai` と同じにつないで、コマンドを関数（`sakai::run::run`）として呼ぶ（ritsu の DESIGN 3.3）。例が一式から写したものも、それぞれの言語の口で確かめる。これで、テストが一式のツールのバイナリを走らせるところ（`SAKAI_RULEC`・`SAKAI_KOYOMI`・`SAKAI_CHOBO`・`SAKAI_RITSU`）は無くなり、ritsu-testkit の `Need::Suite` と CI の `SAKAI_*` の変数も消した。
 
+### 12.3 ritsu の段階 E で変えたこと
+
+段階 E の最初の部分（ritsu の PLAN の E.1、E.2）で、二つのことを変えた。どちらも、コマンドの振る舞いは変えていない（例と fixture の全部の 238 回の出力が、クレートのバイナリでも `ritsu sakai` でも一字も違わない）。
+
+- 参照と規則が持つものを、言語ごとにではなく、プロジェクトの索引で引く（4.1）。
+- `ritsu check` のために、`sakai::run::checked` が、`sakai check` が地図ごとに印字するもの（診断一つずつのテキストと `--format json` のオブジェクト、通った地図の `ok —` の行）を、コマンドと同じ関数で作って渡す（ritsu の DESIGN 8.3）。ルートの決め方と、パスをルートからの相対にする部分は、コマンドと同じ関数を使う（`run::root_from`、`run::from_root`）。
+
 ## 13. 捨てたもの
 
 ここまでの節に書いたもののほかに、次を捨てた。

@@ -546,6 +546,28 @@ DESIGN 6 章。プロジェクトを歩いて種類を分け、一度ずつ読�
 
 DESIGN 8.1、8.3、8.4。テキストと JSON の形を決めて golden にし、英語と日本語で取る。各言語の `check` と同じ診断が出ること（ファイルごとに、その言語の `check` の出力と突き合わせる）、見出しにツールの語が入ること、終了コード。
 
+**したこと**（E の最初の部分）：
+
+- `ritsu check [<path>...] [--root <dir>] [--format json] [--lang ja|en]` を作った（`crates/ritsu/src/check.rs`、`src/cli.rs`）。`ritsu-project` の `Project::check` が、言語ごとの `check` を DESIGN 6.1 の順に走らせる。各言語は、自分のコマンドが印字に使う関数で、単位ごとの結果（`ritsu_ports::Checked`：診断一つずつのテキストと JSON、そのほかの行、単位の結果）を返す（`rulec::ports::Engine::checked` など七つ。DESIGN 8.1）。
+- テキストと JSON の形を決めた（DESIGN 8.3 の形の案を実物に差し替えた）。テキストは言語が印字するもののまま、見出しにツールの語を足し、最後に一行の要約を置く。JSON は `ritsu`・`root`・`ok`・`files`・`diagnostics`・`borders` の順のキーで、言語の診断はその言語の形のまま、先頭に `tool` を置き `file` をルートからの相対にする。言語をまたぐ検査の結果を載せる場所は、要約の境目の数と JSON の `borders`、診断は `tool` が `ritsu` のもの（中身は E.4）。
+- 終了コードを決めた（DESIGN 8.4）。確かめられなかった単位があれば 2、エラーか通らない単位があれば 1。
+- `ritsu <言語>` を七つの全部に作り、`ritsu` を言語の名前で呼べばその言語のコマンドとして動くようにした（DESIGN 2.3、8.2）。そのために rulec、koyomi、chobo、geas のコマンドの本体を `src/main.rs` からライブラリの関数に移した（`rulec::cli::run`、`koyomi::run::run`、`chobo::run::run`、`geas::cli::run`）。`ritsu --help` は ritsu-base の表で描く。
+- rulec の `Engine` が `check` の報告を覚え、`ritsu check` の中で dandori や sakai が同じ規則の事実を尋ねても、規則を検査し直さないようにした（DESIGN 6.1、rulec の §15.173）。
+- テスト：`crates/ritsu/tests/check.rs`（テストのプロジェクトと、受注が注文の状態に値を足した写しの、英語と日本語のテキストと JSON の golden。各言語のコマンドとファイルごとに突き合わせること。止める場合）、`tests/entry.rs`（`--help`、七つの `ritsu <言語>`、リンクの名前）、rulec の `tests/ports.rs`（`checked` の出力が `rulec check` と同じで、規則を一回ずつしか検査しないこと）。
+
+**決めたこと**：
+
+- 言語は、文を読み直すのではなく、診断を一つずつ型で渡す。ツールの語は、各診断の見出しの最初の `[<コード>]` に足す。言語の文の形（rulec の `-->` の枠、geas の主張の行の中に字下げして入る診断）は変えない。
+- rulec、koyomi、chobo、geas、dandori にはファイルを一つずつ渡し、yuen と sakai には渡されたパスのうち自分のファイルを含むものと `--root` を渡す（yuen と sakai は、自分でファイルを探して、プロジェクトや地図として確かめる言語だから。sakai はディレクトリを渡されたときだけ W103 を言う）。
+- 言語は `--lang` と `RITSU_LANG` で選び、各言語の `<名前>_LANG` は読まない（一つのコマンドの文面を一つの言語にする）。
+- geas の `check` は主張を走らせ、ジャーナルを書く。`ritsu check` でも同じにした。geas が構文の誤りに 2 で終わるのは、`ritsu check` では 1 として読む（DESIGN 8.4）。
+- JSON の、境目の検査の結果のキーを `crossings` ではなく `borders` にし、`proved` を `held` にした（DESIGN 8.3。sakai の `crossings` と取り違えないため、0.4 の語の決まりのため）。
+- `ritsu <言語>` は七つの全部に作った（PLAN の E のどの項目にも書かれていなかったが、DESIGN 8.1 と 8.2 は E で作るとしていて、`ritsu check` のために言語のコマンドをライブラリの関数にすれば、ほとんどそのまま作れる）。
+
+**確かめたこと**：触ったクレート（ritsu-ports、ritsu-project、ritsu、rulec、koyomi、chobo、geas、dandori、yuen、sakai）のテストを、ツールを全部つないだ環境（PostgreSQL つき）で一度回した。1,472 件が通り、落ちた 3 件（rulec のフラグのテストが `src/main.rs` を読んでいたこと、テストの二つの書き誤り）を直して、その 3 件を回し直して通った。SKIP 0、ignored 1（rulec の、前からあるもの）。dandori の重いテストは、生成器と runner と規則の読み方に触れていないので回していない。
+
+コマンドの出力を、E の前のバイナリと突き合わせた（`scratchpad` の `cap.py`。geas の分を足した）。rulec はコーパスの 1,675 回、koyomi は 289 回、chobo は 277 回、geas は 339 回（`--help`、`explain`、`tests/specs` の 109 の主張のファイルの `check` を写しの上で）、dandori は `ritsu dandori` で 702 回、yuen は 1,026 回と sakai は 238 回をクレートのバイナリと `ritsu yuen`・`ritsu sakai` の両方で走らせ、どれも一字も違わなかった。新しい `ritsu rulec`・`ritsu koyomi`・`ritsu chobo`・`ritsu geas` の出力も、E の前のそれぞれのバイナリと一字も違わなかった。
+
 ### E.3 ritsu の台帳と `ritsu explain`
 
 `crates/ritsu-cross/src/codes.rs` に、言語をまたぐ検査のコードを置く（土台の `ledger`）。どのコードにも、出すプロジェクトの最小の再現を置き、テストが走らせる。

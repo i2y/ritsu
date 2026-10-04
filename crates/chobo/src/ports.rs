@@ -55,6 +55,37 @@ fn hold_machine(t: &TransferKind) -> Machine {
     }
 }
 
+impl Engine {
+    /// `chobo check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3): every finding,
+    /// as the command prints it and as its `--format json` prints it, then the line that sums them
+    /// up and the report. `files` are as the person gave them, from where the program runs; `root`
+    /// is the project's.
+    pub fn checked(&self, root: &Path, files: &[String], lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
+        use crate::diag::Show;
+        use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
+        files
+            .iter()
+            .map(|f| match check::check_file(Path::new(f)) {
+                Ok((src, c)) => {
+                    let file = ritsu_base::paths::from_root(root, Path::new(f));
+                    let mut parts: Vec<Part> = c
+                        .diags
+                        .iter()
+                        .map(|d| {
+                            let json = ritsu_base::json::parse(&d.json_in(f, &src, lang).to_string()).unwrap_or(ritsu_base::json::Json::Null);
+                            Part::Finding(Finding { code: d.code.to_string(), severity: d.severity, file: file.clone(), line: d.line, text: d.shown(f, &src, lang), json })
+                        })
+                        .collect();
+                    parts.push(Part::Text(check::render_tail(f, &c, lang)));
+                    let verdict = if crate::diag::has_errors(&c.diags) { Verdict::Fails } else { Verdict::Passes };
+                    Unit { label: f.clone(), parts, verdict }
+                }
+                Err(e) => Unit::unchecked(f, format!("{e}\n")),
+            })
+            .collect()
+    }
+}
+
 impl ritsu_ports::Books for Engine {
     fn facts(&self, file: &Path) -> Result<BookFacts, Vec<Said>> {
         let (src, book, c) = checked(file)?;

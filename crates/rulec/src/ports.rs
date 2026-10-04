@@ -20,10 +20,21 @@ use std::path::Path;
 
 /// rulec, as the ports reach it. It keeps each rule it has checked, by its path and its text, so
 /// that a program asking one rule many times (an evaluation per call of a workflow) checks it
-/// once.
+/// once; and the report `rulec check` prints of it, so that `ritsu check`, which prints that report
+/// and then asks the rule's facts for the workflows that use it, checks it once too.
 #[derive(Default)]
 pub struct Engine {
     checked: std::sync::Mutex<std::collections::HashMap<(String, String), Checked2>>,
+    /// By the file (its path with its links followed, so two spellings of one path are one file)
+    /// and its text: the path the report was made with, its language, and the report.
+    reports: std::sync::Mutex<std::collections::HashMap<(std::path::PathBuf, String), (String, RLang, std::sync::Arc<crate::Report>)>>,
+    /// How many times a rule's text has been checked whole (what [`Engine::checks`] says).
+    checks: std::sync::atomic::AtomicUsize,
+}
+
+/// The file a path names, its links followed and `..` folded: how the reports are kept.
+fn the_file(path: &str) -> std::path::PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| std::path::PathBuf::from(path))
 }
 
 /// A rule read and checked, or what check said of it.
@@ -108,13 +119,92 @@ impl Engine {
         Engine::default()
     }
 
-    /// The rule at `rule`, checked: read again when its text has changed.
+    /// The rule at `rule`, checked: read again when its text has changed. A report `check` already
+    /// made of the same text says whether the rule passes, so it is not checked a second time.
     fn rule(&self, rule: &Path) -> Result<(String, String, Checked2), Vec<Said>> {
         let (path, src) = read(rule)?;
         let key = (path.clone(), crate::sha256::hex(src.as_bytes()));
+        let reported = self.reports.lock().unwrap_or_else(|e| e.into_inner()).get(&(the_file(&path), key.1.clone())).map(|(_, _, r)| r.clone());
         let mut cache = self.checked.lock().unwrap_or_else(|e| e.into_inner());
-        let got = cache.entry(key).or_insert_with(|| std::sync::Arc::new(checked(&path, &src))).clone();
+        let got = cache
+            .entry(key)
+            .or_insert_with(|| {
+                std::sync::Arc::new(match reported {
+                    Some(r) if crate::has_error(&r.diags) => Err(refused(&path, &src)),
+                    Some(_) => crate::prepare(&src, &path).map_err(|_| refused(&path, &src)),
+                    None => {
+                        self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        checked(&path, &src)
+                    }
+                })
+            })
+            .clone();
         Ok((path, src, got))
+    }
+
+    /// The report `rulec check` makes of a rule's text, in `lang`, naming the file `path` (its
+    /// findings are written as they are found, so a report is kept for the language and the path
+    /// it was made with; whether the rule passes, [`Engine::rule`] reads off any of them).
+    fn report(&self, path: &str, src: &str, lang: RLang) -> std::sync::Arc<crate::Report> {
+        let key = (the_file(path), crate::sha256::hex(src.as_bytes()));
+        let mut reports = self.reports.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((p, l, r)) = reports.get(&key)
+            && p == path
+            && *l == lang
+        {
+            return r.clone();
+        }
+        self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let r = std::sync::Arc::new(i18n::with(lang, || crate::report(src, path)));
+        reports.insert(key, (path.to_string(), lang, r.clone()));
+        r
+    }
+
+    /// How many times the engine has checked a rule's text whole, for `check` or for a port's
+    /// answer: once for each rule in a run that asks the same rule both ways (ritsu's DESIGN 6.1).
+    pub fn checks(&self) -> usize {
+        self.checks.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// `rulec check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3): every finding,
+    /// as the command prints it and as its `--format json` prints it, then what the command prints
+    /// after them (`ok rules/送料.rule`). `files` are as the person gave them, from where the
+    /// program runs; `root` is the project's, which the findings' files are written from.
+    pub fn checked(&self, root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Checked> {
+        use ritsu_ports::{Checked, Finding, Part, Verdict};
+        let rl = rlang(lang);
+        files
+            .iter()
+            .map(|path| {
+                let Ok(src) = std::fs::read_to_string(path) else {
+                    return Checked::unchecked(path, i18n::with(rl, || format!("{}\n", crate::tr!("error: `{path}` を読めません", "error: cannot read `{path}`"))));
+                };
+                let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
+                let r = self.report(path, &src, rl);
+                let file = ritsu_base::paths::from_root(root, Path::new(path));
+                let mut parts: Vec<Part> = r
+                    .diags
+                    .iter()
+                    .map(|d| {
+                        let json = ritsu_base::json::parse(&crate::diag::render_json(d, path)).unwrap_or(ritsu_base::json::Json::Null);
+                        Part::Finding(Finding {
+                            code: d.code.to_string(),
+                            severity: match d.severity {
+                                crate::diag::Severity::Error => ritsu_base::diag::Severity::Error,
+                                crate::diag::Severity::Warning => ritsu_base::diag::Severity::Warning,
+                            },
+                            file: file.clone(),
+                            line: d.marks.first().map(|m| m.span.line),
+                            text: i18n::with(rl, || crate::findings_text(std::slice::from_ref(d), &lines)),
+                            json,
+                        })
+                    })
+                    .collect();
+                parts.push(Part::Text(i18n::with(rl, || crate::check_tail(&r.shadow, &r.diags, path, 0))));
+                let verdict = if crate::has_error(&r.diags) { Verdict::Fails } else { Verdict::Passes };
+                Checked { label: path.clone(), parts, verdict }
+            })
+            .collect()
     }
 
     /// The facts of a rule already read and checked.

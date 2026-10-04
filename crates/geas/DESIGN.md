@@ -1322,6 +1322,18 @@ ritsu-base (`ritsu_base::udiff`), since yuen reads diffs too; what a side's
 git blob is stays here (`src/diff.rs`). The command line, its exit codes,
 its output and its JSON did not change.
 
+In the first part of ritsu's stage E, the command moved from `src/main.rs`
+into the library, as `geas::cli::run`: the binary of this crate calls it,
+and so does `ritsu geas` (ritsu's DESIGN 8.2). For `ritsu check`,
+`geas::cli::checked` runs `geas check` on a project's specs and hands back
+what the command prints, a piece at a time (ritsu's DESIGN 8.3): a line for
+each claim, from the same function (`report::claim`, which `report::claims`
+now calls a claim at a time), the diagnostic of a claim that could not run
+or of a spec that does not parse, each with its JSON as `--json` writes a
+diagnostic, and the summary line. The claims run as `geas check` runs them,
+and the journal is written beside the spec. The command line, its exit
+codes, its output and its JSON did not change.
+
 ## 14. Distribution through the agent channel
 
 The skill is the other half of §0's division of labor: the person reads

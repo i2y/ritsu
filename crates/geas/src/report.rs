@@ -9,9 +9,14 @@ use crate::run::{ClaimResult, ClaimStatus};
 
 /// The lines for the claims; with `only_failures`, the claims that are not ok.
 pub fn claims(file: &str, src: &str, results: &[ClaimResult], lang: Lang, only_failures: bool) -> String {
+    results.iter().enumerate().map(|(i, r)| claim(file, src, i + 1, r, lang, only_failures)).collect()
+}
+
+/// The lines for one claim, the `n`th of its spec; with `only_failures`, nothing for one that is
+/// ok.
+pub fn claim(file: &str, src: &str, n: usize, r: &ClaimResult, lang: Lang, only_failures: bool) -> String {
     let mut out = String::new();
-    for (i, r) in results.iter().enumerate() {
-        let n = i + 1;
+    {
         match &r.status {
             ClaimStatus::Ok => {
                 if !only_failures {

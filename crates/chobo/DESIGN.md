@@ -916,6 +916,8 @@ chobo は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 段階 D の最後の部分（ritsu の PLAN の D.9）で、単位を ritsu の単位の型に載せた（1.2）。お金の単位に税込か税抜を書けるようにし（`unit 円 incl_tax`）、お金でない単位に書けば E014 で断る。`incl_tax` と `excl_tax` は修飾のキーワードになり、名前に使えなくなった。ritsu の口の帳簿の事実（`BookUnit`）は、単位ごとに ritsu の単位の型を持つ（名前だけの単位は `Dim::Count`）。`chobo api` は、税込か税抜を書いた単位にだけ `tax` を出し、`chobo doc` は勘定の単位を `円 incl_tax` のように書く。帳簿の中の意味と生成するコードは、区別を書いても変わらない。区別を書かない帳簿の出力は変わらない。例とテストの帳簿の全部のコマンドの出力（277 回）と、例を七つの組み合わせに生成したファイル（72 個）を、替える前と後で比べ、違ったのは、E014 を足した `--help`（三つ）と `explain --all`（四つ）と、新しいテストの帳簿（`tests/fixtures/税区分.book`）の四つだけだった。
 
+段階 E の最初の部分で、コマンドの本体を `src/main.rs` からライブラリの `chobo::run::run` に移した。クレートのバイナリと ritsu の `ritsu chobo`（ritsu の DESIGN 8.2）が、同じ関数を呼ぶ。`ritsu check` のために、`chobo::ports::Engine::checked` が、`chobo check` が印字するもの（診断一つずつのテキストと `--format json` のオブジェクト、要約の行と報告）を、コマンドと同じ関数で作って渡す（ritsu の DESIGN 8.3）。そのために、`check::render` の診断のあとの部分を `check::render_tail` に分けた。コマンドの振る舞いは変えていない。
+
 ## 9. 捨てたもの
 
 - **残高を読んで額を決める振替**（Numscript の順に取る元、`max`、`balance()`。TigerBeetle の `balancing_debit`）：額が処理した時点の残高で決まり、結果が「通すか、断るか」の二つに収まらない。呼ぶ側が残高を読んで額を決め、そのあと変わっていれば断られる、という形にする（P6）。

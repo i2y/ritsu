@@ -10,8 +10,7 @@
 //! The transport is the stdio one: one JSON-RPC 2.0 message per line, in and out.
 
 use super::{commands, global_flags, Cmd};
-use rulec::json::{self, Json, Obj};
-use rulec::tr;
+use crate::json::{self, Json, Obj};
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
 
@@ -351,7 +350,7 @@ fn run_into(
     // A group of its own, so that what it started — an adapter `verify` stood up, a compiler
     // `test` ran — is stopped with it, not left running on its own: at the limit, and when this
     // returns early (§15.163).
-    let mut child = rulec::child::Owned::spawn_group(
+    let mut child = crate::child::Owned::spawn_group(
         cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::from(out)).stderr(std::process::Stdio::from(err)),
     )?;
     let start = std::time::Instant::now();

@@ -12,10 +12,13 @@
 //! - [`Project::references`]: every reference the files make, resolved through the index — the
 //!   file it lands on, whether that file is part of the project, and what the language of that
 //!   file says of the thing named.
+//! - [`Project::check`]: each language's own `check` of the project's files, in that order, as
+//!   its command prints it, for `ritsu check` to print again (DESIGN 8.3).
 //!
 //! This is the connecting layer (DESIGN 3.1): it depends on the base layer and on the seven
 //! languages, and no language depends on it.
 
+pub mod check;
 pub mod joined;
 pub mod project;
 pub mod resolve;

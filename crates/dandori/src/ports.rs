@@ -73,6 +73,44 @@ fn definition(lines: &[&str], from: usize, to: usize) -> String {
     rows.iter().map(|(w, p)| format!("{}{p}", "  ".repeat(depth(*w)))).collect::<Vec<_>>().join("\n")
 }
 
+impl Engine {
+    /// `dandori check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3), the rules the
+    /// flows use read through `rules`: every finding, as the command prints it and as its
+    /// `--format json` prints it, then the line that says a file passes. `files` are as the person
+    /// gave them, from where the program runs; `root` is the project's.
+    pub fn checked(&self, root: &Path, files: &[String], rules: std::rc::Rc<dyn ritsu_ports::Rules>, lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
+        use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
+        crate::sources::with_rules(rules, || {
+            files
+                .iter()
+                .map(|f| match crate::check::check_file(Path::new(f)) {
+                    Ok((src, c)) => {
+                        let file = ritsu_base::paths::from_root(root, Path::new(f));
+                        let mut parts: Vec<Part> = c
+                            .diags
+                            .iter()
+                            .map(|d| {
+                                let json = ritsu_base::json::parse(&d.to_json(lang).to_string()).unwrap_or(ritsu_base::json::Json::Null);
+                                let severity = match d.severity {
+                                    crate::diag::Severity::Error => ritsu_base::diag::Severity::Error,
+                                    crate::diag::Severity::Warning => ritsu_base::diag::Severity::Warning,
+                                };
+                                Part::Finding(Finding { code: d.code.to_string(), severity, file: file.clone(), line: (d.line > 0).then_some(d.line), text: crate::commands::render(std::slice::from_ref(d), f, &src, lang), json })
+                            })
+                            .collect();
+                        if c.model.is_some() {
+                            parts.push(Part::Text(crate::commands::passed(f, c.diags.len(), lang)));
+                        }
+                        let verdict = if crate::diag::has_errors(&c.diags) { Verdict::Fails } else { Verdict::Passes };
+                        Unit { label: f.clone(), parts, verdict }
+                    }
+                    Err(msg) => Unit::unchecked(f, format!("{msg}\n")),
+                })
+                .collect()
+        })
+    }
+}
+
 impl ritsu_ports::Items for Engine {
     /// Each task, case, record (and each of its fields), enum (and each of its values), input
     /// and output the file writes (ritsu's DESIGN 6.3). A task's, a case's and a record's

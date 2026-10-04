@@ -109,7 +109,12 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
 
 /// The root (DESIGN 2.4): `--root`, else found from the first path.
 fn root_of(a: &Args, first: &str) -> Result<PathBuf, Text> {
-    match a.get("--root") {
+    root_from(a.get("--root"), first)
+}
+
+/// The root of `--root <flag>`, else found from the first path.
+fn root_from(flag: Option<&str>, first: &str) -> Result<PathBuf, Text> {
+    match flag {
         Some(r) => {
             let p = paths::absolute(Path::new(r));
             if p.is_dir() {
@@ -135,6 +140,46 @@ fn from_root(root: &Path, args: &[String]) -> Result<Vec<String>, Text> {
             })
         })
         .collect()
+}
+
+/// `sakai check <args>... [--root <root>]`, as `ritsu check` prints it (ritsu's DESIGN 8.3): for
+/// each map, its findings, as the command prints them and as its `--format json` prints them,
+/// then the line that says what was checked. `args` and `root` are as the person would write them,
+/// from where the program runs; the findings' files are from the root.
+pub fn checked(args: &[String], root: Option<&str>, suite: &Suite, lang: Lang) -> Vec<ritsu_ports::Checked> {
+    use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
+    let label = args.join(" ");
+    let refused = |e: Text| {
+        let head = if lang == Lang::Ja { "エラー" } else { "error" };
+        vec![Unit::unchecked(&label, format!("{head}: {}\n", e.get(lang)))]
+    };
+    let Some(first) = args.first() else { return vec![] };
+    let mut command = vec!["check".to_string()];
+    command.extend(args.iter().cloned());
+    if let Some(r) = root {
+        command.extend(["--root".to_string(), r.to_string()]);
+    }
+    crate::suite::COMMAND.with(|c| *c.borrow_mut() = Some(command));
+    let units = (|| -> Result<Vec<Unit>, Text> {
+        let root = root_from(root, first)?;
+        paths::show_from(paths::Shown::new(&root, first));
+        let rel = from_root(&root, args)?;
+        let outcomes = check::check_args_with(&root, &rel, suite)?;
+        Ok(outcomes
+            .iter()
+            .map(|o| {
+                let mut parts: Vec<Part> = o.diags.iter().map(|d| Part::Finding(Finding::of(d, (!d.rel.is_empty()).then(|| d.rel.clone()), lang))).collect();
+                let tail = check::render(&check::Outcome { file: o.file.clone(), diags: vec![], summary: o.summary.clone(), checked: None, reads: vec![] }, lang);
+                if !tail.is_empty() {
+                    parts.push(Part::Text(tail));
+                }
+                Unit { label: paths::shown(&o.file), parts, verdict: if o.has_errors() { Verdict::Fails } else { Verdict::Passes } }
+            })
+            .collect())
+    })();
+    crate::suite::COMMAND.with(|c| *c.borrow_mut() = None);
+    paths::show_from_the_root();
+    units.unwrap_or_else(refused)
 }
 
 fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {

@@ -235,7 +235,7 @@ ritsu/
 
 - 言語のクレートは、いまの `[[bin]]`（`rulec` など）を残す。開発と、そのクレートのテストが使う。
 - すべての言語をつなぐバイナリは `crates/ritsu` の `ritsu` だけである。
-- リリースで配るのは `ritsu` 一つで、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai` はそれを指すリンクにする。リンクの名前で呼ばれたら、その言語のコマンドとして、すべての口をつないで動く（8.2）。Cargo のバイナリの名前は、ワークスペースの中で重ならない（言語のクレートの `rulec` と、リリースのリンクの `rulec` は、作られる場所が違う）。
+- リリースで配るのは `ritsu` 一つで、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai` はそれを指すリンクにする。リンクの名前で呼ばれたら、その言語のコマンドとして、すべての口をつないで動く（8.2。E.2 で作った）。Cargo のバイナリの名前は、ワークスペースの中で重ならない（言語のクレートの `rulec` と、リリースのリンクの `rulec` は、作られる場所が違う）。
 - 受け取る側（dandori、yuen、sakai）のクレートのバイナリは、D の段階からほかの言語を読めない（ほかの言語のクレートに依存しないため）。ほかの言語を読むところに来たら、`ritsu <言語>` で走らせるよう言う診断を出す。dandori のクレートのバイナリは、規則を使わないフローならいまと同じに動く。D の二つ目の部分で dandori をそうした。規則を読む口に、何も読まない口（`dandori::sources::NoRules`）を渡し、`use rule` のところで E005 が `ritsu dandori …` で走らせるよう言う。`ritsu dandori` は、D で先に作った入口の最小の形にある（8.6）。D の最後の部分で yuen と sakai もそうした。yuen のクレートのバイナリは何もつながない口の束（`yuen::suite::Suite` の空のもの）を渡され、ほかの言語のものを名指すプロジェクトには、`ritsu yuen` に同じコマンドを続けた形を言って exit 2 で終わる。sakai のクレートのバイナリも何もつながない口の束（`sakai::suite::Suite` の空のもの）を渡され、地図が規則、カレンダー、ワークフローを含めば、言語ごとに一つの E104 で `ritsu sakai` に同じコマンドを続けた形を言う（診断なので exit 1。sakai の DESIGN 4.1）。
 
 ## 3. 依存の決まり
@@ -578,6 +578,7 @@ chobo の額は 0 から 2⁶³ − 1 までで、rulec の値は負にもなり
 
 - `Project::load(パス, --root)` が、渡したパス（無ければ `.`）の下のファイルを、土台の `paths::walk`（4.7 の名前を飛ばす）で歩き、拡張子で言語を決める。ルートは `--root`、無ければ最初のパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ最初のパスである（6.2 の 3）。並びは、上の 3 の順の言語（rulec、koyomi、chobo、geas、`.proto`、dandori、yuen、sakai。`ORDER`）、言語の中ではパスの順である。止めるのは四つで、どれも使う人が直すもの（使い方の誤り。8.4 の exit 2）である。無いパス、ルートの外のパス、名前で渡した言語の無いファイル（`.py` など）、言語のファイルが一つも無いプロジェクト。最後のものを止めるのは、何も確かめずに通ったように見せないためである（rulec の `check` が、無いディレクトリを空のまま通さないのと同じ考え）。
 - 言語は `Joined` が一度だけ作る。rulec の `Engine`（確かめた規則を覚える）、koyomi・chobo・geas・dandori・sakai の `Engine`、その上の索引（6.4）である。`ritsu dandori` には規則の口を、`ritsu yuen` と `ritsu sakai` には索引を含む口のまとまりを、ここから渡す。D の入口では三つがそれぞれ rulec の `Engine` を作り、同じ規則を別々に読んでいた（PLAN の 7.8）。
+- 一度だけ読むことの中身は、口の問いを同じファイルに一度しか問わないことである（索引、rulec の `Engine` の覚え書き、yuen と sakai の口のまとまりの覚え書き）。`ritsu check`（E.2）は、rulec の `check` の報告も rulec の `Engine` から作る。`Engine` は報告をファイルと中身で覚え、dandori や sakai がその規則の事実を尋ねたら、報告から検査を通ったかを読んで、規則を検査し直さない（パスの書き方が違っても同じファイルとみなす。`rulec/tests/ports.rs` が、コーパスの 50 本で、`check` と事実の二つを尋ねても検査は一回ずつであることを確かめる）。各言語の `check` の文は、頼まれた言語で一度作る。
 - ファイルをまたぐ参照（上の 2）は `Project::references` が解く。各ファイルの言語が `References` で言う名指しごとに、行き着くファイル、そのファイルがプロジェクトのものか、行き着き方（`Landing`：ファイルが無い、索引が読むファイルならその言語の答え、`.proto` なら ritsu-proto で読んでその要素があるか、索引が読まないファイル）を返す。参照の誤りは、これまでどおり各言語が自分の `check` と自分のコードで言う（7.10）ので、これは言語をまたぐ検査（E.4）と LSP（F）が読む、プロジェクトの一枚の見取り図である。テストは、sakai の例を写した `crates/ritsu/tests/projects/通販` の参照の全部（`crates/ritsu-project/tests/golden/shop.references.txt`）を golden にする。
 
 ### 6.2 名指しを処理系全体のものにする
@@ -781,6 +782,13 @@ ritsu --help | --version
 - `ritsu explain` は、ritsu の台帳（言語をまたぐ検査のコード）を引く。各言語のコードは `ritsu <言語> explain <コード>` で引く。言語ごとにコードの番号が重なる（rulec の E101 と koyomi の E101 は別のもの）からである。
 - `ritsu <言語> …` は、その言語のコマンドと同じものを、すべての口をつないで走らせる。
 
+**E.2 で作った形**（PLAN の E.2）。`ritsu check` は、プロジェクトを読み（6.1 の `Project::load`）、言語ごとの `check` を 6.1 の順に走らせる。rulec、koyomi、chobo、geas、dandori には、プロジェクトのファイルを一つずつ、使う人が書くとおりのパス（走らせたディレクトリから）で渡す。dandori には rulec の規則の口をつなぐ。yuen と sakai は自分でファイルを探して一つのプロジェクトや地図として確かめる言語なので、渡されたパスのうち自分のファイルを含むものと、プロジェクトのルートを `--root` で渡す。`.proto` には自分の言語の `check` が無い（言語をまたぐ検査が読む。7 章）。
+
+- 各言語は、自分のコマンドが印字に使う関数で、単位（ファイル、yuen のプロジェクト、sakai の地図）ごとに、何をどう印字するかを返す（`ritsu_ports::Checked`。診断一つずつのテキストと JSON、そのほかの行、単位の結果）。`ritsu check` は言語の出したテキストを読み直さない。言語ごとの関数は `rulec::ports::Engine::checked`、`koyomi::ports::Engine::checked`、`chobo::ports::Engine::checked`、`geas::cli::checked`、`dandori::ports::Engine::checked`、`yuen::ports::Engine::checked`、`sakai::run::checked` である。
+- geas の `check` は主張を走らせる（プログラムを動かし、ジャーナルを書く）。`ritsu check` でも同じで、`geas check` が走らせるものを走らせる。
+- 言語は `--lang` で選び、無ければ `RITSU_LANG`、どちらも無ければ英語である。各言語の `<名前>_LANG` は読まない（一つのコマンドの文面を一つの言語にする）。
+- 言語のコマンドは、どれもライブラリの関数になった。rulec、koyomi、chobo、geas は、E.2 で `src/main.rs` の中身を `rulec::cli::run`、`koyomi::run::run`、`chobo::run::run`、`geas::cli::run` に移した（振る舞いは変えていない。各言語の DESIGN.md）。これで `ritsu <言語>` は七つの全部にある（8.2）。
+
 ### 8.2 各言語のコマンドの残し方
 
 - 名前は残す。`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai` は、リリースでは `ritsu` を指すリンクで、呼ばれた名前の言語として動く（2.3）。`ritsu rulec check …` と `rulec check …` は同じである。
@@ -788,21 +796,95 @@ ritsu --help | --version
 - `--version` は `<名前> <ritsu のバージョン>` を一行で出す（`rulec 0.23.0` など。13.1）。`rulec --version` を読むスクリプトは、そのまま動く。
 - 言語の環境変数（`RULEC_LANG` など）は残し、全部に効く `RITSU_LANG` を足す。
 
+E.2 で、`ritsu <言語>` を七つの全部に作った。rulec、koyomi、chobo、geas のコマンドはそれぞれのクレートのバイナリと同じ関数を、dandori、yuen、sakai のコマンドは ritsu-project が一度つないだ口（6.1）を渡して呼ぶ。`ritsu` を言語の名前で呼ぶと（`rulec` という名前のリンク）、その言語のコマンドとして動く（2.3）。`crates/ritsu/tests/entry.rs` が、七つの `--version`、いくつかのコマンド、`koyomi` と `rulec` という名前のリンクで確かめる。
+
 ### 8.3 出力
 
 `ritsu check` のテキストは、ファイルごとに、その言語の `check` が出すとおりの診断を出し、そのあとに言語をまたぐ検査の診断を出す。言語ごとに番号が重なるので、`ritsu check` の中でだけ、見出しの括弧にツールの語を足す（`error[rulec E101]`、`error[ritsu E201]`）。rulec の診断の枠（`-->` で場所を示す形）は、そのまま使う。
 
-JSON は一つのオブジェクトにする。
+**E.2 で決めた形**。テキストは、言語の `check` が単位ごとに印字するもの（診断、`ok rules/送料.rule` の行、要約、chobo の報告など）を、そのまま 6.1 の順に並べる。足すのは、診断の見出しのツールの語（見出しの最初の `[<コード>]` を `[<ツール> <コード>]` にする）と、最後の一行の要約だけである。sakai の例を写したプロジェクトで、受注が注文の状態に値を足したとき（`order.proto` に `ORDER_STATUS_RETURNED = 5;`）は次のようになる（`crates/ritsu/tests/golden/check/shop-returned.en.txt`。途中の、通るファイルの行は省いた）。
 
-```json
-{"ritsu": "0.23.0", "root": ".", "files": [{"tool": "rulec", "file": "rules/送料.rule", "ok": true}], "diagnostics": [{"tool": "ritsu", "code": "E201", "severity": "error", "file": "flows/order.flow", "line": 12, "col": 3, "message": "…", "notes": [], "fix": null}], "crossings": {"proved": 14, "failed": 1, "undecided": 2}}
+```
+$ ritsu check .
+ok billing/rules/出荷の送料.rule
+ok billing/rules/決済手数料.rule
+error[rulec E032]: Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
+  --> billing/rules/請求の要否.rule:5
+  |
+5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
+  |      ^^^^^^^^^^
+  |
+ In ../../proto/shop/ordering/v1/order.proto but not in this enum: returned
+ The form to add: `<name>(returned)`. The name is yours to decide — the file carries no Japanese.
+ A value appeared through the contract, not through this rule. What the new value costs is a decision nobody has made yet (§15.59).
+
+ok delivery/rules/出荷の急ぎ.rule
+…
+ordering/受注.flow: ok
+error[sakai E105]: billing/rules/請求の要否.rule:5:1: The file billing/rules/請求の要否.rule does not pass rulec's check, or cannot be read
+     5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
+  = What rulec says: [E032] billing/rules/請求の要否.rule:5: Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
+  = Make the file pass rulec's check; the references of a file that cannot be read cannot be checked.
+ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): 1 fail (2 errors); borders between the languages: 0 checked, 0 undecided
 ```
 
-（形の案。キーは E の段階で決め、テストで固定する。）各言語の診断は、その言語の JSON の形のまま入れ、外側に `tool` と、ルートからの `file` を足す。
+要約は、言語ごとのファイルの数、結果、言語の境目の検査の数を言う。結果は、どれも通れば `all pass`（日本語は「どれも検査を通った」）、通らないファイルがあればその数、確かめられなかったファイルがあればその数で、エラーと警告の数を括弧に添える。ファイルが通らないとは、そのファイルを場所とするエラーがあるか、ファイルを一つずつ確かめる言語（rulec、koyomi、chobo、geas、dandori）がそのファイルを通さなかった（geas の成り立たない主張など、コードの無いものも含む）ことである。境目の数は、言語をまたぐ検査（7 章）が確かめた境目と、そのうち決められなかったものである。検査は E の二つ目の部分（PLAN の E.4）で入るので、いまはどちらも 0 である。日本語の要約は「ritsu check: ファイル 21 個（rulec 4、…）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所」の形になる。
+
+JSON は一つのオブジェクトで、キーは `ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート）、`ok`（exit 0 になるか）、`files`（ファイルごとの `tool`、ルートからの `file`、`ok`）、`diagnostics`、`borders`（境目の検査の `held`・`failed`・`undecided`）の順である。各言語の診断は、その言語の `check --format json` が書く形のまま入れ、その先頭に `tool` を置き、`file` をルートからの相対にする（言語の形に `file` が無ければ `tool` のすぐあとに足す）。rulec の診断は rulec の形（`v` が 2 の形）のままで、`title` や `column` は rulec の名前である。上の例では次のようになる（`crates/ritsu/tests/golden/check/shop-returned.json`。`…` は省いたところ）。
+
+```json
+{
+  "ritsu": "0.1.0",
+  "root": ".",
+  "ok": false,
+  "files": [
+    {
+      "tool": "rulec",
+      "file": "billing/rules/出荷の送料.rule",
+      "ok": true
+    },
+    …
+  ],
+  "diagnostics": [
+    {
+      "tool": "rulec",
+      "v": 2,
+      "severity": "error",
+      "code": "E032",
+      "file": "billing/rules/請求の要否.rule",
+      "line": 5,
+      "column": 6,
+      "title": "Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto",
+      …
+    },
+    {
+      "tool": "sakai",
+      "code": "E105",
+      "severity": "error",
+      "file": "billing/rules/請求の要否.rule",
+      "line": 5,
+      "col": 1,
+      "message": "The file billing/rules/請求の要否.rule does not pass rulec's check, or cannot be read",
+      …
+    }
+  ],
+  "borders": {
+    "held": 0,
+    "failed": 0,
+    "undecided": 0
+  }
+}
+```
+
+形の案で `crossings` と呼んでいたものは `borders` にした。sakai の要約と api の `crossings` は、境界づけられたコンテキストの境界を越える参照のことで、別のものだからである。案の `proved` も、0.4 の決まり（肯定形で「証明」と言わない）に合わせて `held` にした。
+
+テストは `crates/ritsu/tests/check.rs` で、テストのプロジェクトとそれを変えた写しのテキスト（英語と日本語）と JSON を golden にし、テキストからツールの語を除いたものが、同じファイルに各言語のコマンド（`ritsu <言語> check`）が出すものを順に並べたものと一字も違わないことを、テストのプロジェクト、変えた写し、yuen のテストの材料（規則を名指す要件）、geas の例（主張が Python のプログラムを走らせる）で確かめる。
 
 ### 8.4 終了コード
 
 0（問題なし、または警告と備考だけ）、1（どれかの言語か、言語をまたぐ検査にエラーがある）、2（使い方の誤り、読めないファイル、中の異常）。どの言語のコマンドとも同じ。
+
+E.2 で、言語の結果をこう読むことにした。言語が単位を確かめられなかったとき（読めないファイル、geas がジャーナルを書けないとき）は 2 で、ほかの単位の検査は続ける（6.1）。言語がエラーを見つけたとき、または単位を通さなかったときは 1 である。geas は、読めない主張のファイル（構文の誤り）にも 2 で終わるが、`ritsu check` では言語がファイルの誤りを見つけたこととして 1 にする（ritsu の 2 は、走らせ方とファイルを読めることの問題だけに使う）。`ritsu <言語>` の終了コードは、その言語のコマンドのものである。
 
 ### 8.5 外のツールのための JSON
 
@@ -823,6 +905,8 @@ D.3 で、dandori のクレートは rulec を読まなくなり、そのバイ�
 D の最後の部分で、`ritsu yuen <引数>…` を足した（PLAN の D.7）。yuen のコマンドを、yuen が読むすべての言語の口（rulec、koyomi、chobo、geas、dandori、sakai の `Items`、rulec と koyomi の `Sources`、rulec の `Rules`、koyomi の `Dates`、geas の `Claims`）をつないで走らせる。テストは `crates/ritsu/tests/yuen.rs`（ほかの言語のものを名指す yuen のテストの材料の全部が通ること、`affected`、借りた出典の `source outdated`）。
 
 同じ部分で、`ritsu sakai <引数>…` も足した（PLAN の D.8）。sakai のコマンドを、sakai が読むすべての言語の口（rulec の `Rules` と `References`、koyomi と dandori の `References`、chobo の `Books`）をつないで走らせる。テストは `crates/ritsu/tests/sakai.rs`（例の `check` と `api` と四つの `build --check`、ほかの言語を通してしか見えない変更の E209 と E105）。これで入口が持つ言語は、ほかの言語を読む dandori、yuen、sakai の三つになった。残りの四つ（rulec、koyomi、chobo、geas）はほかの言語を読まないので、自分のクレートのバイナリで同じに動く。
+
+E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ritsu <言語>`、リンクの名前）。下の段落と捨てたものは、D でこの最小の形を先に作った理由として残す。
 
 待つ費用が大きく、作る費用が小さいからである。待てば、規則を使う例をコマンドで走らせる手段が E まで無く、README に書ける手順も無い。作るのは、dandori のコマンドを関数（`dandori::cli::run`）にしたので、引数を渡すだけで済む（`src/main.rs` は 90 行）。入口は何に依存してもよく（3.1）、`cargo xtask deps` も通る。テストは `crates/ritsu/tests/dandori.rs` に置いた（すべてをつないだバイナリを走らせるテストの置き場所。3.3）。規則を使うフローを `ritsu dandori check` と `doc` が読むこと（英語と日本語）と、`ritsu` が持たないコマンドに 2 で終わることを見る。
 

@@ -80,6 +80,35 @@ fn over_budget(m: &Model) -> Option<Text> {
     (combos > budget as u128).then(|| ritsu_base::tr!("入力の組み合わせが {combos} 通りあり、koyomi が確かめる {budget} 通りを超えます", "the inputs come to {combos} combinations, more than the {budget} koyomi checks"))
 }
 
+impl Engine {
+    /// `koyomi check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3): every finding,
+    /// as the command prints it and as its `--format json` prints it, then the line that says what
+    /// was checked. One loader is shared by the files, as the command shares it. `files` are as
+    /// the person gave them, from where the program runs; `root` is the project's.
+    pub fn checked(&self, root: &Path, files: &[String], lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
+        use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
+        let mut loader = Loader::default();
+        files
+            .iter()
+            .map(|f| match check::check_file(f, &Options::default(), &mut loader) {
+                Ok(o) => {
+                    let mut parts: Vec<Part> = o.diags.iter().map(|d| Part::Finding(Finding::of(d, ritsu_base::paths::from_root(root, Path::new(&d.file)), lang))).collect();
+                    let tail = check::render(&check::Outcome { path: o.path.clone(), diags: vec![], checked: None, ok: o.ok.clone() }, lang);
+                    if !tail.is_empty() {
+                        parts.push(Part::Text(tail));
+                    }
+                    Unit { label: f.clone(), parts, verdict: if o.has_errors() { Verdict::Fails } else { Verdict::Passes } }
+                }
+                Err(e) => {
+                    let msg = ritsu_base::tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}");
+                    let head = if lang == ritsu_base::text::Lang::Ja { "エラー" } else { "error" };
+                    Unit::unchecked(f, format!("{head}: {}\n", msg.get(lang)))
+                }
+            })
+            .collect()
+    }
+}
+
 impl ritsu_ports::Dates for Engine {
     fn facts(&self, file: &Path) -> Result<DateFacts, Vec<Said>> {
         let m = model(file)?;

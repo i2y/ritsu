@@ -392,3 +392,21 @@ fn 規則のファイルが持つものと名指すもの() {
         e.references(&root(), &path).unwrap();
     }
 }
+
+/// `ritsu check` prints for a rule what `rulec check` prints for it, and a rule it has checked
+/// for that is not checked a second time when a workflow asks for its facts, under another
+/// spelling of its path (ritsu's DESIGN 6.1, 8.3).
+#[test]
+fn a_rule_checked_for_ritsu_check_is_checked_once() {
+    let e = Engine::new();
+    let rules = corpus();
+    let units = e.checked(&root(), &rules, ritsu_base::text::Lang::En);
+    assert_eq!(units.len(), rules.len());
+    for (rule, u) in rules.iter().zip(&units) {
+        let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).args(["check", rule, "--lang", "en"]).current_dir(root()).output().unwrap();
+        assert_eq!(u.text(), String::from_utf8_lossy(&o.stdout), "{rule}");
+        assert_eq!(u.verdict, ritsu_ports::Verdict::Passes, "{rule}");
+        assert!(e.facts(&root().join(rule)).is_ok(), "{rule}");
+    }
+    assert_eq!(e.checks(), rules.len(), "each rule is checked once, for check and for its facts");
+}

@@ -1,5 +1,6 @@
-//! geas: hold agent-written code to claims a person has read. The command is `src/main.rs`; this
-//! library is what it runs, and what ritsu's ports read of a spec (`ports`, ritsu's DESIGN 3.2).
+//! geas: hold agent-written code to claims a person has read. The command is `cli` (the binary
+//! of this crate and `ritsu geas` run it); the rest of this library is what it runs, and what
+//! ritsu's ports read of a spec (`ports`, ritsu's DESIGN 3.2).
 
 #[macro_use]
 extern crate ritsu_base;
@@ -7,6 +8,8 @@ extern crate ritsu_base;
 pub mod affected;
 pub mod cdp;
 pub mod check;
+/// The `geas` command, as a function.
+pub mod cli;
 pub mod codes;
 pub mod cover;
 pub mod diag;

@@ -46,6 +46,13 @@ fn steps(src: &str, from: usize, to: usize) -> Vec<String> {
     src.lines().skip(from.saturating_sub(1)).take(to + 1 - from).map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).map(String::from).collect()
 }
 
+impl Engine {
+    /// `geas check` of each spec, as `ritsu check` prints it ([`crate::cli::checked`]).
+    pub fn checked(&self, root: &Path, files: &[String], lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
+        crate::cli::checked(root, files, lang)
+    }
+}
+
 impl ritsu_ports::Claims for Engine {
     fn claims(&self, file: &Path) -> Result<Vec<Claim>, Vec<Said>> {
         let (src, claims) = read(file)?;

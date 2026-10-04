@@ -22,6 +22,33 @@ impl Engine {
     pub fn with(suite: crate::suite::Suite) -> Engine {
         Engine { suite }
     }
+
+    /// `yuen check <args>... [--root <root>]`, as `ritsu check` prints it (ritsu's DESIGN 8.3): the
+    /// project's findings, as the command prints them and as its `--format json` prints them, then
+    /// the line that sums them up. `args` and `root` are as the person would write them, from where
+    /// the program runs; the findings' files are from the root.
+    pub fn checked(&self, args: &[String], root: Option<&str>, lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
+        use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
+        let label = args.join(", ");
+        let mut command = vec!["check".to_string()];
+        command.extend(args.iter().cloned());
+        if let Some(r) = root {
+            command.extend(["--root".to_string(), r.to_string()]);
+        }
+        crate::check::COMMAND.with(|c| *c.borrow_mut() = Some(command));
+        let checked = crate::check::check_with(args, root, self.suite.clone());
+        crate::check::COMMAND.with(|c| *c.borrow_mut() = None);
+        let c = match checked {
+            Ok(c) => c,
+            Err(project::Refusal(t)) => {
+                let head = if lang == ritsu_base::text::Lang::Ja { "エラー" } else { "error" };
+                return vec![Unit::unchecked(&label, format!("{head}: {}\n", t.get(lang)))];
+            }
+        };
+        let mut parts: Vec<Part> = c.diags.iter().map(|d| Part::Finding(Finding::of(d, (!d.rel.is_empty()).then(|| d.rel.clone()), lang))).collect();
+        parts.push(Part::Text(format!("{}\n", crate::check::summary(&c, &label).get(lang).trim_end())));
+        vec![Unit { label, parts, verdict: if c.has_errors() { Verdict::Fails } else { Verdict::Passes } }]
+    }
 }
 
 /// The file, read as a project of its own under `root`, with its names resolved.

@@ -1,11 +1,12 @@
-//! `ritsu`: the one command of the toolchain (DESIGN 8.1). In stage D it has its least form
-//! (DESIGN 8.6): the languages that read others run with the ports joined — `ritsu dandori …`
-//! with rulec's answer to the port of rules, so that a workflow reads its rules in the same
-//! process, `ritsu yuen …` with every language yuen reads, and `ritsu sakai …` with every
-//! language sakai reads, each language made once by ritsu-project (DESIGN 6). What the binaries
-//! of their own crates cannot do, since those crates hold no other language (DESIGN 2.3). The
-//! rest of DESIGN 8.1 (`ritsu check`, `ritsu run`, `ritsu gen`, `ritsu explain`, `ritsu
-//! <language>` for every language) comes in stage E.
+//! `ritsu`: the one command of the toolchain (DESIGN 8.1). `ritsu check` checks a project's files,
+//! each with its language's own check, the languages joined once by ritsu-project (DESIGN 6);
+//! `ritsu <language> …` is the language's own command, with the languages it reads joined — what
+//! the binary of a receiving language's crate cannot do, since that crate holds no other language
+//! (DESIGN 2.3). Called by a language's name (a link named `rulec`), ritsu is that command
+//! (DESIGN 2.3, 8.2). `ritsu run` and `ritsu gen` come later in stage E, `ritsu lsp` in F.
+
+mod check;
+mod cli;
 
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
@@ -13,27 +14,18 @@ use ritsu_project::Joined;
 use std::io::Write;
 use std::process::ExitCode;
 
-/// The languages whose commands `ritsu <language>` will run (DESIGN 8.2), but for the ones that
-/// read others (dandori, yuen, sakai), run as their own commands until stage E: they read no other
-/// language, so their own binaries do all they do.
-const ON_THEIR_OWN: [&str; 4] = ["rulec", "koyomi", "chobo", "geas"];
-
-fn help(lang: Lang) -> String {
-    let v = env!("CARGO_PKG_VERSION");
-    let t = tr!(
-        "ritsu {v} — 七つの小さな言語（rulec、dandori、koyomi、chobo、geas、yuen、sakai）を一つにまとめる処理系\n\n\
-         使い方:\n  ritsu dandori <コマンド> ...   dandori のコマンド。フローが使う規則を同じプロセスの中で読む\n  ritsu yuen <コマンド> ...      yuen のコマンド。要件が名指すほかの言語のもの、借りた出典、主張の記録を同じプロセスの中で読む\n  ritsu sakai <コマンド> ...     sakai のコマンド。地図が持つ規則、カレンダー、ワークフローの参照と、規則の列挙を同じプロセスの中で読む\n  ritsu --help | --version\n\n\
-         ほかの言語は、いまはそれぞれのコマンドで走らせます（rulec、koyomi、chobo、geas）。\n\
-         --lang ja|en でこの画面の言語を選びます（無ければ環境変数 RITSU_LANG、それも無ければ en）。`ritsu dandori`、`ritsu yuen`、`ritsu sakai` の言語は、その言語が選びます。\n\
-         exit code: 言語のコマンドのもの / 2 ritsu に無いコマンド\n",
-        "ritsu {v} — one toolchain for seven small languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai)\n\n\
-         Usage:\n  ritsu dandori <command> ...   dandori's commands, reading the rules a flow uses in the same process\n  ritsu yuen <command> ...      yuen's commands, reading in the same process what requirements name of the other languages, the sources they borrow and the records of claims\n  ritsu sakai <command> ...     sakai's commands, reading in the same process what the rules, calendars and workflows of a map refer to, and the enums of its rules\n  ritsu --help | --version\n\n\
-         The other languages run as their own commands for now (rulec, koyomi, chobo, geas).\n\
-         --lang ja|en chooses the language of this page (else the RITSU_LANG environment variable, else en); `ritsu dandori`, `ritsu yuen` and `ritsu sakai` let the language choose its own.\n\
-         Exit codes: the language's command's / 2 a command ritsu does not have\n"
-    );
-    t.get(lang).to_string()
+/// Die quietly when the reader of a pipe goes away, as `cat` does (`ritsu rulec vectors | head`).
+#[cfg(unix)]
+fn restore_sigpipe() {
+    unsafe extern "C" {
+        fn signal(signum: i32, handler: usize) -> usize;
+    }
+    // SIGPIPE is 13 on Linux and macOS; SIG_DFL is 0.
+    unsafe { signal(13, 0) };
 }
+
+#[cfg(not(unix))]
+fn restore_sigpipe() {}
 
 /// `--lang ja`, `--lang=ja`, before the command.
 fn lang_asked(args: &[String]) -> Option<String> {
@@ -59,46 +51,88 @@ fn refuse(msg: Text, lang: Lang) -> ExitCode {
     ExitCode::from(2)
 }
 
+/// The language's own command, on the words after its name, with the languages it reads joined.
+fn language(name: &str, args: &[String]) -> ExitCode {
+    let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
+    let code = match name {
+        "rulec" => return rulec::cli::run(args.to_vec()),
+        "koyomi" => return koyomi::run::run(args.to_vec()),
+        "chobo" => return chobo::run::run(args.to_vec()),
+        "geas" => {
+            let code = geas::cli::run(args);
+            let _ = out.flush();
+            std::process::exit(code);
+        }
+        "dandori" => dandori::cli::run(args, Joined::new().rules(), &mut out, &mut err),
+        "yuen" => yuen::run::run(args, Joined::new().yuen(), &mut out, &mut err),
+        "sakai" => sakai::run::run(args, Joined::new().sakai(), &mut out, &mut err),
+        _ => unreachable!("only the seven languages come here"),
+    };
+    let _ = out.flush();
+    ExitCode::from(code)
+}
+
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    restore_sigpipe();
+    // A panic is a bug in ritsu: exit 2, as DESIGN 8.4 says, rather than Rust's 101.
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("ritsu: a bug in ritsu, please report it: {info}");
+    }));
+    match std::panic::catch_unwind(run) {
+        Ok(code) => code,
+        Err(_) => ExitCode::from(2),
+    }
+}
+
+fn run() -> ExitCode {
+    let mut argv = std::env::args();
+    let called = argv.next().unwrap_or_default();
+    let args: Vec<String> = argv.collect();
+    // called by a language's name, ritsu is that command
+    let name = std::path::Path::new(&called).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    if cli::LANGUAGES.contains(&name.as_str()) {
+        return language(&name, &args);
+    }
     let lang = Lang::pick(lang_asked(&args).as_deref(), "RITSU_LANG");
+    let table = cli::table();
     // the command is the first word that is not ritsu's own `--lang`
     let mut at = 0;
     while at < args.len() && (args[at] == "--lang" || args[at].starts_with("--lang=")) {
         at += if args[at] == "--lang" { 2 } else { 1 };
     }
     let Some(first) = args.get(at) else {
-        eprint!("{}", help(lang));
+        eprint!("{}", table.help_all(lang));
         return ExitCode::from(2);
     };
     match first.as_str() {
-        "--help" | "-h" | "help" => {
-            print!("{}", help(lang));
+        "--help" | "-h" => {
+            print!("{}", table.help_all(lang));
             ExitCode::SUCCESS
         }
+        "help" => match args.get(at + 1) {
+            None => {
+                print!("{}", table.help_all(lang));
+                ExitCode::SUCCESS
+            }
+            Some(l) if cli::LANGUAGES.contains(&l.as_str()) => language(l, &["--help".to_string()]),
+            Some(c) => match table.command(c) {
+                Some(cmd) => {
+                    print!("{}", table.help_cmd(cmd, lang));
+                    ExitCode::SUCCESS
+                }
+                None => refuse(tr!("`{c}` というコマンドはありません。`ritsu --help` を読んでください", "there is no command `{c}`; run `ritsu --help`"), lang),
+            },
+        },
         "--version" | "-V" => {
             println!("ritsu {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        "dandori" => {
-            let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
-            let code = dandori::cli::run(&args[at + 1..], Joined::new().rules(), &mut out, &mut err);
-            let _ = out.flush();
-            ExitCode::from(code)
+        "check" => {
+            let mut rest: Vec<String> = args[..at].to_vec();
+            rest.extend(args[at + 1..].iter().cloned());
+            ExitCode::from(check::command(&rest, lang))
         }
-        "yuen" => {
-            let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
-            let code = yuen::run::run(&args[at + 1..], Joined::new().yuen(), &mut out, &mut err);
-            let _ = out.flush();
-            ExitCode::from(code)
-        }
-        "sakai" => {
-            let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
-            let code = sakai::run::run(&args[at + 1..], Joined::new().sakai(), &mut out, &mut err);
-            let _ = out.flush();
-            ExitCode::from(code)
-        }
-        l if ON_THEIR_OWN.contains(&l) => refuse(tr!("`ritsu {l}` はまだありません。`{l}` のコマンドで走らせてください", "there is no `ritsu {l}` yet; run the `{l}` command itself"), lang),
+        l if cli::LANGUAGES.contains(&l) => language(l, &args[at + 1..]),
         other => refuse(tr!("`{other}` というコマンドはありません。`ritsu --help` を読んでください", "there is no command `{other}`; run `ritsu --help`"), lang),
     }
 }

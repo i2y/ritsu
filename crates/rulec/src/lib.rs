@@ -29,6 +29,9 @@ pub mod backend;
 pub mod cel;
 pub mod cert;
 pub mod child;
+/// The `rulec` command, as a function: the binary runs it, and so does `ritsu rulec`.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod cli;
 pub mod defset;
 pub mod diag;
 pub mod doc;
