@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "A small language for the things you count and move between accounts: stock, money, points, seats. Every bound on an account holds in one write."
-repository = "https://github.com/i2y/chobo"
+repository.workspace = true
 
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }

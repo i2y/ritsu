@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "A small language for where requirements come from: the sources they are read from, who decided them and why, what meets them and what checks them, and the hashes that stop the check when any of it moves"
-repository = "https://github.com/i2y/yuen"
+repository.workspace = true
 
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }

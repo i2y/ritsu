@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "A small language for the checkable part of a context map: which bounded context owns each artifact, which crossings the relationships allow, and how a layer maps the words and values that cross"
-repository = "https://github.com/i2y/ritsu"
+repository.workspace = true
 
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }

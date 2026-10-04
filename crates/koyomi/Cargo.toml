@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "A small language for closing days, payment days, business days and month arithmetic, checked on every day of its range and compiled to TypeScript, Python, Go, Rust and SQL"
-repository = "https://github.com/i2y/koyomi"
+repository.workspace = true
 
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }

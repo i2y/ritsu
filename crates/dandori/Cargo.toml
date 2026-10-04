@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2021"
 description = "A small typed language for workflows that call business rules, checked before it runs and compiled to AWS Step Functions, Temporal, Lambda durable functions, Argo Workflows and pydantic-graph"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/i2y/dandori"
+repository.workspace = true
 
 [dependencies]
 # ritsu's base layer (ritsu's DESIGN 3.1): the two languages of the text, the command-line

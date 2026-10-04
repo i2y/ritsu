@@ -3,7 +3,7 @@ name = "geas"
 version.workspace = true
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/i2y/geas"
+repository.workspace = true
 
 [dependencies]
 # Nothing from outside but ritsu's base layer, which is std only (ritsu DESIGN 3.1)
