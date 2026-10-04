@@ -87,8 +87,8 @@ Whether a refund is paid back at once or reviewed. A refund never asks for more 
 
 | Name | Type | Range | Notes |
 |---|---|---|---|
-| paid | number | 0 〜 1万 |  |
-| asked | number | 0 〜 1万 |  |
+| paid | number | 0 to 10_000 |  |
+| asked | number | 0 to 10_000 |  |
 
 ## Outputs
 
@@ -150,7 +150,7 @@ The settlement run a payment day falls in. The days are the ones payment_terms.c
 
 | Name | Type | Range | Notes |
 |---|---|---|---|
-| pay_day | date | 2026-02-10 〜 2027-01-10 | Only the days `koyomi "../dates/payment_terms.cal" date payment` comes to (12 days: 2026-02-10, 2026-03-10, 2026-04-10, 2026-05-10, 2026-06-10, 2026-07-10, 2026-08-10, 2026-09-10, 2026-10-10, 2026-11-10, 2026-12-10, 2027-01-10). The tables are checked over these days; the generated code refuses any other day at its door |
+| pay_day | date | 2026-02-10 to 2027-01-10 | Only the days `koyomi "../dates/payment_terms.cal" date payment` comes to (12 days: 2026-02-10, 2026-03-10, 2026-04-10, 2026-05-10, 2026-06-10, 2026-07-10, 2026-08-10, 2026-09-10, 2026-10-10, 2026-11-10, 2026-12-10, 2027-01-10). The tables are checked over these days; the generated code refuses any other day at its door |
 
 ## Outputs
 

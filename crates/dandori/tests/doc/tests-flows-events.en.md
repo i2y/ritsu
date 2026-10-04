@@ -108,7 +108,7 @@ The rules this workflow calls, as `rulec doc` renders them for whoever approves 
 |---|---|---|---|
 | 状態 | 状態 (5 values) |  |  |
 | イベント | イベント (4 values) |  |  |
-| 支払額 | money[円, incl_tax] | 0円 〜 100万円 |  |
+| 支払額 | money[円, incl_tax] | 0円 to 1_000_000円 |  |
 
 ## Outputs
 
@@ -185,11 +185,11 @@ stateDiagram-v2
 
 | State | Goes to (row of table 遷移) |
 |---|---|
-| 受付 | 入金（row 1） → 入金済 / 取消依頼（row 2） → 取消 / 出荷, 配達（row 3） → stays |
-| 入金済 | 出荷（row 4） → 出荷済 / 取消依頼（row 5） → 取消 / 入金, 配達（row 6） → stays |
-| 出荷済 | 配達（row 7） → 配達済 / 入金, 出荷, 取消依頼（row 8） → stays |
-| 配達済 | any call（row 9） → stays |
-| 取消 | any call（row 10） → stays |
+| 受付 | 入金 (row 1) → 入金済 / 取消依頼 (row 2) → 取消 / 出荷, 配達 (row 3) → stays |
+| 入金済 | 出荷 (row 4) → 出荷済 / 取消依頼 (row 5) → 取消 / 入金, 配達 (row 6) → stays |
+| 出荷済 | 配達 (row 7) → 配達済 / 入金, 出荷, 取消依頼 (row 8) → stays |
+| 配達済 | any call (row 9) → stays |
+| 取消 | any call (row 10) → stays |
 
 ### What `rulec check` proved about every sequence of calls
 

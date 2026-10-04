@@ -69,7 +69,7 @@ The rules this workflow calls, as `rulec doc` renders them for whoever approves 
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | 会員 | bool |  |  |
-| 金額 | money[円, incl_tax] | 0円 〜 100万円 |  |
+| 金額 | money[円, incl_tax] | 0円 to 1_000_000円 |  |
 
 ## Outputs
 
@@ -130,7 +130,7 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | 会員 | bool |  |  |
-| 金額 | money[円, incl_tax] | 0円 〜 100万円 |  |
+| 金額 | money[円, incl_tax] | 0円 to 1_000_000円 |  |
 
 ## Outputs
 

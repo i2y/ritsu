@@ -102,7 +102,7 @@ The rules this workflow calls, as `rulec doc` renders them for whoever approves 
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | 会員 | bool |  |  |
-| 金額 | money[円, incl_tax] | 0円 〜 100万円 |  |
+| 金額 | money[円, incl_tax] | 0円 to 1_000_000円 |  |
 
 ## Outputs
 
@@ -163,7 +163,7 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | 客室 | 客室 (3 values) |  |  |
-| 泊数 | number | 1 〜 30 |  |
+| 泊数 | number | 1 to 30 |  |
 
 ## Outputs
 
@@ -248,7 +248,7 @@ Intermediate values that can be placed in a table column. The expressions are as
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | 判断 | 判断 (3 values) |  |  |
-| 確信度 | rate | 0 〜 1 |  |
+| 確信度 | rate | 0 to 1 |  |
 
 ## Outputs
 

@@ -75,7 +75,7 @@ Whether the scoring's verdict on an application is acted on at once or goes to a
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | verdict | verdict (3 values) |  |  |
-| sure | rate | 0 〜 1 |  |
+| sure | rate | 0 to 1 |  |
 
 ## Outputs
 

@@ -63,7 +63,7 @@ The rules this workflow calls, as `rulec doc` renders them for whoever approves 
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | 状態 | 口座の状態 (2 values) |  |  |
-| 残高 | money[円] | 0円 〜 1000万円 |  |
+| 残高 | money[円] | 0円 to 10_000_000円 |  |
 
 ## Outputs
 

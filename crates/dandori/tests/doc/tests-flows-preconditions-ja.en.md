@@ -87,8 +87,8 @@ The rules this workflow calls, as `rulec doc` renders them for whoever approves 
 
 | Name | Type | Range | Notes |
 |---|---|---|---|
-| 払った額 | number | 0 〜 1万 |  |
-| 求める額 | number | 0 〜 1万 |  |
+| 払った額 | number | 0 to 10_000 |  |
+| 求める額 | number | 0 to 10_000 |  |
 
 ## Outputs
 
@@ -150,7 +150,7 @@ Relations between inputs that the caller guarantees. **The checks believed them 
 
 | Name | Type | Range | Notes |
 |---|---|---|---|
-| 支払日 | date | 2026-02-10 〜 2027-01-10 | Only the days `koyomi "../dates/支払条件.cal" date 支払日` comes to (12 days: 2026-02-10, 2026-03-10, 2026-04-10, 2026-05-10, 2026-06-10, 2026-07-10, 2026-08-10, 2026-09-10, 2026-10-10, 2026-11-10, 2026-12-10, 2027-01-10). The tables are checked over these days; the generated code refuses any other day at its door |
+| 支払日 | date | 2026-02-10 to 2027-01-10 | Only the days `koyomi "../dates/支払条件.cal" date 支払日` comes to (12 days: 2026-02-10, 2026-03-10, 2026-04-10, 2026-05-10, 2026-06-10, 2026-07-10, 2026-08-10, 2026-09-10, 2026-10-10, 2026-11-10, 2026-12-10, 2027-01-10). The tables are checked over these days; the generated code refuses any other day at its door |
 
 ## Outputs
 

@@ -66,7 +66,7 @@ Whether an order goes out in a hurry, and by which carrier: a member's always do
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | member | bool |  |  |
-| amount | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+| amount | money[JPY, incl_tax] | 0JPY to 1_000_000JPY |  |
 
 ## Outputs
 
@@ -127,7 +127,7 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | room | room (3 values) |  |  |
-| nights | number | 1 〜 30 |  |
+| nights | number | 1 to 30 |  |
 
 ## Outputs
 
@@ -269,7 +269,7 @@ An enum is a **closed** finite set. Add a value, and every table that does not l
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | 急ぎ | bool |  |  |
-| 返金 | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+| 返金 | money[JPY, incl_tax] | 0JPY to 1_000_000JPY |  |
 
 ## Outputs
 
@@ -323,7 +323,7 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 |---|---|---|---|
 | state | state (5 values) |  |  |
 | event | event (4 values) |  |  |
-| amount_paid | money[JPY, incl_tax] | 0JPY 〜 100万JPY |  |
+| amount_paid | money[JPY, incl_tax] | 0JPY to 1_000_000JPY |  |
 
 ## Outputs
 
@@ -400,11 +400,11 @@ stateDiagram-v2
 
 | State | Goes to (row of table step) |
 |---|---|
-| received | pay（row 1） → paid / cancel（row 2） → cancelled / ship, deliver（row 3） → stays |
-| paid | ship（row 4） → shipped / cancel（row 5） → cancelled / pay, deliver（row 6） → stays |
-| shipped | deliver（row 7） → delivered / pay, ship, cancel（row 8） → stays |
-| delivered | any call（row 9） → stays |
-| cancelled | any call（row 10） → stays |
+| received | pay (row 1) → paid / cancel (row 2) → cancelled / ship, deliver (row 3) → stays |
+| paid | ship (row 4) → shipped / cancel (row 5) → cancelled / pay, deliver (row 6) → stays |
+| shipped | deliver (row 7) → delivered / pay, ship, cancel (row 8) → stays |
+| delivered | any call (row 9) → stays |
+| cancelled | any call (row 10) → stays |
 
 ### What `rulec check` proved about every sequence of calls
 
