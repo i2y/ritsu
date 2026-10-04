@@ -110,61 +110,61 @@ Every row of every table becomes one branch, in order, with the original
 cells quoted beside it.
 
 ```python
-def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
-    """Rule 送料例 v1: the same decision as fee_demo_traced, without the rows that matched."""
+def fee_demo(dest: Zone, girth: Inch, weight: Pound) -> USDInclTax:
+    """Rule fee_demo v1: the same decision as fee_demo_traced, without the rows that matched."""
     out, _ = fee_demo_traced(dest, girth, weight)
     return out
 
 
-def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
-    if not _isinstance(dest, Prefecture):
-        raise RuleInputError("あて先 is not a value of enum Prefecture", dest)
-    if not 1 <= girth <= 100:
-        raise RuleInputError("三辺合計 is out of range", girth)
+def fee_demo_traced(dest: Zone, girth: Inch, weight: Pound) -> tuple[USDInclTax, list[Fired]]:
+    if not _isinstance(dest, Zone):
+        raise RuleInputError("dest is not a value of enum Zone", dest)
+    if not 1 <= girth <= 130:
+        raise RuleInputError("girth is out of range", girth)
     trace: _Trace = []
-    # table サイズ判定 (policy first)
-    if girth <= 60:  # row 1: <=60cm | S60
-        size = SizeClass.S60
-        trace.append(Fired("サイズ判定", 1))
-    elif girth <= 80:  # row 2: <=80cm | S80
-        size = SizeClass.S80
-        trace.append(Fired("サイズ判定", 2))
-    elif True:  # row 3: - | S100
-        size = SizeClass.S100
-        trace.append(Fired("サイズ判定", 3))
+    # table size_of (policy first)
+    if girth <= 22:  # row 1: <=22in | envelope
+        size = SizeClass.ENVELOPE
+        trace.append(Fired("size_of", 1))
+    elif girth <= 60:  # row 2: <=60in | small
+        size = SizeClass.SMALL
+        trace.append(Fired("size_of", 2))
+    elif True:  # row 3: - | large
+        size = SizeClass.LARGE
+        trace.append(Fired("size_of", 3))
     else:
         raise AssertionError("unreachable: completeness was statically checked by rulec")
     ...
-    return YenInclTax(_round_up(fee, 10)), trace
+    return USDInclTax(_round_up(fee, 1)), trace
 ```
 
 ```go
-func FeeDemo(in Input) (YenInclTax, error) {
+func FeeDemo(in Input) (USDInclTax, error) {
 	out, _, err := FeeDemoTraced(in)
 	return out, err
 }
 
-func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
+func FeeDemoTraced(in Input) (USDInclTax, []Fired, error) {
 	if !in.Dest.Valid() {
-		return 0, nil, &RuleInputError{What: "あて先 is not a value of the enum", Value: int64(in.Dest), HasValue: true}
+		return 0, nil, &RuleInputError{What: "dest is not a value of the enum", Value: int64(in.Dest), HasValue: true}
 	}
 	var trace []Fired
-	// table サイズ判定 (policy first)
+	// table size_of (policy first)
 	var size SizeClass
-	if int64(in.Girth) <= 60 { // row 1: <=60cm | S60
-		size = SizeClassS60
-		trace = append(trace, Fired{"サイズ判定", 1})
-	} else if int64(in.Girth) <= 80 { // row 2: <=80cm | S80
-		size = SizeClassS80
-		trace = append(trace, Fired{"サイズ判定", 2})
-	} else if true { // row 3: - | S100
-		size = SizeClassS100
-		trace = append(trace, Fired{"サイズ判定", 3})
+	if int64(in.Girth) <= 22 { // row 1: <=22in | envelope
+		size = SizeClassEnvelope
+		trace = append(trace, Fired{"size_of", 1, ""})
+	} else if int64(in.Girth) <= 60 { // row 2: <=60in | small
+		size = SizeClassSmall
+		trace = append(trace, Fired{"size_of", 2, ""})
+	} else if true { // row 3: - | large
+		size = SizeClassLarge
+		trace = append(trace, Fired{"size_of", 3, ""})
 	} else {
 		panic("unreachable: completeness was statically checked by rulec")
 	}
 	...
-	return YenInclTax(roundUp(int64(fee), 10)), trace, nil
+	return USDInclTax(roundUp(int64(fee), 1)), trace, nil
 }
 ```
 
@@ -204,14 +204,14 @@ of them and comparing **canonical JSON byte for byte**.
 ## How to call it, without reading it
 
 ```console
-$ rulec api rules/クーポン一枚.rule | jq -r .python.signature
-def coupon_step(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> Output:
+$ rulec api rules/single_coupon.rule | jq -r .python.signature
+def single_coupon(subtotal: JPYInclTax, applied: JPYInclTax, kind: CouponKind, rate: Rate, face: JPYInclTax, dup: bool) -> Output:
 ```
 
 One JSON object: module and function names, the parameters in order with
 their brands, units and ranges, the outputs with their rounding, the
 enum members **under the spelling each language gives them**
-(`CouponKind.PERCENT` in Python, `couponstep.CouponKindPercent` in Go),
+(`CouponKind.PERCENT` in Python, `singlecoupon.CouponKindPercent` in Go),
 and the errors that can come out.
 
 A calling convention written by hand goes quietly wrong the day a name
@@ -302,8 +302,8 @@ exactly once.
 It is worth running because the model checker and the checker that
 proved the table share no code. Where they agree, two unrelated tools
 say the same thing; where they disagree, one of them is wrong and you
-get the input that shows it. On the corpus of 50 rules, 118 harnesses
-verify in 192 seconds.
+get the input that shows it. On the corpus of 87 rules, 207 harnesses
+verify in 766 seconds.
 
 What it does not say: anything about the table itself, or about any
 target but this one. And two kinds of rule get no harness at all, the
@@ -367,7 +367,7 @@ rate in its description, and its answer is the record line the module
 writes — the inputs, the outputs, and **the rows that decided it**:
 
 ```json
-{"in":{"届け先":"鹿児島県","重量":800,"注文金額":4200,"会員":"一般"},"observed":{"送料":800},"trace":[{"table":"基本送料","row":3},{"table":"負担判定","row":3}]}
+{"in":{"dest":"鹿児島県","weight":800,"total":4200,"member":"basic"},"observed":{"fee":800},"trace":[{"table":"base","row":3},{"table":"payer","row":3}]}
 ```
 
 Two things follow. An answer can be audited, because it names the rows.
@@ -540,8 +540,8 @@ Shopify Function takes the third, a named export — and where its boundary runs
 ## Is the vector suite itself complete?
 
 ```console
-$ rulec coverage rules/送料.rule
-rules/送料.rule
+$ rulec coverage rules/member_shipping_fee.rule
+rules/member_shipping_fee.rule
 70 vectors
   row coverage                   7 / 7     satisfied
   boundary-pair coverage         4 / 4     satisfied

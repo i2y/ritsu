@@ -56,9 +56,11 @@ examples
 
 This example passes `rulec check` as it stands; the repository's tests run it on every commit.
 What one table produces is a column of the next, and `examples` is an executable specification.
-The keywords are English, and the names and cell values stay in the language of the business —
-Japanese, in the rules transcribed from Japanese terms and statutes on the
-[examples page](https://i2y.github.io/rulec/examples/).
+The keywords are English, and the names and cell values are the business's own words. The
+[examples page](https://i2y.github.io/rulec/examples/) writes them in English throughout,
+including the rules transcribed from Japanese terms and statutes; the originals, with their names
+in Japanese, are beside them in the repository and on the
+[Japanese page](https://i2y.github.io/rulec/ja/examples/).
 
 Transcribe a tariff, leave one of its bands out, and the gap comes back with the input that
 falls through it:
@@ -259,21 +261,23 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 proofs/           the Lean 4 development: what a table means, the checks a certificate has to
                   pass, the theorems that each check settles its claim, and the re-checker
 src/              53 modules, and 6 more under codegen/
-tests/corpus/     50 rules, and the copies of the documents they cite
+tests/corpus/     87 rules, and the copies of the documents they cite
 tests/mutants/    109 files, each with one mistake planted in it
-tests/golden/     the diagnostic prose snapshot by snapshot: 53 in Japanese, 42 in English
+tests/golden/     the diagnostic prose snapshot by snapshot: 55 in Japanese, 44 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
-50 rules — 22 transcribed from a published source, 28 written to reach the rest of the language — are checked, generated and run on every commit, and all 112 diagnostics are implemented.
+87 rules — 34 transcribed from a published source, 53 written to reach the rest of the language — are checked, generated and run on every commit, and all 112 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as
-e-Gov publishes them, the premium tables of 協会けんぽ and 日本年金機構, GOV.UK's minimum wage,
+e-Gov publishes them, the premium tables of Kyokai Kenpo and the Japan Pension Service, GOV.UK's minimum wage,
 income tax and stamp duty rates, the IRS rate tables, three sections of the US Code of Federal
 Regulations as the eCFR publishes them, PayPal's own merchant fees, and the lifecycle of a
 PaymentIntent as Stripe's documentation describes it — or are sketches written to reach the
-corners of the language, three of them in English. None of it is private data.
+corners of the language. 74 of the 87 are 37 pairs, each a rule written with Japanese names and the
+same rule written with English ones, which a test holds to the same findings, the same answers and
+the same claims. None of it is private data.
 
 ```console
 $ cargo test          # python3, node, rustc, ruby, php, go, swiftc, a JDK and protoc are used where present

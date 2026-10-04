@@ -14,15 +14,15 @@ report counts, amount differences and a witness.
 Write a 20-to-30-line adapter — rulec prints the shape:
 
 ```console
-$ rulec adapter rules/ゆうパック運賃.rule --template python > adapter.py
-$ rulec schema rules/ゆうパック運賃.rule            # the JSON Schema of the wire
-$ rulec verify rules/ゆうパック運賃.rule --adapter python3 adapter.py
+$ rulec adapter rules/yupack_base_fee.rule --template python > adapter.py
+$ rulec schema rules/yupack_base_fee.rule            # the JSON Schema of the wire
+$ rulec verify rules/yupack_base_fee.rule --adapter python3 adapter.py
 Compared 209 / matched 184 (88.038%)
 Counterpart: legacy@fake-1
 
 Affected 25 (11.962%)  amount -250
-  table サイズ判定 row 1 / table 運賃表 row 36                 7 records  difference -10 uniform  total -70
-    Example: あて先=沖縄県, 三辺合計=1, 重量=1 → rule 運賃=1450 / legacy 運賃=1460
+  table size_of row 1 / table fee_table row 36         7 records  difference -10 uniform  total -70
+    Example: dest=沖縄県, girth=1, weight=1 → rule fee=1450 / legacy fee=1460
   …
 ```
 
@@ -50,11 +50,11 @@ cases would raise the match rate.
 Past records are JSON Lines, one per record. Validate them first:
 
 ```console
-$ rulec fixtures lint replay/2025-08.jsonl rules/ゆうパック運賃.rule
-replay/2025-08.jsonl: 208 records (208 observed, 0 filled)
+$ rulec fixtures lint replay/2025-08.jsonl rules/yupack_base_fee.rule
+replay/2025-08.jsonl: 209 records (209 observed, 0 filled)
 
-5 problems:
-  `in.あて先`: `江戸` is not a value of enum 都道府県
+1 problems:
+  `in.dest`: `江戸` is not a value of enum 都道府県
     1 record(s). Example: line 21 (order:b3)
     The type or range disagrees with the declaration.
 ```
@@ -64,7 +64,7 @@ would raise the match rate by exactly however much the denominator
 shrank.
 
 ```console
-$ rulec replay rules/ゆうパック運賃.rule --fixtures replay/2025-08.jsonl
+$ rulec replay rules/yupack_base_fee.rule --fixtures replay/2025-08.jsonl
 ```
 
 Records written by the generated code carry the rows that matched (the `_record`
@@ -78,26 +78,26 @@ about a case you have never seen. Leave `--fixtures` off and the same
 command answers that instead:
 
 ```console
-$ rulec diff 送料@v3 送料@v4
-rule 送料 v3 → v4
+$ rulec diff member_shipping_fee@v3 member_shipping_fee@v4
+rule member_shipping_fee v3 → v4
 7050 cells, of which 3525 are inputs that can occur: 3501 same, 24 differ, 0 unsettled, 0 unrealized
 
-  会員 not プラチナ  and  重量 >=2001g <=40000g  and  注文金額 >=0円 <=29999円  and  届け先 = 遠隔地
-    送料: 1800 → 2000
-    rows: table 基本送料 row 2, table 負担判定 row 3
-    example: 会員=一般, 届け先=北海道, 注文金額=0, 重量=2001
+  member not platinum  and  weight >=2001g <=40000g  and  total >=0JPY <=29999JPY  and  dest = remote
+    fee: 1800 → 2000
+    rows: table base row 2, table payer row 3
+    example: dest=北海道, member=basic, total=0, weight=2001
 
-  会員 = プラチナ  and  重量 >=2001g <=40000g  and  注文金額 >=0円 <=29999円  and  届け先 = 遠隔地
-    送料: 900 → 1000
-    rows: table 基本送料 row 2, table 負担判定 row 2
-    example: 会員=プラチナ, 届け先=北海道, 注文金額=0, 重量=2001
+  member = platinum  and  weight >=2001g <=40000g  and  total >=0JPY <=29999JPY  and  dest = remote
+    fee: 900 → 1000
+    rows: table base row 2, table payer row 2
+    example: dest=北海道, member=platinum, total=0, weight=2001
 
 outside this region the two versions answer alike.
 ```
 
 Two things in that answer are not available from a log.
 
-**`注文金額 >=0円 <=29999円`.** The change was one amount in the base fee
+**`total >=0JPY <=29999JPY`.** The change was one amount in the base fee
 table, and nothing about it mentions the order total. But an order of
 30,000 yen or more pays 0% of the base fee, and zero times the new
 amount is zero times the old one: the change is *erased* on that side.
@@ -115,7 +115,7 @@ settled, with the region they cover, rather than passed over.
 
 How it works: both versions' boundaries are put on one set of axes —
 **the rule's columns**, not its inputs. A derived column can cut the
-input space diagonally (`余裕 = 床面積 - 占有面積` tested at `<10m2` is a
+input space diagonally (`spare = floor - used` tested at `<10m2` is a
 slab, not a box), so a region over inputs alone could not be written
 down, and a tool that tried would answer "no difference" where there is
 one. Each cell of the refinement is settled three ways: the same
@@ -132,18 +132,18 @@ and `tests/vdiff.rs` is what holds them to it.
 ## Between two versions, over the records you have
 
 ```console
-$ rulec diff ゆうパック運賃@v1 ゆうパック運賃@v2 --fixtures replay/2025-08.jsonl
-Compared 207 / matched 190 (91.787%)
-Counterpart: ゆうパック運賃@v1 → ゆうパック運賃@v2
+$ rulec diff yupack_base_fee@v1 yupack_base_fee@v2 --fixtures replay/2025-08.jsonl
+Compared 209 / matched 200 (95.694%)
+Counterpart: yupack_base_fee@v1 → yupack_base_fee@v2
 
-Affected 17 (8.213%)  amount +5,300
-  table サイズ判定 row 1→row 2 / table 運賃表 row 29→row 30    7 records  difference +300 uniform  total +2,100
-    Example: あて先=北海道, 三辺合計=60, 重量=1 → rule 運賃=1710 / old version 運賃=1410
+Affected 9 (4.306%)  amount +2,800
+  table size_of row 1→row 2 / table fee_table row 15→row 16     1 record  difference +320 uniform  total +320
+    Example: dest=滋賀県, girth=60, weight=1 → rule fee=1310 / old version fee=990
 ```
 
-`ゆうパック運賃@v2` is sugar for the git tag `rules/ゆうパック運賃/v2`, or,
+`yupack_base_fee@v2` is sugar for the git tag `rules/yupack_base_fee/v2`, or,
 when there is no such tag, for `v2` as a git revision. A path at a
-revision — `rules/ゆうパック運賃.rule@origin/main` — is the file as it is on
+revision — `rules/yupack_base_fee.rule@origin/main` — is the file as it is on
 that branch, which is what a pull request compares against.
 A diff clusters on **the transition of the fired row** — `row 1→row 2`
 says where the decision moved — and each cluster carries the count, the
@@ -158,7 +158,7 @@ and nothing else. `diff` exits 1 when there is an impact, which is the
 information here and not a failure, so the step goes on after 1:
 
 ```yaml
-- run: rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
+- run: rulec diff rules/shipping_fee.rule@origin/main rules/shipping_fee.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
   env:
     RULEC_LANG: ja        # the people approving this one read Japanese
 - run: gh pr comment "$PR" --body-file diff.md
@@ -180,13 +180,13 @@ what:
 
 ```
 Excluded 5 records (not matching the declared format)
-Filled records: 4 (重量: 4); matched 4. Not included in the headline match rate
-Default values used: 重量 = 1000
+Filled records: 4 (weight: 4); matched 4. Not included in the headline match rate
+Default values used: weight = 1000
 ```
 
 The defaults are not written into the `.rule`, and that is deliberate: a
 rule is a pure function, and filling is a judgement about one particular
-replay experiment. Running "fill 会員 with 一般" and "fill it with ゴールド
+replay experiment. Running "fill member with basic" and "fill it with gold
 to see the upper bound of the impact" against the same rule is a
 legitimate thing to do, and burning one of them into the rule would make
 it impossible.
@@ -200,11 +200,11 @@ it impossible.
 ## Everything here is machine-readable too
 
 ```console
-$ rulec verify rules/ゆうパック運賃.rule --format json --adapter python3 adapter.py
+$ rulec verify rules/yupack_base_fee.rule --format json --adapter python3 adapter.py
 {"compared":209,"matched":184,"rate":0.88038,"counterpart":"legacy@fake-1","unanswered":0,
- "clusters":[{"rows":[{"table":"サイズ判定","row":1},{"table":"運賃表","row":36}],"count":7,
-              "delta":{"運賃":{"min":-10,"max":-10,"uniform":true,"total":-70}},
-              "witness":{"in":{"あて先":"沖縄県","三辺合計":1,"重量":1},"ours":{"運賃":1450},"theirs":{"運賃":1460}},
+ "clusters":[{"rows":[{"table":"size_of","row":1},{"table":"fee_table","row":36}],"count":7,
+              "delta":{"fee":{"min":-10,"max":-10,"uniform":true,"total":-70}},
+              "witness":{"in":{"dest":"沖縄県","girth":1,"weight":1},"ours":{"fee":1450},"theirs":{"fee":1460}},
               "records":[{"line":42,"tag":""},{"line":115,"tag":""},…],
               "suspect_rounding":false},…],
  "moved":[],"excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}

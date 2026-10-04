@@ -34,19 +34,19 @@ Who: the agent
 An agent or a person transcribes; what matters is that every table or row ends with **`@source article`**, so that where it came from stays with it. For a statute, `source` names the law's id and the date the text is read as of. The word after `law` says which database: none for e-Gov, the Japanese government's statute database, and `ecfr` for the US federal regulations — `source osha = law ecfr "29 CFR 1910" asof 2026-01-01`, cited as `@osha "§1910.157"`.
 
 ```rule
-source 法 = law "342AC0000000023" asof 2026-04-01
-source 措置法 = law "332AC0000000026" asof 2026-04-01
+source stamp_act = law "342AC0000000023" asof 2026-04-01
+source measures_act = law "332AC0000000026" asof 2026-04-01
 
-define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31  @措置法 第91条
+define reduced : bool = made <= 2027-03-31  @measures_act 第91条
 
-table 本則(base)  @法 別表第一
+table base  @stamp_act 別表第一
 policy unique
-         | 金額の記載あり | 契約金額         | -> 印紙税額(tax) : money[円] |
-記載なし | false          | -                | 200円                        |
-r3       | true           | >=1万円 <=10万円 | 200円                        |
+         | stated | amount                   | -> tax : money[JPY] |
+unstated | false  | -                        | 200JPY              |
+r3       | true   | >=10_000JPY <=100_000JPY | 200JPY              |
 ```
 
-The whole notation is in [Write a rule](tour.md#where-it-was-transcribed-from-source-and-). A supplementary provision is cited as `@法 附則第3条`, an amending law's as `@法 附則（令和七年三月三一日法律第一三号）第3条`.
+The whole notation is in [Write a rule](tour.md#where-it-was-transcribed-from-source-and-). A supplementary provision is cited as `@stamp_act 附則第3条`, an amending law's as `@stamp_act 附則（令和七年三月三一日法律第一三号）第3条`.
 
 ### 1-2. Fetch the copy and pin it
 
@@ -56,9 +56,9 @@ Who: the agent
 
 ```console
 $ rulec source fetch rules/stamp_duty.rule
-措置法: fetched 第91条 (sha256:85faf53f6f6e8196)
+measures_act: fetched 第91条 (sha256:85faf53f6f6e8196)
 $ rulec source pin rules/stamp_duty.rule
-措置法: pinned 1 fragments
+measures_act: pinned 1 fragments
 ```
 
 `pin` writes one line under the `source`: `  第91条 sha256:85faf53f6f6e8196`. The copies go to `sources/law/<law id>@<date>/`; commit them.
@@ -76,14 +76,14 @@ When the article's side changes, `check` stops there. A copy that differs is **E
 
 ```console
 $ rulec check rules/stamp_duty.rule
-error[E038]: Fragment `第91条` of source `措置法` has changed
-  --> rules/stamp_duty.rule:7 source 措置法
+error[E038]: Fragment `第91条` of source `measures_act` has changed
+  --> rules/stamp_duty.rule:7 source measures_act
   |
 7 |   第91条 sha256:85faf53f6f6e8196
   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ pinned: sha256:85faf53f6f6e8196
   |
- The copy now: sha256:cac55089de86c8eb
- Definitions to reread: definition 軽減期間, table 軽減
+ The copy now: sha256:625713b9504d23dc
+ Definitions to reread: definition reduced, table reduced_rate
 ```
 
 A missing pin is E037, a missing copy E039; `rulec explain E038` explains any of them.
@@ -101,7 +101,7 @@ $ rulec doc rules/stamp_duty.rule > stamp_duty.md
 Under the table's heading, the page reads:
 
 ```markdown
-Source: 措置法 第91条 (law 332AC0000000026, as of 2026-04-01; in force from 2026-04-01, as amended by Act No. 12 of 2026)
+Source: measures_act 第91条 (law 332AC0000000026, as of 2026-04-01; in force from 2026-04-01, as amended by Act No. 12 of 2026)
 
 > 第九十一条
 > 平成二十六年四月一日から令和九年三月三十一日までの間に作成される…
@@ -116,15 +116,15 @@ Who: the agent. rulec checks that the twelve languages agree
 ```console
 $ rulec gen rules/stamp_duty.rule --out generated/
 $ rulec test generated/
-ok    stamp_duty_split (Python) 296 vectors
-ok    stamp_duty_split (SQL) 296 vectors
+ok    japan_stamp_duty_split (Python) 296 vectors
+ok    japan_stamp_duty_split (SQL) 296 vectors
 …
 ```
 
 The header of every generated file names the article, its date and its digest, so a reader of the code can tell which text it was made from:
 
 ```python
-# Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)
+# Cites: measures_act = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:85faf53f6f6e8196)
 ```
 
 Where an implementation already runs, hold the table to it before anything is replaced, as in [2-3](#2-3-hold-it-to-the-code-that-runs-today).
@@ -268,7 +268,7 @@ $ rulec adapter rules/shipping_fee.rule --template python > adapter.py
 ```
 
 ```python
-# rulec adapter template (rule 送料).
+# rulec adapter template (rule shipping_fee).
 # It only exchanges JSON Lines over stdin/stdout. Call the legacy implementation from here.
 import json, sys
 
@@ -280,12 +280,12 @@ for line in sys.stdin:
     if not line:
         continue
     req = json.loads(line)
-    d = req["in"]  # inputs: 届け先, 重量, 注文金額, 会員
+    d = req["in"]  # inputs: dest, weight, total, member
 
     # Call the legacy implementation here.
     got = 0  # TODO: legacy.compute(d)
 
-    print(json.dumps({"id": req["id"], "out": {"送料": got}}, ensure_ascii=False), flush=True)
+    print(json.dumps({"id": req["id"], "out": {"fee": got}}, ensure_ascii=False), flush=True)
 ```
 
 ```console
@@ -294,10 +294,10 @@ Compared 70 / matched 60 (85.714%)
 Counterpart: legacy@2024-03
 
 Affected 10 (14.286%)  amount +2,550
-  table 基本送料 row 2 / table 負担判定 row 2                  3 records  difference +150 uniform  total +450
-    Example: 会員=プラチナ, 届け先=北海道, 注文金額=0, 重量=2001 → rule 送料=900 / legacy 送料=750
-  table 基本送料 row 2 / table 負担判定 row 3                  7 records  difference +300 uniform  total +2,100
-    Example: 会員=一般, 届け先=北海道, 注文金額=0, 重量=2001 → rule 送料=1800 / legacy 送料=1500
+  table base row 2 / table payer row 2                 3 records  difference +150 uniform  total +450
+    Example: dest=北海道, member=platinum, total=0, weight=2001 → rule fee=900 / legacy fee=750
+  table base row 2 / table payer row 3                 7 records  difference +300 uniform  total +2,100
+    Example: dest=北海道, member=basic, total=0, weight=2001 → rule fee=1800 / legacy fee=1500
 ```
 
 Mismatches come grouped by the rows that matched. Here only the row for remote areas above 2 kg disagrees. Whether that is a defect in the legacy code, a transcription error in the table or a rounding convention is decided from the row and its example; a mismatch is not automatically anyone's bug.
@@ -317,8 +317,8 @@ Compared 70 / matched 60 (85.714%)
 Counterpart: records.jsonl
 
 Affected 10 (14.286%)  amount -1,700
-  table 基本送料 row 2 / table 負担判定 row 2                  3 records  difference -100 uniform  total -300
-  table 基本送料 row 2 / table 負担判定 row 3                  7 records  difference -200 uniform  total -1,400
+  table base row 2 / table payer row 2                 3 records  difference -100 uniform  total -300
+  table base row 2 / table payer row 3                 7 records  difference -200 uniform  total -1,400
 ```
 
 Both comparisons are described on [Compare and replay](compare.md).
@@ -443,23 +443,23 @@ the rule's own columns, plus the claim that there are none outside it.
 
 ```console
 $ rulec diff shipping_fee.rule shipping_fee_new.rule
-rule 送料 v3 → v4
+rule shipping_fee v3 → v4
 7050 cells, of which 3525 are inputs that can occur: 3501 same, 24 differ, 0 unsettled, 0 unrealized
 
-  会員 not プラチナ  and  重量 >=2001g <=40000g  and  注文金額 >=0円 <=29999円  and  届け先 = 遠隔地
-    送料: 1800 → 2000
-    rows: table 基本送料 row 2, table 負担判定 row 3
-    example: 会員=一般, 届け先=北海道, 注文金額=0, 重量=2001
+  member not platinum  and  weight >=2001g <=40000g  and  total >=0JPY <=29999JPY  and  dest = remote
+    fee: 1800 → 2000
+    rows: table base row 2, table payer row 3
+    example: dest=北海道, member=basic, total=0, weight=2001
 
-  会員 = プラチナ  and  重量 >=2001g <=40000g  and  注文金額 >=0円 <=29999円  and  届け先 = 遠隔地
-    送料: 900 → 1000
-    rows: table 基本送料 row 2, table 負担判定 row 2
-    example: 会員=プラチナ, 届け先=北海道, 注文金額=0, 重量=2001
+  member = platinum  and  weight >=2001g <=40000g  and  total >=0JPY <=29999JPY  and  dest = remote
+    fee: 900 → 1000
+    rows: table base row 2, table payer row 2
+    example: dest=北海道, member=platinum, total=0, weight=2001
 
 outside this region the two versions answer alike.
 ```
 
-注文金額 is in there on its own: an order of 30,000 yen or more pays 0% of the base fee,
+`total` is in there on its own: an order of 30,000 yen or more pays 0% of the base fee,
 so the rise is multiplied away. That comes out of the whole rule, not out of the row
 that changed.
 
@@ -475,8 +475,8 @@ Compared 70 / matched 60 (85.714%)
 Counterpart: shipping_fee.rule → shipping_fee_new.rule
 
 Affected 10 (14.286%)  amount +1,700
-  table 基本送料 row 2 / table 負担判定 row 2                  3 records  difference +100 uniform  total +300
-  table 基本送料 row 2 / table 負担判定 row 3                  7 records  difference +200 uniform  total +1,400
+  table base row 2 / table payer row 2                 3 records  difference +100 uniform  total +300
+  table base row 2 / table payer row 3                 7 records  difference +200 uniform  total +1,400
 ```
 
 Run the first before the second: it says what *can* move, and the second says how many of your records land there. `--format json` names every record that moved, by its line and tag. Where an implementation already runs, [2-3](#2-3-hold-it-to-the-code-that-runs-today) holds the table to it before anything is replaced. All of it is on [Compare and replay](compare.md).
@@ -634,11 +634,11 @@ The one met most is E122. A contract that puts no cap on an order's lines, for e
 
 ```console
 $ rulec check rules/order_shipping.rule
-error[E122]: The contract lets `注文.lines` hold 51, which the rule refuses
+error[E122]: The contract lets `order.lines` hold 51, which the rule refuses
   --> rules/order_shipping.rule:13
    |
-13 |   明細数(lines)  : number  range >=1 <=50  from count 注文.lines
-   |                                            ^^^^^^^^^^^^^^^^^^^^^ the contract lets through 1 or more; 明細数 takes >=1 <=50
+13 |   lines : number  range >=1 <=50  from count order.lines
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^ the contract lets through 1 or more; lines takes >=1 <=50
    |
  A value that passes the contract's validation is still refused at the door of the generated code: an API answers the request with an error, and a Kafka consumer stops or sends the message to the DLQ.
  hint: if that value cannot occur, narrow the contract with "minItems": 1, "maxItems": 50. If it can, widen the rule's range and decide what it answers for that many. Which of the two is a person's decision.

@@ -168,7 +168,7 @@ Ten, and no others.
 | enum | `size_class` | a **closed** finite set. Declared with `enum` or brought in with `import` |
 | quantity | `mass[g]` `length[cm]` `area[m2]` `volume[L]` `duration[h]` | **the unit is part of the type**. `2kg` is sugar for `2000g`; at run time the value is one integer in the declared unit. Mass is `mg g kg t oz lb`, length `mm cm m km in ft yd mi`, area `mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac`, volume `mm3 cm3 m3 mL L kL`, duration `ms s min h d w`. **Dimensions do not multiply into one another** — an area is its own type, and `縦 × 横` is E103 |
 | ordered quantity | `temperature[℃]` `sound[dB]` | comparison and `range` only: **they do not add** (E048). 41℉ is exactly 5℃ and a literal converts between them, but the difference of two temperatures is not a temperature, and a decibel is a logarithm, so two of them added are not two sounds' worth |
-| money | `money[円, incl_tax]` `money[USD, excl_tax]` | **branded twice**, by currency and by tax flag. `incl_tax` and `excl_tax` do not add. The currency is `円` or any ISO 4217 code; its hundredth is the code plus `c`, so `money[USD]` counts dollars and `money[USDc]` cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
+| money | `money[JPY, incl_tax]` `money[USD, excl_tax]` | **branded twice**, by currency and by tax flag. `incl_tax` and `excl_tax` do not add. The currency is `円` or any ISO 4217 code; its hundredth is the code plus `c`, so `money[USD]` counts dollars and `money[USDc]` cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
 | rate | `rate[step 1%]` `rate` | an integer throughout, counting steps (`10%` is 10 with `rate[step 1%]`). An input declares its step; a computed rate may leave it out, and then it comes from the literals in its column |
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score. Dividing money by money in the same currency drops the unit and lands here |
 | date | `date` | comparison and range only. **There is no date arithmetic** |
@@ -335,7 +335,7 @@ modes, each **pinned down for negative values too**.
 | `up` | away from zero | −4.2 → −5 |
 | `down` | toward zero | −4.8 → −4 |
 | `half_up` | an exact half goes away from zero | −4.5 → −5 |
-| `half_down` | an exact half goes toward zero — the payroll deduction rule of the social insurance tables (50銭以下切り捨て) | 4.5 → 4, 4.6 → 5 |
+| `half_down` | an exact half goes toward zero — the payroll deduction rule of the social insurance tables (50 sen and under rounds down) | 4.5 → 4, 4.6 → 5 |
 | `half_even` | an exact half goes to the even neighbour | 2.5 → 2, 3.5 → 4 |
 
 What is in the parentheses is the **grid**: `up(10USDc)` rounds to a
@@ -579,30 +579,30 @@ outputs returned".
 
 A tariff usually comes with a main rule and an exception that takes precedence over it:
 "a contract for more than 100,000 yen is taxed at the reduced rate until 31 March 2027". It
-can be written as one table with a `軽減期間` column, but when the sources are two — the
+can be written as one table with a `reduced` column, but when the sources are two — the
 appendix table of the Stamp Tax Act and Article 91 of the Special Taxation Measures Act — two
 tables read better against them.
 
 ```rule
-table 本則(base)  @法 別表第一
+table base  @stamp_act 別表第一
 policy unique
-   | 金額の記載あり | 契約金額          | -> 印紙税額(tax) : money[円] |
-r1 | false          | -                 | 200円                        |
-r3 | true           | >=1万円 <=10万円  | 200円                        |
-r4 | true           | >10万円 <=50万円  | 400円                        |
-r5 | true           | >50万円 <=100万円 | 1000円                       |
+   | stated | amount                     | -> tax : money[JPY] |
+r1 | false  | -                          | 200JPY              |
+r3 | true   | >=10_000JPY <=100_000JPY   | 200JPY              |
+r4 | true   | >100_000JPY <=500_000JPY   | 400JPY              |
+r5 | true   | >500_000JPY <=1_000_000JPY | 1000JPY             |
 
-table 軽減(reduced_rate)  @措置法 第91条
+table reduced_rate  @measures_act 第91条
 policy unique
-overrides 本則
-| 軽減期間 | 金額の記載あり | 契約金額          | -> 印紙税額 |
-| true     | true           | >10万円 <=50万円  | 200円       |
-| true     | true           | >50万円 <=100万円 | 500円       |
+overrides base
+| reduced | stated | amount                     | -> tax |
+| true    | true   | >100_000JPY <=500_000JPY   | 200JPY |
+| true    | true   | >500_000JPY <=1_000_000JPY | 500JPY |
 ```
 
-`overrides 本則` declares that the rows of this table take precedence over the rows of
-table 本則 (an excerpt; the real tables have more rows). `r1` at the head of a row is a label,
-which is how a single row is named: `overrides 本則:r4`.
+`overrides base` declares that the rows of this table take precedence over the rows of
+table base (an excerpt; the real tables have more rows). `r1` at the head of a row is a label,
+which is how a single row is named: `overrides base:r4`.
 
 The checks treat the tables that define one output **as one set**. Completeness is judged over
 both together, and when there is a hole, which table gets the row is a person's decision. Where
@@ -612,8 +612,8 @@ meet none of the other's is W117.
 
 The generated code tries the later table first and takes the first row that applies. The trace
 names the table the row was written in and its position there, plus the label when it has one.
-The approver's page says, in one sentence, "table 軽減 takes precedence over table 本則; in
-all 10 pairs that meet, the rows of 軽減 lie inside the other's (an exception)".
+The approver's page says, in one sentence, "table reduced_rate takes precedence over table base. in
+all 10 pairs that meet, the rows of table reduced_rate lie inside the other's (an exception)".
 
 ## A rule written as a sentence: clause
 
@@ -621,14 +621,14 @@ A one-line rule whose conditions do not line up as columns — a proviso, typica
 forced into a table. It is a `clause`.
 
 ```rule
-clause 通常(regular) -> 送料  # Article 3(1), the main text
+clause regular -> fee  # Article 3(1), the main text
   when always
-  then 基本運賃
+  then base
 
-clause 無料(free) -> 送料  # Article 3(2), the proviso
-  when 注文金額 >=3900円 and 会員 true
-  then 0円
-  overrides 通常
+clause free -> fee  # Article 3(2), the proviso
+  when total >=3900JPY and member true
+  then 0JPY
+  overrides regular
 ```
 
 `when` joins `<column> <cell>` pairs with `and`, the cell being any of the seven kinds a table
@@ -637,7 +637,7 @@ mistaken for one, the same reason a blank cell is refused). `then` holds what an
 holds: a literal or a name.
 
 A clause is treated as **a table with one row**: checked, generated and traced by the same
-machinery, firing as `{"table":"無料","row":1}`. It mixes with tables through `overrides`.
+machinery, firing as `{"table":"free","row":1}`. It mixes with tables through `overrides`.
 
 ## Where it was transcribed from: source and @
 
@@ -646,15 +646,15 @@ A rule transcribed from a published policy or a statute can say where each part 
 line cites it.
 
 ```rule
-source 郵便 = file "ゆうパック基本運賃.pdf" sha256:9e4edb5b6a1c0f42
-source 措置法 = law "332AC0000000026" asof 2026-04-01
+source japanpost = file "yupack_tariff.pdf" sha256:9e4edb5b6a1c0f42
+source measures_act = law "332AC0000000026" asof 2026-04-01
   第91条 sha256:85faf53f6f6e8196
 source osha = law ecfr "29 CFR 1910" asof 2026-01-01
   "§1910.157" sha256:c2a9ce966c7e2269
 
-define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31  @措置法 第91条
+define reduced : bool = made <= 2027-03-31  @measures_act 第91条
 
-table 運賃表(fee_table)  @郵便
+table fee_table  @japanpost
 table distance          @osha "§1910.157"
 ```
 
@@ -662,8 +662,8 @@ There are two kinds of document, cited and copied a little differently.
 
 | Document | Declared as | Cited as | Its copy |
 |---|---|---|---|
-| **A file beside the rule** (a policy PDF, a tariff sheet, a company rule in Word) | `source 郵便 = file "<file>" sha256:<digest>` | `@郵便`, or **`@郵便 表1` to say which table of it was transcribed** | the file itself; `rulec source pin` writes its digest on the `source` line, and a cited table is taken out of the document and kept beside it |
-| **A statute** | `source 法 = law [<database>] "<id>" asof <date>`, the date saying which text is meant | always with the fragment, named the way that database names one | `rulec source fetch` brings each cited fragment into `sources/` beside the rule; `rulec source pin` writes each copy's digest on the line under `source` |
+| **A file beside the rule** (a policy PDF, a tariff sheet, a company rule in Word) | `source japanpost = file "<file>" sha256:<digest>` | `@japanpost`, or **`@japanpost 表1` to say which table of it was transcribed** | the file itself; `rulec source pin` writes its digest on the `source` line, and a cited table is taken out of the document and kept beside it |
+| **A statute** | `source stamp_act = law [<database>] "<id>" asof <date>`, the date saying which text is meant | always with the fragment, named the way that database names one | `rulec source fetch` brings each cited fragment into `sources/` beside the rule; `rulec source pin` writes each copy's digest on the line under `source` |
 
 **Two statute databases**, and the word after `law` says which.
 
@@ -690,30 +690,36 @@ an amendment until the copy is fetched again, so this belongs in a scheduled CI 
 
 ### Cite a table and its amounts are held to the copy
 
-`@郵便 表1` on a file source makes `rulec source fetch` take that table out of the document and
+`@japanpost 表1` on a file source makes `rulec source fetch` take that table out of the document and
 write it beside it. A sheet is a table in a workbook (`.xlsx`), a table is a table in a Word
 file (`.docx`), and Markdown and CSV are what they look like. A PDF or a scan cannot be read
 here: hand an extractor (docling and the like) to `rulec source fetch --via <cmd>`, or cite the
-document whole as `@郵便`.
+document whole as `@japanpost`.
 
 What the copy then holds is **the amounts the table writes**.
 
 ```console
 $ rulec check rules/shipping_fee.rule
 error[E116]: The amount of row 4 is not in the copy it cites
+  --> rules/shipping_fee.rule:22 table fee_table row 4
    |
-24 | | not: 遠隔地 | >2000g  | 1000円      |
-   |                           ^^^^^^ not in the copy: 1000円
+22 | | kanto | S80  | 1000JPY             |
+   |                  ^^^^^^^ not in the copy: 1000JPY
    |
- The copy cited: 規約 表1
+ The copy cited: tariff 表1
 
 warning[W120]: The copy of 表1 states values no row uses
+  --> rules/shipping_fee.rule:16 table fee_table
+   |
+16 | table fee_table  @tariff 表1
+   |                  ^^^^^^^^^^^
+   |
  Stated in the copy, used by no row: 1100円
 ```
 
 A mistyped digit brings out both halves at once, and W120 alone catches **a row that was never
 transcribed**. Only amounts are compared: a threshold is rewritten as it is transcribed
-(`1,949,000円まで` becomes `<=1949000円`) and an amount is not.
+(`1,949,000円まで` becomes `<=1_949_000JPY`) and an amount is not.
 
 The approver's page quotes the cited text, or the cited table, from the copies.
 
@@ -724,12 +730,12 @@ be read as 'period in office'." A statute written this way is saying that the ru
 20 is used once more with its inputs replaced. `apply` writes exactly that.
 
 ```rule
-apply 退職手当(retirement) = "退職手当.rule" sha256:b58648ea2767ebbd  # Article 31
-  勤続年数 = 在職期間
-  退職事由 = 任期終了事由 with 任期満了 -> 定年, 辞職 -> 自己都合
-  基本給 = 報酬月額
-  except 減額
-  手当 -> 非常勤手当
+apply retirement = "retirement_pay.rule" sha256:b58648ea2767ebbd  # Article 31
+  years = tenure
+  reason = end_reason with term_end -> retirement_age, resignation -> voluntary
+  base_pay = monthly_pay
+  except reduction
+  allowance -> part_time_allowance
 ```
 
 The heading names the rule file being applied and the digest of that file. The lines under it
@@ -740,11 +746,11 @@ are matched value by value with `with`; a value spelled the same on both sides n
 The applied rule's outputs become values of this rule, renamed with `->`.
 
 `rulec check` first checks the applied rule whole, on its own ground, then expands its tables
-and clauses into this rule under names like `退職手当:支給表` and checks the result as one
+and clauses into this rule under names like `retirement:schedule` and checks the result as one
 rule — so completeness and overlaps are proved on the rule as applied. Three things more are
 checked: that no substitution is missing (E041), that the types agree (E042), and that **what
 this rule passes stays inside the applied rule's ranges** (E043). Declare the period in office
-from 0 and it stops with "在職期間 = 0 is outside range >=1 <=40 of 勤続年数 in 退職手当.rule":
+from 0 and it stops at E043, `years = 0` being outside the `>=1 <=40` range of `years` in retirement_pay.rule:
 the applied rule's completeness was proved over that range and no further, and whether to narrow
 the range or to define the excess in a clause of this rule is a business decision.
 
@@ -755,7 +761,7 @@ ranges never reach are not errors: the approver's page lists them as unused by t
 only a table none of whose rows is reached draws W118.
 
 The generated code carries the applied rule expanded, and the trace says
-`{"table":"退職手当:支給表","row":1,"label":"短期"}`. An apply goes one level, and a rule
+`{"table":"retirement:schedule","row":1,"label":"short"}`. An apply goes one level, and a rule
 that walks a sequence cannot be applied (E044).
 
 ## Saying which combinations cannot happen
@@ -790,23 +796,23 @@ candidates a filter left — `elements` declares what one element carries
 and `fold` declares how the walk ends.
 
 ```rule
-elements 運賃行(fee_rows)
-  行ゾーン(row_zone) : ゾーン区分
-  閾値(threshold)    : money[円, incl_tax]  range >=0円 <=100万円
-  行運賃(row_fee)    : money[円, incl_tax]  range >=0円 <=10万円
+elements fee_rows
+  row_zone  : zone
+  threshold : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  row_fee   : money[JPY, incl_tax]  range >=0JPY <=100_000JPY
 
-table 行判定(row_of)
+table row_of
 policy unique
-| 行ゾーン | 閾値     | -> 採用(verdict) : 採用区分 |
-| 近畿圏   | <=1000円 | 確定                        |
+| row_zone | threshold | -> verdict : pick |
+| kinki    | <=1000JPY | take              |
 | …
 
-fold 採用 over 運賃行
-  スキップ  -> next
-  打ち切り  -> stop with 0円
-  確定      -> take_unique 行運賃
-  持ち越し  -> keep_max 行運賃 by 閾値
-  empty     -> 0円
+fold verdict over fee_rows
+  skip      -> next
+  halt      -> stop with 0JPY
+  take      -> take_unique row_fee
+  hold      -> keep_max row_fee by threshold
+  empty     -> 0JPY
   exhausted -> held
 ```
 
@@ -842,14 +848,14 @@ time.
 An example **names the sequence**, because a cell holds one value.
 
 ```rule
-sequence 近い一件(near)
-| 行ゾーン | 閾値   | 行運賃 |
-| 近畿圏   | 500円  | 800円  |
-| 近畿圏   | 2000円 | 1500円 |
+sequence near
+| row_zone | threshold | row_fee |
+| kinki    | 500JPY    | 800JPY  |
+| kinki    | 2000JPY   | 1500JPY |
 
 examples
-| 運賃行   | -> 運賃 |
-| 近い一件 | 800円   |
+| fee_rows | -> fee |
+| near     | 800JPY |
 ```
 
 A `sequence` with no rows is the example for a sequence with nothing in
@@ -866,22 +872,22 @@ A `fold` turns a sequence into **one answer**. A `count` turns it into **one
 number** and hands the rule back to the tables.
 
 ```rule
-count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
+count hits over candidates where kind = same  range >=0 <=50
 ```
 
 What `where` names is **a column of one element** — a field, or a column a
 per-element table produces — whose values are a closed set. For an enum,
 `= <value>` says which one to count; a bool column needs nothing after it
-(`where 冷蔵品`).
+(`where chilled`).
 
 From there the count is a `number`, so **it can be a column**.
 
 ```rule
-| 一致数 | 自動確定可 | -> 手続き(action) : 次の手 |
-| 0      | -          | 新規登録                   |
-| 1      | true       | 自動確定                   |
-| 1      | false      | 目視確認                   |
-| >=2    | -          | 目視確認                   |
+| hits | auto_ok | -> action : action_kind |
+| 0    | -       | register                |
+| 1    | true    | auto                    |
+| 1    | false   | review                  |
+| >=2  | -       | review                  |
 ```
 
 That is why `count` exists beside `fold`: **when an ordinary table turns the
@@ -893,8 +899,8 @@ check quantifies over, and **the cap on the sequence**. A longer sequence is
 refused at the door by the generated code, for the reason a number outside its
 range is — the proof was made over what was declared.
 
-**A count counts and a `sum` adds one column up** — `sum 合計(total) over 明細
-of 金額`. An average does not follow: dividing by a count is dividing by a
+**A count counts and a `sum` adds one column up** — `sum total over lines
+of amount`. An average does not follow: dividing by a count is dividing by a
 variable, so it belongs before the call, as a value. A rule cannot hold both a
 `fold` and a `count` or `sum` (E031): two endings for one walk, and a fold may
 stop partway.
@@ -908,26 +914,26 @@ Some rules are one step of something that goes on: an order is paid,
 shipped and delivered, or cancelled. The state lives with the caller — in
 the order's row of a database — and every call is passed the state and
 answers the next one. The table is written as always, with the state as a
-column and the next state as an output; `状態` in an output cell hands the
+column and the next state as an output; `state` in an output cell hands the
 state back as it was.
 
 ```rule
-table 遷移(step)
+table step
 policy unique
-| 状態   | 出来事   | -> 次の状態 | 返金額 | 受理  |
-| 受付   | 入金     | 入金済      | 0円    | true  |
-| 受付   | 取消依頼 | 取消        | 0円    | true  |
-| 入金済 | 取消依頼 | 取消        | 支払額 | true  |
+| state     | event  | -> next_state | refund      | accepted |
+| received  | pay    | paid          | 0JPY        | true     |
+| received  | cancel | cancelled     | 0JPY        | true     |
+| paid      | cancel | cancelled     | amount_paid | true     |
 | …
-| 取消   | -        | 状態        | 0円    | false |
+| cancelled | -      | state         | 0JPY        | false    |
 
-machine 注文(order) over 遷移
-  carry   状態 -> 次の状態
-  held    支払額
-  initial 受付
-  final   配達済, 取消
-  never   出荷済 after 取消
-  once    返金額 >0円
+machine order over step
+  carry   state -> next_state
+  held    amount_paid
+  initial received
+  final   delivered, cancelled
+  never   shipped after cancelled
+  once    refund >0JPY
 ```
 
 `carry` is the one line with new meaning: the output a call answers is
@@ -940,10 +946,10 @@ proves them:
 |---|---|---|
 | `final` | no call moves a case out of these states | E124 |
 | (always) | from every state a case can reach, one of the `final` states can still be reached | E125 |
-| `never 出荷済 after 取消` | no sequence of calls reaches `出荷済` once the case has been `取消` | E126 |
-| `once 返金額 >0円` | in one case, at most one call answers a refund | E127 |
+| `never shipped after cancelled` | no sequence of calls reaches `shipped` once the case has been `cancelled` | E126 |
+| `once refund >0JPY` | in one case, at most one call answers a refund | E127 |
 
-`held 支払額` says that one case passes the same paid amount on every call,
+`held amount_paid` says that one case passes the same paid amount on every call,
 so the claims are about the sequences that keep it, and a sequence that
 changes it halfway is never offered as a counterexample.
 
@@ -958,11 +964,11 @@ for the carried input: the first call starts in `initial`, and each later
 one where the call before it ended.
 
 ```rule
-scenario 取消のあとの入金(late_pay)
-| 出来事   | 支払額 | -> 次の状態 | 返金額 | 受理  |
-| 入金     | 3000円 | 入金済      | 0円    | true  |
-| 取消依頼 | 3000円 | 取消        | 3000円 | true  |
-| 入金     | 3000円 | 取消        | 0円    | false |
+scenario late_pay
+| event  | amount_paid | -> next_state | refund  | accepted |
+| pay    | 3000JPY     | paid          | 0JPY    | true     |
+| cancel | 3000JPY     | cancelled     | 3000JPY | true     |
+| pay    | 3000JPY     | cancelled     | 0JPY    | false    |
 ```
 
 Beside the function, each language gets the initial state and a test for a
@@ -983,9 +989,9 @@ order that goes on".
 
 ```rule
 examples
-| 届け先 | 重量  | 注文金額 | 会員     | -> 送料 |
-| 沖縄県 | 2500g | 40000円  | 一般     | 0円     |
-| 東京都 | 1999g | 12000円  | プラチナ | 400円   |
+| dest   | weight | total     | member   | -> fee |
+| 沖縄県 | 2500g  | 40_000JPY | basic    | 0JPY   |
+| 東京都 | 1999g  | 12_000JPY | platinum | 400JPY |
 ```
 
 `examples` is an **executable specification**. `rulec check` runs every

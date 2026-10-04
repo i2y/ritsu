@@ -89,7 +89,7 @@ A few shapes are worth knowing before the first draft:
   one table may produce several output columns. That, plus a `derive` used as a column, is how
   a rule with interlocking conditions gets written — not by putting more into a cell.
 - **An output returns the binding of its own name** — a `define` or a table output column
-  called `送料` is what the output `送料` returns. `result` is sugar for the **first** output
+  called `fee` is what the output `fee` returns. `result` is sugar for the **first** output
   only: naming a later one is E015, and a second `result` line is E016.
 - **Combinations that cannot happen are said once.** `constraint <input> <= <input>` states a
   relation the caller guarantees. Completeness then demands no row for what it excludes, every
@@ -127,7 +127,7 @@ A few shapes are worth knowing before the first draft:
   a case in progress would be stranded in.
 - **A main rule and its special case are two tables, or a table and a clause.** Several
   tables may define the same output, each transcribed from its own source, and the one that
-  takes precedence says so with `overrides <table>` right after `policy` (`overrides 本則:r3`
+  takes precedence says so with `overrides <table>` right after `policy` (`overrides base:r3`
   for one labelled row). A row is labelled by a word before its first bar (`r3 | … |`), which
   is also how the trace names it. A proviso whose conditions do not line up as columns is a
   `clause`: `when <column> <cell> and …` (or `when always`), `then <value>`, and `overrides`
@@ -135,17 +135,17 @@ A few shapes are worth knowing before the first draft:
   one output are checked together — completeness over their union, every overlap either
   ordered by an `overrides` line or reported (E105) — and `doc` says which is the exception
   (§7 of the grammar).
-- **A source is declared, cited and pinned.** `source 法 = law "342AC0000000023" asof
+- **A source is declared, cited and pinned.** `source stamp_act = law "342AC0000000023" asof
   2026-04-01` names a law on e-Gov and `law ecfr "29 CFR 1910"` one in the US eCFR; the word
-  after `law` picks the database, e-Gov when left out. `@法 別表第一` at the end of a table,
+  after `law` picks the database, e-Gov when left out. `@stamp_act 別表第一` at the end of a table,
   clause, row, derive or define line says what it transcribes, quoted if not one word.
   `rulec source fetch` puts a copy of each cited fragment beside the rule and `rulec source
   pin` writes its digest; `check` then holds the rule to the copies (E037–E039, W119) without
   reading the network, and `doc` quotes the fragment under the definition. Any other document
-  is `source 郵便 = file "…" sha256:…`, and a `url "…"` on it says where that copy came from,
+  is `source japanpost = file "…" sha256:…`, and a `url "…"` on it says where that copy came from,
   so `fetch` can bring it again and `outdated` can ask whether it moved on — pinned to a
   commit the answer names the commits that touched it, otherwise only that the bytes differ.
-  **A document's fragments are its tables**: `@郵便 表1` cites the first table in document
+  **A document's fragments are its tables**: `@japanpost 表1` cites the first table in document
   order (a sheet, in a workbook), and `fetch` writes it beside the document under
   `<document>.fragments/`, where it is pinned, checked and quoted exactly as a law's article
   is. Cite the table the rows came from and a revision that moves it fails the check, naming
@@ -156,13 +156,13 @@ A few shapes are worth knowing before the first draft:
   an amount the copy does not show (under the row's own heading, where the copy has one) is E116,
   a number the copy states that no row uses is W120, and a boundary the copy puts on the other
   side of itself is E119 — the only checks that look outside the rule at all.
-- **A provision applied mutatis mutandis is an `apply`.** `apply 退職手当 = "退職手当.rule"
-  sha256:…` uses another rule with every input bound (`勤続年数 = 在職期間`, enums mapped with
-  `with 任期満了 -> 定年`), definitions left out with `except 減額`, and outputs taken under a
-  name (`手当 -> 非常勤手当`). The callee is expanded into the rule under `退職手当:…`, held to
+- **A provision applied mutatis mutandis is an `apply`.** `apply retirement = "retirement_pay.rule"
+  sha256:…` uses another rule with every input bound (`years = tenure`, enums mapped with
+  `with term_end -> retirement_age`), definitions left out with `except reduction`, and outputs taken under a
+  name (`allowance -> part_time_allowance`). The callee is expanded into the rule under `retirement:…`, held to
   its digest (E040, `rulec source pin` writes it), and what is passed has to stay inside its
   ranges (E043). `check` and `doc` show the applied tables as the callee wrote them.
-- **An input may say where the caller's object holds it.** `shape 注文(order) = jsonschema
+- **An input may say where the caller's object holds it.** `shape order = jsonschema
   "order.json" "#/$defs/Order"` borrows the contract the object is already described by, and
   `from` says where the value stands in it: `from order.shipping.zone`, `from any order.lines
   where chilled = true`, `from all order.lines where chilled = true`, `from count order.lines`.
@@ -356,8 +356,8 @@ what the changed row says (a base fee a later table multiplies by 0% moves nobod
 `--fixtures`** it answers how many of your records move and by how much, which is the number a
 person needs before approving; run `fixtures lint` first, always, and `replay` against the log.
 
-A version is named by its file, its git tag (`送料@v3` is `rules/送料/v3`, else the revision
-`v3`), or a path at a revision — on a PR, `rules/送料.rule@origin/main`. `--format markdown` is
+A version is named by its file, its git tag (`parcel@v3` is `rules/parcel/v3`, else the revision
+`v3`), or a path at a revision — on a PR, `rules/parcel.rule@origin/main`. `--format markdown` is
 what gets posted and `--terse` keeps record values out; [formats.md](formats.md) has both shapes.
 
 ### For the person who approves: `rulec doc`
@@ -374,11 +374,11 @@ CI per change, never committed.
 
 ### For the customer: `rulec doc --audience customer`
 
-`rulec doc <file> --lang ja --audience customer` renders the rule as the article a help centre
+`rulec doc <file> --audience customer` renders the rule as the article a help centre
 publishes, so that whatever answers customers — a person, a search, a model reading retrieved
 pages — reads a page that is complete, carries the version, and spells out both sides of every
-threshold. Those come from the boundary-pair vectors: the article says "60cm → 1410円, 61cm →
-1710円" where the table says `<=60cm`, and aliases, ranges and codes are left out. Regenerate it
+threshold. Those come from the boundary-pair vectors: the article says "girth 60cm → fee 1410JPY; 61cm → fee
+1710JPY" where the table says `<=60cm`, and aliases, ranges and codes are left out. Regenerate it
 on every change; like the approver's page, it is a product of the file, never a source.
 
 ---
@@ -402,7 +402,7 @@ fields whose name says prose (`title`, `notes`, `what`, `hint`, `text` in a note
 **Do not edit generated code.** The header says `DO NOT EDIT` and `gen --check` will fail on
 it in CI. Anything missing belongs in the `.rule` or on the calling side.
 
-**Do not decide a rounding yourself.** `round down(1円)` will make E104 go away, and
+**Do not decide a rounding yourself.** `round down(1JPY)` will make E104 go away, and
 `fix.text` will hand it to you, but *which direction and which grid* moves real money. If the
 source says, use what it says. If it does not, ask — and write the answer's provenance in a
 `#` comment next to the declaration, because that comment is the only place the approver will
@@ -452,8 +452,8 @@ cannot decide an overlap (W114), it says so rather than approximating.
 A worked example. Ask for JSON, act on the fields, never on the sentence:
 
 ```console
-$ rulec check rules/ゆうパック運賃.rule --format json | jq -c 'select(.code=="E101") | {table:.where.table, witness:.witness.inputs, fix:.fix}'
-{"table":"運賃表","witness":{"あて先":"山梨県","サイズ":"S60"},"fix":{"kind":"add_row","text":"| 山梨県 | S60 | 820円 |"}}
+$ rulec check rules/parcel.rule --format json | jq -c 'select(.code=="E101") | {table:.where.table, witness:.witness.inputs, fix:.fix}'
+{"table":"base_rate","witness":{"dest":"overseas","size":"small","weight":1},"fix":{"kind":"add_row","text":"| overseas | small | 1lb | 6USD |"}}
 ```
 
 The prose in `title` and `notes` is allowed to improve between versions; the codes and the
@@ -469,12 +469,12 @@ person can answer in a sentence. Convert the structured finding, not the prose.
 
 | what you have | what to ask |
 |---|---|
-| E101, `witness.inputs = {あて先: 山梨県, サイズ: S60}` | 「山梨県あての S60 サイズの運賃はいくらですか」 |
-| E104 on output `送料`, notes saying the spread is 9 yen | 「送料の端数はどちら向きに丸めますか。切り上げと切り捨てで最大 9 円変わります。規約に記載はありますか」 |
-| E105 between rows 3 and 7 with different outputs | 「この入力は 1,200 円と 800 円のどちらですか。両方の条件に当てはまります」 |
-| W114 | 「この二つの条件を同時に満たす注文は実在しますか」 |
-| E126, `witness.trace` = 取消依頼 → 入金 → 出荷 | 「取消のあとに入金の通知が届いたら、注文はどうなりますか。いまの表では入金済に戻り、出荷まで進みます」 |
-| A rounding you assumed | 「この丸めは規約に根拠がありません。仮に切り捨てにしています。出典はありますか」 |
+| E101, `witness.inputs = {dest: overseas, size: small}` | "What is the fee for an overseas parcel of the small size?" |
+| E104 on output `fee`, notes saying the spread is 9 yen | "Which way should the fee be rounded? Rounding up or down changes it by up to 9 yen. Do the terms say?" |
+| E105 between rows 3 and 7 with different outputs | "Is this input 1,200 yen or 800 yen? It meets the conditions of both." |
+| W114 | "Can an order that meets both of these conditions at once exist?" |
+| E126, `witness.trace` = cancel → pay → ship | "What happens to an order when a payment notice arrives after the cancellation? As the table stands it goes back to paid and on to shipped." |
+| A rounding you assumed | "This rounding has no basis in the terms. I have assumed rounding down for now. Is there a source?" |
 
 Three things make such a question answerable: **a concrete case** (the witness), **what turns
 on the answer** (the amount that moves), and **what you assumed in the meantime**, so that

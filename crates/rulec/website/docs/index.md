@@ -197,26 +197,26 @@ A rule is rarely one table. GOV.UK gives a minimum wage for each age band, then 
 <div markdown>
 
 ```rule
-machine 注文(order) over 遷移
-  carry   状態 -> 次の状態
-  held    支払額
-  initial 受付
-  final   配達済, 取消
-  never   出荷済 after 取消
-  once    返金額 >0円
+machine order over step
+  carry   state -> next_state
+  held    amount_paid
+  initial received
+  final   delivered, cancelled
+  never   shipped after cancelled
+  once    refund >0JPY
 ```
 
 ```console
-error[E126]: A sequence of calls reaches 出荷済 after 取消
-  --> 注文の状態.rule:37 machine 注文
+error[E126]: A sequence of calls reaches shipped after cancelled
+  --> order_lifecycle.rule:37 machine order
    |
-37 |   never   出荷済 after 取消
-   |   ^^^^^^^^^^^^^^^^^^^^^^^^^
+37 |   never   shipped after cancelled
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
- Calls (from 受付):
-   1. at 受付, 出来事 = 取消依頼, 支払額 = 0円 → 取消 (table 遷移 row 2)
-   2. at 取消, 出来事 = 入金, 支払額 = 0円 → 入金済 (table 遷移 row 10)
-   3. at 入金済, 出来事 = 出荷, 支払額 = 0円 → 出荷済 (table 遷移 row 4)
+ Calls (from received):
+   1. at received, event = cancel, amount_paid = 0JPY → cancelled (table step row 2)
+   2. at cancelled, event = pay, amount_paid = 0JPY → paid (table step row 10)
+   3. at paid, event = ship, amount_paid = 0JPY → shipped (table step row 4)
 ```
 
 </div>
@@ -323,7 +323,7 @@ Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, and
 </div>
 </div>
 
-**Twelve targets** · **112 diagnostics** · **50 rules checked, generated and run on every commit — 22 transcribed from a published source** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+**Twelve targets** · **112 diagnostics** · **87 rules checked, generated and run on every commit — 34 transcribed from a published source** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
 
 ---
 

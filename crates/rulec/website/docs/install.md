@@ -188,8 +188,8 @@ Output is **English by default**. One setting brings back Japanese —
 every surface, including the prose inside generated code:
 
 ```console
-$ rulec check rules/送料.rule --lang ja
-$ RULEC_LANG=ja rulec check rules/送料.rule
+$ rulec check rules/shipping_fee.rule --lang ja
+$ RULEC_LANG=ja rulec check rules/shipping_fee.rule
 ```
 
 `--lang` beats `RULEC_LANG`, which beats `RITSU_LANG`, which beats the default. The system locale
@@ -234,7 +234,7 @@ job, one that has the records, and it is the job that makes a change
 visible: the pull request gets a comment saying how many records move and
 by how much. Four things about it are deliberate.
 
-- The old version is `rules/送料.rule@origin/main`, the file as it is on
+- The old version is `rules/shipping_fee.rule@origin/main`, the file as it is on
   the base branch, so the checkout fetches that branch.
 - `diff` exits 1 when there is an impact. Here that is information, not a
   failure, so the step goes on after 1 and stops only on 2.
@@ -257,7 +257,7 @@ replay:
         fetch-depth: 0                   # origin/main is where the old version is read from
     - uses: i2y/rulec@v0.22.1
     # a step of your own puts the records at $FIXTURES: an artifact, or protected storage
-    - run: rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
+    - run: rulec diff rules/shipping_fee.rule@origin/main rules/shipping_fee.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:
         RULEC_LANG: ja                   # the people approving this one read Japanese
     - run: gh pr comment "$PR" --body-file diff.md
@@ -271,7 +271,7 @@ on every pull request from the first day — and the two comments read side by s
 *can* move, and how much of what you have does.
 
 ```yaml
-- run: rulec diff rules/送料.rule@origin/main rules/送料.rule --format markdown > region.md || [ $? -eq 1 ]
+- run: rulec diff rules/shipping_fee.rule@origin/main rules/shipping_fee.rule --format markdown > region.md || [ $? -eq 1 ]
   env:
     RULEC_LANG: ja
 - run: gh pr comment "$PR" --body-file region.md

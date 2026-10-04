@@ -8,8 +8,9 @@ one are in `rulec explain --all`, and `rulec explain <CODE>` prints any of them.
 Two things to know before anything else.
 
 - **Keywords are English and there is exactly one spelling of each.** No synonyms and no
-  abbreviations. Names and cell values are the business's own words and are written in
-  Japanese in every rule in this repository.
+  abbreviations. Names and cell values are the business's own words: the rules in this
+  repository are written with English ones, and each one transcribed from a Japanese document
+  has its Japanese original beside it.
 - **The file is read top to bottom and there is no forward reference.** A name is declared
   above every line that uses it.
 
@@ -128,12 +129,12 @@ optionally followed by a multiplier and then a unit:
 | multiplier | `万` (10⁴), `億` (10⁸), `兆` (10¹²) |
 | unit | mass `mg` `g` `kg` `t` `oz` `lb` · length `mm` `cm` `m` `km` `in` `ft` `yd` `mi` · rate `%` · money `円` `銭`, or an ISO 4217 code, whose hundredth is that code plus `c` (`USD` and `USDc`). **Two currencies never convert**: there is no exchange rate here, so mixing them is E103 |
 
-`1000万円` is 10,000,000 yen. **A number in a cell must carry its unit**: a bare `2000` where
+`1000万円` is 10,000,000 yen, which `10_000_000JPY` writes as well. **A number in a cell must carry its unit**: a bare `2000` where
 a quantity is expected is an error. `2kg` and `2000g` are the same value; the stored integer
 is always in the unit the type declares.
 
 **A thousands separator is not written** (E049): `,` separates the members of a set, so the
-`1,000円` a document prints would be two values. Write `1000円`, or `1_000円` to group the
+`1,000JPY` a document prints would be two values. Write `1000JPY`, or `1_000JPY` to group the
 digits; the diagnostic's `fix.text` is the literal rewritten.
 
 **Dates** are written `YYYY-MM-DD`. They are held as day ordinals, which is what makes an
@@ -166,17 +167,17 @@ Fourteen, and no others.
 | enum | the enum's name | a **closed** finite set, declared with `enum` or brought in with `import` |
 | mass | `mass[g]`, `mass[lb]`, … | the unit is part of the type. `mg` `g` `kg` `t` `oz` `lb` |
 | length | `length[cm]`, `length[in]`, … | `mm` `cm` `m` `km` `in` `ft` `yd` `mi` |
-| area | `area[m2]`, `area[坪]`, … | `mm2` `cm2` `m2` `a` `ha` `km2` `坪` `in2` `ft2` `yd2` `mi2` `ac`. A dimension of its own: `縦 × 横` is E103, because there is no dimensional analysis here (§2.1) |
+| area | `area[m2]`, `area[坪]`, … | `mm2` `cm2` `m2` `a` `ha` `km2` `坪` `in2` `ft2` `yd2` `mi2` `ac`. A dimension of its own: `width * depth` is E103, because there is no dimensional analysis here (§2.1) |
 | volume | `volume[m3]`, `volume[L]`, … | `mm3` `cm3` `m3` `mL` `L` `kL`. `cm3` and `mL` are the same size, and so are `m3` and `kL`. **There is no gallon** — the US one is 3.785411784 L and the imperial one 4.54609 L |
 | duration | `duration[h]`, `duration[min]`, … | `ms` `s` `min` `h` `d` `w`. A minute is `min`, because `m` is the metre. This is a span of time; a calendar day is `date` |
 | temperature | `temperature[℃]`, `temperature[℉]` | `℃` `℉`. **Ordered, not arithmetic**: comparison and `range` only (E048). 41℉ is exactly 5℃, and a literal converts between them; a difference of two temperatures is not written at all |
 | sound | `sound[dB]` | `dB`, a sound pressure level. **Ordered, not arithmetic** (E048): a decibel is a logarithm, so adding two of them is not two sounds' worth |
-| money | `money[円, incl_tax]`, `money[USD, excl_tax]` | currency **and** tax flag are both part of the type. Any ISO 4217 code, or `円`; the hundredth of a currency is its code plus `c`, so `money[USD]` counts dollars and `money[USDc]` counts cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
+| money | `money[JPY, incl_tax]`, `money[USD, excl_tax]` | currency **and** tax flag are both part of the type. Any ISO 4217 code, or `円`; the hundredth of a currency is its code plus `c`, so `money[USD]` counts dollars and `money[USDc]` counts cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
 | rate | `rate[step 1%]`, `rate[step 0.1%]`, `rate` | the stored integer counts steps. **An input declares its step** (E103 without one): what the caller passes is that integer, and its meaning cannot change when a row is added. **An output travels at the step it declares**, or with none declared at its rounding grid, which every answer sits on — never at whatever its rows happen to write, so no row can change what the integer counts. A rounding grid that is not a whole number of the declared step is E114. A computed rate that is not an output may leave the step out; it is held at whatever its literals need |
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score |
 | date | `date` | comparison and range only. **There is no date arithmetic** (E048) |
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
-| optional | `会員区分?` | any of the above, plus the absent value. Consumed by the cell `none` |
+| optional | `member_kind?` | any of the above, plus the absent value. Consumed by the cell `none` |
 
 Every quantity, money, rate, number and date is an **integer** internally. No floating point appears
 anywhere in the tool or in the generated code.
@@ -184,24 +185,24 @@ anywhere in the tool or in the generated code.
 Money of different currencies or different tax flags cannot be added or compared, and neither
 can values of different units (E103). A conversion is written as a table, never as a formula.
 
-There are no compound dimensions. `重さ × 長さ` and `縦 × 横` are both E103, as `金額 × 金額`
+There are no compound dimensions. `weight * length` and `width * depth` are both E103, as `amount * amount`
 always was: this tool does no dimensional analysis, and a dimension invented to hold a product
 would be one nobody declared. Where the product itself is what a rule decides on — a floor
 area, a volume of water — take it as an input, or look it up in a table. For the same reason a
 divisor carrying a unit has to be written in the **left side's** unit: a divisor is read at the
-unit it is written in and never converted, so `重さ(mass[g]) ÷ 2kg` is E103 rather than a
+unit it is written in and never converted, so `weight / 2kg`, with `weight` a `mass[g]`, is E103 rather than a
 division by 2000.
 
 A value is read **through its unit**, wherever it is written. A range bound, a table cell, an
 expected value in `examples`, a rounding grid, a `step` inside a type's brackets, an answer a
 `fold` gives, a member of a `group`: each is a value of the thing it sits in, and one that is
-not is E103 (E012 for a name). `round up(10銭)` on a `money[円]` output is refused, and
-`round up(1000銭)` is accepted as the ten yen it is worth — the unit is read, not merely
+not is E103 (E012 for a name). `round up(10USDc)` on a `money[USD]` output is refused, and
+`round up(1000USDc)` is accepted as the ten dollars it is worth — the unit is read, not merely
 recognised.
 
 Three types are **ordered but not arithmetic**: `date`, `temperature` and `sound`. They are
 written in cells, compared, and given a `range`, and that is all — `+ - × ÷` over any of them
-is E048. A ℃ is a scale whose zero is displaced, so `気温 × 2` means nothing; a decibel is a
+is E048. A ℃ is a scale whose zero is displaced, so `temp * 2` means nothing; a decibel is a
 logarithm, so adding two of them is not two sounds' worth; a date is a calendar day, and there
 is no type to hold the result of subtracting one. Where a difference is itself what the rule
 decides on, compute it on the calling side and pass it in — as a `duration`, or a `number`.
@@ -209,13 +210,13 @@ decides on, compute it on the calling side and pass it in — as a `duration`, o
 ### Declaring an enum
 
 ```rule
-enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチナ(platinum)
+enum member_kind = basic | gold | platinum
 ```
 
 A value may be marked `default`:
 
 ```rule
-enum 会員区分(member_kind) = 一般(basic) default | ゴールド(gold) | プラチナ(platinum)
+enum member_kind = basic default | gold | platinum
 ```
 
 which declares "this value needs no row of its own; being caught by a `-` row is correct" and
@@ -231,7 +232,7 @@ in an output cell as in any other. A value may be spelled like one of the reserv
 ### Declaring a group
 
 ```rule
-group 近畿圏(kinki) = 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
+group kinki = 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
 ```
 
 A group is a named subset of an enum and may be used in a cell wherever a value may. Groups
@@ -265,8 +266,8 @@ anything else).
 ### An enum a `.proto` owns
 
 ```rule
-import proto "api/v1/order.proto" MemberTier -> 会員区分
-enum 会員区分(tier) = 一般(basic) | ゴールド(gold) | プラチナ(platinum) default
+import proto "api/v1/order.proto" MemberTier -> tier
+enum tier = basic | gold | platinum default
 ```
 
 When the values come from a service contract, the set is not the rule's to decide. The line
@@ -297,8 +298,8 @@ error, because nobody has read it yet. Marking it `default` is how you say you d
 ### An enum a JSON Schema owns
 
 ```rule
-import jsonschema "api/openapi.json" "#/components/schemas/MemberTier" -> 会員区分
-enum 会員区分(tier) = 一般(basic) | ゴールド(gold) | プラチナ(platinum) default
+import jsonschema "api/openapi.json" "#/components/schemas/MemberTier" -> tier
+enum tier = basic | gold | platinum default
 ```
 
 The same binding, for the other place a value set is declared. Everything about E032 and E033
@@ -326,20 +327,20 @@ toolchains can write.
 ## 3.2 source — the documents a rule transcribes
 
 ```rule
-source 法 = law "342AC0000000023" asof 2026-04-01
+source stamp_act = law "342AC0000000023" asof 2026-04-01
   別表第一 sha256:0ba69792e960021e
-source 措置法 = law "332AC0000000026" asof 2026-04-01
+source measures_act = law "332AC0000000026" asof 2026-04-01
   第91条 sha256:85faf53f6f6e8196
 source osha = law ecfr "29 CFR 1910" asof 2026-01-01
   "§1910.157" sha256:c2a9ce966c7e2269
-source 郵便 = file "ゆうパック基本運賃.pdf" sha256:9e4edb5b6a1c0f42
-source 規約 = file "tariff.md" url "https://raw.githubusercontent.com/o/r/a1b2c3d/docs/tariff.md" sha256:4f1e0a77b2c3d5e6
+source japanpost = file "yupack_tariff.pdf" sha256:9e4edb5b6a1c0f42
+source terms = file "tariff.md" url "https://raw.githubusercontent.com/o/r/a1b2c3d/docs/tariff.md" sha256:4f1e0a77b2c3d5e6
   表1 sha256:a583ec8586bbf596
 
-table 本則(base)  @法 別表第一
+table base  @stamp_act 別表第一
 policy unique
-| 金額の記載あり | 契約金額 | -> 印紙税額 |
-| false          | -        | 200円       |  @法 別表第一  # 記載のないもの
+| stated | amount | -> tax |
+| false  | -      | 200JPY |  @stamp_act 別表第一  # no amount stated
 ```
 
 A `source` names a document, after `import`. A `law` is a law in a statute database, by the
@@ -408,7 +409,7 @@ the last bar of a row, says which fragment the definition transcribes: `第91条
 `第20条第2項`, `第20条第2項第3号`, `別表第一`, and the supplementary provisions as `附則第3条` (the law's
 own) or `附則（令和七年三月三一日法律第一三号）第3条` (an amending law's, its number spelled as the law's
 heading spells it); several are separated by `,`. A `file` is cited
-whole, `@郵便`, or by one of its tables, `@郵便 表1`; a law cited with no article is E037, and so
+whole, `@japanpost`, or by one of its tables, `@japanpost 表1`; a law cited with no article is E037, and so
 is a document fragment named anything but `表<n>` or `table<n>`. The citation goes before the `#` comment. `check` holds the pins to the copies and never reads the network: a cited
 fragment without a pin is E037 (the fix is the pin line), a pin that differs from the copy is
 E038 (naming the definitions that cite it), a fragment with no copy is E039, and a pin no
@@ -432,7 +433,7 @@ or `GH_TOKEN` is passed on when it is set; without one the API allows sixty requ
 approver's page quotes the fragment under the definition that cites it: an article as its text,
 with the date that text came into force and the amending law; a document's table as the table
 itself, beside the rows transcribed from it. Every generated file names the sources in its header
-(`Cites: 措置法 = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:…)`), and `rulec api` lists
+(`Cites: measures_act = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:…)`), and `rulec api` lists
 them under `sources`, a file source carrying its `url` in both.
 
 ## 3.3 shape and from — where the caller's object holds an input
@@ -441,13 +442,13 @@ An input may say where it comes from, and a `shape` says which contract the obje
 from is already described by:
 
 ```rule
-shape order(order) = jsonschema "api/order.json" "#/$defs/Order"
-shape order(order) = proto "api/v1/order.proto" shop.v1.Order
+shape order = jsonschema "api/order.json" "#/$defs/Order"
+shape order = proto "api/v1/order.proto" shop.v1.Order
 
 inputs
-  届け先(dest)   : 都道府県  from order.shipping.prefecture
-  冷蔵あり(cold) : bool      from any order.lines where category = "chilled"
-  明細数(lines)  : number    range >=0 <=200  from count order.lines
+  dest  : 都道府県  from order.shipping.prefecture
+  cold  : bool      from any order.lines where category = "chilled"
+  lines : number    range >=0 <=200  from count order.lines
 ```
 
 **It changes no check of the table.** What comes out of a projection is a scalar input like
@@ -562,13 +563,13 @@ input, and the function in each language that reads them, under `projection`.
 
 ```rule
 inputs
-  届け先(dest)    : 都道府県
-  重量(weight)    : mass[g]              range >=1g <=40kg
-  注文金額(total) : money[円, incl_tax]   range >=0円 <=1000万円
-  会員(member)    : 会員区分
+  dest   : 都道府県
+  weight : mass[g]  range >=1g <=40kg
+  total  : money[JPY, incl_tax]  range >=0JPY <=10_000_000JPY
+  member : member_kind
 
 outputs
-  送料(fee) : money[円, incl_tax]  round up(10円)
+  fee : money[JPY, incl_tax]  round up(10JPY)
 ```
 
 ### `range` — required on every numeric input and every `derive`
@@ -582,7 +583,7 @@ One declaration does three jobs.
 3. **The entry guard of the generated code.** A call outside the range returns an error
    instead of silently computing something.
 
-The form is `range` followed by one or two bounds: `range >=0円 <=1000万円`, `range >=1g`.
+The form is `range` followed by one or two bounds: `range >=0JPY <=10_000_000JPY`, `range >=1g`.
 A `derive` whose declared range does not contain what it can actually reach is E112, and the
 message states the interval to widen to. A rate input may leave `range` out: it is then
 `>=0% <=100%`, and the guard enforces that, so a rate that can exceed 100% declares its range
@@ -592,7 +593,7 @@ are its range.
 `contract_only` marks an input that is only ever an entry check and appears in no table:
 
 ```
-  重量(weight) : mass[g]  range >=1g <=25kg  contract_only
+  weight : mass[g]  range >=1g <=25kg  contract_only
 ```
 
 Without it, an input no table uses is W111.
@@ -645,7 +646,7 @@ borrow its range from another file. The days are listed as a precondition in `ru
 ### `round` — required on every numeric output
 
 ```
-  送料(fee) : money[円, incl_tax]  round up(10円)
+  fee : money[JPY, incl_tax]  round up(10JPY)
 ```
 
 Five modes, each pinned down for negative values:
@@ -658,7 +659,7 @@ Five modes, each pinned down for negative values:
 | `half_down` | an exact half goes toward zero | 4.5 → 4, 4.6 → 5 |
 | `half_even` | an exact half goes to the even neighbour | 2.5 → 2, 3.5 → 4 |
 
-The value in parentheses is the **grid**: `up(10円)` rounds to a multiple of 10 yen. Rounding
+The value in parentheses is the **grid**: `up(10JPY)` rounds to a multiple of 10 yen. Rounding
 is applied once per output, last. A missing one is E104; an output literal that is not a
 multiple of the grid is E106.
 
@@ -668,7 +669,7 @@ A linear combination of inputs, which **can be used as a table column while stil
 quantity**.
 
 ```rule
-derive 適用後金額(net) : money[円, incl_tax] = 商品合計 - 割引額  range >=0円 <=100万円
+derive net : money[JPY, incl_tax] = subtotal - discount  range >=0JPY <=1_000_000JPY
 ```
 
 The right-hand side may use inputs, `+`, `-`, and multiplication by a constant. `range` is
@@ -679,9 +680,9 @@ required and behaves exactly as it does for an input.
 A named boolean or intermediate value. A boolean `define` may be used as a table column.
 
 ```rule
-define 大口(bulk) : bool = 注文金額 >= 3万円
-define Aが早いか同じ(a_earlier) : bool = A期限 <= B期限
-define 率割引(rate_off) : money[円, incl_tax] = 元価 × 割引率
+define bulk : bool = total >= 30_000JPY
+define a_earlier : bool = a_due <= b_due
+define rate_off : money[JPY, incl_tax] = list * rate
 ```
 
 The condition of a boolean `define` must be one of exactly two shapes (E113):
@@ -699,8 +700,8 @@ A relation between two inputs that the caller guarantees. It computes nothing; i
 **which combinations of inputs can happen**.
 
 ```rule
-constraint 全条件一致数 <= 会社名一致数
-constraint 適用開始日 <= 適用終了日
+constraint all_matches <= name_matches
+constraint valid_from <= valid_to
 ```
 
 The shape is `constraint <input> <comparison> <input>`, with one of `<=`, `<`, `>=`, `>`
@@ -734,23 +735,23 @@ of a tariff sheet, the candidates a predicate left — and the answer comes from
 `elements` declares what one element carries; `fold` declares how the walk ends.
 
 ```rule
-elements 運賃行(fee_rows)
-  行ゾーン(row_zone) : ゾーン区分
-  閾値(threshold)    : money[円, incl_tax]  range >=0円 <=100万円
-  行運賃(row_fee)    : money[円, incl_tax]  range >=0円 <=10万円
+elements fee_rows
+  row_zone  : zone
+  threshold : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  row_fee   : money[JPY, incl_tax]  range >=0JPY <=100_000JPY
 
-table 行判定(row_of)
+table row_of
 policy unique
-| 行ゾーン | 閾値     | -> 採用(verdict) : 採用区分 |
-| 近畿圏   | <=1000円 | 確定                        |
+| row_zone | threshold | -> verdict : pick |
+| kinki    | <=1000JPY | take              |
 | …
 
-fold 採用 over 運賃行
-  スキップ  -> next
-  打ち切り  -> stop with 0円
-  確定      -> take_unique 行運賃
-  持ち越し  -> keep_max 行運賃 by 閾値
-  empty     -> 0円
+fold verdict over fee_rows
+  skip      -> next
+  halt      -> stop with 0JPY
+  take      -> take_unique row_fee
+  hold      -> keep_max row_fee by threshold
+  empty     -> 0JPY
   exhausted -> held
 ```
 
@@ -811,18 +812,18 @@ An example is a row of cells and a sequence does not fit in one, so the sequence
 once, under a name, and the cell names it:
 
 ```rule
-sequence 近い一件(near)
-| 行ゾーン | 閾値   | 行運賃 |
-| 近畿圏   | 500円  | 800円  |
-| 近畿圏   | 2000円 | 1500円 |
+sequence near
+| row_zone | threshold | row_fee |
+| kinki    | 500JPY    | 800JPY  |
+| kinki    | 2000JPY   | 1500JPY |
 
-sequence 空(none)
-| 行ゾーン | 閾値 | 行運賃 |
+sequence no_rows
+| row_zone | threshold | row_fee |
 
 examples
-| あて先 | 注文金額 | 運賃行   | -> 運賃 |
-| 近畿圏 | 5000円   | 近い一件 | 800円   |
-| 近畿圏 | 5000円   | 空       | 0円     |
+| dest  | total   | fee_rows | -> fee |
+| kinki | 5000JPY | near     | 800JPY |
+| kinki | 5000JPY | no_rows  | 0JPY   |
 ```
 
 The columns of a `sequence` are the fields of `elements`, all of them, and every cell is a
@@ -848,13 +849,13 @@ it. That is what makes the last fold transition covered rather than merely named
 goes on from there like any other.
 
 ```rule
-count 一致数(hits) over 候補 where 照合 = 一致  range >=0 <=100
+count hits over candidates where hit = same  range >=0 <=100
 ```
 
 The shape is `count <name>(<alias>) over <sequence> where <column> = <value>`, with `range`
 (E028, E030). The column is one of **one element** — a field of `elements`, or a column a
 per-element table produces — and its values have to be a closed set, a bool or an enum
-(E029). A bool column needs no `= <value>`: `where 会社名一致` counts the elements where it
+(E029). A bool column needs no `= <value>`: `where name_match` counts the elements where it
 is true.
 
 A rule that counts runs in two phases, and which item belongs to which is derived rather
@@ -863,21 +864,21 @@ element has.** So the table that classifies an element runs once per element, an
 that reads only the counts and the ordinary inputs runs once, after.
 
 ```rule
-table 候補判定(row_of)          # the walk: it reads a field of an element
+table row_of  # the walk: it reads a field of an element
 policy unique
-| 会社名一致 | 住所一致 | -> 照合(hit) : 照合結果 |
-| true       | true     | 一致                    |
-| true       | false    | 不一致                  |
-| false      | -        | 不一致                  |
+| name_match | addr_match | -> hit : match_kind |
+| true       | true       | same                |
+| true       | false      | diff                |
+| false      | -          | diff                |
 
-count 一致数(hits) over 候補 where 照合 = 一致  range >=0 <=100
+count hits over candidates where hit = same  range >=0 <=100
 
-table 結果判定(verdict_of)      # after the walk: it reads the count
+table verdict_of  # after the walk: it reads the count
 policy unique
-| 一致数 | -> 結果(result) : 判定 |
-| 0      | 該当なし               |
-| 1      | 一件                   |
-| >=2    | 複数                   |
+| hits | -> result : outcome |
+| 0    | no_match            |
+| 1    | one                 |
+| >=2  | several             |
 ```
 
 **The range is required, and it says two things.** It is the universe the completeness check
@@ -891,16 +892,16 @@ outside its range. A count cannot leave the space the proof was made over.
 `sum` totals one column of the elements instead of counting them.
 
 ```rule
-elements 明細(lines)
-  金額(amount) : money[円]  range >=0円 <=100000円
+elements lines
+  amount : money[JPY]  range >=0JPY <=100_000JPY
 
-sum 合計(total) over 明細 of 金額  range >=0円 <=1000000円
+sum total over lines of amount  range >=0JPY <=1_000_000JPY
 ```
 
 The shape is `sum <name>(<alias>) over <sequence> of <column>`, with `range`. The column is
 one of **one element**, the same as a count's, and it has to be a number — an amount, a
-quantity, `number` or `rate` (E029). The total keeps that column's type, so `合計` above is
-`money[円]` and a table over it is written in yen.
+quantity, `number` or `rate` (E029). The total keeps that column's type, so `total` above is
+`money[JPY]` and a table over it is written in yen.
 
 **The summed column has to be non-negative** (`range >=0…`, E029). That is what lets the
 running total move one way only: the walk refuses the moment it passes the declared maximum,
@@ -924,13 +925,13 @@ membership that moves up a tier each year. The state lives with the caller — i
 of a database — and every call is passed the state and answers the next one. `machine` says so:
 
 ```rule
-machine 注文(order) over 遷移
-  carry   状態 -> 次の状態
-  held    支払額
-  initial 受付
-  final   配達済, 取消
-  never   出荷済 after 取消
-  once    返金額 >0円
+machine order over step
+  carry   state -> next_state
+  held    amount_paid
+  initial received
+  final   delivered, cancelled
+  never   shipped after cancelled
+  once    refund >0JPY
 ```
 
 | line | what it says |
@@ -969,12 +970,12 @@ A broken claim comes back with the **shortest sequence of calls that breaks it**
 input the rule takes (`witness.trace` in the JSON, one line per call in the text):
 
 ```console
-error[E126]: A sequence of calls reaches 出荷済 after 取消
-  --> rules/注文の状態.rule:36 machine 注文
- Calls (from 受付):
-   1. at 受付, 出来事 = 取消依頼, 支払額 = 0円 → 取消 (table 遷移 row 2)
-   2. at 取消, 出来事 = 入金, 支払額 = 0円 → 入金済 (table 遷移 row 10)
-   3. at 入金済, 出来事 = 出荷, 支払額 = 0円 → 出荷済 (table 遷移 row 4)
+error[E126]: A sequence of calls reaches shipped after cancelled
+  --> rules/order_lifecycle.rule:37 machine order
+ Calls (from received):
+   1. at received, event = cancel, amount_paid = 0JPY → cancelled (table step row 2)
+   2. at cancelled, event = pay, amount_paid = 0JPY → paid (table step row 10)
+   3. at paid, event = ship, amount_paid = 0JPY → shipped (table step row 4)
 ```
 
 ### Why the claims stay decidable
@@ -1013,11 +1014,11 @@ A `scenario` is the `examples` of a machine: a sequence of calls from the initia
 row per call, with what each call answers.
 
 ```rule
-scenario 取消のあとの入金(late_pay)
-| 出来事   | 支払額 | -> 次の状態 | 返金額 | 受理  |
-| 入金     | 3000円 | 入金済      | 0円    | true  |
-| 取消依頼 | 3000円 | 取消        | 3000円 | true  |
-| 入金     | 3000円 | 取消        | 0円    | false |
+scenario late_pay
+| event  | amount_paid | -> next_state | refund  | accepted |
+| pay    | 3000JPY     | paid          | 0JPY    | true     |
+| cancel | 3000JPY     | cancelled     | 3000JPY | true     |
+| pay    | 3000JPY     | cancelled     | 0JPY    | false    |
 ```
 
 The carried input has **no column**: the first call starts in the `initial` state, and every
@@ -1060,13 +1061,13 @@ the answers (docs/formats.md).
 ## 7. Tables
 
 ```rule
-table 基本送料(base_fee)
+table base
 policy unique
-| 届け先      | 重量    | -> 基本送料(base) : money[円, incl_tax] |
-| 遠隔地      | <=2000g | 1200円                                  |
-| 遠隔地      | >2000g  | 1800円                                  |
-| not: 遠隔地 | <=2000g | 800円                                   |
-| not: 遠隔地 | >2000g  | 1100円                                  |
+| dest        | weight  | -> base : money[JPY, incl_tax] |
+| remote      | <=2000g | 1200JPY                        |
+| remote      | >2000g  | 1800JPY                        |
+| not: remote | <=2000g | 800JPY                         |
+| not: remote | >2000g  | 1100JPY                        |
 ```
 
 The first row is the header. Left of `->` are input columns, right of it output columns. A
@@ -1088,13 +1089,13 @@ hole is E101 whichever policy it uses.
 A row may carry a label before its first bar:
 
 ```rule
-       | 金額の記載あり | 契約金額         | -> 印紙税額(tax) : money[円] |
-非課税 | true           | <1万円           | 0円                          |
-r3     | true           | >=1万円 <=10万円 | 200円                        |
+       | stated | amount                   | -> tax : money[JPY] |
+exempt | true   | <10_000JPY               | 0JPY                |
+r3     | true   | >=10_000JPY <=100_000JPY | 200JPY              |
 ```
 
 A label names the row wherever a name is needed — in an `overrides` line, in the trace a
-generated function returns (`{"table":"本則","row":2,"label":"非課税"}`), in a later version —
+generated function returns (`{"table":"base","row":2,"label":"exempt"}`), in a later version —
 and it is unique within its table (E034). Rows without one are still counted by position, and
 `rulec fmt` aligns the labels as a column of their own.
 
@@ -1105,14 +1106,14 @@ from its own source. Each then has exactly one output column (E045), and which t
 precedence is written on the table that wins, right after `policy`:
 
 ```rule
-table 軽減(reduced_rate)
+table reduced_rate
 policy unique
-overrides 本則
-| 軽減期間 | 金額の記載あり | 契約金額         | -> 印紙税額 |
-| true     | true           | >10万円 <=50万円 | 200円       |
+overrides base
+| reduced | stated | amount                   | -> tax |
+| true    | true   | >100_000JPY <=500_000JPY | 200JPY |
 ```
 
-`overrides` names tables declared above, or one labelled row of one (`本則:r3`), and says that
+`overrides` names tables declared above, or one labelled row of one (`base:r3`), and says that
 every row of this table takes precedence over them. The exception is written after what it
 excepts: a target that is missing or declared below is E035, one that defines a different
 output is E036. The tables of one output are checked together — completeness over their
@@ -1128,24 +1129,24 @@ A definition whose conditions do not line up as columns — a proviso, a main ru
 one sentence — is a `clause`: one row, written as prose.
 
 ```rule
-clause 通常(regular) -> 送料
+clause regular -> fee
   when always
-  then 基本運賃
+  then base
 
-clause 無料(free) -> 送料
-  when 注文金額 >=3900円 and 会員 true
-  then 0円
-  overrides 通常
+clause free -> fee
+  when total >=3900JPY and member true
+  then 0JPY
+  overrides regular
 ```
 
 The heading names the clause and the output it defines (an `outputs` name, an intermediate an
-earlier table or clause introduced, or a new one with `-> 名前 : 型`). `when` is a list of
+earlier table or clause introduced, or a new one with `-> name : type`). `when` is a list of
 `<column> <cell>` joined by `and`, the cell being any of the seven kinds above, the column
 anything a table's column may be; a clause with no condition writes `when always` (leaving the
 line out is E046, for the reason a blank cell is E008). `then` holds what an output cell holds:
 a literal or a name. `overrides` is the same line a table may carry. A clause is a table of one
 row whose other columns are `-`: it is checked, evaluated and generated as one, fires in the
-trace as `{"table":"無料","row":1}`, and the page shows its condition and its value as written.
+trace as `{"table":"free","row":1}`, and the page shows its condition and its value as written.
 
 ### Applying another rule
 
@@ -1154,12 +1155,12 @@ service' as 'period in office'" — is an `apply`: another rule file, used once 
 inputs bound to values of this rule.
 
 ```rule
-apply 退職手当(retirement) = "退職手当.rule" sha256:b58648ea2767ebbd  # 出典: 第31条
-  勤続年数 = 在職期間
-  退職事由 = 任期終了事由 with 任期満了 -> 定年, 辞職 -> 自己都合
-  基本給 = 報酬月額
-  except 減額
-  手当 -> 非常勤手当
+apply retirement = "retirement_pay.rule" sha256:b58648ea2767ebbd  # Source: Article 31
+  years = tenure
+  reason = end_reason with term_end -> retirement_age, resignation -> voluntary
+  base_pay = monthly_pay
+  except reduction
+  allowance -> part_time_allowance
 ```
 
 The heading names the apply, the callee (a path relative to this file) and the digest of the
@@ -1171,15 +1172,15 @@ two enums are mapped with `with`, which covers every value of this rule's enum, 
 the same on both sides mapping by themselves. What this rule passes has to stay inside the
 callee's declared ranges and satisfy its constraints (E043, proved by interval arithmetic and
 never fixed by adding a row: the callee is another unit of approval). `except` leaves a table,
-a clause or a labelled row (`表:行`) of the callee out; a hole that leaves in the main rule is
+a clause or a labelled row (`table:row`) of the callee out; a hole that leaves in the main rule is
 this rule's E101 to fill. The callee's outputs become definitions of this rule, under their
 own names or renamed with `->`, rounded as the callee declares and then, if one is an output
 here, rounded once more as this rule declares.
 
 The callee is expanded into this rule: its tables, clauses, derives and defines appear under
-`<apply>:<name>` (`退職手当:支給表`), which is how a clause of this rule takes precedence over
-one of them (`overrides 退職手当:減額`, defining `退職手当:手当`) and how the trace names a
-row (`{"table":"退職手当:支給表","row":1,"label":"短期"}`). Rows of the callee this rule never
+`<apply>:<name>` (`retirement:schedule`), which is how a clause of this rule takes precedence over
+one of them (`overrides retirement:reduction`, defining `retirement:allowance`) and how the trace names a
+row (`{"table":"retirement:schedule","row":1,"label":"short"}`). Rows of the callee this rule never
 reaches — its ranges are usually narrower — are silent, and the page lists them under the
 apply; a whole table none of whose rows is reached is W118. A callee that itself applies a
 rule, walks a sequence, produces one of its own enums, or does not pass `check` cannot be
@@ -1193,11 +1194,11 @@ name the callee and its digest in their header, `rulec api` lists them under `ap
 | written | means |
 |---|---|
 | `-` | any value. **A blank cell is a syntax error** (E008): a blank cannot be told from a forgotten entry |
-| `1200円` `2000g` `true` `2026-04-01` `"abc"` | equality with a literal. A quantity must carry its unit |
-| `北海道, 沖縄県` | a set. Each element is a literal or a group name; on a column of numbers each is a value of its own (`100, 200`) |
-| `not: 遠隔地` | the complement of a set |
+| `1200JPY` `2000g` `true` `2026-04-01` `"abc"` | equality with a literal. A quantity must carry its unit |
+| `basic, gold` | a set. Each element is a literal or a group name; on a column of numbers each is a value of its own (`100, 200`) |
+| `not: basic` | the complement of a set |
 | `<=2000g` | comparison. `<=`, `>=`, `<`, `>` |
-| `>=1000円 <20000円` | an interval — two comparisons side by side mean "and" |
+| `>=1000JPY <20000JPY` | an interval — two comparisons side by side mean "and" |
 | `starts_with "CH-"` | a prefix, on a `string` column. Two or more are separated by a comma |
 | `none` | an optional that is absent |
 
@@ -1225,30 +1226,30 @@ a `define`). It never holds an expression.
 Assembles the first output when it is not simply looked up from a table.
 
 ```rule
-result 送料 = 基本送料 × 負担率
+result fee = base * pay_rate
 ```
 
 `result` is sugar for the **first** output and reaches no other. Every output — the first one
 included — is otherwise taken from the binding of its own name: a `define` or a table output
-column called `送料` is what the output `送料` returns. Naming a later output in a `result` is
+column called `fee` is what the output `fee` returns. Naming a later output in a `result` is
 E015; a second `result` line is E016.
 
 Operators, from loosest to tightest: comparison (`<= >= < > =`), then `+ -`, then `* /`.
 Parentheses group. The functions are `min(a, b)`, `max(a, b)` and `allocate(t, c, s)`, and the
-five rounding modes may also be called as functions: `down(x, 1円)`, `up(x, 10円)`,
-`half_up(x, 1円)`, `half_down(x, 1円)`, `half_even(x, 1円)`. There are no others, and each
+five rounding modes may also be called as functions: `down(x, 1JPY)`, `up(x, 10JPY)`,
+`half_up(x, 1JPY)`, `half_down(x, 1JPY)`, `half_even(x, 1JPY)`. There are no others, and each
 takes the number of arguments written here: anything else is E118.
 
 ### allocate — one line's share of an amount
 
 ```rule
-constraint 直前までの定価 <= ここまでの定価
-constraint ここまでの定価 <= 定価合計
+constraint before <= upto
+constraint upto <= base
 
-derive 直前までの配分(to_before) : money[円] = allocate(値引き総額, 直前までの定価, 定価合計)  range >=0円 <=100万円
-derive ここまでの配分(to_upto)   : money[円] = allocate(値引き総額, ここまでの定価, 定価合計)  range >=0円 <=100万円
+derive to_before : money[JPY] = allocate(total_off, before, base)  range >=0JPY <=1_000_000JPY
+derive to_upto   : money[JPY] = allocate(total_off, upto, base)    range >=0JPY <=1_000_000JPY
 
-result 配分額 = ここまでの配分 - 直前までの配分
+result share = to_upto - to_before
 ```
 
 `allocate(<amount>, <running total>, <whole>)` is `<amount> × <running total> ÷ <whole>`
@@ -1276,10 +1277,9 @@ One call decides one line. The loop stays with the caller, as everything else he
 ## 9. examples
 
 ```rule
-examples
-| 届け先 | 重量  | 注文金額 | 会員     | -> 送料 |
-| 沖縄県 | 2500g | 40000円  | 一般     | 0円     |
-| 東京都 | 1999g | 12000円  | プラチナ | 400円   |
+| dest   | weight | total     | member   | -> fee |
+| 沖縄県 | 2500g  | 40_000JPY | basic    | 0JPY   |
+| 東京都 | 1999g  | 12_000JPY | platinum | 400JPY |
 ```
 
 `examples` is an **executable specification**: `rulec check` runs every row through the
@@ -1294,7 +1294,7 @@ the cases a person added in another. Each has a header of its own, and every one
 Its cells are held to the types of the columns they sit under, exactly as a table's are: a
 heading that names nothing is E012, a value that is not one of the column's is E012, and a
 literal the column cannot hold — `1lb` under `mass[g]`, a bare number where a unit is
-required, an expected `800kg` under a `money[円]` output — is E103. An expected value that
+required, an expected `800kg` under a `money[JPY]` output — is E103. An expected value that
 cannot be read would otherwise leave nothing to hold the rule to.
 
 An example naming an enum value is **not** a row for it: W111 still asks which values no table
@@ -1302,7 +1302,7 @@ names.
 
 ## 10. What cannot be written
 
-- Nested objects (`注文.配送先.都道府県`). Flatten at the boundary and pass the scalar in.
+- Nested objects (`order.shipping.prefecture`). Flatten at the boundary and pass the scalar in.
 - Collections and iteration. A rule is one decision; the order and the repetition belong to
   the caller.
 - Date arithmetic. Comparison and range only.

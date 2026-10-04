@@ -14,6 +14,19 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CORPUS = ROOT / "tests" / "corpus"
 
+
+def twins():
+    """The rules written with Japanese names and their English twins (tests/corpus/twins.tsv)."""
+    out = {}
+    for line in (CORPUS / "twins.tsv").read_text(encoding="utf-8").splitlines():
+        if line.strip() and not line.startswith("#"):
+            ja, en = line.split("\t")
+            out[ja] = en
+    return out
+
+
+TWINS = twins()
+
 # (file, ja title, ja lede, ja points, en title, en lede, en points)
 EXAMPLES = [
     (
@@ -63,7 +76,7 @@ EXAMPLES = [
         "Japan Post's base tariff, shipping from Tokyo. 47 prefectures × 7 sizes = 329 combinations, folded into 42 rows by six groups. **This is where the tool first pays for itself**: drop one prefecture and it stops before anything runs, naming that prefecture.",
         [
             "A `group` names part of an enum. It is always expanded back to the values for checking, so **whether the grouping is an exact partition of the 47** is checked too.",
-            "`import std/都道府県` brings the 47 values in, each with an ASCII alias.",
+            "`import std/都道府県` brings the 47 values in. The rule writes them as the namespace spells them, in Japanese; each has an ASCII alias, which is what the generated code calls it.",
             "42 rows, and `policy unique` still proves **reordering them cannot change the answer**.",
         ],
     ),
@@ -81,7 +94,7 @@ EXAMPLES = [
         [
             "**There can be two or more outputs.** Two tables fill one each, and each carries its own `round`.",
             "An output cell holds **one value or one name**. The arithmetic moves to a `define`, so the table keeps the branching and nothing else.",
-            "The first table's output (`可否`) is a column of the second. Items run one way, top to bottom, so the dependencies are always readable off the page.",
+            "The first table's output (`ok`) is a column of the second. Items run one way, top to bottom, so the dependencies are always readable off the page.",
         ],
     ),
     (
@@ -180,8 +193,8 @@ EXAMPLES = [
         "No money anywhere in this one. Four scored criteria are added with weights, and the rank comes from how much of the maximum the total reaches. This is the shape of rule that is *not* written as a table today but becomes one the moment somebody writes it down.",
         [
             "A `derive` is a name for **additions, subtractions and integer multiples of the inputs**, which is exactly what a weighted total is.",
-            "Declaring `define 達成率 : rate = 合計点 ÷ 50` lets the cells say `>=90%` — **the threshold stays a proportion on the page**. Whether a dimensionless value is called a rate or a number is the declaration's to say.",
-            "**No division happens at runtime.** `>=90%` compiles to `合計点 >= 45`, because a constant maximum folds the boundary into a constant. A maximum that is an *input* cannot be written: that is division by a variable, and E115 stops it — take the proportion itself as a `rate` input instead.",
+            "Declaring `define ratio : rate = total / 50` lets the cells say `>=90%` — **the threshold stays a proportion on the page**. Whether a dimensionless value is called a rate or a number is the declaration's to say.",
+            "**No division happens at runtime.** `>=90%` compiles to `total >= 45`, because a constant maximum folds the boundary into a constant. A maximum that is an *input* cannot be written: that is division by a variable, and E115 stops it — take the proportion itself as a `rate` input instead.",
         ],
     ),
     (
@@ -197,7 +210,7 @@ EXAMPLES = [
         "One point per 100 yen. Dividing money by money cancels the unit and leaves a `number` — a whole number carrying none.",
         [
             "`number` is the type for **counts, days and scores**: whole numbers with no unit.",
-            "`税込金額 ÷ 100円` **does not divide the integer**. It multiplies the internal step by 100, so 1050 yen stays 10.5 points all the way to the end, where `round down(1)` makes it 10 exactly once. Python's `//` and Go's `/` truncate in different directions; neither gets a say here.",
+            "`paid / 100JPY` **does not divide the integer**. It multiplies the internal step by 100, so 1050 yen stays 10.5 points all the way to the end, where `round down(1)` makes it 10 exactly once. Python's `//` and Go's `/` truncate in different directions; neither gets a say here.",
             "Division is allowed **by a constant only**. If the divisor is business data, it belongs in the table as a rate or a constant column.",
         ],
     ),
@@ -214,10 +227,10 @@ EXAMPLES = [
         "Three tables stacked, two outputs returned",
         "Weight gives a weight class, the class and the membership give a tier, and the tier with the amount payable gives shipping and a multiplier. What one table produces is a column of the next. Two things come back: the amount charged and the points.",
         [
-            "**A table's output column is a column of any later table.** There is no limit on the depth (past the check's budget it stops at E109). When `rulec check` fails it names the row that fired in each of them: `table 重さ判定 row 2 / table 帯判定 row 4 / table 送料表 row 4`.",
-            "**One table may produce several output columns.** `送料表` produces `送料` and `倍率` at once, and the `define` below it uses that rate. A rate keeps its step (`step 10%`) through the column, so `基本点 × 倍率` is rounded exactly once, at the end.",
-            "**A `derive` can be a column.** Declaring `支払額 = 商品合計 - 値引` turns judging on the amount after the discount into one column of `送料表` rather than one bare line of arithmetic.",
-            "**`result` assembles the first output and nothing else** (E015). The second and later ones are taken from a `define` of the same name - `define 付与点` here. A second `result` line stops at E016.",
+            "**A table's output column is a column of any later table.** There is no limit on the depth (past the check's budget it stops at E109). When `rulec check` fails it names the row that fired in each of them: `table weight_of row 2 / table tier_of row 4 / table ship row 4`.",
+            "**One table may produce several output columns.** `ship` produces `shipping` and `multiplier` at once, and the `define` below it uses that rate. A rate keeps its step (`step 10%`) through the column, so `base * multiplier` is rounded exactly once, at the end.",
+            "**A `derive` can be a column.** Declaring `net = gross - off` turns judging on the amount after the discount into one column of `ship` rather than one bare line of arithmetic.",
+            "**`result` assembles the first output and nothing else** (E015). The second and later ones are taken from a `define` of the same name - `define pts` here. A second `result` line stops at E016.",
         ],
     ),
     (
@@ -236,7 +249,7 @@ EXAMPLES = [
         "The caller passes the rows of a tariff sheet and the rule walks them in order. A table judges one element at a time, and `fold` says what each verdict does: go on, halt, take this one, hold the best so far. It is **the one shape that takes a number of things that is not fixed**.",
         [
             "**`elements` declares what one element carries.** The fields are declared exactly like `inputs`, ranges and units included, and the caller passes any number of elements with those fields filled in.",
-            "**The table's own checks are unchanged.** One element is one case, so completeness, overlap and units are proved over it as they always were: the four rows above cover `採用区分` exactly.",
+            "**The table's own checks are unchanged.** One element is one case, so completeness, overlap and units are proved over it as they always were: the four rows above cover `pick` exactly.",
             "**The fold gives every verdict somewhere to go** — `next`, `stop with <value>`, `take_unique <value>` (a second element that also takes is a run-time error), `keep_max <value> by <key>`. A verdict with no arm stops at E024.",
             "**The answer for no elements, and for a walk that reached the end, are both required** (E022, E023). An empty sequence always turns up, and answering with what is held is a choice made by writing it (`exhausted -> held`).",
             "**An example names a `sequence`.** A cell holds one value, so the list is written under a name and the example points at it; a `sequence` with no rows is the example for a sequence with nothing in it.",
@@ -257,7 +270,7 @@ EXAMPLES = [
         "Counting a sequence, and deciding from the count",
         "An invoice's name is matched against the supplier ledger, one candidate at a time. A table judges each candidate, `count` counts the ones it called a match, and **the next table decides what to do with that number**. \"One means automatic, more than one means look at it\" is decided inside the rule rather than by whoever counted before calling it.",
         [
-            "**A count is what the walk leaves behind.** `count 一致数(hits) over 候補 where 照合結果 = 一致` is how many elements the per-element table judged `一致`. From there it is a `number`, so it can be a column.",
+            "**A count is what the walk leaves behind.** `count hits over candidates where kind = same` is how many elements the per-element table judged `same`. From there it is a `number`, so it can be a column.",
             "**What turns the number into a decision is an ordinary table.** A gap or an overlap in the `0` / `1` / `>=2` boundaries stops the check as it always would. Counting and deciding are checked separately.",
             "**The range says two things** (`range >=0 <=50`): the universe the completeness check quantifies over, and **the cap on the sequence**. Pass 51 candidates and the generated code refuses at the door — the same answer a number outside its range gets.",
             "**A count counts and a `sum` adds one column up** — \"Adding the lines up\" below. An average does not follow: dividing by the count is dividing by a variable, so compute one before the call.",
@@ -276,7 +289,7 @@ EXAMPLES = [
         "Adding the lines up",
         "\"Free shipping over 5,000 yen.\" The rule walks however many lines it is given, adds the amounts, and decides the fee from the total. Where `count` leaves a number behind, `sum` leaves an amount.",
         [
-            "**`sum 合計(total) over 明細 of 金額` leaves one amount behind.** From there it is an ordinary column, so `>=5000円` becomes a boundary and completeness and overlap are checked as they always are.",
+            "**`sum total over lines of amount` leaves one amount behind.** From there it is an ordinary column, so `>=5000JPY` becomes a boundary and completeness and overlap are checked as they always are.",
             "**The summed column cannot go negative** (E029). The running total then only rises, so the entry guard can refuse the moment it leaves the declared range — which is what keeps the int64 claim true of a sequence whose length nothing caps. For a difference, sum two non-negative columns and subtract.",
             "**An average does not follow**: dividing by the count is dividing by a variable (E115). Work it out before the call and pass it in.",
         ],
@@ -329,10 +342,10 @@ EXAMPLES = [
         "Inputs taken from the caller's order (JSON Schema)",
         "The shipping fee, decided from an order object. The caller already describes its orders with a JSON Schema, so the rule borrows it with `shape` and says, for each input, where in it the value stands, with `from`. The table itself is a table of flat inputs like any other.",
         [
-            "**`from` comes in four shapes.** The value of a field (`from 注文.shipping.zone`), whether some element passes a test (`from any 注文.lines where chilled = true`), whether every one does (`from all …`), and how many there are (`from count 注文.lines`). A join or a nested quantifier cannot be written.",
-            "**`rulec gen` also writes `order_shipping_from(order)`.** Hand it the order object as it is, and it reads the inputs out and calls the rule. It is written for Python, TypeScript, JavaScript, Ruby and PHP, where parsed JSON is usually used as it comes, as a plain map; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.",
+            "**`from` comes in four shapes.** The value of a field (`from order.shipping.zone`), whether some element passes a test (`from any order.lines where chilled = true`), whether every one does (`from all …`), and how many there are (`from count order.lines`). A join or a nested quantifier cannot be written.",
+            "**`rulec gen` also writes `order_shipping_fee_from(order)`.** Hand it the order object as it is, and it reads the inputs out and calls the rule. It is written for Python, TypeScript, JavaScript, Ruby and PHP, where parsed JSON is usually used as it comes, as a plain map; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.",
             "**Every `rulec check` holds the paths to the contract.** A field the contract does not have is E121, which says how far the path got and which fields were there; a type that does not fit is E120.",
-            "**The contract's validation is held to the inputs' declarations too.** The contract keeps `lines` to 1 to 50 elements (`minItems`, `maxItems`), the same as the `range >=1 <=50` of `明細数`. Take `maxItems` away and an order of 51 lines passes the contract but not the rule, which stops at E122; `fix.text` is the keyword to write back into the contract (`\"minItems\": 1, \"maxItems\": 50`).",
+            "**The contract's validation is held to the inputs' declarations too.** The contract keeps `lines` to 1 to 50 elements (`minItems`, `maxItems`), the same as the `range >=1 <=50` of `lines`. Take `maxItems` away and an order of 51 lines passes the contract but not the rule, which stops at E122; `fix.text` is the keyword to write back into the contract (`\"minItems\": 1, \"maxItems\": 50`).",
             "**No check of the table changes.** What comes out of a projection is a scalar input like any other, and completeness and overlap are decided as they would be without `from`.",
         ],
     ),
@@ -349,10 +362,10 @@ EXAMPLES = [
         "Inputs taken from a Connect request (.proto and Protovalidate)",
         "The shipping fee, decided from a shipment request. The request is described by a `.proto`, and its fields carry Protovalidate's rules. The rule borrows that `.proto`, and its inputs are declared to agree with the rules.",
         [
-            "**The generated `shipment_fee_from` reads the JSON protojson writes, as it is.** A field is read under its lowerCamelCase name (`declaredValueJpy`) or under the name the `.proto` gives it (`declared_value_jpy`); a field left out is read as its proto default; an int64 that arrives as a string is read as the number it is.",
-            "**An `optional` field is taken by an optional input.** `delivery_window` may not be sent, so the input is `時間帯?`, and the table has a row for when it is missing (`none`).",
+            "**The generated `shipment_delivery_fee_from` reads the JSON protojson writes, as it is.** A field is read under its lowerCamelCase name (`declaredValueJpy`) or under the name the `.proto` gives it (`declared_value_jpy`); a field left out is read as its proto default; an int64 that arrives as a string is read as the number it is.",
+            "**An `optional` field is taken by an optional input.** `delivery_window` may not be sent, so the input's type is `delivery_window?`, and the table has a row for when it is missing (`none`).",
             "**A `where` on an enum field compares the value's name.** `handling` is an enum of the `.proto`, and protojson carries the value's name (`HANDLING_FRAGILE`). At the value numbered 0 (`HANDLING_STANDARD`) the field is left out altogether, and it is read as `HANDLING_STANDARD` all the same.",
-            "**The rules and the declarations agree, so `check` passes.** Take `required = true` off `destination` and a request may leave it out, in which case `region` arrives as `\"\"`. `地域` does not take `\"\"`, so the check stops at E122, with `[(buf.validate.field).required = true]` as `fix.text`.",
+            "**The rules and the declarations agree, so `check` passes.** Take `required = true` off `destination` and a request may leave it out, in which case `region` arrives as `\"\"`. `delivery_region` does not take `\"\"`, so the check stops at E122, with `[(buf.validate.field).required = true]` as `fix.text`.",
         ],
     ),
     (
@@ -367,7 +380,7 @@ EXAMPLES = [
         "Conditions a contract places across its fields (CEL)",
         "The fee, decided from a quote request. The `.proto` the request is validated against promises two things in Protovalidate's CEL: express takes a parcel of up to 5 kg, and the declared value never exceeds the cover. The rule is written on those promises.",
         [
-            "**`constraint 申告額 <= 補償額` can be written because the contract promises it.** The insurance table has no row where the declared value exceeds the cover: with the constraint, the completeness check does not ask for one. The contract's CEL (`this.declared_jpy <= this.cover_jpy`) promises the same, so `check` passes. Make the constraint `<` and the contract lets through a request whose declared value equals the cover: the check stops at E123, with that request as the example.",
+            "**`constraint declared <= cover` can be written because the contract promises it.** The insurance table has no row where the declared value exceeds the cover: with the constraint, the completeness check does not ask for one. The contract's CEL (`this.declared_jpy <= this.cover_jpy`) promises the same, so `check` passes. Make the constraint `<` and the contract lets through a request whose declared value equals the cover: the check stops at E123, with that request as the example.",
             "**There is no row for express above 5 kg.** The contract's `!this.express || this.weight_g <= 5000` never lets such a request through. Add one and it is W124: each cell alone asks for values the contract lets through, and the combination never passes.",
             "**Of CEL, what can be read is read.** Comparisons of whole-number sums, `in`, `size()`, `has()`, `&&`, `||`, `!` and `? :`. A part that cannot be read, such as a remainder or a string function, is taken as true, so nothing is missed.",
         ],
@@ -387,10 +400,10 @@ EXAMPLES = [
         "One event in an order that goes on (machine)",
         "Where an online order moves on an event — payment, shipment, delivery, a cancel request — and how much is refunded. The state lives with the caller, in the order's row of a database. The rule stays a pure function that takes the state and one event and answers the next state; the `machine` section says that calling it again and again cannot break.",
         [
-            "**`carry 状態 -> 次の状態` is the one line with new meaning.** It declares that the `次の状態` a call answers is passed as `状態` to the next one. The table is an ordinary table, and completeness asks for the row about a cancel request that arrives after shipment. `状態` in an output cell hands the state back as it was.",
-            "**`held 支払額` is a promise the caller keeps.** One order passes the same paid amount on every call. As `constraint` says which combinations do not happen, the claims are then about the sequences of calls that keep the promise, and one that changes the amount halfway is never offered as a counterexample.",
-            "**`final`, `never` and `once` are claims about every sequence of calls.** Rewrite the last row so that a payment arriving after cancellation puts the order back to `入金済`, and `check` stops with three errors: the ended `取消` has a way out (E124), a cancel request, a payment and a shipment reach `出荷済` after `取消` (E126), and four calls refund twice (E127) — each with the shortest sequence of calls that breaks it. Read one row at a time, every row looks reasonable.",
-            "**A `scenario` is an example that runs for several calls.** It has no column for the carried `状態`: the first call starts in `initial`, `受付`, and each later one where the call before it ended.",
+            "**`carry state -> next_state` is the one line with new meaning.** It declares that the `next_state` a call answers is passed as `state` to the next one. The table is an ordinary table, and completeness asks for the row about a cancel request that arrives after shipment. `state` in an output cell hands the state back as it was.",
+            "**`held amount_paid` is a promise the caller keeps.** One order passes the same paid amount on every call. As `constraint` says which combinations do not happen, the claims are then about the sequences of calls that keep the promise, and one that changes the amount halfway is never offered as a counterexample.",
+            "**`final`, `never` and `once` are claims about every sequence of calls.** Rewrite the last row so that a payment arriving after cancellation puts the order back to `paid`, and `check` stops with three errors: the ended `cancelled` has a way out (E124), a cancel request, a payment and a shipment reach `shipped` after `cancelled` (E126), and four calls refund twice (E127) — each with the shortest sequence of calls that breaks it. Read one row at a time, every row looks reasonable.",
+            "**A `scenario` is an example that runs for several calls.** It has no column for the carried `state`: the first call starts in `initial`, `received`, and each later one where the call before it ended.",
             "**The generated code gets the initial state and a test for a final one** (`INITIAL` and `is_final` in Python). The vectors get sequences of calls, and `rulec test` has each language hand the state it answered to its own next call.",
             "**A revision is compared in terms of the cases in progress.** `rulec diff` between two versions gives the shortest sequence of calls the two answer differently, and the states from which a case can no longer finish. `replay` plays a log's records through the new version one case at a time, a case being the records that share a `tag`.",
         ],
@@ -463,8 +476,8 @@ EXAMPLES = [
         "A rule written in English — EU air passenger rights",
         "Names and cells are English, so not one ASCII alias appears. The money is EUR and the distance is km. It is a transcription of published law — Article 7 of Regulation (EC) No 261/2004 — whose text is already shaped like a decision table.",
         [
-            "**An ASCII name needs no alias.** A kanji cannot begin an exported Go identifier, which is why `運賃(fee)` carries one; `distance` does not. Write the rule in English and there are no parentheses anywhere.",
-            "**Two currencies never convert.** `100円` in a `money[EUR]` column stops at E103. There is no exchange rate in this tool and there must not be one ([the units](reference.md)).",
+            "**An ASCII name needs no alias.** A kanji cannot begin an exported Go identifier, which is why a name written in Japanese carries one (`運賃(fee)` in the Japanese originals of these rules); `distance` does not. Write the rule in English and there are no parentheses anywhere.",
+            "**Two currencies never convert.** `100JPY` in a `money[EUR]` column stops at E103. There is no exchange rate in this tool and there must not be one ([the units](reference.md)).",
             "**What the text leaves open, the table makes you decide.** Article 7(1)(b) says \"between 1500 and 3500 kilometres\" and does not say whether either end is included. Since (a) is \"1500 kilometres or less\", the lower end is open here — and that is a decision, made in the open. Leave it undecided and the checker stops with a gap or an overlap.",
             "**Sometimes writing the same condition twice is the faithful thing.** The 50% reduction thresholds could be keyed on the band in two columns, but Article 7(2) restates the distance conditions in full. Keying them on distance keeps the rows one-for-one with the text.",
         ],
@@ -618,8 +631,8 @@ EXAMPLES = [
         "Stamp duty on a receipt",
         "The table for document type 17 (a receipt for the proceeds of a sale) from NTA tax answer No.7141. Besides the amount received, whether an amount is stated and whether the receipt is in the course of business decide it.",
         [
-            "**Exempt is a row of 0 yen.** Under 50,000 yen, and receipts not in the course of business, are exempt, and the table holds that as `0円` rows: \"not taxed\" is an answer of the rule too.",
-            "**A receipt with no amount stated does not look at the amount.** The row with `金額の記載あり` false has `-` in the amount column and is 200 yen whatever the amount. The checker proves that every combination of the three inputs hits exactly one row.",
+            "**Exempt is a row of 0 yen.** Under 50,000 yen, and receipts not in the course of business, are exempt, and the table holds that as `0JPY` rows: \"not taxed\" is an answer of the rule too.",
+            "**A receipt with no amount stated does not look at the amount.** The row with `stated` false has `-` in the amount column and is 200 yen whatever the amount. The checker proves that every combination of the three inputs hits exactly one row.",
         ],
     ),
     (
@@ -634,7 +647,7 @@ EXAMPLES = [
         "The income-tax bracket table",
         "The quick-calculation table of NTA tax answer No.2260. Each bracket of taxable income carries a rate and a deduction, and `taxable × rate − deduction` is the tax; the reconstruction surtax is 2.1% of it.",
         [
-            "**One table produces a rate and an amount at once.** The rate column is `rate[step 1%]`, the deduction column `money[円]`, and a `define` multiplies and subtracts. The page's own worked example (7,000,000 × 0.23 − 636,000 = 974,000 yen) is an `examples` row as it stands.",
+            "**One table produces a rate and an amount at once.** The rate column is `rate[step 1%]`, the deduction column `money[JPY]`, and a `define` multiplies and subtracts. The page's own worked example (7,000,000 × 0.23 − 636,000 = 974,000 yen) is an `examples` row as it stands.",
             "**Bracket edges are written as \"below the start of the next bracket\".** The page says \"from 1,000 to 1,949,000 yen\" and \"from 1,950,000 yen\"; since taxable income is in units of 1,000 yen those are the same thing, and completeness over all the integers needs the form with no gap.",
             "**What the page does not say is marked as a placeholder.** How a fraction of a yen in the surtax is settled is not on this page. The rule says `round down` and keeps, in the comment beside the declaration, that the source is silent — which is what `rulec doc` shows the approver.",
         ],
@@ -651,7 +664,7 @@ EXAMPLES = [
         "Stamp duty on a contract, with a reduced rate that expires",
         "The stamp duty on a contract for the transfer of real estate (document type 1). The standard amounts (No.7140) and the reduced amounts for contracts made up to 31 March 2027 (No.7108) sit in one table, with the date of the contract as an input.",
         [
-            "**A time-limited exception is a date definition and one column.** `define 軽減期間 = 作成日 <= 2027-03-31` goes into a column: `true` on the reduced rows, `false` on the standard ones, `-` where the period does not matter. Under `policy unique` every amount on every date is proved to hit exactly one row.",
+            "**A time-limited exception is a date definition and one column.** `define reduced = made <= 2027-03-31` goes into a column: `true` on the reduced rows, `false` on the standard ones, `-` where the period does not matter. Under `policy unique` every amount on every date is proved to hit exactly one row.",
             "**What the reduction does not cover, the standard rows take.** The reduction applies only above 100,000 yen, so the exempt row (under 10,000 yen) and the row up to 100,000 yen have `-` in the period column.",
             "**This rule found a defect in the generator.** A date literal inside a definition was generated as 0 in every language. The reference evaluator read the date, so the disagreement showed up in `rulec test`.",
         ],
@@ -667,12 +680,12 @@ EXAMPLES = [
             "**写し元の Excel に縛ってあります。** `source` が日本年金機構の保険料額表（`.xlsx`）そのものを指し、`@機構 表1` がその一枚目のシートを引きます。`rulec source fetch` がシートを取り出して規則の隣に置き、以後 `rulec check` は、**この表の 32 個の標準報酬月額がその写しに出てくる値であること**を確かめます（E116）。`470000円` を `480000円` と写せば、刻みにも載っていて抜けも重なりもないのに、そこだけが落ちます。",
         ],
         "The employees' pension grade table",
-        "The premium table for employees' pension from 日本年金機構 (fiscal 2026 edition): 32 grades, and a rate that is 18.3% for ordinary insured people but varies by fund for members of a pension fund, so the rate is an input.",
+        "The premium table for employees' pension from the Japan Pension Service (fiscal 2026 edition): 32 grades, and a rate that is 18.3% for ordinary insured people but varies by fund for members of a pension fund, so the rate is an input.",
         [
             "**The same shape as the health-insurance rule.** Fifty grades become thirty-two and the ceiling is 650,000 yen; the halving and the two ways of settling the sen are unchanged. Rules of one shape transcribe into rules of one shape.",
             "**Here the two ways agree.** 18.3% of a standard remuneration is always an even number of yen, so the half has no fraction. The rule states both roundings; the `examples` show that at this rate the difference never appears.",
             "**All 32 printed grades are held to the rule.** The printed halves are transcribed into records (`tests/oracle/`), and a test replays the rule over them and requires every one to agree.",
-            "**And the table is held to the workbook it came from.** The `source` line points at 日本年金機構's own `.xlsx` and `@機構 表1` cites its first sheet; `rulec source fetch` takes that sheet out and keeps it beside the rule, and every `rulec check` then requires **each of the 32 standard remunerations to be a value that copy shows** (E116). Write `470000円` as `480000円` and it fails there alone — on the rounding grid, no gap, no overlap.",
+            "**And the table is held to the workbook it came from.** The `source` line points at the Japan Pension Service's own `.xlsx` and `@agency 表1` cites its first sheet (`表1` is the sheet's own name); `rulec source fetch` takes that sheet out and keeps it beside the rule, and every `rulec check` then requires **each of the 32 standard remunerations to be a value that copy shows** (E116). Write `470_000JPY` as `480_000JPY` and it fails there alone — on the rounding grid, no gap, no overlap.",
         ],
     ),
     (
@@ -685,7 +698,7 @@ EXAMPLES = [
             "**表の全等級と突き合わせてあります。** 印刷された折半額を写した記録（`tests/oracle/`）に `rulec replay` を当て、100 件すべてで一致することをテストが確かめます。",
         ],
         "A premium table, with two ways to settle the sen",
-        "The 協会けんぽ premium table (Tokyo branch, from March 2026). Monthly pay picks one of 50 grades of standard remuneration, the rate is applied and the amount halved. Fractions of a yen are settled two different ways — one when the premium is deducted from salary, another when it is paid in cash — and transcribing this table is what put `half_down` into the language.",
+        "The Kyokai Kenpo (Japan Health Insurance Association) premium table (Tokyo branch, from March 2026). Monthly pay picks one of 50 grades of standard remuneration, the rate is applied and the amount halved. Fractions of a yen are settled two different ways — one when the premium is deducted from salary, another when it is paid in cash — and transcribing this table is what put `half_down` into the language.",
         [
             "**Two outputs from one halved amount, rounded two ways.** The table's notes say: deducted from salary, half a yen or less is dropped and more than half is carried up; paid in cash, less than half is dropped and half or more is carried up. The second is `half_up`; the first is `half_down`. At the grade whose half is 6,599.5 yen the two outputs differ by one yen.",
             "**The rates are inputs.** They change by prefecture and by year; baking them into the rule would mean rewriting the table at every revision. A `derive` adds the care-insurance rate to the health-insurance rate, and a table picks which applies by whether the person is a category-2 care insured.",
@@ -705,10 +718,10 @@ EXAMPLES = [
         "A main rule and a reduced rate as two tables, held to their sources",
         "The stamp duty rule above, split into the main table (Appendix Table 1 of the Stamp Tax Act) and the reduced-rate table (Article 91 of the Special Taxation Measures Act), with the exemption as a clause. Each table cites its own source, and each source is held to the digest of a copy of the text fetched from e-Gov, the Japanese government's statute database.",
         [
-            "**`overrides 本則` makes the exception take precedence over the main rule.** Instead of adding a `軽減期間` column to one table, the tables follow the documents, and one line says which wins. The checks judge completeness and overlaps over the two together.",
+            "**`overrides base` makes the exception take precedence over the main rule.** Instead of adding a `reduced` column to one table, the tables follow the documents, and one line says which wins. The checks judge completeness and overlaps over the two together.",
             "**The exemption is a `clause`.** In the appendix table it sits in the column of exempt documents, not in the table of taxable ones, so it is written as a sentence rather than a row.",
             "**`source` and `@` hold the rule to its documents.** `rulec source fetch` brings copies of the appendix table and Article 91 from e-Gov, `rulec source pin` writes their digests. When the text changes, the check stops and names the tables that cite that place (E038).",
-            "**Row labels** (`r1` …) are the names the trace reports and the names `overrides 本則:r3` points at.",
+            "**Row labels** (`r1` …) are the names the trace reports and the names `overrides base:r3` points at.",
         ],
     ),
     (
@@ -723,9 +736,9 @@ EXAMPLES = [
         "A proviso written as a sentence",
         "A tariff table decides the base fee, and two clauses decide the shipping fee: the main text (\"regular\") and the proviso that makes a member's order of 3,900 yen or more free. The proviso's conditions do not line up as columns, so it is a `clause`, not a table.",
         [
-            "**A `clause` is a one-row table.** The condition under `when`, the value under `then`; checked, generated and traced like a table, firing as `{\"table\":\"無料\",\"row\":1}`.",
-            "**`overrides 通常` makes the proviso take precedence over the main text.** The approver's page says \"clause 無料 takes precedence over clause 通常; in the 1 pair that meets, its row lies inside the other's (an exception)\".",
-            "**A group without an alias** (`group 遠隔地 = 北海道, 沖縄県`) is allowed; the generated identifiers number it.",
+            "**A `clause` is a one-row table.** The condition under `when`, the value under `then`; checked, generated and traced like a table, firing as `{\"table\":\"free\",\"row\":1}`.",
+            "**`overrides regular` makes the proviso take precedence over the main text.** The approver's page says \"clause free takes precedence over clause regular. in all 1 pairs that meet, the rows of clause free lie inside the other's (an exception)\".",
+            "**A group without an alias** (`group remote = 北海道, 沖縄県`) is allowed; the generated identifiers number it.",
         ],
     ),
     (
@@ -740,7 +753,7 @@ EXAMPLES = [
         "The rule applied by the next example. Years of service and the reason for leaving decide the number of months paid, and a clause reducing the allowance on voluntary resignation takes precedence over the main rule. It is a sketch from the design document, not a real statute.",
         [
             "**It is checked and generated on its own.** The rule that applies it writes this file's digest in its heading and is held to it.",
-            "**The `減額` clause can be left out by the applying rule with `except`** — \"Article 20 (excluding paragraph 2) applies\".",
+            "**The `reduction` clause can be left out by the applying rule with `except`** — \"Article 20 (excluding paragraph 2) applies\".",
         ],
     ),
     (
@@ -756,9 +769,9 @@ EXAMPLES = [
         "Applying another rule with its terms read differently",
         "The retirement allowance rule above, applied to part-time staff: \"years of service\" is read as \"period in office\", \"reason for leaving\" as \"how the term ended\", and the reduction clause is not applied.",
         [
-            "**A substitution is `<input of the applied rule> = <value of this rule>`.** Two enums are matched value by value: `with 任期満了 -> 定年, 辞職 -> 自己都合`.",
+            "**A substitution is `<input of the applied rule> = <value of this rule>`.** Two enums are matched value by value: `with term_end -> retirement_age, resignation -> voluntary`.",
             "**The check proves that what is passed stays inside the applied rule's ranges (E043).** The period in office is 1 to 3 years, inside the 1 to 40 of years of service; declared from 0, the check stops with that value as the example.",
-            "**The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{\"table\":\"退職手当:支給表\",\"row\":1,\"label\":\"短期\"}`. The rows for ten years of service and more are never reached here; they are not errors, and the approver's page lists them as unused by this apply.",
+            "**The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{\"table\":\"retirement:schedule\",\"row\":1,\"label\":\"short\"}`. The rows for ten years of service and more are never reached here; they are not errors, and the approver's page lists them as unused by this apply.",
             "**When the applied rule changes, E040 stops the check.** `rulec diff` shows how many answers move and by how much; once accepted, `rulec source pin` writes the new digest.",
         ],
     ),
@@ -774,8 +787,8 @@ EXAMPLES = [
         "A temperature and a volume decide the label",
         "A transcription of a food storage standard. A temperature in degrees Celsius, a volume in millilitres, and a column that is allowed to hold \"not decided yet\", all in one rule.",
         [
-            "**A temperature is a scale to compare against, and nothing more.** A ℃ has a displaced zero, so it can be neither added nor doubled; comparison and `range` are all there is, and `気温 - 気温` stops at E048.",
-            "**`区分?` is a column that may hold nothing.** Only the cell `none` accepts it, and it never appears in an expression — null is kept out of arithmetic by making the table branch on it.",
+            "**A temperature is a scale to compare against, and nothing more.** A ℃ has a displaced zero, so it can be neither added nor doubled; comparison and `range` are all there is, and `temp - temp` stops at E048.",
+            "**`kind?` is a column that may hold nothing.** Only the cell `none` accepts it, and it never appears in an expression — null is kept out of arithmetic by making the table branch on it.",
             "**An output may be a string**, such as the label a person reads. A string cannot be a table's *input* column (E110): a value that decides a branch belongs in an enum.",
         ],
     ),
@@ -792,8 +805,8 @@ EXAMPLES = [
         "Area, noise and overtime decide the measure and the cost",
         "A sketch of Japan's office hygiene rules and its noise-exposure guidance. Three dimensions — area, sound and time — and a declared relation between two inputs.",
         [
-            "**`constraint 占有面積 <= 床面積` is a relation the caller guarantees.** Completeness then demands no row outside it, every witness becomes a case somebody could really send, and the generated code refuses a violating input at the door.",
-            "**An area is a dimension of its own, not the product of two lengths.** `縦 × 横` is E103: this tool does no dimensional analysis, and will not invent a dimension to hold a product.",
+            "**`constraint used <= floor` is a relation the caller guarantees.** Completeness then demands no row outside it, every witness becomes a case somebody could really send, and the generated code refuses a violating input at the door.",
+            "**An area is a dimension of its own, not the product of two lengths.** `length * width` is E103: this tool does no dimensional analysis, and will not invent a dimension to hold a product.",
             "**A sound level is another scale to compare against.** It is logarithmic, so adding two decibels is not two sounds' worth.",
             "**`round half_even` is one of the five roundings**, the one that sends a tie to the even side — the direction accounting usually asks for.",
         ],
@@ -824,17 +837,21 @@ language are held to the same answers byte for byte. Copy any of them and it wor
 
 They are ordered smallest first.
 
-**Eleven are written in English throughout** — [whether a return is
+**All of them are written in English.** Some began that way — [whether a return is
 accepted](#whether-a-return-is-accepted-in-english), [a parcel tariff in pounds and
 inches](#a-parcel-tariff-in-pounds-and-inches), [Article 7 of Regulation (EC) No
 261/2004](#a-rule-written-in-english--eu-air-passenger-rights), [the UK minimum
 wage](#a-minimum-wage-and-the-exception-that-overrides-it), [the UK personal
 allowance](#a-personal-allowance-that-tapers-and-the-band-above-it), [the US federal income
 tax](#the-us-federal-income-tax-bracket-by-bracket), [one section of the
-CFR](#one-section-of-the-us-code-of-federal-regulations) and the four after it. The rest are
-transcriptions of Japanese published terms and statutes, left in the language they were
-published in: the keywords are English in every one of them, and what a transcription is here
-to show is the shape of the rule rather than the words in its cells.
+CFR](#one-section-of-the-us-code-of-federal-regulations) and the four after it. The rest began
+as transcriptions of Japanese published terms and statutes, and each is shown here as its
+English twin: the same rule with English names, `JPY` for the yen, and the amounts written out
+in digits. What stays in Japanese in them belongs to the documents: the 47 prefectures of
+`std/都道府県`, and the headings that a `source` line points at in a statute or a workbook.
+[The Japanese page](https://i2y.github.io/rulec/ja/examples/) shows the originals, with their
+names in Japanese, and the repository's tests hold each pair to the same findings, the same
+answers and the same claims.
 
 """
 
@@ -851,10 +868,12 @@ EN_TAIL = """---
 """
 
 
-def page(head, tail, title_i, lede_i, points_i, shows, reads):
+def page(head, tail, title_i, lede_i, points_i, shows, reads, english):
     out = [head]
     for e in EXAMPLES:
-        src = (CORPUS / e[0]).read_text(encoding="utf-8").rstrip("\n")
+        # The English page shows a rule written with Japanese names as its English twin.
+        file = TWINS.get(e[0], e[0]) if english else e[0]
+        src = (CORPUS / file).read_text(encoding="utf-8").rstrip("\n")
         out.append(f"## {e[title_i]}\n\n{e[lede_i]}\n\n```rule\n{src}\n```\n\n")
         if e[0] in CONTRACTS:
             path, fence = CONTRACTS[e[0]]
@@ -869,10 +888,10 @@ def page(head, tail, title_i, lede_i, points_i, shows, reads):
 
 def main():
     (ROOT / "website" / "docs-ja" / "examples.md").write_text(
-        page(JA_HEAD, JA_TAIL, 1, 2, 3, "この例が見せていること", "規則が読む契約（`{path}`）:"), encoding="utf-8"
+        page(JA_HEAD, JA_TAIL, 1, 2, 3, "この例が見せていること", "規則が読む契約（`{path}`）:", False), encoding="utf-8"
     )
     (ROOT / "website" / "docs" / "examples.md").write_text(
-        page(EN_HEAD, EN_TAIL, 4, 5, 6, "What this one shows", "The contract it reads (`{path}`):"), encoding="utf-8"
+        page(EN_HEAD, EN_TAIL, 4, 5, 6, "What this one shows", "The contract it reads (`{path}`):", True), encoding="utf-8"
     )
     print(f"wrote examples.md (en + ja): {len(EXAMPLES)} rules")
 

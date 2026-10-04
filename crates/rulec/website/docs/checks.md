@@ -6,8 +6,8 @@ that does not pass it does not generate.
 
 ```console
 $ rulec check rules/
-note rules/ゆうパック運賃.rule: 21 shadow pairs (21 structural, 0 equivalent, 0 needs review)
-ok rules/ゆうパック運賃.rule
+note rules/yupack_base_fee.rule: 21 shadow pairs (21 structural, 0 equivalent, 0 needs review)
+ok rules/yupack_base_fee.rule
 ```
 
 Exit codes are **0** (notes only), **1** (errors), **2** (bad arguments
@@ -87,7 +87,7 @@ CSV; for a PDF or a scan, hand an extractor to `--via`). That is where **one mor
 in.
 
 - **E116** — an amount a row writes is nowhere in the copy it cites. This is the error no
-  check of the table alone can reach: `1100円` written as `1000円` sits on the rounding grid,
+  check of the table alone can reach: `1100JPY` written as `1000JPY` sits on the rounding grid,
   leaves no gap and overlaps nothing. Where the copy has a heading that says a word of the row
   (`関東`), the amount is looked for in that heading's row and column, so the amount of the
   next row, which is somewhere in the copy too, is caught as well.
@@ -100,7 +100,7 @@ in.
   still complete with no overlap; and exactly one input in the whole space changes hands.
 
 A threshold cannot be compared as text — it is rewritten as it is transcribed (`1,949,000円まで`
-becomes `<=1949000円`) — but one thing survives the rewriting: which of the two bands the
+becomes `<=1_949_000JPY`) — but one thing survives the rewriting: which of the two bands the
 boundary value itself falls in. `60cm以下` and `60cmを超え` agree that 60cm is in the band below,
 and so do `<=60cm` and `>60cm`, so a rule that writes a band from either end can still be held
 to the copy. The word is read beside the number (`60cm以下`, `Under 18`, `Not over $11,925`) or
@@ -151,7 +151,7 @@ declared range matches some row; no input matches two; every row can be reached;
 mix; every intermediate fits in int64. Those five are shown exhaustively — not sampled.
 
 **Why it can be exhaustive at all.** A cell only ever tests its own column (`<=2000g` is the
-weight column, `遠隔地` the destination column), so a row is the product of its columns'
+weight column, `remote` the destination column), so a row is the product of its columns'
 conditions — one box of the input space — and a numeric column only has to be cut where the
 table itself cuts it. The declared range therefore falls into a **finite number of boxes**, and
 looking at all of them terminates. The cell language is kept narrow to keep that true. Nothing
@@ -202,18 +202,18 @@ things are named in a run rather than proved. Both programs end by saying which.
 
 ```
 error[E101]: Completeness gap: some input matches no row
-  --> rules/ゆうパック運賃.rule:34 table 運賃表
+  --> rules/yupack_base_fee.rule:34 table fee_table
    |
-34 | table 運賃表(fee_table)
-   |       ^^^^^^ the input space is not fully covered
+34 | table fee_table  # Source: Japan Post, base fee table (Tokyo)
+   |       ^^^^^^^^^ the input space is not fully covered
    |
- An input that matches no row: あて先 = 山梨県, サイズ = S60
+ An input that matches no row: dest = 山梨県, size = S60
  hint: add a row that matches this input.
- The shape of the row to add: `| 山梨県 | S60 | 820円 |`. Its output values are copied
+ The shape of the row to add: `| 山梨県 | S60 | 820JPY |`. Its output values are copied
  from the first row to give a shape that parses; they are not the right amounts. …
 ```
 
-The witness is the part to reason about. `あて先 = 山梨県, サイズ = S60`
+The witness is the part to reason about. `dest = 山梨県, size = S60`
 is not an illustration — it is an input the checker constructed, and it
 is the sentence you hand to whoever knows the answer.
 
@@ -222,8 +222,8 @@ is the sentence you hand to whoever knows the answer.
 ```console
 $ rulec check rules/ --terse
 error[E101]: Completeness gap: some input matches no row
-  --> rules/ゆうパック運賃.rule:34 table 運賃表
-  witness: あて先 = 山梨県, サイズ = S60
+  --> rules/yupack_base_fee.rule:34 table fee_table
+  witness: dest = 山梨県, size = S60
 …
 details: rulec explain <code>
 ```
@@ -237,8 +237,8 @@ The same finding as data. The prose is still there, but nothing
 downstream has to take a sentence apart:
 
 ```console
-$ rulec check rules/ゆうパック運賃.rule --format json | jq -c 'select(.code=="E101") | {table:.where.table, witness:.witness.inputs, fix:.fix}'
-{"table":"運賃表","witness":{"あて先":"山梨県","サイズ":"S60"},"fix":{"kind":"add_row","text":"| 山梨県 | S60 | 820円 |"}}
+$ rulec check rules/yupack_base_fee.rule --format json | jq -c 'select(.code=="E101") | {table:.where.table, witness:.witness.inputs, fix:.fix}'
+{"table":"fee_table","witness":{"dest":"山梨県","size":"S60"},"fix":{"kind":"add_row","text":"| 山梨県 | S60 | 820JPY |"}}
 ```
 
 `where` says which table and row, `witness` is an assignment of values
@@ -333,7 +333,7 @@ check the rule over every day instead, and says so (E129). See
 ## Showing it to the person who approves
 
 ```console
-$ rulec doc rules/ゆうパック運賃.rule --lang ja > 運賃.md
+$ rulec doc rules/yupack_base_fee.rule > fees.md
 ```
 
 A `.rule` is already almost markdown, so transcribing its syntax is
@@ -342,32 +342,34 @@ text does not show**: that a group of six values and its complement of
 41 really do cover all 47, which rows shadow which, where a rounding was
 assumed rather than sourced.
 
-This is what `rulec doc` writes (excerpt; the command above asked for Japanese).
+This is what `rulec doc` writes (excerpt; `--lang ja` asks for Japanese).
 
 ```markdown
 
-## グループ
+## Groups
 
-グループは列挙の一部に名前を付けたものです。表のセルに書かれた一語が、下の値をまとめて指しています。
+A group is a named subset of an enum. One word written in a table cell stands for all the values below.
 
-- **近畿圏**（6 値）— 滋賀県、京都府、大阪府、兵庫県、奈良県、和歌山県
-- **中国四国**（9 値）— 鳥取県、島根県、岡山県、広島県、山口県、徳島県、香川県、愛媛県、高知県
-- **沖縄**（1 値）— 沖縄県
+- **kinki** (6 values) — 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
+- **cs** (9 values) — 鳥取県, 島根県, 岡山県, 広島県, 山口県, 徳島県, 香川県, 愛媛県, 高知県
+- **okinawa** (1 value) — 沖縄県
 …
 
-この 6 グループは 都道府県 の 47 値を過不足なく分割しています（この資料が宣言から数えました）。
+These 6 groups partition the 47 values of 都道府県 exactly (counted from the declarations by this rendering).
 
-## 表 運賃表（policy unique）
+## Table fee_table (policy unique)
 
-| 列 | 出どころ |
+Source: Japan Post, base fee table (Tokyo)
+
+| Column | Source |
 |---|---|
-| あて先 | 入力 |
-| サイズ | 表 サイズ判定 の出力 |
-| → 運賃 | この規則の出力 |
+| dest | Input |
+| size | Output of table size_of |
+| → fee | Output of this rule |
 …
 ```
 
-Write `# 出典: 日本郵便 基本運賃表（東京）` at the end of a row or of the `table` line, and
+Write `# Source: Japan Post, base fee table (Tokyo)` at the end of a row or of the `table` line, and
 those words appear in the document too. The approver's job turns from "read the whole table
 again" into "compare this row with that cell".
 
@@ -416,7 +418,7 @@ against.
 ## Showing it to the customer
 
 ```console
-$ rulec doc rules/ゆうパック運賃.rule --lang ja --audience customer > 運賃の案内.md
+$ rulec doc rules/yupack_base_fee.rule --audience customer > fee-guide.md
 ```
 
 The same rule as the article a help centre publishes. Aliases, declared
@@ -426,12 +428,12 @@ so a reader — or a model reading a retrieved page — is never left to
 decide what `<=60cm` means for 61cm.
 
 ```markdown
-## 境目の例
+## At the thresholds
 
-条件の境目の両側で、答えがどう変わるかです。
+How the answer changes on either side of a threshold.
 
-- 三辺合計 が 60cm なら 運賃 1410円、61cm なら 運賃 1710円（あて先 北海道、重量 1g）
-- 三辺合計 が 80cm なら 運賃 1710円、81cm なら 運賃 2020円（あて先 北海道、重量 1g）
+- girth 60cm → fee 1410JPY; 61cm → fee 1710JPY (dest 北海道, weight 1g)
+- girth 80cm → fee 1710JPY; 81cm → fee 2020JPY (dest 北海道, weight 1g)
 …
 ```
 

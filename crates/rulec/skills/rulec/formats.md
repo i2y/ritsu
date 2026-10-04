@@ -32,14 +32,14 @@ One object per diagnostic. This is version 2; every field version 1 had is still
 still means the same thing, and `v` says which version wrote the line.
 
 ```json
-{"v":2,"severity":"error","code":"E101","file":"rules/送料.rule","line":34,"column":7,
+{"v":2,"severity":"error","code":"E101","file":"rules/yupack_base_fee.rule","line":34,"column":7,
  "title":"Completeness gap: some input matches no row",
- "notes":["An input that matches no row: あて先 = 山梨県, サイズ = S60","hint: …"],
- "where":{"file":"rules/送料.rule","line":34,"column":7,"table":"運賃表"},
+ "notes":["An input that matches no row: dest = 山梨県, size = S60","hint: …"],
+ "where":{"file":"rules/yupack_base_fee.rule","line":34,"column":7,"table":"fee_table"},
  "spans":[{"line":34,"column":7,"length":9,"label":"the input space is not fully covered"}],
- "witness":{"inputs":{"あて先":"山梨県","サイズ":"S60"}},
+ "witness":{"inputs":{"dest":"山梨県","size":"S60"}},
  "rows":[],
- "fix":{"kind":"add_row","text":"| 山梨県 | S60 | 820円 |"},
+ "fix":{"kind":"add_row","text":"| 山梨県 | S60 | 820JPY |"},
  "key":"…"}
 ```
 
@@ -60,7 +60,7 @@ still means the same thing, and `v` says which version wrote the line.
 `fix.kind` is one of `add_row`, `remove_row`, `add_rounding`, `add_range`, `widen_range`,
 `add_alias`, `mark_default`, `mark_contract_only`, `change_policy`, `add_expected`, `pin_source`,
 `flip_bound`, `narrow_contract`, `rewrite_literal`, `none`. `rewrite_literal` is one literal as
-it has to be written: `1,000円` becomes `1000円` (E049).
+it has to be written: `1,000JPY` becomes `1000JPY` (E049).
 `none` means no single mechanical edit is right; the reason is in `notes`. `narrow_contract` is
 the one edit that is not to the `.rule`: its `text` is what to write in the contract the input is
 read from — a Protovalidate option, or JSON Schema keywords — as they are written there (E122).

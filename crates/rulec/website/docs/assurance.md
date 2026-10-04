@@ -27,7 +27,7 @@ down, and nothing here can check that reading.
 | **5. The seven coverage criteria** | the vector suite actually reaches every row, every boundary pair, every shadowed pair, every computed value at two values, every rounding tie, every fold transition and every transition of a state machine | `rulec coverage` |
 | **6. The model checker** | the generated Rust, over every input in the declared domain, read by a tool that shares no code with rulec | `rulec test --proofs` |
 | **7. The certificate** | the evidence, small enough to hand over, re-checked by two programs that share no code with rulec — one of them carrying machine-checked proofs | `rulec certificate` |
-| **8. The repository's own tests** | 109 deliberately broken rules each produce the diagnostic they should; 50 rules are checked, generated and run on every commit | `cargo test` |
+| **8. The repository's own tests** | 109 deliberately broken rules each produce the diagnostic they should; 87 rules are checked, generated and run on every commit | `cargo test` |
 | **9. The source** | an amount that disagrees with the document the row cites fails | `rulec source fetch`, then `rulec check` |
 
 ---
@@ -172,7 +172,7 @@ proved correct**. What stands in for a proof is evidence, and it is kept deliber
 
 - **109 deliberately broken rules**, each producing the diagnostic it should — and the
   expected codes are pinned, so a mutant that starts reporting something else fails.
-- **50 rules** — 22 transcribed from a published source, 28 written to reach the corners of
+- **87 rules** — 34 transcribed from a published source, 53 written to reach the corners of
   the language — checked, generated and run on every commit, in every language that takes
   them.
 - **The documents are held to the tool.** The diagnostic ledger is regenerated from the code,
@@ -184,8 +184,8 @@ proved correct**. What stands in for a proof is evidence, and it is kept deliber
 ## 9. The source a rule was transcribed from
 
 A rule can cite the document it came from: a law in the government's own database
-(`source 法 = law "342AC0000000023" asof 2026-04-01`) or a file beside it, pinned by digest.
-Rows, tables, clauses and derivations then carry `@法 別表第一`, and `rulec check` compares
+(`source stamp_act = law "342AC0000000023" asof 2026-04-01`) or a file beside it, pinned by digest.
+Rows, tables, clauses and derivations then carry `@stamp_act 別表第一`, and `rulec check` compares
 the amounts in the table with the amounts in the copy. One that is nowhere in the copy — or,
 where the copy heads a row or a column with the row's own word, nowhere under that heading — is
 E116; a value of the copy that no row uses is W120, which is what usually comes with a

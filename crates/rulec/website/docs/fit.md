@@ -154,7 +154,7 @@ sets of lines; here it is a theorem in `proofs/`.
   the record ([`by`](formats.md))
 - **Deciding the weights or the thresholds themselves** — that is optimisation and
   machine learning. **Adding up scores with weights that are already agreed and turning
-  the total into a rank is writable** — see "評価ランク" in the [examples](examples.md),
+  the total into a rank is writable** — see "Scores added up, then ranked by how much of the total they reach" in the [examples](examples.md),
   where no money appears anywhere. What can be proved is which row fires, never whether a
   weight is the right one
 
