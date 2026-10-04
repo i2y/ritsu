@@ -758,7 +758,7 @@ pub fn via(cmd: &[String], doc: &Path) -> Result<(String, Vec<(Option<i64>, Vec<
     // for it to end.
     let mut child = crate::child::Owned::spawn(std::process::Command::new(bin).args(args).arg(doc).stdout(std::process::Stdio::piped()))
         .map_err(|e| tr!("抽出器を起動できません: {e}", "Cannot start the extractor: {e}"))?;
-    let so = child.stdout.take().ok_or_else(|| tr!("stdout を掴めません", "Cannot open the extractor's stdout"))?;
+    let so = child.stdout.take().ok_or_else(|| tr!("stdout を取得できません", "Cannot open the extractor's stdout"))?;
 
     let mut impl_id = String::new();
     let mut tables: Vec<(Option<i64>, Vec<Vec<String>>)> = Vec::new();
@@ -846,7 +846,7 @@ pub fn template(f: &crate::ast::RuleFile, rule_path: &str) -> String {
         .collect();
     let which = if docs.is_empty() {
         tr!(
-            "# この規則には、自分で読めない形式の出典はいまのところ無い（読めるのは {FORMATS}）。\n",
+            "# この規則には、rulec が読めない形式の出典はいまのところ無い（読めるのは {FORMATS}）。\n",
             "# No source of this rule is in a format this program cannot read (it reads {FORMATS}).\n"
         )
     } else {
@@ -864,7 +864,7 @@ fn body(rule_path: &str) -> String {
          import json, sys\n\n\
          path = sys.argv[1]\n\n\
          # ここを好きな抽出器に差し替える（docling・marker・MinerU・クラウドの API など）。\n\
-         # 名乗りはそのまま写しの隣に残るので、版まで書く。\n\
+         # 名乗りの impl はそのまま写しの隣に残るので、バージョンまで書く。\n\
          from docling.document_converter import DocumentConverter  # type: ignore\n\
          import docling  # type: ignore\n\n\
          print(json.dumps({{\"rulec\": \"extract/1\", \"impl\": f\"docling {{docling.__version__}}\"}}), flush=True)\n\n\

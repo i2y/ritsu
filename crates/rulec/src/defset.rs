@@ -193,7 +193,7 @@ pub fn build(f: &RuleFile, path: &str) -> (Vec<DefSet>, HashMap<String, (usize, 
                             .at(at(t, r.span.line))
                             .mark(r.span.clone(), tr!("この名前の表は上にありません", "no table of this name is declared above"))
                             .note(tr!(
-                                "指せるのは、この表より上で宣言した表か、その行（`表:行ラベル`）です。例外は本文の後に書きます。",
+                                "指せるのは、この表より上で宣言した表か、その行（`表:行ラベル`）です。例外の表は、指す先の表より後ろに書いてください。",
                                 "A target is a table declared above this one, or one of its rows (`table:label`). The exception is written after what it excepts."
                             )),
                     );
@@ -205,7 +205,7 @@ pub fn build(f: &RuleFile, path: &str) -> (Vec<DefSet>, HashMap<String, (usize, 
                             .at(at(t, r.span.line))
                             .mark(r.span.clone(), if u == k { tr!("自分自身です", "this is the table itself") } else { tr!("後ろで宣言されています", "declared below") })
                             .note(tr!(
-                                "優先する側を後に書いてください。例外は本文の後に来ます。",
+                                "優先する側を後ろに書いてください。例外の表は、指す先の表より後ろに置く決まりです。",
                                 "Write the side that takes precedence later. The exception comes after the main rule."
                             )),
                     );
@@ -220,7 +220,7 @@ pub fn build(f: &RuleFile, path: &str) -> (Vec<DefSet>, HashMap<String, (usize, 
                                     .at(at(t, r.span.line))
                                     .mark(r.span.clone(), "")
                                     .note(tr!(
-                                        "行を指すには、その行の先頭にラベルを書きます（`{l} | … |`）。番号では指せません。行を挿すと番号は動きます。",
+                                        "行を指すには、その行の先頭にラベルを書いてください（`{l} | … |`）。行を挿し込むと番号が動くので、番号では指せません。",
                                         "To name a row, write a label at its head (`{l} | … |`). A row cannot be named by its number: numbers move when a row is inserted."
                                     )),
                             );
@@ -279,7 +279,7 @@ pub fn build(f: &RuleFile, path: &str) -> (Vec<DefSet>, HashMap<String, (usize, 
                             .at(at(t, t.span.line))
                             .mark(t.span.clone(), "")
                             .note(tr!(
-                                "{} と出力を共有する表は、出力の列を一つだけ持ちます。二つ目の出力は別の表に分けてください。",
+                                "{} と出力を共有する表には、出力の列を一つしか書けません。二つ目の出力は別の表に分けてください。",
                                 "A table that shares an output with {} has exactly one output column. Move the second output to a table of its own.",
                                 others.join(", ")
                             )),

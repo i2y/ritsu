@@ -817,7 +817,7 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                     .at(tr!("{path}:{} 例", "{path}:{} examples", sp.line))
                     .fix(crate::diag::FixKind::AddExpected, &od.name.text)
                     .mark(sp, tr!("{} の期待値がありません", "no expected value for {}", od.name.text))
-                    .note(tr!("実装どうしの照合では捕まらない誤りを捕まえられるのは例だけなので、出力は全部書きます。", "The examples are the only wedge that catches errors the implementations can share, so every output is written."))
+                    .note(tr!("実装どうしを照らし合わせても見つからない誤りを見つけられるのは例だけなので、出力は全部書いてください。", "The examples are the only wedge that catches errors the implementations can share, so every output is written."))
                     .note(tr!("ヒント: 見出しに `{}` の列を足してください。", "Hint: add a `{}` column to the header.", od.name.text)),
             );
         }
@@ -854,7 +854,7 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                     .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
                     .mark(row.span.clone(), tr!("この行のセルは {cells} 個で、見出しの列は {cols} 個です", "this row has {cells} cells, and the header {cols} columns"))
                     .note(tr!(
-                        "一つの列に一つのセルを書きます。どの値でもよい列には `-` を書きます。",
+                        "一つの列に一つずつセルを書いてください。どの値でもよい列には `-` を書いてください。",
                         "Write one cell per column; a column that takes any value gets `-`."
                     )),
             );

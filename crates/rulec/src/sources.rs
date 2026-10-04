@@ -53,11 +53,11 @@ fn cite_shape(db: LawDb, name: &str) -> String {
 fn fragment_shapes(db: LawDb) -> String {
     match db {
         LawDb::Egov => tr!(
-            "書けるのは `第20条`、`第20条の2`、`第20条第2項`、`第20条第2項第3号`、`別表第一`、`附則第3条`、`附則（令和七年三月三一日法律第一三号）第3条` の形です。号の細分はまだ受けません。",
+            "書けるのは `第20条`、`第20条の2`、`第20条第2項`、`第20条第2項第3号`、`別表第一`、`附則第3条`、`附則（令和七年三月三一日法律第一三号）第3条` の形です。号の細分には、まだ対応していません。",
             "The forms are `第20条`, `第20条の2`, `第20条第2項`, `第20条第2項第3号`, `別表第一`, `附則第3条` and `附則（令和七年三月三一日法律第一三号）第3条`. Sub-items are not read yet."
         ),
         LawDb::Ecfr => tr!(
-            "書けるのは `§1910.157` か `1910.157` の形です。項（`(d)(2)`）はまだ受けません — eCFR が section の単位でしか渡さないので、写しをこちらで切ることになるからです。",
+            "書けるのは `§1910.157` か `1910.157` の形です。項（`(d)(2)`）には、まだ対応していません。eCFR は section の単位でしか返さないので、rulec の側で写しを切り分けることになるからです。",
             "The forms are `§1910.157` and `1910.157`. A paragraph of one (`(d)(2)`) is not read yet: the eCFR API serves a section at a time, so it would mean cutting the copy up here."
         ),
     }
@@ -210,7 +210,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                             } else {
                                 tr!("読み直す定義: {}", "Definitions to reread: {}", whos_text(&whos))
                             })
-                            .note(tr!("原本を読み直し、写した行がまだ正しければ、次の行に書き換えて固定し直してください。", "Reread the document; if what was transcribed still holds, rewrite the line as follows to pin the new copy."))
+                            .note(tr!("元の文書を読み直し、写した行がまだ正しければ、次の行に書き換えて固定し直してください。", "Reread the document; if what was transcribed still holds, rewrite the line as follows to pin the new copy."))
                             .fix(crate::diag::FixKind::PinSource, file_line(d, &h)),
                     ),
                     _ => {}
@@ -228,7 +228,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                             Diag::error("E037", tr!("引用箇所 `{frag}` の書き方が読めません", "The fragment `{frag}` cannot be read"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
-                                .note(tr!("文書から引けるのは表なので、引用箇所は `表3`（文書順に三つめの表）か `table3` と書きます。見出しで指す書き方はまだ受けません。", "A document's fragments are its tables: write `table3` (the third table in document order; `表3` is its Japanese spelling). Naming a heading is not read yet."))
+                                .note(tr!("文書から引けるのは表なので、引用箇所は `表3`（文書の中で三つ目の表）か `table3` と書いてください。見出しで指す書き方には、まだ対応していません。", "A document's fragments are its tables: write `table3` (the third table in document order; `表3` is its Japanese spelling). Naming a heading is not read yet."))
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
                         );
                         continue;
@@ -240,11 +240,11 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                         // document whole until there is an extractor to plug in (§15.82).
                         let how = match crate::extract::unreadable(&p) {
                             Some(why) => tr!(
-                                "{why}。抽出器を繋げるまでは、この文書は `@{name}` と丸ごと引いてください。",
+                                "{why}。抽出器をつなぐまでは、この文書は `@{name}` と丸ごと引いてください。",
                                 "{why}. Until an extractor can be plugged in, cite this document whole: `@{name}`."
                             ),
                             None => tr!(
-                                "`rulec source fetch {rule_path}` が文書から取り出して隣に置きます。check は文書の中身までは見ません。",
+                                "`rulec source fetch {rule_path}` を走らせると、文書から表を取り出して隣に置きます。check は文書の中身までは読みません。",
                                 "`rulec source fetch {rule_path}` takes it out of the document and puts it beside it. check does not read the document itself."
                             ),
                         };
@@ -315,7 +315,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                                 .mark(d.span.clone(), "")
                                 .note(tr!("探した先: {}", "Looked for: {}", p.display()))
                                 .note(tr!(
-                                    "`rulec source fetch {rule_path}` が {d} から取ってきて写しに置きます。check は通信しません。",
+                                    "`rulec source fetch {rule_path}` を走らせると、{d} から取ってきて写しとして置きます。check は通信しません。",
                                     "`rulec source fetch {rule_path}` fetches it from {d} into the copies. check never reads the network.",
                                     d = db.title()
                                 ))
@@ -453,9 +453,9 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                 tr!("写しに無い: {values}", "not in the copy: {values}")
             };
             let title = if elsewhere.len() == missing.len() {
-                tr!("{rn} の金額が、写しでは別の見出しの下にあります", "The amount of {rn} stands under another heading in the copy it cites")
+                tr!("{rn} の値が、写しでは別の見出しの下にあります", "The amount of {rn} stands under another heading in the copy it cites")
             } else {
-                tr!("{rn} の金額が、引いた写しにありません", "The amount of {rn} is not in the copy it cites")
+                tr!("{rn} の値が、引いた写しにありません", "The amount of {rn} is not in the copy it cites")
             };
             let mut d = Diag::error("E116", title)
                 .at(tr!("{rule_path}:{} {word} {name} {rn}", "{rule_path}:{} {word} {name} {rn}", r.span.line))
@@ -478,7 +478,7 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
             }
             if elsewhere.len() < missing.len() {
                 d = d.note(tr!(
-                    "金額は写すときに書き換わらないので、これは写し間違いか、その値が別のところから来たかのどちらかです。別のところから来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
+                    "値は写すときに書き換わらないので、これは写し間違いか、その値が別のところから来たかのどちらかです。別のところから来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
                     "An amount is not rewritten as it is transcribed, so either it was mistyped or it came from somewhere else. If it came from somewhere else, take the citation off this row and say in a comment at the end of it where the value came from."
                 ));
             }
@@ -778,7 +778,7 @@ fn unused_pins(d: &SourceDecl, cited: &[(String, Vec<&str>)], name: &str, rule_p
                 Diag::warning("W119", tr!("出典 `{name}` の `{}` はハッシュが固定されていますが、引用されていません", "Fragment `{}` of source `{name}` is pinned but not cited", pin.fragment))
                     .at(at(pin.span.line))
                     .mark(pin.span.clone(), "")
-                    .note(tr!("引用を消したあとの残りです。`rulec source pin` が消します。", "It is what remains after a citation was removed. `rulec source pin` removes it.")),
+                    .note(tr!("引用を消したあとに残った行です。`rulec source pin` で消せます。", "It is what remains after a citation was removed. `rulec source pin` removes it.")),
             );
         }
     }
@@ -1235,7 +1235,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
         let db = *db;
         if latest.get(id.as_str()).is_some_and(|l| *l != asof.as_str()) {
             lines.push(tr!(
-                "{}: 同じ法令をもっと後の時点で引用している出典があるので、改正はそちらで確かめます",
+                "{}: 同じ法令をもっと後の時点で引用している出典があるので、改正はそちらの出典で確かめます",
                 "{}: another source reads this law as of a later date; amendments are asked about there",
                 d.name.text
             ));
@@ -1432,7 +1432,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                         // unless the rule cites tables out of it, which were just compared.
                         if opaque(path) && !told {
                             lines.push(tr!(
-                                "  この形式では中身の差分を取れないので、変わったということしか言えません",
+                                "  この形式では中身の差分を取れないので、変わったことしか分かりません",
                                 "  nothing here can diff this format, so all it can say is that it changed"
                             ));
                         }
@@ -1440,7 +1440,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                 }
                 if base::raw_on_a_branch(url) {
                     lines.push(tr!(
-                        "  この URL はブランチを指しています。コミットを指す URL なら、何がいつ変えたかまで言えます",
+                        "  この URL はブランチを指しています。コミットを指す URL なら、どのコミットがいつ変えたかまで分かります",
                         "  this URL names a branch; one that names a commit would say what changed it, and when"
                     ));
                 }

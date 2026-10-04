@@ -529,7 +529,7 @@ for n, r in enumerate(rows):
             .str(
                 "wire",
                 &tr!(
-                    "列ごとに同じ長さの並びを渡す。値は生成コードと同じワイヤ形式（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。",
+                    "列ごとに同じ長さの並びを渡す。値の形は、生成コードが受け取る入力と同じ（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。",
                     "One equal-length sequence per column. The values are the wire format the generated code takes: an integer in the declared unit, a rate as the count of steps, a date as YYYY-MM-DD, an enum as its name."
                 ),
             )

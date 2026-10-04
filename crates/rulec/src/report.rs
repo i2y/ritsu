@@ -437,7 +437,7 @@ fn impact(rep: &Report, c: &Checked) -> String {
         .iter()
         .map(|(name, d)| {
             let label = if rep.multi { format!("{name} ") } else { String::new() };
-            tr!("  金額 {label}{}", "  amount {label}{}", group(d.sum))
+            tr!("  差の合計 {label}{}", "  amount {label}{}", group(d.sum))
         })
         .collect();
     tr!(

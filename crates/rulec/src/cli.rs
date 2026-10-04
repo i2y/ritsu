@@ -121,7 +121,7 @@ fn commands() -> Vec<Cmd> {
         flag(
             "--out",
             Some("<dir>"),
-            tr!("{what} の書き出し先", "directory to write the {what} into"),
+            tr!("{what}の書き出し先", "directory to write the {what} into"),
         )
     };
     vec![
@@ -129,7 +129,7 @@ fn commands() -> Vec<Cmd> {
             name: "check",
             args: "<file.rule>...",
             purpose: tr!(
-                "規則を検査する。完全性・重なり・当てはまらない行・単位・丸め・溢れ・例",
+                "規則を検査する。完全性・重なり・当てはまらない行・単位・丸め・オーバーフロー・例",
                 "check a rule: completeness, overlap, redundancy, units, rounding, overflow, examples"
             ),
             params: vec![rule_files()],
@@ -164,11 +164,11 @@ fn commands() -> Vec<Cmd> {
             )],
             flags: vec![
                 flag("--all", None, tr!("全部のコードを出す", "print every code")),
-                flag("--format", Some("markdown|json"), tr!("出し方。既定は端末向けの text", "how to render it; the default is text for a terminal"))
+                flag("--format", Some("markdown|json"), tr!("出力の形式。既定は端末向けの text", "how to render it; the default is text for a terminal"))
                     .choices(&["markdown", "json"]),
             ],
             exits: vec![
-                (0, tr!("引けた", "found")),
+                (0, tr!("コードが見つかった", "found")),
                 (2, tr!("そのコードが無い、または引数の誤り", "no such code, or bad arguments")),
             ],
             examples: vec![
@@ -239,7 +239,7 @@ fn commands() -> Vec<Cmd> {
                     "--require-all",
                     None,
                     tr!(
-                        "toolchain が無くて飛ばした言語があれば落とす。一致の主張を全言語ぶん要求する",
+                        "ツールチェーンが無くて飛ばした言語があれば失敗にする。全言語で一致することを求める",
                         "fail when any language was skipped for a missing toolchain, demanding the agreement across all of them"
                     ),
                 ),
@@ -253,7 +253,7 @@ fn commands() -> Vec<Cmd> {
                 ),
             ],
             exits: vec![
-                (0, tr!("全部一致した、または toolchain が無くて飛ばした（--require-all を付けると飛ばした時点で 1）", "everything matched, or the toolchain is absent and it was skipped (with --require-all, skipping is 1)")),
+                (0, tr!("全部一致した、またはツールチェーンが無くて飛ばした（--require-all を付けると、飛ばした時点で 1）", "everything matched, or the toolchain is absent and it was skipped (with --require-all, skipping is 1)")),
                 (1, tr!("食い違いがある", "something disagreed")),
                 (2, tr!("引数の誤り、読めないディレクトリ", "bad arguments, or a directory that cannot be read")),
             ],
@@ -277,7 +277,7 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("七基準すべてを満たす", "all seven criteria are met")),
-                (1, tr!("欠けている義務がある（名指しされる）、または規則が検査を通らない", "an obligation is missing (it is named), or the rule does not pass check")),
+                (1, tr!("足りないテストケースがある（どれが足りないかを出す）、または規則が検査を通らない", "an obligation is missing (it is named), or the rule does not pass check")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec![tr!("rulec coverage rules/送料.rule", "rulec coverage rules/member_shipping_fee.rule"), "rulec coverage rules/".into()],
@@ -307,7 +307,7 @@ fn commands() -> Vec<Cmd> {
             name: "source",
             args: "fetch|pin|outdated <file.rule>",
             purpose: tr!(
-                "出典の写しを扱う。fetch は写しを取ってきて規則の隣に置き（法令の引用箇所は e-Gov から、ファイルの出典はその `url` から、引いている表は文書そのものから取り出して）、pin は写しのハッシュを規則に書き込み、outdated は元の文書が変わったかを問い合わせる（法令なら後の改正、ファイルなら `url` の先。コミットで固定した GitHub の URL なら、何がいつ変えたかまで言う）",
+                "出典の写しを扱う。fetch は写しを取ってきて規則の隣に置き（法令の引用箇所は e-Gov から、ファイルの出典はその `url` から、引いている表は文書そのものから取り出して）、pin は写しのハッシュを規則に書き込み、outdated は元の文書が変わったかを問い合わせる（法令なら後の改正、ファイルなら `url` の先。コミットで固定した GitHub の URL なら、どのコミットがいつ変えたかまで出す）",
                 "handle the copies of a rule's sources: fetch brings them to the rule's side — a law's cited fragments from e-Gov, a file source from its url, a cited table out of the document itself — pin writes the copies' digests into the rule, and outdated asks whether the original moved on (a later amendment for a law; what is at the url for a file, and for a GitHub URL pinned to a commit, what changed that path since and when)"
             ),
             params: vec![
@@ -319,7 +319,7 @@ fn commands() -> Vec<Cmd> {
                     "--via",
                     Some("<cmd>"),
                     tr!(
-                        "自分で読めない形式（PDF、スキャン）の表を取り出す抽出器。これ以降は全部そのコマンドの引数で、文書のパスが最後に足される。やりとりは extract/1（docs/formats.md）。テンプレートは `rulec adapter --template docling`",
+                        "rulec が読めない形式（PDF、スキャン）から表を取り出す抽出器。これ以降は全部そのコマンドの引数で、文書のパスが最後に足される。やりとりは extract/1（docs/formats.md）。テンプレートは `rulec adapter --template docling` で出せる",
                         "the extractor that takes the tables out of a format this program cannot read itself (a PDF, a scan); everything after it is that command's own arguments, and the document's path is appended. The protocol is extract/1 (docs/formats.md), and `rulec adapter --template docling` prints a template"
                     ),
                 )
@@ -327,7 +327,7 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("済んだ。outdated では、引いている文書が変わっていない", "done; for outdated, nothing the rule cites has moved on")),
-                (1, tr!("outdated: 引いている文書が変わっている（後の改正、または `url` の先）。規則が読めないときも", "outdated: something moved on (a later amendment, or what is at the url); also when the rule cannot be parsed")),
+                (1, tr!("outdated: 引いている文書が変わっている（後の改正、または `url` の先）。規則が読めないときも 1", "outdated: something moved on (a later amendment, or what is at the url); also when the rule cannot be parsed")),
                 (2, tr!("引数の誤り、読めないファイル、curl の失敗", "bad arguments, a file that cannot be read, or curl failing")),
             ],
             examples: vec![
@@ -368,7 +368,7 @@ fn commands() -> Vec<Cmd> {
             name: "api",
             args: "<file.rule>",
             purpose: tr!(
-                "生成物の呼び方を、コードを読まずに得る",
+                "生成したコードの呼び出し方を、コードを読まずに知る",
                 "how to call the generated code, without reading it"
             ),
             params: vec![("<file.rule>", tr!("規則ファイル", "the rule file"))],
@@ -504,7 +504,7 @@ fn commands() -> Vec<Cmd> {
                 "--adapter",
                 Some("<cmd> [args...]"),
                 tr!(
-                    "いま動いている実装を立てるコマンド。rulec を知らないコードでも、rulec が前に生成したものでも構いません。これ以降は全部そのコマンドの引数",
+                    "いま動いている実装を立てるコマンド。rulec と関係なく書かれたコードでも、rulec が前に生成したコードでもよい。これ以降は全部そのコマンドの引数",
                     "the command that starts the legacy implementation; everything after it is that command's own arguments"
                 ),
             )
@@ -564,7 +564,7 @@ fn commands() -> Vec<Cmd> {
                 flag("--fill", Some(if crate::i18n::ja() { "<フィールド=値>" } else { "<field=value>" }), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
                 flag("--read-as", Some("<file.rule[@rev]>"), tr!("記録を、この版の規則の刻みと単位で読む（送料@v3 のような git の版も書ける）。刻みや単位を変える前に書いた記録を読み直すため", "read the records at the steps and units of this version of the rule (a git version such as shipping_fee@v3 works too): for records written before a step or a unit changed")),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
-                flag("--terse", None, tr!("入力例を出さない。件数と金額だけにして、本番の記録の値を PR に貼らない", "leave the witnesses out: counts and amounts only, so that no value from a production record is pasted into a pull request")),
+                flag("--terse", None, tr!("入力例を出さない。件数と差の大きさだけを出し、本番の記録の値が PR に貼られないようにする", "leave the witnesses out: counts and amounts only, so that no value from a production record is pasted into a pull request")),
             ],
             exits: vec![
                 (0, tr!("全件一致した", "every record agreed")),
@@ -616,7 +616,7 @@ fn commands() -> Vec<Cmd> {
                 "--timeout",
                 Some("<seconds>"),
                 tr!(
-                    "ツールの呼び出し一回を待つ上限の秒数。超えたら止めて、失敗として答える（`rulec test` のように長くかかるものに合わせて大きくできる）",
+                    "ツールの呼び出し一回を待つ上限の秒数。超えたら止めて、失敗として返す（`rulec test` のように長くかかるものに合わせて大きくできる）",
                     "the most seconds one tool call may run; past it the call is stopped and answered as failed (raise it for long runs such as `rulec test`)"
                 ),
             )
@@ -635,27 +635,27 @@ fn commands() -> Vec<Cmd> {
             name: "diff",
             args: "<old> <new>",
             purpose: tr!(
-                "二つの版を比べる。記録があれば何件がいくら動くかを、無ければどの入力で答えが変わるかを出す",
+                "二つの版を比べる。記録があれば、何件の答えがどれだけ動くかを出し、無ければ、どの入力で答えが変わるかを出す",
                 "compare two versions: against records, how many move and by how much; with no records, which inputs get a different answer"
             ),
             params: vec![
-                ("<old>", tr!("旧の規則。file.rule、送料@v3（git タグ rules/送料/v3）、または rules/送料.rule@origin/main（そのリビジョンのそのパス）", "the old rule: file.rule, shipping_fee@v3 (the git tag rules/shipping_fee/v3), or rules/shipping_fee.rule@origin/main (that path at that revision)")),
-                ("<new>", tr!("新の規則。同じ書き方", "the new rule, written the same way")),
+                ("<old>", tr!("古い版の規則。file.rule、送料@v3（git タグ rules/送料/v3）、または rules/送料.rule@origin/main（そのリビジョンのそのパス）", "the old rule: file.rule, shipping_fee@v3 (the git tag rules/shipping_fee/v3), or rules/shipping_fee.rule@origin/main (that path at that revision)")),
+                ("<new>", tr!("新しい版の規則。書き方は <old> と同じ", "the new rule, written the same way")),
             ],
             flags: vec![
                 flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録。付けなければ、入力の全体で比べる", "the past records; with none, the two versions are compared over the whole input space")),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言（--fixtures のとき）", "the declaration of the default values used for filling (with --fixtures)")),
                 flag("--fill", Some(if crate::i18n::ja() { "<フィールド=値>" } else { "<field=value>" }), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
                 flag("--read-as", Some("<file.rule[@rev]>"), tr!("記録を、この版の規則の刻みと単位で読む（--fixtures のとき）", "read the records at the steps and units of this version of the rule (with --fixtures)")),
-                flag("--budget", Some("<n>"), tr!("調べる入力の組み合わせの上限。超えたら、どこで違うかを出さずにそう言う（既定 1000000。--fixtures を付けないときだけ）", "how many cells of the space of columns to visit before saying so instead of working out a region (default 1000000; only without --fixtures)")),
+                flag("--budget", Some("<n>"), tr!("調べる入力の組み合わせの上限。超えたら、どこで違うかは出さず、超えたことだけを出す（既定 1000000。--fixtures を付けないときだけ）", "how many cells of the space of columns to visit before saying so instead of working out a region (default 1000000; only without --fixtures)")),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
-                flag("--terse", None, tr!("入力例を出さない。--fixtures のときは本番の記録の値を PR に貼らないため、無いときは領域だけを短く出すため", "leave the examples out: with --fixtures so that no value from a production record is pasted into a pull request, without it so that the regions stand alone")),
+                flag("--terse", None, tr!("入力例を出さない。--fixtures のときは本番の記録の値を PR に貼らないために、無いときは領域だけを短く出すために使う", "leave the examples out: with --fixtures so that no value from a production record is pasted into a pull request, without it so that the regions stand alone")),
             ],
             exits: vec![
                 (
                     0,
                     tr!(
-                        "動いたものは無い。--fixtures なら全件同じ答え、無いなら答えが違う入力を一つも見つけていない（決められなかった領域があれば、それは出ているが 1 にはしない。JSON の total を読む）",
+                        "動いたものは無い。--fixtures なら全件同じ答え、無いなら答えが違う入力を一つも見つけていない（決められなかった領域があれば出力には出るが、1 にはしない。JSON の total を見れば分かる）",
                         "nothing moved: with --fixtures every record answered the same, without it no input was found that answers differently (a region that could not be settled is reported and does not raise this to 1; read `total` in the JSON)"
                     ),
                 ),
@@ -724,7 +724,7 @@ fn help_cmd(c: &Cmd) -> String {
 
     if !c.codes.is_empty() {
         o.push_str(&tr!(
-            "\n出しうる診断（`rulec explain <CODE>` が引きます）:\n  ",
+            "\n出しうる診断（`rulec explain <CODE>` で一つずつ説明を読めます）:\n  ",
             "\nDiagnostics it can print (`rulec explain <CODE>` looks one up):\n  "
         ));
         o.push_str(&c.codes.join(" "));
@@ -830,7 +830,7 @@ fn parse(c: &Cmd, argv: &[String]) -> Result<Args, String> {
                 None => String::new(),
             };
             return Err(tr!(
-                "知らないフラグ `{name}` です{hint}。`rulec {} --help` を読んでください",
+                "`{name}` というフラグはありません{hint}。`rulec {} --help` を読んでください",
                 "unknown flag `{name}`{hint}; run `rulec {} --help`",
                 c.name
             ));
@@ -873,7 +873,7 @@ fn parse(c: &Cmd, argv: &[String]) -> Result<Args, String> {
         };
         if !f.choices.is_empty() && !f.choices.contains(&v.as_str()) {
             return Err(tr!(
-                "`{} {v}` は知らない値です。書けるのは {} だけです",
+                "`{}` に `{v}` は使えません。書けるのは {} だけです",
                 "`{} {v}` is not a value this flag takes; it takes only {}",
                 f.name,
                 f.choices.join(" | ")
@@ -935,7 +935,7 @@ fn refuse(msg: String) -> ExitCode {
 fn source_cmd(files: &[&String], via: &[String]) -> ExitCode {
     let verb = files.first().map(|s| s.as_str()).unwrap_or("");
     if !matches!(verb, "fetch" | "pin" | "outdated") || files.len() != 2 {
-        return refuse(tr!("`rulec source fetch|pin|outdated <file.rule>` です", "it is `rulec source fetch|pin|outdated <file.rule>`"));
+        return refuse(tr!("書き方は `rulec source fetch|pin|outdated <file.rule>` です", "it is `rulec source fetch|pin|outdated <file.rule>`"));
     }
     let path = files[1];
     let Ok(src) = std::fs::read_to_string(path) else {
@@ -1037,7 +1037,7 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
                     ExitCode::from(0)
                 }
                 None => refuse(tr!(
-                    "知らないコマンド `{n}` です。`rulec --help` に一覧があります",
+                    "rulec に `{n}` というコマンドはありません。`rulec --help` に一覧があります",
                     "unknown command `{n}`; `rulec --help` lists them"
                 )),
             },
@@ -1046,7 +1046,7 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
     let Some(cmd) = cmds.iter().find(|c| c.name == args[0].as_str()) else {
         let n = &args[0];
         return refuse(tr!(
-            "知らないコマンド `{n}` です。`rulec --help` に一覧があります",
+            "rulec に `{n}` というコマンドはありません。`rulec --help` に一覧があります",
             "unknown command `{n}`; `rulec --help` lists them"
         ));
     };
@@ -1173,7 +1173,7 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
             let kind = files.first().map(|s| s.as_str()).unwrap_or("");
             if !matches!(kind, "csv" | "xlsx") || files.len() != 2 {
                 return refuse(tr!(
-                    "`rulec import csv <file.csv>` か `rulec import xlsx <file.xlsx>` です",
+                    "書き方は `rulec import csv <file.csv>` か `rulec import xlsx <file.xlsx>` です",
                     "it is `rulec import csv <file.csv>` or `rulec import xlsx <file.xlsx>`"
                 ));
             }
@@ -1182,7 +1182,7 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
             let name = a.get("--name").map(|s| s.to_string()).unwrap_or(stem);
             let n = match a.get("--outputs").unwrap_or("1").parse::<usize>() {
                 Ok(n) => n,
-                Err(_) => return refuse(tr!("`--outputs` は正の整数です", "`--outputs` is a positive integer")),
+                Err(_) => return refuse(tr!("`--outputs` には正の整数を書いてください", "`--outputs` is a positive integer")),
             };
             // The draft names its source by the file's name, not by wherever it was read from.
             let base = std::path::Path::new(path).file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string());
@@ -1239,7 +1239,7 @@ fn explain(files: &[&String], a: &Args) -> ExitCode {
     }
     let Some(code) = files.first() else {
         return refuse(tr!(
-            "`rulec explain <CODE>` か `rulec explain --all` です",
+            "書き方は `rulec explain <CODE>` か `rulec explain --all` です",
             "it is `rulec explain <CODE>` or `rulec explain --all`"
         ));
     };
@@ -1517,7 +1517,7 @@ fn git(args: &[&str]) -> Result<Option<String>, String> {
 fn git_source(left: &str, rev: &str) -> Result<String, String> {
     if left.ends_with(".rule") {
         return git(&["show", &format!("{rev}:{left}")])?.ok_or_else(|| {
-            tr!("`{rev}` に `{left}` が無いか、`{rev}` が引けません", "no `{left}` at `{rev}`, or `{rev}` cannot be resolved")
+            tr!("`{rev}` に `{left}` が無いか、`{rev}` が見つかりません", "no `{left}` at `{rev}`, or `{rev}` cannot be resolved")
         });
     }
     let file = format!("{left}.rule");
@@ -1535,7 +1535,7 @@ fn git_source(left: &str, rev: &str) -> Result<String, String> {
             .ok_or_else(|| tr!("`{r}:{path}` が読めません", "cannot read `{r}:{path}`"));
     }
     Err(tr!(
-        "`{left}@{rev}`: git タグ `{tag}` も、リビジョン `{rev}` も引けません",
+        "`{left}@{rev}`: git タグ `{tag}` も、リビジョン `{rev}` も見つかりません",
         "`{left}@{rev}`: neither the git tag `{tag}` nor the revision `{rev}` can be resolved"
     ))
 }
@@ -1670,7 +1670,7 @@ fn vdiff_cmd(a: &String, b: &String, opts: &Args, md: bool, json: bool) -> ExitC
             eprintln!(
                 "{}",
                 tr!(
-                    "error: {} は --fixtures と一緒にしか使えません。補完は記録に当てるときの話です",
+                    "error: {} は --fixtures と一緒にしか使えません。補完は、記録に規則を当てるときにだけ使います",
                     "error: {} needs --fixtures: filling is about records",
                     f
                 )
@@ -1711,7 +1711,7 @@ fn vdiff_cmd(a: &String, b: &String, opts: &Args, md: bool, json: bool) -> ExitC
         Some(v) => match v.parse::<usize>() {
             Ok(n) => n,
             Err(_) => {
-                eprintln!("{}", tr!("error: --budget は正の整数です", "error: --budget takes a positive integer"));
+                eprintln!("{}", tr!("error: --budget には正の整数を書いてください", "error: --budget takes a positive integer"));
                 return ExitCode::from(2);
             }
         },
@@ -1730,7 +1730,7 @@ fn vdiff_cmd(a: &String, b: &String, opts: &Args, md: bool, json: bool) -> ExitC
 
 fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
     let (Some(a), Some(b)) = (files.first(), files.get(1)) else {
-        eprintln!("{}", tr!("error: `rulec diff <旧> <新> --fixtures <f.jsonl>`", "error: `rulec diff <old> <new> --fixtures <f.jsonl>`"));
+        eprintln!("{}", tr!("error: 書き方は `rulec diff <旧> <新> --fixtures <f.jsonl>` です", "error: `rulec diff <old> <new> --fixtures <f.jsonl>`"));
         return ExitCode::from(2);
     };
     let terse = opts.has("--terse");

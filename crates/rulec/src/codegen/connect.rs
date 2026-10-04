@@ -102,7 +102,7 @@ impl BufDeps {
             match self.pins.get(&name) {
                 Some((c, _, f)) if *c != commit => {
                     return Err(tr!(
-                        "`{f}` と `{from}` が {name} を違う commit に固定しています（{c} と {commit}）。一つの モジュール に置けるのは一つなので、二つの buf.lock を揃えてください",
+                        "`{f}` と `{from}` が {name} を違う commit に固定しています（{c} と {commit}）。一つのモジュールに置けるのは一つなので、二つの buf.lock をそろえてください",
                         "`{f}` and `{from}` pin {name} at two commits ({c} and {commit}); one module holds one, so make the two buf.lock files agree"
                     ));
                 }
@@ -168,7 +168,7 @@ fn bsr_deps(elsewhere: &[(PathBuf, String)]) -> BufDeps {
                     out.deps.insert(m);
                 }
                 None => out.notes.push(tr!(
-                    "`{shown}` の import `{imp}` は、そばにも buf.yaml の依存にも見つかりません。buf が名指して止まります",
+                    "`{shown}` の import `{imp}` は、そばにも buf.yaml の依存にも見つかりません。buf がそれを示して止まります",
                     "`{shown}` imports `{imp}`, which is neither beside it nor in a buf.yaml's deps; buf will name it"
                 )),
             }
@@ -181,7 +181,7 @@ fn bsr_deps(elsewhere: &[(PathBuf, String)]) -> BufDeps {
         };
         if take.is_empty() {
             out.notes.push(tr!(
-                "`{shown}` の import `{imp}` は、そばにも {} の依存にも見つかりません。buf が名指して止まります",
+                "`{shown}` の import `{imp}` は、そばにも {} の依存にも見つかりません。buf がそれを示して止まります",
                 "`{shown}` imports `{imp}`, which is neither beside it nor among the deps of {}; buf will name it",
                 dir.join("buf.yaml").display()
             ));
@@ -196,12 +196,12 @@ fn bsr_deps(elsewhere: &[(PathBuf, String)]) -> BufDeps {
                 }
             }
             Some(_) => out.notes.push(tr!(
-                "{} は v1 の形で、digest が shake256 です。v2 の モジュール は b5 の digest しか読まないので、引き継げません。そこで `buf config migrate` を走らせるか、proto/ で `buf dep update` を走らせてください",
+                "{} は v1 の形で、digest が shake256 です。v2 のモジュールは b5 の digest しか読まないので、引き継げません。そこで `buf config migrate` を走らせるか、proto/ で `buf dep update` を走らせてください",
                 "{} is a v1 lock, digested with shake256, and a v2 module reads only b5 digests, so its pins are not carried over: run `buf config migrate` there, or `buf dep update` in proto/",
                 lock_path.display()
             )),
             None => out.notes.push(tr!(
-                "{} がありません。proto/buf.yaml に依存を書きましたが、固定する commit が無いので、そこで `buf dep update` を走らせるか、proto/ で走らせてください",
+                "{} がありません。proto/buf.yaml に依存を書きましたが、固定する commit が無いので、そのディレクトリか proto/ で `buf dep update` を走らせてください",
                 "There is no {}: proto/buf.yaml declares the deps, but nothing pins them. Run `buf dep update` there, or in proto/",
                 lock_path.display()
             )),
@@ -853,7 +853,7 @@ impl<'a> Gen<'a> {
             }
         }
         let doc = tr!(
-            "規則 {} v{} を、Connect のサービス一つとして出す。\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # 標準ライブラリのサーバで試す\n\nTLS と認証は前に置くこと。このサーバは自分では持たない。\n\n呼ぶ側と交わすのは隣の `.proto` だけで、その stub は buf が書く:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\n決めているのは隣のモジュールで、そちらは何にも依存しない。ここにあるのはワイヤだけである。\n返す値には当てはまった行が付く。一回の呼び出しが記録一件で、--record を付ければ\nその一行がファイルに溜まり、rulec replay と rulec diff がそのまま読む。",
+            "規則 {} v{} を、Connect のサービス一つとして出す。\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # 標準ライブラリのサーバで試す\n\nTLS と認証は前に置くこと。このサーバは自分では持たない。\n\n呼ぶ側と交わすのは隣の `.proto` だけで、その stub は buf が書く:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\n決めているのは隣のモジュールで、そちらは何にも依存しない。ここにあるのは、通信を受け持つ部分だけである。\n返す値には当てはまった行が付く。一回の呼び出しが記録一件で、--record を付ければ\nその一行がファイルに溜まり、rulec replay と rulec diff がそのまま読む。",
             "Rule {} v{} as one Connect service.\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # the standard library's server\n\nPut TLS and authentication in front: this server carries neither.\n\nThe only thing a caller agrees to is the `.proto` beside it, whose stubs buf writes:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\nThe deciding is the module next to this file, which depends on nothing; what is here is the\nwire. The answer carries the rows that matched, so one call is one record: with --record that\nline is appended to a file, and rulec replay and rulec diff read it as it stands.",
             self.f.name.text,
             self.f.version,
@@ -901,10 +901,10 @@ impl<'a> Gen<'a> {
                 "@DATES@",
                 if self.has_date(Dir::In) || self.has_date(Dir::Out) { PY_SERVICE_DATES } else { "" },
             )
-            .replace("@D_CODECS@", &tr!("JSON の読み手は、知らないフィールドと列挙の値を断る。Connect の既定はそれを捨てるので、\n# 綴りを誤った入力が、ゼロ値として判断されてしまう。", "The JSON reader refuses a field or an enum value it does not know. Connect's default\n# drops it, and a misspelt input would then be decided as if it were zero."))
-            .replace("@D_REQUIRED@", &tr!("規則が要るフィールドが省かれていたら断る。proto3 は省かれたフィールドをゼロ値として\n    読むので、これが無いと、何も名指さなかったリクエストが 0 と false を言ったものとして判断される。", "Refuse a request that left out a field the rule needs. proto3 reads a field left out\n    as its zero, so without this a request that named nothing would be decided as 0 and false."))
+            .replace("@D_CODECS@", &tr!("JSON のパーサーは、知らないフィールドと列挙の値を断る。Connect の既定はそれを捨てるので、\n# 綴りを誤った入力が、ゼロ値として判断されてしまう。", "The JSON reader refuses a field or an enum value it does not know. Connect's default\n# drops it, and a misspelt input would then be decided as if it were zero."))
+            .replace("@D_REQUIRED@", &tr!("規則が要るフィールドが省かれていたら断る。proto3 は省かれたフィールドをゼロ値として\n    読むので、これが無いと、何も指定しなかったリクエストが、0 と false を指定したものとして判断される。", "Refuse a request that left out a field the rule needs. proto3 reads a field left out\n    as its zero, so without this a request that named nothing would be decided as 0 and false."))
             .replace("@M_REQUIRED@", &tr!("設定されていません", "not set"))
-            .replace("@D_SHA@", &tr!("どの版の表が答えたか。答えを保つ呼び出し側のために、返す見出しに入れる。", "Which version of the table answered; it goes in a response header for a caller that keeps the answer."))
+            .replace("@D_SHA@", &tr!("どの版の表が答えたか。答えを保存しておく呼び出し側のために、レスポンスのヘッダーに入れる。", "Which version of the table answered; it goes in a response header for a caller that keeps the answer."))
             .replace("@D_MEMBER@", &tr!("列挙の値一つ。契約に無い番号は、呼び出し側の契約違反である。", "One value of an enum. A number the contract does not have is a contract violation by the caller."))
             .replace("@M_MEMBER@", &tr!("{{ty}} の値ではありません: {{v}}", "not a value of {{ty}}: {{v}}"))
             .replace("@D_ORD@", &tr!("日付は YYYY-MM-DD の文字列で受け、日数に直す。", "A date arrives as a YYYY-MM-DD string and is read as a day number."))
@@ -919,12 +919,12 @@ impl<'a> Gen<'a> {
             .replace("@D_APP@", &tr!("ASGI アプリとしてのサービス。uvicorn・hypercorn・daphne のどれでも動く。", "The service as an ASGI application, for uvicorn, hypercorn or daphne."))
             .replace("@D_WSGI@", &tr!("同じサービスの WSGI 版。gunicorn・uWSGI のような同期のサーバ向け。", "The same service as a WSGI application, for a synchronous server such as gunicorn or uWSGI."))
             .replace("@D_SERVER@", &tr!("WSGI の側を、標準ライブラリのサーバで立てる。uvicorn も gunicorn も入れずに試すためのもので、\n    connectrpc と stub は要る。本番は uvicorn か gunicorn に上の app を渡すこと。番号に 0 を渡すと\n    空いているものが取られる。", "The WSGI side, on the standard library's own server: a way to try it without uvicorn or\n    gunicorn, though connectrpc and the stubs are still needed. In production, hand `app` to\n    uvicorn or `wsgi_app` to gunicorn. A port of 0 takes any free one."))
-            .replace("@D_QUIET@", &tr!("アクセスログは出さない。通信の話であって、この規則が言うことではない。", "No access log: that is the transport talking, not this rule."))
+            .replace("@D_QUIET@", &tr!("アクセスログは出さない。通信のことで、この規則が扱うことではない。", "No access log: that is the transport talking, not this rule."))
             .replace("@D_MAIN@", &tr!("引数を読んで待ち受ける。", "Read the arguments and listen."))
             .replace("@D_LIMITED@", &tr!(
-                "本文の終わりで止まる入力。\n\n    PEP 3333 は、本文の長さで終わる入力をアプリに渡すことをサーバに勧めているが、標準ライブラリの\n    サーバはそうしない。wsgi.input はソケットそのもので、本文の先を読もうとすると、呼び出し側が\n    次を送るまで止まる。呼び出し側は答えを待っているので、何も来ない。本番の WSGI サーバはどれも\n    長さで切っている。標準ライブラリのものを同じ振る舞いにするのが、この一枚である。",
+                "本文の終わりで止まる入力。\n\n    PEP 3333 は、本文の長さで終わる入力をアプリに渡すことをサーバに勧めているが、標準ライブラリの\n    サーバはそうしない。wsgi.input はソケットそのもので、本文の先を読もうとすると、呼び出し側が\n    次を送るまで止まる。呼び出し側は答えを待っているので、何も来ない。本番の WSGI サーバはどれも\n    長さで切っている。標準ライブラリのサーバでも同じように振る舞わせるためのものである。",
                 "The request body, and not one byte past it.\n\n    PEP 3333 says a server *should* hand the application an input stream that ends at\n    CONTENT_LENGTH, and the standard library's server does not: its wsgi.input is the socket, so\n    a read past the body waits for the caller to send more. The caller is waiting for the answer,\n    so nothing comes. Every production WSGI server limits the stream; this is what makes the\n    standard library's behave like them."))
-            .replace("@D_LIMIT@", &tr!("その入力を渡すだけの包み。", "The wrapper that hands that input over."))
+            .replace("@D_LIMIT@", &tr!("その入力を渡すだけのラッパー。", "The wrapper that hands that input over."))
     }
 }
 
@@ -1303,7 +1303,7 @@ impl<'a> Gen<'a> {
             .map(|t| format!("_PB_{} = {{v: k for k, v in {t}.items()}}\n", t.trim_start_matches("ENUM_")))
             .collect();
         let doc = tr!(
-            "隣の {alias}_runner.py と同じベクタを、Connect 越しに通す。\n\n    python3 {alias}_connect_runner.py [--wsgi] [--get] [--at http://host:port] < vectors.jsonl\n\n--at が無ければ、生成したサービスを空いている番号で立ててそれを呼ぶ。既定は ASGI（uvicorn）で、\n--wsgi なら標準ライブラリのサーバに立てる。出す記録は返ってきたものから組み立てるので、\n隣の runner と食い違えば、それはワイヤが作った差である。--get は同じ呼び出しを GET で行う。\n規則は純関数で、手続きは副作用が無いと宣言してあるから。",
+            "隣の {alias}_runner.py と同じベクタを、Connect 越しに通す。\n\n    python3 {alias}_connect_runner.py [--wsgi] [--get] [--at http://host:port] < vectors.jsonl\n\n--at が無ければ、生成したサービスを空いている番号で立ててそれを呼ぶ。既定は ASGI（uvicorn）で、\n--wsgi なら標準ライブラリのサーバに立てる。出す記録は返ってきたものから組み立てるので、\n隣の runner と食い違えば、それは通信の途中で生まれた差である。--get は同じ呼び出しを GET で行う。\n規則は純関数で、手続きは副作用が無いと宣言してあるから。",
             "The same vectors as {alias}_runner.py beside it, put through Connect.\n\n    python3 {alias}_connect_runner.py [--wsgi] [--get] [--at http://host:port] < vectors.jsonl\n\nWith no --at it stands the generated service up on a free port and calls that: ASGI under\nuvicorn by default, or the standard library's WSGI server with --wsgi. The record it prints is\nbuilt from what came back, so a difference between this and the runner beside it is a\ndifference the wire made. --get makes the same call with GET, which the method allows because\nthe rule is a pure function.",
             alias = alias
         );
@@ -1625,7 +1625,7 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
          from their_pb2 import TheirRequest  # TODO: 相手の .proto から生成した stub\n\
          from their_connect import TheirServiceClientSync  # TODO: 同上\n\n\
          AT = sys.argv[1] if len(sys.argv) > 1 else \"http://127.0.0.1:8080\"\n\n\
-         sys.stdin.readline()  # 握手\n\
+         sys.stdin.readline()  # ハンドシェイク\n\
          print(json.dumps({{\"ok\": True, \"impl\": f\"connect@{{AT}}\"}}), flush=True)\n\n\
          with TheirServiceClientSync(AT) as client:\n    \
              for line in sys.stdin:\n        \

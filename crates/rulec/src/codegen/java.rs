@@ -527,8 +527,8 @@ impl<'a> Gen<'a> {
                  for ({ty} x : values()) {{\n                if (x.wire.equals(v)) {{\n                    \
                  return x;\n                }}\n            }}\n            \
                  throw new RuleInputError({msg} + v);\n        }}\n    }}\n\n",
-                vd = tr!("記録とワイヤに出る綴り。", "The spelling this member has on the wire and in a record."),
-                fd = tr!("ワイヤの綴りから引く。無ければ入口で断る。", "The member with this spelling on the wire; refused at the door when there is none."),
+                vd = tr!("記録と、受け渡しする値に使う綴り。", "The spelling this member has on the wire and in a record."),
+                fd = tr!("受け渡しする値の綴りから引く。無ければ入口で断る。", "The member with this spelling on the wire; refused at the door when there is none."),
                 msg = java_str(&tr!(
                     "{jp} が列挙 {ascii} の値ではありません: ",
                     "{jp} is not a value of enum {ascii}: "
@@ -560,7 +560,7 @@ impl<'a> Gen<'a> {
              super(value == null ? what : what + \": \" + value);\n            \
              this.what = what;\n            this.value = value;\n        }}\n    }}\n\n",
             tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
-            tr!("何を断ったかを言う文。", "The sentence that says what was refused."),
+            tr!("何を断ったかを説明するメッセージ。", "The sentence that says what was refused."),
             tr!("断られた値。理由が値についてでなければ null。", "The value refused, or null when the refusal is not about one.")
         ));
         o.push_str(&format!(
@@ -569,7 +569,7 @@ impl<'a> Gen<'a> {
              /** {} */\n        public final String what;\n\n        \
              public RuleContradictionError(String what) {{\n            super(what);\n            this.what = what;\n        }}\n    }}\n\n",
             tr!("規則そのものの矛盾。呼び出し側の誤りではない。", "A contradiction in the rule itself, not a mistake by the caller."),
-            tr!("何が矛盾したかを言う文。", "The sentence that says what contradicted.")
+            tr!("何が矛盾したかを説明するメッセージ。", "The sentence that says what contradicted.")
         ));
         o.push_str(&format!("    /** {} */\n    public record Fired(String table, int row, String label) {{\n    }}\n\n", fired_doc()));
 

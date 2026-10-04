@@ -1748,7 +1748,7 @@ fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize)
             out.feasible = 1;
         } else {
             out.blocked = Some(tr!(
-                "この規則は並び全体を見て答えを出すので、入力を決まった数の項目の組み合わせに分けられません。変わったのは並びを見ていく側なので、どの入力で答えが変わるかはここでは言えません",
+                "この規則は並び全体を見て答えを出すので、入力を決まった数の項目の組み合わせに分けられません。変わったのは並びを見ていく側なので、どの入力で答えが変わるかは、ここでは示せません",
                 "this rule folds a sequence: the answer depends on the whole of it, so the space of columns does not cut into cells. What changed is inside the walk, and which inputs move cannot be stated here"
             ));
         }
@@ -2444,7 +2444,7 @@ pub fn render(d: &VDiff, c: &Checked, terse: bool) -> String {
         s.push_str(&format!(
             "\n{}\n",
             tr!(
-                "ここに挙げたほかの入力について、同じだとは言えていません。",
+                "ここに挙げた入力のほかについても、同じ答えだとは確かめられていません。",
                 "nothing is claimed about what lies outside the region."
             )
         ));
@@ -2675,7 +2675,7 @@ pub fn markdown(d: &VDiff, c: &Checked, old: &str, new: &str, terse: bool) -> St
         } else if d.total() {
             tr!("両方の版が受け付ける入力のうち、ここに挙げたほかは同じ答えを返します。", "Of the inputs both versions accept, those outside this region get the same answer.")
         } else {
-            tr!("ここに挙げたほかの入力について、同じだとは言えていません。", "Nothing is claimed about what lies outside the region.")
+            tr!("ここに挙げた入力のほかについても、同じ答えだとは確かめられていません。", "Nothing is claimed about what lies outside the region.")
         }
     ));
     if let Some(m) = &d.machine {

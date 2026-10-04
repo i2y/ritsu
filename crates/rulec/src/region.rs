@@ -1846,7 +1846,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                     .at(tr!("{path}:{} 表 {tname}", "{path}:{} table {tname}", t.span.line))
                     .table(tname.clone())
                     .mark(t.span.clone(), "")
-                    .note(tr!("この表の完全性も重なりも検査していません。黙って通すより止めます。", "Neither the completeness nor the overlaps of this table have been checked. Stopping is better than passing it silently."))
+                    .note(tr!("この表の完全性も重なりも検査できていません。黙って通さずに、ここで止めます。", "Neither the completeness nor the overlaps of this table have been checked. Stopping is better than passing it silently."))
                     .note(tr!("列の型を、列挙・真偽・数量・金額・率・日付・それらの optional のいずれかにしてください。", "Give the column one of these types: an enum, boolean, quantity, money, rate, date, or an optional of one of those.")),
             ],
             quiet: Vec::new(),
@@ -2045,7 +2045,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                             tr!("定義の中身まで含めて、この条件を同時に満たす入力を構成できませんでした。存在しないことの証明ではありません。", "No input satisfying this condition, definitions included, could be constructed. This is not a proof that none exists.")
                         } else {
                             tr!(
-                                "導出（{}）が入力を共有しているため、この条件を同時に満たす注文が存在するかどうかを、検査は判定できませんでした。",
+                                "導出（{}）が入力を共有しているため、この条件を同時に満たす入力が存在するかどうかを、検査は判定できませんでした。",
                                 "Because the derived values ({}) share inputs, the check could not decide whether an order satisfying this condition exists.",
                                 dnames.join(if crate::i18n::ja() { "、" } else { ", " })
                             )
@@ -2205,7 +2205,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 .table(set.members[e.winner].clone())
                 .mark(e.span.clone(), "")
                 .note(tr!(
-                    "`{}` は、両方に当てはまる入力があるときに、どちらが勝つかを決めます。交わる行が一つも無いので、この行は何も決めていません。ただし書が本文の一部を切り出す形になっていない、という転記の誤りの徴候です。",
+                    "`{}` は、両方に当てはまる入力があるときに、どちらが勝つかを決めます。交わる行が一つも無いので、この行は何も決めていません。ただし書が本文の一部を切り出す形になっていないときは、規則を写すときに誤ったことが多いです。",
                     "`{}` decides which wins when an input matches both. No rows meet, so the line decides nothing. That is the usual sign of a proviso transcribed so that it no longer carves out part of the main rule.",
                     crate::kw::OVERRIDES
                 )),
@@ -2279,11 +2279,11 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                         tr!("この行が名指ししている値を、上流の表は決して出しません。", "The upstream table never produces the values this row names.")
                     } else if up_dead {
                         tr!(
-                            "上流の表は、この行が名指しする値を、ほかの列がこの行の言うとおりであるときには出しません。片方ずつなら起こりますが、同時には起こりません。",
+                            "ほかの列がこの行の条件どおりのとき、上流の表はこの行が名指しする値を出しません。どちらか一方だけなら起こりますが、両方が同時には起こりません。",
                             "The upstream table does not produce the value this row names while the other columns are what this row says. Either half happens; the two together do not."
                         )
                     } else if by_position {
-                        tr!("`{} {}` のため、この行の範囲は先行する行がすべて先に取ります。", "Because of `{} {}`, the earlier rows take all of this row's range first.", crate::kw::POLICY, crate::kw::FIRST)
+                        tr!("`{} {}` なので、この行の範囲は、上にある行がすべて先に取ります。", "Because of `{} {}`, the earlier rows take all of this row's range first.", crate::kw::POLICY, crate::kw::FIRST)
                     } else if !winner_tables.is_empty() {
                         tr!("この行の範囲は、優先する {} の行がすべて先に取ります。", "The rows of {}, which take precedence, take all of this row's range first.", winner_tables.join(if crate::i18n::ja() { "、" } else { ", " }))
                     } else {
@@ -2337,12 +2337,12 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                     .at(at(head_span.line, 0))
                     .table(anchor.clone())
                     .wit(pairs_to_witness(reg.witness_pairs(&hole)))
-                    .mark(head_span.clone(), tr!("起こりうる入力を覆いきっていません", "the input space is not fully covered"))
+                    .mark(head_span.clone(), tr!("起こりうる入力を網羅していません", "the input space is not fully covered"))
                     .note(tr!("当てはまらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
                     .note(tr!("ヒント: この入力に当てはまる行を足してください。", "hint: add a row that matches this input."));
                 let d = if merged {
                     d.note(tr!(
-                        "{} を合わせても覆えていません。行はどの表に足してもよく、優先の順序はそのまま効きます。",
+                        "{} を合わせても網羅できていません。行はどの表に足してもよく、優先の順序はそのまま効きます。",
                         "{} together do not cover it. The row may go in any of them; the declared precedence still applies.",
                         members_text()
                     ))
@@ -2357,7 +2357,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 match reg.row_text(&hole, t) {
                     Some(row) if !merged => d
                         .note(tr!(
-                            "足す行の形: `{row}`。出力の値は表の一行目から写した「形」で、正しい額ではありません。規約か Excel か、いま動いている実装か、どれが出どころかを決めて、そこから書いてください。この一行が閉じるのは、いま出た入力の穴だけです。ほかにも抜けがあれば、次の入力が出ます。",
+                            "足す行の形: `{row}`。出力の値は表の一行目から写した仮の値で、正しい値とは限りません。規約か Excel か、いま動いている実装か、どれが出どころかを決めて、そこから書いてください。この一行で埋まるのは、いま出た入力の穴だけです。ほかにも抜けがあれば、次の入力が出ます。",
                             "The shape of the row to add: `{row}`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one."
                         ))
                         .fix(crate::diag::FixKind::AddRow, row),
@@ -2371,8 +2371,8 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 .at(at(head_span.line, 0))
                 .table(anchor.clone())
                 .mark(head_span.clone(), "")
-                .note(tr!("支配的なのは {}。", "The dominant columns are {}.", reg.dominant_axes()))
-                .note(tr!("列をグループでまとめるか、表を分けてください。近似では通しません。", "Combine columns into groups or split the table. No approximation is accepted in its place.")),
+                .note(tr!("組み合わせを大きくしているのは {} です。", "The dominant columns are {}.", reg.dominant_axes()))
+                .note(tr!("列をグループでまとめるか、表を分けてください。rulec は近似では通しません。", "Combine columns into groups or split the table. No approximation is accepted in its place.")),
         );
     }
 

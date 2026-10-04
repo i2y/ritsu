@@ -513,7 +513,7 @@ fn fits_the_type(pr: &Projection, ty: &Ty, rule_path: &str, name: &str) -> Vec<D
             .mark(pr.span.clone(), tr!("入力 {name} は {ty}", "the input {name} is {ty}"))
             .note(match pr.kind {
                 ProjKind::Count(_) => tr!(
-                    "`count` は並びの件数なので、受ける入力は `number` です。範囲も要ります——数える上限は検査が量化する宇宙でもあるからです。",
+                    "`count` は並びの件数なので、受ける入力は `number` です。範囲も要ります。数える上限は、検査が対象にする値の全体の上限でもあるからです。",
                     "`count` is how many elements passed, so the input that takes it is a `number`. It needs a range too: the cap on the walk is the universe the checks quantify over."
                 ),
                 _ => tr!(
@@ -551,10 +551,10 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
             .at(at.clone())
             .mark(pr.span.clone(), "")
             .note(if s.had.is_empty() {
-                tr!("`{where_}` までは届きました。その先にフィールドはありません。", "It resolved as far as `{where_}`, which has no fields under it.")
+                tr!("`{where_}` までは見つかりました。その先にフィールドはありません。", "It resolved as far as `{where_}`, which has no fields under it.")
             } else {
                 tr!(
-                    "`{where_}` までは届きました。そこにあるフィールド: {}",
+                    "`{where_}` までは見つかりました。そこにあるフィールド: {}",
                     "It resolved as far as `{where_}`. The fields there: {}",
                     s.had.join(", ")
                 )
@@ -578,7 +578,7 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
                         .at(at.clone())
                         .mark(pr.span.clone(), tr!("契約では {}", "the contract says {}", here.word()))
                         .note(tr!(
-                            "`any`・`all`・`count` は並びを一度だけ歩きます。値そのものが欲しいなら `from <shape の名前>.<フィールド>` を書いてください。",
+                            "`any`・`all`・`count` は並びを一度だけたどります。値そのものが欲しいなら `from <shape の名前>.<フィールド>` を書いてください。",
                             "`any`, `all` and `count` walk a collection once. For the value itself, write `from <shape>.<field>`."
                         )),
                 );
@@ -607,7 +607,7 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
                             .at(at.clone())
                             .mark(field.span.clone(), tr!("契約では {}", "the contract says {}", bad))
                             .note(tr!(
-                                "契約は値がどう運ばれるかを言います。列挙も日付も文字列で、金額と数量は整数で来ます。",
+                                "契約が決めるのは、値がどんな形で届くかです。列挙も日付も文字列で、金額と数量は整数で届きます。",
                                 "A contract says how a value travels: an enum and a date arrive as strings, money and quantities as whole numbers."
                             )),
                     );
@@ -623,7 +623,7 @@ fn mismatch(at: &str, pr: &Projection, full: &str, here: &At, ty: &Ty, name: &st
         .at(at.to_string())
         .mark(pr.span.clone(), tr!("契約では {}、入力 {name} は {ty}", "the contract says {}, the input {name} is {ty}", here.word()))
         .note(tr!(
-            "契約は値がどう運ばれるかを言い、規則はそれが何を意味するかを言います。列挙も日付も文字列で来て、金額と数量は宣言した単位の整数で来ます。",
+            "契約は値がどんな形で届くかを決め、規則はその値が何を意味するかを決めます。列挙も日付も文字列で届き、金額と数量は宣言した単位の整数で届きます。",
             "A contract says how a value travels and the rule says what it means: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
         ));
     match here {
@@ -631,7 +631,7 @@ fn mismatch(at: &str, pr: &Projection, full: &str, here: &At, ty: &Ty, name: &st
         // enum would need the two tied value by value, which `import proto` does and a path
         // does not (§15.133).
         At::Other(t) if t.starts_with("enum ") => d.note(tr!(
-            "`.proto` の列挙は、値の名前（`ZONE_HONSHU` のような）で運ばれます。パスはそれを規則の列挙に渡しません。`where` で比べることはできます。",
+            "`.proto` の列挙は、値の名前（`ZONE_HONSHU` のような）で届きます。`from` のパスは、それを規則の列挙には渡しません。`where` で比べることはできます。",
             "A `.proto` enum travels as its value's name (such as `ZONE_HONSHU`), and a path does not hand that to the rule's enum. A `where` can compare it."
         )),
         _ => d,
@@ -1340,7 +1340,7 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                         let dd = dd.fix_kind(FixKind::None);
                         if spelled {
                             dd.note(tr!(
-                                "契約の通す値は、列挙 {e} の別名です（{}）。運ばれるのは、規則に書いた値の名前（{}）のほうです。値の名前を契約の綴りにそろえるか、呼び出し側に名前を送らせてください。",
+                                "契約の通す値は、列挙 {e} の別名です（{}）。実際に届くのは、規則に書いた値の名前（{}）のほうです。値の名前を契約の綴りにそろえるか、呼び出し側に名前を送らせてください。",
                                 "The values the contract lets through are the aliases of enum {e} ({}), and what travels is the name the rule gives a value ({}). Name the values the way the contract spells them, or have the caller send the names.",
                                 quoted(&aliases),
                                 quoted(&vals)

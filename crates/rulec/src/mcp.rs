@@ -179,16 +179,16 @@ fn tools_list(cmds: &[Cmd]) -> String {
                 }
                 let mut help = f.help.clone();
                 if f.rest {
-                    help.push_str(" (one string; it is split on spaces into the command and its arguments)");
+                    help.push_str(&tr!("（一つの文字列で渡す。空白で区切って、コマンドとその引数に分ける）", " (one string; it is split on spaces into the command and its arguments)"));
                 }
                 o.push_str(&format!(",\"description\":{}", json_str(&help)));
                 props.push(format!("{}:{{{o}}}", json_str(&prop_name(f.name))));
             }
             let mut desc = c.purpose.clone();
-            desc.push_str(". Exit codes: ");
+            desc.push_str(&tr!("。exit code: ", ". Exit codes: "));
             desc.push_str(&c.exits.iter().map(|(n, h)| format!("{n} = {h}")).collect::<Vec<_>>().join("; "));
             if !c.examples.is_empty() {
-                desc.push_str(". For example: ");
+                desc.push_str(&tr!("。例: ", ". For example: "));
                 desc.push_str(&c.examples.join(" / "));
             }
             let schema = format!(

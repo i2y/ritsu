@@ -1119,8 +1119,7 @@ def _round_bankers(x: int, g: int) -> int:
 
 "#,
         note = tr!(
-            "# 生成コードは組み込みを裸で呼ばない。入力の ASCII 別名が `min` や `list` の\n\
-             # ような名前でも壊れないようにするため（衝突の族ごと消す）。",
+            "# 生成コードは組み込み関数を名前だけで呼ばない。入力の ASCII 別名が `min` や `list` の\n# ような名前でも壊れないようにするため（この種の衝突をまとめて防ぐ）。",
             "# Generated code never calls a builtin bare, so that an input whose ASCII alias is a\n\
              # name like `min` or `list` does not break it (the whole family of collisions is gone)."
         ),
@@ -5004,11 +5003,11 @@ impl<'a> Gen<'a> {
                 "completeness (E101) — the `unreachable!` that closes every table; Kani looks for a reachable panic by default."
             ),
             tr!(
-                "W114 のガード — `RuleError::Contradiction` が返らないこと。静的に閉じなかった行対が、ここで閉じる（あるいは反例が出る）。",
+                "W114 のガード — `RuleError::Contradiction` が返らないこと。静的に閉じなかった行の対が、ここで閉じる（あるいは反例が出る）。",
                 "the W114 guards — that `RuleError::Contradiction` is never returned. A pair the checker could not close either closes here, or a counterexample comes back."
             ),
             tr!(
-                "int64— あふれ。Kani は算術のあふれを既定で検査する。",
+                "int64 — オーバーフロー。Kani は算術のオーバーフローを既定で検査する。",
                 "int64 — overflow. Kani checks arithmetic overflow by default."
             ),
             tr!(
@@ -5106,12 +5105,12 @@ impl<'a> Gen<'a> {
                 let (want, doc) = if t.policy == crate::ast::Policy::Unique {
                     (
                         format!("        assert_eq!(rows_{tn}({}), Ok(1));\n", args.join(", ")),
-                        tr!("表 {} の行は、宣言した範囲を隙間なく重なりなく覆う。", "The rows of {} cover the declared domain with no gap and no overlap.", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
+                        tr!("表 {} の行は、宣言した範囲を隙間なく、重なりなく網羅する。", "The rows of {} cover the declared domain with no gap and no overlap.", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
                     )
                 } else {
                     (
                         format!("        assert!(matches!(rows_{tn}({}), Ok(n) if n >= 1));\n", args.join(", ")),
-                        tr!("表 {} の行は、宣言した範囲を覆う（`first` は、重なったときは上の行が勝つ）。", "The rows of {} cover the declared domain (`first` settles an overlap by order).", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
+                        tr!("表 {} の行は、宣言した範囲を網羅する（`first` は、重なったときは上の行が勝つ）。", "The rows of {} cover the declared domain (`first` settles an overlap by order).", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
                     )
                 };
                 harnesses.push_str(&format!(
@@ -7425,7 +7424,7 @@ impl<'a> Gen<'a> {
              \x20     super(value.equal?(NO_VALUE) ? what : \"#{{what}}: #{{value.inspect}}\")\n\
              \x20   end\n  end\n\n",
             tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
-            tr!("文と値は別々に持つ。", "The sentence and the value travel apart.")
+            tr!("メッセージと値を別々に持つ。", "The sentence and the value travel apart.")
         ));
         o.push_str(&format!(
             "  # {}\n  class RuleContradictionError < RuntimeError\n\
@@ -8104,7 +8103,7 @@ impl<'a> Gen<'a> {
 
         // The rounding helpers are private at run time; declaring them keeps `steep` from
         // warning about a method the module defines and the signature does not mention.
-        o.push_str(&format!("  # {}\n", tr!("丸めの補助。実行時は私有。", "The rounding helpers, private at run time.")));
+        o.push_str(&format!("  # {}\n", tr!("丸めの補助。実行時には private で、外からは呼べない。", "The rounding helpers, private at run time.")));
         for h in ["_min", "_max", "_round_down", "_round_up", "_round_half", "_round_half_down", "_round_bankers"] {
             o.push_str(&format!("  private def self.{h}: (Integer, Integer) -> Integer\n"));
         }

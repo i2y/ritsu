@@ -319,7 +319,7 @@ pub fn lex_line_soft(line_no: usize, text: &str) -> Result<(Vec<Token>, Vec<Diag
                 tr!("読めない文字 U+{:04X} があります", "Unreadable character U+{:04X}", c as u32),
             )
             .mark(Span::new(line_no, start, clen), "")
-            .note(tr!("識別子は文字か `_` で始まります。制御文字や記号は名前になれません。", "An identifier starts with a letter or `_`. Control characters and symbols cannot be names.")));
+            .note(tr!("識別子は、文字か `_` で始めてください。制御文字や記号は名前に使えません。", "An identifier starts with a letter or `_`. Control characters and symbols cannot be names.")));
         }
 
         // Identifier: run to the next delimiter.
@@ -429,7 +429,7 @@ fn separated(text: &str, num: &Num, len: usize, line_no: usize, start: usize) ->
     let fixed = whole.raw.clone();
     Some((
         Diag::error("E049", tr!("桁区切りのカンマは書けません", "A thousands separator cannot be written"))
-            .mark(Span::new(line_no, start, written.len()), tr!("`{fixed}` と書きます", "write `{fixed}`"))
+            .mark(Span::new(line_no, start, written.len()), tr!("`{fixed}` と書いてください", "write `{fixed}`"))
             .note(tr!(
                 "`,` は集合の要素を区切る記号なので、`{written}` のままでは二つ以上の値に読まれます。桁を区切りたいときは `_` を使えます（`1_000`）。",
                 "`,` separates the members of a set, so `{written}` as it stands reads as more than one value. To group digits, use `_` (`1_000`)."

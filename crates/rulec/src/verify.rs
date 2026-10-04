@@ -55,12 +55,12 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     let mut si = child
         .stdin
         .take()
-        .ok_or_else(|| tr!("stdin を掴めません", "Cannot open the adapter's stdin"))?;
+        .ok_or_else(|| tr!("stdin を取得できません", "Cannot open the adapter's stdin"))?;
     let mut so = BufReader::new(
         child
             .stdout
             .take()
-            .ok_or_else(|| tr!("stdout を掴めません", "Cannot open the adapter's stdout"))?,
+            .ok_or_else(|| tr!("stdout を取得できません", "Cannot open the adapter's stdout"))?,
     );
 
     // Handshake (§10.1). Names are sent as the canonical (Japanese) names from the `.rule`.
@@ -78,10 +78,10 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
 
     let mut line = String::new();
     so.read_line(&mut line).map_err(|e| e.to_string())?;
-    let hello = parse_line(&line, &tr!("握手の答え", "answer to the handshake"))?;
+    let hello = parse_line(&line, &tr!("ハンドシェイクの応答", "answer to the handshake"))?;
     if hello.get("ok") != Some(&Json::Bool(true)) {
         return Err(tr!(
-            "アダプタが握手を断りました: {}",
+            "アダプタがハンドシェイクを断りました: {}",
             "The adapter refused the handshake: {}",
             line.trim()
         ));
@@ -97,15 +97,15 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
 
         let mut line = String::new();
         if so.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
-            return Err(tr!("アダプタが {id} 件目で黙りました", "The adapter went silent at record {id}"));
+            return Err(tr!("アダプタが {id} 件目に応答しませんでした", "The adapter went silent at record {id}"));
         }
-        let ans = parse_line(&line, &tr!("{id} 件目の答え", "answer to record {id}"))?;
+        let ans = parse_line(&line, &tr!("{id} 件目の応答", "answer to record {id}"))?;
         // An answer to another record would compare one case's values with another's.
         if let Some(got) = ans.get("id") {
             if got.as_int() != Some(id as i128) {
                 let got = crate::json::show(got);
                 return Err(tr!(
-                    "アダプタが {id} 件目に {got} 件目の答えを返しました",
+                    "アダプタが {id} 件目に {got} 件目の応答を返しました",
                     "The adapter answered record {id} with the answer to record {got}"
                 ));
             }
@@ -113,7 +113,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
         let (out, err) = (ans.get("out"), ans.get("err"));
         if out.is_none() && err.is_none() {
             return Err(tr!(
-                "アダプタの {id} 件目の答えに out も err もありません: {}",
+                "アダプタの {id} 件目の応答に out も err もありません: {}",
                 "The adapter's answer to record {id} has neither out nor err: {}",
                 line.trim()
             ));
@@ -171,7 +171,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              func main() {{\n\t\
              sc := bufio.NewScanner(os.Stdin)\n\t\
              sc.Buffer(make([]byte, 1<<20), 1<<20)\n\t\
-             sc.Scan() // 握手\n\t\
+             sc.Scan() // ハンドシェイク\n\t\
              fmt.Println(`{{\"ok\":true,\"impl\":\"legacy@REPLACE_ME\"}}`)\n\t\
              for sc.Scan() {{\n\t\t\
              var req struct {{\n\t\t\tID  int            `json:\"id\"`\n\t\t\tIn  map[string]any `json:\"in\"`\n\t\t}}\n\t\t\
@@ -204,7 +204,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
             "# rulec のアダプタのテンプレート（規則 {}）。\n\
              # 標準入出力で JSON Lines をやりとりするだけ。いま動いている実装をこの中から呼ぶ。\n\
              import json, sys\n\n\
-             sys.stdin.readline()  # 握手\n\
+             sys.stdin.readline()  # ハンドシェイク\n\
              print(json.dumps({{\"ok\": True, \"impl\": \"legacy@REPLACE_ME\"}}), flush=True)\n\n\
              for line in sys.stdin:\n    \
              line = line.strip()\n    \
@@ -523,7 +523,7 @@ pub fn schema(f: &RuleFile, c: &Checked, alias: bool) -> String {
         match pre_kinds(f, c) {
             None => String::new(),
             Some(kinds) => tr!(
-                ",\n  \"$comment\": \"入力の形だけでは足りません。ここに書けないものは、入口で断られます——{kinds}。`rulec api` の `preconditions` に並びます。\"",
+                ",\n  \"$comment\": \"入力の形だけでは足りません。ここに書けない条件（{kinds}）は、入口で断られます。`rulec api` の `preconditions` に並びます。\"",
                 ",\n  \"$comment\": \"The shape is not the whole contract. What it cannot say is refused at the door instead: {kinds}. `rulec api` lists these under `preconditions`.\""
             ),
         }

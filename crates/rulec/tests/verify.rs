@@ -230,7 +230,7 @@ fn jsonでない答えは止まって何件目かを言う() {
     let Some((_tmp, dir)) = setup("jsonでない答えは止まって何件目かを言う") else { return };
     let ((code, out), err) = verify_env(&dir, &[("BUG", "0"), ("BROKEN", "1")]);
     assert_eq!(code, 2, "{out}{err}");
-    assert!(err.contains("0 件目の答え") && err.contains("運賃は"), "{err}");
+    assert!(err.contains("0 件目の応答") && err.contains("運賃は"), "{err}");
 }
 
 /// An optional output with no value is `null` on the wire, which is how the vectors write it;

@@ -410,7 +410,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                     // always: reading the tables above is an under-approximation, so a dead row
                     // it could not prove dead still lands in this bucket.
                     hint: tr!(
-                        "この行が勝つ入力をベクタが一つも作れていません。到達できない行は E102 が名指しするので、多くはジェネレーターが届いていない側です。",
+                        "この行が勝つ入力を、ベクタが一つも作れていません。到達できない行は E102 が名指しするので、ここに出る行の多くは、ジェネレーターが届いていない行です。",
                         "No vector produces an input on which this row wins. A row nothing can reach is named by E102 instead, so this is usually the generator not getting there."
                     ),
                 });
@@ -473,14 +473,14 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                             tr!("外側", "the outside point")
                         } else {
                             tr!(
-                                "対（他列が揃っていない）",
+                                "対（ほかの列がそろっていない）",
                                 "the pair (the other columns are not held equal)"
                             )
                         };
                         missing.push(Missing {
                             kind: BOUND,
                             what: tr!(
-                                "表 {} 行{} 列 {col} の境界 {}（{} / {} を踏む対）",
+                                "表 {} 行{} 列 {col} の境界 {}（{} と {} の対）",
                                 "table {} row {} column {col} boundary {} (pair at {} / {})",
                                 set.row_table(ri),
                                 t.rows[ri].index,
@@ -523,7 +523,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                         }
                     },
                     hint: tr!(
-                        "この点が無いと、隣接行を入れ替えても期待値が変わりません。",
+                        "この点が無いと、隣り合う行を入れ替えても期待値が変わりません。",
                         "Without this point, swapping the adjacent rows changes no expected value."
                     ),
                 });
@@ -604,7 +604,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                 kind: TIE,
                 what: tr!("出力 {name} の丸めの同着", "the rounding tie of output {name}"),
                 hint: tr!(
-                    "同着に載る入力が無いと、`half_up` と `half_down` を入れ替えても期待値が変わりません。載る入力が見つからず、載らないことも示せませんでした。載る入力を知っていれば、examples に一行足すと監査に加わります。",
+                    "同着に載る入力が無いと、`half_up` と `half_down` を入れ替えても期待値が変わりません。載る入力が見つからず、載らないことも示せませんでした。載る入力が分かっているなら、examples に一行足すと、その入力も確かめられます。",
                     "Without an input that lands on the tie, swapping `half_up` for `half_down` changes no expected value. No such input was found, and none was shown impossible. If you know one, a row in `examples` takes part in the audit."
                 ),
             }),
@@ -899,7 +899,7 @@ pub fn render(a: &Audit, vs: &[Vector], refused: &[Vector]) -> String {
         return o;
     }
     o.push_str(&tr!(
-        "\n満たせなかった義務 {} 件:\n",
+        "\n足りないテストケース {} 件:\n",
         "\nunsatisfied obligations: {}\n",
         a.missing.len()
     ));
@@ -976,7 +976,7 @@ fn machine_obligations(
             kind: MACHINE,
             what: tr!("ステートマシンの遷移", "the machine's transitions"),
             hint: tr!(
-                "入力の区画を歩ききれなかったので、遷移の一覧を立てられませんでした（E128）。",
+                "入力の区画を調べきれなかったので、遷移の一覧を作れませんでした（E128）。",
                 "The inputs' cells could not all be walked, so the transitions could not be listed (E128)."
             ),
         });

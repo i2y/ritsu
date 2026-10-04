@@ -91,7 +91,7 @@ fn ツールの一覧はコマンドの表そのもの() {
     }
     assert_eq!(s(props.get("terse").unwrap(), "type"), "boolean");
     assert_eq!(s(props.get("files").unwrap(), "type"), "array");
-    assert!(s(check, "description").contains("Exit codes"), "exit code の意味を説明に入れる");
+    assert!(s(check, "description").contains("exit code: 0 = "), "exit code の意味を説明に入れる");
     let verify = tools.iter().find(|t| s(t, "name") == "rulec_verify").unwrap();
     let props = verify.get("inputSchema").unwrap().get("properties").and_then(rulec::json::members).unwrap();
     assert!(props.contains_key("adapter") && props.contains_key("file"));

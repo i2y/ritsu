@@ -761,7 +761,7 @@ fn settle_claims(a: &mut Analysis, f: &RuleFile, m: &MachineDecl) {
     let broken = |a: &Analysis, t: Vec<usize>| -> Verdict {
         if t.iter().any(|e| a.mixed.contains(e)) {
             Verdict::Undecided(tr!(
-                "見つかった手順は、途中で {} を変えないと通れません。一つの値のまま通れるかは、たどっていません",
+                "見つかった手順は、途中で {} を変えないと通れません。一つの値のまま通れるかまでは、調べていません",
                 "the sequence found needs {} to change partway, and whether one value carries it is not followed",
                 fixed_text
             ))
@@ -818,7 +818,7 @@ fn settle_claims(a: &mut Analysis, f: &RuleFile, m: &MachineDecl) {
             }
             if v.holds() && !a.coupled.is_empty() {
                 v = Verdict::Undecided(tr!(
-                    "{} は、ほかの入力と一緒に計算される値にも使われています。一つの値のまま終わりに着けるかは、たどっていません",
+                    "{} は、ほかの入力と一緒に計算される値にも使われています。一つの値のまま終わりに着けるかまでは、調べていません",
                     "{} also feeds a value computed with other inputs, and whether one value of it can always still reach an end is not followed",
                     a.coupled.join(", ")
                 ));
@@ -1020,7 +1020,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str, budget: usize) -> Vec<Diag> 
                     NODES_PER_CELL
                 ))
                 .note(tr!(
-                    "証明できなかった主張を緑にはしません。`--budget` を上げるか、状態の遷移を決める表の列を減らしてください。",
+                    "rulec は、証明できなかった主張を通ったことにはしません。`--budget` を上げるか、状態の遷移を決める表の列を減らしてください。",
                     "A claim that was not proven is never green. Raise `--budget`, or give the table that decides the transitions fewer columns."
                 )),
         );
@@ -1200,7 +1200,7 @@ fn undecided_diag(at: String, mark: Span, claim: String, why: &str, key: String)
         .mark(mark, "")
         .note(why.to_string())
         .note(tr!(
-            "決めきれなかったことを、成り立つとは言いません。導出どうしが入力を共有していると、ここが残ります（`diff` の決めきれない区画と同じ場所です）。",
+            "rulec は、決めきれなかったことを成り立つとは言いません。導出どうしが入力を共有していると、ここが残ります（`diff` の決めきれない区画と同じ場所です）。",
             "What was not settled is not said to hold. Derived values that share an input leave this behind — the same blind spot as `diff`'s unsettled cells."
         ))
 }
@@ -1255,7 +1255,7 @@ pub fn check_scenarios(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         .fix(crate::diag::FixKind::AddExpected, &od.name.text)
                         .mark(sc.span.clone(), tr!("{} の期待値がありません", "no expected value for {}", od.name.text))
                         .note(tr!(
-                            "手順の例も、実装どうしの照合では捕まらない誤りを捕まえるためのものなので、出力は全部書きます。持ち越す出力 {} の列は、次の呼び出しが始まる状態です。",
+                            "手順の例も、実装どうしを照らし合わせても見つからない誤りを見つけるためのものなので、出力は全部書いてください。持ち越す出力 {} の列は、次の呼び出しが始まる状態です。",
                             "A scenario, like an example, is there to catch what the implementations can share, so every output is written. The column for the carried output {} is the state the next call starts in.",
                             cout
                         )),

@@ -5,5 +5,5 @@ error[E039]: 出典 `措置法` の `第92条` の写しがありません
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
  探した先: tests/mutants/sources/law/332AC0000000026@2026-04-01/MainProvision-Article_92.xml
- `rulec source fetch tests/mutants/m_e039.rule` が e-Gov から取ってきて写しに置きます。check は通信しません。
+ `rulec source fetch tests/mutants/m_e039.rule` を走らせると、e-Gov から取ってきて写しとして置きます。check は通信しません。
  引いている: 表 軽減

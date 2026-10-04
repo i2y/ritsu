@@ -1,9 +1,9 @@
-error[E130]: koyomi "payment_terms.cal" date due の日を koyomi が答えません
+error[E130]: koyomi "payment_terms.cal" date due の日を、koyomi から得られません
   --> variant.rule:7
   |
 7 |   pay_day : date  range from koyomi "payment_terms.cal" date due
   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ payment_terms.cal を読めないか、koyomi の検査を通りません
   |
- koyomi が言うこと: payment_terms.cal: `payment_terms.cal` に日付 `due` はありません
- 日付の集合を読めないときは、そのあいだのすべての日で確かめ直すのではなく、ここで止めます。集合の上で書いた表は、すべての日の上では完全でないことが多いからです。
+ koyomi の診断: payment_terms.cal: `payment_terms.cal` に日付 `due` はありません
+ 日付の集合を読めないときは、そのあいだのすべての日で確かめ直さずに、ここで止めます。その集合の日だけを考えて書いた表は、すべての日で見ると完全でないことが多いからです。
 

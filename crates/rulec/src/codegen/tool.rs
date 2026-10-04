@@ -65,7 +65,7 @@ impl<'a> Gen<'a> {
     /// The `instructions` of `initialize`: what a client shows its model once.
     fn tool_instructions(&self) -> String {
         tr!(
-            "ツールは一つ、{}。結果は一件の記録で、isError が付いていれば呼び出し側の契約違反（範囲の外、列挙に無い値、整数でない数）で、本文がどの引数かを言う。",
+            "ツールは一つ、{}。結果は一件の記録で、isError が付いていれば呼び出し側の契約違反（範囲の外、列挙に無い値、整数でない数）で、どの引数かが本文に書かれている。",
             "One tool, {}. The result is one record; with isError the caller broke the contract (out of range, not a member of the enum, not an integer) and the text says which argument.",
             pub_name(&self.f.name)
         )
@@ -130,7 +130,7 @@ impl<'a> Gen<'a> {
             tys.push("list[m.Element]".to_string());
         }
         let doc = tr!(
-            "規則 {} v{} を、MCP ツール一つとして出す。\n\n    python3 {alias}_mcp.py [--record <file.jsonl>]                 # stdio\n    python3 {alias}_mcp.py --http 8000 [--origin https://example.com]  # Streamable HTTP\n\nツールの引数は規則の入力のワイヤ形式（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n--record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。\n\nstdio はローカルで動くエージェント（Claude Code、IDE）が使う。--http は、HTTPS の口しか受け付けない\n連携先（チャットのコネクタ、ワークフロー製品、業務向けエージェント）のためのもので、待つのは\n既定で 127.0.0.1 だけである。TLS と認証は前に置くこと。このサーバは自分では持たない。",
+            "規則 {} v{} を、MCP ツール一つとして出す。\n\n    python3 {alias}_mcp.py [--record <file.jsonl>]                 # stdio\n    python3 {alias}_mcp.py --http 8000 [--origin https://example.com]  # Streamable HTTP\n\nツールの引数の形は、生成コードが受け取る入力と同じ（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n--record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。\n\nstdio はローカルで動くエージェント（Claude Code、IDE）が使う。--http は、HTTPS のエンドポイントしか受け付けない\n連携先（チャットのコネクタ、ワークフロー製品、業務向けエージェント）のためのもので、待つのは\n既定で 127.0.0.1 だけである。TLS と認証は前に置くこと。このサーバは自分では持たない。",
             "Rule {} v{} as one MCP tool.\n\n    python3 {alias}_mcp.py [--record <file.jsonl>]                 # stdio\n    python3 {alias}_mcp.py --http 8000 [--origin https://example.com]  # Streamable HTTP\n\nThe tool's arguments are the wire form of the rule's inputs (an integer in the declared unit,\na rate as a count of its steps, YYYY-MM-DD for a date, an enum member by its name), and its\nresult is the line the module's record function writes: in, observed, trace. With --record\nthat line is also appended to a file, so what the agent asked is what rulec replay and rulec\ndiff read later.\n\nStdio is for an agent on the same machine (Claude Code, an IDE). --http is for the places\nthat only accept an HTTPS endpoint (a chat client's connectors, a workflow product, a\nbusiness agent); it listens on 127.0.0.1 alone unless told otherwise. Put TLS and\nauthentication in front of it: this server carries neither.",
             self.f.name.text,
             self.f.version
@@ -165,13 +165,13 @@ impl<'a> Gen<'a> {
             .replace("@M_DATE@", &tr!("f\"{{name}}: 日付は YYYY-MM-DD で: {{v!r}}\"", "f\"{{name}}: not a YYYY-MM-DD date: {{v!r}}\""))
             .replace("@M_ENUM@", &tr!("f\"{{name}}: {{cls.__name__}} に無い: {{v!r}}\"", "f\"{{name}}: not in {{cls.__name__}}: {{v!r}}\""))
             .replace("@D_CALL@", &tr!("入力を一つの辞書で受け、規則を当てて、記録の一行を返す。", "Take the inputs as one dict, apply the rule, and return the record line."))
-            .replace("@D_SERVE@", &tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ答える。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time."))
+            .replace("@D_SERVE@", &tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ返す。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time."))
             .replace("@D_HANDLE@", &tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here."))
-            .replace("@D_ORIGIN@", &tr!("Origin を見る。既定で通すのはローカルからの呼び出しだけで、ブラウザが開いているページに\n    このサーバを叩かせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n    open in a browser cannot reach this server; name any other origin with --origin."))
+            .replace("@D_ORIGIN@", &tr!("Origin を見る。既定で通すのはローカルからの呼び出しだけで、ブラウザが開いているページに\n    このサーバを呼ばせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n    open in a browser cannot reach this server; name any other origin with --origin."))
             .replace("@D_HTTP@", &tr!("MCP の Streamable HTTP で待ち受ける。POST 一つにレスポンス一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer."))
-            .replace("@D_QUIET@", &tr!("アクセスログは出さない。通信の話であって、このツールが言うことではない。", "No access log: that is the transport talking, not this tool."))
+            .replace("@D_QUIET@", &tr!("アクセスログは出さない。通信のことで、このツールが扱うことではない。", "No access log: that is the transport talking, not this tool."))
             .replace("@D_POST@", &tr!("メッセージを一つ読んで、レスポンスを JSON で返す。", "Read one message and answer it in JSON."))
-            .replace("@D_GET@", &tr!("こちらから送るものは無いので、開く流れも無い。", "Nothing is ever sent unasked, so there is no stream to open."))
+            .replace("@D_GET@", &tr!("こちらから送るものは無いので、ストリームも開かない。", "Nothing is ever sent unasked, so there is no stream to open."))
             .replace("@D_DELETE@", &tr!("セッションを終える。", "End the session."))
             .replace("@D_SEQ@", &tr!("並びは配列で渡す。", "The sequence is passed as an array."))
             .replace("@D_EL@", &tr!("要素はオブジェクトで渡す。", "An element is passed as an object."))
@@ -286,7 +286,7 @@ impl<'a> Gen<'a> {
             .replace("@NAMES@", &names.join(", "))
             .replace("@CONVS@", &convs.iter().map(|c| format!("    {c},\n")).collect::<String>());
         let doc = tr!(
-            "規則 {} v{} を、MCP ツール一つとして出す。\n *\n *     node {alias}_mcp.ts [--record <file.jsonl>]                 // stdio\n *     node {alias}_mcp.ts --http 8000 [--origin https://example.com]  // Streamable HTTP\n *\n * ツールの引数は規則の入力のワイヤ形式（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n * 結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n * --record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。\n *\n * stdio はローカルで動くエージェント（Claude Code、IDE）が使う。--http は、HTTPS の口しか受け付けない\n * 連携先（チャットのコネクタ、ワークフロー製品、業務向けエージェント）のためのもので、待つのは\n * 既定で 127.0.0.1 だけである。TLS と認証は前に置くこと。このサーバは自分では持たない。",
+            "規則 {} v{} を、MCP ツール一つとして出す。\n *\n *     node {alias}_mcp.ts [--record <file.jsonl>]                 // stdio\n *     node {alias}_mcp.ts --http 8000 [--origin https://example.com]  // Streamable HTTP\n *\n * ツールの引数の形は、生成コードが受け取る入力と同じ（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n * 結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n * --record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。\n *\n * stdio はローカルで動くエージェント（Claude Code、IDE）が使う。--http は、HTTPS のエンドポイントしか受け付けない\n * 連携先（チャットのコネクタ、ワークフロー製品、業務向けエージェント）のためのもので、待つのは\n * 既定で 127.0.0.1 だけである。TLS と認証は前に置くこと。このサーバは自分では持たない。",
             "Rule {} v{} as one MCP tool.\n *\n *     node {alias}_mcp.ts [--record <file.jsonl>]                 // stdio\n *     node {alias}_mcp.ts --http 8000 [--origin https://example.com]  // Streamable HTTP\n *\n * The tool's arguments are the wire form of the rule's inputs (an integer in the declared unit,\n * a rate as a count of its steps, YYYY-MM-DD for a date, an enum member by its name), and its\n * result is the line the module's record function writes: in, observed, trace. With --record\n * that line is also appended to a file, so what the agent asked is what rulec replay and rulec\n * diff read later.\n *\n * Stdio is for an agent on the same machine (Claude Code, an IDE). --http is for the places\n * that only accept an HTTPS endpoint (a chat client's connectors, a workflow product, a\n * business agent); it listens on 127.0.0.1 alone unless told otherwise. Put TLS and\n * authentication in front of it: this server carries neither.",
             self.f.name.text,
             self.f.version
@@ -303,11 +303,11 @@ impl<'a> Gen<'a> {
             ("@M_BOOL@", tr!("`${{name}}: true か false で渡す。${{JSON.stringify(v)}} はどちらでもない`", "`${{name}}: true or false is expected, not ${{JSON.stringify(v)}}`")),
             ("@M_DATE@", tr!("`${{name}}: 日付は YYYY-MM-DD で渡す。${{JSON.stringify(v)}} は読めない`", "`${{name}}: a date as YYYY-MM-DD is expected, not ${{JSON.stringify(v)}}`")),
             ("@D_CALL@", tr!("入力を一つのオブジェクトで受け、規則を当てて、記録の一行を返す。", "Take the inputs as one object, apply the rule, and return the record line.")),
-            ("@D_SERVE@", tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ答える。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time.")),
+            ("@D_SERVE@", tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ返す。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time.")),
             ("@D_HANDLE@", tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here.")),
-            ("@D_ORIGIN@", tr!("Origin を見る。既定で通すのはローカルからの呼び出しだけで、ブラウザが開いているページに\n * このサーバを叩かせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n * open in a browser cannot reach this server; name any other origin with --origin.")),
+            ("@D_ORIGIN@", tr!("Origin を見る。既定で通すのはローカルからの呼び出しだけで、ブラウザが開いているページに\n * このサーバを呼ばせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n * open in a browser cannot reach this server; name any other origin with --origin.")),
             ("@D_HTTP@", tr!("MCP の Streamable HTTP で待ち受ける。POST 一つにレスポンス一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer.")),
-            ("@D_GET@", tr!("こちらから送るものは無いので、開く流れも無い。", "Nothing is ever sent unasked, so there is no stream to open.")),
+            ("@D_GET@", tr!("こちらから送るものは無いので、ストリームも開かない。", "Nothing is ever sent unasked, so there is no stream to open.")),
             ("@D_SEQ@", tr!("並びは配列で渡す。", "The sequence is passed as an array.")),
             ("@D_EL@", tr!("要素はオブジェクトで渡す。", "An element is passed as an object.")),
             ("@M_SEQ@", tr!("`${{name}}: 配列で渡す。${{JSON.stringify(v)}} は配列ではない`", "`${{name}}: an array is expected, not ${{JSON.stringify(v)}}`")),

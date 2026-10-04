@@ -361,7 +361,7 @@ impl ritsu_ports::Rules for Engine {
                                 (right.clone(), Value::Int(crate::types::wire_int(r, c.wire_scale(right)))),
                             ]),
                             _ => Answer::Undecided(ritsu_base::tr!(
-                                "`{left}` か `{right}` の範囲に端が無いので、`{left} {op} {right}` がどの値でも成り立つとは言えません",
+                                "`{left}` か `{right}` の範囲に上限か下限が無いので、`{left} {op} {right}` がどの値でも成り立つとは言えません",
                                 "`{left}` or `{right}` has an open end, so `{left} {op} {right}` cannot be shown to hold for every value"
                             )),
                         }
@@ -385,7 +385,7 @@ impl ritsu_ports::Rules for Engine {
                             "`{name}` bounds a total over `{over}`, and how long the list can be is not known, so it cannot be decided"
                         )),
                         (Some(_), None) => Answer::Undecided(ritsu_base::tr!(
-                            "`{name}` は `{over}` の `{of}` の合計の上限です。`{of}` の範囲に上の端が無いので、決められません",
+                            "`{name}` は `{over}` の `{of}` の合計の上限です。`{of}` の範囲に上限が無いので、決められません",
                             "`{name}` bounds the total of `{of}` over `{over}`, and the range of `{of}` has no upper end, so it cannot be decided"
                         )),
                     },
@@ -398,7 +398,7 @@ impl ritsu_ports::Rules for Engine {
                         )),
                     },
                     Precondition::Days { input, .. } => Answer::Undecided(ritsu_base::tr!(
-                        "`{input}` は koyomi の日付がとる日だけをとります。問いは範囲だけを持ち、渡す日がその日のどれかであることは言えません",
+                        "`{input}` は koyomi の日付がとる日だけをとります。問い合わせには範囲しか入らないので、渡す日がその日のどれかであることまでは示せません",
                         "`{input}` takes only the days of a koyomi date, and a range alone cannot show that the day given is one of them"
                     )),
                 };

@@ -377,7 +377,7 @@ fn ヘルプに載る全フラグを解析器が知っている() {
             }
             let (_, _, err) = run(&args);
             assert!(
-                !err.contains("unknown flag") && !err.contains("知らないフラグ"),
+                !err.contains("unknown flag") && !err.contains("というフラグはありません"),
                 "`rulec {c} {name}` が未知扱い: {err}"
             );
         }

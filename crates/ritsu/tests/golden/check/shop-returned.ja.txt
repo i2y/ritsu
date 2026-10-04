@@ -5,7 +5,7 @@ error[rulec E032]: 列挙 order_status が ../../proto/shop/ordering/v1/order.pr
   |      ^^^^^^^^^^^^
   |
  ../../proto/shop/ordering/v1/order.proto にあって、この列挙に無い値: returned
- この列挙に `returned` を足します。
+ この列挙に `returned` を足してください。
  契約（../../proto/shop/ordering/v1/order.proto）に値が増えました。この規則がその値をどう扱うかは、まだ決まっていません。
 
 ok billing/rules/payment_fee.rule

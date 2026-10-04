@@ -89,10 +89,10 @@ fn wanted(im: &EnumImport, text: &str, at: &str) -> Result<Vec<String>, Diag> {
                     im.source
                 ))
                 .note(if keys.is_empty() {
-                    tr!("`{}` までは届きました。", "It resolved as far as `{}`.", reached)
+                    tr!("`{}` までは見つかりました。", "It resolved as far as `{}`.", reached)
                 } else {
                     tr!(
-                        "`{}` までは届きました。そこにあるのは: {}",
+                        "`{}` までは見つかりました。そこにあるのは: {}",
                         "It resolved as far as `{}`, which holds: {}",
                         reached,
                         keys.join(", ")
@@ -166,7 +166,7 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
         let named_apart = target.values.iter().any(|v| !v.text.is_ascii());
         d = if named_apart {
             d.note(tr!(
-                "この列挙は値の名前に別名を付けて書いているので、`{}` の形で足します。名前は自分で決めます。",
+                "この列挙は値の名前に別名を付けて書いているので、`{}` の形で足してください。`<名前>` の部分は自分で決めてください。",
                 "This enum gives its values names with aliases, so add it as `{}`, with a name of your choosing.",
                 only_file
                     .iter()
@@ -176,7 +176,7 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
             ))
         } else {
             d.note(tr!(
-                "この列挙に `{}` を足します。",
+                "この列挙に `{}` を足してください。",
                 "Add `{}` to this enum.",
                 only_file.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" | ")
             ))
@@ -195,7 +195,7 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
             only_rule.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" / ")
         ));
         d = d.note(tr!(
-            "契約から消えた値なら、この規則からも消します。綴り違いなら直します。",
+            "契約から消えた値なら、この規則からも消してください。綴りの誤りなら、綴りを直してください。",
             "A value the contract dropped goes from the rule too; a misspelling is corrected."
         ));
     }
@@ -233,7 +233,7 @@ fn undecided(e: &crate::ast::EnumDecl, c: &Checked, im: &EnumImport, rule_path: 
         .mark(e.name.span.clone(), "")
         .note(tr!("決まっていない値: {}", "Values with nothing decided: {}", names.join(" / ")))
         .note(tr!(
-            "この列挙の値は {1} の {0} が決めています。増えた値をどう扱うかを決めるのは、この規則のほうです。",
+            "この列挙の値は {1} の {0} が決めています。増えた値をどう扱うかは、この規則の側で決めてください。",
             "The values of this enum are decided by {0} in {1}. What happens to a new one is decided here.",
             im.source,
             im.file

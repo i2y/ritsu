@@ -125,14 +125,14 @@ fn line_shape(word: &str) -> String {
         crate::kw::RESULT => tr!("`result <出力> = <式>`", "`result <output> = <expression>`"),
         crate::kw::SHAPE => tr!("`shape <名前>(<別名>) = jsonschema \"<ファイル>\" \"<ポインタ>\"`", "`shape <name>(<alias>) = jsonschema \"<file>\" \"<pointer>\"`"),
         crate::kw::SOURCE => tr!("`source <名前> = law \"<法令番号>\" asof <日付>` か `source <名前> = file \"<ファイル>\" sha256:<ハッシュ>`", "`source <name> = law \"<law id>\" asof <date>` or `source <name> = file \"<file>\" sha256:<digest>`"),
-        crate::kw::APPLY => tr!("`apply <名前>(<別名>) = \"<規則のファイル>\" sha256:<ハッシュ>` と、その下に入力ごとの読み替え", "`apply <name>(<alias>) = \"<rule file>\" sha256:<digest>`, with one binding per input under it"),
+        crate::kw::APPLY => tr!("`apply <名前>(<別名>) = \"<規則のファイル>\" sha256:<ハッシュ>` の行と、その下に入力ごとの読み替え", "`apply <name>(<alias>) = \"<rule file>\" sha256:<digest>`, with one binding per input under it"),
         crate::kw::COUNT => tr!("`count <名前>(<別名>) over <並び> where <列> = <値>  range >=… <=…`", "`count <name>(<alias>) over <sequence> where <column> = <value>  range >=… <=…`"),
         crate::kw::SUM => tr!("`sum <名前>(<別名>) over <並び> of <列>  range >=… <=…`", "`sum <name>(<alias>) over <sequence> of <column>  range >=… <=…`"),
         crate::kw::FOLD => tr!("`fold <判定の列> over <並び>`", "`fold <verdict column> over <sequence>`"),
         crate::kw::CONSTRAINT => tr!("`constraint <入力> <= <入力>`", "`constraint <input> <= <input>`"),
-        crate::kw::TABLE => tr!("`table <名前>(<別名>)` と、その下に `policy` と表の行", "`table <name>(<alias>)`, with `policy` and the rows under it"),
-        crate::kw::CLAUSE => tr!("`clause <名前>(<別名>) -> <出力>` と、その下に `when …` と `then …`", "`clause <name>(<alias>) -> <output>`, with `when …` and `then …` under it"),
-        crate::kw::MACHINE => tr!("`machine <名前>(<別名>) over <表>` と、その下に `carry`・`initial`・`final`", "`machine <name>(<alias>) over <table>`, with `carry`, `initial` and `final` under it"),
+        crate::kw::TABLE => tr!("`table <名前>(<別名>)` の行と、その下に `policy` と表の行", "`table <name>(<alias>)`, with `policy` and the rows under it"),
+        crate::kw::CLAUSE => tr!("`clause <名前>(<別名>) -> <出力>` の行と、その下に `when …` と `then …` の行", "`clause <name>(<alias>) -> <output>`, with `when …` and `then …` under it"),
+        crate::kw::MACHINE => tr!("`machine <名前>(<別名>) over <表>` の行と、その下に `carry`・`initial`・`final` の行", "`machine <name>(<alias>) over <table>`, with `carry`, `initial` and `final` under it"),
         _ => format!("`{word} …`"),
     }
 }
@@ -143,7 +143,7 @@ fn unreadable(word: &str, line: &[Token], what: String, at: String) -> Diag {
     Diag::error("E058", tr!("`{word}` の行を読めません", "The `{word}` line cannot be read"))
         .at(at)
         .mark(span_of(line), what)
-        .note(tr!("形は {} です。", "The shape is {}.", line_shape(word)))
+        .note(tr!("次の形で書いてください: {}", "The shape is {}.", line_shape(word)))
         .note(tr!(
             "読めない行を飛ばして検査を続けると、書いた規則とは別の規則を検査することになります。",
             "Skipping a line that cannot be read would check a rule other than the one written."
@@ -246,7 +246,7 @@ impl P {
                 crate::kw::DESCRIPTION => {
                     match line.get(1).map(|t| t.kind.clone()) {
                         Some(Kind::Str(s)) if line.len() == 2 => f.description = Some(s),
-                        _ => self.err(unreadable(&word, &line, tr!("`{}` の後には文字列を一つだけ書きます", "`{}` takes one string and nothing else", crate::kw::DESCRIPTION), self.at(span_of(&line).line))),
+                        _ => self.err(unreadable(&word, &line, tr!("`{}` の後には文字列を一つだけ書いてください", "`{}` takes one string and nothing else", crate::kw::DESCRIPTION), self.at(span_of(&line).line))),
                     }
                     self.i += 1;
                 }
@@ -509,7 +509,7 @@ impl P {
                         (Some(name), None) => self.err(
                             Diag::error("E055", tr!("手順の例 {} に行がありません", "Scenario {} has no rows", name.text))
                                 .at(self.at(span.line))
-                                .mark(span, tr!("見出しの直後に、呼び出し一回を一行で書きます", "write one call per row, right under the heading"))
+                                .mark(span, tr!("見出しの直後に、呼び出し一回を一行で書いてください", "write one call per row, right under the heading"))
                                 .note(tr!(
                                     "見出しの行は、持ち越す入力のほかの入力、`->`、すべての出力です。一行目の呼び出しは `initial` の状態から始まります。",
                                     "The header names every input but the carried one, then `->`, then every output. The first row's call starts from the `initial` state."
@@ -577,7 +577,7 @@ impl P {
                         Diag::error("E002", tr!("`{text}` の別名が名前ではありません", "The alias of `{text}` is not a name"))
                             .mark(sp, "")
                             .note(tr!(
-                                "別名は英字か `_` で始まる ASCII の名前です。`サイズ60(size_60)` のように書きます。",
+                                "別名は英字か `_` で始まる ASCII の名前です。`サイズ60(size_60)` のように書いてください。",
                                 "An alias is an ASCII name beginning with a letter or `_`, such as `sixty(size_60)`."
                             )),
                     );
@@ -710,7 +710,7 @@ impl P {
                         Diag::error("E009", tr!("`{w}` はキーワードなので、名前にできません", "`{w}` is a keyword and cannot be used as a name"))
                             .at(at)
                             .mark(sp, "")
-                            .note(tr!("行指向の構文なので、キーワードと同じ名前は宣言をセクションの始まりに見せてしまいます。", "The syntax is line-oriented, so a declaration named like a keyword looks like the start of a section."))
+                            .note(tr!("rulec は規則を行ごとに読むので、キーワードと同じ名前を付けると、その宣言がセクションの始まりに見えてしまいます。", "The syntax is line-oriented, so a declaration named like a keyword looks like the start of a section."))
                             .note(tr!("別の名前を付けてください。", "Choose a different name.")),
                     );
                     self.i += 1;
@@ -1164,7 +1164,7 @@ impl P {
                 Diag::error("E057", tr!("宣言に型がありません", "The declaration has no type"))
                     .at(self.at(name.span.line))
                     .mark(name.span.clone(), tr!("{} の型が書かれていません", "{} is not given a type", name.text))
-                    .note(tr!("形は {} です。", "The shape is {}.", line_shape(word))),
+                    .note(tr!("次の形で書いてください: {}", "The shape is {}.", line_shape(word))),
             );
         }
         got
@@ -1179,8 +1179,8 @@ impl P {
             self.err(
                 Diag::error("E006", tr!("宣言に `=` がありません", "The declaration has no `=`"))
                     .at(at)
-                    .mark(span_of(line), tr!("名前と中身を `=` で分けます", "`=` separates the name from the body"))
-                    .note(tr!("形は {} です。", "The shape is {}.", line_shape(word))),
+                    .mark(span_of(line), tr!("名前と中身を `=` で分けてください", "`=` separates the name from the body"))
+                    .note(tr!("次の形で書いてください: {}", "The shape is {}.", line_shape(word))),
             );
             return None;
         };
@@ -1310,7 +1310,7 @@ impl P {
                 self.err(
                     Diag::error("E021", tr!("`fold` の中に `->` の無い行があります", "A `fold` arm has no `->`"))
                         .at(self.at(sp.line))
-                        .mark(sp, tr!("`{} -> next` のように書きます", "write it like `{} -> next`", name.text)),
+                        .mark(sp, tr!("`{} -> next` のように書いてください", "write it like `{} -> next`", name.text)),
                 );
                 continue;
             };
@@ -1457,7 +1457,7 @@ impl P {
                     Diag::error("E050", tr!("`machine` の中に `{}` が二行あります", "There are two `{}` lines under `machine`", word))
                         .at(p.at(sp.line))
                         .mark(sp.clone(), tr!("二行目です", "this is the second"))
-                        .note(tr!("この行は一つの `machine` に一行だけ書きます。", "A `machine` has one line of this kind.")),
+                        .note(tr!("この行は、一つの `machine` に一行だけ書けます。", "A `machine` has one line of this kind.")),
                 );
             };
             match word.as_str() {
@@ -1567,7 +1567,7 @@ impl P {
                     .at(self.at(span.line))
                     .mark(span.clone(), "")
                     .note(tr!(
-                        "`carry` は次の呼び出しの入力になる出力を、`initial` は案件が始まる状態を言います。どちらも無いと、呼び出しの並びが決まりません。",
+                        "`carry` は次の呼び出しの入力になる出力を、`initial` は案件が始まる状態を示します。どちらも無いと、呼び出しの並びが決まりません。",
                         "`carry` names the output that is the next call's input, and `initial` the state a case starts in. Without both there is no sequence of calls to speak of."
                     )),
             );
@@ -1611,7 +1611,7 @@ impl P {
             }
         };
         let (Some(left), Some(right)) = (name_of(&line[1..p]), name_of(&line[p + 1..])) else {
-            return bad(self, tr!("両側とも入力の名前を一つずつ書きます", "one input's name is expected on each side"));
+            return bad(self, tr!("両側に入力の名前を一つずつ書いてください", "one input's name is expected on each side"));
         };
         Some(Constraint { left, op, right, span })
     }
@@ -1643,7 +1643,7 @@ impl P {
                     .at(p.at(span.line))
                     .mark(span.clone(), "")
                     .note(tr!(
-                        "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。隣に置いたファイルは箇所無しで `@郵便` とも、表を指して `@郵便 表1` とも書けます。語にならない箇所は `\"` で囲みます（`@osha \"§1910.157\"`）。出典は `{}` で宣言した名前です。",
+                        "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。隣に置いたファイルは箇所無しで `@郵便` とも、表を指して `@郵便 表1` とも書けます。語にならない箇所は `\"` で囲んでください（`@osha \"§1910.157\"`）。出典は `{}` で宣言した名前です。",
                         "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@act 第20条, 第21条`); a file beside the rule may be cited whole, `@postal`, or by one of its tables, `@postal table1`. A fragment that is not a word goes in quotes (`@osha \"§1910.157\"`). The source is a name a `{}` line declares.",
                         crate::kw::SOURCE
                     )),
@@ -1753,7 +1753,7 @@ impl P {
                 };
                 let Some(Kind::Str(id)) = line.get(i).map(|t| t.kind.clone()) else {
                     bad(self, tr!(
-                        "法令 ID を `\"…\"` で書いてください（データベースを書くなら `{l} egov` か `{l} ecfr` を先に）",
+                        "法令 ID を `\"…\"` で書いてください（データベースを書くなら、`{l} egov` か `{l} ecfr` を先に書いてください）",
                         "write the law id in quotes (a database goes first: `{l} egov` or `{l} ecfr`)",
                         l = crate::kw::LAW
                     ));
@@ -1764,7 +1764,7 @@ impl P {
                     return None;
                 }
                 let Some(Kind::Date(y, m, d)) = line.get(i + 2).map(|t| t.kind.clone()) else {
-                    bad(self, tr!("日付は `YYYY-MM-DD` です", "the date is `YYYY-MM-DD`"));
+                    bad(self, tr!("日付は `YYYY-MM-DD` の形で書いてください", "the date is `YYYY-MM-DD`"));
                     return None;
                 };
                 if line.len() > i + 3 {
@@ -1826,7 +1826,7 @@ impl P {
         let span = span_of(head);
         self.i += 1;
         let shape = tr!(
-            "形は `{a} <名前> = \"<規則ファイル>\" sha256:<ハッシュ>` の下に、`<元の規則の入力> = <この規則の値>`（列挙なら `with <値> -> <値>, …` を続ける）、`{e} <準用しない定義>, …`、`<元の規則の出力> -> <名前>` を一行ずつ書きます。",
+            "`{a} <名前> = \"<規則ファイル>\" sha256:<ハッシュ>` の行の下に、`<元の規則の入力> = <この規則の値>`（列挙なら `with <値> -> <値>, …` を続ける）、`{e} <準用しない定義>, …`、`<元の規則の出力> -> <名前>` を一行ずつ書いてください。",
             "The shape is `{a} <name> = \"<rule file>\" sha256:<digest>`, then one `<callee input> = <value>` line each (for an enum, followed by `with <value> -> <value>, …`), `{e} <target>, …`, and `<callee output> -> <name>` lines.",
             a = crate::kw::APPLY,
             e = crate::kw::EXCEPT
@@ -2102,7 +2102,7 @@ impl P {
             }
         }
         let shape = tr!(
-            "形は `{c} <名前>(<別名>) -> <出力>` の下に `{w} <列> <セル> and …`（条件が無ければ `{w} {a}`）と `{t} <値>` を一行ずつ、任意で `{o} <相手>` です。",
+            "`{c} <名前>(<別名>) -> <出力>` の行の下に、`{w} <列> <セル> and …`（条件が無ければ `{w} {a}`）と `{t} <値>` を一行ずつ書いてください。`{o} <相手>` は、必要なときだけ足してください。",
             "The shape is `{c} <name>(<alias>) -> <output>`, then one `{w} <column> <cell> and …` line (`{w} {a}` when there is no condition), one `{t} <value>` line, and optionally `{o} <target>`.",
             c = crate::kw::CLAUSE,
             w = crate::kw::WHEN,
@@ -2150,7 +2150,7 @@ impl P {
         let body = &wl[1..];
         let always = body.len() == 1 && body[0].ident() == Some(crate::kw::ALWAYS);
         if body.is_empty() {
-            bad(self, span_of(&wl), tr!("条件がありません。無いなら `{} {}` と書きます", "there is no condition; write `{} {}` when there is none", crate::kw::WHEN, crate::kw::ALWAYS));
+            bad(self, span_of(&wl), tr!("条件がありません。条件が無いなら `{} {}` と書いてください", "there is no condition; write `{} {}` when there is none", crate::kw::WHEN, crate::kw::ALWAYS));
             return None;
         }
         if !always {
@@ -2394,7 +2394,7 @@ impl P {
                         .at(at)
                         .mark(span_of(rt), tr!("この行のセルは {} 個で、見出しの列は {} 個です", "this row has {} cells, and the header {} columns", cells_t.len(), header.len()))
                         .note(tr!(
-                            "一つの列に一つのセルを書きます。どの値でもよい列には `-` を書きます。",
+                            "一つの列に一つずつセルを書いてください。どの値でもよい列には `-` を書いてください。",
                             "Write one cell per column; a column that takes any value gets `-`."
                         )),
                 );
@@ -2414,7 +2414,7 @@ impl P {
                         Diag::error("E008", tr!("空のセルがあります", "Empty cell"))
                             .at(at)
                             .mark(cspan.clone(), col)
-                            .note(tr!("任意の値に当てるなら `-` と書いてください（空欄は書き忘れと区別がつきません）", "Write `-` to match any value (an empty cell cannot be told apart from an omission)")),
+                            .note(tr!("どの値にも当てるなら `-` と書いてください（空のセルは、書き忘れと区別がつきません）", "Write `-` to match any value (an empty cell cannot be told apart from an omission)")),
                     );
                     // The place is kept, so that the cells after it stay under their own
                     // headings; the error has already stopped the rule.
@@ -2469,7 +2469,7 @@ impl P {
                 Diag::error("E010", tr!("`..` は書けません", "`..` is not allowed"))
                     .at(at)
                     .mark(t.span.clone(), "")
-                    .note(tr!("`<=2000g` と `>2000g` のどちらの意味かが読めないためです。比較演算子で書いてください", "It is unclear whether `<=2000g` or `>2000g` is meant. Use a comparison operator instead")),
+                    .note(tr!("`<=2000g` と `>2000g` のどちらの意味か分からないためです。比較演算子で書いてください。", "It is unclear whether `<=2000g` or `>2000g` is meant. Use a comparison operator instead")),
             );
             return None;
         }
@@ -2496,7 +2496,7 @@ impl P {
                                 .at(at)
                                 .mark(t.span.clone(), tr!("文字列ではありません", "not a string"))
                                 .note(tr!(
-                                    "`starts_with \"ABC\"` の形で書いてください。前置きを二つ以上書くならコンマで区切ります。",
+                                    "`starts_with \"ABC\"` の形で書いてください。前方一致の文字列を二つ以上書くなら、コンマで区切ってください。",
                                     "Write it as `starts_with \"ABC\"`. Separate two or more prefixes with a comma."
                                 )),
                         );

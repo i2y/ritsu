@@ -256,11 +256,11 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
         }
         if whole {
             d.notes.push(tr!(
-                "入力をいくつか試しましたが、この出力に端数は生まれませんでした（表から引いた額がそのまま出るか、式の中で既に丸めているためです）。",
+                "入力をいくつか試しましたが、この出力に端数は生まれませんでした（表から引いた値がそのまま出るか、式の中で既に丸めているためです）。",
                 "Several witnesses were tried and none produced a fraction in this output (either the amount looked up from the table is emitted as is, or the expression already rounds it)."
             ));
             d.notes.push(tr!(
-                "丸めの宣言はここでは第二の働きをします。出力セルのリテラルがその刻みに載っているかを検査するのに使われ、{typo} のような桁の打ち間違いが E106 で止まります。",
+                "ここでは、丸めの宣言は別の役にも立ちます。出力のセルに書いた値がその刻みに載っているかを検査するので、{typo} のような打ち間違いを E106 で見つけられます。",
                 "Here the rounding declaration does its second job: it is used to check that the literals in the output cells sit on that grid, so a mistyped digit such as {typo} is stopped by E106."
             ));
             d.notes.push(tr!(

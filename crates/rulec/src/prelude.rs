@@ -396,7 +396,7 @@ impl Norm {
                         .at(at)
                         .mark(sp.clone(), tr!("{list} のどれか", "one of {list_en}"))
                         .note(tr!(
-                            "符号や現地の綴りが二つの国で同じです。どの区分か分かるように、値の名前（{list}）で書いてください。",
+                            "コードや現地の綴りが、二つの国で同じです。どの区分か分かるように、値の名前（{list}）で書いてください。",
                             "Two countries spell a division this way (a code, or a local name). Write the value's name ({list_en}), so that it says which one."
                         )),
                 );

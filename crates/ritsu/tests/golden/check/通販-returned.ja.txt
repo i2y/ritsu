@@ -7,7 +7,7 @@ error[rulec E032]: 列挙 注文の状態 が ../../proto/shop/ordering/v1/order
   |      ^^^^^^^^^^
   |
  ../../proto/shop/ordering/v1/order.proto にあって、この列挙に無い値: returned
- この列挙は値の名前に別名を付けて書いているので、`<名前>(returned)` の形で足します。名前は自分で決めます。
+ この列挙は値の名前に別名を付けて書いているので、`<名前>(returned)` の形で足してください。`<名前>` の部分は自分で決めてください。
  契約（../../proto/shop/ordering/v1/order.proto）に値が増えました。この規則がその値をどう扱うかは、まだ決まっていません。
 
 ok delivery/rules/出荷の急ぎ.rule

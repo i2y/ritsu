@@ -132,7 +132,7 @@ pub fn to_val_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Check
                     let meant = crate::types::fmt_val(v, &inner);
                     let n = if meant == n.to_string() { tr!("{n} ", "{n}") } else { tr!("{n}（{meant}）", "{n} ({meant})") };
                     return Err(tr!(
-                        "{n}は宣言範囲 {}..{} の外です",
+                        "{n}は宣言した範囲 {}..{} の外です",
                         "{n} is outside the declared range {}..{}",
                         show(lo),
                         show(hi)
@@ -314,11 +314,11 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
         };
 
         let Some(ins) = crate::json::members_of(&j, "in") else {
-            bad("no_in", "", tr!("`in` がありません", "`in` is missing"), &tr!("入力は `in` の下に、規則の和名で置きます。", "Inputs go under `in`, keyed by the names used in the rule."));
+            bad("no_in", "", tr!("`in` がありません", "`in` is missing"), &tr!("入力は、`in` の下に規則の名前（別名ではないほう）で置いてください。", "Inputs go under `in`, keyed by the names used in the rule."));
             continue;
         };
         let Some(obs) = crate::json::members_of(&j, "observed") else {
-            bad("no_observed", "", tr!("`observed` がありません", "`observed` is missing"), &tr!("そのとき実際に出た値を `observed` に置きます。", "Put the values that actually came out at the time under `observed`."));
+            bad("no_observed", "", tr!("`observed` がありません", "`observed` is missing"), &tr!("そのとき実際に出た値を `observed` に置いてください。", "Put the values that actually came out at the time under `observed`."));
             continue;
         };
 
@@ -333,7 +333,7 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
                 "unknown_field",
                 extra[0],
                 tr!("`in` に規則が知らないフィールドがあります: {}", "`in` has fields the rule does not know: {}", extra.join(", ")),
-                &tr!("規則の入力の和名と綴りを合わせてください。", "Match the spelling of the rule's input names."),
+                &tr!("規則の入力の名前（別名ではないほう）と綴りを合わせてください。", "Match the spelling of the rule's input names."),
             );
             continue;
         }
@@ -395,7 +395,7 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
                         "missing_observed",
                         name,
                         tr!("`observed.{name}` がありません", "`observed.{name}` is missing"),
-                        &tr!("出力は全部要ります。片方だけ比べると、比べなかった側の食い違いが緑になります。", "Every output is required. Comparing only one side turns a mismatch on the other side green."),
+                        &tr!("出力は全部要ります。片方だけ比べると、比べなかった側の食い違いを見逃します。", "Every output is required. Comparing only one side turns a mismatch on the other side green."),
                     );
                     broken = true;
                 }

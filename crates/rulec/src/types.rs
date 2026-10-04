@@ -576,7 +576,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                             .at(at(sp.line))
                             .mark(sp.clone(), "")
                             .note(tr!(
-                                "一つの国の区分は、一つの名前で取り込んでください。`std/都道府県` は値を日本語で、`std/jp/prefectures` は英語で書きます。どちらの綴りも、どちらの取り込みでも書けます。",
+                                "一つの国の区分は、一つの名前で取り込んでください。`std/都道府県` の値は日本語の名前、`std/jp/prefectures` の値は英語の名前です。どちらから取り込んでも、両方の綴りを書けます。",
                                 "Import one country's divisions under one name. `std/都道府県` spells the values in Japanese and `std/jp/prefectures` in English; either import accepts both spellings."
                             )),
                     );
@@ -616,10 +616,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 c.diags.push(
                     Diag::error("E012", tr!("`{}` はどの列挙の値でもありません", "`{}` is not a value of any enum", m.text))
                         .at(at(m.span.line))
-                        .mark(m.span.clone(), tr!("群の一員として書かれています", "written as a member of this group"))
+                        .mark(m.span.clone(), tr!("グループの値として書かれています", "written as a member of this group"))
                         .maybe_note(crate::prelude::hint(&m.text, &c.imported))
                         .note(tr!(
-                            "群は列挙の値の部分集合です。綴りを直すか、その値を列挙に足してください。読めない一員は黙って外され、群は一つ小さくなります。",
+                            "グループは列挙の値の部分集合です。綴りを直すか、その値を列挙に足してください。読めない値は黙って外され、グループが一つ小さくなります。",
                             "A group is a subset of an enum's values. Correct the spelling, or add the value to the enum. A member that names nothing was dropped in silence, leaving the group one value smaller."
                         )),
                 );
@@ -641,11 +641,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             let first = of(&g.members[0]);
             if let Some(other) = g.members.iter().find(|m| !c.enums.get(&first).is_some_and(|vs| vs.contains(&m.text))) {
                 c.diags.push(
-                    Diag::error("E103", tr!("群 {} に、列挙 {} の値と列挙 {} の値が混ざっています", "Group {} mixes values of enum {} and enum {}", g.name.text, first, of(other)))
+                    Diag::error("E103", tr!("グループ {} に、列挙 {} の値と列挙 {} の値が混ざっています", "Group {} mixes values of enum {} and enum {}", g.name.text, first, of(other)))
                         .at(at(other.span.line))
                         .mark(other.span.clone(), tr!("{} の値です", "a value of {}", of(other)))
                         .note(tr!(
-                            "群は一つの列挙の値の部分集合です。列には一つの列挙の値しか来ないので、ほかの列挙の値は当たりません。",
+                            "グループは一つの列挙の値の部分集合です。列には一つの列挙の値しか来ないので、ほかの列挙の値は当たりません。",
                             "A group is a subset of one enum's values. A column holds values of one enum, so the other enum's value never matches."
                         )),
                 );
@@ -675,7 +675,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .mark(i.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
                         .maybe_note(unit_note(&n))
                         .note(tr!(
-                            "範囲は完全性の証明が回る全体集合であり、生成コードの入口ガードでもあります。読めない境界を黙って落とすと、片側の無い範囲で「完全」と答えます。",
+                            "範囲は、完全性の証明が対象にする値の全体で、生成コードの入口のガードでもあります。読めない境界を黙って落とすと、片側の無い範囲のまま「完全」と判定してしまいます。",
                             "The range is the universe the completeness proof quantifies over, and the entry guard of the generated code. Dropping a bound it cannot read would answer \"complete\" for a range with one side missing."
                         )),
                 );
@@ -766,7 +766,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                             .mark(i.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
                             .maybe_note(unit_note(&n))
                             .note(tr!(
-                                "範囲は完全性の証明が回る全体集合であり、生成コードの入口ガードでもあります。読めない境界を黙って落とすと、片側の無い範囲で「完全」と答えます。",
+                                "範囲は、完全性の証明が対象にする値の全体で、生成コードの入口のガードでもあります。読めない境界を黙って落とすと、片側の無い範囲のまま「完全」と判定してしまいます。",
                                 "The range is the universe the completeness proof quantifies over, and the entry guard of the generated code. Dropping a bound it cannot read would answer \"complete\" for a range with one side missing."
                             )),
                     );
@@ -814,7 +814,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             c.diags.push(
                 Diag::error("E104", tr!("出力に丸めの宣言がありません", "The output declares no rounding"))
                     .at(at(o.span.line))
-                    .mark(o.ty.span.clone(), tr!("丸め の宣言がありません", "no rounding is declared"))
+                    .mark(o.ty.span.clone(), tr!("丸めの宣言がありません", "no rounding is declared"))
                     .fix(
                         crate::diag::FixKind::AddRounding,
                         format!("{} {}({})", crate::kw::ROUND, crate::kw::DOWN, unit_one(&ty)),
@@ -886,7 +886,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(at(t.span.line))
                         .mark(t.span.clone(), tr!("この型が宣言している税区分です", "this is the tax the type declares"))
                         .note(tr!(
-                            "お金の型の二つ目には、税込なら `incl_tax`、税抜なら `excl_tax` を書きます。ほかの語では、その金額が税込か税抜かが決まりません。",
+                            "お金の型の二つ目には、税込なら `incl_tax`、税抜なら `excl_tax` を書いてください。ほかの語では、税込か税抜かが決まりません。",
                             "The second word of a money type is `incl_tax` for an amount with tax and `excl_tax` for one without. Any other word leaves it unsaid which the amount is."
                         )),
                 );
@@ -990,7 +990,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 Diag::error("E009", tr!("`{n}` はキーワードなので、名前にできません", "`{n}` is a keyword and cannot be used as a name"))
                     .at(at(sp.line))
                     .mark(sp.clone(), "")
-                    .note(tr!("行指向の構文なので、キーワードと同じ名前は宣言を黙って捨ててしまいます。", "The syntax is line-oriented, so a declaration named like a keyword is silently dropped."))
+                    .note(tr!("rulec は規則を行ごとに読むので、キーワードと同じ名前を付けると、その宣言が黙って捨てられてしまいます。", "The syntax is line-oriented, so a declaration named like a keyword is silently dropped."))
                     .note(tr!("別の名前を付けてください。", "Choose a different name.")),
             );
         }
@@ -1037,7 +1037,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 .fix_kind(crate::diag::FixKind::AddAlias)
                 .mark(f.name.span.clone(), "")
                 .note(tr!("不足: {}", "Missing: {}", missing.join(" / ")))
-                .note(tr!("Go の公開識別子は先頭が大文字である必要があり、漢字とかなは大文字を持ちません。名前がもとから ASCII なら別名は要りません。", "An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase. A name that is already ASCII needs no alias."))
+                .note(tr!("Go の公開識別子は先頭が大文字でなければならず、漢字とかなには大文字がありません。名前がもとから ASCII なら、別名は要りません。", "An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase. A name that is already ASCII needs no alias."))
                 .note(tr!("宣言の位置に丸括弧で書いてください。例: 届け先(dest)", "Write it in parentheses at the declaration, e.g. 届け先(dest)")),
         );
     }
@@ -1164,7 +1164,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         let mut hit: Vec<(&Name, String)> = Vec::new();
         for o in &f.outputs {
             if o.name.ascii.as_deref().is_some_and(|a| taken(a, &["trace"])) {
-                hit.push((&o.name, tr!("答えは出力と並べて `trace` を運びます", "the answer carries `trace` beside the outputs")));
+                hit.push((&o.name, tr!("答えには、出力と並んで `trace` が入ります", "the answer carries `trace` beside the outputs")));
             }
         }
         for e in &f.enums {
@@ -1210,7 +1210,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .mark((*first).clone(), tr!("最初の宣言", "the first declaration"))
                         .mark(n.span.clone(), tr!("同じ名前", "the same name"))
                         .note(tr!(
-                            "表と節の名前は一つの名前空間です。記録の trace と `{}` の行がその名前で指します。どちらかを変えてください。",
+                            "表と節は同じ名前空間に入ります。記録の trace と `{}` の行は、その名前で表や節を指します。どちらかの名前を変えてください。",
                             "Tables and clauses share one namespace: the trace and `{}` lines refer to them by name. Change one of the two.",
                             crate::kw::OVERRIDES
                         )),
@@ -1232,7 +1232,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(at(s.name.span.line))
                         .mark((*first).clone(), tr!("最初の宣言", "the first declaration"))
                         .mark(s.name.span.clone(), tr!("同じ名前", "the same name"))
-                        .note(tr!("引用 `@名前` はこの名前で出典を指します。どちらかを変えてください。", "A citation `@name` refers to the source by this name. Change one of the two.")),
+                        .note(tr!("引用 `@名前` は、この名前で出典を指します。どちらかの名前を変えてください。", "A citation `@name` refers to the source by this name. Change one of the two.")),
                 ),
                 None => {
                     seen.insert(&s.name.text, &s.name.span);
@@ -1318,7 +1318,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 .at(tr!("{path}:{} 数え上げ", "{path}:{} count", d.span.line))
                 .mark(d.span.clone(), tr!("この規則には `fold` もあります（{} 行目）", "this rule also has a `fold` (line {})", fold.span.line))
                 .note(tr!(
-                    "どちらも同じ並びの終わり方です。`fold` は打ち切れるので、途中で止まった歩きの数え上げが何を意味するかが決まりません。数えたいなら `fold` を消して、数えた結果を表で判定してください。",
+                    "どちらも、同じ並びをたどった結果のまとめ方です。`fold` は途中で打ち切れるので、途中で止まったときの数え上げが何を意味するかが決まりません。数えたいなら `fold` を消して、数えた結果を表で判定してください。",
                     "They are two endings for the same walk. A `fold` can stop partway, and what a count means on a walk that stopped is not decided. To count, drop the `fold` and let a table judge the count."
                 )),
         );
@@ -1332,7 +1332,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .at(at_fold.clone())
                     .mark(fold.span.clone(), tr!("{} は宣言されていません", "{} is not declared", fold.over))
                     .note(tr!(
-                        "たどる並びは `elements <名前>(<別名>)` で宣言します。その中に一要素ぶんのフィールドを書きます。",
+                        "たどる並びは `elements <名前>(<別名>)` で宣言し、その下に一要素ぶんのフィールドを書いてください。",
                         "Declare the sequence with `elements <name>(<alias>)`, and the fields of one element inside it."
                     )),
             );
@@ -1443,7 +1443,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .at(at_fold.clone())
                     .mark(fold.span.clone(), tr!("`exhausted -> <値>` がありません", "there is no `exhausted -> <value>`"))
                     .note(tr!(
-                        "どの要素も打ち切らずに終わった場合の答えです。保持しているものを返すなら `exhausted -> {}` と書きます。",
+                        "どの要素でも打ち切らずに最後まで見たときの答えです。保持している値を返すなら `exhausted -> {}` と書いてください。",
                         "It is the answer when no element ended the walk. To answer with what is held, write `exhausted -> {}`.",
                         crate::kw::HELD
                     )),
@@ -1477,7 +1477,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(tr!("{path}:{} 例", "{path}:{} examples", sp.line))
                         .mark(sp, tr!("{} の列がありません", "no column for {}", el.name.text))
                         .note(tr!(
-                            "この規則は並びをたどるので、一件の例は、どの並びをたどるのかまで書いて初めて一件です。`sequence <名前>` で並びを書き、見出しに `{}` の列を足して、その名前をセルに書いてください。",
+                            "この規則は並びをたどるので、例にはどの並びをたどるのかも書く必要があります。`sequence <名前>` で並びを書き、見出しに `{}` の列を足して、その名前をセルに書いてください。",
                             "This rule walks a sequence, so an example is only a case once it says which sequence. Write the list with `sequence <name>`, add a `{}` column to the header, and name it in the cell.",
                             el.name.text
                         )),
@@ -1511,7 +1511,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(at_seq.clone())
                         .mark(sq.span.clone(), tr!("`elements` がありません", "there is no `elements`"))
                         .note(tr!(
-                            "`sequence` は `elements` で宣言したフィールドの並びです。たどる並びが無いなら、書く先がありません。",
+                            "`sequence` は `elements` で宣言したフィールドの並びです。たどる並びが無い規則では、書いても使われません。",
                             "A `sequence` is a list of the fields `elements` declares. With no sequence to walk there is nothing for it to be a list of."
                         )),
                 );
@@ -1550,7 +1550,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                             .at(at_seq.clone())
                             .mark(sq.span.clone(), tr!("`{}` の列がありません", "no column for `{}`", fd.name.text))
                             .note(tr!(
-                                "一件の要素はフィールドが全部そろって一件です。フィールドを落とすと、その値が何かを誰も決めていないことになります。",
+                                "要素には、フィールドを全部書いてください。フィールドを落とすと、その値を誰も決めていないことになります。",
                                 "One element is one element only when all of its fields are there. A field left out is a value nobody decided."
                             )),
                     );
@@ -1569,7 +1569,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                                 .at(at_seq.clone())
                                 .mark(sp.clone(), tr!("`{col}` に値が書かれていません", "`{col}` does not hold a value"))
                                 .note(tr!(
-                                    "範囲や `-` は表のセルの書き方です。ここは実際に渡す一件なので、値を書きます。",
+                                    "範囲や `-` は表のセルの書き方です。ここには実際に渡す一件を書くので、値を書いてください。",
                                     "A range or a `-` is how a table's cell is written. This is one element as it would really be passed, so write the value."
                                 )),
                         );
@@ -1615,11 +1615,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         }
                     }
                     _ => c.diags.push(
-                        Diag::error("E027", tr!("この列には `sequence` の名前を書きます", "This column holds the name of a sequence"))
+                        Diag::error("E027", tr!("この列には `sequence` の名前を書いてください", "This column holds the name of a sequence"))
                             .at(at_ex)
                             .mark(sp, tr!("名前ではありません", "this is not a name"))
                             .note(tr!(
-                                "一件の例がたどる並びは `sequence <名前>` で書き、ここにはその名前だけを書きます。",
+                                "例がたどる並びは `sequence <名前>` で書き、ここにはその名前だけを書いてください。",
                                 "The sequence a case walks is written with `sequence <name>`, and this cell holds that name and nothing else."
                             )),
                     ),
@@ -1660,7 +1660,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                             .at(tr!("{path}:{} 制約", "{path}:{} constraint", k.span.line))
                             .mark(k.span.clone(), what)
                             .note(tr!(
-                                "両側とも `inputs` に宣言した名前にしてください。導出や定義は入力から計算されるので、関係はその元になった入力どうしで書きます。",
+                                "両側とも `inputs` に宣言した名前にしてください。導出や定義は入力から計算されるので、関係は、その元になった入力どうしで書いてください。",
                                 "Name something declared in `inputs` on both sides. A derived or defined value is computed from the inputs, so write the relation between those inputs instead."
                             )),
                     );
@@ -1676,7 +1676,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         let ordered = |t: &Ty| matches!(t, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date);
         if !ordered(&a.ty) || !ordered(&b.ty) {
             c.diags.push(
-                Diag::error("E018", tr!("`constraint` は順序のある型どうしで書きます", "A `constraint` compares two ordered types"))
+                Diag::error("E018", tr!("`constraint` で比べられるのは、大小のある型どうしだけです", "A `constraint` compares two ordered types"))
                     .at(tr!("{path}:{} 制約", "{path}:{} constraint", k.span.line))
                     .mark(k.span.clone(), tr!("{} と {} は比べられません", "{} and {} cannot be compared", k.left, k.right))
                     .note(tr!(
@@ -1712,7 +1712,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     c.diags.push(
                         Diag::error("E108", tr!("制約 `{} {} {}` の比較が int64 に収まることを証明できません", "Cannot prove that the comparison in the constraint `{} {} {}` fits in int64", k.left, k.op.word(), k.right))
                             .at(tr!("{path}:{} 制約", "{path}:{} constraint", k.span.line))
-                            .mark(k.span.clone(), tr!("刻みの違う二つを、共通の刻み 1/{common} にそろえて比べます", "the two sides are compared on their common step of 1/{common}"))
+                            .mark(k.span.clone(), tr!("刻みの違う二つは、共通の刻み 1/{common} にそろえて比べます", "the two sides are compared on their common step of 1/{common}"))
                             .note(tr!(
                                 "{side} は最大で {} になり、共通の刻みで数えると int64 を超えます。範囲を狭めるか、二つの刻みをそろえてください。",
                                 "{side} reaches {}, which on the common step exceeds int64. Narrow the range, or give the two the same step.",
@@ -1758,7 +1758,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .at(tr!("{path}:{} 結果", "{path}:{} result", r.span.line))
                     .mark(r.span.clone(), tr!("{} は最初の出力ではありません", "{} is not the first output", r.name))
                     .note(tr!(
-                        "二つ目以降の出力は、同じ名前の `define` から取ります: `define {}(…) : … = …`。",
+                        "二つ目以降の出力は、同じ名前の `define` で書いてください: `define {}(…) : … = …`。",
                         "The second and later outputs are taken from a `define` of the same name: `define {}(…) : … = …`.",
                         r.name
                     ))
@@ -1811,7 +1811,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(at(d.span.line))
                         .mark(d.name.span.clone(), tr!("どの列にも式にも現れません", "appears in no column and no expression"))
                         .note(tr!(
-                            "数えた結果を使わないなら、並びを歩く意味がありません。表の列に置くか、消してください。",
+                            "数えた結果を使わないなら、並びをたどる意味がありません。表の列に置くか、消してください。",
                             "A count nothing reads is a walk for nothing. Put it in a column, or remove it."
                         )),
                 );
@@ -1853,7 +1853,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .fix(crate::diag::FixKind::MarkDefault, crate::kw::DEFAULT)
                     .mark(e.name.span.clone(), "")
                     .note(tr!("現れない値: {}", "Values that never appear: {}", names.join(" / ")))
-                    .note(tr!("完全性検査は通っていても、その値に当てはまる行が `-` に吸われているだけかもしれません。", "Even though the completeness check passes, the rows for those values may simply be absorbed by a `-`.")),
+                    .note(tr!("完全性の検査は通っていても、その値は `-` の行に当たっているだけかもしれません。", "Even though the completeness check passes, the rows for those values may simply be absorbed by a `-`.")),
             );
         }
     }
@@ -2085,7 +2085,7 @@ impl Checked {
                                 }
                             }
                             _ => self.diags.push(
-                                Diag::error("E118", tr!("`{name}` の刻みは定数で書きます", "The grid of `{name}` is a constant"))
+                                Diag::error("E118", tr!("`{name}` の刻みは定数で書いてください", "The grid of `{name}` is a constant"))
                                     .at(format!("{path}:{}", sp.line))
                                     .mark(sp.clone(), tr!("二つめの引数が定数ではありません", "the second argument is not a constant"))
                                     .note(tr!(
@@ -2151,7 +2151,7 @@ impl Checked {
                                             .at(format!("{path}:{}", sp.line))
                                             .mark(sp.clone(), tr!("{n} の範囲が負を含みます", "the range of {n} includes negative values"))
                                             .note(tr!(
-                                                "`range >=0円 …` のように書いてください。負が混じると、下に丸めるのか零へ丸めるのかで言語ごとに答えが割れます。",
+                                                "`range >=0円 …` のように書いてください。負の値が混じると、下に丸めるか 0 の方向へ丸めるかで、言語ごとに答えが分かれます。",
                                                 "Declare it with `range >=0JPY …`. Below zero the targets disagree about which way to round."
                                             )),
                                     );
@@ -2169,7 +2169,7 @@ impl Checked {
                                         .at(format!("{path}:{}", sp.line))
                                         .mark(sp.clone(), tr!("{n} の範囲が 0 を含みます", "the range of {n} includes 0"))
                                         .note(tr!(
-                                            "`range >=1円 …` のように、下限を正にしてください。0 で割る答えは決まっていないので、実行時に落ちるより先に断ります。",
+                                            "`range >=1円 …` のように、下限を正にしてください。0 で割った答えは決まっていないので、実行時に落ちる前に、検査の時点で断ります。",
                                             "Declare it with a positive lower bound, as in `range >=1JPY …`. Dividing by zero has no answer, so it is refused here rather than at run time."
                                         )),
                                 );
@@ -2357,7 +2357,7 @@ impl Checked {
                 .at(format!("{path}:{}", sp.line))
                 .mark(sp.clone(), "")
                 .note(tr!(
-                    "円×円 や g×cm のような合成単位は持っていません。次元解析はやらないので、書き方の誤りとして止めます。",
+                    "rulec には、円×円 や g×cm のような、単位を掛け合わせた単位がありません。次元解析はしないので、書き方の誤りとして止めます。",
                     "There is no compound dimension for JPY×JPY or g×cm. This tool does not do dimensional analysis, so it is stopped as a modeling error."
                 ))
                 .note(tr!(
@@ -2399,7 +2399,7 @@ impl Checked {
                 .mark(sp.clone(), tr!("この型が使えるのは比較と範囲だけです", "this type is for comparison and range only"))
                 .note(why)
                 .note(tr!(
-                    "閾値として比べるか、`{}` に書いてください。差や倍率そのものが業務ルールなら、計算した結果を入力として受け取るか、表で引きます。",
+                    "閾値として比べるか、`{}` に書いてください。差や倍率そのものが業務ルールなら、計算した結果を入力として受け取るか、表で引いてください。",
                     "Compare it against a threshold, or write it in a `{}`. Where a difference or a multiple is itself the rule, take the computed value as an input, or look it up in a table.",
                     crate::kw::RANGE
                 )),
@@ -2411,7 +2411,7 @@ impl Checked {
             (Ty::Money { tax: Some(x), .. }, Ty::Money { tax: Some(y), .. }) if x != y => {
                 tr!("税の変換は変換式ではなく表として書いてください。", "Write a tax conversion as a table, not as a conversion formula.")
             }
-            _ => tr!("単位の違う値は足せません。数量に応じた加算料金なら、それは表で書きます。", "Values of different dimensions cannot be added. A surcharge that depends on a quantity is written as a table."),
+            _ => tr!("単位の違う値は足せません。数量に応じた加算料金なら、それは表で書いてください。", "Values of different dimensions cannot be added. A surcharge that depends on a quantity is written as a table."),
         };
         self.diags.push(
             Diag::error("E103", tr!("単位の混同: {a} に {b} を足しています", "Mixed units: adding {b} to {a}"))
@@ -2515,7 +2515,7 @@ impl Checked {
                 self,
                 tr!("{col} は要素ごとの値ではありません", "{col} is not a value of one element"),
                 tr!(
-                    "まとめられるのは、要素のフィールドか、要素ごとの表が出した列だけです。一件の呼び出しに一つしかない値をまとめても、並びの話にはなりません。",
+                    "まとめられるのは、要素のフィールドか、要素ごとの表が出した列だけです。一回の呼び出しに一つしかない値は、並びとしてまとめられません。",
                     "Only a field of an element, or a column a per-element table produces, can be summarised. A value there is one of per call says nothing about the sequence."
                 ),
             ),
@@ -2524,7 +2524,7 @@ impl Checked {
                 self,
                 tr!("{col} は {} です", "{col} is {}", sym.ty),
                 tr!(
-                    "合計できるのは数の列——金額・数量・`number`・`rate`——だけです。真偽や列挙を合計しても意味が決まりません。",
+                    "合計できるのは数の列（金額・数量・`number`・`rate`）だけです。真偽や列挙を合計しても意味が決まりません。",
                     "Only a column of numbers — an amount, a quantity, `number` or `rate` — can be summed. A bool or an enum has no total."
                 ),
             ),
@@ -2535,7 +2535,7 @@ impl Checked {
                 self,
                 tr!("{col} は負になりえます", "{col} can be negative"),
                 tr!(
-                    "合計する列には `range >=0…` が要ります。負の値が混じると走っている途中の合計が上下し、宣言した範囲を出た時点で断る、ができません。差を取りたいなら、正の列を二つ合計して引いてください。",
+                    "合計する列には `range >=0…` が要ります。負の値が混じると途中の合計が上下するので、宣言した範囲を出た時点で断ることができません。差を取りたいなら、正の列を二つ合計して引いてください。",
                     "A summed column needs `range >=0…`. With negative values the running total moves both ways, and the guard cannot refuse the moment it leaves the declared range. To take a difference, sum two non-negative columns and subtract."
                 ),
             ),
@@ -2543,7 +2543,7 @@ impl Checked {
                 self,
                 tr!("{col} は {} です", "{col} is {}", sym.ty),
                 tr!(
-                    "数える条件は「その列がこの値であること」なので、値が有限の集合である列——真偽か列挙——にだけ書けます。",
+                    "数える条件は「その列がこの値であること」なので、値が有限の集合である列（真偽か列挙）にだけ書けます。",
                     "The test is \"this column has this value\", so the column's values have to be a closed set: a bool or an enum."
                 ),
             ),
@@ -2612,7 +2612,7 @@ impl Checked {
                         .at(at.clone())
                         .mark(d.span.clone(), what)
                         .note(tr!(
-                            "`range >=0 <=100` の形で書いてください。この範囲は二つの意味を持ちます——数えた結果を列に使ったときに完全性の検査が見る全体集合と、**並びの長さの上限**です。生成コードは、これより長い並びを入口で断ります。",
+                            "`range >=0 <=100` の形で書いてください。この範囲には二つの役割があります。数えた結果を列に使ったときに完全性の検査が見る値の全体であり、並びの長さの上限でもあります。生成コードは、これより長い並びを入口で断ります。",
                             "Write it as `range >=0 <=100`. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence** — the generated code refuses a longer one at the door."
                         )),
                 );
@@ -2645,7 +2645,7 @@ impl Checked {
                         .mark((*first).clone(), tr!("最初の行", "the first row"))
                         .mark(l.span.clone(), tr!("同じラベル", "the same label"))
                         .note(tr!(
-                            "ラベルは表の中で一意です。`{}` の行と記録がそれで行を指します。どちらかを変えてください。",
+                            "ラベルは、一つの表の中で重ならないようにしてください。`{}` の行と記録は、ラベルで行を指します。どちらかのラベルを変えてください。",
                             "A label is unique within its table: `{}` lines and records refer to the row by it. Change one of the two.",
                             crate::kw::OVERRIDES
                         )),
@@ -2667,7 +2667,7 @@ impl Checked {
                         col_ty.push(Ty::Unknown);
                     } else {
                         self.diags.push(
-                            Diag::error("E012", tr!("列 `{name}` という名前は宣言されていません", "Column `{name}` is not a declared name"))
+                            Diag::error("E012", tr!("列の名前 `{name}` は宣言されていません", "Column `{name}` is not a declared name"))
                                 .at(at(sp.line))
                                 .mark(sp.clone(), "")
                                 .note(tr!("列に書けるのは 入力・導出・真偽/列挙の中間値です。", "A column can only be an input, a derived value, or a boolean/enum intermediate value.")),
@@ -2835,7 +2835,7 @@ impl Checked {
                                             .mark(osp.clone(), "")
                                             .note(tr!("出力 {ocol} の丸めは {}({}) です。", "The rounding of output {ocol} is {}({}).", m.name(), fmt_val(g, want)))
                                             .note(tr!("ヒント: {} と書くか、丸めの宣言のほうを直してください。", "Hint: write {} instead, or fix the rounding declaration.", fmt_val(near, want)))
-                                            .note(tr!("黙って寄せることはしません。どちらが正しいかは業務の判断です。", "Nothing is snapped silently. Which one is right is a business decision.")),
+                                            .note(tr!("rulec は黙って値を寄せません。どちらが正しいかは業務の判断です。", "Nothing is snapped silently. Which one is right is a business decision.")),
                                     );
                                 }
                             }
@@ -2922,7 +2922,7 @@ impl Checked {
                 }
                 None => {
                     self.diags.push(
-                        Diag::error("E012", tr!("列 `{name}` という名前は宣言されていません", "Column `{name}` is not a declared name"))
+                        Diag::error("E012", tr!("列の名前 `{name}` は宣言されていません", "Column `{name}` is not a declared name"))
                             .at(at(sp.line))
                             .mark(sp.clone(), "")
                             .note(tr!("例の列は、入力・導出・表の出力のどれかの名前です。", "A column of the examples names an input, a derived value, or a table's output.")),
@@ -3039,7 +3039,7 @@ impl Checked {
                     .at(at_m(m.span.line))
                     .mark(m.span.clone(), "")
                     .note(tr!(
-                        "`fold` のある規則の答えは並び全体で決まり、入力を決まった数の列で区切れません（{} 行目）。ステートマシンの検査は、その区切りの上で一歩ずつの行き先を数えます。",
+                        "`fold` のある規則の答えは並び全体で決まるので、入力を決まった数の列で区切れません（{} 行目）。ステートマシンの検査は、その区切りごとに、一歩ずつの行き先を数えます。",
                         "The answer of a rule with a `fold` depends on the whole sequence, which does not cut into finitely many columns (line {}). The machine's checks count the transitions over exactly that cut."
                     , fd.span.line))
                     .note(tr!(
@@ -3078,7 +3078,7 @@ impl Checked {
                     tr!("{} は {a}、{} は {b} です", "{} is {a} and {} is {b}", i.text, o.text),
                     sp,
                     tr!(
-                        "持ち越す状態は、同じ列挙の入力と出力です。状態が有限個だから、呼び出しの並びについての主張が決まります。",
+                        "持ち越す状態は、同じ列挙を型に持つ入力と出力の組です。状態の数が有限なので、呼び出しの並びについての主張を確かめられます。",
                         "The carried state is an input and an output of the same enum. That the states are finitely many is what makes the claims about sequences of calls decidable."
                     ),
                 ),
@@ -3142,7 +3142,7 @@ impl Checked {
                                 .at(at_m(nv.span.line))
                                 .mark(v.span.clone(), "")
                                 .note(tr!(
-                                    "`never A after B` は、B を通ったあとに A に着く手順が無いことを言います。同じ状態が両側にあると、そこに留まる一歩で破れてしまい、言いたいことになりません。",
+                                    "`never A after B` は、B を通ったあとに A に着く手順が無いという主張です。同じ状態が両側にあると、そこに留まる一歩で破れてしまい、意図した主張になりません。",
                                     "`never A after B` says no sequence of calls reaches A once it has been in B. A state on both sides is broken by the first call that stays in it, which is not what anyone means."
                                 )),
                         );
@@ -3213,7 +3213,7 @@ impl Checked {
                 self.diags.push(bad(
                     tr!("{} は持ち越す状態です", "{} is the carried state", on.output.text),
                     tr!(
-                        "状態は、留まる呼び出しのたびに同じ値を返すので、`once` で数えると留まるだけで破れます。状態について言うなら `never … after …` を使ってください。",
+                        "状態は、留まる呼び出しのたびに同じ値を返すので、`once` で数えると留まるだけで破れます。状態についての主張なら、`never … after …` を使ってください。",
                         "A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. Say it about states with `never … after …`."
                     ),
                 ));
@@ -3280,7 +3280,7 @@ impl Checked {
                         .at(at_s.clone())
                         .mark(sc.span.clone(), "")
                         .note(tr!(
-                            "呼び出し一回に渡すものを全部書きます。持ち越す入力のほかは、どの入力も一行ごとに値が要ります。",
+                            "呼び出し一回に渡す入力を、全部書いてください。持ち越す入力のほかは、どの入力も一行ごとに値が要ります。",
                             "Write everything one call is passed: every input but the carried one takes a value in every row."
                         )),
                 );
@@ -3406,7 +3406,7 @@ impl Checked {
                                 owner = ce.clone();
                             } else {
                                 s.diags.push(
-                                    Diag::error("E103", tr!("この列は {want} ですが、群 `{w}`（{owner} の値）が書かれています", "This column is {want}, but group `{w}` (values of {owner}) is written here"))
+                                    Diag::error("E103", tr!("この列は {want} ですが、グループ `{w}`（{owner} の値）が書かれています", "This column is {want}, but group `{w}` (values of {owner}) is written here"))
                                         .at(at.to_string())
                                         .mark(span.clone(), ""),
                                 );
@@ -3461,7 +3461,7 @@ impl Checked {
                     .at(at.to_string())
                     .mark(span.clone(), tr!("前方一致ではありません", "not a prefix"))
                     .note(tr!(
-                        "`starts_with \"ABC\"` と書いてください。文字列を一つずつ数え上げることはできないので、等号や集合は書けません——値が数えられるものなら `enum` にしてください。",
+                        "`starts_with \"ABC\"` と書いてください。文字列を一つずつ数え上げることはできないので、等号や集合は書けません。値が数えられるものなら、`enum` にしてください。",
                         "Write `starts_with \"ABC\"`. Strings cannot be enumerated, so equality and sets are not available — make it an `enum` if the values can be listed."
                     )),
             ),
@@ -3689,7 +3689,7 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
             d = d.note(n);
         }
         d = d.note(tr!(
-            "日付の集合を読めないときは、そのあいだのすべての日で確かめ直すのではなく、ここで止めます。集合の上で書いた表は、すべての日の上では完全でないことが多いからです。",
+            "日付の集合を読めないときは、そのあいだのすべての日で確かめ直さずに、ここで止めます。その集合の日だけを考えて書いた表は、すべての日で見ると完全でないことが多いからです。",
             "When the set cannot be read, the check stops here rather than checking every day in between instead: a table written over the set is seldom complete over every day."
         ));
         c.diags.push(d);
@@ -3711,7 +3711,7 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
                 .at(at(from.span.line))
                 .mark(from.span.clone(), tr!("{name} の範囲は {naming} がとる日です", "the range of {name} is the days {naming} comes to"))
                 .note(tr!(
-                    "rulec のクレートのバイナリ（とブラウザで試すページ）は、koyomi をつないでいません。`ritsu rulec check …` か `ritsu check …` で走らせると、koyomi の口から日の集合を受け取って確かめます。",
+                    "rulec 単独のバイナリ（とブラウザで試すページ）には、koyomi が入っていません。`ritsu rulec check …` か `ritsu check …` で走らせると、ritsu を通して koyomi から日の集合を受け取って確かめます。",
                     "The binary of rulec's own crate (and the page in the browser) has no koyomi joined. Run `ritsu rulec check …` or `ritsu check …`, which hand the set of days over through koyomi's port."
                 )),
         ),
@@ -3722,10 +3722,10 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
                     let code = if s.code.is_empty() { String::new() } else { format!("[{}] ", s.code) };
                     let line = s.line.map(|l| format!(":{l}")).unwrap_or_default();
                     let msg = if crate::i18n::ja() { s.message.ja.clone() } else { s.message.en.clone() };
-                    tr!("koyomi が言うこと: {code}{}{line}: {msg}", "What koyomi says: {code}{}{line}: {msg}", s.file)
+                    tr!("koyomi の診断: {code}{}{line}: {msg}", "What koyomi says: {code}{}{line}: {msg}", s.file)
                 })
                 .collect();
-            stop(c, tr!("{naming} の日を koyomi が答えません", "koyomi does not answer for the days of {naming}"), tr!("{shown} を読めないか、koyomi の検査を通りません", "{shown} cannot be read, or does not pass koyomi's check"), notes)
+            stop(c, tr!("{naming} の日を、koyomi から得られません", "koyomi does not answer for the days of {naming}"), tr!("{shown} を読めないか、koyomi の検査を通りません", "{shown} cannot be read, or does not pass koyomi's check"), notes)
         }
         crate::days::Read::Undecided(why) => {
             let why = if crate::i18n::ja() { why.ja } else { why.en };
@@ -3784,9 +3784,9 @@ impl Checked {
                         format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(rl, ty), fmt_val_fixed(rh, ty)),
                     )
                     .mark(rg.span.clone(), tr!("実際に取りうる値は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
-                    .note(tr!("範囲が狭いと、完全性の検査が実際に起きる値を見ないまま「完全」と答えます。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."))
+                    .note(tr!("範囲が狭いと、完全性の検査は、実際に起きる値を見ないまま「完全」と判定します。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."))
                     .note(tr!(
-                        "ヒント: 範囲 >={} <={} に広げてください。起こりえない分まで広げても、検査がそこを自分で外すので害はありません。",
+                        "ヒント: 範囲 >={} <={} に広げてください。起こりえない値まで広げても、検査はその分を除いて調べるので、害はありません。",
                         "Hint: widen the range to >={} <={}. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.",
                         fmt_val(rl, ty),
                         fmt_val(rh, ty)
@@ -3964,7 +3964,7 @@ fn missing_step(name: &crate::ast::Name, tr: &TypeRef, ty: &Ty, line: usize, pat
                 "The generated code takes one integer count of the step (with `rate[step 1%]`, 12% is 12). With no step that integer counted whole units of 100%, so neither `10%` in the range nor any boundary in the table could be written in it."
             ))
             .note(tr!(
-                "刻みを表のリテラルから決めることはしません。行を一つ足すだけで、呼び出し側が渡す整数の意味が変わってしまうからです。",
+                "rulec は、刻みを表のリテラルから決めません。行を一つ足すだけで、呼び出し側が渡す整数の意味が変わってしまうからです。",
                 "The step is not taken from the literals in the table: adding a single row would then change what the integer the caller passes means."
             )),
     )
@@ -3998,7 +3998,7 @@ fn empty_range(r: &crate::ast::Range, ty: &Ty, at: String) -> Option<Diag> {
             .at(at)
             .mark(r.span.clone(), tr!("この範囲に入る値は一つもありません", "no value lies in this range"))
             .note(tr!(
-                "下の端が上の端を超えています。取りうる値が無いと、完全性の証明は何も無い集合について「漏れなし」と答え、生成コードの入口はどの呼び出しも断ります。",
+                "下限が上限を超えています。取りうる値が無いと、完全性の証明は空の集合について「漏れなし」と判定し、生成コードの入口はどの呼び出しも断ります。",
                 "The lower end is past the upper one. With no value to take, the completeness proof answers \"complete\" over nothing, and the generated code's entry refuses every call."
             ))
     })
@@ -4111,7 +4111,7 @@ impl Checked {
                         fmt_val(hi, ty)
                     ))
                     .note(tr!("ヒント: 入力の範囲を狭めるか、途中で丸めを一つ入れてください。", "Hint: narrow the input ranges, or insert one rounding step along the way."))
-                    .note(tr!("どこで丸めるかは円が動く業務の判断なので、ツールが勝手に決めません。", "Where to round is a business decision that moves yen, so the tool does not decide it on its own.")),
+                    .note(tr!("どこで丸めるかで答えが変わり、それは業務の判断なので、rulec は勝手に決めません。", "Where to round is a business decision that moves yen, so the tool does not decide it on its own.")),
             );
         }
     }

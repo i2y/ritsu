@@ -176,7 +176,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     out.missing_langs = out.skipped.len();
     if present.is_empty() {
         return Err(tr!(
-            "どの toolchain も無いので、生成物を走らせられません（{}）",
+            "ツールチェーンが一つも無いので、生成したコードを走らせられません（{}）",
             "none of the toolchains is available, so the generated code cannot be run ({})",
             crate::backend::ALL.iter().map(|b| b.tool).collect::<Vec<_>>().join(", ")
         ));
@@ -233,7 +233,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             false
         } else if !crate::backend::psql_ready() {
             out.skipped.push(tr!(
-                "psql がサーバに繋がらないので PostgreSQL 側を飛ばしました（PGHOST・PGDATABASE）",
+                "psql がサーバにつながらないので PostgreSQL 側を飛ばしました（PGHOST・PGDATABASE）",
                 "psql cannot reach a server; skipped the PostgreSQL function side (PGHOST, PGDATABASE)"
             ));
             false
@@ -362,7 +362,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                             }
                             Ok(said) => {
                                 diff = Some(Failure::Lines(tr!(
-                                    "参照評価器が断る入力に答えました（{}行目）: {}",
+                                    "参照評価器が、断るはずの入力に答えを返しました（{}行目）: {}",
                                     "answered an input the reference evaluator refuses (line {}): {}",
                                     k + 1,
                                     said.trim()
@@ -538,7 +538,7 @@ fn via_mcp(
         "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"rulec test\",\"version\":\"0\"}}}",
     )?;
     if init.get("serverInfo").is_none() {
-        return Err(broken(tr!("initialize の答えに serverInfo がありません", "the initialize answer has no serverInfo")));
+        return Err(broken(tr!("initialize のレスポンスに serverInfo がありません", "the initialize answer has no serverInfo")));
     }
     wire.notify("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}")?;
     let tools = wire.ask("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}")?;
@@ -573,7 +573,7 @@ fn via_mcp(
             })
             .and_then(|c| c.get("text"))
             .and_then(|t| t.as_str())
-            .ok_or_else(|| broken(tr!("tools/call の答えに本文がありません", "the tools/call answer has no text")))?;
+            .ok_or_else(|| broken(tr!("tools/call のレスポンスに本文がありません", "the tools/call answer has no text")))?;
         if r.get("isError") == Some(&crate::json::Json::Bool(true)) {
             return Err(broken(tr!("tools/call が {} 件目で断りました: {text}", "tools/call refused record {}: {text}", k + 1)));
         }
@@ -595,7 +595,7 @@ fn via_mcp(
         ))?;
         if r.get("isError") != Some(&crate::json::Json::Bool(true)) {
             return Err(Failure::Lines(tr!(
-                "参照評価器が断る入力に答えました（{}行目）",
+                "参照評価器が、断るはずの入力に答えを返しました（{}行目）",
                 "answered an input the reference evaluator refuses (line {})",
                 k + 1
             )));
@@ -650,7 +650,7 @@ fn via_mcp(
                 })
                 .and_then(|c| c.get("text"))
                 .and_then(|t| t.as_str())
-                .ok_or_else(|| broken(tr!("tools/call の答えに本文がありません", "the tools/call answer has no text")))?
+                .ok_or_else(|| broken(tr!("tools/call のレスポンスに本文がありません", "the tools/call answer has no text")))?
                 .to_string();
             let rec = crate::json::parse(&text).map_err(broken)?;
             state = rec.get("observed").and_then(|o| o.get(cout)).cloned();
@@ -699,7 +699,7 @@ fn broken(m: String) -> Failure {
 fn result_of(line: &str) -> Result<crate::json::Json, Failure> {
     let j = crate::json::parse(line.trim()).map_err(|e| {
         broken(tr!(
-            "MCP サーバの答えが JSON ではありません: {e}\n{line}",
+            "MCP サーバのレスポンスが JSON ではありません: {e}\n{line}",
             "the MCP server's answer is not JSON: {e}\n{line}"
         ))
     })?;
@@ -708,7 +708,7 @@ fn result_of(line: &str) -> Result<crate::json::Json, Failure> {
     }
     match j.get("result") {
         Some(r) => Ok(r.clone()),
-        None => Err(broken(tr!("MCP サーバの答えに result がありません", "the MCP server's answer has no result"))),
+        None => Err(broken(tr!("MCP サーバのレスポンスに result がありません", "the MCP server's answer has no result"))),
     }
 }
 
@@ -731,7 +731,7 @@ impl Wire for StdioWire {
         loop {
             line.clear();
             if self.so.read_line(&mut line).map_err(|e| broken(e.to_string()))? == 0 {
-                return Err(broken(tr!("MCP サーバが答えずに終わりました", "the MCP server ended without answering")));
+                return Err(broken(tr!("MCP サーバがレスポンスを返さずに終わりました", "the MCP server ended without answering")));
             }
             if !line.trim().is_empty() {
                 return result_of(&line);
@@ -757,7 +757,7 @@ struct HttpWire {
 
 impl HttpWire {
     fn connect(at: &str) -> Result<HttpWire, Failure> {
-        let out = TcpStream::connect(at).map_err(|e| broken(tr!("{at} に繋げません: {e}", "cannot connect to {at}: {e}")))?;
+        let out = TcpStream::connect(at).map_err(|e| broken(tr!("{at} につなげません: {e}", "cannot connect to {at}: {e}")))?;
         let inn = BufReader::new(out.try_clone().map_err(|e| broken(e.to_string()))?);
         Ok(HttpWire { out, inn, at: at.to_string(), session: None })
     }
@@ -792,7 +792,7 @@ impl HttpWire {
         loop {
             let mut h = String::new();
             if self.inn.read_line(&mut h).map_err(|e| broken(e.to_string()))? == 0 {
-                return Err(broken(tr!("HTTP の見出しが途中で切れました", "the HTTP headers ended in the middle")));
+                return Err(broken(tr!("HTTP のヘッダーが途中で切れました", "the HTTP headers ended in the middle")));
             }
             let h = h.trim_end();
             if h.is_empty() {

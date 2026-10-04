@@ -369,7 +369,7 @@ impl<'a> Gen<'a> {
             let ty = self.ty_of(&i.name.text);
             o.push_str(&format!("--   {}  {}: {}\n", q(&local(&i.name.text)), i.name.text, self.sql_col_doc(&i.name.text, &ty)));
         }
-        o.push_str(&tr!("-- 出るもの: \"_id\"、入力、出力、表ごとに当てはまった行の番号、そして \"_input_error\"（宣言の外の入力なら、その文。中なら NULL）:\n", "-- Out come \"_id\", the inputs, the outputs, one column per table with the number of the row that matched, and \"_input_error\" (a sentence when an input is outside its declaration, else NULL):\n"));
+        o.push_str(&tr!("-- 出るもの: \"_id\"、入力、出力、表ごとに当てはまった行の番号、そして \"_input_error\"（宣言の外の入力ならそのメッセージ、中なら NULL）:\n", "-- Out come \"_id\", the inputs, the outputs, one column per table with the number of the row that matched, and \"_input_error\" (a sentence when an input is outside its declaration, else NULL):\n"));
         for od in &self.f.outputs {
             let ty = self.ty_of(&od.name.text);
             o.push_str(&format!("--   {}  {}: {}\n", q(&local(&od.name.text)), od.name.text, self.sql_col_doc(&od.name.text, &ty)));
@@ -858,7 +858,7 @@ impl<'a> Gen<'a> {
             "規則 {} v{} を関数にしたもの。一件ずつ呼ぶときはこちらを使う。PostgreSQL 専用で、SQLite では動かない。\n\
              中身は {}.sql の問い合わせそのままで、引数を一行だけの入力の関係にする CTE を頭に足してある。値の形は\n\
              問い合わせと同じ。数は宣言した単位の整数、率は刻みの個数、日付は 1970-01-01 からの日数、列挙はその名前。\n\
-             宣言の外の入力には、ほかの言語と同じ文で例外を投げる（SQLSTATE 22023）。例外にせず列で受け取りたいときは、\n\
+             宣言の外の入力には、ほかの言語と同じメッセージで例外を投げる（SQLSTATE 22023）。例外にせず列で受け取りたいときは、\n\
              関係に対する問い合わせのほうを使う。\n\
              呼び方: SELECT * FROM {}({});\n\
              PostgREST や Supabase なら、公開しているスキーマに置くだけで RPC として呼べる: POST /rpc/{} に {{{}}}",

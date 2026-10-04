@@ -172,7 +172,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     .at(at(a.span.line))
                     .mark(a.span.clone(), tr!("固定: sha256:{p}", "pinned: sha256:{p}"))
                     .note(tr!("いまの元の規則: sha256:{h}", "The callee now: sha256:{h}"))
-                    .note(tr!("`rulec diff` でこの規則の答えが何件いくら動くかを見てから、見出しを次のとおり書き換えてハッシュを固定し直してください。", "See with `rulec diff` how many answers of this rule move and by how much, then rewrite the heading as follows to pin the new callee."))
+                    .note(tr!("`rulec diff` で、この規則の答えが何件、どれだけ動くかを見てから、見出しを次のとおり書き換えてハッシュを固定し直してください。", "See with `rulec diff` how many answers of this rule move and by how much, then rewrite the heading as follows to pin the new callee."))
                     .fix(crate::diag::FixKind::PinSource, header_line(&a, &h)),
             ),
             _ => {}
@@ -187,7 +187,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         if parsed.file.as_ref().is_some_and(|cf| !cf.applies.is_empty()) {
             out.push(e044(
                 tr!("`{}` 自身が `{}` を持っています", "`{}` itself has an `{}`", a.path, crate::kw::APPLY),
-                tr!("準用は一段までです。準用の準用は、元の規則の中身をこの規則に書き写してください。", "An apply goes one level. A provision applied through another is written expanded."),
+                tr!("準用できるのは一段までです。準用している規則をさらに準用するときは、元の規則の中身をこの規則に書き写してください。", "An apply goes one level. A provision applied through another is written expanded."),
             ));
             done.push(a);
             continue;
@@ -233,7 +233,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     })
                     .at(at(a.span.line))
                     .mark(a.span.clone(), "")
-                    .note(tr!("元の規則の入力は全部、`<元の入力> = <この規則の値>` の行で読み替えを書きます。", "Every callee input is bound explicitly by a `<input> = <value>` line; that is the substitution.")),
+                    .note(tr!("元の規則の入力は全部、`<元の入力> = <この規則の値>` の行で読み替えを書いてください。", "Every callee input is bound explicitly by a `<input> = <value>` line; that is the substitution.")),
                 );
                 bad = true;
             }
@@ -993,7 +993,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         Diag::error("E043", tr!("`{}` に渡す値の取りうる範囲が分かりません", "The interval of what is passed to `{}` is not known", cin.name))
                             .at(at(b.span.line))
                             .mark(b.span.clone(), "")
-                            .note(tr!("元の規則の `{}` は range {} の上で検査されています。渡す側にも範囲が要ります。", "The callee's `{}` was checked over range {}; the value passed needs a range.", cin.name, range_text(r))),
+                            .note(tr!("元の規則の `{}` は、range {} の中で検査されています。渡す側にも範囲が要ります。", "The callee's `{}` was checked over range {}; the value passed needs a range.", cin.name, range_text(r))),
                     );
                     continue;
                 }
@@ -1019,7 +1019,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         // its range), so the English one takes them by position: the range comes before the file.
                         .note(tr!("例: {} = {w} は、`{}` の `{}` の range {} の外です。", "For example {0} = {w} is outside range {3} of `{2}` in `{1}`.", cin.name, a.path, cin.name, range_text(r)))
                         .note(tr!(
-                            "元の規則の完全性はその範囲の上で証明されていて、外の値には定義がありません。渡す側の範囲を狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。",
+                            "元の規則の完全性は、その範囲の中でだけ証明されています。範囲の外の値には定義がありません。渡す側の範囲を狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。",
                             "The callee's completeness was proved over that range; outside it there is no definition. Narrow the range on this side, or define that region in a clause of this rule. Which is a business decision."
                         )),
                 );
@@ -1063,7 +1063,7 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                     Diag::error("E043", tr!("元の規則の制約 `{} {} {}` が、この規則の宣言から導けません", "The callee's constraint `{} {} {}` does not follow from this rule's declarations", k.left, k.op.word(), k.right))
                         .at(at(a.span.line))
                         .mark(a.span.clone(), "")
-                        .note(tr!("元の規則は `{}` と `{}` にその関係があると宣言していて、完全性はそれを前提に検査されています。ここでは `{}` と `{}` を渡します。", "The callee declares that relation between `{}` and `{}`, and its completeness was checked believing it. Here `{}` and `{}` are passed.", k.left, k.right, shown(bl), shown(br)))
+                        .note(tr!("元の規則は `{}` と `{}` にその関係があると宣言していて、完全性はそれを前提に検査されています。この規則が渡すのは `{}` と `{}` です。", "The callee declares that relation between `{}` and `{}`, and its completeness was checked believing it. Here `{}` and `{}` are passed.", k.left, k.right, shown(bl), shown(br)))
                         .note(tr!("同じ関係を `{} {} {} {}` として宣言するか、範囲でそれが成り立つようにしてください。", "Declare the same relation as `{} {} {} {}`, or make the ranges imply it.", crate::kw::CONSTRAINT, shown(bl), k.op.word(), shown(br))),
                 );
             }

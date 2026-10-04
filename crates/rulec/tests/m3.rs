@@ -222,7 +222,7 @@ fn 汚れた記録は種類ごとに数えて報告する() {
         "規則が知らないフィールド",
         "列挙 都道府県 の値ではありません",
         // The range is written the way the rule writes it, and so is what the integer means.
-        "900（900cm）は宣言範囲 1cm..170cm の外",
+        "900（900cm）は宣言した範囲 1cm..170cm の外",
         "`observed.運賃` がありません",
     ] {
         assert!(out.contains(want), "`{want}` を言っていない:\n{out}");
@@ -288,7 +288,7 @@ fn 値の変更は発火行を動かさない() {
     ]);
     assert_eq!(c, 1, "差があれば 1 で終わる: {out}");
     assert!(out.contains("影響 7 件"), "{out}");
-    assert!(out.contains("金額 +700"), "動く金額を出す: {out}");
+    assert!(out.contains("差の合計 +700"), "動く金額を出す: {out}");
     assert!(out.contains("差 +100 一様"), "一様なら一行に畳む: {out}");
     assert!(!out.contains("→行"), "行は動いていないのに遷移を出している: {out}");
 }

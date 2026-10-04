@@ -475,7 +475,7 @@ fn 断る入力は生成コードにも断らせる() {
     let (code, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap()]);
     assert_eq!(code, 1, "断らなくなったのに緑のまま: {said}");
     assert!(
-        said.contains("answered an input") || said.contains("答えました"),
+        said.contains("answered an input") || said.contains("答えを返しました"),
         "何が起きたか言っていない: {said}"
     );
 }

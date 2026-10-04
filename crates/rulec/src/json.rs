@@ -34,16 +34,16 @@ fn said(e: &Error) -> String {
         Problem::Exponent => tr!("{n} 文字目: 指数表記は受け付けません", "character {n}: exponent notation is not accepted"),
         Problem::TooLarge => tr!("{n} 文字目: 整数が大きすぎます", "character {n}: integer too large"),
         Problem::BadUnicodeEscape => tr!("{n} 文字目: \\u の後ろが 16 進 4 桁ではありません", "character {n}: \\u is not followed by 4 hex digits"),
-        Problem::LoneHighSurrogate => tr!("{n} 文字目: 上位代理の後ろに下位代理がありません", "character {n}: high surrogate not followed by a low surrogate"),
+        Problem::LoneHighSurrogate => tr!("{n} 文字目: 上位サロゲートの後ろに下位サロゲートがありません", "character {n}: high surrogate not followed by a low surrogate"),
         Problem::NotLowSurrogate => tr!("{n} 文字目: 上位サロゲートの後ろが下位サロゲートではありません", "character {n}: a high surrogate followed by what is not a low surrogate"),
-        Problem::BadCodePoint => tr!("使えない符号位置です", "invalid code point"),
-        Problem::UnknownEscape => tr!("{n} 文字目: 知らないエスケープです", "character {n}: unknown escape"),
+        Problem::BadCodePoint => tr!("使えないコードポイントです", "invalid code point"),
+        Problem::UnknownEscape => tr!("{n} 文字目: 使えないエスケープです", "character {n}: unknown escape"),
         Problem::ControlCharacter => tr!("{n} 文字目: 文字列の中に制御文字がそのまま書かれています", "character {n}: a control character written as it is in a string"),
         Problem::NotUtf8 => tr!("{n} 文字目: UTF-8 として読めません", "character {n}: not valid UTF-8"),
         Problem::Unclosed => tr!("文字列が閉じていません", "unterminated string"),
         Problem::CommaOrBracket => tr!("{n} 文字目に `,` か `]` が要ります", "character {n}: expected `,` or `]`"),
         Problem::CommaOrBrace => tr!("{n} 文字目に `,` か `}}` が要ります", "character {n}: expected `,` or `}}`"),
-        Problem::DuplicateKey(k) => tr!("鍵 `{k}` が二度あります", "key `{k}` appears twice"),
+        Problem::DuplicateKey(k) => tr!("キー `{k}` が二度あります", "key `{k}` appears twice"),
     }
 }
 
