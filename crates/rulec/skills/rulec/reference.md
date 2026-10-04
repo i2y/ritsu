@@ -232,7 +232,7 @@ in an output cell as in any other. A value may be spelled like one of the reserv
 ### Declaring a group
 
 ```rule
-group kinki = 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
+group north_america = domestic, canada
 ```
 
 A group is a named subset of an enum and may be used in a cell wherever a value may. Groups
@@ -335,7 +335,7 @@ source osha = law ecfr "29 CFR 1910" asof 2026-01-01
   "§1910.157" sha256:c2a9ce966c7e2269
 source japanpost = file "yupack_tariff.pdf" sha256:9e4edb5b6a1c0f42
 source terms = file "tariff.md" url "https://raw.githubusercontent.com/o/r/a1b2c3d/docs/tariff.md" sha256:4f1e0a77b2c3d5e6
-  表1 sha256:a583ec8586bbf596
+  table1 sha256:a583ec8586bbf596
 
 table base  @stamp_act 別表第一
 policy unique
@@ -368,10 +368,10 @@ it says where that copy came from, so `rulec source fetch` can bring it again an
 outdated` can ask whether the original has moved on; a document that arrived from a person has
 no address and leaves it out.
 
-**A document's fragments are its tables.** `表1` is the first table of the document in document
-order and `table1` is the same name in English; for a workbook a table is a sheet. A cited table
+**A document's fragments are its tables.** `table1` is the first table of the document in document
+order and `表1` is the same name in Japanese; for a workbook a table is a sheet. A cited table
 is taken out of the document by `rulec source fetch`, written beside it as
-`<document>.fragments/表1.tsv` (`料金表.md.fragments/表1.tsv`), and pinned under the `source` line exactly as a law's articles
+`<document>.fragments/table1.tsv` (`tariff.md.fragments/table1.tsv`), and pinned under the `source` line exactly as a law's articles
 are — so a revision of the document that moves a cited table fails the check, and one that does
 not, does not. The formats read here are csv, md, xlsx and docx — a workbook's table is a sheet, a Word
 document's is a `w:tbl`, and a merged cell leaves the column it took empty rather than being
@@ -409,7 +409,7 @@ the last bar of a row, says which fragment the definition transcribes: `第91条
 `第20条第2項`, `第20条第2項第3号`, `別表第一`, and the supplementary provisions as `附則第3条` (the law's
 own) or `附則（令和七年三月三一日法律第一三号）第3条` (an amending law's, its number spelled as the law's
 heading spells it); several are separated by `,`. A `file` is cited
-whole, `@japanpost`, or by one of its tables, `@japanpost 表1`; a law cited with no article is E037, and so
+whole, `@japanpost`, or by one of its tables, `@japanpost table1`; a law cited with no article is E037, and so
 is a document fragment named anything but `表<n>` or `table<n>`. The citation goes before the `#` comment. `check` holds the pins to the copies and never reads the network: a cited
 fragment without a pin is E037 (the fix is the pin line), a pin that differs from the copy is
 E038 (naming the definitions that cite it), a fragment with no copy is E039, and a pin no

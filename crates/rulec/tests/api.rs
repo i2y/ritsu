@@ -552,7 +552,9 @@ fn 出力の範囲は表の列のセルから来る() {
 #[test]
 fn 生成物の文書が実物の名前を使っている() {
     let doc = std::fs::read_to_string(root().join("docs/generated-code.md")).unwrap();
-    let (_tmp, _, j) = setup("doc", "tests/corpus/クーポン一枚.rule");
+    // The page shows the English twin of クーポン一枚 (tests/corpus/twins.tsv); its names are the
+    // twin's own.
+    let (_tmp, _, j) = setup("doc", "tests/corpus/single_coupon.rule");
     let py_j = j.get("python").unwrap();
     let go_j = j.get("go").unwrap();
     let php_j = j.get("php").unwrap();

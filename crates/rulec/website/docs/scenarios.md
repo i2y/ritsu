@@ -170,22 +170,22 @@ Who: the agent. A person confirms every line marked guess
 A spreadsheet becomes a first draft. Every guess is marked, so only the marked places need a look.
 
 ```console
-$ rulec import xlsx 運賃表.xlsx --sheet 本則 --name 運賃 > rules/運賃.rule
+$ rulec import xlsx tariff.xlsx --sheet Base --name parcel_fee > rules/parcel_fee.rule
 ```
 
 ```rule
-rule 運賃(imported) v1
-description "A draft that rulec import made from 運賃表.xlsx (sheet 本則). Every line marked guess is for a person to confirm"
+rule parcel_fee v1
+description "A draft that rulec import made from tariff.xlsx (sheet Base). Every line marked guess is for a person to confirm"
 
-enum あて先_values(c1_kind) = 北海道(v1) | 沖縄県(v2) | 東京都(v3)  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases
-enum 重量_values(c2_kind) = <=2000g(v1) | >2000g(v2)  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases
+enum dest_values = domestic | canada | overseas  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases
+enum weight_values = <=2000g(v1) | >2000g(v2)  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases
 
 inputs
-  あて先(c1) : あて先_values
-  重量(c2) : 重量_values
+  dest : dest_values
+  weight : weight_values
 
 outputs
-  送料(o1) : money[円, incl_tax]  round down(1円)  # guess: the rounding's direction and grid come from the source; if it has none, write down that this is a placeholder; whether tax is included has to come from the source
+  fee : money[USD]  round down(1USD)  # guess: the rounding's direction and grid come from the source; if it has none, write down that this is a placeholder
 …
 ```
 
@@ -370,7 +370,7 @@ policy unique
 If the rule already lives in a spreadsheet, a first draft can be made from it. Every guess is marked, so only the marked places need a look.
 
 ```console
-$ rulec import csv tariff.csv --name 運賃 > rules/tariff.rule
+$ rulec import csv tariff.csv --name parcel_fee > rules/tariff.rule
 ```
 
 Whether your rule fits a table at all is settled first on [Does your rule fit](fit.md).
@@ -380,29 +380,29 @@ Whether your rule fits a table at all is settled first on [Does your rule fit](f
 Who: rulec. A person answers each witness
 
 ```console
-$ rulec check rules/shipping_fee.rule
+$ rulec check rules/tariff.rule
 ```
 
 A gap comes back **with the input that falls through it**, and the shape of the row to add. Only the amount is a person's to decide.
 
 ```console
 error[E101]: Completeness gap: some input matches no row
-  --> rules/tariff.rule:34 table 運賃表
+  --> rules/tariff.rule:14 table decision
    |
-34 | table 運賃表(fee_table)
-   |       ^^^^^^ the input space is not fully covered
+14 | table decision  # source: tariff.csv (guess: replace with the document's name and date)
+   |       ^^^^^^^^ the input space is not fully covered
    |
- An input that matches no row: あて先 = 山梨県, サイズ = S60
+ An input that matches no row: dest = overseas, size = S60
  hint: add a row that matches this input.
- The shape of the row to add: `| 山梨県 | S60 | 820円 |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts.
+ The shape of the row to add: `| overseas | S60 | 8USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts.
 ```
 
 A contradiction stops with **an input both rows match**:
 
 ```console
-error[E105]: Overlapping rows: the same input matches row 8 and row 22
-  --> rules/tariff.rule:58 table 運賃表
- Both rows match: あて先 = 青森県, サイズ = S60
+error[E105]: Overlapping rows: the same input matches row 4 and row 9
+  --> rules/tariff.rule:25 table decision
+ Both rows match: dest = canada, size = S60
 ```
 
 Fix until it passes. What you fix is the table, never code. The seven checks are on [What it proves](checks.md#the-seven).

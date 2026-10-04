@@ -51,7 +51,7 @@ FIGS["existing"] = dict(
         nodes=[
             ("sheet", ("Statute, policy", ["an article on e-Gov", "a policy PDF", "a tariff sheet"]), 130),
             ("actor", ("Agent", ["reads the article", "writes the table", "cites it with @"]), 150),
-            ("sheet", ("Table", ["@法 第91条", "pinned to a copy"], ".rule"), 120),
+            ("sheet", ("Table", ["@act 第91条", "pinned to a copy"], ".rule"), 120),
             ("actor", ("rulec", ["holds it to the copy", "proves no gap,", "no overlap", "emits twelve languages"]), 160),
             ("sheet", ("Generated code", ["twelve languages, no runtime", "header names the source", "and its date"]), 176),
         ],
@@ -80,7 +80,7 @@ FIGS["internal"] = dict(
         nodes=[
             ("sheet", ("What you have", ["an internal policy", "a spreadsheet, a tariff", "code that runs today"]), 140),
             ("actor", ("Agent", ["reads and transcribes", "imports the spreadsheet", "cites the file with @"]), 160),
-            ("sheet", ("Table", ["@規約 表1", "pinned to the copy"], ".rule"), 130),
+            ("sheet", ("Table", ["@terms table1", "pinned to the copy"], ".rule"), 130),
             ("actor", ("rulec", ["proves no gap,", "no overlap", "holds it to the code", "and to the records"]), 160),
             ("sheet", ("Generated code", ["twelve languages, no runtime", "the same answers as before"]), 176),
         ],

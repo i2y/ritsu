@@ -1,0 +1,24 @@
+rule half_bound v1
+description "A boundary that falls between the values a derive can take: it overlaps over the rationals and not over the integers (the subject of W114)"
+
+inputs
+  paid : money[JPY]  range >=0JPY <=100_000JPY
+
+outputs
+  v : bool
+
+# A doubled amount is always even, so it is never exactly 5JPY. Rows 1 and 2 below therefore
+# never match together — but the elimination solves over the rationals, so it stops at 2.5JPY
+# and cannot show that this does not happen. It does not look at whole numbers (§15.127, the
+# honest limit).
+derive doubled : money[JPY] = paid + paid  range >=0JPY <=200_000JPY
+
+define high : bool = doubled >= 5JPY
+define low : bool = doubled <= 5JPY
+
+table decide
+policy unique
+| high  | low   | -> v : bool |
+| true  | -     | true        |
+| -     | true  | false       |
+| false | false | false       |

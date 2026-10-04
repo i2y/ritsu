@@ -146,6 +146,26 @@ fn to_json(j: &rulec::json::Json) -> String {
     }
 }
 
+/// The W114 guard shown in `docs/generated-code.md` and on the site's generate page is the one
+/// `gen` writes for `tests/pages/half_bound.rule`: a small rule written in English for exactly this,
+/// because the corpus no longer holds a rule whose guard could be shown.
+#[test]
+fn w114の防壁の抜粋は実物と一致する() {
+    let tmp = TempDir::new("docs-w114");
+    let dir = tmp.path().to_path_buf();
+    let (code, out) = run(&["gen", "tests/pages/half_bound.rule", "--out", dir.to_str().unwrap(), "--lang", "en"]);
+    assert_eq!(code, 0, "{out}");
+    let py = std::fs::read_to_string(dir.join("python/half_bound.py")).expect("python/half_bound.py が出ていない");
+    let lines: Vec<&str> = py.lines().collect();
+    let at = lines.iter().position(|l| l.trim_start().starts_with("# guard: W114")).expect("防壁の行が無い");
+    // The guard sits inside a function: the page shows it with that indent taken off.
+    let indent = lines[at].len() - lines[at].trim_start().len();
+    let want: String = lines[at..at + 3].iter().map(|l| format!("{}\n", &l[indent..])).collect();
+    for page in ["docs/generated-code.md", "website/docs/generate.md"] {
+        assert!(read(page).contains(&want), "{page} の W114 の防壁が実物と違う。実物:\n{want}");
+    }
+}
+
 /// The loop AGENTS.md teaches has to be the loop the CI section of the README runs.
 #[test]
 fn agentsとreadmeのciが同じ行を言う() {

@@ -66,7 +66,7 @@ naming the rows and the case that proves it.
 ### SQL is a query, and the same query as a function
 
 SQL gives you two doors on one rule. The first is **one query over a
-relation of inputs**: provide `shipping_fee_input` with a column `_id`
+relation of inputs**: provide `member_shipping_fee_input` with a column `_id`
 and one column per input under its alias, and out come `_id`, the
 inputs, the outputs, and one column per table with the number of the row
 that matched. A row of the table is a `WHEN`; the rounding is arithmetic
@@ -84,7 +84,7 @@ stop, so the entry guard is a column too: `_input_error` is NULL for a
 row inside the declared domain and carries the sentence for one outside
 it.
 
-The second door is `shipping_fee_function.sql`: the same query as a
+The second door is `member_shipping_fee_function.sql`: the same query as a
 function, for one case asked for by name. Its body is the query above,
 unchanged, with one CTE in front binding the arguments into a one-row
 input relation — so the two cannot drift apart. Unlike the query it
@@ -92,7 +92,7 @@ input relation — so the two cannot drift apart. Unlike the query it
 client that reads one field should not be handed a number that looks like
 an answer beside an error column it ignored. Put it in a schema PostgREST
 or Supabase exposes and the rule is an endpoint with no server code of its
-own: `POST /rpc/shipping_fee` with `{"dest": "北海道", …}` answers
+own: `POST /rpc/member_shipping_fee` with `{"dest": "北海道", …}` answers
 `[{"fee":1200,…}]`, and an input outside the declaration comes back as a
 **400** carrying the rule's own sentence. This one is
 PostgreSQL only — SQLite has no `CREATE FUNCTION` — so `rulec test` runs
@@ -282,9 +282,9 @@ could not decide whether two rows of a `unique` table can overlap, the
 generated code stops rather than silently picking one:
 
 ```python
-# guard: W114 (table 適用判定, row 1 × row 2): a pair of rows whose exclusivity could not be proven statically
-if 残高A <= 1000 and 残高B >= 3980:
-    raise RuleContradictionError("table 適用判定: row 1 and row 2 matched at the same time")
+# guard: W114 (table decide, row 1 × row 2): a pair of rows whose exclusivity could not be proven statically
+if high and low:
+    raise RuleContradictionError("table decide: row 1 and row 2 matched at the same time")
 ```
 
 
@@ -328,12 +328,12 @@ model's; hand that answer in **as a value** and the table takes it from
 there.
 
 So `gen` writes the rule as one MCP server beside the module:
-`shipping_fee_mcp.py` next to the Python one, `shipping_fee_mcp.mjs`
+`member_shipping_fee_mcp.py` next to the Python one, `member_shipping_fee_mcp.mjs`
 next to the JavaScript one. Register it and the rule is one tool named
 after its alias:
 
 ```console
-$ claude mcp add shipping_fee -- python3 generated/python/shipping_fee_mcp.py
+$ claude mcp add member_shipping_fee -- python3 generated/python/member_shipping_fee_mcp.py
 ```
 
 That is the agent on this machine. The places that only accept a URL —
@@ -342,7 +342,7 @@ product's MCP node — want MCP's Streamable HTTP, and it is **the same
 server**:
 
 ```console
-$ python3 generated/python/shipping_fee_mcp.py --http 8000
+$ python3 generated/python/member_shipping_fee_mcp.py --http 8000
 http://127.0.0.1:8000/mcp
 ```
 
@@ -354,7 +354,7 @@ answer that changed with the carrying would be a disagreement.
 
 Where the host renders **MCP Apps**, the same server hands over one
 thing more: the approver's page, as the tool's view. `gen` writes it
-beside the server (`shipping_fee_page.html`, the page
+beside the server (`member_shipping_fee_page.html`, the page
 `rulec doc --format html` renders), and the host shows it opened on the
 case that was just asked — the fields filled in, the answer, and the
 rows that decided it lit up. The reader of the chat sees which rows of
@@ -441,8 +441,8 @@ The service is written as **both applications**, because a rule is a pure
 function with nothing to await and the two are two doors on one body:
 
 ```console
-$ uvicorn shipping_fee_service:app --port 8080      # ASGI
-$ gunicorn 'shipping_fee_service:wsgi_app'          # WSGI
+$ uvicorn member_shipping_fee_service:app --port 8080      # ASGI
+$ gunicorn 'member_shipping_fee_service:wsgi_app'          # WSGI
 ```
 
 Apart from the `numpy` the NumPy plan's evaluator needs, `connectrpc` is the one dependency
@@ -479,7 +479,7 @@ backend: the schema is the source, and a generator that already reads
 JSON Schema is not something this tool needs to carry.
 
 Two things about the wire matter on the way in. Every number is an
-integer in the declared unit — 円 as yen, a rate as a count of its
+integer in the declared unit — yen as yen, a rate as a count of its
 steps — and the property's description says which, so a form that shows
 18.3% has to send 183. And an enum travels as its name, the one written
 in the rule.
@@ -488,12 +488,16 @@ in the rule.
 
 ```console
 $ rulec test generated/
-ok    shipping_fee (Python) 68 vectors
-ok    shipping_fee (Go) 68 vectors
+ok    member_shipping_fee (Python) 70 vectors
+ok    member_shipping_fee (Python, MCP) 70 vectors
+…
+ok    member_shipping_fee (Go) 70 vectors
+…
 ok    rounding helper (Python) unit vectors
-ok    rounding helper (Go) unit vectors
+ok    rounding helper (NumPy) unit vectors
+…
 
-All 4 matched.
+All 36 matched.
 ```
 
 The vectors are built from the boundaries of the rule, not from the
@@ -507,11 +511,11 @@ The ninth target is a module rather than a function in a language. `wasm/` holds
 Rust module `rust/` gets, a crate root that puts it behind the canonical ABI of
 `call: func(input: string) -> string`, a `.wit` that names that function as the export of a
 world, and the Node runner `rulec test` drives. `rustc` alone builds it, with no cargo and no
-crate; the shipping rule comes to forty kilobytes and imports nothing.
+crate; the shipping rule comes to forty-four kilobytes and imports nothing.
 
 ```console
 $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
-    --target wasm32-unknown-unknown --crate-type cdylib shipping_fee_wasm.rs -o shipping_fee.wasm
+    --target wasm32-unknown-unknown --crate-type cdylib member_shipping_fee_wasm.rs -o member_shipping_fee.wasm
 ```
 
 A host writes a JSON object of the inputs into the module's memory, calls `call`, and reads
@@ -525,9 +529,10 @@ component step, and what `rulec api` says under `wasm`.
 
 ```console
 $ rulec test generated/
-ok    shipping_fee (Rust) 68 vectors
-ok    shipping_fee (Rust, WASI) 68 vectors
-ok    shipping_fee (Wasm) 68 vectors
+ok    member_shipping_fee (Rust) 70 vectors
+ok    member_shipping_fee (Rust, WASI) 70 vectors
+…
+ok    member_shipping_fee (Wasm) 70 vectors
 …
 ```
 

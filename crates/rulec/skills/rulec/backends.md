@@ -361,7 +361,7 @@ the input and writes the operations through imported host calls rather than thro
 the Shopify Wasm API, which the `shopify_function` crate wraps. The module has to stay under
 256 kB, the run under 11 million instructions, and the `input_query` that shapes the input
 under 3,000 bytes. No network anywhere. None of that is a shape `gen` emits, and none of it
-has to be: the decision itself is small — the `wasm/` module for 送料 is 40 kB, built with
+has to be: the decision itself is small — the `wasm/` module for `member_shipping_fee` is 44 kB, built with
 `rustc` alone — so what the budget goes on is the boundary, not the table.
 
 The rule stays a rule: flat inputs, one decision. What the function adds is the boundary —
@@ -383,8 +383,8 @@ boundary earns the same kind of evidence the rule already has.
 
 What the platform decides is out of the rule's reach. A shipping *rate* is not set by a
 function (the delivery functions rename, reorder and hide options; rates come from a carrier
-service), so a tariff like ゆうパック運賃 is served from the generated code behind an HTTP
-endpoint, and a discount table like クーポン割引 is the function itself.
+service), so a tariff like `yupack_base_fee` is served from the generated code behind an HTTP
+endpoint, and a discount table like `coupon_discount_amount` is the function itself.
 
 ## A spreadsheet again: Google Apps Script
 
@@ -400,7 +400,7 @@ know.
 `gen --check` still guards the file it came from:
 
 ```console
-$ sed 's/^export //' generated/javascript/送料.mjs > gas/送料.gs
+$ sed 's/^export //' generated/javascript/member_shipping_fee.mjs > gas/member_shipping_fee.gs
 ```
 
 **Every integer in the module is a `bigint`**, because a JavaScript `number` is exact only to
@@ -409,16 +409,16 @@ the wrapper converts at both ends:
 
 ```js
 /**
- * 送料（円）。
- * @param {string} 届け先
- * @param {number} 重量      kg
- * @param {number} 注文金額  円
- * @param {string} 会員
- * @return {number} 円、10円単位に切り上げ
+ * The shipping fee, in yen.
+ * @param {string} dest
+ * @param {number} weight  g
+ * @param {number} total   yen
+ * @param {string} member
+ * @return {number} yen, rounded up to 10 yen
  * @customfunction
  */
-function 送料(届け先, 重量, 注文金額, 会員) {
-  return Number(shipping_fee(String(届け先), BigInt(重量), BigInt(注文金額), String(会員)));
+function SHIPPING_FEE(dest, weight, total, member) {
+  return Number(member_shipping_fee(String(dest), BigInt(weight), BigInt(total), String(member)));
 }
 ```
 
@@ -427,7 +427,7 @@ anyway. An error thrown inside a custom function reaches the cell as `#ERROR!` c
 message, so the entry guard ends up stating its refusal where the person who typed the value
 can read it. `Number()` on the way out would lose precision above 2^53 — a yen amount never
 reaches that, and saying so is cheaper than leaving a reader to wonder. A second custom
-function around `shipping_fee_traced` puts the row that fired in the next column, which is
+function around `member_shipping_fee_traced` puts the row that fired in the next column, which is
 what a sheet wants for the same reason a log line does.
 
 **Where the evidence stops.** The module is the one the JavaScript pass of `rulec test`

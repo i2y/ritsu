@@ -22,7 +22,7 @@ empty.
 | **Overlap** | under `policy unique`, an overlap is an error. Under `policy first`, structural shadowing (the staircase) is told apart from the pairs whose outputs differ and therefore deserve a decision |
 | **Dead rows** | a row nothing reaches. The message tells apart "earlier rows already cover it" from "the upstream table never emits the value it names" |
 | **Units** | adding yen to grams stops. So does tax-inclusive plus tax-exclusive |
-| **Rounding** | a numeric output must declare one. Without it, the message shows the money: "down(1円) gives 701, half_up(1円) gives 702, up(10円) gives 710 — the mode moves it by up to 9 yen" |
+| **Rounding** | a numeric output must declare one. Without it, the message shows the money: "down(1JPY) gives 0JPY, half_up(1JPY) gives 0JPY and up(10JPY) gives 10JPY, so the rounding mode moves the result by up to 10JPY" |
 | **Overflow** | that every intermediate fits in int64, proved from the declared ranges and steps |
 | **Examples** | every example runs; a failure names the rows that fired; a missing output column stops |
 
@@ -81,7 +81,7 @@ and, for a statute, `rulec source outdated` asks e-Gov, the Japanese government'
 database, whether a later amendment changes the text of a cited fragment.
 
 **What is cited from a document is a table.** For a tariff sheet or a company rule, `@source
-表1` takes that table out of the document, writes it beside it, and holds the rule to that copy
+table1` takes that table out of the document, writes it beside it, and holds the rule to that copy
 ever after (a sheet in a workbook, a table in a Word file, what it looks like in Markdown and
 CSV; for a PDF or a scan, hand an extractor to `--via`). That is where **one more check** comes
 in.
@@ -95,7 +95,7 @@ in.
   that was never transcribed** looks like. Completeness cannot see it: the inputs of a dropped
   row fall into one of the rows that remain.
 - **E119** — a boundary falls on the other side of itself from where the copy puts it: the copy
-  says `60cm以下` and the row says `<60cm`. Nothing else can see this either. The number 60 is
+  says `Under 18` and the row says `<=18`. Nothing else can see this either. The number 18 is
   still used, so W120 is quiet; move both of the rows that share the boundary and the table is
   still complete with no overlap; and exactly one input in the whole space changes hands.
 
@@ -160,7 +160,7 @@ is waved through when it does not terminate either: over the budget, E109 stops.
 Four things it does **not** prove, and they are kept beside the word:
 
 1. **That the table matches reality.** What is proved is what can be said about the table *as
-   written*. Cite the document a table was transcribed from (`@source 表1`) and an amount that
+   written*. Cite the document a table was transcribed from (`@source table1`) and an amount that
    disagrees with the copy does fail (E116, W120) — but even then what is shown is agreement
    with the copy, not with the world. With no citation, transcribe the tariff wrong and
    everything stays green
@@ -202,18 +202,18 @@ things are named in a run rather than proved. Both programs end by saying which.
 
 ```
 error[E101]: Completeness gap: some input matches no row
-  --> rules/yupack_base_fee.rule:34 table fee_table
+  --> rules/parcel_rate.rule:30 table base_rate
    |
-34 | table fee_table  # Source: Japan Post, base fee table (Tokyo)
+30 | table base_rate
    |       ^^^^^^^^^ the input space is not fully covered
    |
- An input that matches no row: dest = 山梨県, size = S60
+ An input that matches no row: dest = overseas, size = small, weight = 1lb
  hint: add a row that matches this input.
- The shape of the row to add: `| 山梨県 | S60 | 820JPY |`. Its output values are copied
+ The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied
  from the first row to give a shape that parses; they are not the right amounts. …
 ```
 
-The witness is the part to reason about. `dest = 山梨県, size = S60`
+The witness is the part to reason about. `dest = overseas, size = small, weight = 1lb`
 is not an illustration — it is an input the checker constructed, and it
 is the sentence you hand to whoever knows the answer.
 
@@ -222,9 +222,9 @@ is the sentence you hand to whoever knows the answer.
 ```console
 $ rulec check rules/ --terse
 error[E101]: Completeness gap: some input matches no row
-  --> rules/yupack_base_fee.rule:34 table fee_table
-  witness: dest = 山梨県, size = S60
-…
+  --> rules/parcel_rate.rule:30 table base_rate
+  witness: dest = overseas, size = small, weight = 1
+note rules/parcel_rate.rule: 3 shadow pairs (3 structural, 0 equivalent, 0 needs review)
 details: rulec explain <code>
 ```
 
@@ -237,8 +237,8 @@ The same finding as data. The prose is still there, but nothing
 downstream has to take a sentence apart:
 
 ```console
-$ rulec check rules/yupack_base_fee.rule --format json | jq -c 'select(.code=="E101") | {table:.where.table, witness:.witness.inputs, fix:.fix}'
-{"table":"fee_table","witness":{"dest":"山梨県","size":"S60"},"fix":{"kind":"add_row","text":"| 山梨県 | S60 | 820JPY |"}}
+$ rulec check rules/parcel_rate.rule --format json | jq -c 'select(.code=="E101") | {table:.where.table, witness:.witness.inputs, fix:.fix}'
+{"table":"base_rate","witness":{"dest":"overseas","size":"small","weight":1},"fix":{"kind":"add_row","text":"| overseas | small | 1lb | 6USD |"}}
 ```
 
 `where` says which table and row, `witness` is an assignment of values
@@ -376,7 +376,7 @@ again" into "compare this row with that cell".
 ### A page the approver can try a case on
 
 ```console
-$ rulec doc rules/送料.rule --lang ja --format html > 送料.html
+$ rulec doc rules/member_shipping_fee.rule --format html > member_shipping_fee.html
 ```
 
 `--format html` renders the same document as one HTML page, laid out as a board. The form
@@ -387,19 +387,19 @@ appears on the card that produced it, and the line the generated code would writ
 is shown as it is. The example buttons fill in the rule's own verified examples. The page is
 drawn light or dark, as the reader's browser is set.
 
-![The board for the shipping-fee rule. Example 2 (東京都, 1999g, 12000円, プラチナ) is in the form on the left and the result reads 送料 = 400円; the cards 大口, 基本送料, 負担率 and 送料 run left to right, with row 3 of 基本送料 (not a remote area, up to 2000g) and row 2 of 負担判定 (platinum) lit](images/try-en-dark.png#only-dark)
-![The board for the shipping-fee rule. Example 2 (東京都, 1999g, 12000円, プラチナ) is in the form on the left and the result reads 送料 = 400円; the cards 大口, 基本送料, 負担率 and 送料 run left to right, with row 3 of 基本送料 (not a remote area, up to 2000g) and row 2 of 負担判定 (platinum) lit](images/try-en.png#only-light)
+![The board for the shipping-fee rule. Example 2 (東京都, 1999g, 12000JPY, platinum) is in the form on the left and the result reads fee = 400JPY; the cards bulk, base, pay_rate and fee run left to right, with row 3 of base (not a remote area, up to 2000g) and row 2 of payer (platinum) lit](images/try-en-dark.png#only-dark)
+![The board for the shipping-fee rule. Example 2 (東京都, 1999g, 12000JPY, platinum) is in the form on the left and the result reads fee = 400JPY; the cards bulk, base, pay_rate and fee run left to right, with row 3 of base (not a remote area, up to 2000g) and row 2 of payer (platinum) lit](images/try-en.png#only-light)
 
 Selecting a card opens a dock below it: where that table's columns come from, and what
 `rulec check` verified about it. Only the selected card carries colour, so which one you
 are reading is never in doubt.
 
-![The same board with 基本送料 selected: the card is in colour, and the dock below holds its "column / where it comes from" table and what rulec check verified](images/try-dock-en-dark.png#only-dark)
-![The same board with 基本送料 selected: the card is in colour, and the dock below holds its "column / where it comes from" table and what rulec check verified](images/try-dock-en.png#only-light)
+![The same board with base selected: the card is in colour, and the dock below holds its "column / where it comes from" table and what rulec check verified](images/try-dock-en-dark.png#only-dark)
+![The same board with base selected: the card is in colour, and the dock below holds its "column / where it comes from" table and what rulec check verified](images/try-dock-en.png#only-light)
 
 What runs in the page is the generated JavaScript itself, so the page says nothing the code
 does not. The case and the card both stay in the page's address
-(`?dest=東京都&weight=1999&…#t-基本送料`), so "look at this table on this case" is a link.
+(`?dest=東京都&weight=1999&…#t-base`), so "look at this table on this case" is a link.
 
 
 There is one prohibition. **It writes no sentence that is not in the

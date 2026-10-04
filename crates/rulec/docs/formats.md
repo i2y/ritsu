@@ -12,7 +12,7 @@ Three rules hold everywhere.
   says so (`title`, `notes`, `text`, `hint`, `what`). `--lang` moves the prose and nothing
   else. Numbers, names taken from the rule, and identifiers are the same bytes in both
   languages.
-- **A number is an integer in the canonical unit** (§10.2): yen for `money[円, …]`, the
+- **A number is an integer in the canonical unit** (§10.2): yen for `money[JPY, …]`, the
   declared unit for a quantity, the number of steps for a rate, `YYYY-MM-DD` as a string for
   a date, `true`/`false` for a boolean, the value's own name for an enum.
 
@@ -32,14 +32,14 @@ One object per diagnostic. This is version 2; every field version 1 had is still
 still means the same thing, and `v` says which version wrote the line.
 
 ```json
-{"v":2,"severity":"error","code":"E101","file":"rules/yupack_base_fee.rule","line":34,"column":7,
+{"v":2,"severity":"error","code":"E101","file":"rules/parcel_rate.rule","line":30,"column":7,
  "title":"Completeness gap: some input matches no row",
- "notes":["An input that matches no row: dest = 山梨県, size = S60","hint: …"],
- "where":{"file":"rules/yupack_base_fee.rule","line":34,"column":7,"table":"fee_table"},
- "spans":[{"line":34,"column":7,"length":9,"label":"the input space is not fully covered"}],
- "witness":{"inputs":{"dest":"山梨県","size":"S60"}},
+ "notes":["An input that matches no row: dest = overseas, size = small, weight = 1lb","hint: …",…],
+ "where":{"file":"rules/parcel_rate.rule","line":30,"column":7,"table":"base_rate"},
+ "spans":[{"line":30,"column":7,"length":9,"label":"the input space is not fully covered"}],
+ "witness":{"inputs":{"dest":"overseas","size":"small","weight":1}},
  "rows":[],
- "fix":{"kind":"add_row","text":"| 山梨県 | S60 | 820JPY |"},
+ "fix":{"kind":"add_row","text":"| overseas | small | 1lb | 6USD |"},
  "key":"…"}
 ```
 
@@ -88,7 +88,7 @@ those are business decisions. The caveat is in `notes`, because `notes` is prose
 One object for the run.
 
 ```json
-{"unformatted":["rules/送料.rule"],"formatted":[]}
+{"unformatted":["rules/member_shipping_fee.rule"],"formatted":[]}
 ```
 
 `--check` fills `unformatted` and writes nothing; without it, the files rewritten are listed
@@ -99,7 +99,7 @@ in `formatted`. Both keys are always present.
 One object for the run.
 
 ```json
-{"written":["generated/python/shipping_fee.py"],"stale":[],"missing":[]}
+{"written":["generated/python/member_shipping_fee.py"],"stale":[],"missing":[]}
 ```
 
 `stale` is a file that exists but differs from a fresh generation; `missing` is one that is
@@ -111,7 +111,7 @@ written are in `written`. A file already up to date appears in none of the three
 One object per rule file.
 
 ```json
-{"file":"rules/送料.rule","vectors":70,"refused":0,
+{"file":"rules/member_shipping_fee.rule","vectors":70,"refused":0,
  "criteria":[{"name":"row","satisfied":7,"total":7,"missing":[]},
              {"name":"boundary_pair","satisfied":4,"total":4,"missing":[]},
              {"name":"shadow_pair","satisfied":3,"total":3,"missing":[]},
@@ -147,11 +147,11 @@ what is asked of the generated code there is that it refuse them too (below).
 One object for the run.
 
 ```json
-{"results":[{"rule":"shipping_fee","lang":"python","via":"runner","vectors":68,"refused":0,
+{"results":[{"rule":"member_shipping_fee","lang":"python","via":"runner","vectors":70,"refused":0,
               "ok":true,"ran":true,"first_diff":null,"error":null},
-             {"rule":"shipping_fee","lang":"python","via":"mcp","vectors":68,"refused":0,
+             {"rule":"member_shipping_fee","lang":"python","via":"mcp","vectors":70,"refused":0,
               "ok":true,"ran":true,"first_diff":null,"error":null},
-             {"rule":"shipping_fee","lang":"go","via":"runner","vectors":68,"refused":0,
+             {"rule":"member_shipping_fee","lang":"go","via":"runner","vectors":70,"refused":0,
               "ok":false,"ran":false,"first_diff":null,
               "error":"does not compile:\n…"}],
  "skipped":[]}
@@ -179,16 +179,17 @@ splits them the same way: `disagrees with the reference evaluator` against `coul
 The same shape for all three: they differ only in what the rule is compared against.
 
 ```json
-{"compared":207,"matched":182,"rate":0.87923,"counterpart":"legacy@fake-1",
- "clusters":[{"rows":[{"table":"サイズ判定","row":1},{"table":"運賃表","row":36}],
-              "count":7,
-              "delta":{"運賃":{"min":-10,"max":-10,"uniform":true,"total":-70}},
-              "witness":{"in":{"あて先":"沖縄県","三辺合計":1,"重量":1},
-                         "ours":{"運賃":1450},"theirs":{"運賃":1460}},
-              "records":[{"line":12,"tag":"order:1234567"},{"line":88,"tag":""}],
+{"compared":96,"matched":87,"rate":0.90625,"counterpart":"legacy@fake-1","unanswered":0,
+ "clusters":[{"rows":[{"table":"size_of","row":3},{"table":"base_rate","row":5},
+                      {"table":"fuel_rate","row":1},{"table":"signature_fee","row":1}],
+              "count":9,
+              "delta":{"fee":{"min":-1,"max":-1,"uniform":true,"total":-9}},
+              "witness":{"in":{"dest":"domestic","girth":61,"signature":true,"weight":11},
+                         "ours":{"fee":36},"theirs":{"fee":37}},
+              "records":[{"line":9,"tag":""},{"line":45,"tag":""},{"line":46,"tag":""},…],
               "suspect_rounding":false}],
  "moved":[],
- "excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"unanswered":0}
+ "excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
 ```
 
 | field | meaning |
@@ -196,7 +197,7 @@ The same shape for all three: they differ only in what the rule is compared agai
 | `compared` | observed records compared. **Filled records are not counted here** (§10.3) |
 | `matched` | of those, how many agreed |
 | `rate` | `matched / (compared − unanswered)`, as a fraction |
-| `counterpart` | who the rule was compared against: an adapter's self-reported id, a fixtures path, or `送料@v3 → 送料@v4` |
+| `counterpart` | who the rule was compared against: an adapter's self-reported id, a fixtures path, or `rules/parcel_rate.rule@v3 → rules/parcel_rate.rule@v4` |
 | `unanswered` | records the counterpart declared it could not answer. Excluded from the denominator |
 | `clusters` | mismatches grouped by the rows that matched |
 | `clusters[].records` | **every** record in the cluster, in the order they came in — `line` is the record's line in the fixtures file (for `verify`, the vector's place in the stream) and `tag` is its label, empty when it has none. `witness` shows one of them; this names them all, which is what something that has to act on the records needs. `count` is its length |
@@ -232,23 +233,33 @@ different shape: not "how many of these records moved" but "which inputs get a d
 answer, and is there anything outside them" (DESIGN §15.122).
 
 ```json
-{"rule":"送料","old":"送料@v3","new":"送料@v4","old_version":"3","new_version":"4",
+{"rule":"parcel_rate","old":"rules/parcel_rate.rule@v3","new":"rules/parcel_rate.rule@v4",
+ "old_version":"3","new_version":"4",
  "over_budget":false,"total":true,
- "cells":7050,"feasible":3525,"same":3501,"differing":24,"unsettled":0,"unrealized":0,
+ "cells":210,"feasible":210,"same":194,"differing":16,"unsettled":0,"unrealized":0,
  "domain":[],
- "changes":[{"region":[{"column":"届け先","kind":"input","accepts":["北海道","沖縄県"],
-                        "text":"届け先 = 遠隔地"},
-                       {"column":"重量","kind":"input",
-                        "accepts":[{"from":"2001","to":"39999"},{"from":"40000","to":"40000"}],
-                        "text":"重量 >=2001g <=40000g"}],
-             "text":"届け先 = 遠隔地  かつ  重量 >=2001g <=40000g",
-             "outputs":[{"output":"送料","old":"1800","new":"2000"}],
+ "changes":[{"region":[{"column":"signature","kind":"input","accepts":["false"],
+                        "text":"signature = false"},
+                       {"column":"dest","kind":"input","accepts":["domestic","canada"],
+                        "text":"dest = north_america"},
+                       {"column":"weight","kind":"input",
+                        "accepts":[{"from":"11","to":"69"},{"from":"70","to":"70"}],
+                        "text":"weight >=11lb <=70lb"},
+                       {"column":"girth","kind":"input",
+                        "accepts":[{"from":"61","to":"129"},{"from":"130","to":"130"}],
+                        "text":"girth >=61in <=130in"}],
+             "text":"signature = false  and  dest = north_america  and  weight >=11lb <=70lb  and  girth >=61in <=130in",
+             "outputs":[{"output":"fee","old":"32","new":"33"}],
              "uniform":true,
-             "old_rows":[{"table":"基本送料","row":2}],
-             "new_rows":[{"table":"基本送料","row":2}],
-             "witness":[{"input":"届け先","value":"北海道"},{"input":"重量","value":"2001"}],
-             "cells":16}],
- "unknown":[]}
+             "old_rows":[{"table":"size_of","row":3},{"table":"base_rate","row":5},
+                         {"table":"fuel_rate","row":1},{"table":"signature_fee","row":2}],
+             "new_rows":[{"table":"size_of","row":3},{"table":"base_rate","row":5},
+                         {"table":"fuel_rate","row":1},{"table":"signature_fee","row":2}],
+             "witness":[{"input":"dest","value":"domestic"},{"input":"girth","value":"61"},
+                        {"input":"signature","value":"false"},{"input":"weight","value":"11"}],
+             "cells":8},
+            …],
+ "unknown":[],"machine":null}
 ```
 
 | field | meaning |
@@ -291,10 +302,10 @@ over the corpus.
 One object for the run.
 
 ```json
-{"file":"replay/2025-08.jsonl","records":208,"observed":208,"filled":0,"dropped":0,
- "problems":[{"kind":"bad_input","field":"あて先","count":1,
-              "example":{"line":21,"tag":"order:b3"},
-              "what":"`in.あて先`: `江戸` is not a value of enum 都道府県",
+{"file":"replay/2025-08.jsonl","records":24,"observed":24,"filled":0,"dropped":0,
+ "problems":[{"kind":"bad_input","field":"dest","count":1,
+              "example":{"line":25,"tag":"order:b3"},
+              "what":"`in.dest`: `mars` is not a value of enum zone",
               "hint":"The type or range disagrees with the declaration."}]}
 ```
 
@@ -326,110 +337,114 @@ that fetched the sequence, checking these before returning it is the difference 
 value refused at its own boundary and one refused after it is recorded (§15.116).
 
 ```json
-{"rule":"クーポン一枚","alias":"coupon_step","version":"1","source_sha256":"…",
- "python":{"module":"coupon_step","mcp":"coupon_step_mcp.py","page":"coupon_step_page.html","function":"coupon_step",
-           "signature":"def coupon_step(subtotal: YenInclTax, …) -> Output:",
-           "traced":"coupon_step_traced",
-           "traced_signature":"def coupon_step_traced(subtotal: YenInclTax, …) -> tuple[Output, list[Fired]]:",
-           "record":"coupon_step_record",
-           "record_signature":"def coupon_step_record(subtotal: YenInclTax, …, out: Output, trace: _Trace, tag: str = \"\") -> str:",
-           "params":[{"name":"商品合計","alias":"subtotal","type":"YenInclTax","unit":"円",
-                      "range":{"min":0,"max":1000000},"optional":false}],
+{"rule":"single_coupon","alias":"single_coupon","version":"1","source_sha256":"…",
+ "python":{"module":"single_coupon","mcp":"single_coupon_mcp.py","page":"single_coupon_page.html","function":"single_coupon",
+           "signature":"def single_coupon(subtotal: JPYInclTax, …) -> Output:",
+           "traced":"single_coupon_traced",
+           "traced_signature":"def single_coupon_traced(subtotal: JPYInclTax, …) -> tuple[Output, list[Fired]]:",
+           "record":"single_coupon_record",
+           "record_signature":"def single_coupon_record(subtotal: JPYInclTax, …, out: Output, trace: _Trace, tag: str = \"\") -> str:",
+           "params":[{"name":"subtotal","alias":"subtotal","type":"JPYInclTax","unit":"JPY",
+                      "range":{"min":0,"max":1000000},"optional":false},…],
            "returns":"Output",
-           "outputs":[{"name":"素割引","alias":"raw","type":"YenInclTax","unit":"円",
+           "outputs":[{"name":"ok","alias":"ok","type":"bool","optional":false},
+                      {"name":"raw","alias":"raw","type":"JPYInclTax","unit":"JPY",
                        "optional":false,"rounding":{"mode":"down","grid":1}}],
-           "enums":[{"name":"クーポン種別","alias":"CouponKind",
-                     "values":[{"name":"率引き","alias":"PERCENT"}]}],
+           "enums":[{"name":"coupon_kind","alias":"CouponKind",
+                     "values":[{"name":"percent","alias":"PERCENT"},…]}],
            "errors":["RuleInputError","RuleContradictionError"]},
- "typescript":{"module":"coupon_step.ts","mcp":"coupon_step_mcp.ts","page":"coupon_step_page.html","function":"coupon_step",
-               "signature":"export function coupon_step(subtotal: YenInclTax, …): Output",
+ "typescript":{"module":"single_coupon.ts","mcp":"single_coupon_mcp.ts","page":"single_coupon_page.html","function":"single_coupon",
+               "signature":"export function single_coupon(subtotal: JPYInclTax, …): Output",
                "params":[…],"returns":"Output","outputs":[…],
-               "enums":[{"name":"クーポン種別","alias":"CouponKind",
-                         "values":[{"name":"率引き","alias":"PERCENT"}]}],
+               "enums":[{"name":"coupon_kind","alias":"CouponKind",
+                         "values":[{"name":"percent","alias":"PERCENT"},…]}],
                "errors":["RuleInputError","RuleContradictionError"]},
- "javascript":{"module":"coupon_step.mjs","mcp":"coupon_step_mcp.mjs","page":"coupon_step_page.html","function":"coupon_step",
-               "signature":"export function coupon_step(subtotal, applied, kind, rate, face, dup)",
+ "javascript":{"module":"single_coupon.mjs","mcp":"single_coupon_mcp.mjs","page":"single_coupon_page.html","function":"single_coupon",
+               "signature":"export function single_coupon(subtotal, applied, kind, rate, face, dup)",
                "params":[…],"returns":"Output","outputs":[…],"enums":[…],
                "errors":["RuleInputError","RuleContradictionError"]},
- "rust":{"module":"coupon_step.rs","function":"coupon_step",
-         "signature":"pub fn coupon_step(subtotal: YenInclTax, …) -> Result<Output, RuleError>",
+ "rust":{"module":"single_coupon.rs","function":"single_coupon",
+         "signature":"pub fn single_coupon(subtotal: JPYInclTax, …) -> Result<Output, RuleError>",
          "params":[…],"returns":"Output","outputs":[…],
-         "enums":[{"name":"クーポン種別","alias":"CouponKind",
-                   "values":[{"name":"率引き","alias":"Percent"}]}],
+         "enums":[{"name":"coupon_kind","alias":"CouponKind",
+                   "values":[{"name":"percent","alias":"Percent"},…]}],
          "errors":["RuleError::Input","RuleError::Contradiction"],
-         "proof":"coupon_step_proof.rs","harnesses":["coupon_step_answers","applicable_rows","raw_discount_rows"]},
- "ruby":{"module":"CouponStep","function":"coupon_step",
-         "signature":"CouponStep.coupon_step(subtotal, applied, …)",
-         "rbs":"sig/coupon_step.rbs",
+         "proof":"single_coupon_proof.rs","harnesses":["single_coupon_answers","applicable_rows","raw_discount_rows"]},
+ "ruby":{"module":"SingleCoupon","function":"single_coupon",
+         "signature":"SingleCoupon.single_coupon(subtotal, applied, …)",
+         "rbs":"sig/single_coupon.rbs",
          "params":[…],"returns":"Output","outputs":[…],
-         "enums":[{"name":"クーポン種別","alias":"CouponKind",
-                   "values":[{"name":"率引き","alias":"PERCENT"}]}],
+         "enums":[{"name":"coupon_kind","alias":"CouponKind",
+                   "values":[{"name":"percent","alias":"PERCENT"},…]}],
          "errors":["RuleInputError","RuleContradictionError"]},
- "php":{"module":"coupon_step.php","namespace":"CouponStep","function":"coupon_step",
-        "signature":"function coupon_step(int $subtotal, int $applied, …): Output",
+ "php":{"module":"single_coupon.php","namespace":"SingleCoupon","function":"single_coupon",
+        "signature":"function single_coupon(int $subtotal, int $applied, …): Output",
         "params":[…],"returns":"Output","outputs":[…],
-        "enums":[{"name":"クーポン種別","alias":"CouponKind",
-                  "values":[{"name":"率引き","alias":"CouponKind::PERCENT"}]}],
+        "enums":[{"name":"coupon_kind","alias":"CouponKind",
+                  "values":[{"name":"percent","alias":"CouponKind::PERCENT"},…]}],
         "errors":["RuleInputError","RuleContradictionError"]},
- "go":{"package":"couponstep","func":"CouponStep",
-       "signature":"func CouponStep(in Input) (Output, error)",
+ "go":{"package":"singlecoupon","func":"SingleCoupon",
+       "signature":"func SingleCoupon(in Input) (Output, error)",
        "input_type":"Input","input_fields":[…],
        "output_type":"Output","output_fields":[…],
-       "enums":[{"name":"クーポン種別","alias":"CouponKind",
-                 "values":[{"name":"率引き","alias":"CouponKindPercent"}]}]},
- "swift":{"module":"coupon_step.swift","function":"couponStep",
-          "signature":"func couponStep(subtotal: YenInclTax, …) throws -> Output",
+       "enums":[{"name":"coupon_kind","alias":"CouponKind",
+                 "values":[{"name":"percent","alias":"CouponKindPercent"},…]}]},
+ "swift":{"module":"single_coupon.swift","function":"singleCoupon",
+          "signature":"func singleCoupon(subtotal: JPYInclTax, …) throws -> Output",
           "params":[…],"returns":"Output","outputs":[…],
-          "enums":[{"name":"クーポン種別","alias":"CouponKind",
-                    "values":[{"name":"率引き","alias":"percent"}]}],
+          "enums":[{"name":"coupon_kind","alias":"CouponKind",
+                    "values":[{"name":"percent","alias":"percent"},…]}],
           "errors":["RuleError.input","RuleError.contradiction"]},
- "java":{"module":"CouponStep.java","class":"CouponStep","function":"couponStep",
-         "signature":"public static Output couponStep(long subtotal, long applied, …)",
+ "java":{"module":"SingleCoupon.java","class":"SingleCoupon","function":"singleCoupon",
+         "signature":"public static Output singleCoupon(long subtotal, long applied, …)",
          "build":"javac --release 17 -encoding UTF-8 -d classes *.java",
          "params":[…],"returns":"Output","outputs":[…],
-         "enums":[{"name":"クーポン種別","alias":"CouponKind",
-                   "values":[{"name":"率引き","alias":"CouponKind.PERCENT"}]}],
+         "enums":[{"name":"coupon_kind","alias":"CouponKind",
+                   "values":[{"name":"percent","alias":"CouponKind.PERCENT"},…]}],
          "errors":["RuleInputError","RuleContradictionError"]},
- "connect":{"proto":"proto/rulec/coupon_step/v1/coupon_step.proto","package":"rulec.coupon_step.v1",
-            "service":"CouponStepService","method":"Decide",
-            "path":"/rulec.coupon_step.v1.CouponStepService/Decide",
+ "connect":{"proto":"proto/rulec/single_coupon/v1/single_coupon.proto","package":"rulec.single_coupon.v1",
+            "service":"SingleCouponService","method":"Decide",
+            "path":"/rulec.single_coupon.v1.SingleCouponService/Decide",
             "request":"DecideRequest","response":"DecideResponse",
             "idempotency_level":"NO_SIDE_EFFECTS","trace":"trace",
             "source_header":"rulec-source-sha256",
             "stubs":"cd proto && buf generate",
             "buf_yaml":"proto/buf.yaml","buf_gen_yaml":"proto/buf.gen.yaml","deps":[],
             "json_names":"lowerCamelCase","json_int64":"string",
-            "request_fields":[{"name":"商品合計","field":"subtotal","type":"int64","optional":false},
-                              {"name":"種別","field":"kind","type":"CouponKind","optional":false,
-                               "enum":"クーポン種別"}],
+            "request_fields":[{"name":"subtotal","field":"subtotal","type":"int64","optional":false},
+                              {"name":"applied","field":"applied","type":"int64","optional":false},
+                              {"name":"kind","field":"kind","type":"CouponKind","optional":false,
+                               "enum":"coupon_kind"},…],
             "element_fields":null,
-            "response_fields":[{"name":"素割引","field":"raw","type":"int64","optional":false}],
-            "enums":[{"name":"クーポン種別","alias":"CouponKind","contract":null,
+            "response_fields":[{"name":"ok","field":"ok","type":"bool","optional":false},
+                               {"name":"raw","field":"raw","type":"int64","optional":false}],
+            "enums":[{"name":"coupon_kind","alias":"CouponKind","contract":null,
                       "unset":"COUPON_KIND_UNSPECIFIED",
-                      "values":[{"name":"率引き","alias":"COUPON_KIND_PERCENT","number":1}]}],
-            "python":{"module":"coupon_step_service.py",
-                      "class":"CouponStep","sync_class":"CouponStepSync",
+                      "values":[{"name":"percent","alias":"COUPON_KIND_PERCENT","number":1},…]}],
+            "python":{"module":"single_coupon_service.py",
+                      "class":"SingleCoupon","sync_class":"SingleCouponSync",
                       "asgi":"app","wsgi":"wsgi_app",
-                      "serve_asgi":"uvicorn coupon_step_service:app --port 8080",
-                      "serve_wsgi":"gunicorn 'coupon_step_service:wsgi_app'",
-                      "client":"CouponStepServiceClientSync",
-                      "runner":"coupon_step_connect_runner.py",
+                      "serve_asgi":"uvicorn single_coupon_service:app --port 8080",
+                      "serve_wsgi":"gunicorn 'single_coupon_service:wsgi_app'",
+                      "client":"SingleCouponServiceClientSync",
+                      "runner":"single_coupon_connect_runner.py",
                       "needs":["connectrpc","buf"]}},
- "sql":{"file":"coupon_step.sql","input":"coupon_step_input","id":"_id","guard":"_input_error",
+ "sql":{"file":"single_coupon.sql","input":"single_coupon_input","id":"_id","guard":"_input_error",
         "dialect":"postgresql","runs_on":["postgresql","sqlite"],
-        "columns":[{"name":"商品合計","alias":"subtotal","type":"bigint","unit":"円",
-                    "range":{"min":0,"max":1000000},"optional":false}],
-        "outputs":[…],"rows":[{"table":"適用判定","column":"decide_row"}],
-        "function":{"file":"coupon_step_function.sql","name":"coupon_step",
-                    "signature":"\"coupon_step\"(\"subtotal\" bigint, …, \"dup\" boolean) RETURNS TABLE (\"ok\" boolean, …, \"raw_discount_row\" int)",
+        "columns":[{"name":"subtotal","alias":"subtotal","type":"bigint","unit":"JPY",
+                    "range":{"min":0,"max":1000000},"optional":false},…],
+        "outputs":[…],"rows":[{"table":"applicable","column":"applicable_row"},
+                              {"table":"raw_discount","column":"raw_discount_row"}],
+        "function":{"file":"single_coupon_function.sql","name":"single_coupon",
+                    "signature":"\"single_coupon\"(\"subtotal\" bigint, …, \"dup\" boolean) RETURNS TABLE (\"ok\" boolean, …, \"raw_discount_row\" int)",
                     "language":"plpgsql","runs_on":["postgresql"],"raises":"22023"}},
- "wasm":{"source":"coupon_step_wasm.rs","module":"coupon_step.wasm",
-         "build":"rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib coupon_step_wasm.rs -o coupon_step.wasm",
-         "wit":"coupon_step.wit","package":"rulec:coupon-step@1.0.0","world":"coupon-step",
+ "wasm":{"source":"single_coupon_wasm.rs","module":"single_coupon.wasm",
+         "build":"rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib single_coupon_wasm.rs -o single_coupon.wasm",
+         "wit":"single_coupon.wit","package":"rulec:single-coupon@1.0.0","world":"single-coupon",
          "call":"call","call_signature":"call: func(input: string) -> string",
          "post_return":"cabi_post_call","realloc":"cabi_realloc","memory":"memory",
-         "runner":"coupon_step_runner.mjs",
-         "component":"wasm-tools component embed coupon_step.wit coupon_step.wasm -o coupon_step.embedded.wasm && wasm-tools component new coupon_step.embedded.wasm -o coupon_step.component.wasm"}}
+         "runner":"single_coupon_runner.mjs",
+         "component":"wasm-tools component embed single_coupon.wit single_coupon.wasm -o single_coupon.embedded.wasm && wasm-tools component new single_coupon.embedded.wasm -o single_coupon.component.wasm"}}
 ```
 
 Everything here is a name or a number the generated code really uses, so nothing in it moves
@@ -439,7 +454,7 @@ and `record_signature`, the function that writes one call as a fixtures record
 ([generated-code.md](generated-code.md#the-rows-that-matched)). `range` states the bounds **the entry guard enforces**, and `alias` states the
 member spelling **that language** uses (`CouponKind.PERCENT` in Python and TypeScript,
 `CouponKind.PERCENT` in JavaScript too, `CouponKind::Percent` in Rust, `CouponKind::PERCENT` in Ruby
-and in PHP, `CouponKind.PERCENT` in Java, `couponstep.CouponKindPercent` in Go,
+and in PHP, `CouponKind.PERCENT` in Java, `singlecoupon.CouponKindPercent` in Go,
 `CouponKind.percent` in Swift; SQL spells no member, an
 enum being its own name there, and the Wasm module and the NumPy plan read and write the name itself, as the wire does). `unit`, `range` and `rounding` are absent when the
 type has none. `range` and `rounding.grid` are integers the way the value itself travels, so
@@ -454,9 +469,12 @@ sequence (§15.56) has one more parameter, last in the list and last in every si
 the fields one element carries under `elements`:
 
 ```json
-{"name":"運賃行","alias":"freight_rows","type":"list[Element]","optional":false,
- "elements":[{"name":"閾値","alias":"threshold","type":"YenInclTax","unit":"円",
-              "range":{"min":0,"max":1000000},"optional":false}]}
+{"name":"freight_rows","alias":"freight_rows","type":"list[Element]","optional":false,
+ "elements":[{"name":"row_zone","alias":"row_zone","type":"Zone","optional":false},
+             {"name":"threshold","alias":"threshold","type":"JPYInclTax","unit":"JPY",
+              "range":{"min":0,"max":1000000},"optional":false},
+             {"name":"row_fee","alias":"row_fee","type":"JPYInclTax","unit":"JPY",
+              "range":{"min":0,"max":100000},"optional":false}]}
 ```
 
 Those fields get the same entry guards the inputs get, so their `range` means what a
@@ -502,13 +520,13 @@ A rule that is one step of a state machine (§15.148) carries `machine` at the t
 `null` there otherwise:
 
 ```json
-"machine":{"name":"注文","alias":"order","over":"遷移",
-           "carry":{"input":"状態","output":"次の状態","enum":"状態"},
-           "held":["支払額"],
-           "states":["受付","入金済","出荷済","配達済","取消"],
-           "initial":"受付","final":["配達済","取消"],
-           "never":[{"states":["出荷済"],"after":["取消"]}],
-           "once":[{"output":"返金額","cell":">0円"}],
+"machine":{"name":"order","over":"step",
+           "carry":{"input":"state","output":"next_state","enum":"order_state"},
+           "held":["amount_paid"],
+           "states":["received","paid","shipped","delivered","cancelled"],
+           "initial":"received","final":["delivered","cancelled"],
+           "never":[{"states":["shipped"],"after":["cancelled"]}],
+           "once":[{"output":"refund","cell":">0JPY"}],
            "constants":{"python":{"initial":"INITIAL","final":"FINAL","is_final":"is_final"},
                         "php":{"initial":"INITIAL","final":"FINAL_STATES","is_final":"is_final"},
                         "swift":{"initial":"initialState","final":"finalStates","is_final":"isFinal"},…}}
@@ -541,20 +559,20 @@ for anything to happen in. What happens outside is at the edge of the picture, w
 the crossings carry their guards and `preconditions` comes along.
 
 ```json
-{"rule":"買物かごの送料","alias":"cart_shipping","version":"1","source_sha256":"…",
- "nodes":[{"name":"区分","alias":"tier","kind":"input","type":"会員区分"},
-          {"name":"明細","alias":"lines","kind":"sequence"},
-          {"name":"金額","alias":"amount","kind":"element","of":"明細","type":"money[円]",
+{"rule":"cart_shipping_fee","alias":"","version":"1","source_sha256":"…",
+ "nodes":[{"name":"tier","kind":"input","type":"member_tier"},
+          {"name":"lines","kind":"sequence"},
+          {"name":"amount","kind":"element","of":"lines","type":"money[JPY]",
            "range":{"min":0,"max":100000}},
-          {"name":"合計","alias":"total","kind":"value","type":"money[円]",
+          {"name":"total","kind":"value","type":"money[JPY]",
            "range":{"min":0,"max":1000000},
-           "by":[{"kind":"sum","over":"明細","of":"金額"}]},
-          {"name":"送料","alias":"fee","kind":"value","type":"money[円]","output":true,
-           "by":[{"kind":"table","name":"送料表","policy":"unique","rows":4}]}],
- "edges":[{"from":"金額","to":"合計","kind":"walk"},
-          {"from":"合計","to":"送料","kind":"reads","via":"送料表"},
-          {"from":"区分","to":"送料","kind":"reads","via":"送料表"}],
- "preconditions":[{"kind":"sum","name":"合計","over":"明細","of":"金額","max":1000000}],
+           "by":[{"kind":"sum","over":"lines","of":"amount"}]},
+          {"name":"fee","kind":"value","type":"money[JPY]","range":{"min":0,"max":500},"output":true,
+           "by":[{"kind":"table","name":"fee_table","policy":"unique","rows":4}]}],
+ "edges":[{"from":"amount","to":"total","kind":"walk"},
+          {"from":"total","to":"fee","kind":"reads","via":"fee_table"},
+          {"from":"tier","to":"fee","kind":"reads","via":"fee_table"}],
+ "preconditions":[{"kind":"sum","name":"total","over":"lines","of":"amount","max":1000000}],
  "carry":null}
 ```
 
@@ -605,31 +623,31 @@ produces runs those very functions, so what it prints is the theorems applied to
 document. The tests hold both to forged certificates as well as to the corpus.
 
 ```json
-{"v":1,"rule":"クーポン併用","alias":"coupon_stack","version":"1","source_sha256":"094dba24753a…","rulec":"0.22.1",
- "ranges":{"合計":["0","1000000"],"割引A":["0","100000"],"残高A":["-100000","1000000"]},
+{"v":1,"rule":"coupon_stacking","alias":"coupon_stacking","version":"1","source_sha256":"200912693e01…","rulec":"0.23.0",
+ "ranges":{"disc_a":["0","100000"],"disc_b":["0","100000"],"rest_a":["-100000","1000000"],"rest_b":["-200000","1000000"],"total":["0","1000000"]},
  "constraints":[],
- "values":[{"name":"残高A","expr":{"op":"-","l":{"name":"合計"},"r":{"name":"割引A"}},
-            "interval":["-100000","1000000"],"scale":1,"stored_max":"1000000"}],
- "tables":[{"table":"適用判定","policy":"unique",
-   "axes":[{"column":"残高A","kind":"derived","coords":["999円","1000円","1001円"],"step":"1",
-            "bounds":[[null,"1000"],["1000","1000"],["1000",null]]}],
+ "values":[{"name":"rest_a","type":"money[JPY, incl_tax]","expr":{"op":"-","l":{"name":"total"},"r":{"name":"disc_a"}},
+            "interval":["-100000","1000000"],"scale":1,"stored_max":"1000000"},…],
+ "tables":[{"table":"decide","policy":"unique",
+   "axes":[{"column":"rest_a","kind":"derived","coords":["999JPY","1000JPY","1001JPY"],"step":"1","prefixes":null,
+            "bounds":[[null,"1000"],["1000","1000"],["1000",null]]},…],
    "outputs":1,
-   "rows":[{"row":1,"label":"","cells":["<= 1000円","-"],
+   "rows":[{"row":1,"label":"","cells":["<= 1000JPY","-"],
             "tests":[{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]},{"cell":"any"}],
-            "origin":"適用判定","line":21,
-            "source":[{"line":21,"col":2,"len":9,"text":"<=1000円"},{"line":21,"col":15,"len":1,"text":"-"}],
-            "accepts":[[0,1],[0,1,2]]}],
+            "origin":"decide","line":24,
+            "source":[{"line":24,"col":2,"len":9,"text":"<=1000JPY"},{"line":24,"col":14,"len":1,"text":"-"}],
+            "accepts":[[0,1],[0,1,2]],"produces":["no"]},…],
    "disjoint":[{"a":1,"b":3,"axis":0},{"a":2,"b":3,"axis":1}],
    "refuted":[{"a":1,"b":2,"farkas":[{"fact":0,"y":"1/2980"},{"fact":6,"y":"1/2980"},{"fact":11,"y":"1/2980"},
      {"coord":{"axis":0,"hi":true,"at":"1000","open":false},"y":"1/2980"},
      {"coord":{"axis":1,"hi":false,"at":"3980","open":false},"y":"1/2980"}]}],
    "undecided":[],
-   "reach":[{"row":1,"at":[0,0],"values":{"残高A":0,"残高B":-100000},"at_values":["0","-100000"],
-             "extra_values":["0","100000","0"]}],
+   "reach":[{"row":1,"at":[0,0],"values":{"rest_a":0,"rest_b":-100000},"at_values":["0","-100000"],
+             "extra_values":["0","100000","0"]},…],
    "unused":[],"unreachable":[],
-   "constraints":[],
-   "linear":{"extra":["割引A","割引B","合計"],
-             "facts":[{"derive":"残高B","le":true},{"derive":"残高B","le":false},{"range":"残高B","hi":false},…]},
+   "constraints":[],"above":{"never":[],"apart":[]},
+   "linear":{"extra":["disc_a","disc_b","total"],
+             "facts":[{"derive":"rest_b","le":true},{"derive":"rest_b","le":false},{"range":"rest_b","hi":false},…]},
    "cover":{"split":[{"row":1},{"row":1},{"split":[{"row":3},{"row":2},{"row":2}]}]}}]}
 ```
 
@@ -644,7 +662,7 @@ document. The tests hold both to forged certificates as well as to the corpus.
 | `contracts` | one entry per `shape` the rule reads inputs from: the condition the contract places on those values, and why the rule's **door** keeps it (§15.142). The claim is inclusion — every value the contract lets through is one the door takes — and the door is what the rule asks of the same values: each numeric input inside its declared range, at the `scale` between the rule's value and the integer the contract carries; each `constraint` between two of them; each enum input among its enum's values. `file` is the contract, named relative to the rule, and `sha256` its digest, which a re-checker given `--rule` holds the file beside the rule to. `vars` names the values the condition speaks of, by kind (`num`, `str`, `bool`): the inputs first, then the contract's other fields a condition mentions, as `@` and their path. An optional input, and one counted or tested with `where`, is not among them; the field-by-field comparison (E122) is what covers those. `atoms` are the conditions: `{"num":{name:coef,…},"k":…,"rel":"le"}` is `Σ coef·name + k <= 0` (`"lt"` is `<`, `"eq"` is `=`), already in whole-number form — `2x < 5` is written `x − 2 <= 0` — so that a sum over the rationals can show a boundary that holds only over the integers; `{"str":name,"values":[…],"in":true}` is a string among those values (`false`: among none); `{"bool":name,"value":v}` a truth value. `cases` opens the condition: a value gets through when it satisfies every atom of some case. `null` means it opens into too many cases, and nothing is claimed. `unread` says a rule of the contract could not be read and was taken as true, so the condition is the contract read wider than it is. `doors` lists what the door asks, `{"range":input,"hi":false}`, `{"constraint":k}` or `{"member":input}`, each with one proof per case: `{"farkas":[…]}` multipliers over the case's atoms (`{"atom":i,"part":0,"y":…}`, `part` 1 being the other half of an equality) and the negation of what is asked (`{"door":true,"y":…}`) that add up to a contradiction, as under `refuted`; `{"clash":name}`, strings or truth values of the case that cannot all hold; `{"within":true}`, every string the case lets the input be is one of the enum's. `proofs` is `null` for a thing the certificate cannot show. A re-checker **builds the door again** from `ranges`, `constraints`, `types` and `enums`, so a thing the list leaves out is named as not shown rather than passed |
 | `axes` | the universe, one axis per column of the table, each with the coordinates the boundaries compress it to (§6.2), for a numeric axis each coordinate as a closed interval in `bounds` and the `step` its values sit on, and for a `string` axis the prefix each coordinate stands for in `prefixes` (`null` for the one coordinate that is under none of them). `kind` is `input`, `derived`, `define`, `walk` (what a `count` or a `sum` left behind) or `upstream`: a point on an axis of inputs is a value a caller can send, and on any other axis it is a point the feasibility sieve could not rule out, which is weaker. A re-checker holds a numeric axis to §6.2's construction: the coordinates run from the declared range's low end to its high end, each touching the next or one `step` past it, with nothing between — so a coordinate cannot be quietly removed and the gap under it left uncovered |
 | `decides` | the columns this table writes, in the order `rows[].produces` lists their values. A table below names one of these as an axis of kind `upstream`, and that is the link from a fact to the rows that settle it |
-| `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, the value it writes into each column of `decides` in `produces` (`null` where the cell is not a plain value word), beside the cells it was written with and, in `tests`, those cells resolved as far as their units — `{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]}`, `{"cell":"is","words":["近畿圏"]}`, `{"cell":"prefix","words":["CH-"]}`, `{"cell":"any"}`, and for a set on a column of numbers its values, each a point of the axis — `{"cell":"in","values":["100","200"]}`, `{"cell":"not_in","values":["300"]}`. The re-checker **recomputes** the box from `tests` and the axis bounds and refuses a box that is not what the cell describes |
+| `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, the value it writes into each column of `decides` in `produces` (`null` where the cell is not a plain value word), beside the cells it was written with and, in `tests`, those cells resolved as far as their units — `{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]}`, `{"cell":"is","words":["north_america"]}`, `{"cell":"prefix","words":["CH-"]}`, `{"cell":"any"}`, and for a set on a column of numbers its values, each a point of the axis — `{"cell":"in","values":["100","200"]}`, `{"cell":"not_in","values":["300"]}`. The re-checker **recomputes** the box from `tests` and the axis bounds and refuses a box that is not what the cell describes |
 | `origin`, `line` | the table the row was written in, and the line it is written on. Rows of one table have a cell in the same columns and in no others, are all written in this file or all brought in by an `apply`, and take a run of lines in row order that no other table's rows fall inside — all of which a re-checker holds them to |
 | `source` | where each cell stands in the `.rule` file — `line`, byte `col`, byte `len` — and the text that stands there. With `--rule` a re-checker reads the file and compares, and the span has to be that cell's own place: every cell of a row is on the row's `line`, they are that line's `|`-separated fields, all of them (`outputs` says how many of the line's fields are answers rather than cells), and none of them is empty. `null` for a row an `apply` brought in, which is written in another file; `null` for one cell where there is nothing to point at — a column a `clause` does not mention, or one a merged member table does not have, and then every row of that table has to agree |
 | `disjoint` | `unique` only: for each pair of rows, one axis on which their coordinates do not meet. Re-checking one entry is one set intersection |
@@ -716,25 +734,25 @@ operators and numbers to it; the Lean program does not, and recomputes the box f
 parsed form instead. A rule that does not pass `check` produces no certificate at all.
 
 ```console
-$ rulec certificate rules/健康保険料.rule > cert.json
-$ python3 tools/recheck.py --rule rules/健康保険料.rule cert.json
-健康保険料 (kenpo_premium v1, sha256:5d4974d65bdb) — certificate by rulec 0.22.1
+$ rulec certificate rules/health_insurance_premium.rule > cert.json
+$ python3 tools/recheck.py --rule rules/health_insurance_premium.rule cert.json
+health_insurance_premium (health_insurance_premium v1, sha256:a5c5cf4eaf62) — certificate by rulec 0.23.0
   units: 4 values keep the type the rule declares
   int64: 4 values fit
-  等級: unique, 50 rows — 1225 pairs disjoint, 50 rows reached, 101 boxes covered, 50 boxes read back from their cells, 1 axes tiled
-  適用料率: unique, 2 rows — 1 pairs disjoint, 2 rows reached, 2 boxes covered, 2 boxes read back from their cells, 0 axes tiled
-  the digest is rules/健康保険料.rule's
+  grade: unique, 50 rows — 1225 pairs disjoint, 50 rows reached, 101 boxes covered, 50 boxes read back from their cells, 1 axes tiled
+  applied: unique, 2 rows — 1 pairs disjoint, 2 rows reached, 2 boxes covered, 2 boxes read back from their cells, 0 axes tiled
+  the digest is rules/health_insurance_premium.rule's
   the file says the same: 52 cells read back from it
   every claim this program states was proved
 
-$ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules/健康保険料.rule cert.json
-健康保険料 (0.22.1), re-checked against the Lean proofs
-  values: 4 typed, 4 held to int64, 0 not re-checked
-  等級: 50 rows — complete, 50 rows reached, no two rows meet, 1 axes tiled
+$ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules/health_insurance_premium.rule cert.json
+health_insurance_premium (0.23.0), re-checked against the Lean proofs
+  values: 4 typed, 4 held to int64
+  grade: 50 rows — complete, 50 rows reached, no two rows meet, 1 axes tiled
     50 boxes read back from the cells they were written as
-  適用料率: 2 rows — complete, 2 rows reached, no two rows meet
+  applied: 2 rows — complete, 2 rows reached, no two rows meet
     2 boxes read back from the cells they were written as
-  the digest is rules/健康保険料.rule's, and 52 cells are read back out of it
+  the digest is rules/health_insurance_premium.rule's, and 52 cells are read back out of it
 OK: every claim this program states was proved, by the theorems of RulecCert.
 ```
 
@@ -834,9 +852,9 @@ and they all use the same wire representation for a value.
 JSON Lines, one test case per line, generated from the boundaries of the rule (§9).
 
 ```json
-{"in":{"注文日":"2026-03-31"},"out":{"区分":"改定前"},
- "trace":["table 期間判定 row 1"],
- "why":"boundary pair: table 期間判定 row 1 注文日 20543 inside"}
+{"in":{"order_date":"2026-03-31"},"out":{"kind":"before"},
+ "trace":["table pick row 1"],
+ "why":"boundary pair: table pick row 1 order_date 2026-03-31 inside"}
 ```
 
 | field | meaning |
@@ -858,9 +876,9 @@ two elements both taking under `take_unique` is a contradiction, and there is no
 expect. Those go to a third file, `<alias>.refused.jsonl`, written only when there are any:
 
 ```json
-{"in":{"運賃行":[{"行ゾーン":"近畿圏","閾値":1000,"行運賃":100000},
-                 {"行ゾーン":"近畿圏","閾値":1000,"行運賃":100000}]},
- "refused":"contradiction","why":"確定 then 確定"}
+{"in":{"freight_rows":[{"row_zone":"kinki","threshold":1000,"row_fee":100000},
+                       {"row_zone":"kinki","threshold":1000,"row_fee":100000}]},
+ "refused":"contradiction","why":"take then take"}
 ```
 
 `in` is the same shape the vectors file uses, so the same runner reads it. `rulec test` puts
@@ -875,10 +893,10 @@ calls. `rulec vectors --out` writes the first beside its own file; on stdout it 
 calls only.
 
 ```json
-{"machine":"meta","carry":{"in":"状態","out":"次の状態"}}
-{"in":{"出来事":"出荷","支払額":0},"step":"start","state":"受付",
- "why":"transition pair: 受付 -[table 遷移 row 3]-> 受付 then 受付 -[table 遷移 row 1]-> 入金済"}
-{"in":{"出来事":"入金","支払額":0},"step":"next"}
+{"machine":"meta","carry":{"in":"state","out":"next_state"}}
+{"in":{"event":"ship","amount_paid":0},"step":"start","state":"received",
+ "why":"transition pair: received -[table step row 3]-> received then received -[table step row 1]-> paid"}
+{"in":{"event":"pay","amount_paid":0},"step":"next"}
 ```
 
 The first line asks the runner for its constants. Every other line is one call and carries
@@ -899,9 +917,10 @@ rulec only validates types and ranges (§10.2).
 
 ```json
 {"ts":"2025-08-14T09:12:33+09:00","tag":"order:1234567",
- "in":{"届け先":"鹿児島県","重量":800,"注文金額":4200,"会員":"一般"},
- "observed":{"送料":800},
- "trace":[{"table":"基本送料","row":3},{"table":"負担判定","row":3}]}
+ "in":{"weight":5,"girth":40,"dest":"canada","signature":false},
+ "observed":{"fee":13},
+ "trace":[{"table":"size_of","row":2},{"table":"base_rate","row":2},
+          {"table":"fuel_rate","row":1},{"table":"signature_fee","row":2}]}
 ```
 
 | field | required | meaning |
@@ -928,7 +947,7 @@ version of the rule that wrote them, so a record written before a declared step 
 changed no longer reads as what it meant: its values fall outside the declared ranges and
 the record is excluded. `--read-as <file.rule[@rev]>` (on `fixtures lint`, `replay`, and
 `diff` with records) reads every number at the steps and in the units of that version — a
-file, or a git revision such as `rules/料率.rule@v1` — and brings it to this one's: a rate
+file, or a git revision such as `rules/rates.rule@v1` — and brings it to this one's: a rate
 kept in whole percents is read as the rate it was, yen become sen. It has to be the same
 rule. A replay that compared nothing because every record was excluded says so and exits 1
 (§15.144, §15.145).
@@ -946,10 +965,10 @@ it**, and how sure they were:
 
 ```json
 {"ts":"2026-09-17T09:12:33+09:00","tag":"ticket:88231",
- "in":{"確信度":934,"区分":"請求"},
- "by":{"区分":{"src":"jev","ver":"2026-09-16","conf":934}},
- "observed":{"扱い":"自動"},
- "trace":[{"table":"振り分け表","row":2}]}
+ "in":{"confidence":934,"category":"billing"},
+ "by":{"category":{"src":"jev","ver":"2026-09-16","conf":934}},
+ "observed":{"handling":"auto"},
+ "trace":[{"table":"triage","row":2}]}
 ```
 
 | key | meaning |
@@ -971,14 +990,14 @@ those records.
 One JSON object declaring the default values used to fill a missing field (§10.3).
 
 ```json
-{"rule":"送料","fills":{"重量":1000,"会員":"一般"}}
+{"rule":"parcel_rate","fills":{"weight":5,"signature":false}}
 ```
 
 `rule` is optional and, when present, must match the rule being replayed. Every key of
 `fills` must be an input of the rule, and its value is in the canonical unit. A record
 missing a field that `fills` does not cover is **excluded outright** rather than guessed at;
 a record filled from `fills` is marked a filled record, counted separately, and kept out of
-the headline match rate. `--fill 欄=値` overrides one entry on the command line, for a
+the headline match rate. `--fill weight=5` overrides one entry on the command line, for a
 sensitivity run; it applies after the manifest.
 
 The manifest holds only field names and default values, so unlike the fixtures it can be
@@ -991,11 +1010,12 @@ stdin/stdout. No FFI and no network: a process and line-oriented JSON is the sma
 that is written the same way in every language (DESIGN §10.1 has the reasoning).
 
 ```
-rulec → {"rulec":"adapter/1","rule":"送料","in":["届け先","重量","注文金額","会員"],"out":["送料"]}
-legacy ← {"ok":true,"impl":"legacy/shipping.py@a1b2c3d"}
-rulec → {"id":1,"in":{"届け先":"北海道","重量":2500,"注文金額":12000,"会員":"ゴールド"}}
-legacy ← {"id":1,"out":{"送料":1800}}
-legacy ← {"id":2,"err":"unsupported: 離島"}
+rulec → {"rulec":"adapter/1","rule":"parcel_rate","in":["weight","girth","dest","signature"],"out":["fee"]}
+legacy ← {"ok":true,"impl":"legacy@fake-1"}
+rulec → {"id":0,"in":{"weight":1,"girth":1,"dest":"domestic","signature":true}}
+legacy ← {"id":0,"out":{"fee":11}}
+rulec → {"id":9,"in":{"weight":1,"girth":1,"dest":"overseas","signature":true}}
+legacy ← {"id":9,"err":"unsupported: signature to overseas"}
 ```
 
 1. rulec writes one handshake line naming the rule and its input and output names.
@@ -1022,8 +1042,8 @@ and both are the other side's own messages. A `ConnectError` becomes `err`, so a
 service says it cannot answer leaves the denominator like any other.
 
 ```console
-$ rulec adapter rules/送料.rule --template connect-python > adapter.py
-$ rulec verify rules/送料.rule --adapter python3 adapter.py https://pricing.internal
+$ rulec adapter rules/parcel_rate.rule --template connect-python > adapter.py
+$ rulec verify rules/parcel_rate.rule --adapter python3 adapter.py https://pricing.internal
 Compared 96 / matched 96 (100.000%)
 Counterpart: connect@https://pricing.internal
 ```
@@ -1035,9 +1055,9 @@ xlsx and docx. The extractor is a child process, as the legacy implementation is
 direction and one shot, because an extraction is one question.
 
 ```
-rulec → ./extract.py 料金表.pdf
+rulec → ./extract.py tariff.pdf
 extractor ← {"rulec":"extract/1","impl":"docling 2.4.0"}
-extractor ← {"block":"table","page":12,"grid":[["あて先","運賃"],["近畿","990円"]]}
+extractor ← {"block":"table","page":12,"grid":[["Destination","Fee"],["Kinki","990 yen"]]}
 extractor ← {"done":true}
 ```
 
@@ -1047,11 +1067,11 @@ extractor ← {"done":true}
    approver who read the document — a table a model read out of a scan is evidence of a
    different kind from one that was already a grid.
 3. Each `{"block":"table",…}` line carries a `grid` of rows of strings, in document order; the
-   `n`th of them is the fragment `表n`. `page` is optional and appears in the report. Blocks of
+   `n`th of them is the fragment `table<n>`. `page` is optional and appears in the report. Blocks of
    any other kind are read and let go, so an extractor that also reports headings needs no
    flag.
 4. `{"done":true}` ends the stream. **It is required**: an extractor that died half way would
-   otherwise hand back the tables it managed, and `表3` would quietly be a different table.
+   otherwise hand back the tables it managed, and `table3` would quietly be a different table.
    A missing handshake, a missing `done` and a non-zero exit all fail the command (exit 2)
    and leave the copies that were there untouched.
 

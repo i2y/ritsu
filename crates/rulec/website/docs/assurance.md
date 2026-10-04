@@ -189,8 +189,8 @@ Rows, tables, clauses and derivations then carry `@stamp_act 別表第一`, and 
 the amounts in the table with the amounts in the copy. One that is nowhere in the copy — or,
 where the copy heads a row or a column with the row's own word, nowhere under that heading — is
 E116; a value of the copy that no row uses is W120, which is what usually comes with a
-mistyped digit. A threshold is compared too, in the one way it can be: the copy's `60cm以下`
-puts 60cm in the band below, `<60cm` puts it in the band above, and that is E119.
+mistyped digit. A threshold is compared too, in the one way it can be: the copy's `Under 18`
+puts 18 in the band above, `<=18` puts it in the band below, and that is E119.
 
 **Where it stops:** agreement with the copy, not with the world. And a rule with no citation
 gets none of it — transcribe the tariff wrong and everything stays green.

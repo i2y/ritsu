@@ -287,8 +287,8 @@ Declare the document a rule was transcribed from with `source`, and cite the tab
 <div class="rc-row" markdown>
 <div markdown>
 
-![The approver's page for the shipping-fee rule. Example 2 (東京都, 1999g, 12000円, プラチナ) is in the form on the left and the answer reads 送料 = 400円, with the line the generated code would log under it; to the right, row 3 of 基本送料 (not a remote area, up to 2000g) and row 2 of 負担判定 (platinum) are lit](images/try-top-en-dark.png#only-dark)
-![The approver's page for the shipping-fee rule. Example 2 (東京都, 1999g, 12000円, プラチナ) is in the form on the left and the answer reads 送料 = 400円, with the line the generated code would log under it; to the right, row 3 of 基本送料 (not a remote area, up to 2000g) and row 2 of 負担判定 (platinum) are lit](images/try-top-en.png#only-light)
+![The approver's page for the shipping-fee rule. Example 2 (東京都, 1999g, 12000JPY, platinum) is in the form on the left and the answer reads fee = 400JPY, with the line the generated code would log under it; to the right, row 3 of base (not a remote area, up to 2000g) and row 2 of payer (platinum) are lit](images/try-top-en-dark.png#only-dark)
+![The approver's page for the shipping-fee rule. Example 2 (東京都, 1999g, 12000JPY, platinum) is in the form on the left and the answer reads fee = 400JPY, with the line the generated code would log under it; to the right, row 3 of base (not a remote area, up to 2000g) and row 2 of payer (platinum) are lit](images/try-top-en.png#only-light)
 
 </div>
 <div markdown>

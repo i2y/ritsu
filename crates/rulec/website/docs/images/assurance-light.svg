@@ -43,7 +43,7 @@
 <rect x="252" y="164" width="304" height="5" fill="#4457d8" clip-path="url(#clip-c1)"/>
 <text x="404.0" y="207" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">9 — the source</text>
 <text x="404.0" y="236" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">Catches a mistyped amount.</text>
-<text x="404.0" y="255" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">@法 別表第一 → E116, E119, W120</text>
+<text x="404.0" y="255" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">@gov table1 → E116, E119, W120</text>
 <line x1="246" y1="219.0" x2="139.0" y2="277.0" stroke="#4457d8" stroke-width="1.8" marker-end="url(#head-accent)"/>
 <clipPath id="clip-c2"><rect x="252" y="292" width="304" height="110" rx="10"/></clipPath>
 <rect x="252" y="292" width="304" height="110" rx="10" fill="#ffffff" stroke="#dfe3ee"/>

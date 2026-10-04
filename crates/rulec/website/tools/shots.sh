@@ -5,16 +5,33 @@
 # own deciders (`#t-<table>`), and photographed by headless Chrome. Re-run after anything
 # that changes the page.
 #
-#   $ website/tools/shots.sh [path/to/rulec]
+# Each language is photographed from the rule it shows. The English pages show the English twin
+# (tests/corpus/twins.tsv) of the rule the Japanese pages show, so that an English reader sees
+# no more Japanese than the rule's own `std/都道府県` values; the Japanese pages keep the original.
+#
+#   $ website/tools/shots.sh [path/to/rulec [languages]]      e.g.  shots.sh ../target/debug/rulec en
 set -eu
 cd "$(dirname "$0")/.."
 rulec="${1:-../target/debug/rulec}"
+langs="${2:-ja en}"
 chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 command -v google-chrome >/dev/null 2>&1 && chrome=google-chrome
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+rule_of() {  # lang -> the corpus rule that language's pages show
+  case "$1" in
+    ja) echo ../tests/corpus/送料.rule ;;
+    en) echo ../tests/corpus/member_shipping_fee.rule ;;
+  esac
+}
+table_of() {  # lang -> the table the second picture selects (`基本送料` and its twin `base`)
+  case "$1" in
+    ja) echo 基本送料 ;;
+    en) echo base ;;
+  esac
+}
 page() {  # lang
-  [ -f "$tmp/$1.html" ] || "$rulec" doc --lang "$1" --format html ../tests/corpus/送料.rule > "$tmp/$1.html"
+  [ -f "$tmp/$1.html" ] || "$rulec" doc --lang "$1" --format html "$(rule_of "$1")" > "$tmp/$1.html"
 }
 shot() {  # lang query out [width,height]
   page "$1"
@@ -35,14 +52,15 @@ shot() {  # lang query out [width,height]
 }
 # Two pictures per language. The board on a case: the form on the left, one card per
 # decider, the row that fired lit inside the card it belongs to. Then the same board with
-# 基本送料 selected, which is what the address `#t-基本送料` opens on — the card in colour
-# and the dock below it holding what `rulec check` verified about that table.
+# the first table selected (`基本送料`, or `base` in the twin), which is what the address
+# `#t-<table>` opens on — the card in colour and the dock below it holding what `rulec check`
+# verified about that table.
 # The front page holds the first one in half a row, where a whole board would be too small to
 # read. A narrower window keeps the form, the lit rows and the answer at a size that reads there;
 # the result card on the right is what falls off, and the form states the answer anyway.
-for lang in ja en; do
+for lang in $langs; do
   shot "$lang" "?example=2" "docs/images/try-$lang.png"
-  shot "$lang" "?example=2#t-基本送料" "docs/images/try-dock-$lang.png"
+  shot "$lang" "?example=2#t-$(table_of "$lang")" "docs/images/try-dock-$lang.png"
   shot "$lang" "?example=2" "docs/images/try-top-$lang.png" 1100,620
 done
 ls -la docs/images/try-*.png

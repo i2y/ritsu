@@ -145,7 +145,7 @@ A few shapes are worth knowing before the first draft:
   is `source japanpost = file "…" sha256:…`, and a `url "…"` on it says where that copy came from,
   so `fetch` can bring it again and `outdated` can ask whether it moved on — pinned to a
   commit the answer names the commits that touched it, otherwise only that the bytes differ.
-  **A document's fragments are its tables**: `@japanpost 表1` cites the first table in document
+  **A document's fragments are its tables**: `@japanpost table1` cites the first table in document
   order (a sheet, in a workbook), and `fetch` writes it beside the document under
   `<document>.fragments/`, where it is pinned, checked and quoted exactly as a law's article
   is. Cite the table the rows came from and a revision that moves it fails the check, naming
@@ -181,7 +181,7 @@ When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first
 the workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first
 one by default; `rulec import csv <file.csv>` does the same from a CSV. The columns become
 inputs, the last column the output, the values an enum or a range, and each guess is marked
-`# 推定` — which is then yours to correct: a numeric column is copied as equalities and is
+`# guess` — which is then yours to correct: a numeric column is copied as equalities and is
 usually meant as thresholds, and no range, rounding or unit in it is decided. A date, a
 percentage and a unit that lived in the cell's number format are read back out of it. It
 saves the typing, not the reading.
@@ -243,7 +243,7 @@ meet while transcribing:
   name. Give the calculation a name on a `define` line and put that name in the table.
 - **E116 an amount not in the copy** / **W120 a value of the copy no row uses** / **E119 a
   boundary on the other side of itself** — the row and the table it cites disagree. A mistyped
-  digit raises the first two; `60cm以下` transcribed as `<60cm` raises the third, and nothing
+  digit raises the first two; `Under 18` transcribed as `<=18` raises the third, and nothing
   else catches that one. A value from elsewhere loses its citation and gains a comment saying so.
 - **E114 value off the column’s step** — `0.5%` in a `rate[step 1%]` column has no runtime
   representation. Write a value on the step, or declare a finer step (`rate[step 0.1%]`).

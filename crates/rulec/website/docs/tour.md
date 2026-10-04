@@ -166,7 +166,7 @@ Ten, and no others.
 |---|---|---|
 | boolean | `bool` | |
 | enum | `size_class` | a **closed** finite set. Declared with `enum` or brought in with `import` |
-| quantity | `mass[g]` `length[cm]` `area[m2]` `volume[L]` `duration[h]` | **the unit is part of the type**. `2kg` is sugar for `2000g`; at run time the value is one integer in the declared unit. Mass is `mg g kg t oz lb`, length `mm cm m km in ft yd mi`, area `mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac`, volume `mm3 cm3 m3 mL L kL`, duration `ms s min h d w`. **Dimensions do not multiply into one another** — an area is its own type, and `縦 × 横` is E103 |
+| quantity | `mass[g]` `length[cm]` `area[m2]` `volume[L]` `duration[h]` | **the unit is part of the type**. `2kg` is sugar for `2000g`; at run time the value is one integer in the declared unit. Mass is `mg g kg t oz lb`, length `mm cm m km in ft yd mi`, area `mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac`, volume `mm3 cm3 m3 mL L kL`, duration `ms s min h d w`. **Dimensions do not multiply into one another** — an area is its own type, and `width * depth` is E103 |
 | ordered quantity | `temperature[℃]` `sound[dB]` | comparison and `range` only: **they do not add** (E048). 41℉ is exactly 5℃ and a literal converts between them, but the difference of two temperatures is not a temperature, and a decibel is a logarithm, so two of them added are not two sounds' worth |
 | money | `money[JPY, incl_tax]` `money[USD, excl_tax]` | **branded twice**, by currency and by tax flag. `incl_tax` and `excl_tax` do not add. The currency is `円` or any ISO 4217 code; its hundredth is the code plus `c`, so `money[USD]` counts dollars and `money[USDc]` cents. **Two currencies never convert** — there is no exchange rate here, and mixing them is E103 |
 | rate | `rate[step 1%]` `rate` | an integer throughout, counting steps (`10%` is 10 with `rate[step 1%]`). An input declares its step; a computed rate may leave it out, and then it comes from the literals in its column |
@@ -662,7 +662,7 @@ There are two kinds of document, cited and copied a little differently.
 
 | Document | Declared as | Cited as | Its copy |
 |---|---|---|---|
-| **A file beside the rule** (a policy PDF, a tariff sheet, a company rule in Word) | `source japanpost = file "<file>" sha256:<digest>` | `@japanpost`, or **`@japanpost 表1` to say which table of it was transcribed** | the file itself; `rulec source pin` writes its digest on the `source` line, and a cited table is taken out of the document and kept beside it |
+| **A file beside the rule** (a policy PDF, a tariff sheet, a company rule in Word) | `source japanpost = file "<file>" sha256:<digest>` | `@japanpost`, or **`@japanpost table1` to say which table of it was transcribed** | the file itself; `rulec source pin` writes its digest on the `source` line, and a cited table is taken out of the document and kept beside it |
 | **A statute** | `source stamp_act = law [<database>] "<id>" asof <date>`, the date saying which text is meant | always with the fragment, named the way that database names one | `rulec source fetch` brings each cited fragment into `sources/` beside the rule; `rulec source pin` writes each copy's digest on the line under `source` |
 
 **Two statute databases**, and the word after `law` says which.
@@ -690,7 +690,7 @@ an amendment until the copy is fetched again, so this belongs in a scheduled CI 
 
 ### Cite a table and its amounts are held to the copy
 
-`@japanpost 表1` on a file source makes `rulec source fetch` take that table out of the document and
+`@japanpost table1` on a file source makes `rulec source fetch` take that table out of the document and
 write it beside it. A sheet is a table in a workbook (`.xlsx`), a table is a table in a Word
 file (`.docx`), and Markdown and CSV are what they look like. A PDF or a scan cannot be read
 here: hand an extractor (docling and the like) to `rulec source fetch --via <cmd>`, or cite the
@@ -699,27 +699,23 @@ document whole as `@japanpost`.
 What the copy then holds is **the amounts the table writes**.
 
 ```console
-$ rulec check rules/shipping_fee.rule
-error[E116]: The amount of row 4 is not in the copy it cites
-  --> rules/shipping_fee.rule:22 table fee_table row 4
+$ rulec check rules/uk_minimum_wage.rule
+error[E116]: The amount of row 2 is not in the copy it cites
+  --> rules/uk_minimum_wage.rule:26 table by_age row 2
    |
-22 | | kanto | S80  | 1000JPY             |
-   |                  ^^^^^^^ not in the copy: 1000JPY
+26 | | >=18 <=20 | 1058GBPc                |
+   |               ^^^^^^^^ not in the copy: 1058GBPc
    |
- The copy cited: tariff 表1
-
-warning[W120]: The copy of 表1 states values no row uses
-  --> rules/shipping_fee.rule:16 table fee_table
-   |
-16 | table fee_table  @tariff 表1
-   |                  ^^^^^^^^^^^
-   |
- Stated in the copy, used by no row: 1100円
+ The copy cited: gov table1
+ An amount is not rewritten as it is transcribed, so either it was mistyped or it came from
+ somewhere else. …
 ```
 
-A mistyped digit brings out both halves at once, and W120 alone catches **a row that was never
-transcribed**. Only amounts are compared: a threshold is rewritten as it is transcribed
-(`1,949,000円まで` becomes `<=1_949_000JPY`) and an amount is not.
+A mistyped digit is E116 — here 1058 for 1085, in a table whose rows still tile the whole input
+space and overlap nowhere. The other half of the same slip is a figure the copy states that no
+row uses, W120 (*The copy of table1 states values no row uses*), and W120 alone catches **a row
+that was never transcribed**. Only amounts are compared: a threshold is rewritten as it is
+transcribed (`Not over $11,925` becomes `<=1192500USDc`) and an amount is not.
 
 The approver's page quotes the cited text, or the cited table, from the copies.
 

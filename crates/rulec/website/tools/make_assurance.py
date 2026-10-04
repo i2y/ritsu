@@ -137,7 +137,7 @@ EN = dict(
     ],
     cards=[
         ("No layer here", ["A person read, and wrote it down.", "rulec sees only from here down"], ("joint", 0), "human"),
-        ("9 — the source", ["Catches a mistyped amount.", "@法 別表第一 → E116, E119, W120"], ("joint", 1), "accent"),
+        ("9 — the source", ["Catches a mistyped amount.", "@gov table1 → E116, E119, W120"], ("joint", 1), "accent"),
         ("1, 2, 3 — the table", ["Five proofs: gaps, overlaps, dead rows,", "units, int64. Rounding. Examples."], ("box", 2), "accent"),
         ("4, 5, 6 — the code", ["Twelve languages, byte for byte. Seven", "coverage criteria. Rust over every input"], ("joint", 2), "accent"),
         ("7 — the evidence, re-read", ["Two programs share no code with rulec:", "one file with no imports, and Lean's proofs"], ("box", 4), "accent"),

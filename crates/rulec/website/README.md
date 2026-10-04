@@ -160,7 +160,9 @@ opened on one of the rule's own examples and photographed by headless Chrome:
 
 ```console
 $ website/tools/shots.sh            # needs Google Chrome; uses ../target/debug/rulec
+$ website/tools/shots.sh ../target/debug/rulec en    # only the English pictures
 ```
 
-Re-run it after anything that changes the page. They are pictures of real output, not
-mock-ups.
+Each language shows its own rule: the Japanese pictures are of `tests/corpus/送料.rule`, the
+English ones of its English twin `member_shipping_fee.rule` (`tests/corpus/twins.tsv`). Re-run
+it after anything that changes the page. They are pictures of real output, not mock-ups.

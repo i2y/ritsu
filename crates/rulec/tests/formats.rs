@@ -512,3 +512,166 @@ fn diffは動いた記録を全部名指しする() {
     let total: i128 = cs.iter().map(|c| c.get("count").unwrap().as_int().unwrap()).sum();
     assert_eq!(total, want.len() as i128);
 }
+
+// ── The examples of docs/formats.md are abridged real output ─────────────────────────────────
+
+/// Read an example the page abridges. A bare `…` is "something left out": a whole value, the
+/// rest of an array, the rest of an object (`,…}`) or the tail of a string (`"abc…"`, which is
+/// kept as it is). It becomes the string `"…"`, or disappears with its comma at the end of an
+/// object, so that what is left reads as JSON.
+fn abridged(text: &str) -> rulec::json::Json {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::new();
+    let (mut in_str, mut esc) = (false, false);
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if in_str {
+            out.push(c);
+            if esc {
+                esc = false;
+            } else if c == '\\' {
+                esc = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+        } else if c == '"' {
+            in_str = true;
+            out.push(c);
+        } else if c == '…' {
+            let next = chars[i + 1..].iter().find(|c| !c.is_whitespace());
+            let trimmed = out.trim_end().to_string();
+            if next == Some(&'}') && trimmed.ends_with(',') {
+                out = trimmed[..trimmed.len() - 1].to_string();
+            } else {
+                out.push_str("\"…\"");
+            }
+        } else {
+            out.push(c);
+        }
+        i += 1;
+    }
+    rulec::json::parse(&out).unwrap_or_else(|e| panic!("例が JSON として読めない: {e}\n{out}"))
+}
+
+/// Every key and value of the example is in the output, at the same place. An array that does
+/// not end in `…` has to be as long as the output's.
+fn within(ex: &rulec::json::Json, real: &rulec::json::Json, at: &str, bad: &mut Vec<String>) {
+    use rulec::json::Json;
+    let dots = |j: &Json| matches!(j, Json::Str(s) if s == "…");
+    match (ex, real) {
+        (e, _) if dots(e) => {}
+        (Json::Obj(es), Json::Obj(_)) => {
+            for (k, v) in es {
+                match real.get(k) {
+                    Some(r) => within(v, r, &format!("{at}.{k}"), bad),
+                    None => bad.push(format!("{at}.{k}: 実物に無い")),
+                }
+            }
+        }
+        (Json::Arr(es), Json::Arr(rs)) => {
+            let marked = es.last().is_some_and(dots);
+            let body = if marked { &es[..es.len() - 1] } else { &es[..] };
+            if !marked && body.len() != rs.len() {
+                bad.push(format!("{at}: 例は {} 件、実物は {} 件", body.len(), rs.len()));
+            }
+            for (n, e) in body.iter().enumerate() {
+                match rs.get(n) {
+                    Some(r) => within(e, r, &format!("{at}[{n}]"), bad),
+                    None => bad.push(format!("{at}[{n}]: 実物に無い")),
+                }
+            }
+        }
+        (Json::Str(e), Json::Str(r)) if e.contains('…') => {
+            if !r.starts_with(e.split('…').next().unwrap_or("")) {
+                bad.push(format!("{at}: {e:?} と {:?} が合わない", &r.chars().take(60).collect::<String>()));
+            }
+        }
+        (e, r) if e == r => {}
+        (e, r) => bad.push(format!("{at}: {} と {}", rulec::json::show(e), rulec::json::show(r))),
+    }
+}
+
+/// The text of the page from `start` to the end of its fence.
+fn example(doc: &str, start: &str) -> String {
+    let at = doc.find(start).unwrap_or_else(|| panic!("formats.md に例が無い: {start}"));
+    let end = doc[at..].find("\n```").unwrap_or_else(|| panic!("囲みが閉じていない: {start}")) + at;
+    doc[at..end].to_string()
+}
+
+fn first_json_line(out: &str) -> rulec::json::Json {
+    obj(out.lines().find(|l| l.starts_with('{')).unwrap_or_else(|| panic!("JSON の行が無い:\n{out}")))
+}
+
+/// The page's JSON examples were written for the Japanese rules and are now the English twins'
+/// (tests/corpus/twins.tsv), or a rule written in English (`parcel_rate`). Each is held to the
+/// output of the command that makes it, so that an abridged example cannot show a key the tool
+/// does not write or a value it does not compute.
+#[test]
+fn formatsの例は実物の一部である() {
+    let doc = std::fs::read_to_string(root().join("docs/formats.md")).unwrap();
+    let mut bad: Vec<String> = Vec::new();
+    let mut seen = 0;
+    let mut hold = |what: &str, ex: rulec::json::Json, real: rulec::json::Json| {
+        let mut here = Vec::new();
+        within(&ex, &real, "$", &mut here);
+        seen += 1;
+        bad.extend(here.into_iter().map(|b| format!("{what}: {b}")));
+    };
+
+    // check: the page shows it for `rules/parcel_rate.rule`, so it is run from there.
+    let tmp = TempDir::new("formats-example");
+    std::fs::create_dir_all(tmp.path().join("rules")).unwrap();
+    std::fs::copy(root().join("tests/mutants/m_e101en.rule"), tmp.path().join("rules/parcel_rate.rule")).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "en")
+        .current_dir(tmp.path())
+        .args(["check", "rules/parcel_rate.rule", "--format", "json", "--lang", "en"])
+        .output()
+        .unwrap();
+    let out = String::from_utf8_lossy(&o.stdout).into_owned();
+    let line = out.lines().find(|l| l.contains("\"code\":\"E101\"")).expect("E101 が無い");
+    // `key` is what `--diff-base` adds; the page documents it with the shape.
+    let ex = example(&doc, "{\"v\":2,\"severity\":\"error\",\"code\":\"E101\"").replace(",\n \"key\":\"…\"", "");
+    hold("check", abridged(&ex), obj(line));
+
+    // The commands that need nothing but the rule.
+    let (_, out) = run(&["coverage", "tests/corpus/member_shipping_fee.rule", "--format", "json", "--lang", "en"]);
+    let ex = example(&doc, "{\"file\":\"rules/member_shipping_fee.rule\",\"vectors\":70");
+    let real = first_json_line(&out);
+    // The page names the file as the rules directory of a project does.
+    let ex = abridged(&ex.replace("rules/member_shipping_fee.rule", "tests/corpus/member_shipping_fee.rule"));
+    hold("coverage", ex, real);
+
+    let (_, out) = run(&["api", "tests/corpus/single_coupon.rule", "--lang", "en"]);
+    let api = first_json_line(&out);
+    hold("api", abridged(&example(&doc, "{\"rule\":\"single_coupon\",\"alias\":\"single_coupon\"")), api);
+
+    let (_, out) = run(&["api", "tests/corpus/order_lifecycle.rule", "--lang", "en"]);
+    let ex = example(&doc, "\"machine\":{\"name\":\"order\",\"over\":\"step\"");
+    hold("machine", abridged(&format!("{{{ex}}}")), first_json_line(&out));
+
+    let (_, out) = run(&["api", "tests/corpus/nationwide_freight.rule", "--lang", "en"]);
+    let real = first_json_line(&out);
+    let params = real.get("python").and_then(|p| p.get("params")).expect("python.params");
+    let rulec::json::Json::Arr(ps) = params else { panic!("params が配列でない") };
+    hold("elements", abridged(&example(&doc, "{\"name\":\"freight_rows\",\"alias\":\"freight_rows\"")), ps.last().unwrap().clone());
+
+    let (_, out) = run(&["graph", "tests/corpus/cart_shipping_fee.rule", "--format", "json", "--lang", "en"]);
+    hold("graph", abridged(&example(&doc, "{\"rule\":\"cart_shipping_fee\",\"alias\":\"\"")), first_json_line(&out));
+
+    let (_, out) = run(&["certificate", "tests/corpus/coupon_stacking.rule", "--lang", "en"]);
+    let ex = example(&doc, "{\"v\":1,\"rule\":\"coupon_stacking\"");
+    hold("certificate", abridged(&ex), first_json_line(&out));
+
+    // A vector of the data files: the one the page shows is the boundary pair on the 31st of March.
+    let (_, out) = run(&["vectors", "tests/corpus/order_period.rule", "--lang", "en"]);
+    let line = out
+        .lines()
+        .find(|l| l.contains("boundary pair: table pick row 1 order_date 2026-03-31 inside"))
+        .expect("例のベクタが出ていない");
+    hold("vectors", abridged(&example(&doc, "{\"in\":{\"order_date\":\"2026-03-31\"}")), obj(line));
+
+    assert!(seen >= 8, "例を {seen} 件しか確かめていない");
+    assert!(bad.is_empty(), "formats.md の例が実物と合わない:\n{}", bad.join("\n"));
+}
