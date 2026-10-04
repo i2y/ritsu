@@ -1,0 +1,21 @@
+requirements 返金 v1
+description "chobo の例「refunds.ja.book」の勘定と振替がどこから来たかを書いた例（refunds.req の日本語版）。返金の方針は、この例のために決めたもの"
+
+role 経理 "返金の方針を決める"
+role 開発 "帳簿を書いて直す"
+
+scope chobo "refunds.ja.book" transfer
+
+requirement 売上を超えない(within_sales)
+  text "返金は、その注文の売上を超えない"
+  in force 2026-10-01..
+  owner 経理
+  decided 2026-10-04 by 経理 "注文ごとに、返金の額は売上の額を超えない。この例のために決めたもの"
+  satisfied by chobo "refunds.ja.book" account 返金できる残り
+    reviewed 2026-10-04 by 開発 sha256:5c5082d4aa498fe8 -> sha256:9f9b0d74872f62a4
+  satisfied by chobo "refunds.ja.book" transfer 売上計上
+    reviewed 2026-10-04 by 開発 sha256:5c5082d4aa498fe8 -> sha256:851ab806078168fe
+  satisfied by chobo "refunds.ja.book" transfer 返金
+    reviewed 2026-10-04 by 開発 sha256:5c5082d4aa498fe8 -> sha256:84e9ce254075c697
+  verified by chobo "refunds.ja.book"
+    reviewed 2026-10-04 by 開発 sha256:5c5082d4aa498fe8 -> sha256:b2daf81c87ff979e

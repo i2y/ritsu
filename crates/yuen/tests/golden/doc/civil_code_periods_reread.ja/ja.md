@@ -1,0 +1,130 @@
+# 民法の期間 — 要件の出どころ
+
+このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。
+
+- `civil_code_periods_reread.ja.req`（民法の期間 v1、`sha256:810f491b0587c912`）
+
+検査の結果：`examples/civil_code_periods_reread/civil_code_periods_reread.ja.req: エラー 1 件`。止めている診断：
+
+- `エラー[E303]: examples/civil_code_periods_reread/civil_code_periods_reread.ja.req:40:3: koyomi "civil_code_period_end.ja.cal" date 満了日_142条 は、2026-10-04 に 開発 がこのリンクを確かめたあとで変わりました`
+
+## トレーサビリティ
+
+| 要件 | 期間 | 出どころ | 持ち主 | 満たすもの | 確かめるもの | 状態 |
+|---|---|---|---|---|---|---|
+| `起算日 (first_day)` | 2026-10-01.. | `@民法 第140条` | 法務 | `koyomi "civil_code_period_end.ja.cal" date 起算日` | 見送り | 確かめたまま（見送り 1 件） |
+| `満了日 (last_day)` | 2026-10-01.. | `@民法 第141条, 第143条` | 法務 | `koyomi "civil_code_period_end.ja.cal" date 満了日` | 見送り | 確かめたまま（見送り 1 件） |
+| `満了日_142条 (last_day_142)` | 2026-10-01.. | `@民法 第142条`; 2026-10-03 に 法務 が決めた | 法務 | `koyomi "civil_code_period_end.ja.cal" date 満了日_142条` | `koyomi "civil_code_period_end.ja.cal" claim 142条の満了日は満了日以後` | **印あり（1 本）** |
+
+## 出典
+
+### 民法
+
+e-Gov の法令 `129AC0000000089`、2026-10-01 時点、版 `129AC0000000089_20260624_508AC0000000045`（写しの隣の revision.txt）。 借りた先：`koyomi "civil_code_period_end.ja.cal" source 民法`（写しと固定は、そのファイルのもの。その言語の検査が確かめる）。
+
+| 条 | 固定 | 引く要件 | 固定している成果物 |
+|---|---|---|---|
+| `第140条` | `sha256:e880059021fbb67d` | `起算日 (first_day)` | `koyomi "civil_code_period_end.ja.cal"` |
+| `第141条` | `sha256:0575c131b9f08063` | `満了日 (last_day)` | `koyomi "civil_code_period_end.ja.cal"` |
+| `第142条` | `sha256:fc8c35a0769d3b35` | `満了日_142条 (last_day_142)` | `koyomi "civil_code_period_end.ja.cal"` |
+| `第143条` | `sha256:6950bdfb988439b6` | `満了日 (last_day)` | `koyomi "civil_code_period_end.ja.cal"` |
+
+## 要件ごとの「なぜ」
+
+### 起算日 (first_day)
+
+**日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない**
+
+- 期間：2026-10-01..
+- 持ち主：法務
+- ファイル：`examples/civil_code_periods_reread/civil_code_periods_reread.ja.req:11`
+- 要件の端：`sha256:a9ebc73907faddc8`
+
+出どころ `@民法 第140条` — 法務 が 2026-10-04 に確かめた（`sha256:e880059021fbb67d` → `sha256:a9ebc73907faddc8`）。状態：確かめたまま
+
+> **民法 第140条（e-Gov 129AC0000000089、2026-10-01 時点の写し）**
+>
+> 第百四十条　日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない。
+
+満たすもの `koyomi "civil_code_period_end.ja.cal" date 起算日` — 開発 が 2026-10-04 に確かめた（`sha256:a9ebc73907faddc8` → `sha256:15aa6c91d6aaae80`）。状態：確かめたまま
+
+確かめるものを置かない（見送り）：初日を算入しないことは、koyomi doc のページで、条文と言い直しを見比べて確かめる。この例に、それを確かめる条件は無い — 法務 が 2026-10-04 に承認した（`sha256:a9ebc73907faddc8`）。状態：確かめたまま
+
+### 満了日 (last_day)
+
+**月によって期間を定めたときは、最後の月においてその起算日に応当する日の前日の終わりに満了する。応当する日がないときは、その月の末日の終わりに満了する**
+
+- 期間：2026-10-01..
+- 持ち主：法務
+- ファイル：`examples/civil_code_periods_reread/civil_code_periods_reread.ja.req:22`
+- 要件の端：`sha256:465b83ed8c251406`
+
+出どころ `@民法 第141条, 第143条` — 法務 が 2026-10-04 に確かめた（`sha256:0575c131b9f08063, sha256:6950bdfb988439b6` → `sha256:465b83ed8c251406`）。状態：確かめたまま
+
+> **民法 第141条（e-Gov 129AC0000000089、2026-10-01 時点の写し）**
+>
+> （期間の満了）
+>
+> 第百四十一条　前条の場合には、期間は、その末日の終了をもって満了する。
+
+> **民法 第143条（e-Gov 129AC0000000089、2026-10-01 時点の写し）**
+>
+> （暦による期間の計算）
+>
+> 第百四十三条　週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。
+>
+> ２　週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。
+
+満たすもの `koyomi "civil_code_period_end.ja.cal" date 満了日` — 開発 が 2026-10-04 に確かめた（`sha256:465b83ed8c251406` → `sha256:23441fd408f07548`）。状態：確かめたまま
+
+確かめるものを置かない（見送り）：条文の場合分けをそのまま書いた関数と、起点 2000〜2027 年のすべての日と月数 1〜12 で一致することを、koyomi の設計の段階の試作が確かめた。この例の中に、それを確かめる条件は無い — 法務 が 2026-10-04 に承認した（`sha256:465b83ed8c251406`）。状態：確かめたまま
+
+### 満了日_142条 (last_day_142)
+
+**期間の末日が日曜日、国民の祝日に関する法律に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する**
+
+- 期間：2026-10-01..
+- 持ち主：法務
+- ファイル：`examples/civil_code_periods_reread/civil_code_periods_reread.ja.req:33`
+- 要件の端：`sha256:d4f2d2a67322df17`
+
+出どころ `@民法 第142条` — 法務 が 2026-10-04 に確かめた（`sha256:fc8c35a0769d3b35` → `sha256:d4f2d2a67322df17`）。状態：確かめたまま
+
+> **民法 第142条（e-Gov 129AC0000000089、2026-10-01 時点の写し）**
+>
+> 第百四十二条　期間の末日が日曜日、国民の祝日に関する法律（昭和二十三年法律第百七十八号）に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する。
+
+2026-10-03 に 法務 が決めた：「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。休みが明けるまで動かす読み方とは、起点 2026 年と月数 1〜12 の 4,380 通りのうち 121 通りで分かれる。この例のために決めたもので、法令の読み方を示すものではない
+
+満たすもの `koyomi "civil_code_period_end.ja.cal" date 満了日_142条` — 開発 が 2026-10-04 に確かめた（`sha256:d4f2d2a67322df17` → `sha256:bba4761410179e6e`）。状態：確かめたあとで、成果物が変わった
+
+```text
+エラー[E303]: examples/civil_code_periods_reread/civil_code_periods_reread.ja.req:40:3: koyomi "civil_code_period_end.ja.cal" date 満了日_142条 は、2026-10-04 に 開発 がこのリンクを確かめたあとで変わりました
+    40 |   satisfied by koyomi "civil_code_period_end.ja.cal" date 満了日_142条
+  koyomi "civil_code_period_end.ja.cal" date 満了日_142条 の変わったところ:
+      @@ -1,2 +1,2 @@
+        date 満了日_142条(last_day_142) = 満了日                 @民法 第142条
+      - if closed + 1 day
+      + roll following
+  = 確かめたら: yuen review examples/civil_code_periods_reread/civil_code_periods_reread.ja.req --root examples/civil_code_periods_reread --at examples/civil_code_periods_reread/civil_code_periods_reread.ja.req:40 --by <役割>
+```
+
+確かめるもの `koyomi "civil_code_period_end.ja.cal" claim 142条の満了日は満了日以後` — 開発 が 2026-10-04 に確かめた（`sha256:d4f2d2a67322df17` → `sha256:7c616f5dcc9503a8`）。状態：確かめたまま
+
+## 範囲
+
+`scope koyomi "civil_code_period_end.ja.cal" date` — 成果物 3 個。どれも要件に辿れる。
+
+## 確かめた記録
+
+| 日付 | 誰が | 何を | ハッシュ |
+|---|---|---|---|
+| 2026-10-04 | 法務 | `@民法 第140条` → `起算日 (first_day)` | `sha256:e880059021fbb67d -> sha256:a9ebc73907faddc8` |
+| 2026-10-04 | 開発 | `起算日 (first_day)` → `koyomi "civil_code_period_end.ja.cal" date 起算日` | `sha256:a9ebc73907faddc8 -> sha256:15aa6c91d6aaae80` |
+| 2026-10-04 | 法務 | `起算日 (first_day)` の見送り（確かめるもの）を承認 | `sha256:a9ebc73907faddc8` |
+| 2026-10-04 | 法務 | `@民法 第141条, 第143条` → `満了日 (last_day)` | `sha256:0575c131b9f08063, sha256:6950bdfb988439b6 -> sha256:465b83ed8c251406` |
+| 2026-10-04 | 開発 | `満了日 (last_day)` → `koyomi "civil_code_period_end.ja.cal" date 満了日` | `sha256:465b83ed8c251406 -> sha256:23441fd408f07548` |
+| 2026-10-04 | 法務 | `満了日 (last_day)` の見送り（確かめるもの）を承認 | `sha256:465b83ed8c251406` |
+| 2026-10-04 | 法務 | `@民法 第142条` → `満了日_142条 (last_day_142)` | `sha256:fc8c35a0769d3b35 -> sha256:d4f2d2a67322df17` |
+| 2026-10-04 | 開発 | `満了日_142条 (last_day_142)` → `koyomi "civil_code_period_end.ja.cal" date 満了日_142条` | `sha256:d4f2d2a67322df17 -> sha256:bba4761410179e6e` |
+| 2026-10-04 | 開発 | `満了日_142条 (last_day_142)` → `koyomi "civil_code_period_end.ja.cal" claim 142条の満了日は満了日以後` | `sha256:d4f2d2a67322df17 -> sha256:7c616f5dcc9503a8` |

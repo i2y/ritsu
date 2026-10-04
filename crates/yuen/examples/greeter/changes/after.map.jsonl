@@ -1,0 +1,6 @@
+{"geas_map":1,"spec":"greeter.geas","root":".","claims":[{"name":"greets by name","status":"ok","targets":["api"]},{"name":"rejects an empty name","status":"ok","targets":["api"]},{"name":"totals accumulate across requests","status":"ok","targets":["api"]},{"name":"unknown paths are 404","status":"ok","targets":["api"]}]}
+{"file":"server.py","blob":"6e077c5927c3b37387eb10f3a50492d3e8fa49b2","lang":"python","code":"1-4,6,9-11,13-19,21-31,33,35,37-45,47,50-51"}
+{"claim":"greets by name","target":"api","file":"server.py","ran":"1-4,6,9-11,13-19,21-25,28-29,35,50-51"}
+{"claim":"rejects an empty name","target":"api","file":"server.py","ran":"1-4,6,9-11,13-19,21-27,35,50-51"}
+{"claim":"totals accumulate across requests","target":"api","file":"server.py","ran":"1-4,6,9-11,13-19,21-23,30-31,35,37-45,50-51"}
+{"claim":"unknown paths are 404","target":"api","file":"server.py","ran":"1-4,6,9-11,13-19,21-23,30,33,35,50-51"}

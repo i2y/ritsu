@@ -1,0 +1,43 @@
+requirements greeter v1
+description "What geas's example greeter answers: met by its server and checked by the claims of its spec. What it answers was decided for this example"
+
+role api "Decides what the service answers"
+role development "Writes the server"
+
+scope file "server.py"
+
+requirement greets_by_name
+  text "GET /greet?name=<name> answers 200 with the message Hello, <name>"
+  owner api
+  decided 2026-10-04 by api "A greeting names whoever asked for it. Decided for this example"
+  satisfied by file "server.py"
+    reviewed 2026-10-04 by development sha256:59d408ab78823210 -> sha256:331e02e26d128e8c
+  verified by geas "greeter.geas" claim "greets by name"
+    reviewed 2026-10-04 by development sha256:59d408ab78823210 -> sha256:2b4e11c2cc191431
+
+requirement rejects_an_empty_name
+  text "GET /greet with an empty name answers 400"
+  owner api
+  decided 2026-10-04 by api "An empty name is a mistake of the client, not a greeting. Decided for this example"
+  satisfied by file "server.py"
+    reviewed 2026-10-04 by development sha256:611723760e60eba7 -> sha256:331e02e26d128e8c
+  verified by geas "greeter.geas" claim "rejects an empty name"
+    reviewed 2026-10-04 by development sha256:611723760e60eba7 -> sha256:3f7c8d1b2bbcc309
+
+requirement totals_accumulate
+  text "POST /add adds its body to a total that GET /total answers, and POST /reset sets it to 0"
+  owner api
+  decided 2026-10-04 by api "The total is kept across requests until it is reset. Decided for this example"
+  satisfied by file "server.py"
+    reviewed 2026-10-04 by development sha256:fd0003d1f89cfc8c -> sha256:331e02e26d128e8c
+  verified by geas "greeter.geas" claim "totals accumulate across requests"
+    reviewed 2026-10-04 by development sha256:fd0003d1f89cfc8c -> sha256:d653be1c06f5c8b1
+
+requirement unknown_paths_are_404
+  text "Any other path answers 404"
+  owner api
+  decided 2026-10-04 by api "The service answers only the paths it knows. Decided for this example"
+  satisfied by file "server.py"
+    reviewed 2026-10-04 by development sha256:9e53cc1bcdc81167 -> sha256:331e02e26d128e8c
+  verified by geas "greeter.geas" claim "unknown paths are 404"
+    reviewed 2026-10-04 by development sha256:9e53cc1bcdc81167 -> sha256:1950201e8644bc57

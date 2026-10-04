@@ -1,0 +1,43 @@
+requirements 挨拶 v1
+description "geas の例 greeter が何を返すかを書いた例（greeter.req の日本語版）。満たすのはサーバー、確かめるのは spec の主張。何を返すかは、この例のために決めたもの"
+
+role 窓口 "サービスが何を返すかを決める"
+role 開発 "サーバーを書く"
+
+scope file "server.py"
+
+requirement 名前で挨拶する(greets_by_name)
+  text "GET /greet?name=<名前> は 200 と、メッセージ Hello, <名前> を返す"
+  owner 窓口
+  decided 2026-10-04 by 窓口 "挨拶には、頼んだ人の名前を入れる。この例のために決めたもの"
+  satisfied by file "server.py"
+    reviewed 2026-10-04 by 開発 sha256:e87a6fee4807cbad -> sha256:331e02e26d128e8c
+  verified by geas "greeter.ja.geas" claim 名前で挨拶する
+    reviewed 2026-10-04 by 開発 sha256:e87a6fee4807cbad -> sha256:23771933ab7071aa
+
+requirement 空の名前は断る(rejects_an_empty_name)
+  text "名前が空の GET /greet は 400 を返す"
+  owner 窓口
+  decided 2026-10-04 by 窓口 "空の名前は呼び出す側の誤りで、挨拶ではない。この例のために決めたもの"
+  satisfied by file "server.py"
+    reviewed 2026-10-04 by 開発 sha256:2590c87a9ffa99f1 -> sha256:331e02e26d128e8c
+  verified by geas "greeter.ja.geas" claim 空の名前は断る
+    reviewed 2026-10-04 by 開発 sha256:2590c87a9ffa99f1 -> sha256:e973e18f878e1f9e
+
+requirement 足した数が積み上がる(totals_accumulate)
+  text "POST /add は本文の数を合計に足し、GET /total が合計を返し、POST /reset が合計を 0 に戻す"
+  owner 窓口
+  decided 2026-10-04 by 窓口 "合計は、戻すまでリクエストをまたいで持つ。この例のために決めたもの"
+  satisfied by file "server.py"
+    reviewed 2026-10-04 by 開発 sha256:301f01ea03399fc9 -> sha256:331e02e26d128e8c
+  verified by geas "greeter.ja.geas" claim 足した数が積み上がる
+    reviewed 2026-10-04 by 開発 sha256:301f01ea03399fc9 -> sha256:851003f8a61e8af4
+
+requirement 知らないパスは404(unknown_paths_are_404)
+  text "ほかのパスは 404 を返す"
+  owner 窓口
+  decided 2026-10-04 by 窓口 "サービスは、知っているパスにだけ答える。この例のために決めたもの"
+  satisfied by file "server.py"
+    reviewed 2026-10-04 by 開発 sha256:38b694c45841408b -> sha256:331e02e26d128e8c
+  verified by geas "greeter.ja.geas" claim "知らないパスには 404 を返す"
+    reviewed 2026-10-04 by 開発 sha256:38b694c45841408b -> sha256:8788b539c21c495d

@@ -1,0 +1,6 @@
+{"geas_map":1,"spec":"greeter.ja.geas","root":".","claims":[{"name":"名前で挨拶する","status":"ok","targets":["api"]},{"name":"空の名前は断る","status":"ok","targets":["api"]},{"name":"足した数が積み上がる","status":"ok","targets":["api"]},{"name":"知らないパスには 404 を返す","status":"ok","targets":["api"]}]}
+{"file":"server.py","blob":"58cb96d6047dba7d9c7f5d502e51fe87e592db17","lang":"python","code":"1-4,6,9-11,13-19,21-31,33,35,37-45,47,50-51"}
+{"claim":"名前で挨拶する","target":"api","file":"server.py","ran":"1-4,6,9-11,13-19,21-25,28-29,35,50-51"}
+{"claim":"空の名前は断る","target":"api","file":"server.py","ran":"1-4,6,9-11,13-19,21-27,35,50-51"}
+{"claim":"足した数が積み上がる","target":"api","file":"server.py","ran":"1-4,6,9-11,13-19,21-23,30-31,35,37-45,50-51"}
+{"claim":"知らないパスには 404 を返す","target":"api","file":"server.py","ran":"1-4,6,9-11,13-19,21-23,30,33,35,50-51"}

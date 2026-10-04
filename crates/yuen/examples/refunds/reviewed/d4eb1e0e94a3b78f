@@ -1,0 +1,66 @@
+{
+  "accounts": {
+    "refundable": {
+      "description": "what is left to refund on the order",
+      "lower": {
+        "refused_as": "refund_exceeds_sale",
+        "value": 0
+      },
+      "outside": false,
+      "params": [
+        "order"
+      ],
+      "unit": "USD",
+      "upper": null
+    },
+    "refunded": {
+      "description": null,
+      "lower": null,
+      "outside": true,
+      "params": [],
+      "unit": "USD",
+      "upper": null
+    }
+  },
+  "description": "held while it waits for approval: posted when it is approved, voided when it is turned down",
+  "key": [
+    "request"
+  ],
+  "moves": [
+    {
+      "amount": {
+        "param": "amount"
+      },
+      "from": {
+        "account": "refundable",
+        "args": [
+          {
+            "param": "order"
+          }
+        ]
+      },
+      "to": {
+        "account": "refunded",
+        "args": []
+      }
+    }
+  ],
+  "params": [
+    {
+      "name": "request",
+      "type": "string"
+    },
+    {
+      "name": "order",
+      "type": "string"
+    },
+    {
+      "name": "amount",
+      "type": "amount",
+      "unit": "USD"
+    }
+  ],
+  "pending": {
+    "expires_after_seconds": 604800
+  }
+}

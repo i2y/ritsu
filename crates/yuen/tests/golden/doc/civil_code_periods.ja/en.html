@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="yuen 0.23.0">
+<title>民法の期間 — where the requirements come from</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 12px; overflow-wrap: anywhere; }
+h2 { font-size: 1.25rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 28px 0 8px; overflow-wrap: anywhere; }
+p, li { overflow-wrap: anywhere; }
+code { font: 0.88em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
+pre { font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); min-width: 7em; }
+th { background: var(--soft); color: var(--dim); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td strong { color: var(--warn); }
+td.nw { white-space: nowrap; }
+blockquote.law { margin: 8px 0 16px; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0; }
+blockquote.law p { margin: 4px 0; }
+blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; }
+.lead { color: var(--dim); }
+@media print { body { background: #fff; color: #000; } .scroll { overflow: visible; } pre { white-space: pre-wrap; } }
+</style>
+</head>
+<body>
+<main>
+<h1>民法の期間 — where the requirements come from</h1>
+<p class="lead">yuen 0.23.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.</p>
+<ul>
+<li><code>civil_code_periods.ja.req</code> (民法の期間 v1, <code>sha256:810f491b0587c912</code>)</li>
+</ul>
+<p>The check: <code>examples/civil_code_periods/civil_code_periods.ja.req: ok — 3 requirements, whose 7 links and 2 waivers are as they were looked at; every requirement is met and checked, or waived; the 3 dates in scope all trace to a requirement</code></p>
+<h2 id="traceability">Traceability</h2>
+<div class="scroll"><table>
+<thead><tr><th>Requirement</th><th>In force</th><th>Comes from</th><th>Owner</th><th>Met by</th><th>Checked by</th><th>State</th></tr></thead>
+<tbody>
+<tr><td><code>起算日 (first_day)</code></td><td class="nw">2026-10-01..</td><td><code>@民法 第140条</code></td><td>法務</td><td><code>koyomi &quot;civil_code_period_end.ja.cal&quot; date 起算日</code></td><td>waived</td><td>as looked at (1 waived)</td></tr>
+<tr><td><code>満了日 (last_day)</code></td><td class="nw">2026-10-01..</td><td><code>@民法 第141条, 第143条</code></td><td>法務</td><td><code>koyomi &quot;civil_code_period_end.ja.cal&quot; date 満了日</code></td><td>waived</td><td>as looked at (1 waived)</td></tr>
+<tr><td><code>満了日_142条 (last_day_142)</code></td><td class="nw">2026-10-01..</td><td><code>@民法 第142条</code>; decided by 法務 on 2026-10-03</td><td>法務</td><td><code>koyomi &quot;civil_code_period_end.ja.cal&quot; date 満了日_142条</code></td><td><code>koyomi &quot;civil_code_period_end.ja.cal&quot; claim 142条の満了日は満了日以後</code></td><td>as looked at</td></tr>
+</tbody>
+</table></div>
+<h2 id="sources">Sources</h2>
+<h3 id="source-民法">民法</h3>
+<p>The law <code>129AC0000000089</code> in e-Gov, as of 2026-10-01, version <code>129AC0000000089_20260624_508AC0000000045</code> (revision.txt beside the copies). Borrowed from <code>koyomi &quot;civil_code_period_end.ja.cal&quot; source 民法</code> (the copies and the pins are that file&#39;s, and its language&#39;s check holds them).</p>
+<div class="scroll"><table>
+<thead><tr><th>Article</th><th>Pin</th><th>Cited by</th><th>Pinned by the artifacts</th></tr></thead>
+<tbody>
+<tr><td><code>第140条</code></td><td><code>sha256:e880059021fbb67d</code></td><td><code>起算日 (first_day)</code></td><td><code>koyomi &quot;civil_code_period_end.ja.cal&quot;</code></td></tr>
+<tr><td><code>第141条</code></td><td><code>sha256:0575c131b9f08063</code></td><td><code>満了日 (last_day)</code></td><td><code>koyomi &quot;civil_code_period_end.ja.cal&quot;</code></td></tr>
+<tr><td><code>第142条</code></td><td><code>sha256:fc8c35a0769d3b35</code></td><td><code>満了日_142条 (last_day_142)</code></td><td><code>koyomi &quot;civil_code_period_end.ja.cal&quot;</code></td></tr>
+<tr><td><code>第143条</code></td><td><code>sha256:6950bdfb988439b6</code></td><td><code>満了日 (last_day)</code></td><td><code>koyomi &quot;civil_code_period_end.ja.cal&quot;</code></td></tr>
+</tbody>
+</table></div>
+<h2 id="why">Why each requirement is so</h2>
+<h3 id="why-first_day">起算日 (first_day)</h3>
+<p><strong>日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない</strong></p>
+<ul>
+<li>In force: 2026-10-01..</li>
+<li>Owner: 法務</li>
+<li>File: <code>examples/civil_code_periods/civil_code_periods.ja.req:11</code></li>
+<li>The requirement&#39;s end: <code>sha256:a9ebc73907faddc8</code></li>
+</ul>
+<p>Comes from <code>@民法 第140条</code> — looked at by 法務 on 2026-10-04 (<code>sha256:e880059021fbb67d</code> → <code>sha256:a9ebc73907faddc8</code>). State: as looked at</p>
+<blockquote class="law">
+<p class="cite">民法 第140条 (e-Gov 129AC0000000089, the copy as of 2026-10-01)</p>
+<p>第百四十条　日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない。</p>
+</blockquote>
+<p>Met by <code>koyomi &quot;civil_code_period_end.ja.cal&quot; date 起算日</code> — looked at by 開発 on 2026-10-04 (<code>sha256:a9ebc73907faddc8</code> → <code>sha256:15aa6c91d6aaae80</code>). State: as looked at</p>
+<p>Nothing checks it (waived): 初日を算入しないことは、koyomi doc のページで、条文と言い直しを見比べて確かめる。この例に、それを確かめる条件は無い — approved by 法務 on 2026-10-04 (<code>sha256:a9ebc73907faddc8</code>). State: as looked at</p>
+<h3 id="why-last_day">満了日 (last_day)</h3>
+<p><strong>月によって期間を定めたときは、最後の月においてその起算日に応当する日の前日の終わりに満了する。応当する日がないときは、その月の末日の終わりに満了する</strong></p>
+<ul>
+<li>In force: 2026-10-01..</li>
+<li>Owner: 法務</li>
+<li>File: <code>examples/civil_code_periods/civil_code_periods.ja.req:22</code></li>
+<li>The requirement&#39;s end: <code>sha256:465b83ed8c251406</code></li>
+</ul>
+<p>Comes from <code>@民法 第141条, 第143条</code> — looked at by 法務 on 2026-10-04 (<code>sha256:0575c131b9f08063, sha256:6950bdfb988439b6</code> → <code>sha256:465b83ed8c251406</code>). State: as looked at</p>
+<blockquote class="law">
+<p class="cite">民法 第141条 (e-Gov 129AC0000000089, the copy as of 2026-10-01)</p>
+<p>（期間の満了）</p>
+<p>第百四十一条　前条の場合には、期間は、その末日の終了をもって満了する。</p>
+</blockquote>
+<blockquote class="law">
+<p class="cite">民法 第143条 (e-Gov 129AC0000000089, the copy as of 2026-10-01)</p>
+<p>（暦による期間の計算）</p>
+<p>第百四十三条　週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。</p>
+<p>２　週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。</p>
+</blockquote>
+<p>Met by <code>koyomi &quot;civil_code_period_end.ja.cal&quot; date 満了日</code> — looked at by 開発 on 2026-10-04 (<code>sha256:465b83ed8c251406</code> → <code>sha256:23441fd408f07548</code>). State: as looked at</p>
+<p>Nothing checks it (waived): 条文の場合分けをそのまま書いた関数と、起点 2000〜2027 年のすべての日と月数 1〜12 で一致することを、koyomi の設計の段階の試作が確かめた。この例の中に、それを確かめる条件は無い — approved by 法務 on 2026-10-04 (<code>sha256:465b83ed8c251406</code>). State: as looked at</p>
+<h3 id="why-last_day_142">満了日_142条 (last_day_142)</h3>
+<p><strong>期間の末日が日曜日、国民の祝日に関する法律に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する</strong></p>
+<ul>
+<li>In force: 2026-10-01..</li>
+<li>Owner: 法務</li>
+<li>File: <code>examples/civil_code_periods/civil_code_periods.ja.req:33</code></li>
+<li>The requirement&#39;s end: <code>sha256:d4f2d2a67322df17</code></li>
+</ul>
+<p>Comes from <code>@民法 第142条</code> — looked at by 法務 on 2026-10-04 (<code>sha256:fc8c35a0769d3b35</code> → <code>sha256:d4f2d2a67322df17</code>). State: as looked at</p>
+<blockquote class="law">
+<p class="cite">民法 第142条 (e-Gov 129AC0000000089, the copy as of 2026-10-01)</p>
+<p>第百四十二条　期間の末日が日曜日、国民の祝日に関する法律（昭和二十三年法律第百七十八号）に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する。</p>
+</blockquote>
+<p>Decided by 法務 on 2026-10-03: 「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。休みが明けるまで動かす読み方とは、起点 2026 年と月数 1〜12 の 4,380 通りのうち 121 通りで分かれる。この例のために決めたもので、法令の読み方を示すものではない</p>
+<p>Met by <code>koyomi &quot;civil_code_period_end.ja.cal&quot; date 満了日_142条</code> — looked at by 開発 on 2026-10-04 (<code>sha256:d4f2d2a67322df17</code> → <code>sha256:bba4761410179e6e</code>). State: as looked at</p>
+<p>Checked by <code>koyomi &quot;civil_code_period_end.ja.cal&quot; claim 142条の満了日は満了日以後</code> — looked at by 開発 on 2026-10-04 (<code>sha256:d4f2d2a67322df17</code> → <code>sha256:7c616f5dcc9503a8</code>). State: as looked at</p>
+<h2 id="scope">Scope</h2>
+<p><code>scope koyomi &quot;civil_code_period_end.ja.cal&quot; date</code> — 3 artifacts in it, every one tracing to a requirement.</p>
+<h2 id="records">Records</h2>
+<div class="scroll"><table>
+<thead><tr><th>Date</th><th>By</th><th>What</th><th>Hashes</th></tr></thead>
+<tbody>
+<tr><td class="nw">2026-10-04</td><td>法務</td><td><code>@民法 第140条</code> → <code>起算日 (first_day)</code></td><td><code>sha256:e880059021fbb67d -&gt; sha256:a9ebc73907faddc8</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>起算日 (first_day)</code> → <code>koyomi &quot;civil_code_period_end.ja.cal&quot; date 起算日</code></td><td><code>sha256:a9ebc73907faddc8 -&gt; sha256:15aa6c91d6aaae80</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>法務</td><td><code>起算日 (first_day)</code>: nothing checks it, approved</td><td><code>sha256:a9ebc73907faddc8</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>法務</td><td><code>@民法 第141条, 第143条</code> → <code>満了日 (last_day)</code></td><td><code>sha256:0575c131b9f08063, sha256:6950bdfb988439b6 -&gt; sha256:465b83ed8c251406</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>満了日 (last_day)</code> → <code>koyomi &quot;civil_code_period_end.ja.cal&quot; date 満了日</code></td><td><code>sha256:465b83ed8c251406 -&gt; sha256:23441fd408f07548</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>法務</td><td><code>満了日 (last_day)</code>: nothing checks it, approved</td><td><code>sha256:465b83ed8c251406</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>法務</td><td><code>@民法 第142条</code> → <code>満了日_142条 (last_day_142)</code></td><td><code>sha256:fc8c35a0769d3b35 -&gt; sha256:d4f2d2a67322df17</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>満了日_142条 (last_day_142)</code> → <code>koyomi &quot;civil_code_period_end.ja.cal&quot; date 満了日_142条</code></td><td><code>sha256:d4f2d2a67322df17 -&gt; sha256:bba4761410179e6e</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>満了日_142条 (last_day_142)</code> → <code>koyomi &quot;civil_code_period_end.ja.cal&quot; claim 142条の満了日は満了日以後</code></td><td><code>sha256:d4f2d2a67322df17 -&gt; sha256:7c616f5dcc9503a8</code></td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

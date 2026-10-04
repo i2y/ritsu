@@ -1,0 +1,21 @@
+requirements refunds v1
+description "Where the account and the transfers of chobo's example refunds.book come from. The refund policy was decided for this example"
+
+role accounting "Decides the refund policy"
+role development "Writes and fixes the book"
+
+scope chobo "refunds.book" transfer
+
+requirement within_sales
+  text "A refund does not exceed the sale of its order"
+  in force 2026-10-01..
+  owner accounting
+  decided 2026-10-04 by accounting "What is refunded on an order never exceeds what was sold on it. Decided for this example"
+  satisfied by chobo "refunds.book" account refundable
+    reviewed 2026-10-04 by development sha256:29fcc8e8216d5dac -> sha256:49d9b3dd2d4bf83b
+  satisfied by chobo "refunds.book" transfer sale
+    reviewed 2026-10-04 by development sha256:29fcc8e8216d5dac -> sha256:699a4feaa65a1dfe
+  satisfied by chobo "refunds.book" transfer refund
+    reviewed 2026-10-04 by development sha256:29fcc8e8216d5dac -> sha256:d4eb1e0e94a3b78f
+  verified by chobo "refunds.book"
+    reviewed 2026-10-04 by development sha256:29fcc8e8216d5dac -> sha256:3b8bf7fc7a202c38

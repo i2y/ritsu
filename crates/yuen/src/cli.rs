@@ -145,6 +145,27 @@ pub fn commands() -> Vec<Cmd> {
         },
         Cmd {
             usage: None,
+            name: "doc",
+            args: "<path>...",
+            purpose: tr!(
+                "要件と来歴のページを出す（Markdown か一枚の HTML）。コードが実現すべきものを理解し、確かめる人が読む",
+                "print the page of the requirements and where they come from (Markdown, or one HTML file), for whoever has to understand and check what the code is meant to do"
+            ),
+            params: vec![("<path>...", tr!("{}", "{}", PATHS.0; PATHS.1))],
+            flags: vec![
+                flag("--format", Some("markdown|html"), tr!("ページの形。既定は Markdown", "the form of the page; Markdown unless html")).choices(&["markdown", "html"]),
+                flag("--out", Some("<dir>"), tr!("ページを書くディレクトリ。最初の .req の名前から <名前>.md か <名前>.html を書く", "the directory to write the page to, as <name>.md or <name>.html after the first .req")),
+            ],
+            exits: vec![
+                (0, tr!("出した（印や欠け、範囲の外れはページに載せる）", "printed (marks, gaps and what the scope misses are on the page)")),
+                (1, tr!("構文、名前、出典、成果物にエラーがある（ページを作らず、診断を標準エラーに出す）", "the words, names, sources or artifacts have errors (no page; the diagnostics go to standard error)")),
+                (2, tr!("引数の誤り、読めないファイル、つながっていない言語の成果物", "bad arguments, a file that cannot be read, or an artifact of a language not joined")),
+            ],
+            examples: vec!["yuen doc tests/fixtures/period", "yuen doc tests/fixtures/period --format html --out site --lang ja"],
+            codes: vec![],
+        },
+        Cmd {
+            usage: None,
             name: "api",
             args: "<path>...",
             purpose: tr!(

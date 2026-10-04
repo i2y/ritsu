@@ -9,7 +9,7 @@ fn run(args: &[&str]) -> common::Ran {
     common::yuen(Path::new("."), args)
 }
 
-const COMMANDS: &[&str] = &["check", "review", "trace", "affected", "api", "export", "source", "explain"];
+const COMMANDS: &[&str] = &["check", "review", "trace", "affected", "doc", "api", "export", "source", "explain"];
 
 #[test]
 fn every_command_has_its_help_page() {
@@ -27,11 +27,6 @@ fn every_command_has_its_help_page() {
     assert_eq!(r.code, 0);
     for c in COMMANDS {
         assert!(r.stdout.contains(&format!("  yuen {c} ")), "{c} is listed");
-    }
-    // The command of the next stage is not in the table yet.
-    for c in ["doc"] {
-        assert!(!r.stdout.contains(&format!("  yuen {c} ")), "{c} is not built yet");
-        assert_eq!(run(&[c]).code, 2, "{c}");
     }
     assert!(run(&["check", "--help"]).stdout.contains("E302"), "check lists the codes it can print");
 }

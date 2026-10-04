@@ -1,0 +1,36 @@
+requirements 印紙税 v1
+description "rulec の規則「印紙税の本則と軽減.rule」の印紙税額が、印紙税法と租税特別措置法のどこから来たかを、軽減の期間の版と、そのあとの版の二つで書いた例。出典は yuen が自分で写して固定し、写しが規則の写しと同じ本文であることを検査が確かめる。例として書いたもので、法令の読み方を示すものではない"
+
+role 税務 "条文の読み方を決める"
+role 開発 "規則を書いて直す"
+
+source 法 = law "342AC0000000023" asof 2026-04-01
+  別表第一 sha256:0ba69792e960021e
+source 措置法 = law "332AC0000000026" asof 2026-04-01
+  第91条 sha256:85faf53f6f6e8196
+
+scope rulec "印紙税の本則と軽減.rule" output
+
+requirement 契約書の印紙税額(contract_stamp_tax) v1
+  text "令和9年3月31日までに作成される不動産の譲渡に関する契約書の印紙税額は、契約金額が10万円を超えるものは租税特別措置法第91条の軽減された税率により、そのほかは別表第一の第1号文書の欄の税率による。契約金額が1万円未満のものは課税しない"
+  in force 2014-04-01..2027-03-31
+  owner 税務
+  from @法 別表第一
+    reviewed 2026-10-04 by 税務 sha256:0ba69792e960021e -> sha256:fb6fc8251c7bd27b
+  from @措置法 第91条
+    reviewed 2026-10-04 by 税務 sha256:85faf53f6f6e8196 -> sha256:fb6fc8251c7bd27b
+  satisfied by rulec "印紙税の本則と軽減.rule" output 印紙税額
+    reviewed 2026-10-04 by 開発 sha256:fb6fc8251c7bd27b -> sha256:0037ed7e6d91942d
+  verified by rulec "印紙税の本則と軽減.rule"
+    reviewed 2026-10-04 by 開発 sha256:fb6fc8251c7bd27b -> sha256:dc176eebd83f26e3
+
+requirement 契約書の印紙税額(contract_stamp_tax) v2
+  text "不動産の譲渡に関する契約書の印紙税額は、記載された契約金額に応じて、別表第一の第1号文書の欄の税率による。契約金額が1万円未満のものは課税しない"
+  in force 2027-04-01..
+  owner 税務
+  from @法 別表第一
+    reviewed 2026-10-04 by 税務 sha256:0ba69792e960021e -> sha256:836c2c8320d89533
+  satisfied by rulec "印紙税の本則と軽減.rule" output 印紙税額
+    reviewed 2026-10-04 by 開発 sha256:836c2c8320d89533 -> sha256:0037ed7e6d91942d
+  verified by rulec "印紙税の本則と軽減.rule"
+    reviewed 2026-10-04 by 開発 sha256:836c2c8320d89533 -> sha256:dc176eebd83f26e3

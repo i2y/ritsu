@@ -1,0 +1,1 @@
+text GET /greet?name=<名前> は 200 と、メッセージ Hello, <名前> を返す

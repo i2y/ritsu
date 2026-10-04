@@ -1,0 +1,32 @@
+requirements payment_terms v1
+description "Where the dates of koyomi's example payment_20th_close_next_10th.cal come from. The closed days come from the table of national holidays the calendar file pins, borrowed; the terms of payment were decided for this example"
+
+role accounting "Decides the terms of payment"
+role development "Writes and fixes koyomi's files"
+
+source holidays = koyomi "calendars/tokyo_business_days.cal" source national_holidays
+
+scope koyomi "payment_20th_close_next_10th.cal" date
+
+requirement payment_day
+  text "Invoices close on the 20th and are paid on the 10th of the next month, within 60 days of receipt"
+  in force 2026-10-01..
+  owner accounting
+  decided 2026-10-04 by accounting "Closing on the 20th and paying on the 10th of the next month keeps every payment within 60 days of receipt. Decided for this example"
+  satisfied by koyomi "payment_20th_close_next_10th.cal" date closing
+    reviewed 2026-10-04 by development sha256:ce2048eb0cb0cf01 -> sha256:64153f3ffeeabb6b
+  satisfied by koyomi "payment_20th_close_next_10th.cal" date payment
+    reviewed 2026-10-04 by development sha256:ce2048eb0cb0cf01 -> sha256:77727589d8318079
+  verified by koyomi "payment_20th_close_next_10th.cal" claim within_60_days_of_receipt
+    reviewed 2026-10-04 by development sha256:ce2048eb0cb0cf01 -> sha256:39afffc0504e0754
+
+requirement business_days
+  text "A payment is made on a business day: when the payment day is a Saturday, a Sunday or a national holiday, it is made on the business day before"
+  in force 2026-10-01..
+  owner accounting
+  from @holidays
+    reviewed 2026-10-04 by accounting sha256:cec37a743c96995c -> sha256:d53e37ddddbb71fa
+  satisfied by koyomi "payment_20th_close_next_10th.cal" date payment
+    reviewed 2026-10-04 by development sha256:d53e37ddddbb71fa -> sha256:77727589d8318079
+  verified by koyomi "payment_20th_close_next_10th.cal" claim paid_on_a_business_day
+    reviewed 2026-10-04 by development sha256:d53e37ddddbb71fa -> sha256:a30c094c89e283df

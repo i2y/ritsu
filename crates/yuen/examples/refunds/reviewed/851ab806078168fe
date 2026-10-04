@@ -1,0 +1,60 @@
+{
+  "accounts": {
+    "売上": {
+      "description": null,
+      "lower": null,
+      "outside": true,
+      "params": [],
+      "unit": "円",
+      "upper": null
+    },
+    "返金できる残り": {
+      "description": "その注文でまだ返金できる額",
+      "lower": {
+        "refused_as": "返金超過",
+        "value": 0
+      },
+      "outside": false,
+      "params": [
+        "注文"
+      ],
+      "unit": "円",
+      "upper": null
+    }
+  },
+  "description": null,
+  "key": [
+    "注文"
+  ],
+  "moves": [
+    {
+      "amount": {
+        "param": "額"
+      },
+      "from": {
+        "account": "売上",
+        "args": []
+      },
+      "to": {
+        "account": "返金できる残り",
+        "args": [
+          {
+            "param": "注文"
+          }
+        ]
+      }
+    }
+  ],
+  "params": [
+    {
+      "name": "注文",
+      "type": "string"
+    },
+    {
+      "name": "額",
+      "type": "amount",
+      "unit": "円"
+    }
+  ],
+  "pending": null
+}

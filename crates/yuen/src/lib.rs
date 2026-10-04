@@ -17,6 +17,8 @@ pub mod coverage;
 pub mod date;
 pub mod diag;
 pub mod diff;
+/// The page of a project, as Markdown or one HTML file (DESIGN 10).
+pub mod doc;
 pub mod ends;
 pub mod export;
 pub mod fetch;

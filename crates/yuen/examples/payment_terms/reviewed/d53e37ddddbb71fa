@@ -1,0 +1,3 @@
+text A payment is made on a business day: when the payment day is a Saturday, a Sunday or a national holiday, it is made on the business day before
+from file calendars/data/syukujitsu.csv sha256:cec37a743c96995c
+in force 2026-10-01..

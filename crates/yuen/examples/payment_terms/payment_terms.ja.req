@@ -1,0 +1,32 @@
+requirements 支払条件 v1
+description "koyomi の例「payment_20th_close_next_10th.ja.cal」の日付がどこから来たかを書いた例（payment_terms.req の日本語版）。休みの日は、カレンダーのファイルが固定している内閣府の祝日の表を借りる。支払の条件は、この例のために決めたもの"
+
+role 経理 "支払の条件を決める"
+role 開発 "koyomi のファイルを書いて直す"
+
+source 祝日 = koyomi "calendars/東京の営業日.cal" source 祝日
+
+scope koyomi "payment_20th_close_next_10th.ja.cal" date
+
+requirement 支払日(payment_day)
+  text "20 日締め翌月 10 日払い。受領から 60 日以内に払う"
+  in force 2026-10-01..
+  owner 経理
+  decided 2026-10-04 by 経理 "20 日に締めて翌月 10 日に払えば、どの支払も受領から 60 日以内に収まる。この例のために決めたもの"
+  satisfied by koyomi "payment_20th_close_next_10th.ja.cal" date 締め日
+    reviewed 2026-10-04 by 開発 sha256:5d97c87d3ce26490 -> sha256:74f19beadf2f4043
+  satisfied by koyomi "payment_20th_close_next_10th.ja.cal" date 支払日
+    reviewed 2026-10-04 by 開発 sha256:5d97c87d3ce26490 -> sha256:feb9535fb9350ecc
+  verified by koyomi "payment_20th_close_next_10th.ja.cal" claim 受領から60日以内
+    reviewed 2026-10-04 by 開発 sha256:5d97c87d3ce26490 -> sha256:57f704e64ea8e3c8
+
+requirement 営業日(business_days)
+  text "支払は営業日にする。支払日が土曜、日曜、祝日なら、その前の営業日に払う"
+  in force 2026-10-01..
+  owner 経理
+  from @祝日
+    reviewed 2026-10-04 by 経理 sha256:cec37a743c96995c -> sha256:cc3109016d422ecd
+  satisfied by koyomi "payment_20th_close_next_10th.ja.cal" date 支払日
+    reviewed 2026-10-04 by 開発 sha256:cc3109016d422ecd -> sha256:feb9535fb9350ecc
+  verified by koyomi "payment_20th_close_next_10th.ja.cal" claim 営業日に払う
+    reviewed 2026-10-04 by 開発 sha256:cc3109016d422ecd -> sha256:3cf8fc3fb2dda9d9

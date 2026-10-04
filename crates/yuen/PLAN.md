@@ -4,7 +4,7 @@ DESIGN.md を仕様として、yuen を三つの段階（B・C・D）で作る�
 
 この計画を書いた A の段階では、本体のコードは書いていない。リポジトリに置いたのは DESIGN.md とこの PLAN.md だけである（LICENSE-MIT と LICENSE-APACHE は前からある）。端のハッシュの値は、DESIGN の定義どおりに組んだ使い捨ての Python の試作で計算し、DESIGN 1.1・3.2・4.1・19 章と、下の完了の条件に写した。試作はリポジトリに残していない。B と C の yuen が同じ値を出すことを、完了の条件にした。
 
-この計画は、yuen が yurai という名前で自分のリポジトリにあったときに書いた。いまは ritsu の `crates/yuen` にあり、ritsu の段階 C の最初に名前を yuen に改めた（ritsu の DESIGN.md 2.2）。0 章の決まりと機械の扱いのうち、ritsu の PLAN.md と食い違うところは ritsu の PLAN.md に従う。C の残り（一式の読み込み）は、ritsu の口で作るように書き直し（下の C.1〜C.9）、ritsu の PLAN の D.7 で作った。D は ritsu の PLAN の F.1 で書き直してから作る。
+この計画は、yuen が yurai という名前で自分のリポジトリにあったときに書いた。いまは ritsu の `crates/yuen` にあり、ritsu の段階 C の最初に名前を yuen に改めた（ritsu の DESIGN.md 2.2）。0 章の決まりと機械の扱いのうち、ritsu の PLAN.md と食い違うところは ritsu の PLAN.md に従う。C の残り（一式の読み込み）は、ritsu の口で作るように書き直し（下の C.1〜C.9）、ritsu の PLAN の D.7 で作った。D は ritsu の PLAN の F.1 で書き直して作った（4 章）。
 
 ## 0. 全部の段階に共通の決まり
 
@@ -395,64 +395,57 @@ C.1〜C.9 の計画には無かったが、ritsu の D.6 で dandori が中の�
 
 ## 4. 段階 D：doc、例、README、スキル
 
+ritsu の PLAN の F.1 で、ritsu の中で作るように書き直して作った（2026-10-04）。書き直したのは次のところである。doc の HTML の枠は ritsu-base の `docpage`、テストの道具は ritsu-testkit（`TempDir`、`need` と SKIP、golden の BLESS）。ほかの言語のもの（rulec の表、koyomi の日付、geas の主張、chobo の勘定と振替）は、C の後半と同じく口から読む。例、テストの材料、文書は英語を先にする（ritsu の決まり）。yuen は ritsu の一部として配り、入れ方は `cargo install --git https://github.com/i2y/ritsu --locked ritsu`、コマンドは `ritsu yuen …` である。README とスキルが言うページの読み手は「コードが実現すべきものを理解し、確かめる人」で、「承認する人」とは書かない。
+
 ### D.1 doc（`src/doc/`）
 
-- DESIGN 10 章のとおり、Markdown（既定）と HTML（`--format html`）。ページは一度ブロックの並び（見出し、段落、表、引用、差分）として組み、Markdown と HTML はそれを書き出すだけにする（koyomi の `src/doc/` と同じ考え。二つの形の中身が食い違わないように）。
-- 節の順（見出し、トレーサビリティの表、出典、要件ごとの「なぜ」、範囲、確かめた記録の一覧）。出典の条文は `article_lines` で項ごとに引用し、時点と版（`revision.txt`）を添える。HTML では `<blockquote>`。
-- 1〜4 の段のエラーがあればページを作らず、診断を標準エラーに出して exit 1。5〜7 の段のエラーは、ページに載せて exit 0。
-- HTML は一枚で、script も外のファイルも読まない。明るい配色と暗い配色（`prefers-color-scheme` と `data-theme`）。幅の狭い画面で横にはみ出さない。
-- `--out <dir>` があれば、最初の `.req` のファイル名から `<名前>.md` か `<名前>.html` を書く。
-- CLI の表に `doc` を足す。
-- テスト（`tests/doc.rs`）：例ごとの Markdown と HTML を、英語と日本語の golden で比べる。HTML が外の URL を読まないこと（`src=`、`href=` に `http` が無い。出典の URL を文字として載せるのはよい）。ページに載せた条文の各行が、写しの `article_lines` にあること。Chrome があれば、`民法の期間_読み方を変えた` のページの先頭（明るい配色）と、要件ごとの節（暗い配色）のスクリーンショットを撮り（時間を区切って kill する）、`YUEN_BLESS=1` のときに `docs/images/` に置く。無ければ SKIP。
+- DESIGN 10 章のとおり、Markdown（既定）と HTML（`--format html`）。ページは一度ブロックの並び（見出し、段落、表、条文の引用、診断）として組み、Markdown と HTML はそれを書き出すだけにする。グラフは `api` の JSON から読み、条文は ritsu-base の `quote_lines`（`trace` と同じ）で写しから引く。
+- 節の順（見出し、トレーサビリティの表、出典、要件ごとの「なぜ」、範囲、確かめた記録の一覧）。
+- 1〜4 の段のエラーがあればページを作らず、診断を標準エラーに出して exit 1（E206 なら 2）。5〜7 の段のエラーは、ページに載せて exit 0。
+- HTML は一枚で、script も外のファイルも読まない。枠と配色は ritsu-base の `docpage`。幅の狭い画面では表が枠の中で横に動く。
+- `--out <dir>` があれば、最初の `.req` のファイル名から `<名前>.md` か `<名前>.html` を書く。CLI の表に `doc` を足した。
+- テスト（`tests/doc.rs`）：例の `.req` ごと（十）に、Markdown と HTML、英語と日本語の golden（`tests/golden/doc/<名前>/<言語>.md|html`、四十）。HTML が外を読まないこと（`docpage::outside_urls`）。ページに引いた条文の各行が、写しの `quote_lines` にあること。印がページに載ること、写しが固定と違えばページを作らないこと、`--out`。Chrome があれば、`civil_code_periods_reread` のページの先頭（明るい配色）と、印の付いた要件の節（暗い配色）を英語と日本語で撮り（時間を区切る）、`YUEN_BLESS=1` のときに `docs/images/` に置く。
 
 ### D.2 例（`examples/`）
 
-DESIGN 15 章の七つを作る。写したファイルの元（リポジトリと、そのパス）を、例ごとの `README.md` に書く。
+DESIGN 15 章の七つ。英語の例を先に、日本語の版を `<名前>.ja.req` として横に置く。写したファイルの元（ritsu の中のパス）を、例ごとの `README.md` に書く。確かめた記録は `yuen review --date 2026-10-04` で書いた。
 
-- `民法の期間/`：DESIGN 1.1 の `.req`（出典は koyomi から借りる）。確かめた記録は `yuen review` で書く（`--date` は、その例を作った日）。
-- `民法の期間_読み方を変えた/`：`民法の期間/` を写し、`.cal` の `満了日_142条` の `if closed + 1 day` を `roll following` に替えたもの（A の段階で、koyomi の検査を通ることを確かめた。DESIGN 19 章）。`.req` と `reviewed/` は `民法の期間/` と同じバイト列にする。
-- `支払条件/`：要件は、支払日（`decided` で、例として決めた決まりと書く）と、営業日（`from @祝日`。`source 祝日 = koyomi "calendars/東京の営業日.cal" source 祝日`）。確かめるのは koyomi の条件（`営業日に払う`、`受領から60日以内`）。範囲は `koyomi "支払_20日締め翌月10日払い.cal" date`。
-- `印紙税/`：契約書の印紙税額の要件を、v1（`in force 2014-04-01..2027-03-31`、`from @法 別表第一` と `from @措置法 第91条`）と v2（`in force 2027-04-01..`、`from @法 別表第一`）の二つの版で書く。期間の始まりは規則の入力 `作成日` の範囲の始まり（2014-04-01）、軽減の終わりは規則の `define 軽減期間`（`作成日 <= 2027-03-31`）にそろえる。満たすのは `rulec "印紙税の本則と軽減.rule" output 印紙税額`、確かめるのは `rulec "印紙税の本則と軽減.rule"`（例と完全性）。出典は yuen が自分で写して固定する（写しは rulec の写しと同じバイト列。E107 が出ないことを確かめる）。
-- `返金/`：要件「返金は、その注文の売上を超えない」（`decided`）。満たすのは `chobo "refunds.ja.book" account 返金できる残り`、`transfer 売上計上`、`transfer 返金`。確かめるのは `chobo "refunds.ja.book"`。範囲は `chobo "refunds.ja.book" transfer`。
-- `greeter/`：`greeter.req`（英語）と `greeter.ja.req`（日本語）。要件は主張ごとに一つ（名前で挨拶する、空の名前は断る、足した数が積み上がる、知らないパスには 404 を返す）で、出どころは `decided`。満たすのは `file "server.py"`、確かめるのは geas の主張。範囲は `file "server.py"`。geas の記録（`.geas/greeter.map.jsonl`）を置き、テストが `geas map --root` で作り直したものと同じかを確かめる。`affected` の例の差分（`change.diff`）と、変更のあとの記録も置く。
-- `osha/`：英語の、法令を引く例。`source osha = law ecfr "29 CFR 1910" asof 2026-01-01`（自分で写す。写しは rulec の写しと同じバイト列）、要件は消火器までの距離、満たすのは `rulec "osha_extinguisher.rule" table distance`、確かめるのは `rulec "osha_extinguisher.rule"`。
-- どの例の `description` にも、法令を引くものには「例として書いたもので、法令の読み方を示すものではない」、例として決めた決まりには「この例のために決めたもの」と書く。
-- テスト（`tests/examples.rs`）：`民法の期間_読み方を変えた/` のほかの例は、どれも `yuen check` が exit 0。`民法の期間_読み方を変えた/` は exit 1 で、E303 が三つ（差分は一本め）、ほかのコードは出ない。どの例も、`review --all` を当てても `.req` が変わらない（印が無い）。
+- `osha/`（英語）、`greeter/`（`greeter.req` と `greeter.ja.req`）、`payment_terms/`（`payment_terms.req` と `.ja.req`）、`refunds/`（`refunds.req` と `.ja.req`）、`civil_code_periods/`、`civil_code_periods_reread/`、`stamp_tax/`（この三つは e-Gov の法令にしか無いので日本語だけ。ファイルは `<英語の名前>.ja.req`）。
+- テスト（`tests/examples.rs`）：`civil_code_periods_reread/` のほかの `.req` は、どれも `check` が exit 0。`civil_code_periods_reread/` は exit 1 で、E303 が一つ（差分は `if closed + 1 day` → `roll following`）、ほかのコードは出ない。A の段階では E303 が三つと書いていたが、ritsu の D.7 で koyomi の日付の端がその日付の定義の文になったので、一つになった（DESIGN 15 章）。二つの civil code の例の `.req` と `reviewed/` が同じバイト列で、`.cal` が一行だけ違うこと。止まる例のほかは、`review --all` を当てても `.req` が変わらないこと。greeter の記録（前と後）が `geas map --root` で作り直したものと同じこと。`affected` が変更から `rejects_an_empty_name` に届くこと。
 
 ### D.3 docs/
 
-- `docs/reference.md`（英語）：言語の全部（DESIGN 1 章）、成果物の名指し方（2 章）、端とハッシュと確かめた記録（3、4 章）、検査（5 章）、コマンド、exit code、JSON の形、書き出し、出典のコマンド。キーワードの表は `src/kw.rs` と同じ並びにする。
-- `docs/codes.md` と `docs/codes.ja.md`：`yuen explain --all --format markdown`（`--lang ja`）の出力そのもの。手で直さない。
-- テスト（`tests/docs.rs`）：codes の二つがいまの出力と同じ。キーワードの表が `src/kw.rs` と同じ。
+- `docs/reference.md`（英語）：言語の全部、名指し方、端とハッシュと確かめた記録、検査、コマンド、exit code、JSON の形、環境変数。キーワードの表は `src/kw.rs` の `TABLE` と同じ並び。
+- `docs/codes.md` と `docs/codes.ja.md`：`yuen explain --all --format markdown`（`--lang ja`）の出力そのもの。
+- テスト（`tests/docs.rs`）：codes の二つがいまの出力と同じ。キーワードの表が `kw.rs` と同じ。
 
 ### D.4 README.md と README.ja.md
 
-- README.md（英語）：koyomi と chobo の README の並びにならう。看板（DESIGN 0.1）、何か、`.req` の例（英語の例 `greeter` か `osha`）、`check` の結果、わざと止まる例の診断（本物の出力。英語の README なので、日本語の名前の例の診断を載せるなら、そう断る）、確かめることと確かめないこと（DESIGN 0.1 と P1）、入れ方（`cargo install --path .`）、コマンド、例の一覧、どう確かめているか（テストの数、SKIP、外のツール）、`doc` のページ（スクリーンショット）、DESIGN.md への案内、ライセンス（「License」の節。MIT OR Apache-2.0）。
-- README.ja.md：英語の写しではなく、普通の日本語で一から書く。例は日本語の例（`民法の期間`）。「ライセンス」の節。
-- どちらも、法令に触れる例について DESIGN 15 章の断りを書く。名前の分かる勤め先や人に結びつく書き方をしない。
-- テスト（`tests/docs.rs`）：README と `docs/` とスキルの ` ```req ` の塊のどの行も、`examples/` か `tests/` の `.req` の行であること（`…` で切ってよい）。` ```console ` の塊に出力つきで書いた `yuen` のコマンドを、リポジトリの根で実際に走らせ、書いた行が書いた順に出ること。文書の中の相対リンクの先があること。README に書いたコードの数が台帳の数と同じこと。
+- README.md（英語）：看板、何か、`.req` の例（`osha`）、`check` の結果、わざと止まる例の診断（日本語の名前の例であることを断る）、`affected`、確かめることと確かめないこと、`doc` のページ（スクリーンショット）、エージェント向け、入れ方（ritsu）、コマンド、例の一覧、どう確かめているか、次に読むもの、License。
+- README.ja.md：英語の写しではなく、日本語で一から書いた。例は `civil_code_periods`。「ライセンス」の節。
+- テスト（`tests/docs.rs`）：README、`docs/`、例の README、スキルの ` ```req ` の塊のどの行も、`examples/` か `tests/` の `.req` の行であること（`…` で切ってよい）。` ```console ` の塊に出力つきで書いた `ritsu yuen`（か `yuen`）のコマンドを、クレートのディレクトリで、すべての言語をつないで走らせ、書いた行がそのまま出ること。出力の無いコマンドは、yuen のコマンドであること。単独で載せた診断が、そのファイルの `check` の出力にあること。相対リンクの先があること。README に書いたコードの数が台帳の数と同じこと。
 
 ### D.5 スキル（`skills/yuen/`）
 
-- dandori と koyomi の `skills/` を手本にする。`SKILL.md` は手で書く（frontmatter に `name`、`description`、`compatibility`、`license: MIT OR Apache-2.0`。いつ使うか、ループ（要件を書く → `check` → 差分を読む → 人に確かめてもらう → `review` → `trace` と `doc` で人に見せる）、言語の一ページ、人に聞くこと（要件の文、出典のどの条か、持ち主、見送りの理由、誰が確かめたか）、診断から直し方、`review` をエージェントが自分の判断で走らせないこと（人が確かめた記録なので、確かめた人の `--by` で、その人が頼んだときだけ走らせる））。
-- ほかのファイルは `skills/sync.sh` が `docs/` から写す（リンクはスキルのディレクトリの外へ出ないように書き換える）。`skills/README.md` に入れ方。
+- `SKILL.md` は手で書いた（frontmatter に `name`、`description`、`compatibility`、`license: MIT OR Apache-2.0`。いつ使うか、ループ、言語の一ページ、人に聞くこと、診断から直し方、エージェントが自分の判断で `review` を走らせないこと）。
+- `reference.md` と `codes.md` は `skills/sync.sh` が `docs/` から写す（リンクはスキルのディレクトリの外へ出ないように書き換える）。`skills/README.md` に入れ方。
 - テスト（`tests/skill.rs`）：sync.sh を一時ディレクトリに走らせて写しと同じか、スキルの中のリンクが外へ出ないか、frontmatter の形と `license` が `Cargo.toml` と同じか。
 
 ### D.6 ライセンスと出典
 
-- ライセンスは MIT OR Apache-2.0（作者が一式に決めた）。LICENSE-MIT と LICENSE-APACHE はもう置いてある。`Cargo.toml` の `license`、README.md の「License」、README.ja.md の「ライセンス」、スキルの frontmatter の `license` に書く。
-- `THIRD_PARTY_NOTICES.md`：例とテストに写した出典の写し（e-Gov の民法・印紙税法・租税特別措置法の条の XML、内閣府の祝日の CSV（公共データ利用規約（第1.0版）、出典の書き方）、eCFR の 29 CFR 1910.157）の扱いを、koyomi の THIRD_PARTY_NOTICES.md の書き方にそろえて書く。一式の例から写した `.rule`・`.cal`・`.book`・`.geas`・`server.py`・`.proto` は同じ作者の同じライセンスのものであることと、元のリポジトリを書く。ReqIF のスキーマはリポジトリに入れない（C.10）ので載せない。
+- MIT OR Apache-2.0。`Cargo.toml` の `license`、README.md の「License」、README.ja.md の「ライセンス」、スキルの frontmatter に書いた。
+- `THIRD_PARTY_NOTICES.md`：内閣府の祝日の CSV（PDL1.0）、GOV.UK の bank holidays の JSON（OGL v3.0）、e-Gov の民法・印紙税法・租税特別措置法の条の XML（PDL1.0）、eCFR の 29 CFR 1910.157 と 37 CFR 1 の節。一式から写した `.rule`・`.cal`・`.book`・`.geas`・`server.py` などは同じ作者の同じライセンスのものであることと、元の場所。
 
 ### D.7 D の完了の条件
 
-- `cargo test -- --nocapture` が全部通り、この機械で SKIP が 0（Chrome のスクリーンショットも撮れる）。
+- `cargo test -p yuen -- --nocapture` が全部通り、この機械で SKIP が 0（Chrome のスクリーンショットも撮れる）。
 - 例ごとの doc の golden（英語と日本語、Markdown と HTML）があり、HTML のテストが通る。
-- 例の検査の結果が D.2 のとおり（`民法の期間_読み方を変えた/` だけが E303 三つで止まる）。
+- 例の検査の結果が D.2 のとおり（`civil_code_periods_reread/` だけが E303 一つで止まる）。
 - README.md と README.ja.md の中の `.req`、コマンドの出力、診断が、`tests/docs.rs` の確かめを通る。
 - `docs/codes.md` と `docs/codes.ja.md` がいまの `explain` の出力と同じ。
 - スキルのテストが通る。
 - DESIGN の形の案が、どれも実物に差し替わっている（`grep -n '形の案' DESIGN.md` が何も出さない）。
-- 報告に、README に貼った出力をどのコマンドで取ったかを書く。
+- 報告に、README に貼った出力をどのコマンドで取ったかを書く（どれも README の ` ```console ` の塊に書いたコマンドそのもので、`tests/docs.rs` が走らせ直す）。
 
 ## 5. 次の段階への申し送り
 
@@ -485,3 +478,10 @@ DESIGN 15 章の七つを作る。写したファイルの元（リポジトリ�
 - ほかの言語を読むところは `src/suite.rs`（口と、一回の実行の中で覚えた答え）、`src/ends.rs` の `artifact_end`、`src/coverage.rs` の `gather` と `ran_by_claims`、`src/sources.rs` の `borrow` と `pinned_by` に集めてある。言語が新しい種類を口で渡すようになっても、yuen の側は名指しの表（ritsu-base）に種類が入れば読める。
 - テストは、ほかの言語のクレートを dev-dependency に持ち、`tests/common/mod.rs` の `suite()` と `run()` で、`ritsu yuen` と同じにつないで同じプロセスの中で走らせる。環境変数を変えて走らせるテスト（テストの中の e-Gov など）で、ほかの言語も要るものは、`crates/ritsu/tests/yuen.rs` に置く（ritsu のバイナリを走らせる）。
 - `ritsu yuen` に同じコマンドを続けて言うために、`run` が引数を `check::COMMAND`（スレッドに一つ）に置く。ライブラリの関数を直接呼んだときは、`check` と渡したパスから組み立てる。
+
+### 5.5 D（ritsu の F.1）から次へ
+
+- D は済んだ（2026-10-04）。例は英語を先にし、e-Gov の法令にしか無い三つだけを日本語にした。例の `.req` は一つずつがプロジェクトで、英語の版と日本語の版は同じディレクトリの別のプロジェクトである。
+- 例の記録は `review --date 2026-10-04` で書いた。例のファイル（写した `.rule`・`.cal`・`.book`・`.geas`・`server.py`）を元の言語で直したら、写し直して、人が確かめてから `review` を走らせ直す（記録を書くのは人が確かめたときだけ。例でも同じ）。
+- `doc` のページの画像（`docs/images/`）は `YUEN_BLESS=1 cargo test -p yuen --test doc` で撮り直す。golden も同じ。
+- 文書のテスト（`tests/docs.rs`）は、`$ ritsu yuen …` を、クレートのディレクトリで、すべての言語をつないで走らせる。README に出力を足すときは、走らせた出力をそのまま貼る。

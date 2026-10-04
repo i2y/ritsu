@@ -1,0 +1,1 @@
+text 名前が空の GET /greet は 400 を返す

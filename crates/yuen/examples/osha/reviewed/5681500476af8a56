@@ -1,0 +1,8 @@
+table distance  @osha "§1910.157"
+policy unique
+| hazard | nearby  | -> travel : length[ft] |
+| a      | -       | 75ft                   |
+| b      | -       | 50ft                   |
+| c      | class_a | 75ft                   |
+| c      | class_b | 50ft                   |
+| d      | -       | 75ft                   |

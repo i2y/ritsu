@@ -735,7 +735,12 @@ fn requirement_line(p: &Project, r: usize) -> Text {
     let owner = d.owner.as_ref().map(|o| o.0.clone()).unwrap_or_default();
     let from = from_labels(p, r);
     let (fja, fen) = (from.join("、"), from.join(", "));
-    let mut t = tr!("  {me}（{file}:{line}）持ち主 {owner}、出どころ {fja}", "  {me} ({file}:{line}): owner {owner}; from {fen}");
+    // a requirement a person decided, with no `from`, says only its decision
+    let mut t = if from.is_empty() {
+        tr!("  {me}（{file}:{line}）持ち主 {owner}", "  {me} ({file}:{line}): owner {owner}")
+    } else {
+        tr!("  {me}（{file}:{line}）持ち主 {owner}、出どころ {fja}", "  {me} ({file}:{line}): owner {owner}; from {fen}")
+    };
     if let Some(dc) = d.decided.iter().max_by_key(|dc| dc.date) {
         let (date, by, why) = (dc.date.to_string(), &dc.by.0, &dc.why);
         t = t.then(&tr!("。{date} に {by} が決めた「{why}」", "; decided {date} by {by}: \"{why}\""));

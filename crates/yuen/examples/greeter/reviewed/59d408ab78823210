@@ -1,0 +1,1 @@
+text GET /greet?name=<name> answers 200 with the message Hello, <name>

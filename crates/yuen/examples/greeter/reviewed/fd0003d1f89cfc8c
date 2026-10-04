@@ -1,0 +1,1 @@
+text POST /add adds its body to a total that GET /total answers, and POST /reset sets it to 0

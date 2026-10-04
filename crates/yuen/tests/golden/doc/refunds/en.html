@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="yuen 0.23.0">
+<title>refunds — where the requirements come from</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 12px; overflow-wrap: anywhere; }
+h2 { font-size: 1.25rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 28px 0 8px; overflow-wrap: anywhere; }
+p, li { overflow-wrap: anywhere; }
+code { font: 0.88em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
+pre { font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); min-width: 7em; }
+th { background: var(--soft); color: var(--dim); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td strong { color: var(--warn); }
+td.nw { white-space: nowrap; }
+blockquote.law { margin: 8px 0 16px; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0; }
+blockquote.law p { margin: 4px 0; }
+blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; }
+.lead { color: var(--dim); }
+@media print { body { background: #fff; color: #000; } .scroll { overflow: visible; } pre { white-space: pre-wrap; } }
+</style>
+</head>
+<body>
+<main>
+<h1>refunds — where the requirements come from</h1>
+<p class="lead">yuen 0.23.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.</p>
+<ul>
+<li><code>refunds.req</code> (refunds v1, <code>sha256:e9f310e314736b47</code>)</li>
+</ul>
+<p>The check: <code>examples/refunds/refunds.req: ok — 1 requirement, whose 4 links are as they were looked at; every requirement is met and checked, or waived; the 2 transfers in scope all trace to a requirement</code></p>
+<h2 id="traceability">Traceability</h2>
+<div class="scroll"><table>
+<thead><tr><th>Requirement</th><th>In force</th><th>Comes from</th><th>Owner</th><th>Met by</th><th>Checked by</th><th>State</th></tr></thead>
+<tbody>
+<tr><td><code>within_sales</code></td><td class="nw">2026-10-01..</td><td>decided by accounting on 2026-10-04</td><td>accounting</td><td><code>chobo &quot;refunds.book&quot; account refundable</code>; <code>chobo &quot;refunds.book&quot; transfer sale</code>; <code>chobo &quot;refunds.book&quot; transfer refund</code></td><td><code>chobo &quot;refunds.book&quot;</code></td><td>as looked at</td></tr>
+</tbody>
+</table></div>
+<h2 id="sources">Sources</h2>
+<p>No source is declared: every requirement comes from a decision or from another requirement.</p>
+<h2 id="why">Why each requirement is so</h2>
+<h3 id="why-within_sales">within_sales</h3>
+<p><strong>A refund does not exceed the sale of its order</strong></p>
+<ul>
+<li>In force: 2026-10-01..</li>
+<li>Owner: accounting</li>
+<li>File: <code>examples/refunds/refunds.req:9</code></li>
+<li>The requirement&#39;s end: <code>sha256:29fcc8e8216d5dac</code></li>
+</ul>
+<p>Decided by accounting on 2026-10-04: What is refunded on an order never exceeds what was sold on it. Decided for this example</p>
+<p>Met by <code>chobo &quot;refunds.book&quot; account refundable</code> — looked at by development on 2026-10-04 (<code>sha256:29fcc8e8216d5dac</code> → <code>sha256:49d9b3dd2d4bf83b</code>). State: as looked at</p>
+<p>Met by <code>chobo &quot;refunds.book&quot; transfer sale</code> — looked at by development on 2026-10-04 (<code>sha256:29fcc8e8216d5dac</code> → <code>sha256:699a4feaa65a1dfe</code>). State: as looked at</p>
+<p>Met by <code>chobo &quot;refunds.book&quot; transfer refund</code> — looked at by development on 2026-10-04 (<code>sha256:29fcc8e8216d5dac</code> → <code>sha256:d4eb1e0e94a3b78f</code>). State: as looked at</p>
+<p>Checked by <code>chobo &quot;refunds.book&quot;</code> — looked at by development on 2026-10-04 (<code>sha256:29fcc8e8216d5dac</code> → <code>sha256:3b8bf7fc7a202c38</code>). State: as looked at</p>
+<h2 id="scope">Scope</h2>
+<p><code>scope chobo &quot;refunds.book&quot; transfer</code> — 2 artifacts in it, every one tracing to a requirement.</p>
+<h2 id="records">Records</h2>
+<div class="scroll"><table>
+<thead><tr><th>Date</th><th>By</th><th>What</th><th>Hashes</th></tr></thead>
+<tbody>
+<tr><td class="nw">2026-10-04</td><td>development</td><td><code>within_sales</code> → <code>chobo &quot;refunds.book&quot; account refundable</code></td><td><code>sha256:29fcc8e8216d5dac -&gt; sha256:49d9b3dd2d4bf83b</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>development</td><td><code>within_sales</code> → <code>chobo &quot;refunds.book&quot; transfer sale</code></td><td><code>sha256:29fcc8e8216d5dac -&gt; sha256:699a4feaa65a1dfe</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>development</td><td><code>within_sales</code> → <code>chobo &quot;refunds.book&quot; transfer refund</code></td><td><code>sha256:29fcc8e8216d5dac -&gt; sha256:d4eb1e0e94a3b78f</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>development</td><td><code>within_sales</code> → <code>chobo &quot;refunds.book&quot;</code></td><td><code>sha256:29fcc8e8216d5dac -&gt; sha256:3b8bf7fc7a202c38</code></td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

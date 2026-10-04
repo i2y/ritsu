@@ -1,0 +1,1 @@
+within_60_days_of_receipt   : payment <= received + 60 days

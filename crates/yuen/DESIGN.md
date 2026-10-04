@@ -22,7 +22,7 @@
                         │     ├── review：人が確かめたことを、両端のハッシュとして .req に書く
                         │     ├── trace：要件か成果物から、出典まで「なぜこうなっているか」をたどる
                         │     ├── affected：差分 → 主張（geas）→ 要件 → 持ち主と出典
-                        │     ├── doc：承認する人と監査する人のページ（Markdown と HTML）
+                        │     ├── doc：コードが実現すべきものを確かめる人と、監査する人のページ（Markdown と HTML）
                         │     ├── api：グラフ全体（JSON）
                         │     └── export：ReqIF、W3C PROV（PROV-N と PROV-JSON）
                         └── source fetch | pin | outdated（通信するのは fetch と outdated だけ）
@@ -151,55 +151,55 @@ requirement timely_filing
     approved 2026-10-03 by legal sha256:8d02c6a1f0ad3364
 ```
 
-日本語の例は、koyomi の例 `民法の期間.cal`（民法 140〜143 条を文字どおりに書いた期間の計算）に、要件と来歴を書いたもの（15 章の例 `examples/民法の期間/民法の期間.req` の一部）である。
+日本語の例は、koyomi の例 `civil_code_period_end.ja.cal`（民法 140〜143 条を文字どおりに書いた期間の計算。取り込む前の名前は `民法の期間.cal`）に、要件と来歴を書いたもの（15 章の例 `examples/civil_code_periods/civil_code_periods.ja.req` の全部）である。
 
 ```
 requirements 民法の期間 v1
-description "koyomi の例「民法の期間.cal」の日付と条件が、民法のどの条から来たか、142 条の読み方を誰が決めたかを書いた例。例として書いたもので、法令の読み方を示すものではない"
+description "koyomi の例「civil_code_period_end.ja.cal」の日付と条件が、民法のどの条から来たか、142 条の読み方を誰が決めたかを書いた例。例として書いたもので、法令の読み方を示すものではない"
 
 role 法務 "条文の読み方を決める"
 role 開発 "koyomi のファイルを書いて直す"
 
-source 民法 = koyomi "民法の期間.cal" source 民法
+source 民法 = koyomi "civil_code_period_end.ja.cal" source 民法
 
-scope koyomi "民法の期間.cal" date
+scope koyomi "civil_code_period_end.ja.cal" date
 
 requirement 起算日(first_day)
   text "日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない"
   in force 2026-10-01..
   owner 法務
   from @民法 第140条
-    reviewed 2026-10-03 by 法務 sha256:e880059021fbb67d -> sha256:a9ebc73907faddc8
-  satisfied by koyomi "民法の期間.cal" date 起算日
-    reviewed 2026-10-03 by 開発 sha256:a9ebc73907faddc8 -> sha256:15aa6c91d6aaae80
+    reviewed 2026-10-04 by 法務 sha256:e880059021fbb67d -> sha256:a9ebc73907faddc8
+  satisfied by koyomi "civil_code_period_end.ja.cal" date 起算日
+    reviewed 2026-10-04 by 開発 sha256:a9ebc73907faddc8 -> sha256:15aa6c91d6aaae80
   not verified "初日を算入しないことは、koyomi doc のページで、条文と言い直しを見比べて確かめる。この例に、それを確かめる条件は無い"
-    approved 2026-10-03 by 法務 sha256:a9ebc73907faddc8
+    approved 2026-10-04 by 法務 sha256:a9ebc73907faddc8
 
 requirement 満了日(last_day)
   text "月によって期間を定めたときは、最後の月においてその起算日に応当する日の前日の終わりに満了する。応当する日がないときは、その月の末日の終わりに満了する"
   in force 2026-10-01..
   owner 法務
   from @民法 第141条, 第143条
-    reviewed 2026-10-03 by 法務 sha256:0575c131b9f08063, sha256:6950bdfb988439b6 -> sha256:465b83ed8c251406
-  satisfied by koyomi "民法の期間.cal" date 満了日
-    reviewed 2026-10-03 by 開発 sha256:465b83ed8c251406 -> sha256:23441fd408f07548
+    reviewed 2026-10-04 by 法務 sha256:0575c131b9f08063, sha256:6950bdfb988439b6 -> sha256:465b83ed8c251406
+  satisfied by koyomi "civil_code_period_end.ja.cal" date 満了日
+    reviewed 2026-10-04 by 開発 sha256:465b83ed8c251406 -> sha256:23441fd408f07548
   not verified "条文の場合分けをそのまま書いた関数と、起点 2000〜2027 年のすべての日と月数 1〜12 で一致することを、koyomi の設計の段階の試作が確かめた。この例の中に、それを確かめる条件は無い"
-    approved 2026-10-03 by 法務 sha256:465b83ed8c251406
+    approved 2026-10-04 by 法務 sha256:465b83ed8c251406
 
 requirement 満了日_142条(last_day_142)
   text "期間の末日が日曜日、国民の祝日に関する法律に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する"
   in force 2026-10-01..
   owner 法務
   from @民法 第142条
-    reviewed 2026-10-03 by 法務 sha256:fc8c35a0769d3b35 -> sha256:d4f2d2a67322df17
+    reviewed 2026-10-04 by 法務 sha256:fc8c35a0769d3b35 -> sha256:d4f2d2a67322df17
   decided 2026-10-03 by 法務 "「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。休みが明けるまで動かす読み方とは、起点 2026 年と月数 1〜12 の 4,380 通りのうち 121 通りで分かれる。この例のために決めたもので、法令の読み方を示すものではない"
-  satisfied by koyomi "民法の期間.cal" date 満了日_142条
-    reviewed 2026-10-03 by 開発 sha256:d4f2d2a67322df17 -> sha256:bba4761410179e6e
-  verified by koyomi "民法の期間.cal" claim 142条の満了日は満了日以後
-    reviewed 2026-10-03 by 開発 sha256:d4f2d2a67322df17 -> sha256:7c616f5dcc9503a8
+  satisfied by koyomi "civil_code_period_end.ja.cal" date 満了日_142条
+    reviewed 2026-10-04 by 開発 sha256:d4f2d2a67322df17 -> sha256:bba4761410179e6e
+  verified by koyomi "civil_code_period_end.ja.cal" claim 142条の満了日は満了日以後
+    reviewed 2026-10-04 by 開発 sha256:d4f2d2a67322df17 -> sha256:7c616f5dcc9503a8
 ```
 
-`reviewed` と `approved` の行は、人が書かない。人が確かめたあとに `yuen review` が書く（4.2）。ハッシュの値のうち、出典の側（`e880059021fbb67d` など）は koyomi が固定している条の写しのハッシュ、要件の端（`a9ebc73907faddc8` など）は 4 章の定義どおりに試作で計算し、yuen が同じ値を出したもの、成果物の側（`15aa6c91d6aaae80` など）は koyomi が渡す日付と条件の定義の文のハッシュ（3.2）である。成果物の側は ritsu の D.7 で、同じ形で書いたテストの材料 `tests/fixtures/koyomi` から取り直した（取り込む前は、日付も条件もファイル全体を端にするつもりで、`民法の期間.cal` のバイト列のハッシュ `c9b94eecde23e6b5` を書いていた）。
+`reviewed` と `approved` の行は、人が書かない。人が確かめたあとに `yuen review` が書く（4.2）。例の記録は、例を作った日（2026-10-04）に `yuen review --date 2026-10-04` で書いた。ハッシュの値のうち、出典の側（`e880059021fbb67d` など）は koyomi が固定している条の写しのハッシュ、要件の端（`a9ebc73907faddc8` など）は 4 章の定義どおりに試作で計算し、yuen が同じ値を出したもの、成果物の側（`15aa6c91d6aaae80` など）は koyomi が渡す日付と条件の定義の文のハッシュ（3.2）である。成果物の側は ritsu の D.7 で、同じ形で書いたテストの材料 `tests/fixtures/koyomi` から取り直した（取り込む前は、日付も条件もファイル全体を端にするつもりで、`民法の期間.cal` のバイト列のハッシュ `c9b94eecde23e6b5` を書いていた）。
 
 ファイルの節は、見出し、`description`、`role`、`source`、`scope`、`requirement` の順に並ぶ（違えば E004）。`description` は一度まで。`role`・`source`・`scope`・`requirement` はいくつでも書ける。字下げは、要件の中の行と、出典の固定の行と、確かめた記録の行を表す（スペースで書き、タブは E005）。見出しの `v1` は人のための目印で、yuen は `api` と書き出しに写すだけに使う。省けない（rulec と koyomi と同じ。無ければ E002）。
 
@@ -1045,7 +1045,7 @@ tests/mutants/E406_隙間が一日: エラー 1 件
 | `yuen review <path>... (--at <file.req>:<行>)... (--requirement '<名前>[ v<n>]')... [--all] --by <役割> [--date <YYYY-MM-DD>]` | 選んだリンクと見送りのうち、印の付いているものに、確かめた記録を書く（4.2）。確かめたときの中身を `reviewed/` に書く（4.4） |
 | `yuen trace <path>... (--requirement '<名前>[ v<n>]' \| --artifact '<成果物>' \| --source '@<出典> <条>') [--format json]` | 一つのものから、出典まで「なぜこうなっているか」をたどって見せる（9 章） |
 | `yuen affected <path>... --diff <file\|-> [--map <spec.geas>=<記録>]... [--format json]` | 差分が触る要件と、その持ち主と出典（8 章） |
-| `yuen doc <path>... [--format markdown\|html] [--out <dir>]` | 承認する人と監査する人のページ（10 章）。既定は Markdown で標準出力 |
+| `yuen doc <path>... [--format markdown\|html] [--out <dir>]` | コードが実現すべきものを理解し、確かめる人と、来歴を監査する人のページ（10 章）。既定は Markdown で標準出力 |
 | `yuen api <path>...` | プロジェクトのグラフ全体を JSON で（11 章） |
 | `yuen export reqif\|prov <path>... [--format provn\|json] [--time <RFC 3339>] [--out <file>]` | ReqIF（12 章）か W3C PROV（13 章）に書き出す。PROV の既定は PROV-N |
 | `yuen source fetch\|pin\|outdated <path>...` | 出典の写しを取る・固定する・元が変わったかを問う（14 章） |
@@ -1079,7 +1079,7 @@ tests/mutants/E406_隙間が一日: エラー 1 件
 5. **範囲のファイル**：範囲（1.8）の中で、どの要件にも辿れないファイル（E404 のもの）の変更は、どの要件にも届かない変更である。
 6. **そのほか**：要件に関わらないファイルとして並べる。
 
-最後に、触った要件を一つずつ、場所と持ち主と出どころと最後に決めたこと（日付のいちばん新しい `decided`）と一緒に挙げ、持ち主を並べる。
+最後に、触った要件を一つずつ、場所と持ち主と出どころと最後に決めたこと（日付のいちばん新しい `decided`）と一緒に挙げ、持ち主を並べる。`from` の無い要件（人が決めただけの要件）は、出どころの部分を書かず、決めたことだけを書く（ritsu の F.1 で、例 `greeter` の要件が `from ;` と空の出どころを書いていたのを直した。出力が変わるのは `from` の無い要件のときだけで、替える前のテストの材料には無かった）。
 
 テストの材料 `tests/fixtures/geas`（geas の例 greeter の要件。記録は `geas map` で一度だけ取ってテストの材料に置いた）に、A の段階と同じ差分（`server.py` の空の名前を断るときの文言を一行変えたもの）と、変更の前と後の記録を渡すと、次のように答える。
 
@@ -1215,7 +1215,7 @@ $ yuen trace tests/fixtures/period --root tests/fixtures/period --requirement �
 
 ## 10. doc
 
-**決定**：`yuen doc` は、要件を承認する人と、来歴を監査する人が読むページを、Markdown か一枚の HTML で出す。書くのは `.req` と、検査の結果と、写しから言えることだけである。
+**決定**：`yuen doc` は、コードが実現すべきものを理解し、確かめる人（事業を回す人、経理や法務、運用する人、コードを見る開発者）と、来歴を監査する人が読むページを、Markdown か一枚の HTML で出す。書くのは `.req` と、検査の結果と、写しから言えることだけである。
 
 ページは次の順に並ぶ。
 
@@ -1226,7 +1226,9 @@ $ yuen trace tests/fixtures/period --root tests/fixtures/period --requirement �
 5. **範囲**：範囲の成果物と、それに辿る要件。辿れないものがあれば、それを挙げる。
 6. **確かめた記録の一覧**：日付の順に、誰がどのリンクを確かめ、どの見送りを承認したか。ハッシュも載せる。監査する人のための節である。
 
-1〜4 の段（構文、名前、出典、成果物）にエラーがあればページを作らず、診断を標準エラーに出して exit 1。写しや成果物が読めないまま整ったページを作れば、読む人を誤らせる。5〜7 の段のエラー（循環、期間、印、欠け、範囲）は、承認する人に見せるべき事実なので、ページを作って exit 0 にする（koyomi の 7.4 と同じ考え）。標準出力はページだけで、`yuen doc … > x.md` に診断は混ざらない。
+1〜4 の段（構文、名前、出典、成果物）にエラーがあればページを作らず、診断を標準エラーに出して exit 1。写しや成果物が読めないまま整ったページを作れば、読む人を誤らせる。5〜7 の段のエラー（循環、期間、印、欠け、範囲）は、ページを読む人に見せるべき事実なので、ページを作って exit 0 にする（koyomi の 7.4 と同じ考え）。標準出力はページだけで、`yuen doc … > x.md` に診断は混ざらない。印のあるリンクの下には、`check` が出すのと同じ診断（差分つき）を載せる。
+
+ページは一度ブロックの並び（見出し、段落、表、条文の引用、診断）として組み、Markdown と HTML はそれを書き出すだけにした（`src/doc/`。koyomi と同じ考えで、二つの形の中身が食い違わない）。グラフは `yuen api` が出すもの（11 章）から読み、条文は固定した写しから、`yuen trace` と同じ ritsu-base の `quote_lines` で引く（e-Gov の条は `article_lines` の形、別表と eCFR の節は本文の行）。一つの条を二つの要件が引けば、二つめからは「上に引いた」と書く（印紙税の別表第一のように長い条を、版ごとに繰り返さないため）。出典の節の「固定している成果物」は、条を固定しているのがファイル全体なので、ファイルの名指しで一度ずつ書く。`--out <dir>` は、最初の `.req` のファイル名から `<名前>.md` か `<名前>.html` を書き、書いたパスを一行で言う。HTML の枠（頭と配色の変数、`prefers-color-scheme` と `data-theme` の切り替え）は ritsu-base の `docpage` のもので、表の枠と引用と診断の見た目は yuen のものである。
 
 HTML は一枚で、script も外のファイル（フォント、画像、スタイルシート）も読まない。明るい配色と暗い配色を CSS の変数で持ち、`prefers-color-scheme` に従い、`<html data-theme="light|dark">` で決められる（koyomi と chobo と同じ）。幅の狭い画面では、表がそれぞれの枠の中で横に動き、ページは横にはみ出さない。
 
@@ -1467,23 +1469,25 @@ exit code は rulec と koyomi と同じにする。`fetch` と `pin` は済め�
 
 ## 15. 例
 
-`examples/` に、一式の例を写して使う（元の木は読むだけで、写したファイルの元の場所は、それぞれの例の README に書く）。どれも、公開されている出典（e-Gov の民法・印紙税法・租税特別措置法、eCFR の 29 CFR 1910、内閣府の祝日の表）か、例として決めた決まりだけを使う。法令を引く例は、どれも「例として書いたもので、法令の読み方を示すものではない」と `description` に書く。
+`examples/` に、一式の例を写して使う（元のファイルは ritsu の各言語のクレートにあり、写したファイルの元の場所は、それぞれの例の README に書く）。どれも、公開されている出典（e-Gov の民法・印紙税法・租税特別措置法、eCFR の 29 CFR 1910、内閣府の祝日の表）か、例として決めた決まりだけを使う。法令を引く例は、どれも「例として書いたもので、法令の読み方を示すものではない」と `description` に書く。例として決めた決まりは、`decided` の理由に「この例のために決めたもの」と書く。
+
+ritsu の決まりで、例は英語のものを先に置く。英語で作れるものは英語の `.req` を作り、日本語の版を `<名前>.ja.req` として横に置く（dandori の `<名前>.ja.flow` と同じ形）。e-Gov の法令にしか無い例（民法の期間、その読み方を変えた版、印紙税）は日本語だけで、ディレクトリの名前は英語、ファイルは `<英語の名前>.ja.req` である。一つの `.req` が一つのプロジェクトで、英語の版と日本語の版は同じディレクトリにあっても別のプロジェクトである（`check` には `.req` を一つずつ渡す。二つをまとめて渡すと、要件の別名がぶつかる）。
 
 | 例 | 写すもの（元） | 書くこと |
 |---|---|---|
-| `民法の期間/` | koyomi の `民法の期間.cal`、`calendars/民法142条の休日.cal`、`calendars/data/syukujitsu.csv`、`sources/law/129AC0000000089@2026-10-01/` | 1.1 の三つの要件。出典は koyomi から借りる。142 条の「その翌日」の読み方を、決めたこととして記録する（下） |
-| `民法の期間_読み方を変えた/` | 同じもの。`.cal` だけ、`満了日_142条` を `roll following`（休みが明けるまで動かす読み方）に書き換えたもの | わざと止まる例。`.req` と確かめた記録は `民法の期間/` と同じで、`check` が E303 で `.cal` の差分を見せる |
-| `支払条件/` | koyomi の `支払_20日締め翌月10日払い.cal`、`calendars/東京の営業日.cal`、`calendars/data/syukujitsu.csv` | 支払日の要件（例として決めた決まり）と、営業日の要件（出典は koyomi のカレンダーから借りた内閣府の祝日の表）。確かめるのは koyomi の条件 |
-| `印紙税/` | rulec の `tests/corpus/印紙税の本則と軽減.rule` と、その写し（`sources/law/342AC0000000023@2026-04-01/`、`332AC0000000026@2026-04-01/`） | 契約書の印紙税額の要件を二つの版で書く（軽減の期間の版と、そのあとの版）。出典は yuen が自分で写して固定し、規則の写しと本文が同じことを E107 の検査が確かめる |
-| `返金/` | chobo の `examples/refunds/refunds.ja.book` | 「返金は売上を超えない」の要件（例として決めた決まり）を、勘定と二つの振替が満たし、帳簿の検査が確かめる。端の中身がそのもの一つになる例 |
-| `greeter/` | geas の `examples/greeter/`（`greeter.geas`、`greeter.ja.geas`、`server.py`）と、geas が書いた記録 | 英語の例（`greeter.req`）と日本語の版（`greeter.ja.req`）。満たすのは `file "server.py"`、確かめるのは geas の主張。範囲の `server.py` に、geas の記録を通って辿る。`affected` の例 |
-| `osha/` | rulec の `tests/corpus/osha_extinguisher.rule` と、その写し（`sources/law/29-CFR-1910@2026-01-01/1910.157.xml`） | 英語の、法令を引く例。出典は eCFR（`law ecfr "29 CFR 1910"`） |
+| `osha/` | rulec の `tests/corpus/osha_extinguisher.rule` と、その写し（`sources/law/29-CFR-1910@2026-01-01/1910.157.xml`） | 英語の、法令を引く例。出典は eCFR（`law ecfr "29 CFR 1910"`）で、yuen が自分で写して固定する（写しは規則の写しと同じバイト列で、E107 は出ない）。満たすのは規則の表 `distance`、確かめるのは `rulec "osha_extinguisher.rule"`（規則の検査）。範囲は規則の表 |
+| `greeter/` | geas の `examples/greeter/`（`greeter.geas`、`greeter.ja.geas`、`server.py`）と、`geas map <spec> --root .` が書いた記録 | 英語の `greeter.req` と日本語の版 `greeter.ja.req`。要件は主張ごとに一つで、出どころは `decided`。満たすのは `file "server.py"`、確かめるのは geas の主張。範囲の `server.py` に、geas の記録を通って辿る。`affected` の例の差分（`changes/change.diff`）と、変更のあとの記録（`changes/after.map.jsonl`） |
+| `payment_terms/` | koyomi の `payment_20th_close_next_10th.cal`（と `.ja.cal`）、`calendars/tokyo_business_days.cal`（と `東京の営業日.cal`）、`calendars/data/syukujitsu.csv` | 支払日の要件（例として決めた決まり）と、営業日の要件（出典はカレンダーが固定する内閣府の祝日の表を借りる）。確かめるのは koyomi の条件（`within_60_days_of_receipt`、`paid_on_a_business_day`）。範囲は `.cal` の日付 |
+| `refunds/` | chobo の `examples/refunds/refunds.book` と `refunds.ja.book` | 「返金は売上を超えない」の要件（例として決めた決まり）を、勘定一つと振替二つが満たし、帳簿の検査が確かめる。端の中身がそのもの一つの定義になる例。範囲は帳簿の振替 |
+| `civil_code_periods/` | koyomi の `civil_code_period_end.ja.cal`、`calendars/民法142条の休日.cal`、`calendars/data/syukujitsu.csv`、`sources/law/129AC0000000089@2026-10-01/` | 1.1 の三つの要件（`civil_code_periods.ja.req`）。出典は koyomi から借りる。142 条の「その翌日」の読み方を、決めたこととして記録する（下） |
+| `civil_code_periods_reread/` | 同じもの。`.cal` だけ、`満了日_142条` を `roll following`（休みが明けるまで動かす読み方）に書き換えたもの | わざと止まる例。`.req`（`civil_code_periods_reread.ja.req`）と `reviewed/` は `civil_code_periods/` と同じバイト列で、`check` が E303 で日付の定義の差分を見せる |
+| `stamp_tax/` | rulec の `tests/corpus/印紙税の本則と軽減.rule` と、その写し（`sources/law/342AC0000000023@2026-04-01/`、`332AC0000000026@2026-04-01/`） | 契約書の印紙税額の要件を二つの版で書く（v1 は軽減の期間 `2014-04-01..2027-03-31` で、別表第一と措置法 91 条から。v2 は `2027-04-01..` で、別表第一から）。期間の始まりは規則の入力 `作成日` の範囲の始まり、軽減の終わりは規則の `define 軽減期間` にそろえた。満たすのは `output 印紙税額`、確かめるのは規則の検査。出典は yuen が自分で写して固定する（写しは規則の写しと同じ本文で、E107 は出ない） |
 
-**142 条の読み方**：koyomi の例は、民法 142 条の「その翌日」を、文字どおり翌日とする読み方（`if closed + 1 day`）と、休みが明けるまで動かす読み方（`roll following`）の二つを並べ、どちらを採るかは人が決める、として残した（koyomi の DESIGN 1.8 と 10 章）。`民法の期間.req` は、その決めごとを `decided 2026-10-03 by 法務 "…"` として記録する（1.1）。決めたのは例の中の役割で、法令の読み方を示すものではない、と理由の文と `description` に書く。
+**142 条の読み方**：koyomi の例は、民法 142 条の「その翌日」を、文字どおり翌日とする読み方（`if closed + 1 day`）と、休みが明けるまで動かす読み方（`roll following`）の二つを並べ、どちらを採るかは人が決める、として残した（koyomi の DESIGN 1.8 と 10 章）。`civil_code_periods.ja.req` は、その決めごとを `decided 2026-10-03 by 法務 "…"` として記録する（1.1）。決めたのは例の中の役割で、法令の読み方を示すものではない、と理由の文と `description` に書く。
 
-`民法の期間_読み方を変えた/` は、決めたあとで `.cal` が別の読み方に書き換えられたときに、何が起きるかを見せる。`check` は、`満了日_142条` を満たすリンクに E303 を出し、確かめたときの `.cal` との差分（`if closed + 1 day` が `roll following` に変わったこと）を見せる。koyomi の日付の端はファイル全体なので（3.2）、同じ `.cal` の `起算日` と `満了日` を満たすリンクにも E303 が付く。三本とも同じ差分で、診断は二本めから差分を繰り返さない。
+`civil_code_periods_reread/` は、決めたあとで `.cal` が別の読み方に書き換えられたときに、何が起きるかを見せる。`check` は、`満了日_142条` を満たすリンクに E303 を一つだけ出し、確かめたときの定義の文との差分（`if closed + 1 day` が `roll following` に変わったこと）を見せる。ritsu の D.7 から、koyomi の日付と条件の端はファイル全体ではなく、そのものの定義の文なので（3.2）、同じ `.cal` の `起算日` と `満了日` と、条件 `142条の満了日は満了日以後`（定義の文は `満了日_142条 >= 満了日` のまま）へのリンクには印が付かない。A の段階では、日付の端をファイル全体にするつもりで、三本に E303 が付き、差分は一本めだけに出ると書いていた。書き換えたものだけが止まり、読み直すべきものが一つに絞られるのは、端をそのもの一つにした効き目である。
 
-わざと止まる例は `民法の期間_読み方を変えた/` 一つで、README とテストは、ほかの例が通り、これだけが止まることを確かめる。例ごとに一つのプロジェクトなので、`yuen check` には例のディレクトリを一つずつ渡す（二つの例をまとめて渡すと、要件の名前がぶつかる）。
+わざと止まる例は `civil_code_periods_reread/` 一つで、README とテスト（`tests/examples.rs`）は、ほかの例が通り、これだけが E303 一つで止まることを確かめる。どの例にも、`review --all` で書く記録が残っていないことも確かめる（止まる例を除く）。
 
 ## 16. 実装
 
@@ -1581,7 +1585,7 @@ ritsu の D.7 で、一式の読み込みを口で作った（3 章）。その�
 
 - 日本語の `docs/reference.md`。今は英語だけで、日本語は README.ja.md と `docs/codes.ja.md` にある。
 - ドキュメントのサイト、MCP サーバー、ブラウザで試すページ（rulec と dandori にはある）。
-- リリースとバイナリ、crates.io。入れ方は、リポジトリを取ってきて `cargo install --path .` である。
+- yuen だけのリリースとバイナリ、crates.io。yuen は ritsu の一部として配り、入れ方は ritsu と同じ `cargo install --git https://github.com/i2y/ritsu --locked ritsu` である（コマンドは `ritsu yuen …`、リンクの名前 `yuen` でも呼べる）。
 
 ## 19. 確かめたこと（2026-10-03 と 2026-10-04、macOS arm64）
 

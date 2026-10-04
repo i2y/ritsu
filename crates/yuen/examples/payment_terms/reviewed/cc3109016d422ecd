@@ -1,0 +1,3 @@
+text 支払は営業日にする。支払日が土曜、日曜、祝日なら、その前の営業日に払う
+from file calendars/data/syukujitsu.csv sha256:cec37a743c96995c
+in force 2026-10-01..

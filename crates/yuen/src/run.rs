@@ -97,6 +97,7 @@ fn run_command(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn
         "review" => review_cmd(&a, lang, &suite, out, err),
         "trace" => trace_cmd(&a, lang, &suite, out, err),
         "affected" => crate::affected::command(&a, lang, &suite, out, err),
+        "doc" => doc_cmd(&a, lang, &suite, out, err),
         "api" => api_cmd(&a, lang, &suite, out, err),
         "export" => export_cmd(&a, lang, &suite, out, err),
         "source" => source_cmd(&a, lang, &suite, out, err),
@@ -317,6 +318,41 @@ fn trace_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
         }
         Err(r) => refuse(err, r.0, lang),
     }
+}
+
+/// `yuen doc <path>... [--format markdown|html] [--out <dir>]` (DESIGN 10): no page while the
+/// words, names, sources or artifacts have errors (stages 1 to 4); the marks, gaps and what the
+/// scope misses (stages 5 to 7) are on the page, and it exits 0.
+fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let c = match checked(a, lang, "doc", suite, err) {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let label = a.pos.join(", ");
+    if crate::doc::blocked(&c) {
+        let _ = write!(err, "{}", crate::check::render(&c, &label, lang));
+        return exit_of(&c);
+    }
+    let page = crate::doc::page(&c, &label, lang);
+    let html = a.get("--format") == Some("html");
+    let text = if html { crate::doc::html::render(&page, lang) } else { crate::doc::markdown::render(&page, lang) };
+    match a.get("--out") {
+        Some(dir) => {
+            let p = c.project.as_ref().unwrap();
+            let first = p.files.first().map(|f| f.abs.clone()).unwrap_or_default();
+            let stem = first.file_name().map(|n| n.to_string_lossy().trim_end_matches(".req").to_string()).unwrap_or_else(|| "yuen".into());
+            let file = std::path::Path::new(dir).join(format!("{stem}.{}", if html { "html" } else { "md" }));
+            let shown = file.to_string_lossy().to_string();
+            if let Err(e) = std::fs::create_dir_all(dir).and_then(|_| std::fs::write(&file, &text)) {
+                return refuse(err, tr!("`{shown}` に書けません: {e}", "Cannot write `{shown}`: {e}"), lang);
+            }
+            let _ = writeln!(out, "{}", tr!("書き出しました: {shown}", "wrote: {shown}").get(lang));
+        }
+        None => {
+            let _ = write!(out, "{text}");
+        }
+    }
+    0
 }
 
 fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {

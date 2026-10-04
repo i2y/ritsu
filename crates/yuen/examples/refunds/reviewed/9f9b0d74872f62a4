@@ -1,0 +1,13 @@
+{
+  "description": "その注文でまだ返金できる額",
+  "lower": {
+    "refused_as": "返金超過",
+    "value": 0
+  },
+  "outside": false,
+  "params": [
+    "注文"
+  ],
+  "unit": "円",
+  "upper": null
+}

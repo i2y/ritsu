@@ -1,0 +1,4 @@
+claim "名前で挨拶する" {
+when api.get("/greet?name=Alice")
+then status is 200
+and  body json ".message" is "Hello, Alice"

@@ -1,0 +1,1234 @@
+# 診断のコード
+
+`yuen explain --all --format markdown --lang ja` の出力です。手で直しません。
+
+<a id="e001"></a>
+
+## E001 — 読めない字句があります
+
+**いつ出るか**: 知らない文字、閉じていない文字列、`\"` と `\\` のほかのエスケープ、形の崩れた日付・ハッシュ・版・別名、ASCII の数字で始まる ASCII の名前、全角の空白があるとき。
+
+**直し方**: 示された位置を直します。文字列は `"…"` で閉じ、日付は `2026-10-03`、ハッシュは `sha256:` と 16 桁の小文字の 16 進数、別名は `(payment_day)` の形で書きます。
+
+**再現**:
+
+```req
+requirements 例 v1
+description "閉じていない
+```
+
+関連: [E002](#e002)
+
+<a id="e002"></a>
+
+## E002 — この位置に書けない語があります
+
+**いつ出るか**: 知らない行、行の中で構文が受け付けない語、足りない語、名前に使った yuen の語（`text` など）があるとき。
+
+**直し方**: 注に挙がる書き方のどれかにします。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  because "y"
+```
+
+関連: [E004](#e004)
+
+<a id="e003"></a>
+
+## E003 — ファイルが `requirements` の行で始まっていません
+
+**いつ出るか**: コメントと空行を除いた最初の行が `requirements …` でないとき、ファイルが空のとき。
+
+**直し方**: `requirements 民法の期間 v1` のように、要件の集まりの名前と版で書き始めます。
+
+**再現**:
+
+```req
+role 法務
+```
+
+関連: [E004](#e004)
+
+<a id="e004"></a>
+
+## E004 — 節や行の順序か数が違います
+
+**いつ出るか**: ファイルの節が `requirements`、`description`、`role`、`source`、`scope`、`requirement` の順にないとき、要件の中の行が `text`、`in force`、`owner`、`replaces`、`from`、`decided`、`satisfied by`・`not satisfied`、`verified by`・`not verified` の順にないとき、一つだけの行（`description`、`text`、`in force`、`owner`、確かめた記録）が二つあるとき。
+
+**直し方**: 決まった順序に並べ替え、二つめを消します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+description "役割より後ろ"
+```
+
+関連: [E002](#e002)
+
+<a id="e005"></a>
+
+## E005 — 字下げが合いません
+
+**いつ出るか**: 字下げにタブがあるとき、同じブロックの行の字下げがそろっていないとき、字下げで続く行の無いところに字下げした行があるとき、確かめた記録の行がリンクか見送りの行のすぐ下に一段深く書かれていないとき。
+
+**直し方**: スペースで字下げし、同じブロックの行はそろえ、記録はリンクの行より深くします。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+	text "x"
+```
+
+<a id="e006"></a>
+
+## E006 — 無い日付か、逆さまの期間が書かれています
+
+**いつ出るか**: `2026-02-30` のように暦に無い日付を書いたとき、期間の終わりが始まりより前のとき。日付は 0001-01-01〜9999-12-31 です。
+
+**直し方**: 暦にある日付に直し、期間は始まりを先に書きます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-02-30 by 法務 "例"
+```
+
+関連: [E001](#e001)
+
+<a id="e007"></a>
+
+## E007 — 同じ名前を二度宣言しています
+
+**いつ出るか**: 要件（版を書かずに二つ）、要件の別名、役割、同じファイルの出典、ファイルの見出しの名前のどれかが二度出てくるとき、一つの要件に別名が二つあるとき。
+
+**直し方**: どちらかの名前を変えます。同じ要件の版なら `v1`、`v2` と書き分けます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+role 法務
+```
+
+関連: [E009](#e009)
+
+<a id="e008"></a>
+
+## E008 — 宣言されていない名前です
+
+**いつ出るか**: `owner`、`decided … by`、確かめた記録の `by`、`review --by` の役割が宣言されていないとき、`from` と `replaces` の要件がプロジェクトに無いとき。
+
+**直し方**: `role 法務 "…"` で役割を宣言するか、名前の書き間違いを直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務部
+  decided 2026-10-03 by 法務 "例"
+```
+
+関連: [E007](#e007)
+
+<a id="e009"></a>
+
+## E009 — 版の書き方が違います
+
+**いつ出るか**: `v0` と書いたとき、同じ版が二つあるとき、版が二つ以上ある要件の版で版を書かなかったとき、版が二つ以上ある要件を版を書かずに指したとき、無い版を指したとき。
+
+**直し方**: 版は `v1` から数え、二つ以上あるなら、どの版にも書き、指すときも書きます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1 v0
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+```
+
+関連: [E007](#e007), [E408](#e408)
+
+<a id="e010"></a>
+
+## E010 — 要件に要るものがありません
+
+**いつ出るか**: 要件に `text` か `owner` が無いとき、出どころ（`from` も `decided` も）が無いとき、名前が ASCII の小文字・数字・`_` でない要件に別名が無いとき。
+
+**直し方**: 足りない行を書きます。別名は `支払日(payment_day)` のように名前のすぐあとに付けます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+```
+
+<a id="e011"></a>
+
+## E011 — 知らないツールの語です
+
+**いつ出るか**: 名指しの最初の語が、rulec、dandori、koyomi、chobo、geas、proto、file、yuen、sakai のどれでもないとき（`dir` も、名指しの語ではありません）。
+
+**直し方**: 九つのどれかで書きます。ほかのファイルは `file "…"` で名指します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by excel "a.xlsx"
+```
+
+関連: [E012](#e012), [E013](#e013)
+
+<a id="e012"></a>
+
+## E012 — その種類や組は、そこに書けません
+
+**いつ出るか**: ツールに無い種類、子の種類（`method`、`field`、`value`）が親のすぐあとにない、子の組が二つ、入れ子の無いツールで組が二つ、file の種類、種類のあとに名前が無いとき。`source` と `yuen` の名指しをリンクや範囲に書いたとき、借りた出典が rulec か koyomi の `source` でないときも。
+
+**直し方**: 文に挙がる種類で書きます。file はファイルを丸ごと名指します（`file "src/app.py"`）。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by dandori "order.flow" table reserve
+```
+
+関連: [E011](#e011), [E013](#e013)
+
+<a id="e013"></a>
+
+## E013 — パスの書き方が違います
+
+**いつ出るか**: パスに引用符が無いとき、空のとき、絶対パスのとき、畳んだあとでルートの外に出るとき。
+
+**直し方**: 名指しを書いたファイルのディレクトリからの相対で、`"…"` で囲んで書きます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by file "/etc/hosts"
+```
+
+関連: [E011](#e011), [E012](#e012)
+
+<a id="e101"></a>
+
+## E101 — 出典の写しがありません
+
+**いつ出るか**: 固定した条の写し（`sources/law/<ID>@<日付>/<要素>.xml`）か、`file` の出典のファイルが無いとき。check は通信しません。
+
+**直し方**: `yuen source fetch` で写しを取ってくるか、パスを直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第142条 sha256:fc8c35a0769d3b35
+
+requirement r1
+  text "x"
+  owner 法務
+  from @民法 第142条
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+```
+
+関連: [E102](#e102), [E103](#e103)
+
+<a id="e102"></a>
+
+## E102 — 出典が固定されていません
+
+**いつ出るか**: 引いている条に固定の行が無いとき、固定の行や `file` の出典に `sha256:` が無いとき。
+
+**直し方**: 写しの SHA-256 の先頭 16 桁を書きます（直した行が出ます。`yuen source pin` でも書けます）。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第142条
+
+requirement r1
+  text "x"
+  owner 法務
+  from @民法 第142条
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+```
+
+関連: [E101](#e101), [E103](#e103)
+
+<a id="e103"></a>
+
+## E103 — 写しが固定と違います
+
+**いつ出るか**: 写しのハッシュが、固定の行の `sha256:` と違うとき。固定したあとで写しが変わっています。
+
+**直し方**: 何が変わったかを読んでから（`yuen source outdated`）、固定を書き換えます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第142条 sha256:0000000000000000
+
+requirement r1
+  text "x"
+  owner 法務
+  from @民法 第142条
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+```
+
+関連: [E102](#e102), [E302](#e302)
+
+<a id="e104"></a>
+
+## E104 — 写しが読めません
+
+**いつ出るか**: 法令の写しが UTF-8 の XML でないか、e-Gov や eCFR が配る形（条なら `<Article>`、eCFR の section なら `<DIV8>` で始まる）でないとき。
+
+**直し方**: 写しを手で直さず、`yuen source fetch` で取り直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第142条 sha256:6210aedce8fd1601
+
+requirement r1
+  text "x"
+  owner 法務
+  from @民法 第142条
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+```
+
+`sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml`:
+
+```
+not xml
+```
+
+関連: [E101](#e101)
+
+<a id="e105"></a>
+
+## E105 — 引用が使えません
+
+**いつ出るか**: 引用の条が読めない形のとき、同じファイルで宣言されていない出典を引いたとき、法令を条なしで引いたとき、`file` の出典に条を書いたとき。
+
+**直し方**: 出典を同じファイルで宣言し、法令は `@民法 第142条` のように条で、`file` の出典は `@約款` と丸ごと引きます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  from @商法 第1条
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+```
+
+関連: [E102](#e102)
+
+<a id="e106"></a>
+
+## E106 — 借りた出典が使えません
+
+**いつ出るか**: 借りた出典を、名指したファイルが宣言していないか、引いた条を固定していないとき。ファイルが無いとき、写しが読めないか固定と違うときも。
+
+**直し方**: そのファイルが宣言して固定している出典と条を書きます。ほかの条を引くなら、そのファイルに固定の行を足します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+source 民法 = koyomi "a.cal" source 民法
+
+requirement r1
+  text "x"
+  owner 法務
+  from @民法 第142条
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+```
+
+`a.cal`:
+
+```
+dates 例(example) v1
+
+inputs
+  起点(origin) : date  range >=2026-01-01 <=2026-12-31
+
+date 翌日(next_day) = 起点
+  + 1 day
+```
+
+関連: [E105](#e105), [E203](#e203)
+
+<a id="e107"></a>
+
+## E107 — 要件と成果物が、同じ条の違う本文を読んでいます
+
+**いつ出るか**: 要件が引く条を、それを満たす規則かカレンダーのファイルも固定していて、どの写しも要件の写しと本文が違うとき。どちらかが古い写しです。
+
+**直し方**: 本文の差分を読み、古いほうの写しを取り直して固定し直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第142条 sha256:54a319e4148c24c7
+
+requirement r1
+  text "x"
+  owner 法務
+  from @民法 第142条
+    reviewed 2026-10-04 by 法務 sha256:54a319e4148c24c7 -> sha256:f0db3717ffd12ba0
+  satisfied by koyomi "cal/a.cal" date 満了日
+    reviewed 2026-10-04 by 法務 sha256:f0db3717ffd12ba0 -> sha256:3c4a7518c3f1dead
+  not verified "例なので置かない"
+    approved 2026-10-04 by 法務 sha256:f0db3717ffd12ba0
+```
+
+`cal/a.cal`:
+
+```
+dates 例(example) v1
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第142条 sha256:fc8c35a0769d3b35
+
+inputs
+  起点(origin) : date  range >=2026-01-01 <=2026-12-31
+
+date 満了日(last_day) = 起点  @民法 第142条
+  + 1 day
+```
+
+関連: [E103](#e103)
+
+<a id="w101"></a>
+
+## W101 — 固定した条が、どの要件からも引かれていません
+
+**いつ出るか**: 出典の下に固定の行があるのに、同じファイルのどの要件の `from` もその条を引いていないとき。
+
+**直し方**: 引用を消したあとの残りなら、固定の行を消します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第142条 sha256:fc8c35a0769d3b35
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+関連: [E102](#e102)
+
+<a id="e201"></a>
+
+## E201 — 成果物のファイルがありません
+
+**いつ出るか**: リンクが名指すファイルか、範囲のパスが無いとき。リンクにディレクトリを書いたときも。
+
+**直し方**: パスを直します。ファイルの名前を変えたのなら、リンクも直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by file "missing.txt"
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+関連: [E013](#e013)
+
+<a id="e202"></a>
+
+## E202 — 成果物の名前が、そのファイルにありません
+
+**いつ出るか**: 名指した名前が、そのファイルに無いとき（その言語が渡す中のものに無い、`.proto` に無い）。別名で書いたときと、名前が変わったときも（候補を添えます）。
+
+**直し方**: その言語の名前（別名ではなく）で書きます。名前が変わったのなら、リンクも直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by proto "a.proto" message Orders
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`a.proto`:
+
+```
+syntax = "proto3";
+
+package shop.v1;
+
+message Order {
+  string id = 1;
+}
+```
+
+関連: [E201](#e201)
+
+<a id="e203"></a>
+
+## E203 — 名指したものの言語が、そのファイルについて答えられません
+
+**いつ出るか**: 名指したファイルが、その言語の検査を通らないか、読めないとき。検査を通らないファイルからは端を作りません。注に、その言語の診断を並べます。
+
+**直し方**: そのファイルが、その言語の検査を通るように直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by rulec "a.rule" table fees
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`a.rule`:
+
+```
+rule fee v1
+
+inputs
+  amount : money[JPY]  range >=0JPY <=10000JPY
+
+outputs
+  fee : money[JPY]  round down(1JPY)
+
+table fees
+| amount       | -> fee  |
+| <5000JPY     | 500JPY  |
+| >5000JPY     | 0JPY    |
+```
+
+関連: [E106](#e106), [E202](#e202)
+
+<a id="e204"></a>
+
+## E204 — ツールの JSON が知らない形です
+
+**いつ出るか**: 出しません。ツールの JSON に、yuen が読むキーが無いときのためのコードでした。
+
+**直し方**: 直すものはありません。
+
+**再現**: ritsu 0.23.0 で退きました。ほかの言語を子プロセスの JSON で読む予定のころに決めたコードで、いまは ritsu の口で型のまま読むので、JSON を読みません。
+
+関連: [E203](#e203)
+
+<a id="e205"></a>
+
+## E205 — proto が読めません
+
+**いつ出るか**: `.proto` が ritsu の `.proto` の読み手で読めないとき（proto3 として読めない、import の先が読めない）。
+
+**直し方**: `.proto` を直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by proto "a.proto" message Order
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`a.proto`:
+
+```
+syntax = "proto3";
+
+package shop.v1;
+
+message Order {
+  string id = 1;
+```
+
+関連: [E201](#e201)
+
+<a id="e206"></a>
+
+## E206 — 名指したものの言語がつながっていません
+
+**いつ出るか**: yuen のクレートのバイナリ（`yuen`）が、ほかの言語のもの（規則、カレンダー、帳簿、主張、ワークフロー、コンテキスト）を名指すプロジェクトを渡されたとき。このバイナリはほかの言語を持たず（ritsu の DESIGN 2.3）、それを読めません。言語ごとに一つ、最初に名指したところで言い、そこで止めます。exit code は 2（走らせ方の問題で、プロジェクトの誤りではないため）。
+
+**直し方**: 同じコマンドを `ritsu yuen` で走らせます（`ritsu yuen check .`）。すべての言語をつないで、同じプロセスの中で読みます。
+
+**再現**:
+
+```req
+requirements shipping v1
+role legal
+
+requirement r1
+  text "a fee for every amount"
+  owner legal
+  decided 2026-10-04 by legal "an example"
+  satisfied by rulec "fee.rule" table fees
+```
+
+`fee.rule`:
+
+```
+rule fee v1
+
+inputs
+  amount : money[USD]  range >=0USD <=10000USD
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fees
+| amount    | -> fee |
+| <5000USD  | 5USD   |
+| >=5000USD | 0USD   |
+```
+
+関連: [E203](#e203)
+
+<a id="w201"></a>
+
+## W201 — geas の記録が無いので、主張があるかを確かめていません
+
+**いつ出るか**: 出しません。`geas map` の記録が無く、spec のファイルがあることしか確かめられないときのためのコードでした。
+
+**直し方**: 直すものはありません。
+
+**再現**: ritsu 0.23.0 で退きました。geas の主張は geas の口が spec から読むので、記録が無くても主張があるかを確かめます。記録が無いために辿れない範囲のファイルは、E404 の注が言います。
+
+関連: [E202](#e202), [E404](#e404)
+
+<a id="e301"></a>
+
+## E301 — まだ確かめていないリンクです
+
+**いつ出るか**: リンクの下に、確かめた記録（`reviewed …`）が無いとき。
+
+**直し方**: 両端を読んで確かめたら、`yuen review … --by <役割>` で記録を書きます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by file "a.txt"
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`a.txt`:
+
+```
+a
+```
+
+関連: [E302](#e302), [E303](#e303)
+
+<a id="e302"></a>
+
+## E302 — 確かめたあとで、リンク元が変わりました
+
+**いつ出るか**: 記録のリンク元のハッシュが、いまのハッシュと違うとき。リンク元は、`from` なら出典の条か元の要件、`satisfied by` と `verified by` なら要件です。要件の端（確かめる中身）には出典のハッシュが入るので、条が変われば、その先のリンクにも印が付きます。
+
+**直し方**: 差分を読み、要件がまだ正しく読めているか、成果物がまだ満たしているかを確かめてから、`yuen review` で記録を書き直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by file "a.txt"
+    reviewed 2026-10-03 by 法務 sha256:f1e653e8ce72c16f -> sha256:87428fc522803d31
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`a.txt`:
+
+```
+a
+```
+
+`reviewed/f1e653e8ce72c16f`:
+
+```
+text the old x
+```
+
+関連: [E303](#e303), [E304](#e304), [W301](#w301)
+
+<a id="e303"></a>
+
+## E303 — 確かめたあとで、リンク先が変わりました
+
+**いつ出るか**: 記録のリンク先のハッシュが、いまのハッシュと違うとき。リンク先は、`from` なら要件、`satisfied by` と `verified by` なら成果物です。
+
+**直し方**: 差分を読み、成果物がまだ要件を満たしているかを確かめてから、`yuen review` で記録を書き直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by file "a.txt"
+    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f -> sha256:0263829989b6fd95
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`a.txt`:
+
+```
+a
+```
+
+`reviewed/0263829989b6fd95`:
+
+```
+b
+```
+
+関連: [E302](#e302), [W301](#w301)
+
+<a id="e304"></a>
+
+## E304 — 見送りが承認されていないか、承認のあとで要件が変わりました
+
+**いつ出るか**: `not satisfied` か `not verified` の下に承認の記録（`approved …`）が無いとき、記録の要件のハッシュがいまと違うとき。
+
+**直し方**: 持ち主が理由を読んで承認したら、`yuen review … --by <役割>` で承認を書きます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+関連: [E301](#e301)
+
+<a id="e305"></a>
+
+## E305 — 確かめた記録の形が崩れています
+
+**いつ出るか**: 記録の行の形が崩れているとき（`->` や `by` が無い、見送りの下の `reviewed`）、ハッシュの数がリンク元の数と合わないとき。
+
+**直し方**: 記録は `yuen review` が書くものです。確かめ直して、書き直させます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by file "a.txt"
+    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`a.txt`:
+
+```
+a
+```
+
+関連: [E301](#e301)
+
+<a id="w301"></a>
+
+## W301 — 確かめたときの中身が reviewed/ に無いので、差分を見せられません
+
+**いつ出るか**: 印の付いたリンクの、確かめたときの中身（`reviewed/<ハッシュ>`）が無いとき。印はハッシュで付きます。
+
+**直し方**: `reviewed/` を git に入れておきます。無くした中身は、git の履歴から戻せることがあります。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by file "a.txt"
+    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f -> sha256:0263829989b6fd95
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`a.txt`:
+
+```
+a
+```
+
+関連: [E302](#e302), [E303](#e303)
+
+<a id="e401"></a>
+
+## E401 — 満たす成果物も、その見送りもありません
+
+**いつ出るか**: 要件の版に、`satisfied by` も `not satisfied` も無いとき。
+
+**直し方**: `satisfied by <成果物>` を書くか、`not satisfied "<理由>"` を書いて承認してもらいます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+関連: [E402](#e402)
+
+<a id="e402"></a>
+
+## E402 — 確かめる主張も、その見送りもありません
+
+**いつ出るか**: 要件の版に、`verified by` も `not verified` も無いとき。
+
+**直し方**: `verified by <主張>` を書くか、`not verified "<理由>"` を書いて承認してもらいます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+関連: [E401](#e401)
+
+<a id="e403"></a>
+
+## E403 — 確かめる側に、主張でないものを書きました
+
+**いつ出るか**: `verified by` に、geas と koyomi の主張、検査するツールのファイル全体、テストのファイルのほかを書いたとき（rulec の出力、chobo の振替、proto など）。
+
+**直し方**: 満たすものなら `satisfied by` に書き、確かめる側には落ちることのあるものを書きます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  verified by koyomi "支払条件.cal" date 支払日
+```
+
+関連: [E012](#e012)
+
+<a id="e404"></a>
+
+## E404 — 範囲の成果物が、どの要件にも辿れません
+
+**いつ出るか**: `scope` が集めた成果物を、どのリンクも名指さず、含みも含まれもしないとき。
+
+**直し方**: `satisfied by` か `verified by` でそれを名指す要件を足すか、範囲を狭めます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+scope file "b.txt"
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`b.txt`:
+
+```
+b
+```
+
+関連: [E401](#e401)
+
+<a id="e405"></a>
+
+## E405 — 要件のあいだに循環があります
+
+**いつ出るか**: `from <要件>` と `replaces <要件>` をたどると、元の要件に戻ってくるとき。
+
+**直し方**: どちらが元かを決め、もう一方の `from` か `replaces` を消します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  from r2
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+
+requirement r2
+  text "y"
+  owner 法務
+  from r1
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+```
+
+関連: [E409](#e409)
+
+<a id="e406"></a>
+
+## E406 — 版の期間に隙間があります
+
+**いつ出るか**: 前の版の終わりの翌日に、次の版が始まらないとき。どの版にも入らない日を挙げます。
+
+**直し方**: 次の版の始まりを、前の版の終わりの翌日にします（直した行が出ます）。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement x v1
+  text "x"
+  in force 2026-01-01..2026-12-31
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b
+
+requirement x v2
+  text "x"
+  in force 2027-01-02..
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:4e7392102a031a5b
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:4e7392102a031a5b
+```
+
+関連: [E407](#e407), [E408](#e408)
+
+<a id="e407"></a>
+
+## E407 — 版の期間が重なります
+
+**いつ出るか**: 次の版が、前の版の終わり以前に始まるとき。重なる日と二つの版を挙げます。
+
+**直し方**: 一つの日に効く版は一つです。前の版の終わりか、次の版の始まりを直します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement x v1
+  text "x"
+  in force 2026-01-01..2026-12-31
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b
+
+requirement x v2
+  text "x"
+  in force 2026-12-30..
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:7523d312c91d81c0
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:7523d312c91d81c0
+```
+
+関連: [E406](#e406), [E408](#e408)
+
+<a id="e408"></a>
+
+## E408 — 版の期間の書き方が足りません
+
+**いつ出るか**: 版が二つ以上あるのに期間の無い版があるとき、終わりを開けた版が最後でないとき、始まりを開けた版が最初でないとき、版の番号が期間の順に増えていないとき。
+
+**直し方**: どの版にも `in force` を書き、版の番号を期間の順にそろえます。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement x v1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+
+requirement x v2
+  text "x"
+  in force 2027-01-01..
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fa2942b05a851b79
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fa2942b05a851b79
+```
+
+関連: [E406](#e406), [E407](#e407)
+
+<a id="e409"></a>
+
+## E409 — 置き換える要件の期間が、置き換えられる要件の終わりの翌日から始まりません
+
+**いつ出るか**: `replaces` で置き換えられる要件に終わりの日が無いとき、`replaces` を書いた版の始まりが、その翌日でないとき。
+
+**直し方**: 置き換えられる要件を終わらせ、置き換える版をその翌日から始めます（直した行が出ます）。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  in force 2026-01-01..2026-12-31
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b
+
+requirement r2
+  text "y"
+  in force 2027-01-02..
+  owner 法務
+  replaces r1
+  decided 2026-10-03 by 法務 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:cb98f1b81b3a40fd
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:cb98f1b81b3a40fd
+```
+
+関連: [E406](#e406), [E405](#e405)
+
+<a id="w401"></a>
+
+## W401 — 見送りと、同じ側のリンクの両方があります
+
+**いつ出るか**: `satisfied by` と `not satisfied`（か `verified by` と `not verified`）が同じ要件の版にあるとき。見送りは要りません。
+
+**直し方**: リンクを置いたのなら、見送りを消します。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by file "a.txt"
+    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f -> sha256:87428fc522803d31
+  not satisfied "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f
+```
+
+`a.txt`:
+
+```
+a
+```
+
+関連: [E401](#e401)

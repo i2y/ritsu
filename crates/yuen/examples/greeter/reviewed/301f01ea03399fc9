@@ -1,0 +1,1 @@
+text POST /add は本文の数を合計に足し、GET /total が合計を返し、POST /reset が合計を 0 に戻す

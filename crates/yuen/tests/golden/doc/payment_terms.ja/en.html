@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="yuen 0.23.0">
+<title>支払条件 — where the requirements come from</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 12px; overflow-wrap: anywhere; }
+h2 { font-size: 1.25rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 28px 0 8px; overflow-wrap: anywhere; }
+p, li { overflow-wrap: anywhere; }
+code { font: 0.88em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
+pre { font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); min-width: 7em; }
+th { background: var(--soft); color: var(--dim); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td strong { color: var(--warn); }
+td.nw { white-space: nowrap; }
+blockquote.law { margin: 8px 0 16px; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0; }
+blockquote.law p { margin: 4px 0; }
+blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; }
+.lead { color: var(--dim); }
+@media print { body { background: #fff; color: #000; } .scroll { overflow: visible; } pre { white-space: pre-wrap; } }
+</style>
+</head>
+<body>
+<main>
+<h1>支払条件 — where the requirements come from</h1>
+<p class="lead">yuen 0.23.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.</p>
+<ul>
+<li><code>payment_terms.ja.req</code> (支払条件 v1, <code>sha256:efb13e38decc0120</code>)</li>
+</ul>
+<p>The check: <code>examples/payment_terms/payment_terms.ja.req: ok — 2 requirements, whose 6 links are as they were looked at; every requirement is met and checked, or waived; the 2 dates in scope all trace to a requirement</code></p>
+<h2 id="traceability">Traceability</h2>
+<div class="scroll"><table>
+<thead><tr><th>Requirement</th><th>In force</th><th>Comes from</th><th>Owner</th><th>Met by</th><th>Checked by</th><th>State</th></tr></thead>
+<tbody>
+<tr><td><code>支払日 (payment_day)</code></td><td class="nw">2026-10-01..</td><td>decided by 経理 on 2026-10-04</td><td>経理</td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 締め日</code>; <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code></td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 受領から60日以内</code></td><td>as looked at</td></tr>
+<tr><td><code>営業日 (business_days)</code></td><td class="nw">2026-10-01..</td><td><code>@祝日</code></td><td>経理</td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code></td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 営業日に払う</code></td><td>as looked at</td></tr>
+</tbody>
+</table></div>
+<h2 id="sources">Sources</h2>
+<h3 id="source-祝日">祝日</h3>
+<p>The file <code>calendars/data/syukujitsu.csv</code> (from <code>https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv</code>), pinned at <code>sha256:cec37a743c96995c</code>. Borrowed from <code>koyomi &quot;calendars/東京の営業日.cal&quot; source 祝日</code> (the copies and the pins are that file&#39;s, and its language&#39;s check holds them).</p>
+<p>Cited by: <code>営業日 (business_days)</code></p>
+<h2 id="why">Why each requirement is so</h2>
+<h3 id="why-payment_day">支払日 (payment_day)</h3>
+<p><strong>20 日締め翌月 10 日払い。受領から 60 日以内に払う</strong></p>
+<ul>
+<li>In force: 2026-10-01..</li>
+<li>Owner: 経理</li>
+<li>File: <code>examples/payment_terms/payment_terms.ja.req:11</code></li>
+<li>The requirement&#39;s end: <code>sha256:5d97c87d3ce26490</code></li>
+</ul>
+<p>Decided by 経理 on 2026-10-04: 20 日に締めて翌月 10 日に払えば、どの支払も受領から 60 日以内に収まる。この例のために決めたもの</p>
+<p>Met by <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 締め日</code> — looked at by 開発 on 2026-10-04 (<code>sha256:5d97c87d3ce26490</code> → <code>sha256:74f19beadf2f4043</code>). State: as looked at</p>
+<p>Met by <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code> — looked at by 開発 on 2026-10-04 (<code>sha256:5d97c87d3ce26490</code> → <code>sha256:feb9535fb9350ecc</code>). State: as looked at</p>
+<p>Checked by <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 受領から60日以内</code> — looked at by 開発 on 2026-10-04 (<code>sha256:5d97c87d3ce26490</code> → <code>sha256:57f704e64ea8e3c8</code>). State: as looked at</p>
+<h3 id="why-business_days">営業日 (business_days)</h3>
+<p><strong>支払は営業日にする。支払日が土曜、日曜、祝日なら、その前の営業日に払う</strong></p>
+<ul>
+<li>In force: 2026-10-01..</li>
+<li>Owner: 経理</li>
+<li>File: <code>examples/payment_terms/payment_terms.ja.req:23</code></li>
+<li>The requirement&#39;s end: <code>sha256:cc3109016d422ecd</code></li>
+</ul>
+<p>Comes from <code>@祝日</code> — looked at by 経理 on 2026-10-04 (<code>sha256:cec37a743c96995c</code> → <code>sha256:cc3109016d422ecd</code>). State: as looked at</p>
+<p>Met by <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code> — looked at by 開発 on 2026-10-04 (<code>sha256:cc3109016d422ecd</code> → <code>sha256:feb9535fb9350ecc</code>). State: as looked at</p>
+<p>Checked by <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 営業日に払う</code> — looked at by 開発 on 2026-10-04 (<code>sha256:cc3109016d422ecd</code> → <code>sha256:3cf8fc3fb2dda9d9</code>). State: as looked at</p>
+<h2 id="scope">Scope</h2>
+<p><code>scope koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date</code> — 2 artifacts in it, every one tracing to a requirement.</p>
+<h2 id="records">Records</h2>
+<div class="scroll"><table>
+<thead><tr><th>Date</th><th>By</th><th>What</th><th>Hashes</th></tr></thead>
+<tbody>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>支払日 (payment_day)</code> → <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 締め日</code></td><td><code>sha256:5d97c87d3ce26490 -&gt; sha256:74f19beadf2f4043</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>支払日 (payment_day)</code> → <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code></td><td><code>sha256:5d97c87d3ce26490 -&gt; sha256:feb9535fb9350ecc</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>支払日 (payment_day)</code> → <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 受領から60日以内</code></td><td><code>sha256:5d97c87d3ce26490 -&gt; sha256:57f704e64ea8e3c8</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>経理</td><td><code>@祝日</code> → <code>営業日 (business_days)</code></td><td><code>sha256:cec37a743c96995c -&gt; sha256:cc3109016d422ecd</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>営業日 (business_days)</code> → <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code></td><td><code>sha256:cc3109016d422ecd -&gt; sha256:feb9535fb9350ecc</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>営業日 (business_days)</code> → <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 営業日に払う</code></td><td><code>sha256:cc3109016d422ecd -&gt; sha256:3cf8fc3fb2dda9d9</code></td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

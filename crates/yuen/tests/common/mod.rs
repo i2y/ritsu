@@ -214,3 +214,15 @@ pub fn xmllint_and_schema(what: &str) -> Option<(PathBuf, PathBuf)> {
     }
     Some((lint, std::fs::canonicalize(&xsd).unwrap()))
 }
+
+/// Each example and its projects (one `.req` each: the English one first, its Japanese version
+/// beside it), with the role that looks at its artifacts.
+pub const EXAMPLES: &[(&str, &[&str], &str)] = &[
+    ("osha", &["osha.req"], "development"),
+    ("greeter", &["greeter.req", "greeter.ja.req"], "development"),
+    ("payment_terms", &["payment_terms.req", "payment_terms.ja.req"], "development"),
+    ("refunds", &["refunds.req", "refunds.ja.req"], "development"),
+    ("civil_code_periods", &["civil_code_periods.ja.req"], "開発"),
+    ("civil_code_periods_reread", &["civil_code_periods_reread.ja.req"], "開発"),
+    ("stamp_tax", &["stamp_tax.ja.req"], "開発"),
+];
