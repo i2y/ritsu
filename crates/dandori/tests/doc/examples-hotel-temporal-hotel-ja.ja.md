@@ -170,7 +170,7 @@ flowchart TD
 <details>
 <summary><code>与信</code> · 宿泊の与信額 v1 · <code>../rules/宿泊の与信額.rule</code></summary>
 
-<!-- rulec 0.23.0 が 宿泊の与信額.rule (sha256:7c4298374720) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
+<!-- rulec 0.23.0 が 宿泊の与信額.rule (sha256:7c4298374720) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 宿泊の与信額 v1
 
 予約のときにカードで押さえる額と、フロントの確認に回すかどうか。客室の一泊の額に泊数を掛ける。15 泊以上は確認に回す。書き下ろしの例
@@ -191,7 +191,7 @@ flowchart TD
 
 ## 型
 
-列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+列挙は**閉じた**有限集合です。値を足すと、その値を扱っていない表は完全性の検査を通らなくなります。
 
 - **客室**（3 値）— standard、deluxe、suite
 - **扱い**（2 値）— 自動、確認
@@ -255,7 +255,7 @@ flowchart TD
 <details>
 <summary><code>payment_intent</code> · payment_intent v1 · <code>../rules/payment_intent.rule</code></summary>
 
-<!-- rulec 0.23.0 が payment_intent.rule (sha256:ec6477bfd9ec) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
+<!-- rulec 0.23.0 が payment_intent.rule (sha256:ec6477bfd9ec) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 payment_intent v1
 
 Where a Stripe PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. Transcribed from Stripe's documentation
@@ -283,7 +283,7 @@ Where a Stripe PaymentIntent's status goes when it is confirmed, authenticated, 
 
 ## 型
 
-列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+列挙は**閉じた**有限集合です。値を足すと、その値を扱っていない表は完全性の検査を通らなくなります。
 
 - **status**（7 値）— requires_payment_method、requires_confirmation、requires_action、processing、requires_capture、succeeded、canceled
 - **event**（7 値）— attach、confirm、authenticate、settle、capture、cancel、expire

@@ -65,7 +65,7 @@ flowchart TD
 <details>
 <summary><code>policy</code> · review_policy v1 · <code>../rules/review_policy.rule</code></summary>
 
-<!-- rulec 0.23.0 が review_policy.rule (sha256:d71c8b54077c) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
+<!-- rulec 0.23.0 が review_policy.rule (sha256:d71c8b54077c) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 review_policy v1
 
 Whether the scoring's verdict on an application is acted on at once or goes to a person, by how sure the scoring is of it: approving at once asks more certainty than rejecting at once. Written for the example
@@ -85,7 +85,7 @@ Whether the scoring's verdict on an application is acted on at once or goes to a
 
 ## 型
 
-列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+列挙は**閉じた**有限集合です。値を足すと、その値を扱っていない表は完全性の検査を通らなくなります。
 
 - **verdict**（3 値）— reject、hold、approve
 - **decision**（3 値）— approve、reject、ask

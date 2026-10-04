@@ -72,7 +72,7 @@ flowchart TD
 <details>
 <summary><code>routing</code> · inquiry_routing v1 · <code>../rules/inquiry_routing.rule</code></summary>
 
-<!-- rulec 0.23.0 が inquiry_routing.rule (sha256:77cf5ddb6256) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
+<!-- rulec 0.23.0 が inquiry_routing.rule (sha256:77cf5ddb6256) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 inquiry_routing v1
 
 Which desk takes an inquiry, and how soon it is first answered, from its kind and whether the customer is a member. Written for the example
@@ -93,7 +93,7 @@ Which desk takes an inquiry, and how soon it is first answered, from its kind an
 
 ## 型
 
-列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+列挙は**閉じた**有限集合です。値を足すと、その値を扱っていない表は完全性の検査を通らなくなります。
 
 - **kind**（4 値）— returns、delivery、billing、other
 - **desk**（3 値）— logistics、accounting、general

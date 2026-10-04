@@ -87,7 +87,7 @@ flowchart TD
 <details>
 <summary><code>order_state</code> · order_state v1 · <code>../../examples/order/rules/order_state.rule</code></summary>
 
-<!-- rulec 0.23.0 が order_state.rule (sha256:5b6ae1fbd5cf) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
+<!-- rulec 0.23.0 が order_state.rule (sha256:5b6ae1fbd5cf) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 order_state v1
 
 Where an online order goes on a payment, a shipment, a delivery or a request to cancel it, and how much is refunded. The caller keeps the state; the rule decides one event at a time. Written for the example
@@ -110,7 +110,7 @@ Where an online order goes on a payment, a shipment, a delivery or a request to 
 
 ## 型
 
-列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+列挙は**閉じた**有限集合です。値を足すと、その値を扱っていない表は完全性の検査を通らなくなります。
 
 - **state**（5 値）— received、paid、shipped、delivered、cancelled
 - **event**（4 値）— pay、ship、deliver、cancel

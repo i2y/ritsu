@@ -1514,7 +1514,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A string opened with `\"` is not closed on the same line. Neither a cell nor a `description` may contain a line break."
             ),
             tr!(
-                "その行のうちに `\"` を閉じてください。長い説明は一行に収めるか、`#` のコメントに移します。",
+                "その行のうちに `\"` を閉じてください。長い説明は一行に収めるか、`#` のコメントに移してください。",
                 "Close the `\"` on the same line. A long description either fits on one line or moves into a `#` comment."
             ),
             X_E001,
@@ -1556,7 +1556,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared."
             ),
             tr!(
-                "行頭に宣言の語を書いてください（`{}`）。表の行なら `|` で始めます。",
+                "行頭に宣言の語を書いてください（`{}`）。表の行なら `|` で始めてください。",
                 "Start the line with a declaring word (`{}`). A table row starts with `|`.",
                 crate::kw::line_heads()
             ),
@@ -1571,7 +1571,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each."
             ),
             tr!(
-                "`{}` のどれかに直してください。業務の語は名前とセルの中にだけ書きます。",
+                "`{}` のどれかに直してください。業務の語を書けるのは、名前とセルの中だけです。",
                 "Correct it to one of `{}`. Business words belong in names and cells, not at the head of a line.",
                 crate::kw::line_heads()
             ),
@@ -1582,7 +1582,7 @@ pub fn ledger() -> Vec<Entry> {
             "E006",
             tr!("宣言に `=` がありません", "The declaration has no `=`"),
             tr!(
-                "`enum` `group` `derive` `define` `result` は、名前と中身を `=` で分けます。その `=` が無いとき。",
+                "`enum` `group` `derive` `define` `result` の行に、名前と中身を分ける `=` が無いとき。",
                 "`enum`, `group`, `derive`, `define` and `result` separate the name from the body with `=`. It is missing."
             ),
             tr!(
@@ -1615,7 +1615,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A cell of a table holds only whitespace. **A blank is indistinguishable from a forgotten entry**, so it is a syntax error."
             ),
             tr!(
-                "任意の値のつもりなら `-` と書いてください。値を書き忘れていたなら、その値を書きます。",
+                "どの値でもよいなら `-` と書いてください。値を書き忘れていたなら、その値を書いてください。",
                 "If any value is meant, write `-`. If a value was forgotten, write the value."
             ),
             X_E008,
@@ -1625,7 +1625,7 @@ pub fn ledger() -> Vec<Entry> {
             "E009",
             tr!("宣言の名前が予約語と衝突しています", "A declared name collides with a reserved word"),
             tr!(
-                "宣言した名前（や別名）が語彙の語と同じとき。行指向のパーサがその行をセクションの始まりと読んで、宣言を黙って捨てる事故を防ぎます。列挙の値は行の頭に来ないので、値の位置で別の意味に読まれる 11 語（`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`）のときだけです。",
+                "宣言した名前（や別名）が語彙の語と同じとき。行指向のパーサーがその行をセクションの始まりと読んで、宣言を黙って捨てる事故を防ぐための検査です。列挙の値は行の頭に来ないので、列挙の値で出るのは、値の位置で別の意味に読まれる 11 語（`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`）のときだけです。",
                 "A declared name (or alias) is the same as a word of the vocabulary. Otherwise the line-oriented parser reads the line as the start of a section and drops the declaration silently. An enum value never starts a line, so for a value it is only the eleven words its own position reads as something else (`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`)."
             ),
             tr!(
@@ -1643,7 +1643,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A cell contains `..`, as in `0g..1000g`. Whether \"up to 1000g\" includes the endpoint cannot be read off the text."
             ),
             tr!(
-                "比較演算子で書き直してください。`0g..1000g` は `<=1000g` か `<1000g` のどちらかです。両端を決めたいなら `>=0g <=1000g` と並記します。",
+                "比較演算子で書き直してください。`0g..1000g` は `<=1000g` か `<1000g` のどちらかです。両端を決めたいなら `>=0g <=1000g` と並べて書いてください。",
                 "Rewrite it with comparison operators: `0g..1000g` is either `<=1000g` or `<1000g`. To fix both ends, write `>=0g <=1000g`."
             ),
             X_E010,
@@ -1667,11 +1667,11 @@ pub fn ledger() -> Vec<Entry> {
             "E012",
             tr!("宣言されていない名前です", "The name is not declared"),
             tr!(
-                "表の列や式が、どこにも宣言されていない名前を指しているとき。前方参照は書けないので、名前はそれを使う行より上で宣言します。セルや群に書いた値がどの列挙の値でもないときも出ます。組み込みの区分（`std/us/states` など）を取り込んでいれば、似た綴りの値か、その語を値に持つ別の国の名前空間を添えます。取り込んだ二つの国が同じ綴り（`WA` はワシントン州と西オーストラリア州の符号）を持つ語を書いたときも、これです。",
+                "表の列や式が、どこにも宣言されていない名前を指しているとき。前に宣言していない名前は使えないので、名前はそれを使う行より上で宣言する必要があります。セルやグループに書いた値がどの列挙の値でもないときにも出ます。組み込みの区分（`std/us/states` など）を取り込んでいれば、注に、似た綴りの値か、その語を値に持つ別の国の名前空間が出ます。取り込んだ二つの国が同じ綴りの値を持つとき（`WA` はワシントン州と西オーストラリア州の符号です）は、その綴りをそのまま書いても出ます。",
                 "A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. And it appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia)."
             ),
             tr!(
-                "綴りを宣言に合わせるか、その入力・導出・定義を上に宣言してください。二つの国が共有する綴りなら、値の名前（`Washington` か `Western_Australia`）で書きます。",
+                "綴りを宣言に合わせるか、その入力・導出・定義を上に宣言してください。二つの国が共有する綴りなら、値の名前（`Washington` か `Western_Australia`）で書いてください。",
                 "Match the spelling to the declaration, or declare the input, derived value or definition above. For a spelling two countries share, write the value's name (`Washington` or `Western_Australia`)."
             ),
             X_E012,
@@ -1681,11 +1681,11 @@ pub fn ledger() -> Vec<Entry> {
             "E013",
             tr!("取込先がありません", "No such import"),
             tr!(
-                "`import` の先が無いとき。取込先は三つあります。組み込みの名前空間（十三か国の一段目の区分。`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本の都道府県は `std/都道府県` でも取り込めて、そのときは値を日本語で書きます）、`.proto` の列挙（`import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`）、JSON Schema の列挙（`import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`、OpenAPI も同じ）です。あとの二つは、ファイルを読めないとき、その列挙がファイルに無いとき、行の形が違うときに出ます。YAML は読まないので、JSON にしたものを指してください。一つの国の区分を二つの名前で取り込んだとき（`std/都道府県` と `std/jp/prefectures`）も出ます。",
+                "`import` の先が無いとき。取込先は三つあります。組み込みの名前空間（十三か国の一段目の区分。`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本の都道府県は `std/都道府県` でも取り込めて、そのときは値を日本語で書きます）、`.proto` の列挙（`import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`）、JSON Schema の列挙（`import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`、OpenAPI も同じ）です。あとの二つは、ファイルを読めないとき、その列挙がファイルに無いとき、行の形が違うときに出ます。rulec は YAML を読まないので、JSON にしたものを指してください。一つの国の区分を二つの名前で取り込んだとき（`std/都道府県` と `std/jp/prefectures`）にも出ます。",
                 "The target of `import` is not there. There are three kinds: the built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese), an enum in a `.proto` (`import proto \"<file>\" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema \"<file>\" \"<pointer>\" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`)."
             ),
             tr!(
-                "名前空間の綴りを直すか（似た綴りがあれば注に出ます）、その列挙を `enum` でこのファイルに書いてください。ファイルから取り込むなら、パスは規則ファイルのある場所からたどるので、そこからの相対で書きます。JSON Schema のポインタは `#/components/schemas/<名前>` の形で、届かなかったときは、そこにある鍵が並びます。",
+                "名前空間の綴りを直すか（似た綴りがあれば注に出ます）、その列挙を `enum` でこのファイルに書いてください。ファイルから取り込むなら、パスは規則ファイルのある場所からの相対パスで書いてください。JSON Schema のポインタは `#/components/schemas/<名前>` の形です。ポインタが届かなかったときは、注に、届いたところにある鍵が並びます。",
                 "Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there."
             ),
             X_E013,
@@ -1696,11 +1696,11 @@ pub fn ledger() -> Vec<Entry> {
             "E014",
             tr!("出力のセルに式は書けません", "An output cell cannot hold an expression"),
             tr!(
-                "表の `->` から右のセルに語が二つ以上あるとき。書けるのは値一つか名前一つだけです。読み飛ばして最初の語だけを採ると、かけ算が黙って消えた生成コードが出ます。",
+                "表の `->` から右のセルに語が二つ以上あるとき。書けるのは値一つか名前一つだけです。残りを読み飛ばして最初の語だけを採ると、かけ算が黙って消えた生成コードができてしまいます。",
                 "A cell to the right of `->` holds two or more words. Only one value or one name may be written there. Taking just the first word and skipping the rest would emit generated code with the multiplication silently dropped."
             ),
             tr!(
-                "計算に名前を付けて `define` の行へ出し、表にはその名前だけを書いてください（`| - | 率割引 |`）。表は分岐だけを持ちます。",
+                "計算に名前を付けて `define` の行へ出し、表にはその名前だけを書いてください（`| - | 率割引 |`）。表に書くのは分岐だけです。",
                 "Give the calculation a name on a `define` line and leave only that name in the table (`| - | rate_discount |`). A table holds the branching and nothing else."
             ),
             X_E014,
@@ -1715,7 +1715,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A `result` names an output other than the first. `result` is sugar for the first output, and both the evaluator and the generated code apply it only there. The name used to be ignored, so a `number` could land in a `money` slot without an E103."
             ),
             tr!(
-                "その出力と同じ名前の `define` を書いてください（`define 付与点(pts) : number = 基本点 × 倍率`）。出力は宣言順に、同じ名前の束縛から取られます。`result` で組み立てたいなら、その出力を `outputs` の先頭へ移します。",
+                "その出力と同じ名前の `define` を書いてください（`define 付与点(pts) : number = 基本点 × 倍率`）。出力の値は宣言の順に、同じ名前の `define` から取られます。`result` で組み立てたいなら、その出力を `outputs` の先頭へ移してください。",
                 "Write a `define` of the same name as that output (`define points(pts) : number = base_points * multiplier`); outputs are taken, in declaration order, from the binding of their own name. To assemble it with `result` instead, move that output to the top of `outputs`."
             ),
             X_E015,
@@ -1730,7 +1730,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A file has more than one `result` line. Only the first output can be assembled, so a second `result` merely replaces the first — which it used to do in silence."
             ),
             tr!(
-                "一本だけ残してください。ほかの出力は、その出力と同じ名前の `define` から取ります。",
+                "一本だけ残してください。ほかの出力の値は、その出力と同じ名前の `define` から取られます。",
                 "Keep one. The other outputs are taken from a `define` of the same name as the output."
             ),
             X_E016,
@@ -1745,7 +1745,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A `constraint` line is not `input comparison input`: either there is no comparison, or a side is not a single name."
             ),
             tr!(
-                "`constraint <入力> <= <入力>` の形にしてください。比較は `<=` `<` `>=` `>` の四つです。`A = B` を言いたいなら、`A <= B` と `A >= B` の二行に分けます。",
+                "`constraint <入力> <= <入力>` の形にしてください。比較は `<=` `<` `>=` `>` の四つです。`A = B` を言いたいなら、`A <= B` と `A >= B` の二行に分けてください。",
                 "Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. For `A = B`, write the two lines `A <= B` and `A >= B`."
             ),
             X_E017,
@@ -1755,11 +1755,11 @@ pub fn ledger() -> Vec<Entry> {
             "E018",
             tr!("`constraint` は入力どうしの関係です", "A `constraint` relates two inputs"),
             tr!(
-                "`constraint` の片側が入力でないか、順序の無い型のとき。制約は「呼び出し側が渡す値の組み合わせのうち、どれが起きるか」を言うものなので、両側とも `inputs` の名前で、金額・数量・率・number・日付のいずれかです。",
+                "`constraint` の片側が入力でないか、順序の無い型のとき。制約は「呼び出し側が渡す値の組み合わせのうち、どれが起きるか」を言うものなので、両側とも `inputs` の名前で、型は金額・数量・率・number・日付のどれかでなければなりません。",
                 "A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date."
             ),
             tr!(
-                "両側を `inputs` の名前にしてください。導出や定義は入力から計算されるので、関係は元の入力どうしで書きます。列挙や真偽に大小はありません。",
+                "両側を `inputs` の名前にしてください。導出や定義は入力から計算されるので、関係は元の入力どうしで書いてください。列挙や真偽に大小はありません。",
                 "Name inputs on both sides. A derived or defined value is computed from inputs, so write the relation between those inputs; an enum and a boolean have no order."
             ),
             X_E018,
@@ -1769,11 +1769,11 @@ pub fn ledger() -> Vec<Entry> {
             "E019",
             tr!("例が、生成コードが入口で断る入力です", "An example is an input the generated code refuses at its door"),
             tr!(
-                "例の入力が `constraint` を満たしていないとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で断ります。答えを主張できない入力です。範囲の外の例は、いままで検査を通り、その例から作ったベクタが生成コードに断られていました。",
+                "例の入力が `constraint` を満たしていないとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で断ります。そのため、規則はその入力の答えを決めていません。範囲の外の例は、いままで検査を通り、その例から作ったベクタが生成コードに断られていました。",
                 "An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range used to pass the check, and the vector made from it was then refused by the generated code."
             ),
             tr!(
-                "例の値を直してください。その値や組み合わせが本当に来るなら、範囲を広げるか、制約を消します。",
+                "例の値を直してください。その値や組み合わせが本当に来るなら、範囲を広げるか、制約を消してください。",
                 "Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint."
             ),
             X_E019,
@@ -1783,7 +1783,7 @@ pub fn ledger() -> Vec<Entry> {
             "E020",
             tr!("`elements` の宣言が正しくありません", "The `elements` declaration is not right"),
             tr!(
-                "`elements` に名前が無いか、二本あるとき。規則がたどる並びは一つで、その一要素ぶんのフィールドをそこに書きます。",
+                "`elements` に名前が無いか、二本あるとき。規則がたどる並びは一つで、`elements` にはその一要素ぶんのフィールドを書きます。",
                 "An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there."
             ),
             tr!(
@@ -1811,11 +1811,11 @@ pub fn ledger() -> Vec<Entry> {
             "E022",
             tr!("要素がゼロ件のときの答えが宣言されていません", "The answer for a sequence with no elements is not declared"),
             tr!(
-                "`fold` に `empty -> <値>` が無いとき。空の並びは必ず来ます。手で書いたループがいちばんよく落とすのがこの場合で、たいていは最初の要素をそのまま読んで落ちます。",
+                "`fold` に `empty -> <値>` が無いとき。空の並びは必ず来ます。手で書いたループがいちばんよく見落とすのがこの場合で、たいていは最初の要素をそのまま読もうとして、実行時に落ちます。",
                 "A `fold` has no `empty -> <value>`. An empty sequence always turns up, and it is the case a hand-written loop most often forgets — usually by reading the first element and falling over."
             ),
             tr!(
-                "`empty -> <値>` を足してください。何を返すかは業務の判断で、ツールが決められることではありません。",
+                "`empty -> <値>` を足してください。何を返すかは業務の判断で、rulec が決められることではありません。",
                 "Add `empty -> <value>`. What to answer is a business decision, and not one the tool can make."
             ),
             X_E022,
@@ -1826,7 +1826,7 @@ pub fn ledger() -> Vec<Entry> {
             "E023",
             tr!("最後まで見終えたときの答えが宣言されていません", "The answer for a walk that reached the end is not declared"),
             tr!(
-                "`fold` に `exhausted -> <値>` が無いとき。どの要素も打ち切らずに並びが尽きた場合の答えです。保持していた暫定の値をそのまま返すつもりでも、それは書いて初めて決まります。",
+                "`fold` に `exhausted -> <値>` が無いとき。どの要素も打ち切らずに並びが尽きた場合の答えです。保持していた暫定の値をそのまま返すつもりでも、書くまでは決まっていません。",
                 "A `fold` has no `exhausted -> <value>`: the answer when the sequence ran out and no element ended the walk. Answering with the value that was held is a choice, and it is made by writing it."
             ),
             tr!(
@@ -1845,7 +1845,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A verdict the table can produce has no arm in the `fold`: when an element lands on it, the walk has no move. It is the table's own completeness check, applied to the fold."
             ),
             tr!(
-                "行き先を足すか、表がその値を出さないようにしてください。逆に、どの要素も辿り着けない判定に行き先があるときは W115 が出ます。",
+                "行き先を足すか、表がその値を出さないようにしてください。逆に、どの要素もたどり着けない判定に行き先があるときは、W115 が出ます。",
                 "Add the arm, or stop the table producing that value. The other direction — an arm for a verdict nothing can reach — is W115."
             ),
             X_E024,
@@ -1871,7 +1871,7 @@ pub fn ledger() -> Vec<Entry> {
             "E026",
             tr!("`sequence` の書き方が正しくありません", "The `sequence` is not written correctly"),
             tr!(
-                "`sequence` のフィールドが `elements` のフィールドとそろっていないとき——余分なフィールドがある、フィールドが足りない、`->` がある、たどる並びそのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）。",
+                "`sequence` のフィールドが `elements` のフィールドとそろっていないとき。余分なフィールドがある、フィールドが足りない、`->` がある、たどる並びそのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）、のどれかです。",
                 "The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`)."
             ),
             tr!(
@@ -1929,7 +1929,7 @@ pub fn ledger() -> Vec<Entry> {
             "E030",
             tr!("`count` に範囲が要ります", "A `count` needs a range"),
             tr!(
-                "`count` の行に `range >=0 <=<上限>` が無いか、上限が無いか、下限が負のとき。範囲は二つの意味を持ちます——数えた結果を列に使ったときに完全性の検査が見る全体集合と、**並びの長さの上限**です。",
+                "`count` の行に `range >=0 <=<上限>` が無いか、上限が無いか、下限が負のとき。範囲には二つの意味があります。数えた結果を列に使ったときに完全性の検査が調べる値の全体と、**並びの長さの上限**です。",
                 "The `count` line has no `range >=0 <=<max>`, or no upper bound, or a negative lower one. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence**."
             ),
             tr!(
@@ -1943,7 +1943,7 @@ pub fn ledger() -> Vec<Entry> {
             "E031",
             tr!("`fold` と `count` は一緒に書けません", "A rule cannot have both a `fold` and a `count`"),
             tr!(
-                "一つの規則に `fold` と `count` の両方があるとき。どちらも同じ並びの終わり方で、`fold` は途中で打ち切れるので、止まった歩きの数え上げが何を意味するかが決まりません。",
+                "一つの規則に `fold` と `count` の両方があるとき。どちらも同じ並びをたどり終えたときの答えを決めるもので、`fold` は途中で打ち切れます。途中で止まったときに、数えた結果が何を意味するのかが決まりません。",
                 "One rule has both. They are two endings for the same walk, and a `fold` can stop partway: what a count means on a walk that stopped is not decided."
             ),
             tr!(
@@ -1957,11 +1957,11 @@ pub fn ledger() -> Vec<Entry> {
             "E032",
             tr!("取り込んだ列挙と宣言がずれています", "The declared enum and the imported one disagree"),
             tr!(
-                "`import proto` や `import jsonschema` が名指しした列挙の値と、この規則の `enum` の値（別名があれば別名）がそろっていないとき。どちら側にしか無い値も、名前で出ます。増えるのはたいてい proto の側で、**互換な変更として通ってしまう、規則の外での変更です**。",
+                "`import proto` や `import jsonschema` が名指しした列挙の値と、この規則の `enum` の値（別名があれば別名）がそろっていないとき。片方にしか無い値は、どちらの側のものも名前で出ます。値が増えるのはたいてい proto の側で、それは**規則の外での変更が、互換な変更として通ってしまったもの**です。",
                 "The values of the enum named by `import proto` or `import jsonschema` and the values of the rule's `enum` (their ASCII aliases, where they have them) are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule**."
             ),
             tr!(
-                "増えた値をこの規則の `enum` に足してください。値の名前に別名を付けて書く列挙なら、名前は自分で決めます。消えた値なら、この規則からも消します。値を足すと、次はその値に行が要るかを表が問います（E033）。",
+                "増えた値をこの規則の `enum` に足してください。値の名前に別名を付けて書く列挙なら、名前は自分で決めてください。消えた値なら、この規則からも消してください。値を足すと、次はその値に行が要るかを E033 が問います。",
                 "Add the new value to the rule's `enum`; where the enum gives its values names with aliases, the name is yours to choose. A value the contract dropped goes from the rule too. Once it is added, the table asks whether it needs a row (E033)."
             ),
             X_E032,
@@ -1972,11 +1972,11 @@ pub fn ledger() -> Vec<Entry> {
             "E033",
             tr!("取り込んだ列挙の値に、行も `default` もありません", "A value of an imported enum has neither a row nor `default`"),
             tr!(
-                "取り込んだ列挙の値が、どの行にも現れず、`default` も付いていないとき。自分で書いた値なら書き忘れの警告（W111）ですが、契約から来た値は**外の変更がまだ誰にも読まれていない**という意味なので、止めます。既定の行がある表では完全性検査が通ってしまい、新しい値には既定の行の答えが黙って当たります。",
+                "取り込んだ列挙の値が、どの行にも現れず、`default` も付いていないとき。自分で書いた値なら書き忘れの警告（W111）で済みますが、契約から来た値の場合は**外の変更がまだ誰にも読まれていない**ことを示すので、rulec はエラーにして止めます。既定の行がある表では完全性の検査が通ってしまい、新しい値には既定の行の答えが黙って当たります。",
                 "A value of an imported enum appears in no row and is not marked `default`. For a value you wrote yourself that is a forgotten line (W111); for a value that came through the contract it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default row's answer."
             ),
             tr!(
-                "その値の行を表に足すか、値の宣言に `default` を付けてください。`default` は「既定の行に落ちるのが意図です」という宣言で、扱いを決めた人がいることの印になります。",
+                "その値の行を表に足すか、値の宣言に `default` を付けてください。`default` は「既定の行に落ちるのが意図です」という宣言で、誰かがその値の扱いを決めたことを示します。",
                 "Add a row for it, or mark the value `default` in the declaration. `default` is a signature saying that falling through to the default row is what is meant — that someone decided how it is treated."
             ),
             X_E033,
@@ -1987,7 +1987,7 @@ pub fn ledger() -> Vec<Entry> {
             "E034",
             tr!("行ラベルが二度あります", "A row label appears twice"),
             tr!(
-                "同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは `overrides` の行、記録の trace、後の版が行を指す名前なので、一つの表の中で一意でなければなりません。",
+                "同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは、`overrides` の行や記録の trace、後の版が行を指すための名前なので、一つの表の中で一意でなければなりません。",
                 "Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table."
             ),
             tr!("どちらかのラベルを変えてください。", "Change one of the two labels."),
@@ -2003,7 +2003,7 @@ pub fn ledger() -> Vec<Entry> {
                 "An `overrides` line names a table that does not exist, or one declared below this table, or a row label (`table:label`) the table has no row of. A line whose shape cannot be read is reported the same way. The exception is written after what it excepts, so a target is always above."
             ),
             tr!(
-                "上で宣言した表か、その行（行の先頭にラベルを書き、`表:ラベル` で指す）を名指してください。優先する側を後に書きます。",
+                "上で宣言した表か、その行（行の先頭にラベルを書き、`表:ラベル` で指す）を名指してください。優先する側を後に書いてください。",
                 "Name a table declared above, or one of its rows (label the row at its head and write `table:label`). Write the side that takes precedence later."
             ),
             X_E035,
@@ -2029,7 +2029,7 @@ pub fn ledger() -> Vec<Entry> {
             "E037",
             tr!("引用した箇所のハッシュが固定されていません", "A cited fragment is not pinned"),
             tr!(
-                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。法令を箇所無しで `@法` とだけ引用したとき、箇所の書き方や、引用・宣言の形が読めないときも同じです（隣に置いたファイルは `@郵便` と丸ごと引用できます）。文書から引けるのは表なので、引用箇所は `表3`（文書順に三つめの表）か `table3` と書きます。それ以外の書き方は読めません。語として読めない箇所は `\"` で囲みます（`@osha \"§1910.157\"`）。ハッシュが無いと、写しが改訂されても check は何も言えません。",
+                "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。法令を箇所無しで `@法` とだけ引用したとき、箇所の書き方や、引用・宣言の形が読めないときも同じです（隣に置いたファイルは `@郵便` と丸ごと引用できます）。文書から引けるのは表なので、引用箇所は `表3`（文書の中で三つめの表）か `table3` と書いてください。それ以外の書き方は読めません。語として読めない箇所は `\"` で囲んでください（`@osha \"§1910.157\"`）。ハッシュが無いと、写しが改訂されても check は何も言えません。",
                 "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@source` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@postal`). A document's fragments are its tables, so `table3` (the third table in document order; `表3` is its Japanese spelling) is the only name read. A fragment the language cannot read as one word is quoted (`@osha \"§1910.157\"`). Without a pin, a revised copy passes check in silence."
             ),
             tr!(
@@ -2044,11 +2044,11 @@ pub fn ledger() -> Vec<Entry> {
             "E038",
             tr!("引用した箇所が変わっています", "A source fragment has changed"),
             tr!(
-                "規則に書いてあるハッシュと、規則の隣にある写しのハッシュが違うとき。写しを取り直した PR で落ちます。その箇所を引用している表・節・行を名指しするので、読み直すのはそこだけで済みます。",
+                "規則に書いてあるハッシュと、規則の隣にある写しのハッシュが違うとき。写しを取り直した PR で出ます。注に、その箇所を引用している表・節・行が出るので、読み直すのはそこだけで済みます。",
                 "The pinned digest differs from the digest of the copy beside the rule. It fails in the pull request that refreshed the copy, and names the tables, clauses and rows that cite the fragment, which is all there is to reread."
             ),
             tr!(
-                "写しの差分を読み、写した行がまだ正しければ `fix.text` のとおりハッシュの行を書き換えてください（`rulec source pin` でも書けます）。行が変わるなら、先に行を直します。",
+                "写しの差分を読み、写した行がまだ正しければ `fix.text` のとおりハッシュの行を書き換えてください（`rulec source pin` でも書けます）。行が変わるなら、先に行を直してください。",
                 "Read the copy's diff; if the transcribed rows still hold, rewrite the pin line as `fix.text` says (`rulec source pin` writes it too). If the rows have to change, change them first."
             ),
             X_E038,
@@ -2059,11 +2059,11 @@ pub fn ledger() -> Vec<Entry> {
             "E039",
             tr!("出典の写しがありません", "There is no copy of a source"),
             tr!(
-                "引用した箇所の写しが規則の隣に無いとき（法令なら `sources/law/<法令ID>@<日付>/<要素>.xml`、文書の表なら文書の隣の `料金表.md.fragments/表3.tsv`）、または `file` の出典そのものが読めないとき。check は通信もしませんし、文書の中身も見ません。写しが無ければ照合できません。",
+                "引用した箇所の写しが規則の隣に無いとき（法令なら `sources/law/<法令ID>@<日付>/<要素>.xml`、文書の表なら文書の隣の `料金表.md.fragments/表3.tsv`）、または `file` の出典そのものが読めないとき。check は通信をせず、文書の中身も見ないので、写しが無ければ照合できません。",
                 "The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `tariff.md.fragments/table3.tsv` beside the document for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare."
             ),
             tr!(
-                "`rulec source fetch <file.rule>` が、政府の法令データベース（e-Gov 法令検索）から引用箇所を取り、文書からは引いた表を取り出して、規則の隣に置きます。写しは git に入れてください。",
+                "`rulec source fetch <file.rule>` を実行してください。政府の法令データベース（e-Gov 法令検索）から引用箇所を取り、文書からは引いた表を取り出して、規則の隣に置きます。写しは git に入れてください。",
                 "`rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, and takes the cited tables out of a document, into the copies beside the rule. Commit the copies."
             ),
             X_E039,
@@ -2089,11 +2089,11 @@ pub fn ledger() -> Vec<Entry> {
             "E041",
             tr!("準用の読み替えが元の規則と合いません", "The bindings of an apply do not match the callee"),
             tr!(
-                "元の規則の入力に読み替えの無いものがあるとき、元の規則に無い入力や出力を名指ししたとき、元の規則の出力に付けた名前がこの規則に既にあるとき、`apply` の下の行の形が読めないとき。読み替えは元の規則の入力を一つ残らず書くものなので、足りなければ「読み替えが書いてない」のと同じです。",
+                "元の規則の入力に読み替えの無いものがあるとき、元の規則に無い入力や出力を名指ししたとき、元の規則の出力に付けた名前がこの規則に既にあるとき、`apply` の下の行の形が読めないとき。読み替えは元の規則の入力を一つ残らず書くものなので、一つでも足りなければ、読み替えを書いていないのと同じです。",
                 "A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten."
             ),
             tr!(
-                "元の規則の入力を一つずつ `<元の規則の入力> = <この規則の値>` で読み替え、出力は `<元の規則の出力> -> <名前>` で名前を付けてください。元の規則の入力と出力の名前は文面に並びます。",
+                "元の規則の入力を一つずつ `<元の規則の入力> = <この規則の値>` で読み替え、出力は `<元の規則の出力> -> <名前>` で名前を付けてください。元の規則の入力と出力の名前は、診断の注に並びます。",
                 "Bind each callee input with one `<callee input> = <value>` line, and rename an output with `<callee output> -> <name>`. The callee's input and output names are listed in the message."
             ),
             X_E041,
@@ -2109,7 +2109,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The type of a bound value differs from the callee input's (unit, tax kind, an enum against a number). Between two enums: a value of this rule's enum stands for no value of the callee's (values spelled the same on both sides map by themselves), a `with` names a value neither side has, or a literal is not a value of the callee's type."
             ),
             tr!(
-                "型を合わせてください。列挙は `<入力> = <値> with <この規則の値> -> <元の規則の値>, …` で、この規則の列挙の値を全部対応づけます。「『退職』とあるのは『任期の終了』と読み替える」を、そのまま書く形です。",
+                "型を合わせてください。列挙は `<入力> = <値> with <この規則の値> -> <元の規則の値>, …` の形で、この規則の列挙の値を全部対応づけてください。法令の「『退職』とあるのは『任期の終了』と読み替える」を、そのまま書く形です。",
                 "Make the types agree. For enums, `<input> = <value> with <this rule's value> -> <callee's value>, …` maps every value of this rule's enum; that is the shape of \"'retirement' is read as 'end of term'\"."
             ),
             X_E042,
@@ -2121,7 +2121,7 @@ pub fn ledger() -> Vec<Entry> {
             "E043",
             tr!("渡す値が元の規則の範囲か制約に収まりません", "A value passed leaves the callee's range or constraint"),
             tr!(
-                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（はみ出す値を一つ例に挙げます）、または元の規則の `constraint` がこの規則の宣言から導けないとき。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです。",
+                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（注に、はみ出す値の例が一つ出ます）、または元の規則の `constraint` がこの規則の宣言から導けないとき。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです。",
                 "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval."
             ),
             tr!(
@@ -2137,7 +2137,7 @@ pub fn ledger() -> Vec<Entry> {
             "E044",
             tr!("その規則は準用できません", "That rule cannot be applied"),
             tr!(
-                "元の規則が読めないとき、元の規則が `check` を通らないとき（出たコードを添えます）、元の規則自身が `apply` を持つとき、元の規則が並びを順に見ていく規則（`elements`、`fold`、`count`）のとき、元の規則の表や節が元の規則自身の列挙を出力に持つとき。通らない規則を準用しても通らない規則になるだけで、準用の準用は一段に書き直してから書きます。",
+                "元の規則が読めないとき、元の規則が `check` を通らないとき（注に、出たコードが並びます）、元の規則自身が `apply` を持つとき、元の規則が並びを順に見ていく規則（`elements`、`fold`、`count`）のとき、元の規則の表や節が元の規則自身の列挙を出力に持つとき。通らない規則を準用しても、通らない規則になるだけです。準用の準用は、一段の準用に書き直す必要があります。",
                 "The callee cannot be read, does not pass `check` (the codes are listed), itself has an `apply`, walks a sequence (`elements`, `fold`, `count`), or has a table or clause that produces one of its own enums. A broken rule expanded is a broken rule, and a provision applied through another is written flattened to one level."
             ),
             tr!(
@@ -2169,7 +2169,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The `clause` heading lacks a name, the `->` or the output; the `when` or `then` line is missing or appears twice; or the `when` condition is not `<column> <cell> and …` (a part without a column, a column twice, a column without a condition). A clause is a one-row table, so it needs exactly one condition and one value."
             ),
             tr!(
-                "`clause <名前>(<別名>) -> <出力>` の下に `when <列> <セル> and …`（条件が無ければ `when always`）と `then <値>` を一行ずつ書いてください。優先する相手があれば `overrides <相手>` を足します。",
+                "`clause <名前>(<別名>) -> <出力>` の下に `when <列> <セル> and …`（条件が無ければ `when always`）と `then <値>` を一行ずつ書いてください。優先する相手があれば `overrides <相手>` を足してください。",
                 "Under `clause <name>(<alias>) -> <output>`, write one `when <column> <cell> and …` line (`when always` when there is no condition) and one `then <value>` line. Add `overrides <target>` when it takes precedence over something."
             ),
             X_E046,
@@ -2180,11 +2180,11 @@ pub fn ledger() -> Vec<Entry> {
             "E047",
             tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"),
             tr!(
-                "入力・出力・`derive`・`count` の宣言の行に、`range`・`round`・`contract_only` のどれにも属さない語が残っているとき。このツールは行から欲しい語を探して残りを踏み越える読み方をするので、こうした語はいままで黙って捨てられていました。範囲の後ろに書いた税区分（`range >=0円 <=10000円 incl_tax`）も、単位が単位として読めずに余った分も、どちらも通っていました。範囲は完全性検査が量化する全体集合で、生成コードの入口ガードでもあるので、境界が一つ落ちたまま「完全」と答えることになります。",
+                "入力・出力・`derive`・`count` の宣言の行に、`range`・`round`・`contract_only` のどれにも属さない語が残っているとき。rulec のパーサーは行から欲しい語を探して残りを読み飛ばすので、こうした語はいままで黙って捨てられていました。範囲の後ろに書いた税区分（`range >=0円 <=10000円 incl_tax`）も、単位が単位として読めずに余った分も、どちらも通っていました。範囲は完全性の検査が調べる値の全体で、生成コードの入口のガードでもあるので、境界が一つ落ちると、片側が欠けた範囲のまま「完全」と答えることになります。",
                 "A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered \"complete\" with one side missing."
             ),
             tr!(
-                "その語を消すか、宣言の一部として正しい形に直してください。税区分や刻みは型の括弧の中（`money[円, incl_tax]`、`rate[step 0.1%]`）で、範囲は `range >=<値> <=<値>`、丸めは `round <向き>(<格子>)` です。",
+                "その語を消すか、宣言の一部として正しい形に直してください。税区分や刻みは型の括弧の中に（`money[円, incl_tax]`、`rate[step 0.1%]`）、範囲は `range >=<値> <=<値>`、丸めは `round <向き>(<刻み>)` の形で書いてください。",
                 "Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[JPY, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`."
             ),
             X_E047,
@@ -2195,11 +2195,11 @@ pub fn ledger() -> Vec<Entry> {
             "E049",
             tr!("桁区切りのカンマは書けません", "A thousands separator cannot be written"),
             tr!(
-                "数を `1,000` や `1,949,000円` のように、1〜3 桁のあとに `,` と 3 桁の組を続けて書いたとき。`,` はセルの中で集合の要素を区切る記号なので、そのままでは二つ以上の値に読まれます。いままでは黙ってそう読んでいて、数の列の `<=1,000` は `<=1` として検査を通り、金額の列では `1` に単位が無いという的外れな E103 で止まっていました。文書の数字をそのまま写すと、ここに当たります。",
+                "数を `1,000` や `1,949,000円` のように、1〜3 桁のあとに `,` と 3 桁の組を続けて書いたとき。`,` はセルの中で集合の要素を区切る記号なので、そのままでは二つ以上の値に読まれます。いままでは黙ってそう読んでいて、数の列の `<=1,000` は `<=1` として検査を通り、金額の列では `1` に単位が無いという的外れな E103 で止まっていました。文書の数字をそのまま写すと、このエラーが出ます。",
                 "A number is written as a document writes it, one to three digits followed by `,` and groups of three: `1,000`, `1,949,000JPY`. Inside a cell `,` separates the members of a set, so as it stands the figure reads as more than one value. It used to be read that way without a word: `<=1,000` in a column of numbers passed the check as `<=1`, and in a column of money it stopped at an E103 about `1` having no unit. Copying a document's figures as they stand lands here."
             ),
             tr!(
-                "カンマを外して `1000` と書いてください。桁を区切りたいときは `1_000` と書けます。`fix.text` が書き直したリテラルです。",
+                "カンマを外して `1000` と書いてください。桁を区切りたいときは `1_000` と書けます。`fix.text` には、書き直したリテラルが入っています。",
                 "Take the commas out and write `1000`; to group the digits, write `1_000`. `fix.text` is the literal rewritten."
             ),
             X_E049,
@@ -2214,7 +2214,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A type that is ordered but has no arithmetic is used with `+ - × ÷`. There are three: `date`, `temperature[℃]`/`temperature[℉]`, and `sound[dB]`. A ℃ has a displaced zero, so `temp × 2` means nothing; a decibel is a logarithm, so adding two of them is not two sounds' worth; and a date is a calendar day, with no type to hold the result of subtracting one. All three appear in rules only as thresholds, so comparison and `range` are kept and the arithmetic is dropped."
             ),
             tr!(
-                "閾値として比べるか、`range` に書いてください。差や倍率そのものが業務ルールなら、計算した結果を入力として受け取るか、表で引きます。二つの日付のあいだの日数は、呼び出し側で数えて `number` か `duration` として渡します。",
+                "閾値として比べるか、`range` に書いてください。差や倍率そのものが業務ルールなら、計算した結果を入力として受け取るか、表で引いてください。二つの日付のあいだの日数は、呼び出し側で数えて `number` か `duration` として渡してください。",
                 "Compare it against a threshold, or write it in a `range`. Where a difference or a multiple is itself the rule, take the computed value as an input, or look it up in a table. The days between two dates are counted on the calling side and passed in as a `number` or a `duration`."
             ),
             X_E048,
@@ -2239,7 +2239,7 @@ pub fn ledger() -> Vec<Entry> {
             "E051",
             tr!("`carry` か `over` が宣言と噛み合いません", "`carry` or `over` does not fit the declarations"),
             tr!(
-                "`carry` の左が入力でないとき、右が出力でないとき、二つが同じ列挙でないとき、`over` の表が無いとき、その表が持ち越す出力を決めていないとき。状態が有限個の値の列挙だから、呼び出しの並びについての主張が決まります。",
+                "`carry` の左が入力でないとき、右が出力でないとき、二つが同じ列挙でないとき、`over` の表が無いとき、その表が持ち越す出力を決めていないとき。状態が有限個の値の列挙なので、呼び出しの並びについての主張を確かめられます。",
                 "The left of `carry` is not an input, the right is not an output, the two are not of one enum, the `over` table does not exist, or it does not decide the carried output. It is because the state is an enum of finitely many values that the claims about sequences of calls are decidable."
             ),
             tr!(
@@ -2253,11 +2253,11 @@ pub fn ledger() -> Vec<Entry> {
             "E052",
             tr!("ステートマシンが名指しした状態が噛み合いません", "A state the machine names does not fit"),
             tr!(
-                "`initial`・`final`・`never` の行に、持ち越す状態の列挙に無い値があるとき。または `never` の両側に同じ状態があるとき。その状態に留まる一回の呼び出しで破れるので、言いたいことになりません。",
+                "`initial`・`final`・`never` の行に、持ち越す状態の列挙に無い値があるとき。または `never` の両側に同じ状態があるとき。その主張は、その状態に留まる最初の呼び出しで破れるので、意味のある主張になりません。",
                 "An `initial`, `final` or `never` line names a value the enum of the carried state does not have, or `never` names one state on both sides — which the first call that stays in it breaks, so it cannot be what anyone means."
             ),
             tr!(
-                "列挙の値の綴りで書いてください。`never` の両側には、別の状態を書きます。",
+                "列挙の値の綴りで書いてください。`never` の両側には、別の状態を書いてください。",
                 "Spell the value as the enum does. Write different states on the two sides of `never`."
             ),
             X_E052,
@@ -2267,11 +2267,11 @@ pub fn ledger() -> Vec<Entry> {
             "E053",
             tr!("`once` の行が宣言と噛み合いません", "The `once` line does not fit the declarations"),
             tr!(
-                "`once` の出力が宣言されていないとき、持ち越す状態の出力であるとき、セルが `-` のとき。状態は、留まる呼び出しのたびに同じ値を返すので、`once` で数えると留まるだけで破れます。セルは出力の型に照らして、表のセルと同じ検査を受けます（E103 など）。",
+                "`once` の出力が宣言されていないとき、持ち越す状態の出力であるとき、セルが `-` のとき。持ち越す状態は、その状態に留まる呼び出しのたびに同じ値を返すので、`once` で数えると、留まるだけで主張が破れます。セルは出力の型に照らして、表のセルと同じ検査を受けます（E103 など）。",
                 "The output of `once` is not declared, is the carried state, or the cell is `-`. A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. The cell is held to the output's type exactly as a table's cell is (E103 and the rest)."
             ),
             tr!(
-                "`once <出力> <セル>` の出力には、持ち越す状態ではない出力を書きます（`once 返金額 >0円`）。状態について言うなら `never … after …` を使ってください。",
+                "`once <出力> <セル>` の出力には、持ち越す状態ではない出力を書いてください（`once 返金額 >0円`）。状態について言うなら `never … after …` を使ってください。",
                 "Name an output other than the carried state (`once refund >0JPY`). Say it about states with `never … after …`."
             ),
             X_E053,
@@ -2300,7 +2300,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for the carried input; or it lacks a column for another input. The first call starts from the `initial` state and every later one from the state the call before it answered, so the carried input has no column."
             ),
             tr!(
-                "`scenario <名前>(<ascii>)` の直下に表を書きます。見出しは、持ち越す入力のほかのすべての入力、`->`、すべての出力です。持ち越す状態が無いなら、一行ずつの `examples` で書けます。",
+                "`scenario <名前>(<ascii>)` の直下に表を書いてください。見出しは、持ち越す入力のほかのすべての入力、`->`、すべての出力です。持ち越す状態が無いなら、一行ずつの `examples` で書けます。",
                 "Write the table right under `scenario <name>(<ascii>)`. The header is every input but the carried one, then `->`, then every output. With no state carried from one call to the next, write the rows as `examples`."
             ),
             X_E055,
@@ -2310,7 +2310,7 @@ pub fn ledger() -> Vec<Entry> {
             "E056",
             tr!("`held` の行が宣言と噛み合いません", "The `held` line does not fit the declarations"),
             tr!(
-                "`held` に、入力でない名前か、持ち越す入力か、同じ名前を二度書いたとき。`held` は、一つの案件が最初の呼び出しから最後の呼び出しまで同じ値で渡す入力を言います（注文の金額、申し込んだ人の区分）。検査は、そういう入力を呼び出しごとに変えた並びを反例にしなくなります。",
+                "`held` に、入力でない名前か、持ち越す入力か、同じ名前を二度書いたとき。`held` は、一つの案件が最初の呼び出しから最後の呼び出しまで同じ値で渡す入力を言います（注文の金額、申し込んだ人の区分）。書いておくと、検査は、そういう入力を呼び出しごとに変えた並びを、主張が破れる例として挙げなくなります。",
                 "`held` names something that is not an input, the carried input, or one name twice. `held` says which inputs one case passes with the same value on every call, from its first to its last — the amount of an order, the class of the person who applied — and the check then stops offering sequences of calls that change one of them as counterexamples."
             ),
             tr!(
@@ -2356,7 +2356,7 @@ pub fn ledger() -> Vec<Entry> {
                 "An expression — on the right of `=`, of `->` in a `fold`, and so on — cannot be read to its last token: nothing on the right of an operator (`x +`), a `(` never closed, two values with no operator between them (`amount tax`), a sign stuck to a number (`amount -100JPY`). What could be read used to become the expression and the rest was dropped: `amount tax` passed the check as `amount`, and `x +` took its whole declaration with it."
             ),
             tr!(
-                "抜けている演算子や括弧を補ってください。引くときは `金額 - 100円` のように、記号の後ろを空けます。記号と数字がくっついていると、負の数として読まれます。",
+                "抜けている演算子や括弧を補ってください。引くときは `金額 - 100円` のように、記号の後ろを空けてください。記号と数字がくっついていると、負の数として読まれます。",
                 "Supply the missing operator or parenthesis. To subtract, leave a space after the sign, as in `amount - 100JPY`: a sign touching the digits makes a negative number."
             ),
             X_E059,
@@ -2401,7 +2401,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A literal has the shape of a date (`2026-04-01`) but no such day: the month is outside 1 to 12, or the day is past the end of its month (`2026-02-30`, `2026-01-99`). Such a date used to be read by its shape alone: the checker counted on from the first of the month (January 99th was April 9th), the generated Python stopped at run time, and JavaScript's `Date` would have rolled it over quietly, so the languages disagreed."
             ),
             tr!(
-                "ある日付に直してください。月末を言いたいなら、その月の最後の日を書きます（`2026-02-28`）。",
+                "ある日付に直してください。月末を言いたいなら、その月の最後の日を書いてください（`2026-02-28`）。",
                 "Write a day that exists. For the end of a month, write its last day (`2026-02-28`)."
             ),
             X_E062,
@@ -2415,7 +2415,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A cell of a table, of the examples or of a sequence holds something a cell cannot: words after a comparison (`<=0JPY + false`), a word after a value (`false 0JPY`), a word that is no value (`+`), a header column with no name. What could be read used to become the cell and the rest was dropped, and a cell that could not be read at all was dropped whole, so every cell after it moved one column to the left."
             ),
             tr!(
-                "セルに書けるのは、値一つ、`-`、`none`、比較、コンマで区切った値の集合、`not:` と集合、`starts_with` と文字列です。一つの列に二つの条件を書くなら、比較を並べます（`>=1 <10`）。",
+                "セルに書けるのは、値一つ、`-`、`none`、比較、カンマで区切った値の集合、`not:` と集合、`starts_with` と文字列です。一つの列に二つの条件を書くなら、比較を並べてください（`>=1 <10`）。",
                 "A cell holds one value, `-`, `none`, a comparison, a set of values separated by commas, `not:` with a set, or `starts_with` with a string. Two conditions on one column are two comparisons side by side (`>=1 <10`)."
             ),
             X_E063,
@@ -2426,11 +2426,11 @@ pub fn ledger() -> Vec<Entry> {
             "E064",
             tr!("行が見出しと合いません", "The row does not fit the header"),
             tr!(
-                "表・並び・手順の例・例の行のセルの数が、見出しの列の数と違うとき。または、最後の `|` の後ろに語があるとき（行を閉じる `|` の書き忘れ）。いままでは、閉じていない行の最後のセルが黙って捨てられ、セルの数の合わない行もそのまま読まれていました。参照評価器と生成コードがその行を別々に読み、答えが割れていました。例の表では、見出しに出力の列が無いか行の期待値が足りなければ E111、並びの列が無ければ E025 が、どの列かを先に言います。",
+                "表・並び・手順の例・例の行のセルの数が、見出しの列の数と違うとき。または、最後の `|` の後ろに語があるとき（行を閉じる `|` の書き忘れ）。いままでは、閉じていない行の最後のセルが黙って捨てられ、セルの数の合わない行もそのまま読まれていました。参照評価器と生成コードがその行を別々に読み、答えが割れていました。例の表では、見出しに出力の列が無いか行の期待値が足りなければ E111 が、並びの列が無ければ E025 が先に出て、どの列かを言います。",
                 "A row of a table, of a sequence, of a scenario or of the examples has a different number of cells from the header's columns, or words follow its last `|` — the closing bar was left off. The last cell of such a row used to be dropped with nothing said, and a row whose cells did not match was read as it stood; the reference evaluator and the generated code then read the row two different ways and answered differently. In the examples, a header without a column for an output, or a row short of an expected value, is E111, and a header without the sequence's column is E025: each names the column first."
             ),
             tr!(
-                "一つの列に一つのセルを書き、行を `|` で閉じてください。どの値でもよい列には `-` を書きます。",
+                "一つの列に一つのセルを書き、行を `|` で閉じてください。どの値でもよい列には `-` を書いてください。",
                 "Write one cell per column and close the row with `|`. A column that takes any value gets `-`."
             ),
             X_E064,
@@ -2444,7 +2444,7 @@ pub fn ledger() -> Vec<Entry> {
                 "What follows `range from` is not `koyomi \"<file>\" date <name of a date>`, or it is written on an input that is not a date, or on an output, a derive or a field of an element. The days a koyomi date comes to can only be the range of a date the caller passes."
             ),
             tr!(
-                "日付の入力に `range from koyomi \"<ファイル>\" date <日付の名前>` と書きます。ファイルは規則のディレクトリからのパスです。",
+                "日付の入力に `range from koyomi \"<ファイル>\" date <日付の名前>` と書いてください。ファイルは、規則のディレクトリからの相対パスです。",
                 "Write `range from koyomi \"<file>\" date <name of a date>` on a date input. The file is a path from the rule's directory."
             ),
             X_E065,
@@ -2458,7 +2458,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached."
             ),
             tr!(
-                "それを起こす入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足します。値に専用の行が要らないなら、列挙の宣言に `default` を付けます。",
+                "それを起こす入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足してください。値に専用の行が要らないなら、列挙の宣言に `default` を付けてください。",
                 "Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration."
             ),
             X_E101,
@@ -2468,11 +2468,11 @@ pub fn ledger() -> Vec<Entry> {
             "E102",
             tr!("どの入力にも当てはまらない行があります", "Unreachable row: the row never matches"),
             tr!(
-                "先行する行にすべて覆われているか、上流の表が決して出さない値を名指ししているとき。形は二つあり、文面が原因を書き分けます。",
+                "先行する行にすべて覆われているか、上流の表が決して出さない値を名指ししているとき。形は二つあり、診断の文が原因を書き分けます。",
                 "Every input the row would take is already taken by an earlier row, or the row names a value that the upstream table never produces. The two forms are told apart in the wording."
             ),
             tr!(
-                "その行が新しい仕様なら、覆っている行より上へ移してください。不要なら削除します。上流が出さない値を指しているなら、上流の表にその値を出す行を足すか、この行を消します。",
+                "その行が新しい仕様なら、覆っている行より上へ移してください。不要なら削除してください。上流が出さない値を指しているなら、上流の表にその値を出す行を足すか、この行を消してください。",
                 "If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row."
             ),
             X_E102,
@@ -2482,11 +2482,11 @@ pub fn ledger() -> Vec<Entry> {
             "E103",
             tr!("単位の混同: 型の違う値を混ぜています", "Unit mismatch: values of different types are being mixed"),
             tr!(
-                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときもこれです。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）もこれです。列の列挙に無い値や群をセルに書いたときもこれで、出力のセルと、二つの列挙の値を混ぜた群も含みます。",
+                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときにも出ます。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）にも出ます。列の列挙に無い値やグループをセルに書いたときにも出ます。出力のセルに書いたときと、グループが二つの列挙の値を混ぜているときも同じです。",
                 "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums."
             ),
             tr!(
-                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書きます。刻みなら、型と同じ単位で書きます（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書きます。",
+                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書いてください。刻みなら、型と同じ単位で書いてください（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書いてください。",
                 "Move one side into a table. \"A surcharge that depends on weight\" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without."
             ),
             X_E103,
@@ -2497,7 +2497,7 @@ pub fn ledger() -> Vec<Entry> {
             "E104",
             tr!("数値の出力に丸めの宣言がありません", "A numeric output declares no rounding"),
             tr!(
-                "数量・金額・率の出力に `round` が無いとき。端数がどう決まるかを宣言しないと、生成コードが黙って決めてしまいます。式が端数を生む場合は、丸め方で円がいくら動くかを数字で見せます。",
+                "数量・金額・率の出力に `round` が無いとき。端数がどう決まるかを宣言しないと、生成コードが黙って決めてしまいます。式が端数を生む場合は、丸め方で答えがどれだけ動くかが、診断に数字で出ます。",
                 "A quantity, money or rate output has no `round`. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer."
             ),
             tr!(
@@ -2512,11 +2512,11 @@ pub fn ledger() -> Vec<Entry> {
             "E105",
             tr!("行の重なり: 同じ入力が二つ以上の行に当てはまります", "Overlapping rows: the same input matches two or more rows"),
             tr!(
-                "`policy unique` の表で、両方に当てはまる入力を実際に構成できたとき。構成できなかった重なりは W114 に落ちます。上の表が同時には出さない値の組でしか重ならない対は、重なりとして報告しません（E102 がそういう行を死んだ行と呼ぶのと同じ読みです）。",
+                "`policy unique` の表で、両方に当てはまる入力を実際に構成できたとき。構成できなかった重なりは W114 に落ちます。上の表が同時には出さない値の組でしか重ならない対は、重なりとして報告しません（E102 が、そういう行をどの入力にも当てはまらない行とするのと同じ読み方です）。",
                 "In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead. A pair that meets only on a combination the tables above never produce together is not reported, which is the reading that also lets E102 call such a row dead."
             ),
             tr!(
-                "出力が違うなら、どちらが正しいか決めて行を直してください。順序に意味を持たせたいなら `policy first` を宣言します。出力まで同じなら、片方を削ります。",
+                "出力が違うなら、どちらが正しいか決めて行を直してください。順序に意味を持たせたいなら `policy first` を宣言してください。出力まで同じなら、片方を削ってください。",
                 "If the outputs differ, decide which is right and fix the rows; to let the order decide, declare `policy first`. If even the outputs agree, delete one of the rows."
             ),
             X_E105,
@@ -2531,7 +2531,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451JPY` in a table rounded `up(10JPY)` — is stopped."
             ),
             tr!(
-                "リテラルを刻みに載せてください（`1451円` は `1450円` か `1460円`）。その額が本当に正しいなら、丸めの刻みのほうを直します。",
+                "リテラルを刻みに載せてください（`1451円` は `1450円` か `1460円`）。その値が本当に正しいなら、丸めの刻みのほうを直してください。",
                 "Put the literal on the grid (`1451JPY` becomes `1450JPY` or `1460JPY`). If the amount really is right, change the grid instead."
             ),
             X_E106,
@@ -2546,7 +2546,7 @@ pub fn ledger() -> Vec<Entry> {
                 "Running a row of `examples` through the reference evaluator gives something other than the value written. **Which row of which table fired** is attached. `examples` is an executable specification."
             ),
             tr!(
-                "表が正しいなら期待値を直してください。期待値が業務の真実なら、当てはまった行のほうを直します。どちらを直すかは、出典（規約、Excel、いま動いている実装）が決めます。",
+                "表が正しいなら期待値を直してください。期待値のほうが正しいなら、当てはまった行を直してください。どちらを直すかは、出典（規約、Excel、いま動いている実装）が決めます。",
                 "If the table is right, fix the expected value. If the expected value is the business truth, fix the row that fired. Which one to fix is settled by the source: the written rule, the spreadsheet, or the legacy implementation."
             ),
             X_E107,
@@ -2561,7 +2561,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value."
             ),
             tr!(
-                "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは円が動く業務の判断なので、ツールは勝手に決めません。",
+                "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは答えを変える業務の判断なので、rulec は決めません。",
                 "Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it."
             ),
             X_E108,
@@ -2591,7 +2591,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The column's type cannot be lowered into the region IR. **Seeing this is a bug in rulec itself.** It is the internal breakwater that stops a table from being skipped silently, put in after the same accident happened twice, with dates and with optional."
             ),
             tr!(
-                "その列を、いま検査できる型（真偽・列挙・数量・金額・率・日付・optional）に直してください。そのうえで報告してください — 素通りより止まるほうが正しいという判断でこの検査があります。",
+                "その列を、いま検査できる型（真偽・列挙・数量・金額・率・日付・optional）に直してください。そのうえで報告してください。黙って素通りするより止まるほうが正しい、という判断でこの検査を置いています。",
                 "Change the column to a type the check handles today (bool, enum, quantity, money, rate, date, optional). Then report it: this check exists because stopping is better than passing silently."
             ),
             X_E110,
@@ -2635,7 +2635,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The condition of `define … : bool` is neither one input or derived value compared with a constant, nor a comparison of two values whose difference cannot be subtracted (two dates, say). Comparing two numbers directly is the usual case."
             ),
             tr!(
-                "差を導出として宣言してから定数と比べてください。`define bigger : bool = a >= b` は `derive gap(gap) : money[円, incl_tax] = a - b  range …` を足して `| gap | >=0円 |` と書き換えます。そのほうが厳密に解析できます。",
+                "差を導出として宣言してから定数と比べてください。`define bigger : bool = a >= b` は `derive gap(gap) : money[円, incl_tax] = a - b  range …` を足して `| gap | >=0円 |` と書き換えられます。そのほうが厳密に解析できます。",
                 "Declare the difference as a derived value and compare that against a constant. `define bigger : bool = a >= b` becomes `derive gap(gap) : money[JPY, incl_tax] = a - b  range …` and the cell `>=0JPY`. The analysis is exact that way."
             ),
             X_E113,
@@ -2674,7 +2674,7 @@ pub fn ledger() -> Vec<Entry> {
             "E116",
             tr!("行の金額が、引いた写しに無いか、別の見出しの下にあります", "A row's amount is not in the copy it cites, or is under another heading there"),
             tr!(
-                "行の出力の値が、その行（またはその表）が `@出典 表1` で引いている写しのどこにも出てこないとき。行のセルの語（`関東`）と一字一句同じ見出しが写しにあれば、その見出しの行と列の中だけを探します。隣の行の金額は写しのどこかにはあるので、表全体を探したのでは取り違えを見逃すからです。比べるのは金額だけです。閾値は写すときに書き換わります（`1,949,000円まで` は `<=1949000円` になる）が、金額は書き換わらないからです。写しの `5/1,000` や `1,000分の5` は 0.5% と読みます。写しは `rulec source fetch` が文書から取り出したもので、check が見るのはその写しであって文書そのものではありません。",
+                "行の出力の値が、その行（またはその表）が `@出典 表1` で引いている写しのどこにも出てこないとき。行のセルの語（`関東`）と一字一句同じ見出しが写しにあれば、その見出しの行と列の中だけを探します。隣の行の金額は写しのどこかにはあるので、表全体を探したのでは取り違えを見逃すからです。比べるのは金額だけです。閾値は写すときに書き換わります（`1,949,000円まで` は `<=1949000円` になる）が、金額は書き換わらないからです。rulec は、写しの `5/1,000` や `1,000分の5` を 0.5% と読みます。写しは `rulec source fetch` が文書から取り出したもので、check が見るのはその写しであって文書そのものではありません。",
                 "The output value of a row is nowhere in the copy the row or its table cites with `@source table1`. Where the copy has a heading that says exactly a word of the row's cells (`Kanto`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up. Only amounts are compared: a threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) and an amount is not. A copy's `5/1,000` (or, in Japanese, `1,000分の5`) reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself."
             ),
             tr!(
@@ -2694,7 +2694,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The three of `allocate(<amount>, <running total>, <whole>)` are not the shape a share needs. All three are names with declared ranges, the amount and the running total cannot be negative, the whole is positive, and a `constraint` says the running total never passes the whole."
             ),
             tr!(
-                "足りないものを書いてください。`constraint 累計 <= 全体` がないと、配る分が配る額を超えることがあり、明細の合計が総額に一致しません。負が混じると、下に丸めるのか零へ丸めるのかで言語ごとに答えが割れます。",
+                "足りないものを書いてください。`constraint 累計 <= 全体` がないと、配る分が配る額を超えることがあり、明細の合計が総額に一致しません。負の値が混じると、下へ丸めるのか 0 の方向へ丸めるのかで、言語ごとに答えが割れます。",
                 "Write what is missing. Without `constraint <running total> <= <whole>` a share can exceed the amount being handed out and the lines no longer add up to the total. Below zero the targets disagree about which way to round."
             ),
             X_E117,
@@ -2709,7 +2709,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1JPY)` and the rest)."
             ),
             tr!(
-                "綴りと引数の数を見てください。多い引数は黙って捨てられ、少なければ答えが決まりません——どちらも以前の版では素通りしていて、ジェネレーターのほうで初めて行き止まりになっていました。",
+                "綴りと引数の数を確かめてください。引数が多ければ余りは黙って捨てられ、少なければ答えが決まりません。どちらも以前の版では検査を素通りしていて、ジェネレーターで初めて止まっていました。",
                 "Check the spelling and the count. A spare argument is dropped on the floor and a missing one leaves no answer — both used to pass unnoticed, and only the generator ran out of cases."
             ),
             X_E118,
@@ -2719,11 +2719,11 @@ pub fn ledger() -> Vec<Entry> {
             "E120",
             tr!("`from` が入力の型と合いません", "A `from` does not fit the input's type"),
             tr!(
-                "`from` の返すものが、それを受ける入力の型と合わないとき。`any` と `all` は `bool` を、`count` は `number` を返します。パスの先にあるものの型が入力と合わないとき（契約が文字列と言っているフィールドを `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値がフィールドの型と合わないときも、これです。契約は値がどう運ばれるかを言うので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で来ます。",
+                "`from` の返すものが、それを受ける入力の型と合わないとき。`any` と `all` は `bool` を、`count` は `number` を返します。パスの先にあるものの型が入力と合わないとき（契約が文字列と言っているフィールドを `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値がフィールドの型と合わないときにも出ます。契約が決めるのは値の運ばれ方なので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で届きます。",
                 "What a `from` yields does not fit the input that takes it. `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
             ),
             tr!(
-                "型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けます。値そのものが欲しいなら `from <shape の名前>.<フィールド>` です。`where` の値に単位は書けません——契約に単位は無く、目盛りの違う数どうしを黙って比べることになるからです。",
+                "型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けてください。値そのものが欲しいなら `from <shape の名前>.<フィールド>` と書いてください。`where` の値に単位は書けません。契約の値には単位が無いので、書けば目盛りの違う数どうしを黙って比べることになるからです。",
                 "Correct the type or the `from`. A count is taken by a `number` input with a range, whether the elements passed by a `bool`, and the value itself by `from <shape>.<field>`. A `where` value carries no unit: a contract has none, and comparing a scaled number with a raw one is the thing this must not do quietly."
             ),
             X_E120,
@@ -2735,11 +2735,11 @@ pub fn ledger() -> Vec<Entry> {
             "E121",
             tr!("`from` のパスが契約にありません", "The contract has no such path"),
             tr!(
-                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` の見るフィールドが要素に無いときの三つです。どこまで届いたかと、そこにあったフィールドの名前を出します。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
+                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` の見るフィールドが要素に無いときの三つです。注に、パスがどこまで届いたかと、そこにあったフィールドの名前が出ます。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
                 "A `from` path is not in the contract of the `shape` it starts at. Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin."
             ),
             tr!(
-                "綴りを直すか、契約のほうが動いたのならパスを書き直してください。**これが出るのが目的です**——契約がフィールドの名前を変えたとき、手書きのつなぎのコードなら実行時まで気づかず、ここなら生成の前に止まります。",
+                "綴りを直すか、契約のほうが動いたのならパスを書き直してください。**このエラーはそのためにあります。** 契約がフィールドの名前を変えたとき、手書きのつなぎのコードなら実行するまで気づきませんが、rulec は生成の前に止まります。",
                 "Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here."
             ),
             X_E121,
@@ -2755,7 +2755,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A threshold of a row that cites puts its boundary value on the other side from the copy. A threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `up to 60cm` and `over 60cm` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60-80`), with the word in another column (a Japanese insurance premium table puts `円以上`, \"yen or more\", in the heading over its own column), or with words on both sides, is left alone."
             ),
             tr!(
-                "写しを読み直して直してください。`fix.text` はこのセルの境界の側だけを入れ替えた形です——向きは表の幾何であって写しが決めることではないので、`<` と `<=` の入れ替えしか書きません。一つの境界を写し間違えると、それを分け合う二つの行の両方が出ます。境界が別のところ（後の通知、本文の但し書き）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
+                "写しを読み直して直してください。`fix.text` は、このセルの境界の側だけを入れ替えた形です。比べる向きは表の形で決まり、写しが決めることではないので、`fix.text` は `<` と `<=` の入れ替えしか書きません。一つの境界を写し間違えると、それを分け合う二つの行の両方にこのエラーが出ます。境界が別のところ（後の通知、本文の但し書き）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
                 "Reread the copy and correct it. `fix.text` is this cell with that one boundary's side swapped and nothing else: the direction is the table's geometry, not the copy's to decide, so only `<` and `<=` are exchanged. One boundary mistranscribed is reported on both of the rows that share it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from."
             ),
             X_E119,
@@ -2783,11 +2783,11 @@ pub fn ledger() -> Vec<Entry> {
             "E122",
             tr!("契約が通す値を、規則が断ります", "The contract lets through a value the rule refuses"),
             tr!(
-                "`from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、\"\"、0 件）として届きます。`.proto` の文字列から読む日付は、\"\" を通すかどうかを見ます。フィールドをまたぐ条件（CEL の式、`oneof`、JSON Schema の `allOf`・`anyOf`・`oneOf`・`not`・`if`）が一つのフィールドの幅を狭めていれば、それも読みます。JSON Schema の型に null があるのに、入力が省略できないときも、これです。読めない規則（剰余や文字列の関数を使う CEL など）は、無いものとして扱います。契約を実際より広く読むので、要らないところで言うことはあっても、見逃すことはありません。",
+                "`from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、\"\"、0 件）として届きます。`.proto` の文字列から読む日付は、\"\" を通すかどうかを見ます。フィールドをまたぐ条件（CEL の式、`oneof`、JSON Schema の `allOf`・`anyOf`・`oneOf`・`not`・`if`）が一つのフィールドの幅を狭めていれば、それも読みます。JSON Schema の型に null があるのに、入力が省略できないときにも出ます。読めない規則（剰余や文字列の関数を使う CEL など）は、無いものとして扱います。契約を実際より広く読むので、要らないところで出ることはあっても、見逃すことはありません。",
                 "A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, \"\", no elements) with no rule applied; a date read from a `.proto` string is held to whether \"\" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken."
             ),
             tr!(
-                "どちらを直すかは人が決めます。その値が来ないはずなら、契約を狭めてください。`fix.text` が、契約に書く注釈そのものです（`narrow_contract`）。来るのなら、規則の範囲を広げるか列挙に値を足して、その値の答えを決めてください。`where` で絞った件数の下限のように契約に書けない前提もあり、そのときは `fix.kind` が `none` です。読む値が無いことがあるなら、入力を `T?` にしてください。無いときは none として読みます。",
+                "どちらを直すかは、人が決めることです。その値が来ないはずなら、契約を狭めてください。`fix.text` が、契約に書く注釈そのものです（`narrow_contract`）。来るのなら、規則の範囲を広げるか列挙に値を足して、その値の答えを決めてください。`where` で絞った件数の下限のように契約に書けない前提もあり、そのときは `fix.kind` が `none` です。読む値が無いことがあるなら、入力を `T?` にしてください。値が無いとき、規則はそれを none として読みます。",
                 "Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none."
             ),
             X_E122,
@@ -2815,11 +2815,11 @@ pub fn ledger() -> Vec<Entry> {
             "E123",
             tr!("契約が、規則の `constraint` を破る組み合わせを通します", "The contract lets through a combination the rule's `constraint` refuses"),
             tr!(
-                "`constraint` の両側が、同じ `shape` から `from` で読む入力で、契約の検証を通るリクエストのなかに、両方の値が入力の範囲に入っているのに `constraint` を満たさないものがあるとき。契約がフィールドのあいだに置く条件（`.proto` のメッセージの CEL、`oneof`、JSON Schema の組み合わせ）を読んだうえで、それでも破る組み合わせが残るかを確かめます。見つかれば、その値を例に出します。読めない規則は無いものとして扱うので、見逃すことはありません。",
+                "`constraint` の両側が、同じ `shape` から `from` で読む入力で、契約の検証を通るリクエストのなかに、両方の値が入力の範囲に入っているのに `constraint` を満たさないものがあるとき。契約がフィールドのあいだに置く条件（`.proto` のメッセージの CEL、`oneof`、JSON Schema の組み合わせ）を読んだうえで、それでも破る組み合わせが残るかを確かめ、見つかれば、その値を例に出します。読めない規則は無いものとして扱うので、見逃すことはありません。",
                 "Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken. The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed."
             ),
             tr!(
-                "どちらを直すかは人が決めます。その組み合わせが来ないはずなら、契約で約束してください。`.proto` なら、`fix.text` がメッセージに書く `(buf.validate.message).cel` です（`narrow_contract`）。JSON Schema には二つのフィールドの値を比べる書き方がないので、`fix.kind` は `none` です。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。",
+                "どちらを直すかは、人が決めることです。その組み合わせが来ないはずなら、契約で約束してください。`.proto` なら、`fix.text` がメッセージに書く `(buf.validate.message).cel` です（`narrow_contract`）。JSON Schema には二つのフィールドの値を比べる書き方がないので、`fix.kind` は `none` です。来るのなら、`constraint` を外して、その組み合わせのときの答えを表で決めてください。",
                 "Which side to change is a person's decision. If the combination cannot occur, promise it in the contract: for a `.proto`, `fix.text` is the `(buf.validate.message).cel` to write on the message (`narrow_contract`). JSON Schema has no way to compare the values of two fields, so there `fix.kind` is `none`. If it can occur, take the `constraint` off and decide in the tables what the rule answers for it."
             ),
             X_E123,
@@ -2922,7 +2922,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A rule that takes a range from a koyomi date (`range from koyomi`) is checked by a rulec with no koyomi joined: the binary of rulec's own crate, or the page in the browser. The check does not fall back to every day of the range; the file counts as not checked, and the run exits 2."
             ),
             tr!(
-                "`ritsu rulec check <ファイル>` か `ritsu check <ディレクトリ>` で走らせます。どちらも koyomi の口から日の集合を受け取ります。",
+                "`ritsu rulec check <ファイル>` か `ritsu check <ディレクトリ>` で走らせてください。どちらも、koyomi から日の集合を受け取ります。",
                 "Run `ritsu rulec check <file>` or `ritsu check <dir>`; both hand the set of days over through koyomi's port."
             ),
             X_E129,
@@ -2933,11 +2933,11 @@ pub fn ledger() -> Vec<Entry> {
             "E130",
             tr!("koyomi の日付がとる日を読めません", "The days of the koyomi date cannot be read"),
             tr!(
-                "`range from koyomi` が名指す日付の日を、koyomi が答えないとき。ファイルが無い、koyomi の検査を通らない、その名前の日付が無い、入力の組み合わせが koyomi の確かめる数を超える、途中で計算が止まる入力がある、とる日が一つも無い、のどれかです。koyomi が言うことを注に書きます。範囲全体で確かめ直すことはしません。",
+                "`range from koyomi` が名指す日付の日を、koyomi が答えないとき。ファイルが無い、koyomi の検査を通らない、その名前の日付が無い、入力の組み合わせが koyomi の確かめる数を超える、途中で計算が止まる入力がある、とる日が一つも無い、のどれかです。注には koyomi のメッセージが出ます。範囲全体で確かめ直すことはしません。",
                 "koyomi does not answer for the days of the date `range from koyomi` names: the file is not there, does not pass koyomi's check, or has no date of that name; the inputs come to more combinations than koyomi checks; the computation stops at some input; or the date comes to no day at all. What koyomi says is in the notes. The check does not fall back to every day of the range."
             ),
             tr!(
-                "koyomi のファイルを `ritsu koyomi check` で通るようにし、日付の名前を合わせます。",
+                "koyomi のファイルを `ritsu koyomi check` で通るように直し、日付の名前を合わせてください。",
                 "Make the koyomi file pass `ritsu koyomi check`, and name a date it has."
             ),
             X_E130,
@@ -2995,7 +2995,7 @@ pub fn ledger() -> Vec<Entry> {
                 "In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed."
             ),
             tr!(
-                "意図どおりならこのままで構いません（CI の `check --diff-base` は新たに生じた対だけを報告します）。後の行を優先したいなら、その行を先の行より上へ移してください。全対を見るには `--show-shadow` を付けます。",
+                "意図どおりならこのままで構いません（CI の `check --diff-base` は新たに生じた対だけを報告します）。後の行を優先したいなら、その行を先の行より上へ移してください。すべての対を見るには `--show-shadow` を付けてください。",
                 "If it is intended, leave it: `check --diff-base` in CI reports only newly created pairs. To let the later row win, move it above the earlier one. `--show-shadow` lists every pair."
             ),
             X_W105,
@@ -3024,7 +3024,7 @@ pub fn ledger() -> Vec<Entry> {
                 "An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way."
             ),
             tr!(
-                "入力が範囲の入口検査としてだけ効いているなら、宣言に `contract_only` を付けて黙らせてください。列挙の値が既定行に吸われるのが正しいなら、値の宣言に `default` を付けます。どちらでもないなら、その列を表に足すか、宣言を消します。",
+                "入力が範囲の入口検査としてだけ効いているなら、宣言に `contract_only` を付けて黙らせてください。列挙の値が既定行に落ちるのが正しいなら、値の宣言に `default` を付けてください。どちらでもないなら、その列を表に足すか、宣言を消してください。",
                 "If the input serves only as a range check at the entry, mark the declaration `contract_only`. If an enum value is meant to fall through to the default row, mark the value `default`. Otherwise either add the column to a table, or delete the declaration."
             ),
             X_W111,
@@ -3052,7 +3052,7 @@ pub fn ledger() -> Vec<Entry> {
                 "`source` の下にハッシュの行があるのに、その箇所を引用する `@` が規則のどこにも無いとき。引用を消したあとの残りです。",
                 "A pin line sits under a `source` line, but no `@` in the rule cites that fragment. It is what remains after a citation was removed."
             ),
-            tr!("その行を消してください。`rulec source pin` が消します。", "Remove the pin line; `rulec source pin` does."),
+            tr!("その行を消してください。`rulec source pin` でも消せます。", "Remove the pin line; `rulec source pin` does."),
             X_W119,
             &["E037"],
         )
@@ -3061,11 +3061,11 @@ pub fn ledger() -> Vec<Entry> {
             "W120",
             tr!("写しの値を、どの行も使っていません", "The copy states a value no row uses"),
             tr!(
-                "表が `@出典 表1` で丸ごと引いている写しに、数だけでできたセルがあって、その値をどの行も使っていないとき。行を一本落としても完全性検査には出ません——落ちた行の入力は、残った行のどれかに当てはまってしまうからです。数だけのセルしか見ないので、`2026年4月1日改定` のような文は金額として数えません。`<=3kg` の一行で写しの `1kg`・`2kg`・`3kg` をまとめて写した場合も出ません。",
+                "表が `@出典 表1` で丸ごと引いている写しに、数だけでできたセルがあって、その値をどの行も使っていないとき。行を一本落としても、完全性の検査には出ません。落ちた行の入力は、残った行のどれかに当てはまってしまうからです。数だけのセルしか見ないので、`2026年4月1日改定` のような文は金額として数えません。`<=3kg` の一行で写しの `1kg`・`2kg`・`3kg` をまとめて写した場合も出ません。",
                 "A cell of the copy a table cites whole with `@source table1` is nothing but a number, and no row uses that value. A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `revised 1 April 2026` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them."
             ),
             tr!(
-                "写しと見比べて、落とした行がないか確かめてください。改定で行が増えたのなら、その行をここに写します。引用した表のうち一部だけを写したのなら（発地ごとの運賃表から、一つの発地だけを写したときなど）、引用を `table` の行から、写した行それぞれの末尾へ移してください。行の引用は「この行はここから来た」としか言わないので、残りは問われなくなり、金額の突き合わせ（E116）は残ります。",
+                "写しと見比べて、落とした行がないか確かめてください。改定で行が増えたのなら、その行をここに写してください。引用した表のうち一部だけを写したのなら（発地ごとの運賃表から、一つの発地だけを写したときなど）、引用を `table` の行から、写した行それぞれの末尾へ移してください。行の引用は「この行はここから来た」としか言わないので、写していない残りの行は問われなくなります。金額の突き合わせ（E116）は残ります。",
                 "Compare the table with the copy and check that no row was left out; if a revision added a row, transcribe it. If the table transcribes only part of the fragment — one origin of a tariff sheet that lists several — move the citation from the `table` line onto the end of each row that came from it. A row's citation says only where that row came from, so the rest goes unasked while the amounts are still held to the copy (E116)."
             ),
             X_W120,
@@ -3094,11 +3094,11 @@ pub fn ledger() -> Vec<Entry> {
             "W117",
             tr!("効かない例外です", "An exception with no effect"),
             tr!(
-                "`overrides` で優先すると書いた相手の行と、この表の行が一つも交わらないとき。優先は、両方に当てはまる入力があるときにどちらが勝つかを決めるものなので、交わらなければ何も決めていません。ただし書が本文の一部を切り出す形になっていない、という転記の誤りの徴候です。",
+                "`overrides` で優先すると書いた相手の行と、この表の行が一つも交わらないとき。優先は、両方に当てはまる入力があるときにどちらが勝つかを決めるものなので、交わらなければ何も決めていません。たいていは、ただし書が本文の一部を切り出す形に写されていない、という写し間違いです。",
                 "No row of this table meets a row of what its `overrides` line names. Precedence decides which wins when an input matches both, so with no meeting rows the line decides nothing. It is the usual sign of a proviso transcribed so that it no longer carves out part of the main rule."
             ),
             tr!(
-                "原文と見比べて、この表の行の条件か相手の行の条件を直してください。本当に交わらないなら、`overrides` の行を消します。",
+                "原文と見比べて、この表の行の条件か相手の行の条件を直してください。本当に交わらないなら、`overrides` の行を消してください。",
                 "Compare with the source and fix the conditions of this table's rows or of the target's. If they really never meet, drop the `overrides` line."
             ),
             X_W117,
@@ -3113,7 +3113,7 @@ pub fn ledger() -> Vec<Entry> {
                 "An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there."
             ),
             tr!(
-                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記が言います。引数やローカル変数の名前は、その本体の外までは隠しません。だからそこで出るのは予約語のときだけです。使わない生成先なら、このままで構いません。",
+                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記に出ます。引数やローカル変数の名前は、その本体の外までは隠しません。そのため、引数やローカル変数の名前でこの警告が出るのは、予約語のときだけです。使わない生成先なら、このままで構いません。",
                 "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it."
             ),
             X_W121,
@@ -3124,7 +3124,7 @@ pub fn ledger() -> Vec<Entry> {
             "W115",
             tr!("どの要素もこの判定にはなりません", "No element can land on this verdict"),
             tr!(
-                "`fold` にその判定の行き先があるのに、表のどの行もその判定を出さないとき。E024 の裏返しで、こちらは穴ではなく届かない行き先です。書き忘れではなく、表のほうが変わった跡であることが多い。",
+                "`fold` にその判定の行き先があるのに、表のどの行もその判定を出さないとき。E024 の裏返しで、こちらは穴ではなく、どの要素も届かない行き先です。たいていは書き間違いではなく、表のほうが変わった跡です。",
                 "A `fold` has an arm for a verdict no row produces. It is the other side of E024: not a hole but an arm nothing reaches, and more often the trace of a table that changed than of an arm written by mistake."
             ),
             tr!(
@@ -3139,11 +3139,11 @@ pub fn ledger() -> Vec<Entry> {
             "W114",
             tr!("未確認の重なり: 両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both rows"),
             tr!(
-                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出が入力を共有する形と、真偽の `define` の中の閾値は、消去が決めるようになったのでここには落ちてきません。残るのは、消去が有理数の上で解いているために決まらない形です——上の例の `倍` は必ず偶数なので `5円` ちょうどにはなりませんが、有理数には `2.5円` があります。予算（400 本）を超えた系と、単位をまたぐ系も同じで、どれも「証明できなかった」であって「起こりうる」ではありません。",
+                "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出が入力を共有する形と、真偽の `define` の中の閾値は、消去が決めるようになったのでここには落ちてきません。残るのは、消去が有理数の上で解いているために決まらない形です。下の最小の再現の `倍` は必ず偶数なので `5円` ちょうどにはなりませんが、有理数には `2.5円` があります。不等式の数が上限（400 本）を超えた場合と、単位をまたぐ場合も同じです。どれも「証明できなかった」という意味で、「起こりうる」という意味ではありません。",
                 "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input and the thresholds inside a boolean `define` no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `twice` above is always even and never exactly `5JPY`, but `2.5JPY` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible."
             ),
             tr!(
-                "その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当てはまれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当てはまる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",
+                "その条件を同時に満たす入力が存在するなら、行を直してください（出力が違うので、当てはまれば矛盾です）。存在しないなら、このままで構いません。生成コードには、万一その条件に当てはまる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",
                 "If an order satisfying both conditions can exist, fix the rows: the outputs differ, so a match is a contradiction. If none can exist, leave it — the generated code carries a guard that returns an error rather than silently picking the earlier row."
             ),
             X_W114,
@@ -3265,7 +3265,7 @@ pub fn markdown_all() -> String {
     );
     o.push_str(&tr!("# rulec の診断\n\n", "# rulec diagnostics\n\n"));
     o.push_str(&tr!(
-        "rulec が出しうるコードの全部と、いつ出るか、どう直すか。コードと JSON の形は安定 API で、文面だけが良くなります。一件だけ読むには `rulec explain E101`。\n\n",
+        "rulec が出しうるコードの全部について、いつ出るかと、どう直すかを書いています。コードと JSON の形は安定 API で、変わるのは文面の改善だけです。一件だけ読むときは `rulec explain E101` を使ってください。\n\n",
         "Every code rulec can print, what makes it appear, and how to fix it. The code and the JSON shape are a stable API; only the prose improves. For one of them: `rulec explain E101`.\n\n"
     ));
     o.push_str(&tr!(

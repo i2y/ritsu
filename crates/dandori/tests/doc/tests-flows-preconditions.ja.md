@@ -78,7 +78,7 @@ flowchart TD
 <details>
 <summary><code>check</code> · refund_check v1 · <code>rules/refund_check.rule</code></summary>
 
-<!-- rulec 0.23.0 が refund_check.rule (sha256:e7003e2fa202) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
+<!-- rulec 0.23.0 が refund_check.rule (sha256:e7003e2fa202) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 refund_check v1
 
 Whether a refund is paid back at once or reviewed. A refund never asks for more than was paid, which the rule takes for granted: a precondition dandori cannot show where the amount asked comes from a task with no range, so the workflow checks it when it runs (tests/flows/preconditions.flow)
@@ -98,7 +98,7 @@ Whether a refund is paid back at once or reviewed. A refund never asks for more 
 
 ## 型
 
-列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+列挙は**閉じた**有限集合です。値を足すと、その値を扱っていない表は完全性の検査を通らなくなります。
 
 - **path**（2 値）— at_once、review
 
@@ -141,7 +141,7 @@ Whether a refund is paid back at once or reviewed. A refund never asks for more 
 <details>
 <summary><code>settle</code> · settlement v1 · <code>rules/settlement.rule</code></summary>
 
-<!-- rulec 0.23.0 が settlement.rule (sha256:524fd7442add) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
+<!-- rulec 0.23.0 が settlement.rule (sha256:524fd7442add) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 settlement v1
 
 The settlement run a payment day falls in. The days are the ones payment_terms.cal pays on, so the table names those and nothing in between; dandori carries no range of days, so the workflow checks the day it gives when it runs (tests/flows/preconditions.flow)
@@ -150,7 +150,7 @@ The settlement run a payment day falls in. The days are the ones payment_terms.c
 
 | 名前 | 型 | 範囲 | 注記 |
 |---|---|---|---|
-| pay_day | date | 2026-02-10 〜 2027-01-10 | `koyomi "../dates/payment_terms.cal" date payment` がとる日だけ（12 日: 2026-02-10, 2026-03-10, 2026-04-10, 2026-05-10, 2026-06-10, 2026-07-10, 2026-08-10, 2026-09-10, 2026-10-10, 2026-11-10, 2026-12-10, 2027-01-10）。表はこの日の上で確かめ、ほかの日は生成コードが入口で断ります |
+| pay_day | date | 2026-02-10 〜 2027-01-10 | `koyomi "../dates/payment_terms.cal" date payment` がとる日だけ（12 日: 2026-02-10, 2026-03-10, 2026-04-10, 2026-05-10, 2026-06-10, 2026-07-10, 2026-08-10, 2026-09-10, 2026-10-10, 2026-11-10, 2026-12-10, 2027-01-10）。`rulec check` は表をこの日についてだけ確かめ、ほかの日は生成コードが入口で断ります |
 
 ## 出力
 
@@ -160,7 +160,7 @@ The settlement run a payment day falls in. The days are the ones payment_terms.c
 
 ## 型
 
-列挙は**閉じた**有限集合です。値を足すと、それを見ていない表が完全性検査で割れます。
+列挙は**閉じた**有限集合です。値を足すと、その値を扱っていない表は完全性の検査を通らなくなります。
 
 - **run**（3 値）— first_half、second_half、year_end
 
