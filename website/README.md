@@ -17,7 +17,7 @@ website/
 │   ├── ns/             # what a namespace IRI opens: yuen.md (see below)
 │   └── playground/     # the playground: ritsu.wasm, projects.json, playground.js and .css
 ├── docs-ja/            # the Japanese pages (and ns/yuen.md)
-├── playground/         # the projects the playground opens, from which projects.json is written
+├── playground/         # the shop the playground opens; projects.json is written from it, rulec's corpus and dandori's examples
 ├── tools/
 │   └── make_wasm.sh    # builds docs/playground/ritsu.wasm
 ├── rulec/              # rulec's site: its own zensical.toml, build.sh and pages (its README)

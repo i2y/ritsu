@@ -11,6 +11,7 @@ the browser.
     <button class="pg-add" type="button"></button>
     <button class="pg-remove" type="button"></button>
     <button class="pg-revert" type="button" hidden></button>
+    <button class="pg-share" type="button"></button>
     <span class="pg-status"></span>
   </div>
   <div class="pg-files" role="tablist" aria-label="The project's files"></div>
@@ -29,9 +30,11 @@ the browser.
 
 A project here is a handful of files, one to a tab. Every time a file changes, the page hands all of
 them to the module, which runs the command as it would run in a directory holding the same files:
-`ritsu check .` for the project, and the generator or the page of the file that is open. The tests
-hold what this page answers to what the `ritsu` binary prints and writes on the same files, word for
-word (`crates/ritsu/tests/playground.rs`).
+`ritsu check .` for the project, and the generator or the page of the file that is open. The list
+holds a small shop where every language meets, the examples of rulec and dandori, and an empty
+project to start from one file of your own. The tests hold what this page answers to what the
+`ritsu` binary prints and writes on the same files, word for word
+(`crates/ritsu/tests/playground.rs`).
 
 ## What to try
 
@@ -70,6 +73,60 @@ billing's layer against ordering. One line in one file, and three languages say 
 
 *A small shop, in Japanese* in the list is the same project with Japanese names, and the same steps
 work there.
+
+## The examples of rulec and dandori
+
+Under **rulec: one rule** in the list are the five rules rulec's own playground opened, and under
+**dandori: a flow and the files it reads** every flow dandori's playground opened, each in a project
+with what it reads (its rules, the descriptions of the APIs it calls, its child flow, its dates file
+and its book) at the paths it names them by. They are made from the files those pages were made
+from, rulec's corpus and dandori's examples, and the tests hold them to those files. This page lists
+the English versions, and the Japanese page the Japanese ones.
+
+1. **Find the row a table lacks.** *The table with a row missing* is the table on rulec's front page
+   without its last row. rulec does not say the table is incomplete: it names the input that falls
+   through, `An input that matches no row: Destination = Overseas, Weight = 2001g`, and gives the
+   shape of the row that closes it. *The whole table* has the row. Change `<=2kg` to `<=6kg` in it,
+   and rulec says `Overlapping rows: the same input matches row 1 and row 2`, with an input that
+   matches both.
+2. **Read rules of other shapes.** *Tables in stages* reads what one table decides in the next. *A
+   bigger rule* has two lines out of the same inputs meet again further down, and its page for
+   people is laid out in that shape. *Walking a list* takes a list whose length the caller decides,
+   and the form on its page for people has an *Add a row* button.
+3. **Put a first draft right, one error at a time.** *A first draft of the hotel booking, with
+   errors* calls two rules and Stripe's API, and check finds four errors in it. The last says the
+   workflow can end while the PaymentIntent is still `processing`, or back in
+   `requires_payment_method`, and gives the run that gets there. At the end of line 91, after `fail
+   CardDeclined "The card was declined"`, add `leaving pi`: the workflow hands the PaymentIntent over
+   as it is, and three errors are left.
+4. **Change a rule a flow calls.** A flow's rules are files of its project, each in a tab of its own.
+   dandori's playground could only show them; here, change one, and the flow's check reads the rule
+   as you left it. The page for people of a rule is what `rulec doc` renders for whoever approves
+   it, and a case can be tried on it.
+5. **Build a version for its platform.** *Hotel booking · for Temporal* opens on its flow; press
+   *generate*, and the list beside it starts on Temporal. Pick Step Functions, and nothing is written:
+   the version waits for Stripe's webhook as an event sent to the workflow and releases the hold in
+   `on cancel`, which Step Functions cannot do, and it names no EventBridge connection to call Stripe
+   through and no Lambda function for the rule. *Hotel booking · for AWS* is the version written for
+   it.
+
+## Start from one file
+
+To try one rule or one flow of your own, pick **An empty project** in the list. It has no file yet,
+so *add a file* is the way in: give the file a path that ends in the extension of its language
+(`fee.rule`, `order.flow`, `days.cal`, `stock.book`, …), and paste the file into its tab. A file it
+reads, such as a rule a flow calls, is one more file of the project, at the path the first one names
+it by.
+
+## Share what you made
+
+*copy a link* puts a link to the project as it stands into the address bar, and onto the clipboard
+where the browser allows it. The link holds the project, the file that is open, which of check,
+generate and the page for people is showing, the target, and every file you changed, added or
+removed, packed into the link itself. Nothing is stored anywhere: whoever opens the link has the
+same files in the same tabs, and *undo my edits* takes them back to the project as it opens. The
+links dandori's playground gave, such as `#flow=examples/hotel/temporal/hotel.flow&view=build`, open
+the same flow here.
 
 ## What is not here
 

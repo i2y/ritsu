@@ -1,20 +1,30 @@
 //! The playground on the site (website/docs/playground, DESIGN 8.7): the page answers what the
 //! `ritsu` binary answers in a directory holding the same files, the module it runs answers what the
-//! library answers, and the page starts in Chrome and shows what `ritsu check` prints.
+//! library answers, and the page starts in Chrome, shows what `ritsu check` prints, lists every
+//! project it opens, and opens the links it reads and the links it gives.
 //!
 //! Two of its files are committed products: projects.json, the projects the page opens, written
-//! from website/playground/ (`RITSU_BLESS=1` writes it anew), and ritsu.wasm, built by
-//! website/tools/make_wasm.sh. Both can go stale, and these tests are what says so. Node drives the
-//! module, and Chrome the page (ritsu-testkit's: `RITSU_CHROME`, else where macOS keeps it, else on
-//! the PATH). A test that cannot find what it needs prints `SKIP: ritsu: …` and passes.
+//! from the files they are made of (`RITSU_BLESS=1` writes it anew), and ritsu.wasm, built by
+//! website/tools/make_wasm.sh. Both can go stale, and these tests are what says so. The projects
+//! are the shop (website/playground/), an empty one, the examples of rulec's page (one rule each,
+//! from rulec's corpus and the table on rulec's front page) and the examples of dandori's page
+//! (each flow with every file it reads, from dandori's examples). Node drives the module, and
+//! Chrome the page (ritsu-testkit's: `RITSU_CHROME`, else where macOS keeps it, else on the PATH).
+//! A test that cannot find what it needs prints `SKIP: ritsu: …` and passes.
 
+use ritsu_base::fs::{Files, Kind, Memory, Meta};
 use ritsu_base::naming::Tool;
+use ritsu_base::text::Lang;
 use ritsu_testkit::{Need, TempDir, need, ready, skip};
 use ritsu_wasm::playground::{self, Request};
 use serde_json::{Value, json};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::rc::Rc;
 use std::time::Duration;
 
 fn repo() -> PathBuf {
@@ -25,12 +35,46 @@ fn site() -> PathBuf {
     repo().join("website/docs/playground")
 }
 
-/// The projects the page opens, in the order it lists them: English first, then the Japanese
-/// version beside it (website/playground/<name>/), each with the file it opens on.
-const PROJECTS: [(&str, &str); 2] = [("shop", "proto/shop/v1/order.proto"), ("shop.ja", "proto/shop/v1/order.proto")];
+/// A file of the workspace, by its path from the workspace's root.
+fn read_repo(rel: &str) -> String {
+    std::fs::read_to_string(repo().join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"))
+}
 
-/// Every file under a directory, by its path from it, in the order the page shows them: the files
-/// of the languages in the order `ritsu check` checks them (DESIGN 6.1), then by path.
+/// One project the page opens: the name a link opens it by, the group its list puts it in, the
+/// page that lists it (`en` or `ja`; both when None), the file it opens on (none for the empty
+/// project), the target the generator of its flow starts on, and its files by their paths in the
+/// project. `from` says where the text of each file comes from (what projects.json keys it by),
+/// and is empty in what the page has.
+#[derive(Clone, Debug, Default)]
+struct Project {
+    name: String,
+    group: String,
+    lang: Option<String>,
+    open: String,
+    target: Option<String>,
+    files: Vec<(String, String)>,
+    from: Vec<String>,
+}
+
+impl Project {
+    /// The languages the page answers this project in: those of the pages that list it.
+    fn langs(&self) -> Vec<&'static str> {
+        match self.lang.as_deref() {
+            Some("ja") => vec!["ja"],
+            Some(_) => vec!["en"],
+            None => vec!["en", "ja"],
+        }
+    }
+}
+
+/// The order the page shows a project's files in: the files of the languages in the order `ritsu
+/// check` checks them (DESIGN 6.1), then by path.
+fn in_order(files: &mut [(String, String)]) {
+    let rank = |p: &str| ritsu_project::project::kind_of(p).and_then(|t| ritsu_project::ORDER.iter().position(|o| *o == t)).unwrap_or(ritsu_project::ORDER.len());
+    files.sort_by(|(a, _), (b, _)| (rank(a), a).cmp(&(rank(b), b)));
+}
+
+/// Every file under a directory, by its path from it, in the order the page shows them.
 fn files_of(dir: &Path) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
@@ -45,36 +89,292 @@ fn files_of(dir: &Path) -> Vec<(String, String)> {
             }
         }
     }
-    let rank = |p: &str| ritsu_project::project::kind_of(p).and_then(|t| ritsu_project::ORDER.iter().position(|o| *o == t)).unwrap_or(ritsu_project::ORDER.len());
-    out.sort_by(|(a, _), (b, _)| (rank(a), a).cmp(&(rank(b), b)));
+    in_order(&mut out);
     out
 }
 
-/// projects.json: `{"projects": [{"name", "open", "files": [[path, text], ...]}]}`, a file to a line.
-fn record() -> String {
-    let mut s = String::from("{\n  \"projects\": [\n");
-    for (i, (name, open)) in PROJECTS.iter().enumerate() {
-        let files = files_of(&repo().join("website/playground").join(name));
-        assert!(files.iter().any(|(p, _)| p == open), "{name} has no {open}");
-        s.push_str(&format!("    {{\n      \"name\": {},\n      \"open\": {},\n      \"files\": [\n", json!(name), json!(open)));
-        let lines: Vec<String> = files.iter().map(|(p, t)| format!("        {}", json!([p, t]))).collect();
-        s.push_str(&lines.join(",\n"));
-        s.push_str(&format!("\n      ]\n    }}{}\n", if i + 1 < PROJECTS.len() { "," } else { "" }));
+/// The shop the page opens on, in English and then in Japanese (website/playground/<name>/), open
+/// on the contract that has just gained a value.
+fn shop(name: &str) -> Project {
+    let files = files_of(&repo().join("website/playground").join(name));
+    let open = "proto/shop/v1/order.proto";
+    assert!(files.iter().any(|(p, _)| p == open), "{name} has no {open}");
+    let from = files.iter().map(|(p, _)| format!("website/playground/{name}/{p}")).collect();
+    Project { name: name.into(), group: "ritsu".into(), open: open.into(), files, from, ..Project::default() }
+}
+
+/// The examples of rulec's page (website/rulec/docs/playground/), one rule each, in the order of its
+/// buttons, with the file each comes from in English and in Japanese, as rulec's tests/website.rs
+/// holds the page's copies to them. The first two are the table on rulec's front page, its last row
+/// taken out and whole.
+const RULEC: [(&str, &str, &str); 5] = [
+    ("gap", "website/rulec/tools/overview.rule", "website/rulec/tools/overview-ja.rule"),
+    ("full", "website/rulec/tools/overview.rule", "website/rulec/tools/overview-ja.rule"),
+    ("multi", "crates/rulec/tests/corpus/parcel_rate.rule", "crates/rulec/tests/corpus/送料.rule"),
+    ("big", "crates/rulec/tests/corpus/Claude利用料.rule", "crates/rulec/tests/corpus/クーポン割引.rule"),
+    ("walk", "crates/rulec/tests/corpus/shipment_surcharge.rule", "crates/rulec/tests/corpus/買物かごの送料.rule"),
+];
+
+/// The name of a rule's file, as rulec's corpus names it: the rule's name on its first line (`rule
+/// 送料(shipping_fee) v4` is in 送料.rule, `rule parcel_rate v1` in parcel_rate.rule).
+fn rule_file(text: &str) -> String {
+    let name = text.lines().next().and_then(|l| l.strip_prefix("rule ")).and_then(|l| l.split(['(', ' ']).next()).expect("a rule begins with its name");
+    format!("{name}.rule")
+}
+
+/// One example of rulec's page, as a project of one file: the rule as the page showed it. The
+/// front page's table opens with comments about the picture, which the page left out.
+fn rulec_example(key: &str, lang: &str, source: &str) -> Project {
+    let whole = read_repo(source);
+    let (text, from) = match key {
+        "gap" | "full" => {
+            let full = whole.lines().skip_while(|l| l.starts_with('#') || l.is_empty()).collect::<Vec<_>>().join("\n") + "\n";
+            if key == "full" {
+                (full, format!("{source}, below its comments"))
+            } else {
+                let rows: Vec<&str> = full.trim_end().lines().collect();
+                (rows[..rows.len() - 1].join("\n") + "\n", format!("{source}, below its comments, without its last row"))
+            }
+        }
+        _ => (whole, source.to_string()),
+    };
+    let path = rule_file(&text);
+    let name = if lang == "ja" { format!("rulec/{key}.ja") } else { format!("rulec/{key}") };
+    Project { name, group: "rulec".into(), lang: Some(lang.into()), open: path.clone(), files: vec![(path, text)], from: vec![from], ..Project::default() }
+}
+
+/// The root of dandori's crate, from which its examples name each other.
+fn dandori_root() -> PathBuf {
+    repo().join("crates/dandori")
+}
+
+/// dandori's examples in the order dandori's page listed them, and the versions of each in the order
+/// it listed them (dandori's tests/playground.rs).
+const EXAMPLES: [&str; 6] = ["hotel", "order", "fulfillment", "inquiry", "review", "invoice"];
+const VERSIONS: [&str; 4] = ["temporal", "aws", "pydantic-graph", "argo"];
+/// The first draft of the hotel booking dandori's page opened on, whose check finds errors. Both
+/// pages opened it; it has no Japanese version.
+const DRAFT: &str = "tests/fixtures/hotel_naive.flow";
+
+/// The flows dandori's page listed for each of its languages, by their paths from dandori's crate:
+/// the first draft, then every version of every example, and the flows beside the versions. The
+/// Japanese page listed the Japanese versions (`<name>.ja.flow`).
+fn dandori_flows(tag: &str) -> Vec<String> {
+    let root = dandori_root();
+    let mine = |p: &Path| {
+        let name = p.file_name().unwrap().to_string_lossy().to_string();
+        name.ends_with(".flow") && (name.ends_with(".ja.flow") == (tag == "ja"))
+    };
+    let rel = |p: &Path| p.strip_prefix(&root).unwrap().components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/");
+    let mut list = vec![DRAFT.to_string()];
+    for ex in EXAMPLES {
+        for v in VERSIONS {
+            let mut found: Vec<PathBuf> = std::fs::read_dir(root.join(format!("examples/{ex}/{v}"))).map(|rd| rd.map(|e| e.unwrap().path()).filter(|p| mine(p)).collect()).unwrap_or_default();
+            found.sort();
+            list.extend(found.iter().map(|p| rel(p)));
+        }
+        let mut beside: Vec<PathBuf> = std::fs::read_dir(root.join(format!("examples/{ex}"))).unwrap().map(|e| e.unwrap().path()).filter(|p| p.is_file() && mine(p)).collect();
+        beside.sort();
+        list.extend(beside.iter().map(|p| rel(p)));
     }
-    s.push_str("  ]\n}\n");
+    list
+}
+
+/// Where the examples are held in memory while what a flow reads is found.
+const EXAMPLES_HOME: &str = "/dandori";
+
+/// Files in memory, with every file read out of them noted, by its path from the working directory.
+struct Noting {
+    inner: Memory,
+    read: RefCell<BTreeSet<String>>,
+}
+
+impl Files for Noting {
+    fn read(&self, p: &Path) -> std::io::Result<Vec<u8>> {
+        let got = self.inner.read(p)?;
+        let abs = ritsu_base::paths::absolute(p);
+        if let Ok(rel) = abs.strip_prefix(EXAMPLES_HOME) {
+            self.read.borrow_mut().insert(rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/"));
+        }
+        Ok(got)
+    }
+    fn metadata(&self, p: &Path) -> std::io::Result<Meta> {
+        self.inner.metadata(p)
+    }
+    fn read_dir(&self, p: &Path) -> std::io::Result<Vec<(OsString, Kind)>> {
+        self.inner.read_dir(p)
+    }
+    fn write(&self, p: &Path, bytes: &[u8]) -> std::io::Result<()> {
+        self.inner.write(p, bytes)
+    }
+    fn create_dir_all(&self, p: &Path) -> std::io::Result<()> {
+        self.inner.create_dir_all(p)
+    }
+    fn current_dir(&self) -> std::io::Result<PathBuf> {
+        self.inner.current_dir()
+    }
+    fn canonicalize(&self, p: &Path) -> std::io::Result<PathBuf> {
+        self.inner.canonicalize(p)
+    }
+}
+
+/// What a flow reads of dandori's examples (the flow too), by their paths from dandori's crate:
+/// what `ritsu check` reads when it checks the flow, then the files it read with it, and so on until
+/// it reads nothing new (a rule's own imports, the calendar a dates file uses), and what `dandori
+/// doc` reads to draw it. Every example is held in memory at its path, and nothing else, so what the
+/// commands read is what a project of these files needs and no file of the workspace around them.
+fn reads_of(flow: &str, every: &[(String, String)]) -> BTreeSet<String> {
+    let mut members = BTreeSet::from([flow.to_string()]);
+    loop {
+        let inner = Memory::new(EXAMPLES_HOME);
+        for (p, text) in every {
+            inner.add(p, text.as_bytes().to_vec());
+        }
+        let noting = Rc::new(Noting { inner, read: RefCell::default() });
+        ritsu_base::fs::with(noting.clone(), || {
+            let mut args: Vec<String> = vec!["--root".into(), ".".into()];
+            args.extend(members.iter().filter(|p| ritsu_project::project::kind_of(p).is_some()).cloned());
+            args.extend(["--lang".to_string(), "en".to_string()]);
+            let (mut o, mut e) = (Vec::new(), Vec::new());
+            ritsu::check::run(&args, Lang::En, &mut o, &mut e);
+            let joined = ritsu_project::Joined::new();
+            let doc: Vec<String> = ["doc", flow, "--format", "html", "--lang", "en"].map(String::from).to_vec();
+            dandori::cli::run(&doc, joined.rules(), &mut o, &mut e);
+        });
+        let before = members.len();
+        members.extend(noting.read.borrow().iter().cloned());
+        if members.len() == before {
+            return members;
+        }
+    }
+}
+
+/// The platform a version is written for, which the page builds for when it opens it, as dandori's
+/// page did: the one its directory names. A version for AWS is built for Step Functions, unless it
+/// asks for what Step Functions cannot run; then for Lambda durable functions.
+fn target_for(flow: &str, files: &[(String, String)]) -> &'static str {
+    if flow.contains("/aws/") {
+        let r = Request { files: files.to_vec(), lang: Lang::En, path: flow.into(), target: Some("asl".into()) };
+        if playground::generate(&r)["code"] == 0 { "asl" } else { "durable" }
+    } else if flow.contains("/pydantic-graph/") {
+        "pydantic-graph"
+    } else if flow.contains("/argo/") {
+        "argo"
+    } else {
+        "temporal"
+    }
+}
+
+/// The examples of dandori's page: each flow it listed, as a project of the flow and every file it
+/// reads, at their paths in dandori's crate (so the paths the findings name are the ones dandori's
+/// page named), open on the flow and building for its version's platform. The first draft is listed
+/// on both pages; every other flow, on the page of its language.
+fn dandori_examples() -> Vec<Project> {
+    let every = files_of(&dandori_root().join("examples")).into_iter().map(|(p, t)| (format!("examples/{p}"), t)).chain([(DRAFT.to_string(), std::fs::read_to_string(dandori_root().join(DRAFT)).unwrap())]).collect::<Vec<_>>();
+    let mut out: Vec<Project> = Vec::new();
+    for tag in ["en", "ja"] {
+        for flow in dandori_flows(tag) {
+            if out.iter().any(|p| p.open == flow) {
+                continue;
+            }
+            let mut files: Vec<(String, String)> = reads_of(&flow, &every).into_iter().map(|p| {
+                let text = every.iter().find(|(q, _)| *q == p).map(|(_, t)| t.clone()).unwrap_or_else(|| panic!("{flow} reads {p}, which is not one of dandori's examples"));
+                (p, text)
+            }).collect();
+            in_order(&mut files);
+            let from = files.iter().map(|(p, _)| format!("crates/dandori/{p}")).collect();
+            let target = target_for(&flow, &files).to_string();
+            let lang = (flow != DRAFT).then(|| tag.to_string());
+            out.push(Project { name: format!("dandori/{flow}"), group: "dandori".into(), lang, open: flow, target: Some(target), files, from });
+        }
+    }
+    out
+}
+
+/// The projects the page opens, in the order its list has them (each page lists those of its
+/// language): the shop in English and in Japanese, an empty project to start from one file, the
+/// examples of rulec's page in English and then in Japanese, and the examples of dandori's page.
+fn made() -> Vec<Project> {
+    let mut out = vec![shop("shop"), shop("shop.ja")];
+    out.push(Project { name: "empty".into(), group: "own".into(), ..Project::default() });
+    for (i, lang) in ["en", "ja"].into_iter().enumerate() {
+        for (key, en, ja) in RULEC {
+            out.push(rulec_example(key, lang, if i == 0 { en } else { ja }));
+        }
+    }
+    out.extend(dandori_examples());
+    out
+}
+
+/// projects.json: `{"projects": [{"name", "group", "lang"?, "open", "target"?, "files": [[path,
+/// from], ...]}], "texts": {from: text}}`, a file to a line. A text several projects hold (the
+/// description of Stripe's API, a rule of an example) is written once.
+fn record() -> String {
+    let projects = made();
+    let mut texts: BTreeMap<String, String> = BTreeMap::new();
+    let mut s = String::from("{\n  \"projects\": [\n");
+    for (i, p) in projects.iter().enumerate() {
+        let mut head = vec![format!("\"name\": {}", json!(p.name)), format!("\"group\": {}", json!(p.group))];
+        if let Some(l) = &p.lang {
+            head.push(format!("\"lang\": {}", json!(l)));
+        }
+        head.push(format!("\"open\": {}", json!(p.open)));
+        if let Some(t) = &p.target {
+            head.push(format!("\"target\": {}", json!(t)));
+        }
+        s.push_str(&format!("    {{\n      {},\n      \"files\": [", head.join(",\n      ")));
+        let lines: Vec<String> = p
+            .files
+            .iter()
+            .zip(&p.from)
+            .map(|((path, text), from)| {
+                if let Some(was) = texts.insert(from.clone(), text.clone()) {
+                    assert_eq!(&was, text, "two texts come from {from}");
+                }
+                format!("        {}", json!([path, from]))
+            })
+            .collect();
+        if lines.is_empty() {
+            s.push_str("]\n");
+        } else {
+            s.push_str(&format!("\n{}\n      ]\n", lines.join(",\n")));
+        }
+        s.push_str(&format!("    }}{}\n", if i + 1 < projects.len() { "," } else { "" }));
+    }
+    s.push_str("  ],\n  \"texts\": {\n");
+    let lines: Vec<String> = texts.iter().map(|(k, v)| format!("    {}: {}", json!(k), json!(v))).collect();
+    s.push_str(&lines.join(",\n"));
+    s.push_str("\n  }\n}\n");
     s
 }
 
-/// The projects as the page has them (the committed projects.json).
-fn committed() -> Vec<(String, String, Vec<(String, String)>)> {
+/// The projects as the page has them (the committed projects.json), each file with its text.
+fn committed() -> Vec<Project> {
     let v: Value = serde_json::from_str(&std::fs::read_to_string(site().join("projects.json")).expect("website/docs/playground/projects.json")).unwrap();
+    let texts = v["texts"].as_object().expect("projects.json has its texts");
     v["projects"]
         .as_array()
         .unwrap()
         .iter()
         .map(|p| {
-            let files = p["files"].as_array().unwrap().iter().map(|f| (f[0].as_str().unwrap().to_string(), f[1].as_str().unwrap().to_string())).collect();
-            (p["name"].as_str().unwrap().to_string(), p["open"].as_str().unwrap().to_string(), files)
+            let files = p["files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|f| {
+                    let from = f[1].as_str().unwrap();
+                    (f[0].as_str().unwrap().to_string(), texts[from].as_str().unwrap_or_else(|| panic!("projects.json has no text from {from}")).to_string())
+                })
+                .collect();
+            Project {
+                name: p["name"].as_str().unwrap().into(),
+                group: p["group"].as_str().unwrap().into(),
+                lang: p["lang"].as_str().map(str::to_string),
+                open: p["open"].as_str().unwrap().into(),
+                target: p["target"].as_str().map(str::to_string),
+                files,
+                from: Vec::new(),
+            }
         })
         .collect()
 }
@@ -88,8 +388,79 @@ fn the_projects_are_what_the_page_opens() {
         return;
     }
     let was = std::fs::read_to_string(&file).unwrap_or_default();
-    assert!(was == now, "website/docs/playground/projects.json is not what website/playground holds now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
+    assert!(was == now, "website/docs/playground/projects.json is not what website/playground, rulec's corpus and dandori's examples hold now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
 }
+
+/// The page opens every example rulec's and dandori's pages opened, as they opened it, while those
+/// pages are there (website/rulec/ and website/dandori/): each of rulec's samples, word for word as
+/// its page carries it, in both languages, and each flow dandori's page listed, in the order it
+/// listed them, on the platform it built for. Every flow of dandori's examples is one of them.
+#[test]
+fn every_example_of_the_pages_before_is_a_project() {
+    let projects = committed();
+    let find = |name: &str| projects.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("projects.json has no {name}"));
+    let mut looked = 0;
+    let rulec_page = repo().join("website/rulec/docs/playground.md");
+    if rulec_page.is_file() {
+        let md = std::fs::read_to_string(&rulec_page).unwrap();
+        let keys: Vec<&str> = md.match_indices("data-preset=\"").map(|(i, m)| &md[i + m.len()..i + m.len() + md[i + m.len()..].find('"').unwrap()]).collect();
+        assert_eq!(keys, RULEC.map(|(k, _, _)| k), "rulec's page offers other examples than the ones listed here");
+        let js = read_repo("website/rulec/docs/playground/playground.js");
+        // the page's copies: FULL in each language, the gap made of it, and SAMPLES
+        let quoted = |open: &str| -> String {
+            let start = js.find(open).unwrap_or_else(|| panic!("rulec's playground.js has no {open}")) + open.len();
+            js[start..start + js[start..].find("`,").unwrap()].to_string()
+        };
+        for lang in ["en", "ja"] {
+            let full = quoted(&format!("  {lang}: `"));
+            let gap = full.trim_end().lines().collect::<Vec<_>>();
+            let gap = gap[..gap.len() - 1].join("\n") + "\n";
+            for (key, _, _) in RULEC {
+                let want = match key {
+                    "full" => full.clone(),
+                    "gap" => gap.clone(),
+                    _ => quoted(&format!("  \"{lang}:{key}\": `")),
+                };
+                let name = if lang == "ja" { format!("rulec/{key}.ja") } else { format!("rulec/{key}") };
+                let p = find(&name);
+                assert_eq!(p.files.len(), 1, "{name} is one rule");
+                assert_eq!(p.files[0].1, want, "{name} is not the rule rulec's page showed");
+                assert_eq!(p.lang.as_deref(), Some(lang));
+                looked += 1;
+            }
+        }
+    }
+    let presets = repo().join("website/dandori/docs/playground/presets.json");
+    if presets.is_file() {
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&presets).unwrap()).unwrap();
+        for tag in ["en", "ja"] {
+            let theirs: Vec<(String, String)> = v["flows"][tag].as_array().unwrap().iter().map(|f| (f["path"].as_str().unwrap().to_string(), f["target"].as_str().unwrap().to_string())).collect();
+            let mine: Vec<(String, String)> = projects.iter().filter(|p| p.group == "dandori" && p.lang.as_deref().is_none_or(|l| l == tag)).map(|p| (p.open.clone(), p.target.clone().unwrap())).collect();
+            assert_eq!(mine, theirs, "the {tag} page lists other flows of dandori's than dandori's page did, or builds them for other platforms");
+            looked += mine.len();
+        }
+        // what dandori's page read of each flow is in the flow's project, as the examples have it
+        for (path, text) in v["files"].as_object().unwrap() {
+            if path.ends_with(".flow") && !projects.iter().any(|p| p.group == "dandori" && p.files.iter().any(|(q, t)| q == path && t.as_str() == text.as_str().unwrap())) {
+                panic!("{path}, which dandori's page read, is in no project as dandori's page had it");
+            }
+        }
+    }
+    let mut stack = vec![dandori_root().join("examples")];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().is_some_and(|x| x == "flow") {
+                let rel = p.strip_prefix(dandori_root()).unwrap().to_string_lossy().replace('\\', "/");
+                assert!(projects.iter().any(|q| q.group == "dandori" && q.open == rel), "{rel} is not among the projects the page opens");
+            }
+        }
+    }
+    eprintln!("compared: {looked} examples of rulec's and dandori's pages with the projects the page opens");
+}
+
 
 /// `ritsu`, run in `dir`, with no language asked of the environment.
 fn ritsu_in(dir: &Path, args: &[String]) -> (u8, String, String) {
@@ -177,14 +548,18 @@ fn files_json(files: &[(String, String)]) -> Value {
 }
 
 /// Edits a reader might make, each reaching a way the page answers that the projects as they open
-/// do not: the contract put right, the rule given the value instead (one row short, then whole),
-/// a rule's output renamed under the flow that reads it, a flow that does not parse, a file of no
-/// language added, and a geas spec that does not parse (a spec that parses runs programs, which
-/// the page cannot: it is not held to the binary).
+/// do not. In the shop: the contract put right, the rule given the value instead (one row short,
+/// then whole), a rule's output renamed under the flow that reads it, a flow that does not parse, a
+/// file of no language added, and a geas spec that does not parse (a spec that parses runs
+/// programs, which the page cannot: it is not held to the binary). Then the steps the pages of
+/// rulec and dandori had the reader take (a band widened over the next one, a rounding taken off,
+/// a failure that hands the case over, an arm of a `match` taken out), and one file of the reader's
+/// own in the empty project.
 fn edits() -> Vec<(&'static str, &'static str, Vec<(String, String)>)> {
     let mut out = Vec::new();
-    for (name, open, files) in committed() {
-        let _ = open;
+    let projects = committed();
+    for p in projects.iter().filter(|p| p.group == "ritsu") {
+        let (name, files) = (p.name.as_str(), p.files.clone());
         let swap = |files: &[(String, String)], path: &str, from: &str, to: &str| -> Vec<(String, String)> {
             let mut f = files.to_vec();
             let x = f.iter_mut().find(|(p, _)| p == path).unwrap_or_else(|| panic!("{name} has no {path}"));
@@ -230,79 +605,110 @@ fn edits() -> Vec<(&'static str, &'static str, Vec<(String, String)>)> {
         spec.push(("checks/greeter.geas".into(), "target greeter {\n  run \"python3 greeter.py\"\n}\n\nclaim \"greets\" {\n".into()));
         out.push(("a spec that does not parse", lang, spec));
     }
+    let edited = |name: &str, path: &str, from: &str, to: &str| -> Vec<(String, String)> {
+        let p = projects.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("projects.json has no {name}"));
+        let mut f = p.files.clone();
+        let x = f.iter_mut().find(|(q, _)| q == path).unwrap_or_else(|| panic!("{name} has no {path}"));
+        assert!(x.1.contains(from), "{path} no longer has `{from}`");
+        x.1 = x.1.replacen(from, to, 1);
+        f
+    };
+    for (name, lang, rule, rounding) in [("rulec/full", "en", "Fee.rule", "  round up(1USD)"), ("rulec/full.ja", "ja", "運賃.rule", "  round up(10円)")] {
+        out.push(("a band of the table widened over the next", lang, edited(name, rule, "<=2kg", "<=6kg")));
+        out.push(("the rounding taken off the output", lang, edited(name, rule, rounding, "")));
+    }
+    let draft = format!("dandori/{DRAFT}");
+    for lang in ["en", "ja"] {
+        out.push(("the declined card handed over", lang, edited(&draft, DRAFT, "fail CardDeclined \"The card was declined\"", "fail CardDeclined \"The card was declined\" leaving pi")));
+    }
+    let (en, ja) = ("examples/hotel/temporal/hotel.flow", "examples/hotel/temporal/hotel.ja.flow");
+    out.push(("an arm of the match taken out", "en", edited(&format!("dandori/{en}"), en, "    canceled => fail PaymentCanceled \"The PaymentIntent was canceled\"\n", "")));
+    out.push(("an arm of the match taken out", "ja", edited(&format!("dandori/{ja}"), ja, "    canceled => fail 決済の取消 \"PaymentIntent が取り消されていました\"\n", "")));
+    let rule_of = |name: &str| projects.iter().find(|p| p.name == name).unwrap().files[0].1.clone();
+    out.push(("one file of the reader's own", "en", vec![("fee.rule".to_string(), rule_of("rulec/full"))]));
+    out.push(("one file of the reader's own", "ja", vec![("運賃.rule".to_string(), rule_of("rulec/full.ja"))]));
     out
 }
 
-/// The page answers as the binary does: for every project and edit, in both languages, `ritsu
-/// check` (its text and its JSON), and every file's generator and page.
+/// The page answers as the binary does: for every project, in the language of each page that lists
+/// it, and every edit, `ritsu check` (its text and its JSON), and every file's generator (with every
+/// target it takes) and page. The jobs are shared among as many threads as the machine has cores.
 #[test]
 fn the_page_answers_as_the_command_does() {
     let mut jobs: Vec<(String, &'static str, Vec<(String, String)>)> = Vec::new();
-    for (name, _, files) in committed() {
-        for lang in ["en", "ja"] {
-            jobs.push((format!("{name} as it opens"), lang, files.clone()));
+    for p in committed() {
+        for lang in p.langs() {
+            jobs.push((format!("{} as it opens", p.name), lang, p.files.clone()));
         }
     }
     for (what, lang, files) in edits() {
         jobs.push((what.to_string(), lang, files));
     }
-    let failures: Vec<String> = std::thread::scope(|s| {
-        let handles: Vec<_> = jobs
-            .iter()
-            .map(|(what, lang, files)| {
-                s.spawn(move || {
-                    let mut failures = Vec::new();
-                    let mut n = 0;
-                    for (kind, req) in requests(files, lang) {
-                        let mut req = req;
-                        req["files"] = files_json(files);
-                        let r = Request::from_json(&req).unwrap();
-                        let path = r.path.clone();
-                        let label = format!("{what}: {kind} {path}");
-                        match kind {
-                            "check" => {
-                                let a = playground::check(&r);
-                                holds(files, lang, &label, &a, &mut failures);
-                                let dir = written_out(files);
-                                let (_, out, _) = ritsu_in(dir.path(), &words_of("ritsu check . --format json", lang));
-                                let want: Value = serde_json::from_str(&out).unwrap_or(Value::Null);
-                                if want != a["json"] {
-                                    failures.push(format!("{label} ({lang}): the JSON differs"));
-                                }
-                                n += 2;
-                            }
-                            "gen" => {
-                                let a = playground::generate(&r);
-                                if a["none"] != true {
-                                    holds(files, lang, &label, &a, &mut failures);
-                                    n += 1;
-                                }
-                            }
-                            _ => {
-                                let a = playground::doc(&r);
-                                if a["none"] != true {
-                                    holds(files, lang, &format!("{label} (html)"), &a["html"], &mut failures);
-                                    holds(files, lang, &format!("{label} (markdown)"), &a["markdown"], &mut failures);
-                                    n += 2;
-                                }
-                            }
-                        }
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let width = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    let (failures, n) = std::thread::scope(|s| {
+        let handles: Vec<_> = (0..width)
+            .map(|_| {
+                s.spawn(|| {
+                    let (mut failures, mut n) = (Vec::new(), 0);
+                    while let Some((what, lang, files)) = jobs.get(next.fetch_add(1, std::sync::atomic::Ordering::SeqCst)) {
+                        n += compare(what, lang, files, &mut failures);
                     }
                     (failures, n)
                 })
             })
             .collect();
-        let mut all = Vec::new();
-        let mut n = 0;
+        let (mut all, mut n) = (Vec::new(), 0);
         for h in handles {
             let (f, k) = h.join().unwrap();
             all.extend(f);
             n += k;
         }
-        eprintln!("compared: {n} answers of the page with what the binary prints and writes, on {} projects and edits", jobs.len());
-        all
+        (all, n)
     });
+    eprintln!("compared: {n} answers of the page with what the binary prints and writes, on {} projects and edits", jobs.len());
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+/// Every request of one project's page, each held to the binary; how many answers were compared.
+fn compare(what: &str, lang: &str, files: &[(String, String)], failures: &mut Vec<String>) -> usize {
+    let mut n = 0;
+    for (kind, req) in requests(files, lang) {
+        let mut req = req;
+        req["files"] = files_json(files);
+        let r = Request::from_json(&req).unwrap();
+        let path = r.path.clone();
+        let label = format!("{what}: {kind} {path}");
+        match kind {
+            "check" => {
+                let a = playground::check(&r);
+                holds(files, lang, &label, &a, failures);
+                let dir = written_out(files);
+                let (_, out, _) = ritsu_in(dir.path(), &words_of("ritsu check . --format json", lang));
+                let want: Value = serde_json::from_str(&out).unwrap_or(Value::Null);
+                if want != a["json"] {
+                    failures.push(format!("{label} ({lang}): the JSON differs"));
+                }
+                n += 2;
+            }
+            "gen" => {
+                let a = playground::generate(&r);
+                if a["none"] != true {
+                    holds(files, lang, &label, &a, failures);
+                    n += 1;
+                }
+            }
+            _ => {
+                let a = playground::doc(&r);
+                if a["none"] != true {
+                    holds(files, lang, &format!("{label} (html)"), &a["html"], failures);
+                    holds(files, lang, &format!("{label} (markdown)"), &a["markdown"], failures);
+                    n += 2;
+                }
+            }
+        }
+    }
+    n
 }
 
 /// The page's side of the boundary: allocate, write, call, read the length out of the header,
@@ -343,8 +749,10 @@ fn node_available() -> bool {
     Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-/// The module answers as the library does, every request of the comparison above and a few the
-/// page can be made to send by hand (a path outside the project, a request that is not JSON).
+/// The module answers as the library does: every request of the comparison above for the shop, for
+/// every other project `check` and the generator (on the target it opens on) and the page of the
+/// file it opens on, `check` on every edit, and a few the page can be made to send by hand (a path
+/// outside the project, a request that is not JSON).
 #[test]
 fn the_module_answers_as_the_library_does() {
     let wasm = site().join("ritsu.wasm");
@@ -352,10 +760,14 @@ fn the_module_answers_as_the_library_does() {
         return;
     }
     let mut requests: Vec<(String, String)> = Vec::new();
-    for (_, _, files) in committed() {
-        for lang in ["en", "ja"] {
-            for (kind, mut req) in requests_of(&files, lang) {
-                req["files"] = files_json(&files);
+    for p in committed() {
+        for lang in p.langs() {
+            for (kind, mut req) in requests_of(&p.files, lang) {
+                let opened = req["path"] == p.open.as_str() && (req["target"].is_null() || req["target"].as_str() == p.target.as_deref());
+                if p.group != "ritsu" && kind != "check" && !opened {
+                    continue;
+                }
+                req["files"] = files_json(&p.files);
                 requests.push((kind.to_string(), req.to_string()));
             }
         }
@@ -416,25 +828,27 @@ fn chrome() -> Option<PathBuf> {
     found
 }
 
-/// A server for the page: `page` at `/`, and the playground's files beside it.
-fn serve(page: String) -> u16 {
+/// A server for the pages: each at its path (`/` and the others), and the playground's files beside
+/// them.
+fn serve(pages: Vec<(&'static str, String)>) -> u16 {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
+    let pages = std::sync::Arc::new(pages);
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
-            let page = page.clone();
-            std::thread::spawn(move || respond(stream, &page));
+            let pages = pages.clone();
+            std::thread::spawn(move || respond(stream, &pages));
         }
     });
     port
 }
 
-fn respond(mut s: std::net::TcpStream, page: &str) {
+fn respond(mut s: std::net::TcpStream, pages: &[(&'static str, String)]) {
     let mut buf = [0u8; 4096];
     let n = s.read(&mut buf).unwrap_or(0);
     let head = String::from_utf8_lossy(&buf[..n]);
     let asked = head.split_whitespace().nth(1).unwrap_or("/").split(['?', '#']).next().unwrap_or("/").to_string();
-    let found = if asked == "/" {
+    let found = if let Some((_, page)) = pages.iter().find(|(at, _)| *at == asked) {
         Some((page.as_bytes().to_vec(), "text/html; charset=utf-8"))
     } else {
         let kind = match asked.rsplit('.').next() {
@@ -476,9 +890,45 @@ fn text_in(dom: &str, class: &str, close: &str) -> String {
     text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&nbsp;", "\u{a0}").replace("&amp;", "&")
 }
 
+/// The widget as a page has it, with the script served from the test's server.
+fn widget_of(page: &str) -> String {
+    let md = std::fs::read_to_string(repo().join(page)).unwrap();
+    let from = md.find("<div class=\"pg\"").unwrap_or_else(|| panic!("{page} has no playground"));
+    let tail = "<script src=\"playground/playground.js\" defer></script>";
+    let to = md[from..].find(tail).unwrap_or_else(|| panic!("{page} does not load playground.js")) + from + tail.len();
+    md[from..to].replace("playground/playground.js", "/playground.js")
+}
+
+/// A script for a test's page, run once the page has answered for the project it opens on: the
+/// steps `then` takes (an async function's body, with `root`, the widget, and `until`, which waits
+/// for a condition), and what `location.hash` is after them, written into the page as
+/// `<pre id="shared">`.
+fn steps(then: &str) -> String {
+    format!(
+        r#"<script>
+(async () => {{
+  const until = async (f) => {{ for (let i = 0; i < 600; i++) {{ if (f()) return true; await new Promise((r) => setTimeout(r, 50)); }} return false; }};
+  const root = document.querySelector(".pg");
+  await until(() => / ms/.test(root.querySelector(".pg-status").textContent));
+  {then}
+  await until(() => location.hash.includes("edits="));
+  document.body.append(Object.assign(document.createElement("pre"), {{ id: "shared", textContent: location.hash }}));
+}})();
+</script>"#
+    )
+}
+
+/// What a page of [`steps`] wrote of `location.hash`.
+fn shared(dom: &str) -> String {
+    dom.split("<pre id=\"shared\">").nth(1).and_then(|r| r.split("</pre>").next()).unwrap_or_default().replace("&amp;", "&")
+}
+
 /// The page starts in Chrome, as the site's pages have it: it loads the module and the projects,
-/// shows what `ritsu check` prints for the project it opens with a mark on the files it names, and
-/// follows a link to a file, a view and a target.
+/// shows what `ritsu check` prints for the project it opens with a mark on the files it names, lists
+/// the projects of its language in their groups, opens a project, a file, a view and a target from a
+/// link (the page's own, and the links dandori's page gave), and gives a link to what the reader has
+/// made of a project that opens it as it was, the shop edited and a file of the reader's own in the
+/// empty project.
 #[test]
 fn the_page_starts_in_chrome() {
     let Some(chrome) = chrome() else {
@@ -488,45 +938,127 @@ fn the_page_starts_in_chrome() {
         skip("website/docs/playground/ritsu.wasm is missing; run website/tools/make_wasm.sh");
         return;
     }
-    let (_, _, files) = committed().into_iter().next().unwrap();
+    let projects = committed();
+    let project = |name: &str| projects.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("projects.json has no {name}")).clone();
+    let shop = project("shop");
     let mut looked = 0;
     for (tag, page) in [("en", "website/docs/playground.md"), ("ja", "website/docs-ja/playground.md")] {
-        // the widget as the page has it, with the script served from here
-        let md = std::fs::read_to_string(repo().join(page)).unwrap();
-        let from = md.find("<div class=\"pg\"").expect("the page has no playground");
-        let tail = "<script src=\"playground/playground.js\" defer></script>";
-        let to = md[from..].find(tail).expect("the page does not load playground.js") + from + tail.len();
-        let widget = md[from..to].replace("playground/playground.js", "/playground.js");
-        let port = serve(format!("<!doctype html><html><head><meta charset=\"utf-8\"></head><body>{widget}</body></html>"));
-        let ask = |path: &str, target: Option<&str>| {
+        let widget = widget_of(page);
+        let doc = |extra: &str| format!("<!doctype html><html><head><meta charset=\"utf-8\"></head><body>{widget}{extra}</body></html>");
+        let contract = "proto/shop/v1/order.proto";
+        let returned = "  ORDER_STATUS_RETURNED = 5;\n";
+        let edit_shop = format!(
+            "const src = root.querySelector(\".pg-src\");\n  src.value = src.value.replace({}, \"\");\n  src.dispatchEvent(new Event(\"input\"));\n  root.querySelector(\".pg-share\").click();",
+            json!(returned)
+        );
+        let rule = project(if tag == "ja" { "rulec/full.ja" } else { "rulec/full" }).files[0].1.clone();
+        let own = if tag == "ja" { "運賃.rule" } else { "fee.rule" };
+        let paste = format!(
+            "const chooser = root.querySelector(\".pg-project\");\n  chooser.value = chooser.querySelector('option[data-name=\"empty\"]').value;\n  chooser.dispatchEvent(new Event(\"change\"));\n  window.prompt = () => {};\n  root.querySelector(\".pg-add\").click();\n  const src = root.querySelector(\".pg-src\");\n  src.value = {};\n  src.dispatchEvent(new Event(\"input\"));\n  root.querySelector(\".pg-share\").click();",
+            json!(own),
+            json!(rule)
+        );
+        let port = serve(vec![("/", doc("")), ("/edit", doc(&steps(&edit_shop))), ("/own", doc(&steps(&paste)))]);
+        let ask = |files: &[(String, String)], path: &str, target: Option<&str>| {
             let mut req = json!({ "lang": tag, "path": path, "target": target });
-            req["files"] = files_json(&files);
+            req["files"] = files_json(files);
             Request::from_json(&req).unwrap()
         };
+        let counts = |a: &Value| {
+            let d = a["json"]["diagnostics"].as_array().cloned().unwrap_or_default();
+            let (e, w) = (d.iter().filter(|x| x["severity"] == "error").count(), d.iter().filter(|x| x["severity"] == "warning").count());
+            match (tag, e + w) {
+                ("ja", 0) => "どれも検査を通りました".to_string(),
+                ("ja", _) => format!("エラー {e} 件、警告 {w} 件"),
+                (_, 0) => "all pass".to_string(),
+                _ => format!("{e} error{}, {w} warning{}", if e == 1 { "" } else { "s" }, if w == 1 { "" } else { "s" }),
+            }
+        };
+        let said = |a: &Value| format!("$ {}\n{}{}", a["command"].as_str().unwrap(), a["out"].as_str().unwrap(), a["err"].as_str().unwrap());
+        let base = format!("http://127.0.0.1:{port}");
 
-        let dom = dump_dom(&chrome, &format!("http://127.0.0.1:{port}/"));
+        // the shop, as the page opens
+        let dom = dump_dom(&chrome, &format!("{base}/"));
         let status = text_in(&dom, "pg-status", "</span>");
         assert!(status.starts_with(&format!("ritsu {}", env!("CARGO_PKG_VERSION"))), "{page}: the status says {status:?}");
-        let want = playground::check(&ask("", None));
-        let counts = if tag == "ja" { "エラー 3 件、警告 0 件" } else { "3 errors, 0 warnings" };
-        assert!(status.ends_with(counts), "{page}: the status says {status:?}");
-        let shown = text_in(&dom, "pg-out", "</div>");
-        assert_eq!(shown, format!("$ {}\n{}{}", want["command"].as_str().unwrap(), want["out"].as_str().unwrap(), want["err"].as_str().unwrap()), "{page}: the page shows another check");
+        let want = playground::check(&ask(&shop.files, "", None));
+        assert!(status.ends_with(&counts(&want)), "{page}: the status says {status:?}");
+        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the page shows another check");
         for marked in ["billing/rules/billing_need.rule", "requirements/billing.req"] {
             assert!(dom.contains(&format!("class=\"pg-file err\" role=\"tab\" aria-selected=\"false\">{marked}")), "{page}: the tab of {marked} is not marked");
         }
-        assert!(dom.contains("aria-selected=\"true\">proto/shop/v1/order.proto"), "{page}: the page does not open on the contract");
+        assert!(dom.contains(&format!("aria-selected=\"true\">{contract}")), "{page}: the page does not open on the contract");
+        // the list: the projects of this page's language, in their four groups
+        let listed: Vec<&str> = dom.match_indices("data-name=\"").map(|(i, m)| &dom[i + m.len()..i + m.len() + dom[i + m.len()..].find('"').unwrap()]).collect();
+        let mine: Vec<&str> = projects.iter().filter(|p| p.langs().contains(&tag)).map(|p| p.name.as_str()).collect();
+        assert_eq!(listed, mine, "{page}: the list has other projects than projects.json has for this page");
+        assert_eq!(dom.matches("<optgroup label=").count(), 4, "{page}: the list does not have its four groups");
+        looked += 1;
 
+        // a link to a file, a view and a target
         let flow = "ordering/ship_order.flow";
-        let dom = dump_dom(&chrome, &format!("http://127.0.0.1:{port}/#project=shop&file={flow}&view=gen&target=temporal"));
-        let want = playground::generate(&ask(flow, Some("temporal")));
-        let first = &want["files"][0];
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), first["body"].as_str().unwrap(), "{page}: the page shows another first file of {flow} for Temporal");
+        let dom = dump_dom(&chrome, &format!("{base}/#project=shop&file={flow}&view=gen&target=temporal"));
+        let want = playground::generate(&ask(&shop.files, flow, Some("temporal")));
+        assert_eq!(text_in(&dom, "pg-out", "</div>"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page shows another first file of {flow} for Temporal");
+        let urgency = "ordering/rules/urgency.rule";
+        let dom = dump_dom(&chrome, &format!("{base}/#project=shop&file={urgency}&view=doc"));
+        assert!(dom.contains("class=\"pg-open\" href=\"blob:"), "{page}: the page has no link to the page rulec doc draws of {urgency}");
+        looked += 2;
 
-        let rule = "ordering/rules/urgency.rule";
-        let dom = dump_dom(&chrome, &format!("http://127.0.0.1:{port}/#project=shop&file={rule}&view=doc"));
-        assert!(dom.contains("class=\"pg-open\" href=\"blob:"), "{page}: the page has no link to the page rulec doc draws of {rule}");
-        looked += 3;
+        // an example of rulec's page
+        let gap = project(if tag == "ja" { "rulec/gap.ja" } else { "rulec/gap" });
+        let dom = dump_dom(&chrome, &format!("{base}/#project={}", gap.name));
+        let want = playground::check(&ask(&gap.files, "", None));
+        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the page shows another check of {}", gap.name);
+        assert!(text_in(&dom, "pg-status", "</span>").ends_with(&counts(&want)), "{page}: the status of {} is not its check's", gap.name);
+        looked += 1;
+
+        // the links dandori's page gave: the first draft, a version built for a platform it cannot
+        // run on, and the rules tab
+        let draft = project(&format!("dandori/{DRAFT}"));
+        let dom = dump_dom(&chrome, &format!("{base}/#flow={DRAFT}"));
+        let want = playground::check(&ask(&draft.files, "", None));
+        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the page shows another check of the first draft");
+        assert!(dom.contains(&format!("aria-selected=\"true\">{DRAFT}")), "{page}: the page does not open on the first draft");
+        let hotel = if tag == "ja" { "examples/hotel/temporal/hotel.ja.flow" } else { "examples/hotel/temporal/hotel.flow" };
+        let version = project(&format!("dandori/{hotel}"));
+        let dom = dump_dom(&chrome, &format!("{base}/#flow={hotel}&view=build&target=asl"));
+        let want = playground::generate(&ask(&version.files, hotel, Some("asl")));
+        assert_ne!(want["code"], 0, "{hotel} is built for Step Functions after all");
+        assert!(text_in(&dom, "pg-out", "</div>").ends_with(&said(&want)), "{page}: the page does not say why {hotel} is not built for Step Functions");
+        let dom = dump_dom(&chrome, &format!("{base}/#flow={hotel}&view=build"));
+        let want = playground::generate(&ask(&version.files, hotel, version.target.as_deref()));
+        assert_eq!(text_in(&dom, "pg-out", "</div>"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page does not build {hotel} for the platform its version is for");
+        let dom = dump_dom(&chrome, &format!("{base}/#flow={hotel}&view=rules"));
+        let first_rule = version.files.iter().map(|(p, _)| p.as_str()).find(|p| p.ends_with(".rule")).unwrap();
+        assert!(dom.contains(&format!("aria-selected=\"true\">{first_rule}")) && dom.contains("class=\"pg-open\" href=\"blob:"), "{page}: the rules tab of dandori's page does not open {first_rule} and its page");
+        looked += 4;
+
+        // the empty project, which asks for a file
+        let dom = dump_dom(&chrome, &format!("{base}/#project=empty"));
+        assert!(dom.contains("pg-add pg-cta"), "{page}: the empty project does not point at adding a file");
+        looked += 1;
+
+        // a link to the shop as the reader edited it, given by the page, opens it as it was
+        let dom = dump_dom(&chrome, &format!("{base}/edit"));
+        let hash = shared(&dom);
+        assert!(hash.starts_with("#project=shop&") && hash.contains("&edits="), "{page}: the page gives no link to the edited shop: {hash:?}");
+        let mut fixed = shop.files.clone();
+        fixed.iter_mut().find(|(p, _)| p == contract).unwrap().1 = fixed.iter().find(|(p, _)| p == contract).unwrap().1.replace(returned, "");
+        let dom = dump_dom(&chrome, &format!("{base}/{hash}"));
+        let want = playground::check(&ask(&fixed, "", None));
+        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the link {hash} does not open the shop as it was edited");
+        assert!(dom.contains("class=\"pg-revert\" type=\"button\">"), "{page}: the edited shop has no way back to the shop as it opens");
+        looked += 1;
+
+        // one file of the reader's own, pasted into the empty project, and the link to it
+        let dom = dump_dom(&chrome, &format!("{base}/own"));
+        let hash = shared(&dom);
+        assert!(hash.starts_with("#project=empty&") && hash.contains("&edits="), "{page}: the page gives no link to the file pasted into the empty project: {hash:?}");
+        let dom = dump_dom(&chrome, &format!("{base}/{hash}"));
+        let want = playground::check(&ask(&[(own.to_string(), rule.clone())], "", None));
+        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the link {hash} does not open the file pasted into the empty project");
+        looked += 1;
     }
     eprintln!("compared: {looked} views of the page in Chrome with what the library answers");
 }

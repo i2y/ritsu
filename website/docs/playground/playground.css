@@ -50,6 +50,10 @@
 .pg button.on,
 .pg button.on:hover { background: var(--rt-mark); border-color: var(--rt-mark); color: #fff; }
 
+/* An empty project has one way forward, adding a file, and its button says so. */
+.pg button.pg-cta,
+.pg button.pg-cta:hover { background: var(--rt-mark); border-color: var(--rt-mark); color: #fff; }
+
 /* A tab is a file of the project, by its path; a dot says what the last check found in it. */
 .pg .pg-file {
   font-family: var(--md-code-font-family, monospace);
