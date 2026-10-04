@@ -1,4 +1,4 @@
-error[E044]: `退職手当` を準用できません: `m_e101.rule` が check を通りません（E101）
+エラー[E044]: `退職手当` を準用できません: `m_e101.rule` が check を通りません（E101）
   --> tests/mutants/m_e044.rule:14 準用 退職手当
    |
 14 | apply 退職手当(retirement) = "m_e101.rule" sha256:db7b93a37ffeee8f  # 出典: 第31条（スケッチ）

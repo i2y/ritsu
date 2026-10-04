@@ -1,4 +1,4 @@
-error[E046]: `clause` の形が読めません
+エラー[E046]: `clause` の形が読めません
   --> tests/mutants/m_e046.rule:30
    |
 30 | clause 無料(free) -> 送料  # 出典: 第3条第2項ただし書

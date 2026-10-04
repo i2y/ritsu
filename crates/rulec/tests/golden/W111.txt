@@ -1,4 +1,4 @@
-warning[W111]: 入力 重量 はどの表でも使われていません
+警告[W111]: 入力 重量 はどの表でも使われていません
   --> tests/mutants/m_w111.rule:18
    |
 18 |   重量(weight)     : mass[g]    range >=1g <=25kg

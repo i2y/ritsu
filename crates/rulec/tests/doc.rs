@@ -234,7 +234,7 @@ fn 表のセルはもとの規則までたどれる() {
 fn 検査を通らない規則は描かない() {
     let (c, out, e) = run(&["doc", "tests/mutants/m_e101.rule"]);
     assert_eq!(c, 1, "エラーのある規則を描いた");
-    assert!(out.contains("error[E101]"), "何が悪いかを言う: {out}");
+    assert!(out.contains("エラー[E101]"), "何が悪いかを言う: {out}");
     assert!(e.contains("資料を書き出しません"), "{e}");
     assert!(!out.contains("# 規則"), "資料が書き出され始めている: {out}");
 }

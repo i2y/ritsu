@@ -1,4 +1,4 @@
-error[E130]: koyomi "payment_terms.cal" date due の日を、koyomi から得られません
+エラー[E130]: koyomi "payment_terms.cal" date due の日を、koyomi から得られません
   --> variant.rule:7
   |
 7 |   pay_day : date  range from koyomi "payment_terms.cal" date due

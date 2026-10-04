@@ -17,10 +17,21 @@ pub enum Severity {
 }
 
 impl Severity {
+    /// The word in data (`--format json`): the same in every language.
     fn word(self) -> &'static str {
         match self {
             Severity::Error => "error",
             Severity::Warning => "warning",
+        }
+    }
+
+    /// The word that heads a diagnostic in text, in the language of the output, as every
+    /// language of ritsu heads its own (`エラー[E101]` in Japanese).
+    fn label(self) -> &'static str {
+        match (self, crate::i18n::current()) {
+            (Severity::Error, crate::i18n::Lang::Ja) => "エラー",
+            (Severity::Warning, crate::i18n::Lang::Ja) => "警告",
+            (s, _) => s.word(),
         }
     }
 }
@@ -389,7 +400,7 @@ pub fn char_width(c: char) -> usize {
 /// Render one diagnostic in the frame shape §11 fixes.
 pub fn render(d: &Diag, src_lines: &[String]) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "{}[{}]: {}", d.severity.word(), d.code, d.title);
+    let _ = writeln!(out, "{}[{}]: {}", d.severity.label(), d.code, d.title);
     if !d.where_.is_empty() {
         let _ = writeln!(out, "  --> {}", d.where_);
     }
@@ -431,7 +442,7 @@ pub fn render(d: &Diag, src_lines: &[String]) -> String {
 /// that reads a hundred findings and only needs to know what and where; `rulec explain
 /// <code>` has the rest, and `check` prints that pointer once at the end of the run.
 pub fn render_terse(d: &Diag) -> String {
-    let mut out = format!("{}[{}]: {}\n", d.severity.word(), d.code, d.title);
+    let mut out = format!("{}[{}]: {}\n", d.severity.label(), d.code, d.title);
     if !d.where_.is_empty() {
         let _ = writeln!(out, "  --> {}", d.where_);
     }

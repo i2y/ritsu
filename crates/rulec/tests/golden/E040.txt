@@ -1,4 +1,4 @@
-error[E040]: 元の規則 `../corpus/退職手当.rule` が変わっています
+エラー[E040]: 元の規則 `../corpus/退職手当.rule` が変わっています
   --> tests/mutants/m_e040.rule:14 準用 退職手当
    |
 14 | apply 退職手当(retirement) = "../corpus/退職手当.rule" sha256:0000000000000000  # 出典: 第31条（スケッチ）

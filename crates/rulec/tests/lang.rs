@@ -30,7 +30,7 @@ fn has_japanese(s: &str) -> bool {
 
 /// The first line of the first diagnostic: `error[E101]: <title>`.
 fn title(out: &str) -> String {
-    out.lines().find(|l| l.starts_with("error[") || l.starts_with("warning[")).unwrap_or("").to_string()
+    out.lines().find(|l| ["error[", "warning[", "エラー[", "警告["].iter().any(|h| l.starts_with(h))).unwrap_or("").to_string()
 }
 
 const MUTANT: &str = "tests/mutants/m_e101.rule";
@@ -81,7 +81,8 @@ fn ritsu_lang_comes_after_rulec_lang() {
         let (c, out, _) = run(&args, env);
         assert_eq!(c, 1, "{env:?} {flag:?}: {out}");
         let t = title(&out);
-        assert!(t.starts_with("error[E101]:"), "{env:?} {flag:?}: {out}");
+        // the head is in the language of the output, as the title is
+        assert!(t.starts_with("error[E101]:") || t.starts_with("エラー[E101]:"), "{env:?} {flag:?}: {out}");
         has_japanese(&t)
     };
     assert!(japanese(&[("RITSU_LANG", "ja")], None), "RITSU_LANG alone");

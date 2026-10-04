@@ -1,4 +1,4 @@
-error[E120]: `from count` は number を返します
+エラー[E120]: `from count` は number を返します
   --> tests/mutants/m_e120.rule:12
    |
 12 |   冷蔵あり(cold) : bool    from count 注文.lines

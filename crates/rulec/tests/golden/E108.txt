@@ -1,4 +1,4 @@
-error[E108]: 率割引 が int64 に収まることを証明できません
+エラー[E108]: 率割引 が int64 に収まることを証明できません
   --> tests/mutants/m_e108.rule:37
    |
 37 | define 率割引(rate_off) : money[円,incl_tax] = 元価 × 割引率

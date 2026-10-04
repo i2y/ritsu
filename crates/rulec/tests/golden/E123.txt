@@ -1,4 +1,4 @@
-error[E123]: 契約は `見積.declared_jpy` と `見積.cover_jpy` について、`constraint 申告額 < 補償額` を破る組み合わせも通します
+エラー[E123]: 契約は `見積.declared_jpy` と `見積.cover_jpy` について、`constraint 申告額 < 補償額` を破る組み合わせも通します
   --> tests/mutants/m_e123.rule:14 制約
    |
 14 | constraint 申告額 < 補償額

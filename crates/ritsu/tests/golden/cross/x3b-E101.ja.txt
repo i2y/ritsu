@@ -1,4 +1,4 @@
-error[rulec E101]: 完全性の欠落: どの行にも当てはまらない入力があります
+エラー[rulec E101]: 完全性の欠落: どの行にも当てはまらない入力があります
   --> settlement.rule:14 表 pick
    |
 14 | table pick

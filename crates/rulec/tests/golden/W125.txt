@@ -1,4 +1,4 @@
-warning[W125]: 状態 保留 には、どの手順でも着きません
+警告[W125]: 状態 保留 には、どの手順でも着きません
   --> tests/mutants/m_w125.rule:32 ステートマシン 注文
    |
 32 | machine 注文(order) over 遷移

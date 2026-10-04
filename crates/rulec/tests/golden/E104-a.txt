@@ -1,4 +1,4 @@
-error[E104]: 丸めていない値が出力に到達します
+エラー[E104]: 丸めていない値が出力に到達します
   --> tests/mutants/m_e104b.rule:21
    |
 21 |   割引額(discount) : money[円,incl_tax]

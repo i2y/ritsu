@@ -1,6 +1,6 @@
 ok billing/rules/出荷の送料.rule
 ok billing/rules/決済手数料.rule
-error[rulec E032]: 列挙 注文の状態 が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
+エラー[rulec E032]: 列挙 注文の状態 が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
   --> billing/rules/請求の要否.rule:5
   |
 5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)

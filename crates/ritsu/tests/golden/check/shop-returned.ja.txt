@@ -1,4 +1,4 @@
-error[rulec E032]: 列挙 order_status が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
+エラー[rulec E032]: 列挙 order_status が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
   --> billing/rules/billing_need.rule:5
   |
 5 | enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)

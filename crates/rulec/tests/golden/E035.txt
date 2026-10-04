@@ -1,4 +1,4 @@
-error[E035]: `overrides` の指す先 `本則の表` がありません
+エラー[E035]: `overrides` の指す先 `本則の表` がありません
   --> tests/mutants/m_e035.rule:41 表 軽減
    |
 41 | overrides 本則の表

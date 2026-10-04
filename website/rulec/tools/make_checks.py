@@ -338,7 +338,9 @@ def verify(rulec):
                 # else the panel shows is held to what the tool printed.
                 if policy not in body:
                     raise SystemExit(f"{name} panel {i}: the table is not {policy!r}")
-                for want in [f"error[{code}]"] + [l for l, _ in lines]:
+                # the head of a diagnostic is in the language of the output
+                head = "エラー" if lang == "ja" else "error"
+                for want in [f"{head}[{code}]"] + [l for l, _ in lines]:
                     if want not in out:
                         raise SystemExit(
                             f"{name} panel {i}: rulec check does not say {want!r}\n{out}")

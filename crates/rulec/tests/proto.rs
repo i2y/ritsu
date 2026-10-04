@@ -214,14 +214,14 @@ fn 読めない契約は途中まで読まずに場所を言う() {
     let (_tmp, p) = pair("cut", cut, &whole);
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("error[E013]: `order.proto` を読めません"), "{out}");
+    assert!(out.contains("エラー[E013]: `order.proto` を読めません"), "{out}");
     assert!(out.contains("`.proto` として読めません（14 行目の 21 文字目）: `}` が要るところにファイルの終わりがあります"), "{out}");
 
     let stray = PROTO.replace("MEMBER_TIER_GOLD = 2;", "MEMBER_TIER_GOLD 2;");
     let (_tmp, p) = pair("stray", &stray, &whole);
     let (code, out) = run(&["check", &p]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("error[E013]: `order.proto` を読めません") && !out.contains("E032"), "{out}");
+    assert!(out.contains("エラー[E013]: `order.proto` を読めません") && !out.contains("E032"), "{out}");
     assert!(out.contains("`.proto` として読めません（9 行目の 20 文字目）: `=` が要るところに `2` があります"), "{out}");
 }
 

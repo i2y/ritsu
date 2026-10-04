@@ -1,4 +1,4 @@
-error[E122]: 契約は `注文.lines` が 41 件でも通しますが、規則はそれを断ります
+エラー[E122]: 契約は `注文.lines` が 41 件でも通しますが、規則はそれを断ります
   --> tests/mutants/m_e122.rule:13
    |
 13 |   明細数(lines)  : number  range >=1 <=40  from count 注文.lines

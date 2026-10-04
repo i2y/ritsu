@@ -1,4 +1,4 @@
-error[E129]: この rulec は koyomi のファイルを読めません
+エラー[E129]: この rulec は koyomi のファイルを読めません
   --> variant.rule:7
   |
 7 |   pay_day : date  range from koyomi "payment_terms.cal" date payment

@@ -134,7 +134,8 @@ fn a_project_with_errors() {
     for lang in ["en", "ja"] {
         let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--lang", lang]);
         assert_eq!(code, 1, "{out}{err}");
-        assert!(out.contains("error[rulec E032]: ") && out.contains("[sakai E105]: billing/rules/請求の要否.rule:5:1: "), "{out}");
+        let head = if lang == "ja" { "エラー[rulec E032]: " } else { "error[rulec E032]: " };
+        assert!(out.contains(head) && out.contains("[sakai E105]: billing/rules/請求の要否.rule:5:1: "), "{out}");
         golden(&format!("tests/golden/check/通販-returned.{lang}.txt"), &out, &mut failures);
     }
     let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
@@ -239,7 +240,8 @@ fn a_project_with_errors_in_english() {
     for lang in ["en", "ja"] {
         let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--lang", lang]);
         assert_eq!(code, 1, "{out}{err}");
-        assert!(out.contains("error[rulec E032]: ") && out.contains("[sakai E105]: billing/rules/billing_need.rule:5:1: "), "{out}");
+        let head = if lang == "ja" { "エラー[rulec E032]: " } else { "error[rulec E032]: " };
+        assert!(out.contains(head) && out.contains("[sakai E105]: billing/rules/billing_need.rule:5:1: "), "{out}");
         golden(&format!("tests/golden/check/shop-returned.{lang}.txt"), &out, &mut failures);
     }
     let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);

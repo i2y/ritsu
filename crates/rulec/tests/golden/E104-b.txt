@@ -1,4 +1,4 @@
-error[E104]: 出力に丸めの宣言がありません
+エラー[E104]: 出力に丸めの宣言がありません
   --> tests/mutants/m_e104.rule:21
    |
 21 |   運賃(fee) : money[円, incl_tax]

@@ -83,15 +83,15 @@ fn 通ったファイルはokを出す() {
     assert!(out.contains("ok "), "通ったら ok を出す");
     // Shadowing is a single count line. With zero needs-confirmation pairs, no list is printed.
     assert!(out.contains("隠れ 10 対（階段 4、同じ答え 6、要確認 0）"), "件数行が出る: {out}");
-    assert!(!out.contains("warning[W105]"), "要確認ゼロなら一覧は出ない");
+    assert!(!out.contains("警告[W105]"), "要確認ゼロなら一覧は出ない");
 }
 
 #[test]
 fn show_shadow_で構造的も一覧に出る() {
     let (_, plain, _) = run(&["check", "tests/corpus/ゆうパック運賃.rule"]);
     let (_, verbose, _) = run(&["check", "tests/corpus/ゆうパック運賃.rule", "--show-shadow"]);
-    assert!(!plain.contains("warning[W105]"));
-    assert_eq!(verbose.matches("warning[W105]").count(), 21, "21 対すべてが出る");
+    assert!(!plain.contains("警告[W105]"));
+    assert_eq!(verbose.matches("警告[W105]").count(), 21, "21 対すべてが出る");
 }
 
 #[test]
@@ -212,7 +212,7 @@ fn diff_base_は新たに生じた発見だけを出す() {
 
     // At the base there is one needs-confirmation pair.
     let (_, before) = run_in(&dir, &["check", "t.rule"]);
-    assert_eq!(before.matches("warning[W105]").count(), 1, "{before}");
+    assert_eq!(before.matches("警告[W105]").count(), 1, "{before}");
 
     // Add one row to create one more needs-confirmation pair.
     let after = BASE.replace(
@@ -222,10 +222,10 @@ fn diff_base_は新たに生じた発見だけを出す() {
     std::fs::write(dir.join("t.rule"), &after).unwrap();
 
     let (_, plain) = run_in(&dir, &["check", "t.rule"]);
-    assert_eq!(plain.matches("warning[W105]").count(), 2, "足した後は二件: {plain}");
+    assert_eq!(plain.matches("警告[W105]").count(), 2, "足した後は二件: {plain}");
 
     let (_, diffed) = run_in(&dir, &["check", "t.rule", "--diff-base", "HEAD"]);
-    assert_eq!(diffed.matches("warning[W105]").count(), 1, "新規の一件だけ: {diffed}");
+    assert_eq!(diffed.matches("警告[W105]").count(), 1, "新規の一件だけ: {diffed}");
     assert!(diffed.contains("伏せました"), "伏せた件数を言う: {diffed}");
 }
 
