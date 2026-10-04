@@ -368,7 +368,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
                     // no row of its own and is meant to fall to the default row. This intent is
                     // exactly what the approver should read.
                     if *e.default_marks.get(i).unwrap_or(&false) {
-                        format!("{}（{}）", v.text, crate::kw::DEFAULT)
+                        tr!("{}（{}）", "{} ({})", v.text, crate::kw::DEFAULT)
                     } else {
                         v.text.clone()
                     }
@@ -856,7 +856,7 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
         ts.sort_by(|x, y| x.1.cmp(&y.1));
         for (_, row, to) in ts {
             let label = match &row {
-                Some((t, r)) => format!("{}（{}）", transition_label(f, lines, t, *r, &cin), tr!("行{}", "row {}", r)),
+                Some((t, r)) => tr!("{}（{}）", "{} ({})", transition_label(f, lines, t, *r, &cin), tr!("行{}", "row {}", r)),
                 None => String::new(),
             };
             let target = if to == *s { tr!("留まる", "stays") } else { to.clone() };
@@ -2078,7 +2078,7 @@ fn customer_clause(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str]) -> Stri
     let head = vec![tr!("条件", "Condition"), oh];
     o.push_str(&md_table_nums(&head, &[vec![when, then]], Some(&["1".to_string()])));
     if !t.overrides.is_empty() {
-        let ts: Vec<String> = t.overrides.iter().map(|r| format!("「{}」", r.table)).collect();
+        let ts: Vec<String> = t.overrides.iter().map(|r| tr!("「{}」", "\"{}\"", r.table)).collect();
         o.push_str(&tr!("\nこの決まりは {} より優先します。\n", "\nThis rule takes precedence over {}.\n", ts.join(sep())));
     }
     o
