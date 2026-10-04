@@ -170,8 +170,40 @@ pub fn commands() -> Vec<Cmd> {
         examples: vec!["ritsu explain E101", "ritsu explain --all --format markdown --lang ja"],
         codes: vec![],
     });
+    cmds.push(skills());
     cmds.extend(LANGUAGES.into_iter().map(language));
     cmds
+}
+
+/// `ritsu skills` (PLAN F.3): the eight Agent Skills the binary carries, listed or written where an
+/// agent reads them.
+fn skills() -> Cmd {
+    Cmd {
+        usage: Some("ritsu skills list | ritsu skills install [<name>...] [--dir <dir> | --user] [--force]"),
+        name: "skills",
+        args: "list | install [<name>...]",
+        purpose: tr!(
+            "ritsu と七つの言語の Agent Skills（AI エージェント向けの手引き）を一覧する、またはエージェントが読む場所に書く",
+            "list the Agent Skills of ritsu and the seven languages (the guides for AI agents), or write them where an agent reads them"
+        ),
+        params: vec![
+            ("list", tr!("八つのスキルの名前と、何に使うか", "the names of the eight skills, and what each is for")),
+            ("install", tr!("スキルを <dir>/<name>/ に書く", "write the skills as <dir>/<name>/")),
+            ("<name>...", tr!("書くスキル。無ければ八つとも", "the skills to write; else all eight")),
+        ],
+        flags: vec![
+            flag("--dir", Some("<dir>"), tr!("スキルを書くディレクトリ（ほかのエージェントが読む場所）", "the directory to write the skills into (where another agent reads them)")).default(".claude/skills"),
+            flag("--user", None, tr!("~/.claude/skills に書く（このマシンのどのプロジェクトでも読まれる）", "write into ~/.claude/skills, read in every project on this machine")),
+            flag("--force", None, tr!("ritsu の持つものと違うファイル（手で変えたものなど）も上書きする", "write over files that differ from the ones ritsu carries (changed by hand, say)")),
+        ],
+        exits: vec![
+            (0, tr!("一覧した、または書いた（すでに同じだったものはそのまま）", "listed, or written (files already the same are left as they are)")),
+            (1, tr!("ritsu の持つものと違うファイルがあり、--force が無い（何も書いていない）", "a file there differs from the one ritsu carries, and --force was not given (nothing was written)")),
+            (2, tr!("引数の誤り、無いスキルの名前、書けないファイル", "bad arguments, a skill that does not exist, or a file that cannot be written")),
+        ],
+        examples: vec!["ritsu skills list", "ritsu skills install", "ritsu skills install rulec dandori --user", "ritsu skills install --dir path/to/skills"],
+        codes: vec![],
+    }
 }
 
 /// The whole table.

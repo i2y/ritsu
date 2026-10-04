@@ -1,0 +1,11 @@
+{
+  "name": "ritsu",
+  "version": "0.23.0",
+  "description": "Agent Skills for ritsu and its seven small languages: business rules (rulec), workflows (dandori), dates (koyomi), ledgers (chobo), claims about code (geas), where requirements come from (yuen) and maps of bounded contexts (sakai). The skills run the ritsu binary, which has to be on PATH.",
+  "author": {
+    "name": "i2y"
+  },
+  "repository": "https://github.com/i2y/ritsu",
+  "license": "MIT OR Apache-2.0",
+  "keywords": ["ritsu", "rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "agent-skills"]
+}

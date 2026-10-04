@@ -6,11 +6,12 @@
 //! (DESIGN 2.3). Called by a language's name (a link named `rulec`), ritsu is that command
 //! (DESIGN 2.3, 8.2). `ritsu run` runs a workflow with its rules, dates and books computed by
 //! their languages (DESIGN 7.9); `ritsu gen` writes a project as one package for each of
-//! TypeScript, Python and Go (DESIGN 9.3).
+//! TypeScript, Python and Go (DESIGN 9.3); `ritsu skills` writes the eight Agent Skills the binary
+//! carries where an agent reads them (PLAN F.3).
 
 mod package;
 
-use ritsu::{check, cli, explain, run};
+use ritsu::{check, cli, explain, run, skills};
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
 use ritsu_project::Joined;
@@ -133,12 +134,13 @@ fn run() -> ExitCode {
             println!("ritsu {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        "check" | "explain" | "gen" => {
+        "check" | "explain" | "gen" | "skills" => {
             let mut rest: Vec<String> = args[..at].to_vec();
             rest.extend(args[at + 1..].iter().cloned());
             ExitCode::from(match first.as_str() {
                 "check" => check::command(&rest, lang),
                 "gen" => package::command(&rest, lang),
+                "skills" => skills::command(&rest, lang),
                 _ => explain::command(&rest, lang),
             })
         }

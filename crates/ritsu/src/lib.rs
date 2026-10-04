@@ -7,9 +7,11 @@
 //! - [`cli`]: the table of ritsu's commands and flags, and the seven languages.
 //! - [`languages`]: `ritsu dandori`, with the languages a flow reads joined.
 //! - [`run`]: `ritsu run` (DESIGN 7.9), a workflow run with its rules, dates and books computed.
+//! - [`skills`]: `ritsu skills` (PLAN F.3), the eight Agent Skills the binary carries.
 
 pub mod check;
 pub mod cli;
 pub mod explain;
 pub mod languages;
 pub mod run;
+pub mod skills;
