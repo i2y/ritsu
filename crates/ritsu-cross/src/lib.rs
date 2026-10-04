@@ -26,6 +26,8 @@ mod preconditions;
 mod protos;
 mod transfers;
 
+pub use preconditions::UndecidedCalls;
+
 use ritsu_base::naming::Tool;
 use ritsu_base::text::Lang;
 use ritsu_ports::{Crossings, Finding, Flows};

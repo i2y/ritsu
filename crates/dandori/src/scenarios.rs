@@ -61,6 +61,9 @@ struct Ex<'a> {
     /// a workflow that implements a service: the input has its fields at their zero values, which
     /// it goes without, as protobuf's JSON writes the request
     sparse: bool,
+    /// the flow checks a rule's precondition (`TK::Check`): its numbers and days are made as values
+    /// left open with what was made in them, which a check changes to take the way it chose
+    steered: bool,
 }
 
 pub fn generate(m: &Model) -> Vec<Value> {
@@ -100,6 +103,7 @@ pub fn generate(m: &Model) -> Vec<Value> {
             done_loops: vec![],
             made_values: 0,
             sparse: false,
+            steered: m.all_stmts().iter().any(|s| matches!(s.kind, TK::Check(_))),
         };
         ex.run();
         counts = std::mem::take(&mut ex.counts);
@@ -268,6 +272,85 @@ impl<'a> Ex<'a> {
         json!(format!("{HOLE}{}", self.holes.len() - 1))
     }
 
+    /// A number or a day as it is made: itself, or in a flow that checks a rule's precondition, a
+    /// value left open with it in it, which a check may change (`steer`) before the run is written.
+    fn steerable(&mut self, t: &Ty, v: Value, rg: Option<Range>) -> Value {
+        if !self.steered {
+            return v;
+        }
+        self.holes.push((t.clone(), Some(v), rg));
+        json!(format!("{HOLE}{}", self.holes.len() - 1))
+    }
+
+    /// The value left open that `e` reads, when it reads one.
+    fn open_at(&self, e: &TExpr) -> Option<usize> {
+        let TExpr::Var { name, fields, .. } = e else { return None };
+        let mut v = self.vars.get(name).cloned().unwrap_or(Value::Null);
+        for f in fields {
+            if let Some(id) = Ex::hole_id(&v) {
+                v = self.holes[id].1.clone().unwrap_or(Value::Null);
+            }
+            v = v.get(f).cloned().unwrap_or(Value::Null);
+        }
+        Ex::hole_id(&v)
+    }
+
+    /// What `e` reads now, with the values left open in it as they are.
+    fn now_of(&self, e: &TExpr) -> Value {
+        let TExpr::Var { name, fields, .. } = e else { return crate::interp::value_of(&self.vars, e) };
+        let open = |v: Value| match Ex::hole_id(&v) {
+            Some(id) => self.holes[id].1.clone().unwrap_or(Value::Null),
+            None => v,
+        };
+        let mut v = open(self.vars.get(name).cloned().unwrap_or(Value::Null));
+        for f in fields {
+            v = open(v.get(f).cloned().unwrap_or(Value::Null));
+        }
+        v
+    }
+
+    /// Change a value left open that a check reads, so that the check comes out as `holds` says,
+    /// where its range has room: the later one made first. A check none of whose values were left
+    /// open comes out as it does.
+    fn steer(&mut self, t: &PreTest, holds: bool) {
+        if crate::prechecks::holds(t, &|e| self.now_of(e)) == holds {
+            return;
+        }
+        match t {
+            PreTest::Relation { left, op, right } => {
+                let num = |v: Value| v.as_f64().map(|x| x as i64);
+                let (Some(l), Some(r)) = (num(self.now_of(&left.1)), num(self.now_of(&right.1))) else { return };
+                // the left one given the right, and the right one given the left
+                let lefts = match (op.as_str(), holds) {
+                    ("<=", true) | (">=", true) | ("<", false) | (">", false) => r,
+                    ("<", true) | (">=", false) => r - 1,
+                    _ => r + 1,
+                };
+                let rights = match (op.as_str(), holds) {
+                    ("<=", true) | (">=", true) | ("<", false) | (">", false) => l,
+                    ("<", true) | (">=", false) => l + 1,
+                    _ => l - 1,
+                };
+                let mut tries = vec![(self.open_at(&left.1), lefts), (self.open_at(&right.1), rights)];
+                tries.sort_by_key(|(id, _)| std::cmp::Reverse(*id));
+                for (id, n) in tries {
+                    let Some(id) = id else { continue };
+                    if self.holes[id].2.is_none_or(|rg| rg.contains(n)) {
+                        self.holes[id].1 = Some(json!(n));
+                        return;
+                    }
+                }
+            }
+            PreTest::Days { value, days, .. } => {
+                let Some(id) = self.open_at(value) else { return };
+                let day = if holds { days.first().cloned() } else { ["1999-12-31", "2099-12-31"].iter().find(|d| !days.iter().any(|x| x == *d)).map(|d| d.to_string()) };
+                if let Some(d) = day {
+                    self.holes[id].1 = Some(json!(d));
+                }
+            }
+        }
+    }
+
     /// A number in `rg` not made before in this run, as far as the range has room.
     fn number(&mut self, rg: Option<Range>) -> Value {
         self.made_values += 1;
@@ -295,9 +378,13 @@ impl<'a> Ex<'a> {
             // a day of its own for each value, as a string is
             Ty::Date => {
                 self.made_values += 1;
-                json!(format!("2026-{:02}-{:02}", 1 + (self.made_values / 28) % 12, 1 + self.made_values % 28))
+                let v = json!(format!("2026-{:02}-{:02}", 1 + (self.made_values / 28) % 12, 1 + self.made_values % 28));
+                self.steerable(t, v, rg)
             }
-            Ty::Int | Ty::Num(_) => self.number(rg),
+            Ty::Int | Ty::Num(_) => {
+                let v = self.number(rg);
+                self.steerable(t, v, rg)
+            }
             // an array, so that the targets show they keep a `json` value that is one as one item
             Ty::Json => {
                 self.made_values += 1;
@@ -649,6 +736,18 @@ impl<'a> Ex<'a> {
             TK::Fail { .. } => {
                 self.end_label(&format!("{}:fail", s.site));
                 self.halt(false)
+            }
+            // a rule's precondition: a run where the values keep it, and one where they break it
+            TK::Check(c) => {
+                let holds = self.choose(&format!("check {}", s.site), 2) == 0;
+                self.steer(&c.test, holds);
+                if crate::prechecks::holds(&c.test, &|e| self.now_of(e)) {
+                    self.labels.insert(format!("{}:holds", s.site));
+                    Ctl::Next
+                } else {
+                    self.end_label(&format!("{}:breaks", s.site));
+                    self.halt(false)
+                }
             }
             TK::For { var, list, max, parallel, body, result, locals } => {
                 let raw = self.value(list);

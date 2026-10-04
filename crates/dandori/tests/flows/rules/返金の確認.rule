@@ -1,0 +1,24 @@
+rule 返金の確認(refund_review) v1
+description "返金をすぐに払うか、確かめに回すか。返金は払った額を超えないことを、規則は前提にする。求める額が範囲の無いタスクの結果から来るところでは、dandori はこの前提を示せないので、ワークフローが走るときに確かめる（tests/flows/preconditions.ja.flow）"
+
+enum 扱い(path) = すぐ払う(at_once) | 確かめる(review)
+
+inputs
+  払った額(paid)  : number  range >=0 <=10000
+  求める額(asked) : number  range >=0 <=10000
+
+constraint 求める額 <= 払った額
+
+outputs
+  扱い(route) : 扱い
+
+table 選ぶ(pick)
+policy unique
+| 求める額 | -> 扱い : 扱い |
+| <=100    | すぐ払う       |
+| >100     | 確かめる       |
+
+examples
+| 払った額 | 求める額 | -> 扱い  |
+| 500      | 100      | すぐ払う |
+| 500      | 300      | 確かめる |

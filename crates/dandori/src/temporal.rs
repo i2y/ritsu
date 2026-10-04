@@ -1212,7 +1212,11 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
         for p in &ts.params {
             let (name, ty) = (p.name.as_str(), p.ty.as_str());
             let get = format!("args[{}]", q(name));
-            if enum_aliases.contains(&ty) {
+            if crate::rulec::is_day(&ru.info, name, false) {
+                // a day goes to rulec's code as the number of days since 1970-01-01
+                args.push(format!("BigInt(Date.parse(String({get})) / 86400000)"));
+                arg_types.push(format!("{}: string", q(name)));
+            } else if enum_aliases.contains(&ty) {
                 args.push(format!("{}(String({get}))", name_of(&format!("parse{ty}"))));
                 arg_types.push(format!("{}: string", q(name)));
             } else if ty == "boolean" {
@@ -1235,7 +1239,13 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
             let (name, alias, ty) = (o.name.as_str(), o.alias.as_str(), o.ty.as_str());
             // with one output, the rule's function answers that value itself, not a record of outputs
             let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
-            let v = if enum_aliases.contains(&ty) || ty == "boolean" || ty == "string" { x } else { format!("Number({x})") };
+            let v = if crate::rulec::is_day(&ru.info, name, true) {
+                format!("new Date(Number({x}) * 86400000).toISOString().slice(0, 10)")
+            } else if enum_aliases.contains(&ty) || ty == "boolean" || ty == "string" {
+                x
+            } else {
+                format!("Number({x})")
+            };
             outs.push(format!("{}: {v}", q(name)));
         }
         rules_ts.push_str(&format!(
@@ -2621,6 +2631,15 @@ impl<'a> Gen<'a> {
             TK::Fail { error, cause, .. } => {
                 let c = cause.as_ref().map(|c| self.expr(c)).unwrap_or_else(|| "null".into());
                 self.line(d, &format!("throw dd.fail({}, {c});", q(error)));
+            }
+            // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made
+            TK::Check(c) => {
+                let holds = match &c.test {
+                    PreTest::Relation { left, op, right } => format!("{} {op} {}", self.expr(&left.1), self.expr(&right.1)),
+                    PreTest::Days { value, days, .. } => format!("[{}].includes({})", days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", "), self.expr(value)),
+                };
+                self.line(d, &format!("// line {}: the precondition {} of the rule {}, which ritsu could not decide", c.call_line, c.text(), m.rules[c.rule].name));
+                self.line(d, &format!("if (!({holds})) throw dd.fail({}, {});", q(crate::prechecks::ERROR), q(&c.cause(m))));
             }
             TK::Repeat { times, body } => {
                 let site = s.site;

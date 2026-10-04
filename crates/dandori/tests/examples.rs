@@ -23,26 +23,57 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Run `f` reading the rules through rulec's own answer to the port, as `ritsu dandori` reads them.
-/// One engine a thread keeps the rules it checked.
+/// Run `f` reading the rules through rulec's own answer to the port, as `ritsu dandori` reads them
+/// (rulec reading the days of `range from koyomi` through koyomi's port, as ritsu joins them). One
+/// engine a thread keeps the rules it checked. The preconditions ritsu could not decide are every
+/// precondition of every rule a flow calls ([`EveryUndecided`]).
 fn with_rules<R>(f: impl FnOnce() -> R) -> R {
     thread_local! {
-        static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::new());
+        static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::with_dates(std::sync::Arc::new(koyomi::ports::Engine)));
     }
     let rules: std::rc::Rc<dyn ritsu_ports::Rules> = RULEC.with(|r| r.clone());
+    let undecided = std::rc::Rc::new(EveryUndecided(rules.clone()));
     // the dates files and the books through koyomi's and chobo's answers, as a program that joins them reads them
-    dandori::sources::with_ports(rules, std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), f)
+    dandori::sources::with_undecided(rules, std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), undecided, f)
 }
 
-/// `dandori::check::check_file`, with the rules read through rulec.
+/// The preconditions of rules that ritsu could not decide where a flow calls them, as `ritsu
+/// dandori` hands them over (ritsu-cross's answer to the port `Undecided`): here every precondition
+/// of every rule a flow calls, so that every platform runs the check of each (dandori's DESIGN
+/// 1.17). The flows here that call such rules (tests/flows/preconditions.flow and its Japanese
+/// twin) give values ritsu cannot decide, which crates/ritsu/tests/dandori.rs holds `ritsu dandori
+/// build` to.
+struct EveryUndecided(std::rc::Rc<dyn ritsu_ports::Rules>);
+
+impl ritsu_ports::Undecided for EveryUndecided {
+    fn preconditions(&self, file: &Path) -> Vec<ritsu_ports::UndecidedPrecondition> {
+        use ritsu_ports::Flows;
+        let Ok(calls) = dandori::ports::Engine.rule_calls(file, self.0.clone()) else { return vec![] };
+        let mut out = Vec::new();
+        for c in calls {
+            for p in self.0.facts(&c.rule).map(|f| f.preconditions).unwrap_or_default() {
+                out.push(ritsu_ports::UndecidedPrecondition { line: c.line, rule: c.rule.clone(), precondition: p });
+            }
+        }
+        out
+    }
+}
+
+/// `dandori::check::built`, with the rules read through rulec: the checked flow, with the checks of
+/// the preconditions ritsu could not decide in it, as `build`, `run` and `scenarios` read it.
 fn check_file(f: &Path) -> Result<(String, dandori::check::Checked), String> {
-    with_rules(|| dandori::check::check_file(f))
+    with_rules(|| dandori::check::built(f))
+}
+
+/// rulec's library, reading the days of `range from koyomi` through koyomi's port, as `ritsu rulec` does.
+fn with_days<R>(f: impl FnOnce() -> R) -> R {
+    rulec::days::with(Some(std::sync::Arc::new(koyomi::ports::Engine)), f)
 }
 
 /// What `rulec gen <rule> --out <out>` writes, by rulec's library.
 fn rulec_gen(rule: &Path, out: &Path) {
     let (mut said, mut err) = (Vec::new(), Vec::new());
-    let code = rulec::codegen::generate(&[rule.to_str().unwrap()], out.to_str().unwrap(), false, false, &mut said, &mut err);
+    let code = with_days(|| rulec::codegen::generate(&[rule.to_str().unwrap()], out.to_str().unwrap(), false, false, &mut said, &mut err));
     assert_eq!(code, 0, "rulec gen failed: {}{}", String::from_utf8_lossy(&said), String::from_utf8_lossy(&err));
 }
 
@@ -50,9 +81,11 @@ fn rulec_gen(rule: &Path, out: &Path) {
 fn rulec_vectors(rule: &Path) -> String {
     let path = rule.to_str().unwrap();
     let src = std::fs::read_to_string(rule).unwrap();
-    assert!(!rulec::has_error(&rulec::report(&src, path).diags), "{path} does not pass check");
-    let (f, c) = rulec::prepare(&src, path).unwrap();
-    rulec::vectors::generate(&f, &c).iter().map(|v| rulec::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n"
+    with_days(|| {
+        assert!(!rulec::has_error(&rulec::report(&src, path).diags), "{path} does not pass check");
+        let (f, c) = rulec::prepare(&src, path).unwrap();
+        rulec::vectors::generate(&f, &c).iter().map(|v| rulec::vectors::to_json(&f, &c, v)).collect::<Vec<_>>().join("\n") + "\n"
+    })
 }
 
 /// What `koyomi gen <file.cal> --target <target> --out <out>` writes, by koyomi's library.

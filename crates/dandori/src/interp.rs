@@ -337,6 +337,16 @@ impl<'a> Run<'a> {
                 self.fail_with(error, c);
                 Ctl::Stop
             }
+            // a rule's precondition ritsu could not decide: the values the call will give it, as soon as they are made
+            TK::Check(c) => {
+                if crate::prechecks::holds(&c.test, &|e| self.value(e)) {
+                    Ctl::Next
+                } else {
+                    let cause = c.cause(self.m);
+                    self.fail(crate::prechecks::ERROR, &cause);
+                    Ctl::Stop
+                }
+            }
             TK::Assign { name, expr } => {
                 let v = self.value(expr);
                 self.vars.insert(name.clone(), v);

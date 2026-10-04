@@ -92,9 +92,9 @@ See also: [W201](#w201)
 
 ## W201 — Whether a call keeps a rule's precondition cannot be decided
 
-**When**: Where a workflow calls a rule, whether a precondition holds cannot be decided (X2): a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The rule's generated code checks such a precondition at its door when the workflow runs.
+**When**: Where a workflow calls a rule, whether a precondition holds cannot be decided (X2): a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition` (dandori's DESIGN 1.17).
 
-**Fix**: Give the place the value comes from a range (the `range` of a task's result or of the workflow's input). Where none can be given, leave it: the rule refuses at run time.
+**Fix**: Give the place the value comes from a range (the `range` of a task's result or of the workflow's input). Where none can be given, leave it: the workflow's code checks it at run time.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 

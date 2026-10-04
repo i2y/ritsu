@@ -65,9 +65,12 @@ fn language(name: &str, args: &[String]) -> ExitCode {
             std::process::exit(code);
         }
         "dandori" => {
-            // a flow reads its rules, dates files and books in the same process (DESIGN 7.8)
+            // a flow reads its rules, dates files and books in the same process (DESIGN 7.8), and
+            // the code dandori writes checks the preconditions ritsu cannot decide at a flow's calls
+            // of rules when the workflow runs (DESIGN 7.4)
             let j = Joined::new();
-            dandori::cli::run_with_ports(args, j.rules(), j.koyomi.clone(), j.chobo.clone(), &mut out, &mut err)
+            let undecided = std::rc::Rc::new(ritsu_cross::UndecidedCalls::new(&j));
+            dandori::cli::run_with_undecided(args, j.rules(), j.koyomi.clone(), j.chobo.clone(), undecided, &mut out, &mut err)
         }
         "yuen" => yuen::run::run(args, Joined::new().yuen(), &mut out, &mut err),
         "sakai" => sakai::run::run(args, Joined::new().sakai(), &mut out, &mut err),

@@ -253,6 +253,17 @@ pub fn with_ritsu() -> String {
     }
 }
 
+/// The `dandori` command as `run_with_ports`, with what the checks across the borders could not
+/// decide of a flow's calls of rules (`undecided`, ritsu-cross's answer to ritsu's X2), which
+/// `build`, `run`, `scenarios` and `doc` put into the flow as checks the code makes when the
+/// workflow runs (DESIGN 1.17): what `ritsu dandori` hands over.
+pub fn run_with_undecided(args: &[String], rules: Rc<dyn Rules>, dates: Rc<dyn ritsu_ports::Dates>, books: Rc<dyn ritsu_ports::Books>, undecided: Rc<dyn ritsu_ports::Undecided>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    COMMAND.with(|c| *c.borrow_mut() = Some(args.to_vec()));
+    let code = crate::sources::with_undecided(rules, dates, books, undecided, || run_here(args, out, err));
+    COMMAND.with(|c| *c.borrow_mut() = None);
+    code
+}
+
 /// The `dandori` command as `run`, reading the dates files through `dates` (koyomi's answer) and
 /// the books through `books` (chobo's) besides the rules: what a program that joins all three
 /// hands over.
@@ -386,9 +397,12 @@ fn usage(name: &str) -> String {
     table.command(name).map(|c| table.usage_line(c)).unwrap_or_default()
 }
 
-/// Check one file and print its diagnostics; the model when it passes.
+/// Check one file and print its diagnostics; the model when it passes. `print_ok` is `check`'s: it
+/// says a file passes, and leaves the preconditions ritsu could not decide out of the model, which
+/// the other commands put in as checks (DESIGN 1.17).
 fn load(path: &Path, a: &Asked, print_ok: bool, out: &mut dyn Write, err: &mut dyn Write) -> Result<Option<crate::model::Model>, u8> {
-    let (src, checked) = match check::check_file(path) {
+    let read = if print_ok { check::check_file(path) } else { check::built(path) };
+    let (src, checked) = match read {
         Ok(x) => x,
         Err(msg) => {
             let _ = writeln!(err, "{msg}");

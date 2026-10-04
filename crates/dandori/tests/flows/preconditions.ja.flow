@@ -1,0 +1,54 @@
+workflow 返金 v1
+description "返金をすぐに払うか確かめに回し、支払日に精算する。規則の前提は、ここでは ritsu が決められない（求める額と日が、範囲の無いタスクの結果から来る）ので、ワークフローが値のできたところですぐに確かめる。答えたタスクの直後、規則を呼ぶ分岐の始め、イテレーションの始めで確かめる。どのプラットフォームでも動く"
+
+use rule 確認 from "rules/返金の確認.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:refund-review"
+use rule 精算 from "rules/精算.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:settlement-run"
+
+record 請求
+  注文     : string
+  求める額 : int
+
+inputs
+  注文     : string
+  払った額 : int  range >=0 <=10000
+
+task 額を聞く(注文: string) -> int
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:ask-amount"
+  idempotent
+
+task 受付を記す(注文: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:note-request"
+  idempotent
+
+task 日を選ぶ(注文: string) -> date
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:pick-day"
+  idempotent
+
+task 払い戻す(注文: string, 額: int, 日: date)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:pay-back"
+  key
+
+task 請求を集める(注文: string) -> list[請求]
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:list-claims"
+  idempotent
+
+flow
+  # 求める額 <= 払った額 は、額を聞くが答えた直後、受付を記すより前に確かめる
+  let 求める額 = 額を聞く(注文: 注文)
+  受付を記す(注文: 注文)
+  let 判断 = 確認(払った額: 払った額, 求める額: 求める額)
+  let 日 = 日を選ぶ(注文: 注文)
+  match 判断.扱い
+    # 日はここ、分岐の始めで確かめる。確かめに回す返金は、規則に日を渡さない
+    すぐ払う =>
+      let 回 = 精算(支払日: 日)
+      払い戻す(注文: 注文, 額: 求める額, 日: 日)
+    確かめる => pass
+  let 請求一覧 = 請求を集める(注文: 注文)
+  # 請求は一件ずつ、イテレーションの始めで確かめる
+  for 一件 in 請求一覧 at most 2
+    let 一回 = 確認(払った額: 払った額, 求める額: 一件.求める額)
+  for 各件 in 請求一覧 at most 2 in parallel
+    let 各回 = 確認(払った額: 払った額, 求める額: 各件.求める額)

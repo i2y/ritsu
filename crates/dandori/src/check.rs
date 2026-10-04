@@ -48,6 +48,17 @@ pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
     Ok((src, checked))
 }
 
+/// `check_file`, and in the model, a check of each precondition of a rule that the program running
+/// dandori says ritsu could not decide at a call (`sources::undecided`; DESIGN 1.17): what `build`,
+/// `run` and `scenarios` read.
+pub fn built(path: &Path) -> Result<(String, Checked), String> {
+    let (src, mut checked) = check_file(path)?;
+    if let Some(m) = &mut checked.model {
+        crate::prechecks::insert(m, &crate::sources::undecided(path));
+    }
+    Ok((src, checked))
+}
+
 pub fn check_source(src: &str, path: &Path) -> Checked {
     let (model, _, diags) = checked_parts(src, path);
     let ok = !crate::diag::has_errors(&diags);
@@ -65,7 +76,11 @@ pub struct Drawable {
 
 pub fn drawable(path: &Path) -> Result<(String, Drawable), String> {
     let src = crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    let (model, facts, diags) = checked_parts(&src, path);
+    let (mut model, facts, diags) = checked_parts(&src, path);
+    // the checks of the preconditions ritsu could not decide are drawn where they go, when the flow passes
+    if let (Some(m), false) = (&mut model, crate::diag::has_errors(&diags)) {
+        crate::prechecks::insert(m, &crate::sources::undecided(path));
+    }
     Ok((src, Drawable { model, facts, diags }))
 }
 
@@ -309,6 +324,10 @@ pub struct Cost {
     pub fill: u64,
     /// what reading `now` adds to a statement: on durable functions, the step that reads the clock
     pub clock: u64,
+    /// a check of a rule's precondition that ritsu could not decide (DESIGN 1.17): on Step
+    /// Functions, the Choice that tests it and the Fail it may end at; on Argo, a template that
+    /// computes; nothing on the platforms whose code tests it in the workflow
+    pub precheck: u64,
 }
 
 /// Step Functions: a task is entered, scheduled, started, succeeds and is exited (5); a
@@ -316,8 +335,9 @@ pub struct Cost {
 /// exited (2); a Map is entered, started, succeeds and is exited (4), and each round
 /// starts and succeeds (2); the execution starts and ends. Reading Jev's answer adds a Pass that
 /// keeps it and one that raises the task's error (4). A workflow that implements a service starts
-/// with a Pass that fills in the input's zero values (2).
-pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3, jev: 4, fill: 2, clock: 0 };
+/// with a Pass that fills in the input's zero values (2). A check of a rule's precondition is a Choice
+/// and the Fail it may end at (4).
+pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3, jev: 4, fill: 2, clock: 0, precheck: 4 };
 
 /// Temporal: an activity is scheduled, started, completed, and a workflow task follows
 /// (6); a retry, done in the workflow's code so that it matches Step Functions, adds a
@@ -325,8 +345,9 @@ pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice:
 /// follows (5); a match costs nothing; a callback adds the update that brings the answer
 /// (accepted, completed), its workflow task, and the timer of its timeout (7); a call on a
 /// case, the search attribute's upsert (1). A local activity leaves a marker, and a workflow
-/// task may follow (4); its retry, a timer and another (9).
-pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9, jev: 0, fill: 0, clock: 0 };
+/// task may follow (4); its retry, a timer and another (9). A check of a rule's precondition is code
+/// in the workflow, and costs nothing.
+pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9, jev: 0, fill: 0, clock: 0, precheck: 0 };
 
 /// Lambda durable functions: a task is one step, or a callback and its submit step (2); a
 /// rule is one invoke; a retry adds a wait and another call (3); a wait is one operation, a
@@ -334,12 +355,13 @@ pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, c
 /// a map is one operation, and each round
 /// runs in a child context of its own (1). The limit is 3,000 operations an execution and
 /// cannot be raised.
-pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3, jev: 0, fill: 0, clock: 1 };
+pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3, jev: 0, fill: 0, clock: 1, precheck: 0 };
 pub const DURABLE_LIMIT: u64 = 3_000;
 
 /// Argo Workflows: the nodes in the Workflow's status. A statement is a step group of its
 /// block and a step; a template that computes is a template, a step group and a step that
-/// does not run (3), so a `let`, a `fail`, a `succeed` or a `break` is 4. A call is 13: its
+/// does not run (3), so a `let`, a `fail`, a `succeed`, a `break` or a check of a rule's precondition
+/// is 4. A call is 13: its
 /// template, its step groups for the arguments, the try, the after and the handlers, the two
 /// templates that compute, and the pod; a retry adds the retry's node and a pod; a callback,
 /// the wait and its step group. A match is 8, one node an arm (the arm's block, or a step that
@@ -350,7 +372,7 @@ pub const DURABLE_LIMIT: u64 = 3_000;
 /// check and frame. In the runs of tests/flows/edges.flow, a node took 510 to 612 bytes,
 /// about 60 compressed; the template, which Argo keeps twice in the Workflow, took 240 KB
 /// of it in the runs of examples/hotel.
-pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2, jev: 0, fill: 0, clock: 0 };
+pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2, jev: 0, fill: 0, clock: 0, precheck: 4 };
 /// Argo stores a Workflow of up to 1 MiB, compressing the node status when it is larger
 /// (MAX_WORKFLOW_SIZE), unless the status goes to a database. At about 60 bytes a node, that
 /// is some 15,000 nodes; values larger than the tests' leave fewer, so the check stops at 10,000.
@@ -399,6 +421,7 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
             TK::Break => c.brk,
             TK::Pass => 0,
             TK::Succeed { .. } | TK::Fail { .. } => c.choice,
+            TK::Check(_) => c.precheck,
         };
         let here = here + if s.kind.reads_now() { c.clock } else { 0 };
         total = total.saturating_add(here);

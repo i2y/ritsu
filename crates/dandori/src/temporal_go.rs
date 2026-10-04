@@ -2377,8 +2377,10 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
             t.push_str(&format!("//\trequire koyomi/go/{p} v0.0.0\n//\treplace koyomi/go/{p} => ./<this package's directory>/koyomi/go/{p}\n"));
         }
     }
+    // a rule's day goes to rulec's code as the number of days since 1970-01-01
+    let days = called.iter().any(|r| m.rules[*r].is_rule() && m.rules[*r].info.inputs.iter().chain(&m.rules[*r].info.outputs).any(|c| c.ty == crate::rulec::RType::Date));
     t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n"));
-    if !dated.is_empty() {
+    if !dated.is_empty() || days {
         t.push_str("\t\"time\"\n");
     }
     t.push('\n');
@@ -2397,6 +2399,9 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
     if !dated.is_empty() {
         t.push_str(DAY_GO);
     }
+    if days {
+        t.push_str("\n// ddDayNumber is a day of the calendar (`YYYY-MM-DD`) as the number of days since 1970-01-01, which\n// the Go rulec generates takes, and whether it is one.\nfunc ddDayNumber(v any) (int64, bool) {\n\tt, err := time.Parse(\"2006-01-02\", ddStr(v))\n\treturn t.Unix() / 86400, err == nil\n}\n");
+    }
     for r in called {
         let ru = &m.rules[*r];
         if let Some(d) = ru.date() {
@@ -2411,7 +2416,14 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
         for (i, f) in go.params.iter().enumerate() {
             let (name, alias, ty) = (f.name.as_str(), f.alias.as_str(), f.ty.as_str());
             let get = format!("args[{}]", q(name));
-            let v = if is_enum(ty) {
+            let v = if crate::rulec::is_day(&ru.info, name, false) {
+                let x = format!("dd_in{i}");
+                body.push(format!("{x}, ok := ddDayNumber({get})"));
+                body.push("if !ok {".into());
+                body.push(format!("\treturn nil, ddBadArgument({}, {get})", q(name)));
+                body.push("}".into());
+                if ty == "int64" { x } else { format!("{pkgname}.{ty}({x})") }
+            } else if is_enum(ty) {
                 let x = format!("dd_in{i}");
                 body.push(format!("{x}, ok := {pkgname}.Parse{ty}(ddStr({get}))"));
                 body.push("if !ok {".into());
@@ -2436,7 +2448,9 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
             let (name, alias, ty) = (o.name.as_str(), o.alias.as_str(), o.ty.as_str());
             // with one output, the rule's function answers that value itself, not a record of outputs
             let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
-            let v = if is_enum(ty) {
+            let v = if crate::rulec::is_day(&ru.info, name, true) {
+                format!("time.Unix(int64({x})*86400, 0).UTC().Format(\"2006-01-02\")")
+            } else if is_enum(ty) {
                 format!("{x}.String()")
             } else if ty == "bool" || ty == "string" {
                 x
@@ -3242,6 +3256,26 @@ impl<'a> Gen<'a> {
                 let c = cause.as_ref().map(|c| self.expr(c)).unwrap_or_else(|| "nil".into());
                 self.line(d, &format!("return nil, ddFail({}, {c})", q(error)));
                 true
+            }
+            // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made
+            TK::Check(c) => {
+                let fail = format!("return nil, ddFail({}, {})", q(crate::prechecks::ERROR), q(&c.cause(self.m)));
+                self.line(d, &format!("// line {}: the precondition {} of the rule {}, which ritsu could not decide", c.call_line, c.text(), self.m.rules[c.rule].name));
+                match &c.test {
+                    PreTest::Relation { left, op, right } => {
+                        self.line(d, &format!("if !(ddNum({}) {op} ddNum({})) {{", self.expr(&left.1), self.expr(&right.1)));
+                        self.line(d + 1, &fail);
+                        self.line(d, "}");
+                    }
+                    PreTest::Days { value, days, .. } => {
+                        self.line(d, &format!("switch ddStr({}) {{", self.expr(value)));
+                        self.line(d, &format!("case {}:", days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")));
+                        self.line(d, "default:");
+                        self.line(d + 1, &fail);
+                        self.line(d, "}");
+                    }
+                }
+                false
             }
             TK::Repeat { times, body } => {
                 let site = s.site;

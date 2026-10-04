@@ -1,0 +1,24 @@
+rule refund_check v1
+description "Whether a refund is paid back at once or reviewed. A refund never asks for more than was paid, which the rule takes for granted: a precondition dandori cannot show where the amount asked comes from a task with no range, so the workflow checks it when it runs (tests/flows/preconditions.flow)"
+
+enum path = at_once | review
+
+inputs
+  paid  : number  range >=0 <=10000
+  asked : number  range >=0 <=10000
+
+constraint asked <= paid
+
+outputs
+  route : path
+
+table pick
+policy unique
+| asked | -> route : path |
+| <=100 | at_once         |
+| >100  | review          |
+
+examples
+| paid | asked | -> route |
+| 500  | 100   | at_once  |
+| 500  | 300   | review   |

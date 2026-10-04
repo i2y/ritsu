@@ -1,0 +1,54 @@
+workflow refunds v1
+description "Pays a refund back at once or sends it to review, and settles it on a payment day. ritsu cannot decide the rules' preconditions here (the amount asked and the day come from tasks with no range), so the workflow checks each as soon as its values are made: right after the task that answers them, at the start of the arm that calls the rule, at the start of each round. Runs on every platform"
+
+use rule check from "rules/refund_check.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:refund-check"
+use rule settle from "rules/settlement.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:settlement"
+
+record Claim
+  order : string
+  asked : int
+
+inputs
+  order : string
+  paid  : int  range >=0 <=10000
+
+task ask_amount(order: string) -> int
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:ask-amount"
+  idempotent
+
+task note_request(order: string)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:note-request"
+  idempotent
+
+task pick_day(order: string) -> date
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:pick-day"
+  idempotent
+
+task pay_back(order: string, amount: int, day: date)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:pay-back"
+  key
+
+task list_claims(order: string) -> list[Claim]
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:list-claims"
+  idempotent
+
+flow
+  # asked <= paid is checked right after ask_amount answers, before note_request is called
+  let asked = ask_amount(order: order)
+  note_request(order: order)
+  let decision = check(paid: paid, asked: asked)
+  let day = pick_day(order: order)
+  match decision.route
+    # the day is checked here, at the start of the arm: a refund for review never gives it to the rule
+    at_once =>
+      let run = settle(pay_day: day)
+      pay_back(order: order, amount: asked, day: day)
+    review => pass
+  let claims = list_claims(order: order)
+  # each claim is checked at the start of its round
+  for claim in claims at most 2
+    let one = check(paid: paid, asked: claim.asked)
+  for item in claims at most 2 in parallel
+    let each = check(paid: paid, asked: item.asked)

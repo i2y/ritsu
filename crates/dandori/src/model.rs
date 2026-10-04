@@ -811,6 +811,54 @@ pub enum TK {
     Pass,
     Succeed { fields: Vec<(String, TExpr)> },
     Fail { error: String, cause: Option<TExpr>, leaving: Vec<usize> },
+    /// A rule's precondition that ritsu could not decide where the flow calls the rule (ritsu's X2,
+    /// DESIGN 1.17), checked here, as soon as the values the call gives are made: a run whose values
+    /// break it fails with `Dandori.BrokenPrecondition`. Never written in a `.flow`: `prechecks`
+    /// puts it in after the check, from what `ritsu dandori` hands over.
+    Check(PreCheck),
+}
+
+/// A rule's precondition, checked where the code of the workflow runs (`TK::Check`).
+#[derive(Clone, Debug)]
+pub struct PreCheck {
+    /// the rule called, and the line of the call the check is for
+    pub rule: usize,
+    pub call_line: usize,
+    pub test: PreTest,
+}
+
+#[derive(Clone, Debug)]
+pub enum PreTest {
+    /// `left op right` between two inputs of the rule (`op` is `<=`, `<`, `>=` or `>`): each the
+    /// input's name and the value the call gives it, a whole number on the wire
+    Relation { left: (String, TExpr), op: String, right: (String, TExpr) },
+    /// a date input that takes only the days of a koyomi date (rulec's `range from koyomi`): the
+    /// input, the value the call gives it, the file and the date as the rule names them, and the
+    /// days, `YYYY-MM-DD` in order
+    Days { input: String, value: TExpr, file: String, date: String, days: Vec<String> },
+}
+
+impl PreCheck {
+    /// The values the check reads.
+    pub fn exprs(&self) -> Vec<&TExpr> {
+        match &self.test {
+            PreTest::Relation { left, right, .. } => vec![&left.1, &right.1],
+            PreTest::Days { value, .. } => vec![value],
+        }
+    }
+
+    /// The precondition, as ritsu says it: `asked <= paid`, `pay_day in koyomi "terms.cal" date payment`.
+    pub fn text(&self) -> String {
+        match &self.test {
+            PreTest::Relation { left, op, right } => format!("{} {op} {}", left.0, right.0),
+            PreTest::Days { input, file, date, .. } => format!("{input} in koyomi \"{file}\" date {date}"),
+        }
+    }
+
+    /// The cause a run that breaks it fails with, the same on every platform.
+    pub fn cause(&self, m: &Model) -> String {
+        format!("line {}: the values given to the rule {} break its precondition {}", self.call_line, m.rules[self.rule].name, self.text())
+    }
 }
 
 impl TK {
@@ -823,6 +871,7 @@ impl TK {
             TK::For { list, result, .. } => std::iter::once(list).chain(result.as_ref().map(|(_, y)| y)).collect(),
             TK::Succeed { fields } => fields.iter().map(|(_, e)| e).collect(),
             TK::Fail { cause, .. } => cause.iter().collect(),
+            TK::Check(c) => c.exprs(),
             _ => vec![],
         }
     }

@@ -7,5 +7,5 @@ refund.flow: ok (2 warning(s))
 warning[ritsu W201]: refund.flow:21:1: Whether the call of the rule check keeps its precondition `asked <= paid` cannot be decided
     21 |   let decision = check(paid: paid, asked: asked)
   = nothing says what range `asked` is in (the answer of `ask_amount` has no range)
-  = The rule's generated code checks it at its door when the workflow runs; a call that breaks it fails there.
+  = The workflow's code that `ritsu dandori build` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`.
 ritsu check: 2 files (rulec 1, dandori 1): all pass (3 warnings); borders between the languages: 1 checked, 1 undecided

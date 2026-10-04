@@ -535,7 +535,8 @@ impl<'a> Spans<'a> {
                 }
                 None
             }
-            TK::Pass => Some(st),
+            // a check of a precondition takes no time: the run goes on as it was, or fails there
+            TK::Pass | TK::Check(_) => Some(st),
             TK::Succeed { .. } | TK::Fail { .. } => None,
         }
     }

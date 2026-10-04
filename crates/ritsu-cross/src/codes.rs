@@ -121,12 +121,12 @@ pub fn ledger() -> Ledger {
             "W201",
             tr!("規則を呼ぶところで、前提が保たれるかを決められません", "Whether a call keeps a rule's precondition cannot be decided"),
             tr!(
-                "ワークフローが規則を呼ぶところで、前提が保たれるかを決められないとき（X2）。渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限である（dandori は並びの長さを知りません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来る、のどれかです。決められない前提は、規則の生成したコードが、ワークフローを走らせたときに入口で確かめます。",
-                "Where a workflow calls a rule, whether a precondition holds cannot be decided (X2): a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The rule's generated code checks such a precondition at its door when the workflow runs."
+                "ワークフローが規則を呼ぶところで、前提が保たれるかを決められないとき（X2）。渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限である（dandori は並びの長さを知りません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori build` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめ、破る実行を `Dandori.BrokenPrecondition` で失敗させます（dandori の DESIGN 1.17）。",
+                "Where a workflow calls a rule, whether a precondition holds cannot be decided (X2): a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition` (dandori's DESIGN 1.17)."
             ),
             tr!(
-                "値の来るところに範囲を書きます（タスクの結果やワークフローの入力の `range`）。範囲を書けないなら、このままで構いません。規則が実行時に断ります。",
-                "Give the place the value comes from a range (the `range` of a task's result or of the workflow's input). Where none can be given, leave it: the rule refuses at run time."
+                "値の来るところに範囲を書きます（タスクの結果やワークフローの入力の `range`）。範囲を書けないなら、このままで構いません。ワークフローのコードが実行時に確かめます。",
+                "Give the place the value comes from a range (the `range` of a task's result or of the workflow's input). Where none can be given, leave it: the workflow's code checks it at run time."
             ),
             Repro::Dir { files: vec![("refund_check.rule", REFUND_RULE), ("refund.flow", REFUND_FLOW_OPEN)], command: CHECK.to_vec() },
             &["E201"],

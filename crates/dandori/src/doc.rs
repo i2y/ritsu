@@ -250,6 +250,14 @@ impl<'a> Builder<'a> {
                     let n = self.stmt_node(s, Kind::Succeed, vec![short(&text, 56)]);
                     out.push(Piece::Stop(n));
                 }
+                // a rule's precondition ritsu could not decide, checked as soon as the values are made
+                TK::Check(c) => {
+                    let n = self.stmt_node(s, Kind::Let, vec![short(&format!("check {}", c.text()), 56), match lang {
+                        Lang::En => format!("a precondition of the rule {}", self.i.m.rules[c.rule].name),
+                        Lang::Ja => format!("規則 {} の前提", self.i.m.rules[c.rule].name),
+                    }]);
+                    out.push(Piece::Node(n));
+                }
                 TK::Fail { error, cause, leaving } => {
                     let mut lines = vec![format!("fail {error}")];
                     if let Some(c) = cause {
@@ -1460,6 +1468,7 @@ fn own_error(name: &str, lang: Lang) -> Option<String> {
         "Dandori.BadInput" => ("an input not of the declared type", "宣言した型に合わない入力"),
         "Dandori.TooManyItems" => ("a list longer than the loop's bound", "ループの上限より長いリスト"),
         "Dandori.UnexpectedValue" => ("a value no arm takes", "どの分岐にも当たらない値"),
+        "Dandori.BrokenPrecondition" => ("values that break a precondition of the rule they go to", "渡す先の規則の前提を破る値"),
         _ => return None,
     };
     Some(tr(lang, en, ja))

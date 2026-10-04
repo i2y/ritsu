@@ -1,0 +1,23 @@
+rule settlement v1
+description "The settlement run a payment day falls in. The days are the ones payment_terms.cal pays on, so the table names those and nothing in between; dandori carries no range of days, so the workflow checks the day it gives when it runs (tests/flows/preconditions.flow)"
+
+enum run = first_half | second_half | year_end
+
+inputs
+  pay_day : date  range from koyomi "../dates/payment_terms.cal" date payment
+
+outputs
+  batch : run
+
+table pick
+policy unique
+| pay_day                   | -> batch : run |
+| <=2026-06-30              | first_half     |
+| >=2026-07-10 <=2026-12-10 | second_half    |
+| >=2027-01-01              | year_end       |
+
+examples
+| pay_day    | -> batch    |
+| 2026-02-10 | first_half  |
+| 2026-07-10 | second_half |
+| 2027-01-10 | year_end    |

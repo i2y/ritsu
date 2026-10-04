@@ -84,3 +84,105 @@ fn ritsu_check_reads_the_dates_and_the_books_of_a_flow() {
     // the borders the languages share are ritsu-cross's to count; the files are what is held here
     assert!(out.lines().last().is_some_and(|l| l.starts_with("ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (8 warnings); ")), "{out}");
 }
+
+/// The preconditions of rules that ritsu leaves undecided, as dandori's tests take them: every
+/// precondition of every rule a flow calls.
+struct EveryUndecided(std::rc::Rc<dyn ritsu_ports::Rules>);
+
+impl ritsu_ports::Undecided for EveryUndecided {
+    fn preconditions(&self, file: &std::path::Path) -> Vec<ritsu_ports::UndecidedPrecondition> {
+        use ritsu_ports::Flows;
+        let Ok(calls) = dandori::ports::Engine.rule_calls(file, self.0.clone()) else { return vec![] };
+        let mut out = Vec::new();
+        for c in calls {
+            for p in self.0.facts(&c.rule).map(|f| f.preconditions).unwrap_or_default() {
+                out.push(ritsu_ports::UndecidedPrecondition { line: c.line, rule: c.rule.clone(), precondition: p });
+            }
+        }
+        out
+    }
+}
+
+/// Every file under `dir`, by its path from it, with what it holds.
+fn files_under(dir: &std::path::Path) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else {
+                out.insert(p.strip_prefix(dir).unwrap().display().to_string(), std::fs::read_to_string(&p).unwrap_or_default());
+            }
+        }
+    }
+    out
+}
+
+const TARGETS: [&str; 7] = ["asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"];
+
+/// dandori's own command on `args` in `dir`, with rulec, koyomi and chobo joined and the preconditions
+/// `undecided` says ritsu could not decide (None: none).
+fn dandori_lib(dir: &std::path::Path, args: &[&str], undecided: bool) -> u8 {
+    let rules: std::rc::Rc<dyn ritsu_ports::Rules> = std::rc::Rc::new(rulec::ports::Engine::with_dates(std::sync::Arc::new(koyomi::ports::Engine)));
+    let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    let here = std::env::current_dir().unwrap();
+    std::env::set_current_dir(dir).unwrap();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = if undecided {
+        dandori::cli::run_with_undecided(&args, rules.clone(), std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), std::rc::Rc::new(EveryUndecided(rules)), &mut out, &mut err)
+    } else {
+        dandori::cli::run_with_ports(&args, rules, std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), &mut out, &mut err)
+    };
+    std::env::set_current_dir(here).unwrap();
+    assert_eq!(code, 0, "{}", String::from_utf8_lossy(&err));
+    code
+}
+
+/// What ritsu cannot decide of a rule's preconditions where a flow calls it (ritsu-cross's W201)
+/// goes to dandori, and the code `ritsu dandori build` writes checks it when the workflow runs
+/// (DESIGN 7.4 item 3; dandori's DESIGN 1.17). tests/flows/preconditions.flow and its Japanese twin
+/// call rules whose four preconditions ritsu-cross leaves undecided: each builds on every platform
+/// exactly as dandori builds it with every precondition left undecided, which dandori's tests run on
+/// every platform against its reference interpreter. A call whose precondition ritsu-cross decides
+/// (shown to hold, or broken by an example, its E201) is built as it is built without ritsu-cross.
+#[test]
+fn ritsu_dandori_checks_the_preconditions_ritsu_cannot_decide() {
+    for flow in ["preconditions.flow", "preconditions.ja.flow"] {
+        for target in TARGETS {
+            let (a, b) = (ritsu_testkit::TempDir::new("xb-ritsu"), ritsu_testkit::TempDir::new("xb-lib"));
+            let rel = format!("tests/flows/{flow}");
+            let (code, _, err) = ritsu(&["dandori", "build", &rel, "--target", target, "--out", a.path().to_str().unwrap()]);
+            assert_eq!(code, 0, "{flow} {target}: {err}");
+            dandori_lib(&dandori_dir(), &["build", &rel, "--target", target, "--out", b.path().to_str().unwrap()], true);
+            let (got, want) = (files_under(a.path()), files_under(b.path()));
+            assert_eq!(got.keys().collect::<Vec<_>>(), want.keys().collect::<Vec<_>>(), "{flow} {target}");
+            for (name, text) in &got {
+                assert!(text == &want[name], "{flow} {target}: {name} is not what dandori writes with every precondition undecided");
+            }
+            let checks: usize = got.values().map(|t| t.matches("Dandori.BrokenPrecondition").count()).sum();
+            assert!(checks >= 4, "{flow} {target}: {checks} checks");
+        }
+    }
+    // decided: what is asked kept below what was paid by the ranges (held), and able to pass it (E201)
+    let ledger = ritsu_cross::codes::ledger();
+    let ritsu_base::ledger::Repro::Dir { files, .. } = &ledger.find("E201").unwrap().repro else { panic!("E201 has its files") };
+    let rule = files.iter().find(|(n, _)| n.ends_with(".rule")).unwrap().1;
+    let broken = files.iter().find(|(n, _)| n.ends_with(".flow")).unwrap().1.to_string();
+    let held = broken.replace("paid  : int  range >=0 <=10000", "paid  : int  range >=5000 <=10000").replace("-> int range >=0 <=10000", "-> int range >=0 <=5000");
+    for (name, flow) in [("held", held), ("broken", broken)] {
+        let t = ritsu_testkit::TempDir::new("xb-decided");
+        std::fs::write(t.path().join("refund_check.rule"), rule).unwrap();
+        std::fs::write(t.path().join("refund.flow"), &flow).unwrap();
+        for target in TARGETS {
+            let (a, b) = (t.path().join(format!("ritsu-{target}")), t.path().join(format!("lib-{target}")));
+            let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).current_dir(t.path()).args(["dandori", "build", "refund.flow", "--target", target, "--out", a.to_str().unwrap()]).output().unwrap();
+            assert!(o.status.success(), "{name} {target}: {}", String::from_utf8_lossy(&o.stderr));
+            dandori_lib(t.path(), &["build", "refund.flow", "--target", target, "--out", b.to_str().unwrap()], false);
+            let (got, want) = (files_under(&a), files_under(&b));
+            assert_eq!(got, want, "{name} {target}: a call ritsu decides is built as it is without ritsu-cross");
+            assert!(!got.values().any(|t| t.contains("Dandori.BrokenPrecondition")), "{name} {target}");
+        }
+    }
+}

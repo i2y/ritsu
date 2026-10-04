@@ -4,7 +4,7 @@ billing.flow: 検査を通りました
 警告[ritsu W201]: billing.flow:19:1: 規則 settlement を呼ぶところで、前提 `pay_day in koyomi "payment_terms.cal" date payment` が保たれるかを決められません
     19 |   let pick = settlement(pay_day: received)
   = `received` が何日になるかは分かりません（入力 `received` には日付の範囲がありません）
-  = 規則の生成したコードが、ワークフローを走らせたときに入口で確かめます。破れば、この呼び出しはそこで落ちます。
+  = `ritsu dandori build` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめます。破る実行は、そこで `Dandori.BrokenPrecondition` で失敗します。
 警告[ritsu W205]: billing.flow:18:1: koyomi の日付 `terms.payment` の `received` に渡す日が、入力の範囲に収まるかを決められません
     18 |   let due = terms.payment(received: received)
   = `received` が何日になるかは分かりません（入力 `received` には日付の範囲がありません）。"payment_terms.cal" が `received` に受け取るのは 2026-01-01 から 2026-12-20 までです

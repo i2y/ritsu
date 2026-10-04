@@ -674,7 +674,8 @@ impl<'a> Flow<'a> {
                     head = next;
                 }
             }
-            TK::Pass => a,
+            // put in after this check (prechecks), so never walked here; it goes on, or fails the run
+            TK::Pass | TK::Check(_) => a,
             TK::Break => {
                 let a2 = a.step(Step::new(s.line, tr!("break", "break")).at(here));
                 if let Some(l) = self.loops.last_mut() {

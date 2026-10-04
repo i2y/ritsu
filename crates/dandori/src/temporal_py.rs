@@ -737,7 +737,9 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
         t.push_str("# `koyomi gen <file.cal> --out <this package>/koyomi` writes the modules of the dates.\n");
     }
     t.push_str("\nfrom __future__ import annotations\n\n");
-    if dates {
+    // a rule's day goes to rulec's code as the number of days since 1970-01-01
+    let days = called.iter().any(|r| m.rules[*r].is_rule() && m.rules[*r].info.inputs.iter().chain(&m.rules[*r].info.outputs).any(|c| c.ty == crate::rulec::RType::Date));
+    if dates || days {
         t.push_str("import datetime\n");
     }
     t.push_str("from typing import Any\n\n");
@@ -807,7 +809,9 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
         for p in &py.params {
             let (name, ty) = (p.name.as_str(), p.ty.as_str());
             let get = format!("args[{}]", q(name));
-            if is_enum(ty) {
+            if crate::rulec::is_day(&ru.info, name, false) {
+                args.push(format!("(datetime.date.fromisoformat(str({get})) - datetime.date(1970, 1, 1)).days"));
+            } else if is_enum(ty) {
                 args.push(format!("{}({get})", name_of(ty)));
             } else if ty == "bool" {
                 args.push(format!("bool({get})"));
@@ -823,7 +827,9 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
             let (name, alias, ty) = (o.name.as_str(), o.alias.as_str(), o.ty.as_str());
             // with one output, the rule's function answers that value itself, not a record of outputs
             let x = if outputs.len() == 1 { "out".to_string() } else { format!("out.{alias}") };
-            let v = if is_enum(ty) {
+            let v = if crate::rulec::is_day(&ru.info, name, true) {
+                format!("(datetime.date(1970, 1, 1) + datetime.timedelta(days=int({x}))).isoformat()")
+            } else if is_enum(ty) {
                 format!("{x}.value")
             } else if ty == "bool" || ty == "str" {
                 x
@@ -2021,6 +2027,16 @@ impl<'a> Gen<'a> {
             TK::Fail { error, cause, .. } => {
                 let c = cause.as_ref().map(|c| self.expr(c)).unwrap_or_else(|| "None".into());
                 self.line(d, &format!("raise dd.fail({}, {c})", q(error)));
+            }
+            // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made
+            TK::Check(c) => {
+                let holds = match &c.test {
+                    PreTest::Relation { left, op, right } => format!("{} {op} {}", self.expr(&left.1), self.expr(&right.1)),
+                    PreTest::Days { value, days, .. } => format!("{} in ({},)", self.expr(value), days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")),
+                };
+                self.line(d, &format!("# line {}: the precondition {} of the rule {}, which ritsu could not decide", c.call_line, c.text(), self.m.rules[c.rule].name));
+                self.line(d, &format!("if not ({holds}):"));
+                self.line(d + 1, &format!("raise dd.fail({}, {})", q(crate::prechecks::ERROR), q(&c.cause(self.m))));
             }
             TK::Repeat { times, body } => {
                 let site = s.site;

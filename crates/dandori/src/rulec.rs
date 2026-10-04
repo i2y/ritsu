@@ -28,6 +28,14 @@ pub enum RType {
     Num { unit: Unit, min: Option<i64>, max: Option<i64> },
 }
 
+/// Whether the rule's input (or with `output`, its output) of this name is a day of the calendar,
+/// which the code rulec generates takes and answers as the number of days since 1970-01-01, and the
+/// workflow carries as `YYYY-MM-DD`.
+pub fn is_day(info: &RuleInfo, name: &str, output: bool) -> bool {
+    let cols = if output { &info.outputs } else { &info.inputs };
+    cols.iter().any(|c| c.name == name && c.ty == RType::Date)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Column {
     pub name: String,

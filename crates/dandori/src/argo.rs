@@ -590,6 +590,18 @@ impl<'a> Gen<'a> {
                 let c = cause.as_ref().map(|c| self.ex(c)).unwrap_or_else(|| "nil".into());
                 Some((self.fail_with(&format!("s{site}-fail"), depth, error, c), true))
             }
+            // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made: a
+            // template that computes, which lets the flow go on when it holds and fails it when not
+            TK::Check(c) => {
+                let holds = match &c.test {
+                    PreTest::Relation { left, op, right } => format!("{} {op} {}", self.ex(&left.1), self.ex(&right.1)),
+                    PreTest::Days { value, days, .. } => format!("{} in [{}]", self.ex(value), days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")),
+                };
+                let (ctl, error) = (Gen::ctl(depth), Gen::global_ref("dd_error", depth));
+                let failed = format!("toJson({{\"Error\": {}, \"Cause\": {}}})", q(crate::prechecks::ERROR), q(&c.cause(self.m)));
+                let outs = vec![Gen::set_ctl(depth, format!("({holds}) ? {ctl} : \"fail\"")), Gen::set_error(depth, format!("({holds}) ? {error} : {failed}")), Gen::go(&holds)];
+                Some((self.compute(&format!("s{site}-check"), depth, &[], outs), true))
+            }
             TK::Wait { seconds } => {
                 let n = self.name(&format!("s{site}-wait"));
                 self.templates.push(json!({ "name": n, "inputs": Gen::inputs(depth, &[]), "suspend": { "duration": seconds.to_string() } }));

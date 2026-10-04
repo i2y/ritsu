@@ -25,10 +25,11 @@ fn dandori_dir() -> PathBuf {
 }
 
 /// Run `f` reading the rules, the dates files and the books through rulec's, koyomi's and chobo's
-/// own answers to the ports, as a program that joins them all reads them.
+/// own answers to the ports, as a program that joins them all reads them (rulec reading the days
+/// of `range from koyomi` through koyomi's port, as `ritsu dandori` does).
 fn with_rules<R>(f: impl FnOnce() -> R) -> R {
     thread_local! {
-        static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::new());
+        static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::with_dates(std::sync::Arc::new(koyomi::ports::Engine)));
     }
     let rules: std::rc::Rc<dyn ritsu_ports::Rules> = RULEC.with(|r| r.clone());
     dandori::sources::with_ports(rules, std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), f)
@@ -218,6 +219,9 @@ fn stmt(m: &Model, s: &TStmt) -> Value {
         TK::Pass => json!({"pass": true}),
         TK::Succeed { fields } => json!({"succeed": {"fields": fields.iter().map(|(f, e)| json!([f, expr(e)])).collect::<Vec<_>>()}}),
         TK::Fail { error, cause, leaving } => json!({"fail": {"error": error, "cause": cause.as_ref().map(expr), "leaving": leaving}}),
+        // put in only from the preconditions ritsu-cross could not decide (dandori's DESIGN 1.17), which
+        // the flows are read here without
+        TK::Check(_) => unreachable!("a check of a rule's precondition in a flow read without ritsu-cross"),
     };
     let mut o = k.as_object().unwrap().clone();
     o.insert("site".into(), json!(s.site));

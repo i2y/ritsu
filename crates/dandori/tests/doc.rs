@@ -33,13 +33,34 @@ fn rel(p: &Path) -> String {
 /// Run `f` reading the rules through rulec's own answer to the port, as `ritsu dandori` reads them:
 /// what a flow's check reads of them, and the pages `rulec doc` draws for them. One engine a thread
 /// keeps the rules it checked.
+/// rulec reads the days of `range from koyomi` through koyomi's port, as ritsu joins them, and the
+/// preconditions ritsu could not decide are every precondition of every rule a flow calls, as in
+/// tests/examples.rs: the checks of them are drawn where they go.
 fn with_rules<R>(f: impl FnOnce() -> R) -> R {
     thread_local! {
-        static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::new());
+        static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::with_dates(std::sync::Arc::new(koyomi::ports::Engine)));
     }
     let rules: std::rc::Rc<dyn ritsu_ports::Rules> = RULEC.with(|r| r.clone());
+    let undecided = std::rc::Rc::new(EveryUndecided(rules.clone()));
     // the dates files and the books through koyomi's and chobo's answers, as a program that joins them reads them
-    dandori::sources::with_ports(rules, std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), f)
+    dandori::sources::with_undecided(rules, std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), undecided, f)
+}
+
+/// Every precondition of every rule a flow calls, as the preconditions ritsu could not decide.
+struct EveryUndecided(std::rc::Rc<dyn ritsu_ports::Rules>);
+
+impl ritsu_ports::Undecided for EveryUndecided {
+    fn preconditions(&self, file: &Path) -> Vec<ritsu_ports::UndecidedPrecondition> {
+        use ritsu_ports::Flows;
+        let Ok(calls) = dandori::ports::Engine.rule_calls(file, self.0.clone()) else { return vec![] };
+        let mut out = Vec::new();
+        for c in calls {
+            for p in self.0.facts(&c.rule).map(|f| f.preconditions).unwrap_or_default() {
+                out.push(ritsu_ports::UndecidedPrecondition { line: c.line, rule: c.rule.clone(), precondition: p });
+            }
+        }
+        out
+    }
 }
 
 /// `dandori::check::drawable`, with the rules read through rulec.

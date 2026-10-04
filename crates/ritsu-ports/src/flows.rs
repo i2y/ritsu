@@ -182,3 +182,25 @@ pub fn seconds_text(secs: u64) -> Text {
         en: parts.iter().map(|(n, _, one, many)| format!("{n} {}", if *n == 1 { one } else { many })).collect::<Vec<_>>().join(" "),
     }
 }
+
+/// One precondition of a rule at one call that the check across the border (X2, DESIGN 7.4) could
+/// not decide: neither shown to hold for every value the call can give, nor broken by an example.
+/// The code dandori writes for the workflow checks it when the workflow runs, as soon as the values
+/// are made (dandori's DESIGN 1.17).
+#[derive(Clone, Debug, PartialEq)]
+pub struct UndecidedPrecondition {
+    /// The line of the call, from 1, as `RuleCall::line` gives it.
+    pub line: usize,
+    /// The rule's file, as dandori reaches it.
+    pub rule: PathBuf,
+    pub precondition: crate::Precondition,
+}
+
+/// What the checks across the borders could not decide of a flow's calls of rules (DESIGN 7.4,
+/// item 3), for the code dandori writes: `ritsu dandori` hands ritsu-cross's answer over, and the
+/// binary of dandori's own crate hands over one that says nothing (it reads no rule).
+pub trait Undecided {
+    /// The preconditions left undecided at the calls of the flow at `file`, in the order of the
+    /// calls; none when the flow does not pass dandori's check.
+    fn preconditions(&self, file: &Path) -> Vec<UndecidedPrecondition>;
+}

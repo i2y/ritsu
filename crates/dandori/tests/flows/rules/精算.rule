@@ -1,0 +1,23 @@
+rule 精算(settlement_run) v1
+description "支払日が入る精算の回。日は 支払条件.cal が払う日なので、表はその日だけを書き、あいだの日は書かない。dandori は日の範囲を運ばないので、渡す日はワークフローが走るときに確かめる（tests/flows/preconditions.ja.flow）"
+
+enum 回(run) = 前半(first_half) | 後半(second_half) | 年末(year_end)
+
+inputs
+  支払日(pay_day) : date  range from koyomi "../dates/支払条件.cal" date 支払日
+
+outputs
+  精算の回(batch) : 回
+
+table 選ぶ(pick)
+policy unique
+| 支払日                    | -> 精算の回 : 回 |
+| <=2026-06-30              | 前半             |
+| >=2026-07-10 <=2026-12-10 | 後半             |
+| >=2027-01-01              | 年末             |
+
+examples
+| 支払日     | -> 精算の回 |
+| 2026-02-10 | 前半        |
+| 2026-07-10 | 後半        |
+| 2027-01-10 | 年末        |

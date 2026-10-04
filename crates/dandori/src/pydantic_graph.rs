@@ -686,6 +686,18 @@ impl<'a> Gen<'a> {
                 n.line(0, &format!("raise dd.Failure({}, {c})", q(error)));
                 self.push(n)
             }
+            // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made
+            TK::Check(c) => {
+                let mut n = self.node(format!("S{site}_check"), format!("line {line}: the precondition {} of the rule {}, which ritsu could not decide", c.text(), m.rules[c.rule].name), (site, 0), cx);
+                let holds = match &c.test {
+                    PreTest::Relation { left, op, right } => format!("{} {op} {}", self.expr(&left.1), self.expr(&right.1)),
+                    PreTest::Days { value, days, .. } => format!("{} in ({},)", self.expr(value), days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")),
+                };
+                n.line(0, &format!("if not ({holds}):"));
+                n.line(1, &format!("raise dd.Failure({}, {})", q(crate::prechecks::ERROR), q(&c.cause(m))));
+                n.jump(0, &next);
+                self.push(n)
+            }
             TK::Repeat { times, body } => {
                 let again = Jump::Node(format!("S{site}_again"));
                 self.field(format!("dd_loop_{site}"), "int", "0");

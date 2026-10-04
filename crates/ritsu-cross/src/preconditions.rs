@@ -14,14 +14,16 @@
 //!   it, which dandori's ranges say the call can give, as dandori's own E014 reads them (each value
 //!   from the places it comes from, taken one at a time);
 //! - undecided (W201): a value with a place it comes from that has no range, or a bound on a list
-//!   (dandori calls no rule that walks one, E005, and knows no list's length). The rule's generated
-//!   code still refuses the call at its door when the workflow runs, and the warning says so.
+//!   (dandori calls no rule that walks one, E005, and knows no list's length). `ritsu dandori` hands
+//!   these to dandori ([`UndecidedCalls`], ritsu's port `Undecided`), and the code it writes for the
+//!   workflow checks each when the workflow runs, as soon as the values are made (DESIGN 7.4 item 3;
+//!   dandori's DESIGN 1.17).
 //!
 //! A precondition that a date input takes only the days of a koyomi date (`range from koyomi`) is
 //! decided over the days the value given can be (X3 (a), DESIGN 7.5): when it can only be the day
 //! of koyomi dates, each of their days must be one of the rule's; the example is the first that is
 //! not. A value that can also come from an input, a task's answer or `now` says nothing of what day
-//! it is, and leaves it undecided.
+//! it is, and leaves it undecided, to be checked the same way when the workflow runs.
 //!
 //! A value given to both inputs of a relation (`x` to `a` and to `b`) is the same value on both
 //! sides: `<=` and `>=` hold, `<` and `>` break at any value it takes.
@@ -31,8 +33,47 @@ use ritsu_base::diag::Diag;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
-use ritsu_ports::{day_text, Answer, CallArg, Dates, Finding, Flows, Found, Origin, Precondition, Rules, Value};
+use ritsu_ports::{day_text, Answer, CallArg, Dates, Finding, Flows, Found, Origin, Precondition, Rules, UndecidedPrecondition, Value};
 use ritsu_project::{Joined, Project};
+use std::path::Path;
+use std::rc::Rc;
+
+/// The preconditions X2 cannot decide at a flow's calls of rules, as ritsu's port `Undecided`
+/// answers them: what `ritsu dandori` hands dandori, so that the code it writes for the workflow
+/// checks each when the workflow runs (DESIGN 7.4 item 3).
+pub struct UndecidedCalls {
+    ports: ritsu_ports::Ports,
+    flows: Rc<dyn Flows>,
+}
+
+impl UndecidedCalls {
+    /// The preconditions of the flows' calls, asked of rulec, koyomi, chobo and dandori as `joined`
+    /// joins them.
+    pub fn new(joined: &Joined) -> UndecidedCalls {
+        UndecidedCalls { ports: joined.ports(), flows: joined.dandori.clone() }
+    }
+}
+
+impl ritsu_ports::Undecided for UndecidedCalls {
+    /// Each precondition of each rule the flow at `file` calls that is neither shown to hold nor
+    /// broken by an example at the call, decided as `ritsu check` decides it; none for a flow that
+    /// does not pass dandori's check, or a rule that does not pass rulec's.
+    fn preconditions(&self, file: &Path) -> Vec<UndecidedPrecondition> {
+        // read as `ritsu check` reads the flow, with the dates files and the books, so that the days
+        // a value can be are known
+        let Ok(calls) = self.flows.crossings(file, &self.ports).map(|c| c.rules) else { return vec![] };
+        let mut out = Vec::new();
+        for call in calls {
+            let Ok(facts) = self.ports.rules.facts(&call.rule) else { continue };
+            for p in facts.preconditions {
+                if let Answer::Undecided(_) = decide(self.ports.rules.as_ref(), self.ports.dates.as_ref(), &call.rule, &p, &call.args) {
+                    out.push(UndecidedPrecondition { line: call.line, rule: call.rule.clone(), precondition: p });
+                }
+            }
+        }
+        out
+    }
+}
 
 /// What a value on the wire reads as in a message.
 fn shown(v: &Value) -> String {
@@ -240,8 +281,8 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
                         .rel(&f.rel)
                         .note(why)
                         .note(tr!(
-                            "規則の生成したコードが、ワークフローを走らせたときに入口で確かめます。破れば、この呼び出しはそこで落ちます。",
-                            "The rule's generated code checks it at its door when the workflow runs; a call that breaks it fails there."
+                            "`ritsu dandori build` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめます。破る実行は、そこで `Dandori.BrokenPrecondition` で失敗します。",
+                            "The workflow's code that `ritsu dandori build` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`."
                         ));
                         out.push(Finding::of(&d, Some(f.rel.clone()), lang));
                     }

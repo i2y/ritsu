@@ -21,7 +21,9 @@
 //!   its own copies to.
 //! - [`Flows`]: the calls a workflow makes to rules, koyomi dates and chobo transfers, with what
 //!   dandori knows of each value it gives (its range, the places it can come from), and how long
-//!   each hold can be held before a call its expiry can refuse, for the checks across the borders.
+//!   each hold can be held before a call its expiry can refuse, for the checks across the borders;
+//!   and [`Undecided`], the preconditions those checks could not decide, which the code dandori
+//!   writes checks when the workflow runs.
 //! - [`Checked`]: what a language's own `check` prints for a unit it checks, a diagnostic at a
 //!   time, the text and the JSON, as `ritsu check` prints it again (DESIGN 8.3).
 //!
@@ -44,7 +46,10 @@ pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, Re
 pub use sources::{Source, SourceKind, Sources};
 pub use dates::{day_text, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet, DaySpan};
 pub use index::{Index, Item, Items, Lookup, Reference, References};
-pub use flows::{seconds_text, Amount, CallArg, Crossings, DateCall, Flows, HoldSpan, Origin, Ports, RuleCall, TransferCall};
+pub use flows::{
+    seconds_text, Amount, CallArg, Crossings, DateCall, Flows, HoldSpan, Origin, Ports, RuleCall, TransferCall, Undecided,
+    UndecidedPrecondition,
+};
 pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
 
 use ritsu_base::text::Text;

@@ -37,6 +37,12 @@ pub trait Sources {
     fn books(&self) -> &dyn Books {
         &NoBooks
     }
+    /// What the checks across the borders could not decide of the flow's calls of rules (ritsu's
+    /// X2), which the code dandori writes checks when the workflow runs (DESIGN 1.17): nothing,
+    /// unless the program that runs dandori hands it over.
+    fn undecided(&self) -> Option<&dyn ritsu_ports::Undecided> {
+        None
+    }
 }
 
 thread_local! {
@@ -64,7 +70,21 @@ pub fn with_rules<R>(rules: Rc<dyn Rules>, f: impl FnOnce() -> R) -> R {
 /// Run `f` reading the disk, the rules through `rules`, the dates files through `dates` and the
 /// books through `books` (what `ritsu dandori` hands over when it joins koyomi and chobo).
 pub fn with_ports<R>(rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books>, f: impl FnOnce() -> R) -> R {
-    with(Rc::new(Disk { rules, dates: Some(dates), books: Some(books) }), f)
+    with(Rc::new(Disk { rules, dates: Some(dates), books: Some(books), undecided: None }), f)
+}
+
+/// Run `f` as `with_ports`, and with what the checks across the borders could not decide of a
+/// flow's calls of rules (`undecided`), which `build`, `run`, `scenarios` and `doc` put into the flow
+/// as checks (DESIGN 1.17): what `ritsu dandori` hands over.
+pub fn with_undecided<R>(rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books>, undecided: Rc<dyn ritsu_ports::Undecided>, f: impl FnOnce() -> R) -> R {
+    with(Rc::new(Disk { rules, dates: Some(dates), books: Some(books), undecided: Some(undecided) }), f)
+}
+
+/// The preconditions the program that runs dandori says ritsu could not decide at the calls of
+/// the flow at `path`: none, unless it hands them over.
+pub fn undecided(path: &Path) -> Vec<ritsu_ports::UndecidedPrecondition> {
+    let s = current();
+    s.undecided().map(|u| u.preconditions(path)).unwrap_or_default()
 }
 
 /// What is read from now: the disk with no rules, unless `with` says otherwise.
@@ -161,11 +181,12 @@ pub struct Disk {
     rules: Rc<dyn Rules>,
     dates: Option<Rc<dyn Dates>>,
     books: Option<Rc<dyn Books>>,
+    undecided: Option<Rc<dyn ritsu_ports::Undecided>>,
 }
 
 impl Disk {
     pub fn new(rules: Rc<dyn Rules>) -> Disk {
-        Disk { rules, dates: None, books: None }
+        Disk { rules, dates: None, books: None, undecided: None }
     }
 }
 
@@ -194,6 +215,10 @@ impl Sources for Disk {
             Some(b) => &**b,
             None => &NoBooks,
         }
+    }
+
+    fn undecided(&self) -> Option<&dyn ritsu_ports::Undecided> {
+        self.undecided.as_deref()
     }
 }
 
