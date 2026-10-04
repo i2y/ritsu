@@ -9,9 +9,22 @@
 //! Every entry carries a runnable `example`. A test feeds each one to `check_source` and
 //! requires the code to come out, so an example cannot rot into a lie while the prose
 //! around it still reads well.
+//!
+//! An example whose names, strings or units are Japanese has an English twin
+//! ([`Entry::english`]): the same rule written with English names (`JPY` for `円`), which
+//! `explain` shows in English while `--lang ja` shows the Japanese one as it was. The test
+//! runs both, and requires both to print the code.
 
 use crate::diag::Severity;
+use crate::i18n::Lang;
 use crate::json;
+
+/// A reproduction: the smallest rule, and what has to sit next to it as (name, contents).
+#[derive(Clone, Copy)]
+pub struct Repro {
+    pub example: &'static str,
+    pub files: &'static [(&'static str, &'static str)],
+}
 
 pub struct Entry {
     pub code: &'static str,
@@ -23,7 +36,8 @@ pub struct Entry {
     pub when: String,
     /// How to get rid of it, down to the rewritten form (§11 principle 3).
     pub fix: String,
-    /// The smallest `.rule` that produces it.
+    /// The smallest `.rule` that produces it. It is what `explain` shows in Japanese, and in
+    /// English too unless [`Entry::english`] is set.
     pub example: &'static str,
     /// Only E109 needs this: with the default budget the example would have to be enormous,
     /// so it is reproduced with a budget this small.
@@ -33,6 +47,9 @@ pub struct Entry {
     /// of them is not a rule (§15.59). The test writes them beside the example and runs it
     /// there, so a companion cannot rot any more than the example can.
     pub files: &'static [(&'static str, &'static str)],
+    /// The same reproduction written with English names, when `example` has Japanese ones:
+    /// what `explain` shows in English. The budget is the same for both.
+    pub english: Option<Repro>,
     pub related: &'static [&'static str],
 }
 
@@ -45,7 +62,7 @@ fn e(
     example: &'static str,
     related: &'static [&'static str],
 ) -> Entry {
-    Entry { code, severity, title, when, fix, example, budget: None, files: &[], related }
+    Entry { code, severity, title, when, fix, example, budget: None, files: &[], english: None, related }
 }
 
 fn err(
@@ -70,6 +87,29 @@ impl Entry {
     fn with_files(mut self, fs: &'static [(&'static str, &'static str)]) -> Entry {
         self.files = fs;
         self
+    }
+
+    /// The same entry with its English twin: the reproduction written with English names,
+    /// beside the same files as the Japanese one (see the field).
+    fn english(mut self, example: &'static str) -> Entry {
+        self.english = Some(Repro { example, files: self.files });
+        self
+    }
+
+    /// The English twin with files of its own, for a reproduction whose files have Japanese
+    /// names or contents too.
+    fn english_with_files(mut self, example: &'static str, files: &'static [(&'static str, &'static str)]) -> Entry {
+        self.english = Some(Repro { example, files });
+        self
+    }
+
+    /// The reproduction `explain` shows in `lang`: the English twin in English when there is
+    /// one, the entry's own otherwise.
+    pub fn repro(&self, lang: Lang) -> Repro {
+        match (lang, self.english) {
+            (Lang::En, Some(en)) => en,
+            _ => Repro { example: self.example, files: self.files },
+        }
     }
 }
 
@@ -133,16 +173,63 @@ const X_E014: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  ran
                       outputs\n  o(o) : money[円, incl_tax]  round down(1円)\n\n\
                       table j(j)\npolicy first\n| r    | -> o(o) : money[円, incl_tax] |\n\
                       | <=5% | 0円                           |\n| -    | p × r                         |\n";
+const X_E014_EN: &str = r##"rule t(t) v1
+
+inputs
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY
+  r(r) : rate[step 1%]  range >=0% <=100%
+
+outputs
+  o(o) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy first
+| r    | -> o(o) : money[JPY, incl_tax] |
+| <=5% | 0JPY                           |
+| -    | p * r                          |
+"##;
 
 const X_E015: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
                       outputs\n  a(a) : money[円, incl_tax]  round down(1円)\n  \
                       b(b) : money[円, incl_tax]  round down(1円)\n\n\
                       table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円                         |\n\n\
                       result b = p\n";
+const X_E015_EN: &str = r##"rule t(t) v1
+
+inputs
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY
+
+outputs
+  a(a) : money[JPY, incl_tax]  round down(1JPY)
+  b(b) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| p | -> a(a) : money[JPY, incl_tax] |
+| - | 100JPY                         |
+
+result b = p
+"##;
 const X_E016: &str = "rule t(t) v1\n\ninputs\n  p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
                       outputs\n  a(a) : money[円, incl_tax]  round down(1円)\n\n\
                       table j(j)\npolicy unique\n| p | -> a(a) : money[円, incl_tax] |\n| - | 100円                         |\n\n\
                       result a = p\nresult a = p + 100円\n";
+const X_E016_EN: &str = r##"rule t(t) v1
+
+inputs
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY
+
+outputs
+  a(a) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| p | -> a(a) : money[JPY, incl_tax] |
+| - | 100JPY                         |
+
+result a = p
+result a = p + 100JPY
+"##;
 
 const X_E017: &str = "rule t(t) v1\n\ninputs\n  a(a) : number  range >=0 <=10\n  \
                       b(b) : number  range >=0 <=10\n\nconstraint a\n\n\
@@ -167,9 +254,98 @@ const FOLD_HEAD: &str = "rule t(t) v1\n\n\
                       table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
                       fold d over xs\n";
 const X_E022: &str = const_str_e022();
+const X_E022_EN: &str = r##"rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  exhausted -> held
+"##;
 const X_E023: &str = const_str_e023();
+const X_E023_EN: &str = r##"rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0JPY
+"##;
 const X_E024: &str = const_str_e024();
+const X_E024_EN: &str = r##"rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
+
+fold d over xs
+  a -> next
+  empty -> 0JPY
+  exhausted -> held
+"##;
 const X_E025: &str = const_str_e025();
+const X_E025_EN: &str = r##"rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0JPY
+  exhausted -> held
+
+examples
+| -> r |
+| 0JPY |
+"##;
 const fn const_str_e022() -> &'static str {
     // Every arm and `exhausted`, but no `empty`.
     "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
@@ -238,28 +414,215 @@ const fn const_str_w116() -> &'static str {
 }
 
 const X_E026: &str = const_str_e026();
+const X_E026_EN: &str = r##"rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0JPY
+  exhausted -> held
+
+sequence s(s)
+| m    |
+| 3JPY |
+"##;
 const X_E027: &str = const_str_e027();
+const X_E027_EN: &str = r##"rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0JPY
+  exhausted -> held
+
+examples
+| xs   | -> r |
+| nope | 0JPY |
+"##;
 const X_E034: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)\n   | a     | -> x  |\nr1 | true  | true  |\nr1 | false | false |\n";
+const X_E034_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+   | a     | -> x  |
+r1 | true  | true  |
+r1 | false | false |
+"##;
 const X_E035: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)\noverrides 無い表\n| a     | -> x  |\n| true  | true  |\n| false | false |\n";
+const X_E035_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+overrides no_such_table
+| a     | -> x  |
+| true  | true  |
+| false | false |
+"##;
 const X_E036: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
 table 甲(ko)\n| a | -> x |\n| - | true |\n\ntable 乙(otsu)\noverrides 甲\n| a | -> y |\n| - | true |\n";
+const X_E036_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+  y(y) : bool
+
+table base(base)
+| a | -> x |
+| - | true |
+
+table special(special)
+overrides base
+| a | -> y |
+| - | true |
+"##;
 const X_E045: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n  y(y) : bool\n\n\
 table 甲(ko)\n| a | -> x | y    |\n| - | true | true |\n\ntable 乙(otsu)\noverrides 甲\n| a    | -> x  |\n| true | false |\n";
+const X_E045_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+  y(y) : bool
+
+table base(base)
+| a | -> x | y    |
+| - | true | true |
+
+table special(special)
+overrides base
+| a    | -> x  |
+| true | false |
+"##;
 const X_W117: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 甲(ko)\n   | a     | -> x  |\nr1 | true  | true  |\nr2 | false | false |\n\n\
 table 乙(otsu)\noverrides 甲:r1, 甲:r2\n| a    | -> x  |\n| true | false |\n";
+const X_W117_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table base(base)
+   | a     | -> x  |
+r1 | true  | true  |
+r2 | false | false |
+
+table special(special)
+overrides base:r1, base:r2
+| a    | -> x  |
+| true | false |
+"##;
 const X_E046: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 clause 例外(exception) -> x\n  then true\n";
+const X_E046_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+clause exception(exception) -> x
+  then true
+"##;
 const X_E047: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円, incl_tax]  range >=0円 <=10000円 incl_tax\n\n\
 outputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_E047_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY incl_tax
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a | -> x |
+| - | true |
+"##;
 const X_E049: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=5000円\n\n\
 outputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a         | -> x  |\n| <=1,000円 | true  |\n| >1,000円  | false |\n";
+const X_E049_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : money[JPY]  range >=0JPY <=5000JPY
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a          | -> x  |
+| <=1,000JPY | true  |
+| >1,000JPY  | false |
+"##;
 const X_E048: &str = "rule t(t) v1\n\ninputs\n  甲(a) : temperature[℃]  range >=0℃ <=40℃\n  \
 乙(b) : temperature[℃]  range >=0℃ <=40℃\n\noutputs\n  x(x) : bool\n\n\
 derive 差(gap) : temperature[℃] = 甲 - 乙  range >=-40℃ <=40℃\n\n\
 table 表(t1)\npolicy unique\n| 差 | -> x |\n| -  | true |\n";
+const X_E048_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : temperature[℃]  range >=0℃ <=40℃
+  b(b) : temperature[℃]  range >=0℃ <=40℃
+
+outputs
+  x(x) : bool
+
+derive gap(gap) : temperature[℃] = a - b  range >=-40℃ <=40℃
+
+table t1(t1)
+policy unique
+| gap | -> x |
+| -   | true |
+"##;
 /// A copy of one fragment of a law, beside the examples that cite it. Its digest is what the
 /// examples pin (or fail to).
 const ARTICLE_1: &[(&str, &str)] = &[(
@@ -273,8 +636,45 @@ const TARIFF_DOC: &[(&str, &str)] = &[
     ("料金表.md", "# 料金表\n\n| あて先 | 運賃 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n"),
     ("料金表.md.fragments/表1.tsv", "あて先\t運賃\n近畿\t990円\n関東\t880円\n"),
 ];
+const TARIFF_DOC_EN: &[(&str, &str)] = &[
+    ("tariff.md", "# Tariff\n\n| Destination | Fare |\n|---|---|\n| Kinki | 990JPY |\n| Kanto | 880JPY |\n"),
+    ("tariff.md.fragments/table1.tsv", "Destination\tFare\nKinki\t990JPY\nKanto\t880JPY\n"),
+];
 const X_E116: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a     | -> x  |\n| true  | 990円 |\n| false | 890円 |\n";
+const X_E116_EN: &str = r##"rule t(t) v1
+
+source tariff = file "tariff.md" sha256:583beb1ff0102e2e
+  table1 sha256:07423c36f9e9259f
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : money[JPY]  round down(1JPY)
+
+table t1(t1)  @tariff table1
+policy unique
+| a     | -> x   |
+| true  | 990JPY |
+| false | 890JPY |
+"##;
 const X_W120: &str = "rule t(t) v1\n\nsource 料金表 = file \"料金表.md\" sha256:75465b330d123ab8\n  表1 sha256:0a95cedbd7311274\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : money[円]  round down(1円)\n\ntable 表(t1)  @料金表 表1\npolicy unique\n| a | -> x  |\n| - | 990円 |\n";
+const X_W120_EN: &str = r##"rule t(t) v1
+
+source tariff = file "tariff.md" sha256:583beb1ff0102e2e
+  table1 sha256:07423c36f9e9259f
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : money[JPY]  round down(1JPY)
+
+table t1(t1)  @tariff table1
+policy unique
+| a | -> x   |
+| - | 990JPY |
+"##;
 /// The document of the E119 example, and the copy of its table. A second document, because
 /// the boundary check needs a table that cuts a number line and the E116 one lists a price
 /// per destination (§15.124).
@@ -282,25 +682,158 @@ const SIZE_DOC: &[(&str, &str)] = &[
     ("寸法表.md", "# 寸法表\n\n| サイズ | 運賃 |\n|---|---|\n| 60cmまで | 1410円 |\n| 60cmを超え80cm以下 | 1710円 |\n"),
     ("寸法表.md.fragments/表1.tsv", "サイズ\t運賃\n60cmまで\t1410円\n60cmを超え80cm以下\t1710円\n"),
 ];
+const SIZE_DOC_EN: &[(&str, &str)] = &[
+    ("sizes.md", "# Sizes\n\n| Size | Fare |\n|---|---|\n| up to 60cm | 1410JPY |\n| over 60cm up to 80cm | 1710JPY |\n"),
+    ("sizes.md.fragments/table1.tsv", "Size\tFare\nup to 60cm\t1410JPY\nover 60cm up to 80cm\t1710JPY\n"),
+];
 const X_E119: &str = "rule t(t) v1\n\nsource 寸法表 = file \"寸法表.md\" sha256:a19333e262c10371\n  表1 sha256:a5c05813ad703b8e\n\ninputs\n  a(a) : length[cm]  range >=1cm <=80cm\n\noutputs\n  x(x) : money[円]  round up(10円)\n\ntable 表(t1)  @寸法表 表1\npolicy unique\n| a             | -> x   |\n| <60cm         | 1410円 |\n| >=60cm <=80cm | 1710円 |\n";
+const X_E119_EN: &str = r##"rule t(t) v1
+
+source sizes = file "sizes.md" sha256:8a2a4c38c68dca29
+  table1 sha256:34cc5df35a840201
+
+inputs
+  a(a) : length[cm]  range >=1cm <=80cm
+
+outputs
+  x(x) : money[JPY]  round up(10JPY)
+
+table t1(t1)  @sizes table1
+policy unique
+| a             | -> x    |
+| <60cm         | 1410JPY |
+| >=60cm <=80cm | 1710JPY |
+"##;
 /// The contract of the `shape` examples: one object with one collection in it, which is
 /// what a path and a walk both need (§15.125).
 const SHAPE_DOC: &[(&str, &str)] = &[("order.json", "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"category\":{\"type\":\"string\"}}}}}}}}\n")];
 const X_E120: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool  from count order.lines\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_E120_EN: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : bool  from count order.lines
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a | -> x |
+| - | true |
+"##;
 const X_E121: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool  from order.nope\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_E121_EN: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : bool  from order.nope
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a | -> x |
+| - | true |
+"##;
 const X_W122: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_W122_EN: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : bool
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a | -> x |
+| - | true |
+"##;
 /// The contract of the E122 and W123 examples: a collection of at most ten, always there. What
 /// the two compare is what the contract lets through against what the input takes (§15.132).
 const LINES_DOC: &[(&str, &str)] = &[("order.json", "{\"$defs\":{\"Order\":{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"array\",\"maxItems\":10,\"items\":{\"type\":\"object\"}}},\"required\":[\"lines\"]}}}\n")];
 const X_E122: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : number  range >=0 <=5  from count order.lines\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
+const X_E122_EN: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : number  range >=0 <=5  from count order.lines
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a | -> x |
+| - | true |
+"##;
 /// A `.proto` whose message relates two of its fields, and leaves two others unrelated.
 const QUOTE_PROTO: &[(&str, &str)] = &[(
     "quote.proto",
     "syntax = \"proto3\";\npackage shop.v1;\n\nmessage Quote {\n  option (buf.validate.message).cel = {id: \"express_cap\", expression: \"!this.express || this.weight_g <= 5000\"};\n  int64 min_g = 1 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];\n  int64 max_g = 2 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];\n  int64 weight_g = 3 [(buf.validate.field).int64 = {gte: 1, lte: 30000}];\n  bool express = 4;\n}\n",
 )];
 const X_E123: &str = "rule t(t) v1\n\nshape 見積(q) = proto \"quote.proto\" shop.v1.Quote\n\ninputs\n  最小(min_g) : mass[g]  range >=1g <=30kg  from 見積.min_g\n  最大(max_g) : mass[g]  range >=1g <=30kg  from 見積.max_g\n\nconstraint 最小 <= 最大\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| 最小 | -> x |\n| -    | true |\n";
+const X_E123_EN: &str = r##"rule t(t) v1
+
+shape quote(q) = proto "quote.proto" shop.v1.Quote
+
+inputs
+  minimum(min_g) : mass[g]  range >=1g <=30kg  from quote.min_g
+  maximum(max_g) : mass[g]  range >=1g <=30kg  from quote.max_g
+
+constraint minimum <= maximum
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| minimum | -> x |
+| -       | true |
+"##;
 const X_W124: &str = "rule t(t) v1\n\nshape 見積(q) = proto \"quote.proto\" shop.v1.Quote\n\ninputs\n  重さ(weight) : mass[g]  range >=1g <=30kg  from 見積.weight_g\n  急ぎ(express) : bool  from 見積.express\n\noutputs\n  料金(fee) : money[円]  round up(10円)\n\ntable 料金表(fees)\npolicy first\n| 急ぎ  | 重さ | -> 料金 |\n| true  | >5kg | 3000円  |\n| true  | -    | 1500円  |\n| false | -    | 800円   |\n";
+const X_W124_EN: &str = r##"rule t(t) v1
+
+shape quote(q) = proto "quote.proto" shop.v1.Quote
+
+inputs
+  weight(weight) : mass[g]  range >=1g <=30kg  from quote.weight_g
+  express(express) : bool  from quote.express
+
+outputs
+  fee(fee) : money[JPY]  round up(10JPY)
+
+table fees(fees)
+policy first
+| express | weight | -> fee  |
+| true    | >5kg   | 3000JPY |
+| true    | -      | 1500JPY |
+| false   | -      | 800JPY  |
+"##;
 const X_W123: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : number  range >=0 <=20  from count order.lines\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a    | -> x  |\n| <=10 | true  |\n| >10  | false |\n";
+const X_W123_EN: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : number  range >=0 <=20  from count order.lines
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a    | -> x  |
+| <=10 | true  |
+| >10  | false |
+"##;
 const X_E037: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
 const X_E038: &str = "rule t(t) v1\n\nsource 法 = law \"000AC0000000001\" asof 2026-04-01\n  第1条 sha256:0000000000000000\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
@@ -312,15 +845,123 @@ table 表(t1)  @法 第1条\n| a | -> x |\n| - | true |\n";
 /// The rules the `apply` examples apply, beside them: one that passes check, one whose input
 /// is an enum, and one with a hole.
 const CALLEE: &[(&str, &str)] = &[("呼び先.rule", "rule 呼び先(callee) v1\n\ninputs\n  a(a) : number  range >=1 <=10\n\noutputs\n  x(x) : number  round down(1)\n\ntable 表(t)\npolicy unique\n   | a   | -> x |\n小 | <=5 | 1    |\n大 | >5  | 2    |\n")];
+const CALLEE_EN: &[(&str, &str)] = &[("callee.rule", "rule callee(callee) v1\n\ninputs\n  a(a) : number  range >=1 <=10\n\noutputs\n  x(x) : number  round down(1)\n\ntable t(t)\npolicy unique\n      | a   | -> x |\nsmall | <=5 | 1    |\nlarge | >5  | 2    |\n")];
 const ENUM_CALLEE: &[(&str, &str)] = &[("区分の呼び先.rule", "rule 区分の呼び先(enum_callee) v1\n\nenum 区分(kind) = 甲(a) | 乙(b)\n\ninputs\n  a(a) : 区分\n\noutputs\n  x(x) : number  round down(1)\n\ntable 表(t)\npolicy unique\n| a  | -> x |\n| 甲 | 1    |\n| 乙 | 2    |\n")];
+const ENUM_CALLEE_EN: &[(&str, &str)] = &[("enum_callee.rule", "rule enum_callee(enum_callee) v1\n\nenum band(kind) = low(a) | mid(b)\n\ninputs\n  a(a) : band\n\noutputs\n  x(x) : number  round down(1)\n\ntable t(t)\npolicy unique\n| a   | -> x |\n| low | 1    |\n| mid | 2    |\n")];
 const BROKEN_CALLEE: &[(&str, &str)] = &[("壊れた呼び先.rule", "rule 壊れた呼び先(broken) v1\n\ninputs\n  a(a) : number  range >=1 <=10\n\noutputs\n  x(x) : number  round down(1)\n\ntable 表(t)\npolicy unique\n| a   | -> x |\n| <=5 | 1    |\n")];
+const BROKEN_CALLEE_EN: &[(&str, &str)] = &[("broken_callee.rule", "rule broken_callee(broken) v1\n\ninputs\n  a(a) : number  range >=1 <=10\n\noutputs\n  x(x) : number  round down(1)\n\ntable t(t)\npolicy unique\n| a   | -> x |\n| <=5 | 1    |\n")];
 const X_E040: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\"\n  a = n\n  x -> y\n";
+const X_E040_EN: &str = r##"rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply call(c) = "callee.rule"
+  a = n
+  x -> y
+"##;
 const X_E041: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:369102b8f803dc28\n  b = n\n  x -> y\n";
+const X_E041_EN: &str = r##"rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply call(c) = "callee.rule" sha256:1c554496c37f709f
+  b = n
+  x -> y
+"##;
 const X_E042: &str = "rule t(t) v1\n\nenum 種別(kind) = 甲(a) | 乙(b) | 丙(c)\n\ninputs\n  k(k) : 種別\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"区分の呼び先.rule\" sha256:2e6f2e04c21cdbb3\n  a = k\n  x -> y\n";
+const X_E042_EN: &str = r##"rule t(t) v1
+
+enum kind(kind) = low(a) | mid(b) | high(c)
+
+inputs
+  k(k) : kind
+
+outputs
+  y(y) : number  round down(1)
+
+apply call(c) = "enum_callee.rule" sha256:5c19644247d1b672
+  a = k
+  x -> y
+"##;
 const X_E043: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:369102b8f803dc28\n  a = n\n  x -> y\n";
+const X_E043_EN: &str = r##"rule t(t) v1
+
+inputs
+  n(n) : number  range >=0 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply call(c) = "callee.rule" sha256:1c554496c37f709f
+  a = n
+  x -> y
+"##;
 const X_E044: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"壊れた呼び先.rule\" sha256:c4f9eba5b2949205\n  a = n\n  x -> y\n";
+const X_E044_EN: &str = r##"rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply call(c) = "broken_callee.rule" sha256:765fd7738ae6bfc1
+  a = n
+  x -> y
+"##;
 const X_W118: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"呼び先.rule\" sha256:369102b8f803dc28\n  a = n\n  x -> y\n\nclause 特例(special) -> 呼:x\n  when always\n  then 3\n  overrides 呼:表\n";
+const X_W118_EN: &str = r##"rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply call(c) = "callee.rule" sha256:1c554496c37f709f
+  a = n
+  x -> y
+
+clause special(special) -> call:x
+  when always
+  then 3
+  overrides call:t
+"##;
 const X_W116: &str = const_str_w116();
+const X_W116_EN: &str = r##"rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
+
+fold d over xs
+  a -> next
+  b -> take_first k
+  empty -> 0JPY
+  exhausted -> held
+
+sequence s(s)
+| k    |
+| 3JPY |
+"##;
 
 const fn const_str_w115() -> &'static str {
     // `b` is in the enum but no row produces it, and the fold still waits for it.
@@ -331,6 +972,27 @@ const fn const_str_w115() -> &'static str {
      fold d over xs\n  a -> take_first k\n  b -> next\n  empty -> 0円\n  exhausted -> held\n"
 }
 const X_W115: &str = const_str_w115();
+const X_W115_EN: &str = r##"rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+
+elements xs(xs)
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| k | -> d(d) : v |
+| - | a           |
+
+fold d over xs
+  a -> take_first k
+  b -> next
+  empty -> 0JPY
+  exhausted -> held
+"##;
 
 const X_E020: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
                       elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
@@ -377,30 +1039,126 @@ const X_E103: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10k
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
                       table j(j)\npolicy unique\n| w | -> r(r) : money[円, incl_tax] |\n| - | 100円                         |\n\n\
                       result r = p + w\n";
+const X_E103_EN: &str = r##"rule t(t) v1
+
+inputs
+  w(w) : mass[g]  range >=0g <=10kg
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| w | -> r(r) : money[JPY, incl_tax] |
+| - | 100JPY                         |
+
+result r = p + w
+"##;
 const X_E104: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]\n\n\
                       table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
                       | true  | 100円                         |\n| false | 200円                         |\n";
+const X_E104_EN: &str = r##"rule t(t) v1
+
+inputs
+  x(x) : bool
+
+outputs
+  r(r) : money[JPY, incl_tax]
+
+table j(j)
+policy unique
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 100JPY                         |
+| false | 200JPY                         |
+"##;
 const X_E105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
                       table j(j)\npolicy unique\n| x | y     | -> r(r) : money[円, incl_tax] |\n\
                       | a | -     | 100円                         |\n| - | true  | 200円                         |\n| b | false | 300円                         |\n";
+const X_E105_EN: &str = r##"rule t(t) v1
+
+enum k(k) = a(a) | b(b)
+
+inputs
+  x(x) : k
+  y(y) : bool
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| x | y     | -> r(r) : money[JPY, incl_tax] |
+| a | -     | 100JPY                         |
+| - | true  | 200JPY                         |
+| b | false | 300JPY                         |
+"##;
 const X_E106: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round up(10円)\n\n\
                       table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
                       | true  | 1451円                        |\n| false | 1000円                        |\n";
+const X_E106_EN: &str = r##"rule t(t) v1
+
+inputs
+  x(x) : bool
+
+outputs
+  r(r) : money[JPY, incl_tax]  round up(10JPY)
+
+table j(j)
+policy unique
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 1451JPY                        |
+| false | 1000JPY                        |
+"##;
 const X_E107: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
                       table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
                       | true  | 100円                         |\n| false | 200円                         |\n\n\
                       examples\n| x    | -> r  |\n| true | 200円 |\n";
+const X_E107_EN: &str = r##"rule t(t) v1
+
+inputs
+  x(x) : bool
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 100JPY                         |
+| false | 200JPY                         |
+
+examples
+| x    | -> r   |
+| true | 200JPY |
+"##;
 const X_E108: &str = "rule t(t) v1\n\n\
                       inputs\n  p(p) : money[円, incl_tax]  range >=0円 <=100000000000000000円\n  \
                       q(q) : rate[step 1%]  range >=0% <=100%\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
                       define off(off) : money[円, incl_tax] = p × q\n\n\
                       table j(j)\npolicy unique\n| off | -> r(r) : money[円, incl_tax] |\n| -   | 0円                           |\n";
+const X_E108_EN: &str = r##"rule t(t) v1
+
+inputs
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=100_000_000_000_000_000JPY
+  q(q) : rate[step 1%]  range >=0% <=100%
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+define off(off) : money[JPY, incl_tax] = p * q
+
+table j(j)
+policy unique
+| off | -> r(r) : money[JPY, incl_tax] |
+| -   | 0JPY                           |
+"##;
 const X_E109: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
@@ -412,6 +1170,25 @@ const X_E111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       table j(j)\npolicy unique\n| x     | -> ok(ok) : bool | fee(fee) : money[円, incl_tax] |\n\
                       | true  | true             | 100円                          |\n| false | false            | 0円                            |\n\n\
                       examples\n| x    | -> ok |\n| true | true  |\n";
+const X_E111_EN: &str = r##"rule t(t) v1
+
+inputs
+  x(x) : bool
+
+outputs
+  ok(ok) : bool
+  fee(fee) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| x     | -> ok(ok) : bool | fee(fee) : money[JPY, incl_tax] |
+| true  | true             | 100JPY                          |
+| false | false            | 0JPY                            |
+
+examples
+| x    | -> ok |
+| true | true  |
+"##;
 const X_E112: &str = "rule t(t) v1\n\n\
                       inputs\n  a(a) : money[円, incl_tax]  range >=0円 <=100万円\n  \
                       b(b) : money[円, incl_tax]  range >=0円 <=100万円\n\n\
@@ -419,6 +1196,23 @@ const X_E112: &str = "rule t(t) v1\n\n\
                       derive gap(gap) : money[円, incl_tax] = a - b  range >=0円 <=100万円\n\n\
                       table j(j)\npolicy unique\n| gap   | -> r(r) : bool |\n\
                       | <=0円 | false          |\n| >0円  | true           |\n";
+const X_E112_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  b(b) : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+
+outputs
+  r(r) : bool
+
+derive gap(gap) : money[JPY, incl_tax] = a - b  range >=0JPY <=1_000_000JPY
+
+table j(j)
+policy unique
+| gap    | -> r(r) : bool |
+| <=0JPY | false          |
+| >0JPY  | true           |
+"##;
 const X_E113: &str = "rule t(t) v1\n\n\
                       inputs\n  a(a) : money[円, incl_tax]  range >=0円 <=100万円\n  \
                       b(b) : money[円, incl_tax]  range >=0円 <=100万円\n\n\
@@ -426,6 +1220,23 @@ const X_E113: &str = "rule t(t) v1\n\n\
                       define bigger(bigger) : bool = a >= b\n\n\
                       table j(j)\npolicy unique\n| bigger | -> r(r) : bool |\n\
                       | true   | true           |\n| false  | false          |\n";
+const X_E113_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  b(b) : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+
+outputs
+  r(r) : bool
+
+define bigger(bigger) : bool = a >= b
+
+table j(j)
+policy unique
+| bigger | -> r(r) : bool |
+| true   | true           |
+| false  | false          |
+"##;
 const X_E114: &str = "rule t(t) v1\n\ninputs\n  r(r) : rate[step 1%]  range >=0% <=100%\n\n\
                       outputs\n  o(o) : bool\n\n\
                       table j(j)\npolicy first\n| r      | -> o(o) : bool |\n\
@@ -442,6 +1253,20 @@ const X_E117: &str = "rule t(t) v1\n\ninputs\n  \u{5024}\u{5f15}\u{304d}(off) : 
                       outputs\n  o(o) : money[\u{5186}]  round down(1\u{5186})\n\n\
                       derive \u{914d}\u{5206}(share) : money[\u{5186}] = allocate(\u{5024}\u{5f15}\u{304d}, \u{3053}\u{3053}\u{307e}\u{3067}, \u{5408}\u{8a08})  range >=0\u{5186} <=1000\u{5186}\n\n\
                       result o = \u{914d}\u{5206}\n";
+const X_E117_EN: &str = r##"rule t(t) v1
+
+inputs
+  off(off) : money[JPY]  range >=0JPY <=1000JPY
+  upto(upto) : money[JPY]  range >=0JPY <=1000JPY
+  base(base) : money[JPY]  range >=1JPY <=1000JPY
+
+outputs
+  o(o) : money[JPY]  round down(1JPY)
+
+derive share(share) : money[JPY] = allocate(off, upto, base)  range >=0JPY <=1000JPY
+
+result o = share
+"##;
 
 const X_E118: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n  \
                       d(d) : number  range >=1 <=100\n\n\
@@ -453,12 +1278,44 @@ const X_W121: &str = "rule t(t) v1\n\ninputs\n  \u{7a2e}\u{5225}(type) : number 
                       outputs\n  o(o) : number  round down(1)\n\n\
                       table j(j)\npolicy first\n| \u{7a2e}\u{5225} | -> o(o) : number |\n\
                       | >=5  | 1                |\n| -    | 0                |\n";
+const X_W121_EN: &str = r##"rule t(t) v1
+
+inputs
+  kind(type) : number  range >=0 <=10
+
+outputs
+  o(o) : number  round down(1)
+
+table j(j)
+policy first
+| kind | -> o(o) : number |
+| >=5  | 1                |
+| -    | 0                |
+"##;
 
 const X_W105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
                       table j(j)\npolicy first\n| x | y    | -> r(r) : money[円, incl_tax] |\n\
                       | a | -    | 100円                         |\n| - | true | 200円                         |\n| - | -    | 300円                         |\n";
+const X_W105_EN: &str = r##"rule t(t) v1
+
+enum k(k) = a(a) | b(b)
+
+inputs
+  x(x) : k
+  y(y) : bool
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy first
+| x | y    | -> r(r) : money[JPY, incl_tax] |
+| a | -    | 100JPY                         |
+| - | true | 200JPY                         |
+| - | -    | 300JPY                         |
+"##;
 const X_W110: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy first\n| x | -> r(r) : bool |\n\
@@ -468,6 +1325,26 @@ const X_W111: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n  w(w) : mass[g]  r
                       table j(j)\npolicy unique\n| x     | -> r(r) : bool |\n\
                       | true  | true           |\n| false | false          |\n";
 const X_W114: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[円]  range >=0円 <=10万円\n\noutputs\n  r(r) : bool\n\nderive 倍(d) : money[円] = a + a  range >=0円 <=20万円\n\ndefine 上(up) : bool = 倍 >= 5円\ndefine 下(dn) : bool = 倍 <= 5円\n\ntable j(j)\npolicy unique\n| 上    | 下    | -> r(r) : bool |\n| true  | -     | true           |\n| -     | true  | false          |\n| false | false | false          |\n";
+const X_W114_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : money[JPY]  range >=0JPY <=100_000JPY
+
+outputs
+  r(r) : bool
+
+derive twice(d) : money[JPY] = a + a  range >=0JPY <=200_000JPY
+
+define above(up) : bool = twice >= 5JPY
+define below(dn) : bool = twice <= 5JPY
+
+table j(j)
+policy unique
+| above | below | -> r(r) : bool |
+| true  | -     | true           |
+| -     | true  | false          |
+| false | false | false          |
+"##;
 
 // A state machine (§15.148): three states, two events, one table of transitions.
 const X_E050: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n";
@@ -475,6 +1352,43 @@ const X_E051: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) 
 const X_E052: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   d\n";
 const X_E053: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  once    nx c\n";
 const X_E054: &str = "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n\nelements xs(xs)\n  w(w) : money[円, incl_tax]  range >=0円 <=10円\n\noutputs\n  r(r) : money[円, incl_tax]  round down(1円)\n  nx(nx) : s\n\ntable j(j)\npolicy unique\n| w     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\ntable m(m)\npolicy unique\n| st | -> nx(nx) : s |\n| p  | q             |\n| q  | q             |\n\nfold d over xs\n  a -> next\n  b -> take_first w\n  empty -> 0円\n  exhausted -> held\n\nmachine k(k) over m\n  carry   st -> nx\n  initial p\n";
+const X_E054_EN: &str = r##"rule t(t) v1
+
+enum v(v) = a(a) | b(b)
+enum s(s) = p(p) | q(q)
+
+inputs
+  st(st) : s
+
+elements xs(xs)
+  w(w) : money[JPY, incl_tax]  range >=0JPY <=10JPY
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+  nx(nx) : s
+
+table j(j)
+policy unique
+| w      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
+
+table m(m)
+policy unique
+| st | -> nx(nx) : s |
+| p  | q             |
+| q  | q             |
+
+fold d over xs
+  a -> next
+  b -> take_first w
+  empty -> 0JPY
+  exhausted -> held
+
+machine k(k) over m
+  carry   st -> nx
+  initial p
+"##;
 const X_E055: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n\nscenario s(s)\n| x    | -> r  |\n| true | false |\n";
 /// E056: a `held` line naming an output.
 const X_E056: &str = "rule t(t) v1\n\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n  x(x)   : bool\n\noutputs\n  nx(nx) : s\n  r(r)   : bool\n\ntable m(m)\npolicy unique\n| st | x     | -> nx(nx) : s | r(r) : bool |\n| p  | true  | q             | true        |\n| p  | false | p             | false       |\n| q  | -     | q             | false       |\n\nmachine k(k) over m\n  carry   st -> nx\n  held    r\n  initial p\n  final   q\n";
@@ -482,14 +1396,61 @@ const X_E056: &str = "rule t(t) v1\n\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st
 const X_E058: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  r(r) : bool\n\nderive\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n";
 /// E059: two values with no operator between them, which used to read as the first alone.
 const X_E059: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=100\u{5186}\n  b(b) : money[\u{5186}]  range >=0\u{5186} <=100\u{5186}\n\noutputs\n  o(o) : money[\u{5186}]  round down(1\u{5186})\n\ndefine s(s) : money[\u{5186}] = a b\n\nresult o = s\n";
+const X_E059_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : money[JPY]  range >=0JPY <=100JPY
+  b(b) : money[JPY]  range >=0JPY <=100JPY
+
+outputs
+  o(o) : money[JPY]  round down(1JPY)
+
+define s(s) : money[JPY] = a b
+
+result o = s
+"##;
 /// E060: a rounding grid of zero, which passed and divided by zero in the generated code.
 const X_E060: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=100\u{5186}\n\noutputs\n  o(o) : money[\u{5186}]  round up(0\u{5186})\n\nresult o = a\n";
+const X_E060_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : money[JPY]  range >=0JPY <=100JPY
+
+outputs
+  o(o) : money[JPY]  round up(0JPY)
+
+result o = a
+"##;
 /// E061: a range whose ends are the wrong way round, which passed with nothing in it.
 const X_E061: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=10\u{5186} <=0\u{5186}\n\noutputs\n  o(o) : money[\u{5186}]  round down(1\u{5186})\n\nresult o = a\n";
+const X_E061_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : money[JPY]  range >=10JPY <=0JPY
+
+outputs
+  o(o) : money[JPY]  round down(1JPY)
+
+result o = a
+"##;
 /// E062: a date with the shape of one and no such day, which the checker counted on from.
 const X_E062: &str = "rule t(t) v1\n\ninputs\n  d(d) : date  range >=2026-01-01 <=2026-12-31\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| d            | -> r(r) : bool |\n| <=2026-02-30 | true           |\n| >2026-02-30  | false          |\n";
 /// E063: a comparison with something after it, which used to read as the comparison alone.
 const X_E063: &str = "rule t(t) v1\n\ninputs\n  a(a) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| a             | -> r(r) : bool |\n| <=100\u{5186} + 1\u{5186} | true           |\n| >100\u{5186}        | false          |\n";
+const X_E063_EN: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : money[JPY]  range >=0JPY <=1000JPY
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a               | -> r(r) : bool |
+| <=100JPY + 1JPY | true           |
+| >100JPY         | false          |
+"##;
 /// E065: `range from` written in a shape that names no koyomi date.
 const X_E065: &str = "rule t(t) v1\n\ninputs\n  d(d) : date  range from koyomi \"terms.cal\"\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| d | -> r(r) : bool |\n| - | true           |\n";
 /// E129: a rule whose range is a koyomi date, checked where no koyomi is joined.
@@ -511,6 +1472,32 @@ const X_E128: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c)\nenum e(e) 
 const X_W125: &str = "rule t(t) v1\n\nenum s(s) = a(a) | b(b) | c(c) | d(d)\nenum e(e) = fwd(fwd) | rev(rev)\n\ninputs\n  st(st) : s\n  ev(ev) : e\n\noutputs\n  nx(nx) : s\n\ntable m(m)\npolicy unique\n| st | ev  | -> nx(nx) : s |\n| a  | fwd | b             |\n| a  | rev | a             |\n| b  | fwd | c             |\n| b  | rev | a             |\n| c  | -   | c             |\n| d  | -   | d             |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial a\n  final   c\n";
 const X_W126: &str = X_W125;
 const X_W127: &str = "rule t(t) v1\n\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n  a(a) : money[円]  range >=0円 <=10万円\n\noutputs\n  nx(nx) : s\n\nderive 倍(d) : money[円] = a + a  range >=0円 <=20万円\n\ndefine 上(up) : bool = 倍 >= 5円\ndefine 下(dn) : bool = 倍 <= 5円\n\ntable m(m)\npolicy first\n| st | 上   | 下   | -> nx(nx) : s |\n| p  | true | true | q             |\n| -  | -    | -    | st            |\n\nmachine k(k) over m\n  carry   st -> nx\n  initial p\n";
+const X_W127_EN: &str = r##"rule t(t) v1
+
+enum s(s) = p(p) | q(q)
+
+inputs
+  st(st) : s
+  a(a) : money[JPY]  range >=0JPY <=100_000JPY
+
+outputs
+  nx(nx) : s
+
+derive twice(d) : money[JPY] = a + a  range >=0JPY <=200_000JPY
+
+define above(up) : bool = twice >= 5JPY
+define below(dn) : bool = twice <= 5JPY
+
+table m(m)
+policy first
+| st | above | below | -> nx(nx) : s |
+| p  | true  | true  | q             |
+| -  | -     | -     | st            |
+
+machine k(k) over m
+  carry   st -> nx
+  initial p
+"##;
 
 // ── The ledger ───────────────────────────────────────────────────────────
 
@@ -537,11 +1524,11 @@ pub fn ledger() -> Vec<Entry> {
             tr!("読めない文字があります", "Unreadable character"),
             tr!(
                 "名前の位置に、文字でも `_` でもない文字（記号や制御文字）があるとき。括弧に入れた別名が名前になっていないとき（`六十(60)`）も同じです。打ち間違いが黙って名前になったり、別名が黙って消えたりするのを防ぐための検査です。",
-                "A character that is neither a letter nor `_` appears where a name is expected — an alias in parentheses that is not a name (`六十(60)`) included. The check exists so that a typo does not quietly become a name, nor an alias quietly go missing."
+                "A character that is neither a letter nor `_` appears where a name is expected — an alias in parentheses that is not a name (`sixty(60)`) included. The check exists so that a typo does not quietly become a name, nor an alias quietly go missing."
             ),
             tr!(
                 "その文字を消してください。名前は文字か `_` で始まります（`@x(x)` なら `x(x)`、`六十(60)` なら `六十(size_60)`）。",
-                "Delete the character. A name starts with a letter or `_` (`@x(x)` becomes `x(x)`, and `六十(60)` becomes `六十(size_60)`)."
+                "Delete the character. A name starts with a letter or `_` (`@x(x)` becomes `x(x)`, and `sixty(60)` becomes `sixty(size_60)`)."
             ),
             X_E002,
             &["E001", "E009"],
@@ -555,7 +1542,7 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "先頭に `rule 規則名(alias) v1` の一行を足してください。",
-                "Add `rule 規則名(alias) v1` as the first line."
+                "Add `rule <name>(<alias>) v1` as the first line."
             ),
             X_E003,
             &["E004", "E011"],
@@ -642,7 +1629,7 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "名前を変えてください（`enum range(kind)` なら `enum 範囲区分(range_kind)`）。予約語は `src/kw.rs` の表ひとつで決まっています。",
-                "Rename it (`enum range(kind)` becomes `enum 範囲区分(range_kind)`). The reserved words are fixed by the one table in `src/kw.rs`."
+                "Rename it (`enum range(kind)` becomes `enum range_band(range_kind)`). The reserved words are fixed by the one table in `src/kw.rs`."
             ),
             X_E009,
             &["E005", "E011"],
@@ -712,11 +1699,12 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "計算に名前を付けて `define` の行へ出し、表にはその名前だけを書いてください（`| - | 率割引 |`）。表は分岐だけを持ちます。",
-                "Give the calculation a name on a `define` line and leave only that name in the table (`| - | 率割引 |`). A table holds the branching and nothing else."
+                "Give the calculation a name on a `define` line and leave only that name in the table (`| - | rate_discount |`). A table holds the branching and nothing else."
             ),
             X_E014,
             &["E008", "E012"],
-        ),
+        )
+        .english(X_E014_EN),
         err(
             "E015",
             tr!("`result` が書けるのは最初の出力だけです", "`result` can only assemble the first output"),
@@ -726,11 +1714,12 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "その出力と同じ名前の `define` を書いてください（`define 付与点(pts) : number = 基本点 × 倍率`）。出力は宣言順に、同じ名前の束縛から取られます。`result` で組み立てたいなら、その出力を `outputs` の先頭へ移します。",
-                "Write a `define` of the same name as that output (`define 付与点(pts) : number = 基本点 × 倍率`); outputs are taken, in declaration order, from the binding of their own name. To assemble it with `result` instead, move that output to the top of `outputs`."
+                "Write a `define` of the same name as that output (`define points(pts) : number = base_points * multiplier`); outputs are taken, in declaration order, from the binding of their own name. To assemble it with `result` instead, move that output to the top of `outputs`."
             ),
             X_E015,
             &["E016", "E103"],
-        ),
+        )
+        .english(X_E015_EN),
         err(
             "E016",
             tr!("`result` は一つしか書けません", "There can be only one `result`"),
@@ -744,7 +1733,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E016,
             &["E015"],
-        ),
+        )
+        .english(X_E016_EN),
         err(
             "E017",
             tr!("`constraint` の形が違います", "A `constraint` is not shaped like this"),
@@ -796,7 +1786,7 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "`elements 運賃行(fee_rows)` の形にして、続く行に一要素ぶんのフィールドを `inputs` と同じように書いてください。並びが二つ要るなら、それは別の規則です。",
-                "Write `elements 運賃行(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules."
+                "Write `elements fee_rows(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules."
             ),
             X_E020,
             &["E021"],
@@ -828,7 +1818,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E022,
             &["E023", "E024"],
-        ),
+        )
+        .english(X_E022_EN),
         err(
             "E023",
             tr!("最後まで見終えたときの答えが宣言されていません", "The answer for a walk that reached the end is not declared"),
@@ -842,7 +1833,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E023,
             &["E022", "E024"],
-        ),
+        )
+        .english(X_E023_EN),
         err(
             "E024",
             tr!("行き先の無い判定があります", "Some verdict has no arm"),
@@ -856,7 +1848,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E024,
             &["E022", "E023", "W115"],
-        ),
+        )
+        .english(X_E024_EN),
         err(
             "E025",
             tr!("例に並びの列がありません", "The examples have no column for the sequence"),
@@ -870,7 +1863,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E025,
             &["E026", "E027"],
-        ),
+        )
+        .english(X_E025_EN),
         err(
             "E026",
             tr!("`sequence` の書き方が正しくありません", "The `sequence` is not written correctly"),
@@ -884,7 +1878,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E026,
             &["E025", "E020"],
-        ),
+        )
+        .english(X_E026_EN),
         err(
             "E027",
             tr!("例が指す並びがありません", "The example names a sequence that is not there"),
@@ -898,7 +1893,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E027,
             &["E025", "E026"],
-        ),
+        )
+        .english(X_E027_EN),
         err(
             "E028",
             tr!("`count` の書き方が正しくありません", "The `count` is not written correctly"),
@@ -995,7 +1991,8 @@ pub fn ledger() -> Vec<Entry> {
             tr!("どちらかのラベルを変えてください。", "Change one of the two labels."),
             X_E034,
             &["E009", "E035"],
-        ),
+        )
+        .english(X_E034_EN),
         err(
             "E035",
             tr!("`overrides` の指す先がありません", "The target of `overrides` does not exist"),
@@ -1009,7 +2006,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E035,
             &["E034", "E036"],
-        ),
+        )
+        .english(X_E035_EN),
         err(
             "E036",
             tr!("`overrides` の相手が同じ出力を定めていません", "The target of `overrides` does not define the same output"),
@@ -1023,13 +2021,14 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E036,
             &["E035", "E045"],
-        ),
+        )
+        .english(X_E036_EN),
         err(
             "E037",
             tr!("引用した箇所のハッシュが固定されていません", "A cited fragment is not pinned"),
             tr!(
                 "`@出典 第91条` のように引用した箇所に、`source` の行の下の `  第91条 sha256:…` というハッシュの行が無いとき。`file` の出典なら、その行に `sha256:…` が無いとき。法令を箇所無しで `@法` とだけ引用したとき、箇所の書き方や、引用・宣言の形が読めないときも同じです（隣に置いたファイルは `@郵便` と丸ごと引用できます）。文書から引けるのは表なので、引用箇所は `表3`（文書順に三つめの表）か `table3` と書きます。それ以外の書き方は読めません（§15.82）。語として読めない箇所は `\"` で囲みます（`@osha \"§1910.157\"`）。ハッシュが無いと、写しが改訂されても check は何も言えません（§15.68）。",
-                "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). A document's fragments are its tables, so `表3` (the third table in document order) and `table3` are the only names read (§15.82). A fragment the language cannot read as one word is quoted (`@osha \"§1910.157\"`). Without a pin, a revised copy passes check in silence (§15.68)."
+                "A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@source` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@postal`). A document's fragments are its tables, so `table3` (the third table in document order; `表3` is its Japanese spelling) is the only name read (§15.82). A fragment the language cannot read as one word is quoted (`@osha \"§1910.157\"`). Without a pin, a revised copy passes check in silence (§15.68)."
             ),
             tr!(
                 "原文を読んで写した行が正しいことを確かめたら、`fix.text` の行を貼るか `rulec source pin <file.rule>` を実行して、いまの写しのハッシュを書き込んでください。",
@@ -1059,7 +2058,7 @@ pub fn ledger() -> Vec<Entry> {
             tr!("出典の写しがありません", "There is no copy of a source"),
             tr!(
                 "引用した箇所の写しが規則の隣に無いとき（法令なら `sources/law/<法令ID>@<日付>/<要素>.xml`、文書の表なら文書の隣の `料金表.md.fragments/表3.tsv`）、または `file` の出典そのものが読めないとき。check は通信もしませんし、文書の中身も見ません。写しが無ければ照合できません。",
-                "The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `料金表.md.fragments/表3.tsv` beside the document for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare."
+                "The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `tariff.md.fragments/table3.tsv` beside the document for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare."
             ),
             tr!(
                 "`rulec source fetch <file.rule>` が、政府の法令データベース（e-Gov 法令検索）から引用箇所を取り、文書からは引いた表を取り出して、規則の隣に置きます。写しは git に入れてください。",
@@ -1082,7 +2081,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E040,
             &["E037", "E038", "E044"],
         )
-        .with_files(CALLEE),
+        .with_files(CALLEE)
+        .english_with_files(X_E040_EN, CALLEE_EN),
         err(
             "E041",
             tr!("準用の読み替えが元の規則と合いません", "The bindings of an apply do not match the callee"),
@@ -1097,7 +2097,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E041,
             &["E040", "E042", "E043"],
         )
-        .with_files(CALLEE),
+        .with_files(CALLEE)
+        .english_with_files(X_E041_EN, CALLEE_EN),
         err(
             "E042",
             tr!("読み替えの型が合いません", "A binding does not agree in type"),
@@ -1112,7 +2113,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E042,
             &["E041", "E043"],
         )
-        .with_files(ENUM_CALLEE),
+        .with_files(ENUM_CALLEE)
+        .english_with_files(X_E042_EN, ENUM_CALLEE_EN),
         err(
             "E043",
             tr!("渡す値が元の規則の範囲か制約に収まりません", "A value passed leaves the callee's range or constraint"),
@@ -1127,7 +2129,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E043,
             &["E041", "E042", "E101"],
         )
-        .with_files(CALLEE),
+        .with_files(CALLEE)
+        .english_with_files(X_E043_EN, CALLEE_EN),
         err(
             "E044",
             tr!("その規則は準用できません", "That rule cannot be applied"),
@@ -1142,7 +2145,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E044,
             &["E040", "E041"],
         )
-        .with_files(BROKEN_CALLEE),
+        .with_files(BROKEN_CALLEE)
+        .english_with_files(X_E044_EN, BROKEN_CALLEE_EN),
         err(
             "E045",
             tr!("出力を共有する表に、出力の列が二つ以上あります", "A table that shares an output has two or more output columns"),
@@ -1153,7 +2157,8 @@ pub fn ledger() -> Vec<Entry> {
             tr!("二つ目の出力を、別の表に分けてください。", "Move the second output to a table of its own."),
             X_E045,
             &["E036", "E105"],
-        ),
+        )
+        .english(X_E045_EN),
         err(
             "E046",
             tr!("`clause` の形が読めません", "A `clause` is not shaped like this"),
@@ -1167,27 +2172,29 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E046,
             &["E008", "E035", "E045"],
-        ),
+        )
+        .english(X_E046_EN),
         err(
             "E047",
             tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"),
             tr!(
                 "入力・出力・`derive`・`count` の宣言の行に、`range`・`round`・`contract_only` のどれにも属さない語が残っているとき。このツールは行から欲しい語を探して残りを踏み越える読み方をするので、こうした語はいままで黙って捨てられていました。範囲の後ろに書いた税区分（`range >=0円 <=10000円 incl_tax`）も、単位が単位として読めずに余った分も、どちらも通っていました。範囲は完全性検査が量化する全体集合で、生成コードの入口ガードでもあるので、境界が一つ落ちたまま「完全」と答えることになります。",
-                "A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0円 <=10000円 incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered \"complete\" with one side missing."
+                "A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered \"complete\" with one side missing."
             ),
             tr!(
                 "その語を消すか、宣言の一部として正しい形に直してください。税区分や刻みは型の括弧の中（`money[円, incl_tax]`、`rate[step 0.1%]`）で、範囲は `range >=<値> <=<値>`、丸めは `round <向き>(<格子>)` です。",
-                "Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[円, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`."
+                "Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[JPY, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`."
             ),
             X_E047,
             &["E011", "E103", "E104"],
-        ),
+        )
+        .english(X_E047_EN),
         err(
             "E049",
             tr!("桁区切りのカンマは書けません", "A thousands separator cannot be written"),
             tr!(
                 "数を `1,000` や `1,949,000円` のように、1〜3 桁のあとに `,` と 3 桁の組を続けて書いたとき。`,` はセルの中で集合の要素を区切る記号なので、そのままでは二つ以上の値に読まれます。いままでは黙ってそう読んでいて、数の列の `<=1,000` は `<=1` として検査を通り、金額の列では `1` に単位が無いという的外れな E103 で止まっていました。文書の数字をそのまま写すと、ここに当たります。",
-                "A number is written as a document writes it, one to three digits followed by `,` and groups of three: `1,000`, `1,949,000円`. Inside a cell `,` separates the members of a set, so as it stands the figure reads as more than one value. It used to be read that way without a word: `<=1,000` in a column of numbers passed the check as `<=1`, and in a column of money it stopped at an E103 about `1` having no unit. Copying a document's figures as they stand lands here."
+                "A number is written as a document writes it, one to three digits followed by `,` and groups of three: `1,000`, `1,949,000JPY`. Inside a cell `,` separates the members of a set, so as it stands the figure reads as more than one value. It used to be read that way without a word: `<=1,000` in a column of numbers passed the check as `<=1`, and in a column of money it stopped at an E103 about `1` having no unit. Copying a document's figures as they stand lands here."
             ),
             tr!(
                 "カンマを外して `1000` と書いてください。桁を区切りたいときは `1_000` と書けます。`fix.text` が書き直したリテラルです。",
@@ -1195,13 +2202,14 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E049,
             &["E014", "E103"],
-        ),
+        )
+        .english(X_E049_EN),
         err(
             "E048",
             tr!("この型には足し算も掛け算もありません", "This type has no arithmetic"),
             tr!(
                 "順序はあるが演算の無い型を、`+ - × ÷` のどれかに使ったとき。`date`、`temperature[℃]`・`temperature[℉]`、`sound[dB]` の三つがそれです。℃ は 0 が「無い」を意味しない目盛りなので `気温 × 2` に意味が無く、dB は対数なので二つ足しても音が二つ分にはならず、日付は暦日なので引き算の結果を入れる型がありません。どれも規則の中では閾値としてしか現れないので、比較と `range` だけを残して演算を落としています。",
-                "A type that is ordered but has no arithmetic is used with `+ - × ÷`. There are three: `date`, `temperature[℃]`/`temperature[℉]`, and `sound[dB]`. A ℃ has a displaced zero, so `気温 × 2` means nothing; a decibel is a logarithm, so adding two of them is not two sounds' worth; and a date is a calendar day, with no type to hold the result of subtracting one. All three appear in rules only as thresholds, so comparison and `range` are kept and the arithmetic is dropped."
+                "A type that is ordered but has no arithmetic is used with `+ - × ÷`. There are three: `date`, `temperature[℃]`/`temperature[℉]`, and `sound[dB]`. A ℃ has a displaced zero, so `temp × 2` means nothing; a decibel is a logarithm, so adding two of them is not two sounds' worth; and a date is a calendar day, with no type to hold the result of subtracting one. All three appear in rules only as thresholds, so comparison and `range` are kept and the arithmetic is dropped."
             ),
             tr!(
                 "閾値として比べるか、`range` に書いてください。差や倍率そのものが業務ルールなら、計算した結果を入力として受け取るか、表で引きます。二つの日付のあいだの日数は、呼び出し側で数えて `number` か `duration` として渡します。",
@@ -1209,7 +2217,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E048,
             &["E103", "E112", "E115"],
-        ),
+        )
+        .english(X_E048_EN),
         err(
             "E050",
             tr!("`machine` の節の形が違います", "The `machine` section is not shaped right"),
@@ -1261,7 +2270,7 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "`once <出力> <セル>` の出力には、持ち越す状態ではない出力を書きます（`once 返金額 >0円`）。状態について言うなら `never … after …` を使ってください。",
-                "Name an output other than the carried state (`once 返金額 >0円`). Say it about states with `never … after …`."
+                "Name an output other than the carried state (`once refund >0JPY`). Say it about states with `never … after …`."
             ),
             X_E053,
             &["E127", "E103"],
@@ -1279,7 +2288,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E054,
             &["E050", "E028"],
-        ),
+        )
+        .english(X_E054_EN),
         err(
             "E055",
             tr!("`scenario` の形が違います", "A `scenario` is not shaped right"),
@@ -1317,7 +2327,7 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "`<名前>(<別名>) : <型>` の形で型を書いてください（`: money[円, incl_tax]`、`: 都道府県`、`: bool`）。数の型なら `range` も要ります。",
-                "Write the type as `<name>(<alias>) : <type>` (`: money[円, incl_tax]`, `: 都道府県`, `: bool`). A numeric type needs a `range` too."
+                "Write the type as `<name>(<alias>) : <type>` (`: money[JPY, incl_tax]`, `: <enum>`, `: bool`). A numeric type needs a `range` too."
             ),
             X_E057,
             &["E011", "E047", "E012"],
@@ -1331,7 +2341,7 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "診断の注記にある形に書き直してください（`define 大口(bulk) : bool = 注文金額 >= 3万円`）。どの宣言の形も docs/reference.md にあります。",
-                "Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30000円`). Every declaration's shape is in docs/reference.md."
+                "Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30_000JPY`). Every declaration's shape is in docs/reference.md."
             ),
             X_E058,
             &["E006", "E057", "E059", "E005"],
@@ -1341,43 +2351,46 @@ pub fn ledger() -> Vec<Entry> {
             tr!("式を読めません", "The expression cannot be read"),
             tr!(
                 "`=` などの右に書いた式を、最後の語まで読めないとき。演算子の右が空（`x +`）、`(` が閉じていない、値が二つ演算子なしで並んでいる（`金額 税`）、符号が数にくっついている（`金額 -100円`）、などです。いままでは読めたところまでを式にして、残りを黙って捨てていました。`金額 税` は `金額` と読まれて検査を通り、`x +` は宣言ごと消えていました。",
-                "An expression — on the right of `=`, of `->` in a `fold`, and so on — cannot be read to its last token: nothing on the right of an operator (`x +`), a `(` never closed, two values with no operator between them (`amount tax`), a sign stuck to a number (`amount -100円`). What could be read used to become the expression and the rest was dropped: `amount tax` passed the check as `amount`, and `x +` took its whole declaration with it."
+                "An expression — on the right of `=`, of `->` in a `fold`, and so on — cannot be read to its last token: nothing on the right of an operator (`x +`), a `(` never closed, two values with no operator between them (`amount tax`), a sign stuck to a number (`amount -100JPY`). What could be read used to become the expression and the rest was dropped: `amount tax` passed the check as `amount`, and `x +` took its whole declaration with it."
             ),
             tr!(
                 "抜けている演算子や括弧を補ってください。引くときは `金額 - 100円` のように、記号の後ろを空けます。記号と数字がくっついていると、負の数として読まれます。",
-                "Supply the missing operator or parenthesis. To subtract, leave a space after the sign, as in `amount - 100円`: a sign touching the digits makes a negative number."
+                "Supply the missing operator or parenthesis. To subtract, leave a space after the sign, as in `amount - 100JPY`: a sign touching the digits makes a negative number."
             ),
             X_E059,
             &["E058", "E118", "E115"],
-        ),
+        )
+        .english(X_E059_EN),
         err(
             "E060",
             tr!("刻みが正の値ではありません", "A step is not positive"),
             tr!(
                 "型の刻み（`rate[step 0%]`）、出力の丸めの刻み（`round up(0円)`）、式の中の丸めの刻み（`down(x, 0円)`）が 0 か負の数のとき。刻み 0 の丸めは検査を通り、生成コードの中で 0 で割って、実行時に止まっていました（Python なら ZeroDivisionError）。刻み 0 の型は、黙って刻み 1 として読まれていました。",
-                "The step of a type (`rate[step 0%]`), the rounding grid of an output (`round up(0円)`) or of a rounding call (`down(x, 0円)`) is zero or negative. A grid of zero passed the check and the generated code divided by it at run time (Python stopped with ZeroDivisionError); a step of zero was quietly read as a step of one."
+                "The step of a type (`rate[step 0%]`), the rounding grid of an output (`round up(0JPY)`) or of a rounding call (`down(x, 0JPY)`) is zero or negative. A grid of zero passed the check and the generated code divided by it at run time (Python stopped with ZeroDivisionError); a step of zero was quietly read as a step of one."
             ),
             tr!(
                 "0 より大きい刻みを書いてください（`round up(1円)`、`rate[step 0.1%]`）。",
-                "Write a step greater than zero (`round up(1円)`, `rate[step 0.1%]`)."
+                "Write a step greater than zero (`round up(1JPY)`, `rate[step 0.1%]`)."
             ),
             X_E060,
             &["E104", "E114", "E106"],
-        ),
+        )
+        .english(X_E060_EN),
         err(
             "E061",
             tr!("範囲が空です", "The range is empty"),
             tr!(
                 "`range` に入る値が一つも無いとき。下の端が上の端を超えている（`range >=10円 <=0円`）か、両端が同じ値で片方が `>` か `<` のときです。こういう範囲は、いままで何も言われずに通っていました。完全性の証明は何も無い集合について「漏れなし」と答え、生成コードの入口はどの呼び出しも断っていました。",
-                "No value lies in a `range`: the lower end is past the upper one (`range >=10円 <=0円`), or the two are equal and one of them is `>` or `<`. Such a range used to pass with nothing said: the completeness proof answered \"complete\" over nothing, and the generated code's entry refused every call."
+                "No value lies in a `range`: the lower end is past the upper one (`range >=10JPY <=0JPY`), or the two are equal and one of them is `>` or `<`. Such a range used to pass with nothing said: the completeness proof answered \"complete\" over nothing, and the generated code's entry refused every call."
             ),
             tr!(
                 "書き間違えた端を直してください（`range >=0円 <=10円`）。",
-                "Correct the end that was mistyped (`range >=0円 <=10円`)."
+                "Correct the end that was mistyped (`range >=0JPY <=10JPY`)."
             ),
             X_E061,
             &["E112", "E103", "E060"],
-        ),
+        )
+        .english(X_E061_EN),
         err(
             "E062",
             tr!("ありえない日付です", "There is no such date"),
@@ -1397,7 +2410,7 @@ pub fn ledger() -> Vec<Entry> {
             tr!("セルを読めません", "The cell cannot be read"),
             tr!(
                 "表・例・並びのセルに、セルとして読めない語があるとき。比較の後ろの余分な語（`<=0円 + false`）、値の後ろの語（`false 0円`）、値でない語（`+`）、見出しの列に名前が無い、などです。いままでは読めたところまでをセルにして、残りを捨てていました。読めないセルは丸ごと捨てていたので、後ろのセルが一つずつ左の列へずれていました。",
-                "A cell of a table, of the examples or of a sequence holds something a cell cannot: words after a comparison (`<=0円 + false`), a word after a value (`false 0円`), a word that is no value (`+`), a header column with no name. What could be read used to become the cell and the rest was dropped, and a cell that could not be read at all was dropped whole, so every cell after it moved one column to the left."
+                "A cell of a table, of the examples or of a sequence holds something a cell cannot: words after a comparison (`<=0JPY + false`), a word after a value (`false 0JPY`), a word that is no value (`+`), a header column with no name. What could be read used to become the cell and the rest was dropped, and a cell that could not be read at all was dropped whole, so every cell after it moved one column to the left."
             ),
             tr!(
                 "セルに書けるのは、値一つ、`-`、`none`、比較、コンマで区切った値の集合、`not:` と集合、`starts_with` と文字列です。一つの列に二つの条件を書くなら、比較を並べます（`>=1 <10`）。",
@@ -1405,7 +2418,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E063,
             &["E008", "E010", "E014", "E064"],
-        ),
+        )
+        .english(X_E063_EN),
         err(
             "E064",
             tr!("行が見出しと合いません", "The row does not fit the header"),
@@ -1467,15 +2481,16 @@ pub fn ledger() -> Vec<Entry> {
             tr!("単位の混同: 型の違う値を混ぜています", "Unit mismatch: values of different types are being mixed"),
             tr!(
                 "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です（§2.3）。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときもこれです。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）もこれです。列の列挙に無い値や群をセルに書いたときもこれで、出力のセルと、二つの列挙の値を混ぜた群も含みます（§15.150）。",
-                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[円, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums (§15.150)."
+                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums (§15.150)."
             ),
             tr!(
                 "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書きます。刻みなら、型と同じ単位で書きます（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書きます。",
-                "Move one side into a table. \"A surcharge that depends on weight\" is `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without."
+                "Move one side into a table. \"A surcharge that depends on weight\" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without."
             ),
             X_E103,
             &["E108", "E112"],
-        ),
+        )
+        .english(X_E103_EN),
         err(
             "E104",
             tr!("数値の出力に丸めの宣言がありません", "A numeric output declares no rounding"),
@@ -1485,11 +2500,12 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "出力の宣言に丸めを書いてください。例: `round up(10円)`。向きは五種（`up` `down` `half_up` `half_down` `half_even`）で、負の側まで固定されています（§7.3）。",
-                "Add rounding to the output declaration, e.g. `round up(10円)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well (§7.3)."
+                "Add rounding to the output declaration, e.g. `round up(10JPY)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well (§7.3)."
             ),
             X_E104,
             &["E106", "E103"],
-        ),
+        )
+        .english(X_E104_EN),
         err(
             "E105",
             tr!("行の重なり: 同じ入力が二つ以上の行に当てはまります", "Overlapping rows: the same input matches two or more rows"),
@@ -1503,21 +2519,23 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E105,
             &["W105", "W114", "E102"],
-        ),
+        )
+        .english(X_E105_EN),
         err(
             "E106",
             tr!("出力のリテラルが丸めの刻みに載っていません", "An output literal is not on the rounding grid"),
             tr!(
                 "出力セルに書かれたリテラルが、宣言した丸めの刻みの倍数でないとき。`round up(10円)` の表に `1451円` があるような、桁の打ち間違いをここで落とします（§7.2）。",
-                "A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451円` in a table rounded `up(10円)` — is stopped (§7.2)."
+                "A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451JPY` in a table rounded `up(10JPY)` — is stopped (§7.2)."
             ),
             tr!(
                 "リテラルを刻みに載せてください（`1451円` は `1450円` か `1460円`）。その額が本当に正しいなら、丸めの刻みのほうを直します。",
-                "Put the literal on the grid (`1451円` becomes `1450円` or `1460円`). If the amount really is right, change the grid instead."
+                "Put the literal on the grid (`1451JPY` becomes `1450JPY` or `1460JPY`). If the amount really is right, change the grid instead."
             ),
             X_E106,
             &["E104"],
-        ),
+        )
+        .english(X_E106_EN),
         err(
             "E107",
             tr!("例の期待値と一致しません", "An example does not match"),
@@ -1531,7 +2549,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E107,
             &["E111", "E105"],
-        ),
+        )
+        .english(X_E107_EN),
         err(
             "E108",
             tr!("中間値が int64 に収まることを証明できません", "Cannot prove an intermediate value fits in int64"),
@@ -1545,7 +2564,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E108,
             &["E112", "E103"],
-        ),
+        )
+        .english(X_E108_EN),
         err(
             "E109",
             tr!("検査の予算を超えたので、完全性を証明できませんでした", "The check exceeded its budget, so completeness could not be proven"),
@@ -1588,7 +2608,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E111,
             &["E107"],
-        ),
+        )
+        .english(X_E111_EN),
         err(
             "E112",
             tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of a derived value does not contain the values it can reach"),
@@ -1602,7 +2623,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E112,
             &["E108", "E101"],
-        ),
+        )
+        .english(X_E112_EN),
         err(
             "E113",
             tr!("真偽定義の条件が、書ける二つの形のどちらでもありません", "The condition of a boolean definition is neither of the two allowed forms"),
@@ -1612,11 +2634,12 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "差を導出として宣言してから定数と比べてください。`define bigger : bool = a >= b` は `derive gap(gap) : money[円, incl_tax] = a - b  range …` を足して `| gap | >=0円 |` と書き換えます。そのほうが厳密に解析できます。",
-                "Declare the difference as a derived value and compare that against a constant. `define bigger : bool = a >= b` becomes `derive gap(gap) : money[円, incl_tax] = a - b  range …` and the cell `>=0円`. The analysis is exact that way."
+                "Declare the difference as a derived value and compare that against a constant. `define bigger : bool = a >= b` becomes `derive gap(gap) : money[JPY, incl_tax] = a - b  range …` and the cell `>=0JPY`. The analysis is exact that way."
             ),
             X_E113,
             &["E112", "E103"],
-        ),
+        )
+        .english(X_E113_EN),
         err(
             "E114",
             tr!("値が宣言した刻みに載っていません", "A value does not sit on the declared step"),
@@ -1650,7 +2673,7 @@ pub fn ledger() -> Vec<Entry> {
             tr!("行の金額が、引いた写しに無いか、別の見出しの下にあります", "A row's amount is not in the copy it cites, or is under another heading there"),
             tr!(
                 "行の出力の値が、その行（またはその表）が `@出典 表1` で引いている写しのどこにも出てこないとき（§15.82）。行のセルの語（`関東`）と一字一句同じ見出しが写しにあれば、その見出しの行と列の中だけを探します。隣の行の金額は写しのどこかにはあるので、表全体を探したのでは取り違えを見逃すからです（§15.143）。比べるのは金額だけです。閾値は写すときに書き換わります（`1,949,000円まで` は `<=1949000円` になる）が、金額は書き換わらないからです。写しの `5/1,000` や `1,000分の5` は 0.5% と読みます。写しは `rulec source fetch` が文書から取り出したもので、check が見るのはその写しであって文書そのものではありません。",
-                "The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Where the copy has a heading that says exactly a word of the row's cells (`関東`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up (§15.143). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. A copy's `5/1,000` or `1,000分の5` reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself."
+                "The output value of a row is nowhere in the copy the row or its table cites with `@source table1` (§15.82). Where the copy has a heading that says exactly a word of the row's cells (`Kanto`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up (§15.143). Only amounts are compared: a threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) and an amount is not. A copy's `5/1,000` (or, in Japanese, `1,000分の5`) reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself."
             ),
             tr!(
                 "写しを読み直して金額を直してください。別の見出しの下にあると言われたら、行を取り違えています。一桁の打ち間違いなら、たいてい同時に W120 が出て、どの値が使われずに残っているかを言います。値が別のところ（後の通知、正誤表、人の回答）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。`rulec doc` がそのコメントを承認する人に見せます。",
@@ -1659,7 +2682,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E116,
             &["W120", "E038", "E107"],
         )
-        .with_files(TARIFF_DOC),
+        .with_files(TARIFF_DOC)
+        .english_with_files(X_E116_EN, TARIFF_DOC_EN),
         err(
             "E117",
             tr!("配分の前提が揃っていません", "A share without what a share needs"),
@@ -1673,13 +2697,14 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_E117,
             &["E115", "E108"],
-        ),
+        )
+        .english(X_E117_EN),
         err(
             "E118",
             tr!("呼び出しの形が違います", "The call is not written correctly"),
             tr!(
                 "無い関数を呼んでいるか、引数の数が合わないとき。書けるのは `min(a, b)` `max(a, b)` `allocate(配る額, 累計, 全体)` と丸めの五つ（`down(x, 1円)` など）だけです（§2.3）。",
-                "A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1円)` and the rest) (§2.3)."
+                "A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1JPY)` and the rest) (§2.3)."
             ),
             tr!(
                 "綴りと引数の数を見てください。多い引数は黙って捨てられ、少なければ答えが決まりません——どちらも §15.102 までは素通りしていて、ジェネレーターのほうで初めて行き止まりになっていました。",
@@ -1702,7 +2727,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E120,
             &["E121", "W122", "E103"],
         )
-        .with_files(SHAPE_DOC),
+        .with_files(SHAPE_DOC)
+        .english(X_E120_EN),
         err(
             "E121",
             tr!("`from` のパスが契約にありません", "The contract has no such path"),
@@ -1717,13 +2743,14 @@ pub fn ledger() -> Vec<Entry> {
             X_E121,
             &["E120", "W122", "E032"],
         )
-        .with_files(SHAPE_DOC),
+        .with_files(SHAPE_DOC)
+        .english(X_E121_EN),
         err(
             "E119",
             tr!("行の境界が、引いた写しと反対側です", "A row's boundary falls on the other side from the copy it cites"),
             tr!(
                 "引用のある行の閾値が、境界の値を写しと反対の側に入れているとき（§15.124）。閾値は写すときに書き換わる（`1,949,000円まで` は `<=1949000円` になる）ので文字としては比べられず、比べているのは**境界の値がどちらに入るか**だけです。写しの「60cm以下」と「60cmを超え」はどちらも 60cm を小さいほうに入れ、`<=60cm` と `>60cm` も同じことを言います。写しに境界の語が無いとき（`18 to 20`、`60〜80`）、語が数と別の列にあるとき（保険料額表の「円以上／円未満」）、同じ数を写しが両側に置いているときは、何も言いません。",
-                "A threshold of a row that cites puts its boundary value on the other side from the copy (§15.124). A threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `60cm以下` and `60cmを超え` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60〜80`), with the word in another column (`円以上` over its own column, as an insurance premium table writes it), or with words on both sides, is left alone."
+                "A threshold of a row that cites puts its boundary value on the other side from the copy (§15.124). A threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `up to 60cm` and `over 60cm` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60-80`), with the word in another column (a Japanese insurance premium table puts `円以上`, \"yen or more\", in the heading over its own column), or with words on both sides, is left alone."
             ),
             tr!(
                 "写しを読み直して直してください。`fix.text` はこのセルの境界の側だけを入れ替えた形です——向きは表の幾何であって写しが決めることではないので、`<` と `<=` の入れ替えしか書きません。一つの境界を写し間違えると、それを分け合う二つの行の両方が出ます。境界が別のところ（後の通知、本文の但し書き）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
@@ -1732,7 +2759,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E119,
             &["E116", "W120", "E105"],
         )
-        .with_files(SIZE_DOC),
+        .with_files(SIZE_DOC)
+        .english_with_files(X_E119_EN, SIZE_DOC_EN),
         warn(
             "W122",
             tr!("その `shape` を使っている入力がありません", "No input is projected from that shape"),
@@ -1747,7 +2775,8 @@ pub fn ledger() -> Vec<Entry> {
             X_W122,
             &["E121", "W111"],
         )
-        .with_files(SHAPE_DOC),
+        .with_files(SHAPE_DOC)
+        .english(X_W122_EN),
         err(
             "E122",
             tr!("契約が通す値を、規則が断ります", "The contract lets through a value the rule refuses"),
@@ -1762,7 +2791,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E122,
             &["W123", "E123", "E121", "E032"],
         )
-        .with_files(LINES_DOC),
+        .with_files(LINES_DOC)
+        .english(X_E122_EN),
         warn(
             "W123",
             tr!("行が、契約の通さない値でしか当たりません", "A row is reached only by values the contract does not let through"),
@@ -1777,7 +2807,8 @@ pub fn ledger() -> Vec<Entry> {
             X_W123,
             &["E122", "W124", "E102", "W111"],
         )
-        .with_files(LINES_DOC),
+        .with_files(LINES_DOC)
+        .english(X_W123_EN),
         err(
             "E123",
             tr!("契約が、規則の `constraint` を破る組み合わせを通します", "The contract lets through a combination the rule's `constraint` refuses"),
@@ -1792,7 +2823,8 @@ pub fn ledger() -> Vec<Entry> {
             X_E123,
             &["E122", "W124", "E018"],
         )
-        .with_files(QUOTE_PROTO),
+        .with_files(QUOTE_PROTO)
+        .english(X_E123_EN),
         warn(
             "W124",
             tr!("行が、契約の通さない組み合わせでしか当たりません", "A row is reached only by a combination the contract does not let through"),
@@ -1807,7 +2839,8 @@ pub fn ledger() -> Vec<Entry> {
             X_W124,
             &["W123", "E123", "E102"],
         )
-        .with_files(QUOTE_PROTO),
+        .with_files(QUOTE_PROTO)
+        .english(X_W124_EN),
         err(
             "E124",
             tr!("終わりの状態から出る遷移があります", "A final state has a way out"),
@@ -1946,11 +2979,12 @@ pub fn ledger() -> Vec<Entry> {
             ),
             tr!(
                 "その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。",
-                "If no input really falls in the cell, write the condition over whole numbers (`a >= 3円` for `倍 >= 5円`). If one does, write it down as an example or a scenario."
+                "If no input really falls in the cell, write the condition over whole numbers (`a >= 3JPY` for `twice >= 5JPY`). If one does, write it down as an example or a scenario."
             ),
             X_W127,
             &["W114", "E128"],
-        ),
+        )
+        .english(X_W127_EN),
         warn(
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),
@@ -1964,7 +2998,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W105,
             &["E105", "W110", "E102"],
-        ),
+        )
+        .english(X_W105_EN),
         warn(
             "W110",
             tr!("重なりのない `first` です", "A `first` table with no overlaps"),
@@ -2006,7 +3041,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W116,
             &["E027", "W111"],
-        ),
+        )
+        .english(X_W116_EN),
         warn(
             "W119",
             tr!("ハッシュを書いた箇所が引用されていません", "A pinned fragment is not cited"),
@@ -2024,7 +3060,7 @@ pub fn ledger() -> Vec<Entry> {
             tr!("写しの値を、どの行も使っていません", "The copy states a value no row uses"),
             tr!(
                 "表が `@出典 表1` で丸ごと引いている写しに、数だけでできたセルがあって、その値をどの行も使っていないとき（§15.82）。行を一本落としても完全性検査には出ません——落ちた行の入力は、残った行のどれかに当てはまってしまうからです。数だけのセルしか見ないので、`2026年4月1日改定` のような文は金額として数えません。`<=3kg` の一行で写しの `1kg`・`2kg`・`3kg` をまとめて写した場合も出ません。",
-                "A cell of the copy a table cites whole with `@source 表1` is nothing but a number, and no row uses that value (§15.82). A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `2026年4月1日改定` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them."
+                "A cell of the copy a table cites whole with `@source table1` is nothing but a number, and no row uses that value (§15.82). A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `revised 1 April 2026` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them."
             ),
             tr!(
                 "写しと見比べて、落とした行がないか確かめてください。改定で行が増えたのなら、その行をここに写します。引用した表のうち一部だけを写したのなら（発地ごとの運賃表から、一つの発地だけを写したときなど）、引用を `table` の行から、写した行それぞれの末尾へ移してください。行の引用は「この行はここから来た」としか言わないので、残りは問われなくなり、金額の突き合わせ（E116）は残ります。",
@@ -2033,7 +3069,8 @@ pub fn ledger() -> Vec<Entry> {
             X_W120,
             &["E116", "W119"],
         )
-        .with_files(TARIFF_DOC),
+        .with_files(TARIFF_DOC)
+        .english_with_files(X_W120_EN, TARIFF_DOC_EN),
         warn(
             "W118",
             tr!("準用した表の行が、この規則ではどれも当たりません", "No row of an applied table is reached in this apply"),
@@ -2049,7 +3086,8 @@ pub fn ledger() -> Vec<Entry> {
             X_W118,
             &["E102", "W117"],
         )
-        .with_files(CALLEE),
+        .with_files(CALLEE)
+        .english_with_files(X_W118_EN, CALLEE_EN),
         warn(
             "W117",
             tr!("効かない例外です", "An exception with no effect"),
@@ -2063,7 +3101,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W117,
             &["E035", "E105"],
-        ),
+        )
+        .english(X_W117_EN),
         warn(
             "W121",
             tr!("別名が生成先の言葉とぶつかります", "An alias collides with a word in a target language"),
@@ -2077,7 +3116,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W121,
             &["E009", "E011"],
-        ),
+        )
+        .english(X_W121_EN),
         warn(
             "W115",
             tr!("どの要素もこの判定にはなりません", "No element can land on this verdict"),
@@ -2091,13 +3131,14 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W115,
             &["E024"],
-        ),
+        )
+        .english(X_W115_EN),
         warn(
             "W114",
             tr!("未確認の重なり: 両方に当てはまる入力が有り得ます", "Unconfirmed overlap: an input may match both rows"),
             tr!(
                 "`policy unique` の表で二行が重なりうるが、それを実際に起こす入力を構成できず、実現不能の証明もできなかったとき。導出が入力を共有する形（§15.126）と、真偽の `define` の中の閾値（§15.127）は、消去が決めるようになったのでここには落ちてきません。残るのは、消去が有理数の上で解いているために決まらない形です——上の例の `倍` は必ず偶数なので `5円` ちょうどにはなりませんが、有理数には `2.5円` があります。予算（400 本）を超えた系と、単位をまたぐ系も同じで、どれも「証明できなかった」であって「起こりうる」ではありません。",
-                "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input (§15.126) and the thresholds inside a boolean `define` (§15.127) no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `倍` above is always even and never exactly `5円`, but `2.5円` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible."
+                "Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input (§15.126) and the thresholds inside a boolean `define` (§15.127) no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `twice` above is always even and never exactly `5JPY`, but `2.5JPY` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible."
             ),
             tr!(
                 "その条件を同時に満たす注文が存在するなら、行を直してください（出力が違うので、当てはまれば矛盾です）。存在しないならこのままで構いません — 生成コードには、万一その条件に当てはまる入力が来たとき黙って先の行を選ばずエラーを返すガードが入ります。",
@@ -2105,7 +3146,8 @@ pub fn ledger() -> Vec<Entry> {
             ),
             X_W114,
             &["E105", "W105", "E109"],
-        ),
+        )
+        .english(X_W114_EN),
     ]
 }
 
@@ -2137,8 +3179,9 @@ pub fn render_text(e: &Entry) -> String {
         Some(b) => tr!("\n最小の再現（`--budget {b}` で）\n", "\nSmallest reproduction (with `--budget {b}`)\n"),
         None => tr!("\n最小の再現\n", "\nSmallest reproduction\n"),
     });
-    o.push_str(&indent(e.example));
-    for (name, text) in e.files {
+    let repro = e.repro(crate::i18n::current());
+    o.push_str(&indent(repro.example));
+    for (name, text) in repro.files {
         o.push_str(&tr!("\n隣に置くファイル `{name}`\n", "\nThe file `{name}` beside it\n"));
         o.push_str(&indent(text));
     }
@@ -2163,9 +3206,10 @@ pub fn render_markdown(e: &Entry) -> String {
     // Tagged, so that the site colours it; a reader of the plain file sees the tag and
     // nothing else changes.
     o.push_str("```rule\n");
-    o.push_str(e.example);
+    let repro = e.repro(crate::i18n::current());
+    o.push_str(repro.example);
     o.push_str("```\n");
-    for (name, text) in e.files {
+    for (name, text) in repro.files {
         o.push_str(&tr!("\n隣に置く `{name}`:\n\n", "\nWith `{name}` beside it:\n\n"));
         o.push_str("```proto\n");
         o.push_str(text);
@@ -2180,21 +3224,24 @@ pub fn render_markdown(e: &Entry) -> String {
 }
 
 /// `rulec explain <CODE> --format json`. Language independent in its keys; the prose
-/// fields follow `--lang`.
+/// fields follow `--lang`, and so does the reproduction (`example` and `files`) of an entry
+/// that has an English twin.
 pub fn render_json(e: &Entry) -> String {
+    let repro = e.repro(crate::i18n::current());
     json::Obj::new()
         .str("code", e.code)
         .str("severity", severity_word(e.severity))
         .str("title", &e.title)
         .str("when", &e.when)
         .str("fix", &e.fix)
-        .str("example", e.example)
+        .str("example", repro.example)
         .opt_raw("budget", e.budget.map(|b| b.to_string()))
         .raw(
             "files",
             format!(
                 "[{}]",
-                e.files
+                repro
+                    .files
                     .iter()
                     .map(|(n, t)| json::Obj::new().str("name", n).str("text", t).finish())
                     .collect::<Vec<_>>()

@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::TempDir;
+use rulec::i18n::Lang;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -52,40 +53,94 @@ fn 出しうるコードは全部台帳にある() {
     assert!(missing.is_empty(), "台帳に無いコードが出ている: {missing:?}");
 }
 
+/// What a reproduction prints, as (code, line), when it is run where its files really are:
+/// an example that needs a file beside it (the `.proto` imports, a callee, a cited copy) is run
+/// with the file there, so the companion is held to the same standard as the example.
+fn printed(e: &rulec::codes::Entry, r: rulec::codes::Repro) -> Vec<(&'static str, usize)> {
+    let budget = e.budget.unwrap_or(rulec::region::DEFAULT_BUDGET);
+    let tmp = (!r.files.is_empty()).then(|| TempDir::new(&format!("explain-{}", e.code)));
+    let dir = tmp.as_ref().map_or_else(PathBuf::new, |t| {
+        let d = t.path().to_path_buf();
+        for (name, text) in r.files {
+            // A copy of a source lives under `sources/law/…`, so the directories come first.
+            let p = d.join(name);
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).expect("隣のディレクトリを作れない");
+            }
+            std::fs::write(&p, text).expect("隣のファイルを書けない");
+        }
+        d
+    });
+    let path = dir.join("explain.rule").to_string_lossy().into_owned();
+    // koyomi is joined as `ritsu rulec` joins it, but for E129, which is what a rulec with
+    // no koyomi says (§15.174).
+    let port: Option<rulec::days::Port> = (e.code != "E129").then(|| std::sync::Arc::new(koyomi::ports::Engine) as rulec::days::Port);
+    let ds = rulec::days::with(port, || rulec::report_with(r.example, &path, budget).diags);
+    ds.iter()
+        .map(|d| {
+            let line = d.where_.strip_prefix(&format!("{path}:")).and_then(|t| t.split(' ').next()).and_then(|n| n.parse().ok());
+            (d.code, line.unwrap_or(0))
+        })
+        .collect()
+}
+
+/// The reproduction shown in English and the one shown in Japanese: each of them has to print
+/// the code. An example that has rotted is worse than none: the prose around it still reads well.
 #[test]
 fn 台帳の例は本当にそのコードを出す() {
-    // An example that has rotted is worse than none: the prose around it still reads well.
     for e in rulec::codes::ledger() {
-        let budget = e.budget.unwrap_or(rulec::region::DEFAULT_BUDGET);
-        // An example that needs a file beside it (the `.proto` imports) is run where that
-        // file really is, so the companion is held to the same standard as the example.
-        let tmp = (!e.files.is_empty()).then(|| TempDir::new(&format!("explain-{}", e.code)));
-        let dir = tmp.as_ref().map_or_else(PathBuf::new, |t| {
-            let d = t.path().to_path_buf();
-            for (name, text) in e.files {
-                // A copy of a source lives under `sources/law/…`, so the directories come first.
-                let p = d.join(name);
-                if let Some(parent) = p.parent() {
-                    std::fs::create_dir_all(parent).expect("隣のディレクトリを作れない");
-                }
-                std::fs::write(&p, text).expect("隣のファイルを書けない");
-            }
-            d
-        });
-        let path = dir.join("explain.rule");
-        // koyomi is joined as `ritsu rulec` joins it, but for E129, which is what a rulec with
-        // no koyomi says (§15.174).
-        let port: Option<rulec::days::Port> = (e.code != "E129").then(|| std::sync::Arc::new(koyomi::ports::Engine) as rulec::days::Port);
-        let ds = rulec::days::with(port, || rulec::report_with(e.example, &path.to_string_lossy(), budget).diags);
-        let codes: Vec<&str> = ds.iter().map(|d| d.code).collect();
-        assert!(
-            codes.contains(&e.code),
-            "{} の例が {} を出さない（出たのは {:?}）:\n{}",
-            e.code,
-            e.code,
-            codes,
-            e.example
-        );
+        for lang in [Lang::En, Lang::Ja] {
+            let r = e.repro(lang);
+            let got = printed(&e, r);
+            assert!(
+                got.iter().any(|(c, _)| *c == e.code),
+                "{} の{}の例が {} を出さない（出たのは {:?}）:\n{}",
+                e.code,
+                if lang == Lang::En { "英語" } else { "日本語" },
+                e.code,
+                got,
+                r.example
+            );
+        }
+    }
+}
+
+/// An English twin is the same rule with other names, so it has to say the same things in the
+/// same places: the same codes on the same lines as the Japanese one. A twin that drifts (a name
+/// that collides with a keyword, a unit that is read another way) shows up here, not in a reader.
+#[test]
+fn 英語の再現は日本語の再現と同じ診断を同じ行に出す() {
+    let mut twins = 0;
+    for e in rulec::codes::ledger() {
+        let Some(en) = e.english else { continue };
+        twins += 1;
+        assert_eq!(printed(&e, en), printed(&e, e.repro(Lang::Ja)), "{} の英語の例が日本語の例と違う診断を出す", e.code);
+    }
+    // The twins are the reproductions that had Japanese names, strings or units: 61 of the 112
+    // entries, less the six that stay as they are (below).
+    assert_eq!(twins, 55, "英語の再現を持つ項目の数が変わった: {twins}");
+}
+
+/// Japanese is left in a reproduction shown in English only where being Japanese is the point of
+/// the entry, and the list says which and why. Any other entry shows English names and units, so
+/// a reproduction written with Japanese ones for a new code has to come with its English twin.
+#[test]
+fn 英語の再現に日本語が残るのは決めた項目だけ() {
+    const KEPT: &[(&str, &str)] = &[
+        ("E011", "the point is a name that is not ASCII, and its prose shows 重量(weight)"),
+        ("E037", "cites a Japanese statute through e-Gov: the article 第1条 and the copy of its XML"),
+        ("E038", "the same, with a pinned fragment that has changed"),
+        ("E039", "the same, with no copy of the article"),
+        ("W119", "the same, with a pin that nothing cites"),
+    ];
+    let japanese = |s: &str| {
+        s.chars().any(|c| matches!(c, '\u{3000}'..='\u{30ff}' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}' | '\u{ff00}'..='\u{ffef}'))
+    };
+    for e in rulec::codes::ledger() {
+        let r = e.repro(Lang::En);
+        let has = japanese(r.example) || r.files.iter().any(|(n, t)| japanese(n) || japanese(t));
+        let kept = KEPT.iter().any(|(c, _)| *c == e.code);
+        assert_eq!(has, kept, "{}: 英語の再現に日本語が{}", e.code, if has { "残っている（残すなら KEPT に理由を書く）" } else { "無い（KEPT から外す）" });
     }
 }
 
@@ -133,6 +188,35 @@ fn チェックインされた文書はいまの出力と同じ() {
              `cargo run -- explain --all --format markdown --lang {lang} > {file}` で焼き直してください"
         );
     }
+}
+
+/// `explain` shows the reproduction of the language it is asked in: the English twin in English
+/// (names, units and the files beside it), the Japanese one under `--lang ja` as it was, and the
+/// same one in both for an entry whose point is Japanese.
+#[test]
+fn explainは言語ごとの再現を見せる() {
+    let repro_of = |code: &str, lang: &str| -> String {
+        let (c, out) = run(&["explain", code, "--lang", lang]);
+        assert_eq!(c, 0);
+        let heading = if lang == "en" { "Smallest reproduction" } else { "最小の再現" };
+        out.split(heading).nth(1).unwrap_or_else(|| panic!("{code} に再現の見出しが無い:\n{out}")).to_string()
+    };
+    // A rule with a money unit.
+    let (en, ja) = (repro_of("E014", "en"), repro_of("E014", "ja"));
+    assert!(en.contains("round down(1JPY)") && !en.contains('円'), "{en}");
+    assert!(ja.contains("round down(1円)") && !ja.contains("JPY"), "{ja}");
+    // A callee beside it: its name and what is in it.
+    let (en, ja) = (repro_of("E043", "en"), repro_of("E043", "ja"));
+    assert!(en.contains("callee.rule") && en.contains("small |") && !en.contains("呼"), "{en}");
+    assert!(ja.contains("呼び先.rule") && ja.contains("小 |") && !ja.contains("small"), "{ja}");
+    // One that stays Japanese in both.
+    let (en, ja) = (repro_of("E011", "en"), repro_of("E011", "ja"));
+    assert!(en.contains("重量 : bool") && ja.contains("重量 : bool"));
+    // The JSON follows the language in `example` and `files`, with the same keys.
+    let line = |lang: &str| run(&["explain", "E043", "--format", "json", "--lang", lang]).1;
+    let (en, ja) = (line("en"), line("ja"));
+    assert!(en.contains("\"name\":\"callee.rule\"") && en.contains("round down(1)"), "{en}");
+    assert!(ja.contains("\"name\":\"呼び先.rule\"") && ja.contains("round down(1)"), "{ja}");
 }
 
 #[test]
@@ -208,6 +292,53 @@ fn 台帳のコードは全部checkとgenのhelpにある() {
             assert!(named.contains(&code), "`rulec {c} --help` に {code} が無い");
         }
     }
+}
+
+// ── Two English sentences that used to carry something Japanese or out of order ────────────
+
+/// E103's note on a rounding grid that is not a value of its column gives its example in the unit
+/// of the column (`1JPY` for yen, `1g` for grams, `1円` on a column written in 円), not a yen
+/// amount whatever the column holds. The Japanese sentence is as it was.
+#[test]
+fn 丸めの刻みの英語の例は列の単位で書かれる() {
+    let note = |lang: Lang, ty: &str, range: &str| -> String {
+        let src = format!("rule t(t) v1\n\ninputs\n  p(p) : {ty}  range {range}\n\noutputs\n  r(r) : {ty}  round down(1)\n\nresult r = p\n");
+        rulec::i18n::with(lang, || {
+            let ds = rulec::check_source(&src, "t.rule");
+            let d = ds.iter().find(|d| d.code == "E103").unwrap_or_else(|| panic!("E103 が出ない: {ty}"));
+            d.notes.join("\n")
+        })
+    };
+    let en = note(Lang::En, "money[JPY]", ">=0JPY <=10JPY");
+    assert!(en.contains("(`money[JPY]` takes `round down(1JPY)`)"), "{en}");
+    let en = note(Lang::En, "mass[g]", ">=0g <=10g");
+    assert!(en.contains("(`mass[g]` takes `round down(1g)`)"), "{en}");
+    let en = note(Lang::En, "money[円]", ">=0円 <=10円");
+    assert!(en.contains("(`money[円]` takes `round down(1円)`)"), "{en}");
+    let ja = note(Lang::Ja, "money[円]", ">=0円 <=10円");
+    assert!(ja.contains("（`money[円]` なら `round down(1円)`）"), "{ja}");
+}
+
+/// E043's English example names the range and then the callee's file, as the Japanese one does
+/// (the file and the range were swapped).
+#[test]
+fn e043の英語の例は範囲とファイルを取り違えない() {
+    let dir = TempDir::new("e043-order");
+    let callee = "rule callee(callee) v1\n\ninputs\n  years(years) : number  range >=1 <=40\n\noutputs\n  x(x) : number  round down(1)\n\ntable t(t)\npolicy unique\n| years | -> x |\n| -     | 1    |\n";
+    std::fs::write(dir.path().join("callee.rule"), callee).unwrap();
+    let main = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply call(c) = \"callee.rule\"\n  years = n\n  x -> y\n";
+    let path = dir.path().join("main.rule").to_string_lossy().into_owned();
+    let note = |lang: Lang| -> String {
+        rulec::i18n::with(lang, || {
+            let ds = rulec::check_source(main, &path);
+            let d = ds.iter().find(|d| d.code == "E043").unwrap_or_else(|| panic!("E043 が出ない: {ds:?}"));
+            d.notes.join("\n")
+        })
+    };
+    let en = note(Lang::En);
+    assert!(en.contains("For example years = 0 is outside range >=1 <=40 of `years` in `callee.rule`."), "{en}");
+    let ja = note(Lang::Ja);
+    assert!(ja.contains("例: years = 0 は、`callee.rule` の `years` の range >=1 <=40 の外です。"), "{ja}");
 }
 
 // ── The reference (docs/reference.md) ────────────────────────────────────

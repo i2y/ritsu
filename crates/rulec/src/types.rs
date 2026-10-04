@@ -811,11 +811,16 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(at(rd.span.line))
                         .mark(rd.span.clone(), tr!("この列を丸める刻みです", "this is the grid this column is rounded to"))
                         .maybe_note(unit_note(&rd.grid))
-                        .note(tr!(
-                            "刻みは丸める列と同じ単位で書いてください（`{}` なら `round down(1円)`）。",
-                            "Write the grid in the unit of the column it rounds (`{}` takes `round down(1円)`).",
-                            ty
-                        )),
+                        .note({
+                            // The English example is written in the column's own unit (`1JPY`, `1g`),
+                            // as the fix of E104 is, so it is not a yen amount on a column of grams.
+                            let one = unit_one(&ty);
+                            tr!(
+                                "刻みは丸める列と同じ単位で書いてください（`{}` なら `round down(1円)`）。",
+                                "Write the grid in the unit of the column it rounds (`{}` takes `round down({one})`).",
+                                ty
+                            )
+                        }),
                 ),
                 _ => {}
             }

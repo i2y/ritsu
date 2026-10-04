@@ -140,9 +140,9 @@ Related codes: [E002](#e002)
 
 `error` — **Unreadable character**
 
-**When.** A character that is neither a letter nor `_` appears where a name is expected — an alias in parentheses that is not a name (`六十(60)`) included. The check exists so that a typo does not quietly become a name, nor an alias quietly go missing.
+**When.** A character that is neither a letter nor `_` appears where a name is expected — an alias in parentheses that is not a name (`sixty(60)`) included. The check exists so that a typo does not quietly become a name, nor an alias quietly go missing.
 
-**Fix.** Delete the character. A name starts with a letter or `_` (`@x(x)` becomes `x(x)`, and `六十(60)` becomes `六十(size_60)`).
+**Fix.** Delete the character. A name starts with a letter or `_` (`@x(x)` becomes `x(x)`, and `sixty(60)` becomes `sixty(size_60)`).
 
 **Smallest reproduction**:
 
@@ -161,7 +161,7 @@ Related codes: [E001](#e001), [E009](#e009)
 
 **When.** One `.rule` is one rule, and its first line carries the name and the version. Anything else comes before it, or the `rule` line has no name — a file whose `rule` line had none used to pass the check as a rule with nothing in it.
 
-**Fix.** Add `rule 規則名(alias) v1` as the first line.
+**Fix.** Add `rule <name>(<alias>) v1` as the first line.
 
 **Smallest reproduction**:
 
@@ -286,7 +286,7 @@ Related codes: [E101](#e101)
 
 **When.** A declared name (or alias) is the same as a word of the vocabulary. Otherwise the line-oriented parser reads the line as the start of a section and drops the declaration silently. An enum value never starts a line, so for a value it is only the eleven words its own position reads as something else (`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`) (§15.150).
 
-**Fix.** Rename it (`enum range(kind)` becomes `enum 範囲区分(range_kind)`). The reserved words are fixed by the one table in `src/kw.rs`.
+**Fix.** Rename it (`enum range(kind)` becomes `enum range_band(range_kind)`). The reserved words are fixed by the one table in `src/kw.rs`.
 
 **Smallest reproduction**:
 
@@ -404,7 +404,7 @@ Related codes: [E012](#e012), [E032](#e032)
 
 **When.** A cell to the right of `->` holds two or more words. Only one value or one name may be written there (§3.2). Taking just the first word and skipping the rest would emit generated code with the multiplication silently dropped.
 
-**Fix.** Give the calculation a name on a `define` line and leave only that name in the table (`| - | 率割引 |`). A table holds the branching and nothing else.
+**Fix.** Give the calculation a name on a `define` line and leave only that name in the table (`| - | rate_discount |`). A table holds the branching and nothing else.
 
 **Smallest reproduction**:
 
@@ -412,17 +412,17 @@ Related codes: [E012](#e012), [E032](#e032)
 rule t(t) v1
 
 inputs
-  p(p) : money[円, incl_tax]  range >=0円 <=1万円
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY
   r(r) : rate[step 1%]  range >=0% <=100%
 
 outputs
-  o(o) : money[円, incl_tax]  round down(1円)
+  o(o) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy first
-| r    | -> o(o) : money[円, incl_tax] |
-| <=5% | 0円                           |
-| -    | p × r                         |
+| r    | -> o(o) : money[JPY, incl_tax] |
+| <=5% | 0JPY                           |
+| -    | p * r                          |
 ```
 
 Related codes: [E008](#e008), [E012](#e012)
@@ -433,7 +433,7 @@ Related codes: [E008](#e008), [E012](#e012)
 
 **When.** A `result` names an output other than the first. `result` is sugar for the first output, and both the evaluator and the generated code apply it only there (§1.2). The name used to be ignored, so a `number` could land in a `money` slot without an E103.
 
-**Fix.** Write a `define` of the same name as that output (`define 付与点(pts) : number = 基本点 × 倍率`); outputs are taken, in declaration order, from the binding of their own name. To assemble it with `result` instead, move that output to the top of `outputs`.
+**Fix.** Write a `define` of the same name as that output (`define points(pts) : number = base_points * multiplier`); outputs are taken, in declaration order, from the binding of their own name. To assemble it with `result` instead, move that output to the top of `outputs`.
 
 **Smallest reproduction**:
 
@@ -441,16 +441,16 @@ Related codes: [E008](#e008), [E012](#e012)
 rule t(t) v1
 
 inputs
-  p(p) : money[円, incl_tax]  range >=0円 <=1万円
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY
 
 outputs
-  a(a) : money[円, incl_tax]  round down(1円)
-  b(b) : money[円, incl_tax]  round down(1円)
+  a(a) : money[JPY, incl_tax]  round down(1JPY)
+  b(b) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| p | -> a(a) : money[円, incl_tax] |
-| - | 100円                         |
+| p | -> a(a) : money[JPY, incl_tax] |
+| - | 100JPY                         |
 
 result b = p
 ```
@@ -471,18 +471,18 @@ Related codes: [E016](#e016), [E103](#e103)
 rule t(t) v1
 
 inputs
-  p(p) : money[円, incl_tax]  range >=0円 <=1万円
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY
 
 outputs
-  a(a) : money[円, incl_tax]  round down(1円)
+  a(a) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| p | -> a(a) : money[円, incl_tax] |
-| - | 100円                         |
+| p | -> a(a) : money[JPY, incl_tax] |
+| - | 100JPY                         |
 
 result a = p
-result a = p + 100円
+result a = p + 100JPY
 ```
 
 Related codes: [E015](#e015)
@@ -586,7 +586,7 @@ Related codes: [E017](#e017), [E018](#e018), [E101](#e101)
 
 **When.** An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there (§15.56).
 
-**Fix.** Write `elements 運賃行(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules.
+**Fix.** Write `elements fee_rows(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules.
 
 **Smallest reproduction**:
 
@@ -662,16 +662,16 @@ rule t(t) v1
 enum v(v) = a(a) | b(b)
 
 elements xs(xs)
-  k(k) : money[円, incl_tax]  range >=0円 <=10円
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| k     | -> d(d) : v |
-| <=5円 | a           |
-| >5円  | b           |
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
 
 fold d over xs
   a -> next
@@ -697,21 +697,21 @@ rule t(t) v1
 enum v(v) = a(a) | b(b)
 
 elements xs(xs)
-  k(k) : money[円, incl_tax]  range >=0円 <=10円
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| k     | -> d(d) : v |
-| <=5円 | a           |
-| >5円  | b           |
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
 
 fold d over xs
   a -> next
   b -> take_first k
-  empty -> 0円
+  empty -> 0JPY
 ```
 
 Related codes: [E022](#e022), [E024](#e024)
@@ -732,20 +732,20 @@ rule t(t) v1
 enum v(v) = a(a) | b(b)
 
 elements xs(xs)
-  k(k) : money[円, incl_tax]  range >=0円 <=10円
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| k     | -> d(d) : v |
-| <=5円 | a           |
-| >5円  | b           |
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
 
 fold d over xs
   a -> next
-  empty -> 0円
+  empty -> 0JPY
   exhausted -> held
 ```
 
@@ -767,26 +767,26 @@ rule t(t) v1
 enum v(v) = a(a) | b(b)
 
 elements xs(xs)
-  k(k) : money[円, incl_tax]  range >=0円 <=10円
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| k     | -> d(d) : v |
-| <=5円 | a           |
-| >5円  | b           |
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
 
 fold d over xs
   a -> next
   b -> take_first k
-  empty -> 0円
+  empty -> 0JPY
   exhausted -> held
 
 examples
 | -> r |
-| 0円  |
+| 0JPY |
 ```
 
 Related codes: [E026](#e026), [E027](#e027)
@@ -807,26 +807,26 @@ rule t(t) v1
 enum v(v) = a(a) | b(b)
 
 elements xs(xs)
-  k(k) : money[円, incl_tax]  range >=0円 <=10円
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| k     | -> d(d) : v |
-| <=5円 | a           |
-| >5円  | b           |
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
 
 fold d over xs
   a -> next
   b -> take_first k
-  empty -> 0円
+  empty -> 0JPY
   exhausted -> held
 
 sequence s(s)
-| m   |
-| 3円 |
+| m    |
+| 3JPY |
 ```
 
 Related codes: [E025](#e025), [E020](#e020)
@@ -847,26 +847,26 @@ rule t(t) v1
 enum v(v) = a(a) | b(b)
 
 elements xs(xs)
-  k(k) : money[円, incl_tax]  range >=0円 <=10円
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| k     | -> d(d) : v |
-| <=5円 | a           |
-| >5円  | b           |
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
 
 fold d over xs
   a -> next
   b -> take_first k
-  empty -> 0円
+  empty -> 0JPY
   exhausted -> held
 
 examples
 | xs   | -> r |
-| nope | 0円  |
+| nope | 0JPY |
 ```
 
 Related codes: [E025](#e025), [E026](#e026)
@@ -1110,7 +1110,7 @@ inputs
 outputs
   x(x) : bool
 
-table 表(t1)
+table t1(t1)
    | a     | -> x  |
 r1 | true  | true  |
 r1 | false | false |
@@ -1137,8 +1137,8 @@ inputs
 outputs
   x(x) : bool
 
-table 表(t1)
-overrides 無い表
+table t1(t1)
+overrides no_such_table
 | a     | -> x  |
 | true  | true  |
 | false | false |
@@ -1166,12 +1166,12 @@ outputs
   x(x) : bool
   y(y) : bool
 
-table 甲(ko)
+table base(base)
 | a | -> x |
 | - | true |
 
-table 乙(otsu)
-overrides 甲
+table special(special)
+overrides base
 | a | -> y |
 | - | true |
 ```
@@ -1182,7 +1182,7 @@ Related codes: [E035](#e035), [E045](#e045)
 
 `error` — **A cited fragment is not pinned**
 
-**When.** A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@法` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@郵便`). A document's fragments are its tables, so `表3` (the third table in document order) and `table3` are the only names read (§15.82). A fragment the language cannot read as one word is quoted (`@osha "§1910.157"`). Without a pin, a revised copy passes check in silence (§15.68).
+**When.** A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@source` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@postal`). A document's fragments are its tables, so `table3` (the third table in document order; `表3` is its Japanese spelling) is the only name read (§15.82). A fragment the language cannot read as one word is quoted (`@osha "§1910.157"`). Without a pin, a revised copy passes check in silence (§15.68).
 
 **Fix.** Once the transcribed rows are checked against the document, paste the `fix.text` line or run `rulec source pin <file.rule>` to pin the copy's digest.
 
@@ -1251,7 +1251,7 @@ Related codes: [E037](#e037), [E039](#e039)
 
 `error` — **There is no copy of a source**
 
-**When.** The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `料金表.md.fragments/表3.tsv` beside the document for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare.
+**When.** The copy of a cited fragment is not beside the rule — `sources/law/<law id>@<date>/<element>.xml` for a law, `tariff.md.fragments/table3.tsv` beside the document for a document's table — or the `file` source itself cannot be read. check reads neither the network nor the document, so without a copy there is nothing to compare.
 
 **Fix.** `rulec source fetch <file.rule>` fetches the fragment from e-Gov, the Japanese government's statute database, and takes the cited tables out of a document, into the copies beside the rule. Commit the copies.
 
@@ -1294,15 +1294,15 @@ inputs
 outputs
   y(y) : number  round down(1)
 
-apply 呼(c) = "呼び先.rule"
+apply call(c) = "callee.rule"
   a = n
   x -> y
 ```
 
-With `呼び先.rule` beside it:
+With `callee.rule` beside it:
 
 ```proto
-rule 呼び先(callee) v1
+rule callee(callee) v1
 
 inputs
   a(a) : number  range >=1 <=10
@@ -1310,11 +1310,11 @@ inputs
 outputs
   x(x) : number  round down(1)
 
-table 表(t)
+table t(t)
 policy unique
-   | a   | -> x |
-小 | <=5 | 1    |
-大 | >5  | 2    |
+      | a   | -> x |
+small | <=5 | 1    |
+large | >5  | 2    |
 ```
 
 Related codes: [E037](#e037), [E038](#e038), [E044](#e044)
@@ -1338,15 +1338,15 @@ inputs
 outputs
   y(y) : number  round down(1)
 
-apply 呼(c) = "呼び先.rule" sha256:369102b8f803dc28
+apply call(c) = "callee.rule" sha256:1c554496c37f709f
   b = n
   x -> y
 ```
 
-With `呼び先.rule` beside it:
+With `callee.rule` beside it:
 
 ```proto
-rule 呼び先(callee) v1
+rule callee(callee) v1
 
 inputs
   a(a) : number  range >=1 <=10
@@ -1354,11 +1354,11 @@ inputs
 outputs
   x(x) : number  round down(1)
 
-table 表(t)
+table t(t)
 policy unique
-   | a   | -> x |
-小 | <=5 | 1    |
-大 | >5  | 2    |
+      | a   | -> x |
+small | <=5 | 1    |
+large | >5  | 2    |
 ```
 
 Related codes: [E040](#e040), [E042](#e042), [E043](#e043)
@@ -1376,37 +1376,37 @@ Related codes: [E040](#e040), [E042](#e042), [E043](#e043)
 ```rule
 rule t(t) v1
 
-enum 種別(kind) = 甲(a) | 乙(b) | 丙(c)
+enum kind(kind) = low(a) | mid(b) | high(c)
 
 inputs
-  k(k) : 種別
+  k(k) : kind
 
 outputs
   y(y) : number  round down(1)
 
-apply 呼(c) = "区分の呼び先.rule" sha256:2e6f2e04c21cdbb3
+apply call(c) = "enum_callee.rule" sha256:5c19644247d1b672
   a = k
   x -> y
 ```
 
-With `区分の呼び先.rule` beside it:
+With `enum_callee.rule` beside it:
 
 ```proto
-rule 区分の呼び先(enum_callee) v1
+rule enum_callee(enum_callee) v1
 
-enum 区分(kind) = 甲(a) | 乙(b)
+enum band(kind) = low(a) | mid(b)
 
 inputs
-  a(a) : 区分
+  a(a) : band
 
 outputs
   x(x) : number  round down(1)
 
-table 表(t)
+table t(t)
 policy unique
-| a  | -> x |
-| 甲 | 1    |
-| 乙 | 2    |
+| a   | -> x |
+| low | 1    |
+| mid | 2    |
 ```
 
 Related codes: [E041](#e041), [E043](#e043)
@@ -1430,15 +1430,15 @@ inputs
 outputs
   y(y) : number  round down(1)
 
-apply 呼(c) = "呼び先.rule" sha256:369102b8f803dc28
+apply call(c) = "callee.rule" sha256:1c554496c37f709f
   a = n
   x -> y
 ```
 
-With `呼び先.rule` beside it:
+With `callee.rule` beside it:
 
 ```proto
-rule 呼び先(callee) v1
+rule callee(callee) v1
 
 inputs
   a(a) : number  range >=1 <=10
@@ -1446,11 +1446,11 @@ inputs
 outputs
   x(x) : number  round down(1)
 
-table 表(t)
+table t(t)
 policy unique
-   | a   | -> x |
-小 | <=5 | 1    |
-大 | >5  | 2    |
+      | a   | -> x |
+small | <=5 | 1    |
+large | >5  | 2    |
 ```
 
 Related codes: [E041](#e041), [E042](#e042), [E101](#e101)
@@ -1474,15 +1474,15 @@ inputs
 outputs
   y(y) : number  round down(1)
 
-apply 呼(c) = "壊れた呼び先.rule" sha256:c4f9eba5b2949205
+apply call(c) = "broken_callee.rule" sha256:765fd7738ae6bfc1
   a = n
   x -> y
 ```
 
-With `壊れた呼び先.rule` beside it:
+With `broken_callee.rule` beside it:
 
 ```proto
-rule 壊れた呼び先(broken) v1
+rule broken_callee(broken) v1
 
 inputs
   a(a) : number  range >=1 <=10
@@ -1490,7 +1490,7 @@ inputs
 outputs
   x(x) : number  round down(1)
 
-table 表(t)
+table t(t)
 policy unique
 | a   | -> x |
 | <=5 | 1    |
@@ -1518,12 +1518,12 @@ outputs
   x(x) : bool
   y(y) : bool
 
-table 甲(ko)
+table base(base)
 | a | -> x | y    |
 | - | true | true |
 
-table 乙(otsu)
-overrides 甲
+table special(special)
+overrides base
 | a    | -> x  |
 | true | false |
 ```
@@ -1549,7 +1549,7 @@ inputs
 outputs
   x(x) : bool
 
-clause 例外(exception) -> x
+clause exception(exception) -> x
   then true
 ```
 
@@ -1559,9 +1559,9 @@ Related codes: [E008](#e008), [E035](#e035), [E045](#e045)
 
 `error` — **Extra token after the declaration**
 
-**When.** A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0円 <=10000円 incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered "complete" with one side missing.
+**When.** A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered "complete" with one side missing.
 
-**Fix.** Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[円, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`.
+**Fix.** Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[JPY, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`.
 
 **Smallest reproduction**:
 
@@ -1569,12 +1569,12 @@ Related codes: [E008](#e008), [E035](#e035), [E045](#e045)
 rule t(t) v1
 
 inputs
-  a(a) : money[円, incl_tax]  range >=0円 <=10000円 incl_tax
+  a(a) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY incl_tax
 
 outputs
   x(x) : bool
 
-table 表(t1)
+table t1(t1)
 policy unique
 | a | -> x |
 | - | true |
@@ -1586,7 +1586,7 @@ Related codes: [E011](#e011), [E103](#e103), [E104](#e104)
 
 `error` — **A thousands separator cannot be written**
 
-**When.** A number is written as a document writes it, one to three digits followed by `,` and groups of three: `1,000`, `1,949,000円`. Inside a cell `,` separates the members of a set, so as it stands the figure reads as more than one value. It used to be read that way without a word: `<=1,000` in a column of numbers passed the check as `<=1`, and in a column of money it stopped at an E103 about `1` having no unit. Copying a document's figures as they stand lands here.
+**When.** A number is written as a document writes it, one to three digits followed by `,` and groups of three: `1,000`, `1,949,000JPY`. Inside a cell `,` separates the members of a set, so as it stands the figure reads as more than one value. It used to be read that way without a word: `<=1,000` in a column of numbers passed the check as `<=1`, and in a column of money it stopped at an E103 about `1` having no unit. Copying a document's figures as they stand lands here.
 
 **Fix.** Take the commas out and write `1000`; to group the digits, write `1_000`. `fix.text` is the literal rewritten.
 
@@ -1596,16 +1596,16 @@ Related codes: [E011](#e011), [E103](#e103), [E104](#e104)
 rule t(t) v1
 
 inputs
-  a(a) : money[円]  range >=0円 <=5000円
+  a(a) : money[JPY]  range >=0JPY <=5000JPY
 
 outputs
   x(x) : bool
 
-table 表(t1)
+table t1(t1)
 policy unique
-| a         | -> x  |
-| <=1,000円 | true  |
-| >1,000円  | false |
+| a          | -> x  |
+| <=1,000JPY | true  |
+| >1,000JPY  | false |
 ```
 
 Related codes: [E014](#e014), [E103](#e103)
@@ -1614,7 +1614,7 @@ Related codes: [E014](#e014), [E103](#e103)
 
 `error` — **This type has no arithmetic**
 
-**When.** A type that is ordered but has no arithmetic is used with `+ - × ÷`. There are three: `date`, `temperature[℃]`/`temperature[℉]`, and `sound[dB]`. A ℃ has a displaced zero, so `気温 × 2` means nothing; a decibel is a logarithm, so adding two of them is not two sounds' worth; and a date is a calendar day, with no type to hold the result of subtracting one. All three appear in rules only as thresholds, so comparison and `range` are kept and the arithmetic is dropped.
+**When.** A type that is ordered but has no arithmetic is used with `+ - × ÷`. There are three: `date`, `temperature[℃]`/`temperature[℉]`, and `sound[dB]`. A ℃ has a displaced zero, so `temp × 2` means nothing; a decibel is a logarithm, so adding two of them is not two sounds' worth; and a date is a calendar day, with no type to hold the result of subtracting one. All three appear in rules only as thresholds, so comparison and `range` are kept and the arithmetic is dropped.
 
 **Fix.** Compare it against a threshold, or write it in a `range`. Where a difference or a multiple is itself the rule, take the computed value as an input, or look it up in a table. The days between two dates are counted on the calling side and passed in as a `number` or a `duration`.
 
@@ -1624,18 +1624,18 @@ Related codes: [E014](#e014), [E103](#e103)
 rule t(t) v1
 
 inputs
-  甲(a) : temperature[℃]  range >=0℃ <=40℃
-  乙(b) : temperature[℃]  range >=0℃ <=40℃
+  a(a) : temperature[℃]  range >=0℃ <=40℃
+  b(b) : temperature[℃]  range >=0℃ <=40℃
 
 outputs
   x(x) : bool
 
-derive 差(gap) : temperature[℃] = 甲 - 乙  range >=-40℃ <=40℃
+derive gap(gap) : temperature[℃] = a - b  range >=-40℃ <=40℃
 
-table 表(t1)
+table t1(t1)
 policy unique
-| 差 | -> x |
-| -  | true |
+| gap | -> x |
+| -   | true |
 ```
 
 Related codes: [E103](#e103), [E112](#e112), [E115](#e115)
@@ -1763,7 +1763,7 @@ Related codes: [E050](#e050), [E126](#e126)
 
 **When.** The output of `once` is not declared, is the carried state, or the cell is `-`. A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. The cell is held to the output's type exactly as a table's cell is (E103 and the rest).
 
-**Fix.** Name an output other than the carried state (`once 返金額 >0円`). Say it about states with `never … after …`.
+**Fix.** Name an output other than the carried state (`once refund >0JPY`). Say it about states with `never … after …`.
 
 **Smallest reproduction**:
 
@@ -1817,17 +1817,17 @@ inputs
   st(st) : s
 
 elements xs(xs)
-  w(w) : money[円, incl_tax]  range >=0円 <=10円
+  w(w) : money[JPY, incl_tax]  range >=0JPY <=10JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
   nx(nx) : s
 
 table j(j)
 policy unique
-| w     | -> d(d) : v |
-| <=5円 | a           |
-| >5円  | b           |
+| w      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
 
 table m(m)
 policy unique
@@ -1838,7 +1838,7 @@ policy unique
 fold d over xs
   a -> next
   b -> take_first w
-  empty -> 0円
+  empty -> 0JPY
   exhausted -> held
 
 machine k(k) over m
@@ -1925,7 +1925,7 @@ Related codes: [E050](#e050), [E051](#e051), [W126](#w126)
 
 **When.** A line under `inputs`, `outputs` or `elements`, or a `define` or `derive` line, has a name and no type. Such a line used to be dropped in silence: the rule passed the check with one input fewer than its author wrote, and an example or a record that named it was then refused for a name nobody declared.
 
-**Fix.** Write the type as `<name>(<alias>) : <type>` (`: money[円, incl_tax]`, `: 都道府県`, `: bool`). A numeric type needs a `range` too.
+**Fix.** Write the type as `<name>(<alias>) : <type>` (`: money[JPY, incl_tax]`, `: <enum>`, `: bool`). A numeric type needs a `range` too.
 
 **Smallest reproduction**:
 
@@ -1954,7 +1954,7 @@ Related codes: [E011](#e011), [E047](#e047), [E012](#e012)
 
 **When.** A line that starts with a declaring word — `define`, `derive`, `result`, `enum`, `group`, `table` and the like — cannot be read as that declaration: it has no name, something stands before its `=`, and so on. Such a line used to be dropped with nothing said, and a `derive` line was not even dropped: the check never finished.
 
-**Fix.** Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30000円`). Every declaration's shape is in docs/reference.md.
+**Fix.** Rewrite the line in the shape the note gives (`define bulk(bulk) : bool = order_total >= 30_000JPY`). Every declaration's shape is in docs/reference.md.
 
 **Smallest reproduction**:
 
@@ -1982,9 +1982,9 @@ Related codes: [E006](#e006), [E057](#e057), [E059](#e059), [E005](#e005)
 
 `error` — **The expression cannot be read**
 
-**When.** An expression — on the right of `=`, of `->` in a `fold`, and so on — cannot be read to its last token: nothing on the right of an operator (`x +`), a `(` never closed, two values with no operator between them (`amount tax`), a sign stuck to a number (`amount -100円`). What could be read used to become the expression and the rest was dropped: `amount tax` passed the check as `amount`, and `x +` took its whole declaration with it.
+**When.** An expression — on the right of `=`, of `->` in a `fold`, and so on — cannot be read to its last token: nothing on the right of an operator (`x +`), a `(` never closed, two values with no operator between them (`amount tax`), a sign stuck to a number (`amount -100JPY`). What could be read used to become the expression and the rest was dropped: `amount tax` passed the check as `amount`, and `x +` took its whole declaration with it.
 
-**Fix.** Supply the missing operator or parenthesis. To subtract, leave a space after the sign, as in `amount - 100円`: a sign touching the digits makes a negative number.
+**Fix.** Supply the missing operator or parenthesis. To subtract, leave a space after the sign, as in `amount - 100JPY`: a sign touching the digits makes a negative number.
 
 **Smallest reproduction**:
 
@@ -1992,13 +1992,13 @@ Related codes: [E006](#e006), [E057](#e057), [E059](#e059), [E005](#e005)
 rule t(t) v1
 
 inputs
-  a(a) : money[円]  range >=0円 <=100円
-  b(b) : money[円]  range >=0円 <=100円
+  a(a) : money[JPY]  range >=0JPY <=100JPY
+  b(b) : money[JPY]  range >=0JPY <=100JPY
 
 outputs
-  o(o) : money[円]  round down(1円)
+  o(o) : money[JPY]  round down(1JPY)
 
-define s(s) : money[円] = a b
+define s(s) : money[JPY] = a b
 
 result o = s
 ```
@@ -2009,9 +2009,9 @@ Related codes: [E058](#e058), [E118](#e118), [E115](#e115)
 
 `error` — **A step is not positive**
 
-**When.** The step of a type (`rate[step 0%]`), the rounding grid of an output (`round up(0円)`) or of a rounding call (`down(x, 0円)`) is zero or negative. A grid of zero passed the check and the generated code divided by it at run time (Python stopped with ZeroDivisionError); a step of zero was quietly read as a step of one.
+**When.** The step of a type (`rate[step 0%]`), the rounding grid of an output (`round up(0JPY)`) or of a rounding call (`down(x, 0JPY)`) is zero or negative. A grid of zero passed the check and the generated code divided by it at run time (Python stopped with ZeroDivisionError); a step of zero was quietly read as a step of one.
 
-**Fix.** Write a step greater than zero (`round up(1円)`, `rate[step 0.1%]`).
+**Fix.** Write a step greater than zero (`round up(1JPY)`, `rate[step 0.1%]`).
 
 **Smallest reproduction**:
 
@@ -2019,10 +2019,10 @@ Related codes: [E058](#e058), [E118](#e118), [E115](#e115)
 rule t(t) v1
 
 inputs
-  a(a) : money[円]  range >=0円 <=100円
+  a(a) : money[JPY]  range >=0JPY <=100JPY
 
 outputs
-  o(o) : money[円]  round up(0円)
+  o(o) : money[JPY]  round up(0JPY)
 
 result o = a
 ```
@@ -2033,9 +2033,9 @@ Related codes: [E104](#e104), [E114](#e114), [E106](#e106)
 
 `error` — **The range is empty**
 
-**When.** No value lies in a `range`: the lower end is past the upper one (`range >=10円 <=0円`), or the two are equal and one of them is `>` or `<`. Such a range used to pass with nothing said: the completeness proof answered "complete" over nothing, and the generated code's entry refused every call.
+**When.** No value lies in a `range`: the lower end is past the upper one (`range >=10JPY <=0JPY`), or the two are equal and one of them is `>` or `<`. Such a range used to pass with nothing said: the completeness proof answered "complete" over nothing, and the generated code's entry refused every call.
 
-**Fix.** Correct the end that was mistyped (`range >=0円 <=10円`).
+**Fix.** Correct the end that was mistyped (`range >=0JPY <=10JPY`).
 
 **Smallest reproduction**:
 
@@ -2043,10 +2043,10 @@ Related codes: [E104](#e104), [E114](#e114), [E106](#e106)
 rule t(t) v1
 
 inputs
-  a(a) : money[円]  range >=10円 <=0円
+  a(a) : money[JPY]  range >=10JPY <=0JPY
 
 outputs
-  o(o) : money[円]  round down(1円)
+  o(o) : money[JPY]  round down(1JPY)
 
 result o = a
 ```
@@ -2085,7 +2085,7 @@ Related codes: [E002](#e002), [E103](#e103)
 
 `error` — **The cell cannot be read**
 
-**When.** A cell of a table, of the examples or of a sequence holds something a cell cannot: words after a comparison (`<=0円 + false`), a word after a value (`false 0円`), a word that is no value (`+`), a header column with no name. What could be read used to become the cell and the rest was dropped, and a cell that could not be read at all was dropped whole, so every cell after it moved one column to the left.
+**When.** A cell of a table, of the examples or of a sequence holds something a cell cannot: words after a comparison (`<=0JPY + false`), a word after a value (`false 0JPY`), a word that is no value (`+`), a header column with no name. What could be read used to become the cell and the rest was dropped, and a cell that could not be read at all was dropped whole, so every cell after it moved one column to the left.
 
 **Fix.** A cell holds one value, `-`, `none`, a comparison, a set of values separated by commas, `not:` with a set, or `starts_with` with a string. Two conditions on one column are two comparisons side by side (`>=1 <10`).
 
@@ -2095,16 +2095,16 @@ Related codes: [E002](#e002), [E103](#e103)
 rule t(t) v1
 
 inputs
-  a(a) : money[円]  range >=0円 <=1000円
+  a(a) : money[JPY]  range >=0JPY <=1000JPY
 
 outputs
   r(r) : bool
 
 table j(j)
 policy unique
-| a             | -> r(r) : bool |
-| <=100円 + 1円 | true           |
-| >100円        | false          |
+| a               | -> r(r) : bool |
+| <=100JPY + 1JPY | true           |
+| >100JPY         | false          |
 ```
 
 Related codes: [E008](#e008), [E010](#e010), [E014](#e014), [E064](#e064)
@@ -2226,9 +2226,9 @@ Related codes: [E101](#e101), [W105](#w105), [W110](#w110)
 
 `error` — **Unit mismatch: values of different types are being mixed**
 
-**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[円, incl_tax]` and `money[円, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[円, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums (§15.150).
+**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums (§15.150).
 
-**Fix.** Move one side into a table. "A surcharge that depends on weight" is `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without.
+**Fix.** Move one side into a table. "A surcharge that depends on weight" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without.
 
 **Smallest reproduction**:
 
@@ -2237,15 +2237,15 @@ rule t(t) v1
 
 inputs
   w(w) : mass[g]  range >=0g <=10kg
-  p(p) : money[円, incl_tax]  range >=0円 <=1万円
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=10_000JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| w | -> r(r) : money[円, incl_tax] |
-| - | 100円                         |
+| w | -> r(r) : money[JPY, incl_tax] |
+| - | 100JPY                         |
 
 result r = p + w
 ```
@@ -2258,7 +2258,7 @@ Related codes: [E108](#e108), [E112](#e112)
 
 **When.** A quantity, money or rate output has no `round`. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer.
 
-**Fix.** Add rounding to the output declaration, e.g. `round up(10円)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well (§7.3).
+**Fix.** Add rounding to the output declaration, e.g. `round up(10JPY)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well (§7.3).
 
 **Smallest reproduction**:
 
@@ -2269,13 +2269,13 @@ inputs
   x(x) : bool
 
 outputs
-  r(r) : money[円, incl_tax]
+  r(r) : money[JPY, incl_tax]
 
 table j(j)
 policy unique
-| x     | -> r(r) : money[円, incl_tax] |
-| true  | 100円                         |
-| false | 200円                         |
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 100JPY                         |
+| false | 200JPY                         |
 ```
 
 Related codes: [E106](#e106), [E103](#e103)
@@ -2300,14 +2300,14 @@ inputs
   y(y) : bool
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| x | y     | -> r(r) : money[円, incl_tax] |
-| a | -     | 100円                         |
-| - | true  | 200円                         |
-| b | false | 300円                         |
+| x | y     | -> r(r) : money[JPY, incl_tax] |
+| a | -     | 100JPY                         |
+| - | true  | 200JPY                         |
+| b | false | 300JPY                         |
 ```
 
 Related codes: [W105](#w105), [W114](#w114), [E102](#e102)
@@ -2316,9 +2316,9 @@ Related codes: [W105](#w105), [W114](#w114), [E102](#e102)
 
 `error` — **An output literal is not on the rounding grid**
 
-**When.** A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451円` in a table rounded `up(10円)` — is stopped (§7.2).
+**When.** A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451JPY` in a table rounded `up(10JPY)` — is stopped (§7.2).
 
-**Fix.** Put the literal on the grid (`1451円` becomes `1450円` or `1460円`). If the amount really is right, change the grid instead.
+**Fix.** Put the literal on the grid (`1451JPY` becomes `1450JPY` or `1460JPY`). If the amount really is right, change the grid instead.
 
 **Smallest reproduction**:
 
@@ -2329,13 +2329,13 @@ inputs
   x(x) : bool
 
 outputs
-  r(r) : money[円, incl_tax]  round up(10円)
+  r(r) : money[JPY, incl_tax]  round up(10JPY)
 
 table j(j)
 policy unique
-| x     | -> r(r) : money[円, incl_tax] |
-| true  | 1451円                        |
-| false | 1000円                        |
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 1451JPY                        |
+| false | 1000JPY                        |
 ```
 
 Related codes: [E104](#e104)
@@ -2357,17 +2357,17 @@ inputs
   x(x) : bool
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| x     | -> r(r) : money[円, incl_tax] |
-| true  | 100円                         |
-| false | 200円                         |
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 100JPY                         |
+| false | 200JPY                         |
 
 examples
-| x    | -> r  |
-| true | 200円 |
+| x    | -> r   |
+| true | 200JPY |
 ```
 
 Related codes: [E111](#e111), [E105](#e105)
@@ -2386,18 +2386,18 @@ Related codes: [E111](#e111), [E105](#e105)
 rule t(t) v1
 
 inputs
-  p(p) : money[円, incl_tax]  range >=0円 <=100000000000000000円
+  p(p) : money[JPY, incl_tax]  range >=0JPY <=100_000_000_000_000_000JPY
   q(q) : rate[step 1%]  range >=0% <=100%
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
-define off(off) : money[円, incl_tax] = p × q
+define off(off) : money[JPY, incl_tax] = p * q
 
 table j(j)
 policy unique
-| off | -> r(r) : money[円, incl_tax] |
-| -   | 0円                           |
+| off | -> r(r) : money[JPY, incl_tax] |
+| -   | 0JPY                           |
 ```
 
 Related codes: [E112](#e112), [E103](#e103)
@@ -2478,13 +2478,13 @@ inputs
 
 outputs
   ok(ok) : bool
-  fee(fee) : money[円, incl_tax]  round down(1円)
+  fee(fee) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| x     | -> ok(ok) : bool | fee(fee) : money[円, incl_tax] |
-| true  | true             | 100円                          |
-| false | false            | 0円                            |
+| x     | -> ok(ok) : bool | fee(fee) : money[JPY, incl_tax] |
+| true  | true             | 100JPY                          |
+| false | false            | 0JPY                            |
 
 examples
 | x    | -> ok |
@@ -2507,19 +2507,19 @@ Related codes: [E107](#e107)
 rule t(t) v1
 
 inputs
-  a(a) : money[円, incl_tax]  range >=0円 <=100万円
-  b(b) : money[円, incl_tax]  range >=0円 <=100万円
+  a(a) : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  b(b) : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
 
 outputs
   r(r) : bool
 
-derive gap(gap) : money[円, incl_tax] = a - b  range >=0円 <=100万円
+derive gap(gap) : money[JPY, incl_tax] = a - b  range >=0JPY <=1_000_000JPY
 
 table j(j)
 policy unique
-| gap   | -> r(r) : bool |
-| <=0円 | false          |
-| >0円  | true           |
+| gap    | -> r(r) : bool |
+| <=0JPY | false          |
+| >0JPY  | true           |
 ```
 
 Related codes: [E108](#e108), [E101](#e101)
@@ -2530,7 +2530,7 @@ Related codes: [E108](#e108), [E101](#e101)
 
 **When.** The condition of `define … : bool` is neither one input or derived value compared with a constant, nor a comparison of two values whose difference cannot be subtracted (two dates, say). Comparing two numbers directly is the usual case (§5.3).
 
-**Fix.** Declare the difference as a derived value and compare that against a constant. `define bigger : bool = a >= b` becomes `derive gap(gap) : money[円, incl_tax] = a - b  range …` and the cell `>=0円`. The analysis is exact that way.
+**Fix.** Declare the difference as a derived value and compare that against a constant. `define bigger : bool = a >= b` becomes `derive gap(gap) : money[JPY, incl_tax] = a - b  range …` and the cell `>=0JPY`. The analysis is exact that way.
 
 **Smallest reproduction**:
 
@@ -2538,8 +2538,8 @@ Related codes: [E108](#e108), [E101](#e101)
 rule t(t) v1
 
 inputs
-  a(a) : money[円, incl_tax]  range >=0円 <=100万円
-  b(b) : money[円, incl_tax]  range >=0円 <=100万円
+  a(a) : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  b(b) : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
 
 outputs
   r(r) : bool
@@ -2617,7 +2617,7 @@ Related codes: [E103](#e103), [E108](#e108)
 
 `error` — **A row's amount is not in the copy it cites, or is under another heading there**
 
-**When.** The output value of a row is nowhere in the copy the row or its table cites with `@source 表1` (§15.82). Where the copy has a heading that says exactly a word of the row's cells (`関東`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up (§15.143). Only amounts are compared: a threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) and an amount is not. A copy's `5/1,000` or `1,000分の5` reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself.
+**When.** The output value of a row is nowhere in the copy the row or its table cites with `@source table1` (§15.82). Where the copy has a heading that says exactly a word of the row's cells (`Kanto`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up (§15.143). Only amounts are compared: a threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) and an amount is not. A copy's `5/1,000` (or, in Japanese, `1,000分の5`) reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself.
 
 **Fix.** Reread the copy and correct the amount. When it is said to be under another heading, the rows were mixed up. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows to the approver.
 
@@ -2626,39 +2626,39 @@ Related codes: [E103](#e103), [E108](#e108)
 ```rule
 rule t(t) v1
 
-source 料金表 = file "料金表.md" sha256:75465b330d123ab8
-  表1 sha256:0a95cedbd7311274
+source tariff = file "tariff.md" sha256:583beb1ff0102e2e
+  table1 sha256:07423c36f9e9259f
 
 inputs
   a(a) : bool
 
 outputs
-  x(x) : money[円]  round down(1円)
+  x(x) : money[JPY]  round down(1JPY)
 
-table 表(t1)  @料金表 表1
+table t1(t1)  @tariff table1
 policy unique
-| a     | -> x  |
-| true  | 990円 |
-| false | 890円 |
+| a     | -> x   |
+| true  | 990JPY |
+| false | 890JPY |
 ```
 
-With `料金表.md` beside it:
+With `tariff.md` beside it:
 
 ```proto
-# 料金表
+# Tariff
 
-| あて先 | 運賃 |
+| Destination | Fare |
 |---|---|
-| 近畿 | 990円 |
-| 関東 | 880円 |
+| Kinki | 990JPY |
+| Kanto | 880JPY |
 ```
 
-With `料金表.md.fragments/表1.tsv` beside it:
+With `tariff.md.fragments/table1.tsv` beside it:
 
 ```proto
-あて先	運賃
-近畿	990円
-関東	880円
+Destination	Fare
+Kinki	990JPY
+Kanto	880JPY
 ```
 
 Related codes: [W120](#w120), [E038](#e038), [E107](#e107)
@@ -2677,16 +2677,16 @@ Related codes: [W120](#w120), [E038](#e038), [E107](#e107)
 rule t(t) v1
 
 inputs
-  値引き(off) : money[円]  range >=0円 <=1000円
-  ここまで(upto) : money[円]  range >=0円 <=1000円
-  合計(base) : money[円]  range >=1円 <=1000円
+  off(off) : money[JPY]  range >=0JPY <=1000JPY
+  upto(upto) : money[JPY]  range >=0JPY <=1000JPY
+  base(base) : money[JPY]  range >=1JPY <=1000JPY
 
 outputs
-  o(o) : money[円]  round down(1円)
+  o(o) : money[JPY]  round down(1JPY)
 
-derive 配分(share) : money[円] = allocate(値引き, ここまで, 合計)  range >=0円 <=1000円
+derive share(share) : money[JPY] = allocate(off, upto, base)  range >=0JPY <=1000JPY
 
-result o = 配分
+result o = share
 ```
 
 Related codes: [E115](#e115), [E108](#e108)
@@ -2695,7 +2695,7 @@ Related codes: [E115](#e115), [E108](#e108)
 
 `error` — **The call is not written correctly**
 
-**When.** A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1円)` and the rest) (§2.3).
+**When.** A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1JPY)` and the rest) (§2.3).
 
 **Fix.** Check the spelling and the count. A spare argument is dropped on the floor and a missing one leaves no answer — both passed unnoticed until §15.102, and only the generator ran out of cases.
 
@@ -2739,7 +2739,7 @@ inputs
 outputs
   x(x) : bool
 
-table 表(t1)
+table t1(t1)
 policy unique
 | a | -> x |
 | - | true |
@@ -2774,7 +2774,7 @@ inputs
 outputs
   x(x) : bool
 
-table 表(t1)
+table t1(t1)
 policy unique
 | a | -> x |
 | - | true |
@@ -2792,7 +2792,7 @@ Related codes: [E120](#e120), [W122](#w122), [E032](#e032)
 
 `error` — **A row's boundary falls on the other side from the copy it cites**
 
-**When.** A threshold of a row that cites puts its boundary value on the other side from the copy (§15.124). A threshold is rewritten as it is transcribed (`1,949,000円まで` becomes `<=1949000円`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `60cm以下` and `60cmを超え` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60〜80`), with the word in another column (`円以上` over its own column, as an insurance premium table writes it), or with words on both sides, is left alone.
+**When.** A threshold of a row that cites puts its boundary value on the other side from the copy (§15.124). A threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `up to 60cm` and `over 60cm` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60-80`), with the word in another column (a Japanese insurance premium table puts `円以上`, "yen or more", in the heading over its own column), or with words on both sides, is left alone.
 
 **Fix.** Reread the copy and correct it. `fix.text` is this cell with that one boundary's side swapped and nothing else: the direction is the table's geometry, not the copy's to decide, so only `<` and `<=` are exchanged. One boundary mistranscribed is reported on both of the rows that share it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from.
 
@@ -2801,39 +2801,39 @@ Related codes: [E120](#e120), [W122](#w122), [E032](#e032)
 ```rule
 rule t(t) v1
 
-source 寸法表 = file "寸法表.md" sha256:a19333e262c10371
-  表1 sha256:a5c05813ad703b8e
+source sizes = file "sizes.md" sha256:8a2a4c38c68dca29
+  table1 sha256:34cc5df35a840201
 
 inputs
   a(a) : length[cm]  range >=1cm <=80cm
 
 outputs
-  x(x) : money[円]  round up(10円)
+  x(x) : money[JPY]  round up(10JPY)
 
-table 表(t1)  @寸法表 表1
+table t1(t1)  @sizes table1
 policy unique
-| a             | -> x   |
-| <60cm         | 1410円 |
-| >=60cm <=80cm | 1710円 |
+| a             | -> x    |
+| <60cm         | 1410JPY |
+| >=60cm <=80cm | 1710JPY |
 ```
 
-With `寸法表.md` beside it:
+With `sizes.md` beside it:
 
 ```proto
-# 寸法表
+# Sizes
 
-| サイズ | 運賃 |
+| Size | Fare |
 |---|---|
-| 60cmまで | 1410円 |
-| 60cmを超え80cm以下 | 1710円 |
+| up to 60cm | 1410JPY |
+| over 60cm up to 80cm | 1710JPY |
 ```
 
-With `寸法表.md.fragments/表1.tsv` beside it:
+With `sizes.md.fragments/table1.tsv` beside it:
 
 ```proto
-サイズ	運賃
-60cmまで	1410円
-60cmを超え80cm以下	1710円
+Size	Fare
+up to 60cm	1410JPY
+over 60cm up to 80cm	1710JPY
 ```
 
 Related codes: [E116](#e116), [W120](#w120), [E105](#e105)
@@ -2859,7 +2859,7 @@ inputs
 outputs
   x(x) : bool
 
-table 表(t1)
+table t1(t1)
 policy unique
 | a | -> x |
 | - | true |
@@ -2894,7 +2894,7 @@ inputs
 outputs
   x(x) : bool
 
-table 表(t1)
+table t1(t1)
 policy unique
 | a | -> x |
 | - | true |
@@ -2929,7 +2929,7 @@ inputs
 outputs
   x(x) : bool
 
-table 表(t1)
+table t1(t1)
 policy unique
 | a    | -> x  |
 | <=10 | true  |
@@ -2957,21 +2957,21 @@ Related codes: [E122](#e122), [W124](#w124), [E102](#e102), [W111](#w111)
 ```rule
 rule t(t) v1
 
-shape 見積(q) = proto "quote.proto" shop.v1.Quote
+shape quote(q) = proto "quote.proto" shop.v1.Quote
 
 inputs
-  最小(min_g) : mass[g]  range >=1g <=30kg  from 見積.min_g
-  最大(max_g) : mass[g]  range >=1g <=30kg  from 見積.max_g
+  minimum(min_g) : mass[g]  range >=1g <=30kg  from quote.min_g
+  maximum(max_g) : mass[g]  range >=1g <=30kg  from quote.max_g
 
-constraint 最小 <= 最大
+constraint minimum <= maximum
 
 outputs
   x(x) : bool
 
-table 表(t1)
+table t1(t1)
 policy unique
-| 最小 | -> x |
-| -    | true |
+| minimum | -> x |
+| -       | true |
 ```
 
 With `quote.proto` beside it:
@@ -3004,21 +3004,21 @@ Related codes: [E122](#e122), [W124](#w124), [E018](#e018)
 ```rule
 rule t(t) v1
 
-shape 見積(q) = proto "quote.proto" shop.v1.Quote
+shape quote(q) = proto "quote.proto" shop.v1.Quote
 
 inputs
-  重さ(weight) : mass[g]  range >=1g <=30kg  from 見積.weight_g
-  急ぎ(express) : bool  from 見積.express
+  weight(weight) : mass[g]  range >=1g <=30kg  from quote.weight_g
+  express(express) : bool  from quote.express
 
 outputs
-  料金(fee) : money[円]  round up(10円)
+  fee(fee) : money[JPY]  round up(10JPY)
 
-table 料金表(fees)
+table fees(fees)
 policy first
-| 急ぎ  | 重さ | -> 料金 |
-| true  | >5kg | 3000円  |
-| true  | -    | 1500円  |
-| false | -    | 800円   |
+| express | weight | -> fee  |
+| true    | >5kg   | 3000JPY |
+| true    | -      | 1500JPY |
+| false   | -      | 800JPY  |
 ```
 
 With `quote.proto` beside it:
@@ -3414,7 +3414,7 @@ Related codes: [W125](#w125), [E102](#e102)
 
 **When.** A claim turns on a cell for which no input was built and none was shown impossible. Derived values that share an input, with a solution only among the rationals, are what is left here — the place W114 is about. What was not settled is not said to hold.
 
-**Fix.** If no input really falls in the cell, write the condition over whole numbers (`a >= 3円` for `倍 >= 5円`). If one does, write it down as an example or a scenario.
+**Fix.** If no input really falls in the cell, write the condition over whole numbers (`a >= 3JPY` for `twice >= 5JPY`). If one does, write it down as an example or a scenario.
 
 **Smallest reproduction**:
 
@@ -3425,21 +3425,21 @@ enum s(s) = p(p) | q(q)
 
 inputs
   st(st) : s
-  a(a) : money[円]  range >=0円 <=10万円
+  a(a) : money[JPY]  range >=0JPY <=100_000JPY
 
 outputs
   nx(nx) : s
 
-derive 倍(d) : money[円] = a + a  range >=0円 <=20万円
+derive twice(d) : money[JPY] = a + a  range >=0JPY <=200_000JPY
 
-define 上(up) : bool = 倍 >= 5円
-define 下(dn) : bool = 倍 <= 5円
+define above(up) : bool = twice >= 5JPY
+define below(dn) : bool = twice <= 5JPY
 
 table m(m)
 policy first
-| st | 上   | 下   | -> nx(nx) : s |
-| p  | true | true | q             |
-| -  | -    | -    | st            |
+| st | above | below | -> nx(nx) : s |
+| p  | true  | true  | q             |
+| -  | -     | -     | st            |
 
 machine k(k) over m
   carry   st -> nx
@@ -3468,14 +3468,14 @@ inputs
   y(y) : bool
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy first
-| x | y    | -> r(r) : money[円, incl_tax] |
-| a | -    | 100円                         |
-| - | true | 200円                         |
-| - | -    | 300円                         |
+| x | y    | -> r(r) : money[JPY, incl_tax] |
+| a | -    | 100JPY                         |
+| - | true | 200JPY                         |
+| - | -    | 300JPY                         |
 ```
 
 Related codes: [E105](#e105), [W110](#w110), [E102](#e102)
@@ -3555,26 +3555,26 @@ rule t(t) v1
 enum v(v) = a(a) | b(b)
 
 elements xs(xs)
-  k(k) : money[円, incl_tax]  range >=0円 <=10円
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
-| k     | -> d(d) : v |
-| <=5円 | a           |
-| >5円  | b           |
+| k      | -> d(d) : v |
+| <=5JPY | a           |
+| >5JPY  | b           |
 
 fold d over xs
   a -> next
   b -> take_first k
-  empty -> 0円
+  empty -> 0JPY
   exhausted -> held
 
 sequence s(s)
-| k   |
-| 3円 |
+| k    |
+| 3JPY |
 ```
 
 Related codes: [E027](#e027), [W111](#w111)
@@ -3619,7 +3619,7 @@ Related codes: [E037](#e037)
 
 `warning` — **The copy states a value no row uses**
 
-**When.** A cell of the copy a table cites whole with `@source 表1` is nothing but a number, and no row uses that value (§15.82). A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `2026年4月1日改定` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them.
+**When.** A cell of the copy a table cites whole with `@source table1` is nothing but a number, and no row uses that value (§15.82). A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `revised 1 April 2026` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them.
 
 **Fix.** Compare the table with the copy and check that no row was left out; if a revision added a row, transcribe it. If the table transcribes only part of the fragment — one origin of a tariff sheet that lists several — move the citation from the `table` line onto the end of each row that came from it. A row's citation says only where that row came from, so the rest goes unasked while the amounts are still held to the copy (E116).
 
@@ -3628,38 +3628,38 @@ Related codes: [E037](#e037)
 ```rule
 rule t(t) v1
 
-source 料金表 = file "料金表.md" sha256:75465b330d123ab8
-  表1 sha256:0a95cedbd7311274
+source tariff = file "tariff.md" sha256:583beb1ff0102e2e
+  table1 sha256:07423c36f9e9259f
 
 inputs
   a(a) : bool
 
 outputs
-  x(x) : money[円]  round down(1円)
+  x(x) : money[JPY]  round down(1JPY)
 
-table 表(t1)  @料金表 表1
+table t1(t1)  @tariff table1
 policy unique
-| a | -> x  |
-| - | 990円 |
+| a | -> x   |
+| - | 990JPY |
 ```
 
-With `料金表.md` beside it:
+With `tariff.md` beside it:
 
 ```proto
-# 料金表
+# Tariff
 
-| あて先 | 運賃 |
+| Destination | Fare |
 |---|---|
-| 近畿 | 990円 |
-| 関東 | 880円 |
+| Kinki | 990JPY |
+| Kanto | 880JPY |
 ```
 
-With `料金表.md.fragments/表1.tsv` beside it:
+With `tariff.md.fragments/table1.tsv` beside it:
 
 ```proto
-あて先	運賃
-近畿	990円
-関東	880円
+Destination	Fare
+Kinki	990JPY
+Kanto	880JPY
 ```
 
 Related codes: [E116](#e116), [W119](#w119)
@@ -3683,20 +3683,20 @@ inputs
 outputs
   y(y) : number  round down(1)
 
-apply 呼(c) = "呼び先.rule" sha256:369102b8f803dc28
+apply call(c) = "callee.rule" sha256:1c554496c37f709f
   a = n
   x -> y
 
-clause 特例(special) -> 呼:x
+clause special(special) -> call:x
   when always
   then 3
-  overrides 呼:表
+  overrides call:t
 ```
 
-With `呼び先.rule` beside it:
+With `callee.rule` beside it:
 
 ```proto
-rule 呼び先(callee) v1
+rule callee(callee) v1
 
 inputs
   a(a) : number  range >=1 <=10
@@ -3704,11 +3704,11 @@ inputs
 outputs
   x(x) : number  round down(1)
 
-table 表(t)
+table t(t)
 policy unique
-   | a   | -> x |
-小 | <=5 | 1    |
-大 | >5  | 2    |
+      | a   | -> x |
+small | <=5 | 1    |
+large | >5  | 2    |
 ```
 
 Related codes: [E102](#e102), [W117](#w117)
@@ -3732,13 +3732,13 @@ inputs
 outputs
   x(x) : bool
 
-table 甲(ko)
+table base(base)
    | a     | -> x  |
 r1 | true  | true  |
 r2 | false | false |
 
-table 乙(otsu)
-overrides 甲:r1, 甲:r2
+table special(special)
+overrides base:r1, base:r2
 | a    | -> x  |
 | true | false |
 ```
@@ -3759,14 +3759,14 @@ Related codes: [E035](#e035), [E105](#e105)
 rule t(t) v1
 
 inputs
-  種別(type) : number  range >=0 <=10
+  kind(type) : number  range >=0 <=10
 
 outputs
   o(o) : number  round down(1)
 
 table j(j)
 policy first
-| 種別 | -> o(o) : number |
+| kind | -> o(o) : number |
 | >=5  | 1                |
 | -    | 0                |
 ```
@@ -3789,10 +3789,10 @@ rule t(t) v1
 enum v(v) = a(a) | b(b)
 
 elements xs(xs)
-  k(k) : money[円, incl_tax]  range >=0円 <=10円
+  k(k) : money[JPY, incl_tax]  range >=0JPY <=10JPY
 
 outputs
-  r(r) : money[円, incl_tax]  round down(1円)
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
 
 table j(j)
 policy unique
@@ -3802,7 +3802,7 @@ policy unique
 fold d over xs
   a -> take_first k
   b -> next
-  empty -> 0円
+  empty -> 0JPY
   exhausted -> held
 ```
 
@@ -3812,7 +3812,7 @@ Related codes: [E024](#e024)
 
 `warning` — **Unconfirmed overlap: an input may match both rows**
 
-**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input (§15.126) and the thresholds inside a boolean `define` (§15.127) no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `倍` above is always even and never exactly `5円`, but `2.5円` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible.
+**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input (§15.126) and the thresholds inside a boolean `define` (§15.127) no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `twice` above is always even and never exactly `5JPY`, but `2.5JPY` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible.
 
 **Fix.** If an order satisfying both conditions can exist, fix the rows: the outputs differ, so a match is a contradiction. If none can exist, leave it — the generated code carries a guard that returns an error rather than silently picking the earlier row.
 
@@ -3822,19 +3822,19 @@ Related codes: [E024](#e024)
 rule t(t) v1
 
 inputs
-  a(a) : money[円]  range >=0円 <=10万円
+  a(a) : money[JPY]  range >=0JPY <=100_000JPY
 
 outputs
   r(r) : bool
 
-derive 倍(d) : money[円] = a + a  range >=0円 <=20万円
+derive twice(d) : money[JPY] = a + a  range >=0JPY <=200_000JPY
 
-define 上(up) : bool = 倍 >= 5円
-define 下(dn) : bool = 倍 <= 5円
+define above(up) : bool = twice >= 5JPY
+define below(dn) : bool = twice <= 5JPY
 
 table j(j)
 policy unique
-| 上    | 下    | -> r(r) : bool |
+| above | below | -> r(r) : bool |
 | true  | -     | true           |
 | -     | true  | false          |
 | false | false | false          |

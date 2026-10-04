@@ -965,7 +965,9 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                     Diag::error("E043", tr!("`{}` に渡す値が、元の規則の範囲の外に出ます", "A value passed to `{}` leaves the callee's range", cin.name))
                         .at(at(b.span.line))
                         .mark(b.span.clone(), tr!("渡す値の取りうる範囲: {}", "what is passed: {}", interval_text(lo, hi, &cty)))
-                        .note(tr!("例: {} = {w} は、`{}` の `{}` の range {} の外です。", "For example {} = {w} is outside range {} of `{}` in `{}`.", cin.name, a.path, cin.name, range_text(r)))
+                        // The arguments follow the Japanese sentence (the input, the callee's file, the input again,
+                        // its range), so the English one takes them by position: the range comes before the file.
+                        .note(tr!("例: {} = {w} は、`{}` の `{}` の range {} の外です。", "For example {0} = {w} is outside range {3} of `{2}` in `{1}`.", cin.name, a.path, cin.name, range_text(r)))
                         .note(tr!(
                             "元の規則の完全性はその範囲の上で証明されていて、外の値には定義がありません。渡す側の範囲を狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。",
                             "The callee's completeness was proved over that range; outside it there is no definition. Narrow the range on this side, or define that region in a clause of this rule. Which is a business decision."
