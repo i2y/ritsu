@@ -791,7 +791,7 @@ ritsu の Lean のモデル（`proofs/DandoriCore/Check.lean`）も同じ組を�
 `tests/fixtures/capture_timeout.flow` は、確定がタイムアウトしたあと、レコードの `pending` を見て取消を送り、拒否されたら `succeed` で終わる。確定が外部のサービスでは済んでいた場合、案件は `processing` のまま残る。検査はそれを次のように言う（`--lang ja`）。
 
 ```
-エラー[E020]: tests/fixtures/capture_timeout.flow:41:1: 案件 `p` が processing のまま、ここでワークフローが終わることがあります（終わりの状態は done, voided）
+エラー[E020]: tests/fixtures/capture_timeout.flow:41:1: 案件 `p` が processing のまま、ここでワークフローが終わることがあります（終わりの状態は done・voided）
     41 |         on unexpected_state => succeed
   そうなる例:
       35  open_payment: p が pending で始まる

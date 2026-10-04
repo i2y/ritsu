@@ -34,12 +34,12 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 40 | `判定 = 急ぎ(…)` | 規則 `urgency.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 41 | `見積 = 与信(…)` | 規則 `hold_amount.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 42 | `部屋 = 扱い(…)` | 規則 `部屋の扱い.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 43 | `知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 44 | `次 = 状態(…)` | 規則 `order_state.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 45 | `記録 = 要否(…)` | 規則 `記録の要否.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
+| 40 | `判定 = 急ぎ(…)` | 規則 `urgency.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 41 | `見積 = 与信(…)` | 規則 `hold_amount.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 42 | `部屋 = 扱い(…)` | 規則 `部屋の扱い.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 43 | `知らせる(…)` | `lambda notify`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 44 | `次 = 状態(…)` | 規則 `order_state.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 45 | `記録 = 要否(…)` | 規則 `記録の要否.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

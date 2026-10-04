@@ -129,17 +129,17 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき | 呼び出しのあとの案件 |
 |---:|---|---|---|---|---|---|
-| 75 | `見積 = 与信(…)` | 規則 `宿泊の与信額.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → `on failure` | — |
-| 78 | `決済 ← 決済を作る(…)` | `POST stripe /v1/payment_intents`, `starts payment_intent.payment then attach`, `key` | 2 秒おきに 2 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | `決済`: `requires_confirmation` |
-| 79 | `決済 ← 与信を取る(…)` | `POST stripe /v1/payment_intents/{intent}/confirm`, `sends confirm`, `key` | — | — | `カード拒否` → 80 行目<br>`状態の不一致`, `timeout`, `failure` → `on failure` | `決済`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
-| 80 | `決済 ← 決済を見る(…)` | `GET stripe /v1/payment_intents/{intent}`, `observes`, `idempotent` | 2 秒おきに 3 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | `決済`: `requires_payment_method`, `requires_confirmation`, `requires_action`, `requires_capture`, `canceled` |
-| 83 | `決済 ← 本人認証の知らせ()` | `event`, `observes` | — | 1 時間 | `timeout` → 84 行目<br>`failure` → `on failure` | `決済`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
-| 84 | `決済 ← 決済を見る(…)` | `GET stripe /v1/payment_intents/{intent}`, `observes`, `idempotent` | 2 秒おきに 3 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | `決済`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
-| 89 | `決済 ← 与信を取り消す(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`, `sends cancel`, `key` | — | — | `状態の不一致` → 90 行目<br>`timeout`, `failure` → `on failure` | `決済`: `canceled` |
-| 93 | `決済 ← 売上を確定する(…)` | `POST stripe /v1/payment_intents/{intent}/capture`, `sends capture`, `key` | 5 秒おきに 2 回（failure, timeout） | — | `状態の不一致` → 94 行目<br>`timeout`, `failure` → `on failure` | `決済`: `processing`, `succeeded` |
-| 100 | `決済 ← 決済を見る(…)` | `GET stripe /v1/payment_intents/{intent}`, `observes`, `idempotent` | 2 秒おきに 3 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | `決済`: `requires_payment_method`, `processing`, `succeeded` |
-| 112 | `決済 ← 与信を取り消す(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`, `sends cancel`, `key` | — | — | `状態の不一致` → 113 行目<br>`timeout`, `failure` → 114 行目 | `決済`: `canceled` |
-| 122 | `決済 ← 与信を取り消す(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`, `sends cancel`, `key` | — | — | `状態の不一致` → 123 行目<br>`timeout`, `failure` → 124 行目 | `決済`: `canceled` |
+| 75 | `見積 = 与信(…)` | 規則 `宿泊の与信額.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 78 | `決済 ← 決済を作る(…)` | `POST stripe /v1/payment_intents`・`starts payment_intent.payment then attach`・`key` | 2 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `決済`: `requires_confirmation` |
+| 79 | `決済 ← 与信を取る(…)` | `POST stripe /v1/payment_intents/{intent}/confirm`・`sends confirm`・`key` | — | — | `カード拒否` → 80 行目<br>`状態の不一致`・`timeout`・`failure` → `on failure` | `決済`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
+| 80 | `決済 ← 決済を見る(…)` | `GET stripe /v1/payment_intents/{intent}`・`observes`・`idempotent` | 2 秒おきに 3 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `決済`: `requires_payment_method`・`requires_confirmation`・`requires_action`・`requires_capture`・`canceled` |
+| 83 | `決済 ← 本人認証の知らせ()` | `event`・`observes` | — | 1 時間 | `timeout` → 84 行目<br>`failure` → `on failure` | `決済`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
+| 84 | `決済 ← 決済を見る(…)` | `GET stripe /v1/payment_intents/{intent}`・`observes`・`idempotent` | 2 秒おきに 3 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `決済`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
+| 89 | `決済 ← 与信を取り消す(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`・`sends cancel`・`key` | — | — | `状態の不一致` → 90 行目<br>`timeout`・`failure` → `on failure` | `決済`: `canceled` |
+| 93 | `決済 ← 売上を確定する(…)` | `POST stripe /v1/payment_intents/{intent}/capture`・`sends capture`・`key` | 5 秒おきに 2 回（failure・timeout） | — | `状態の不一致` → 94 行目<br>`timeout`・`failure` → `on failure` | `決済`: `processing`・`succeeded` |
+| 100 | `決済 ← 決済を見る(…)` | `GET stripe /v1/payment_intents/{intent}`・`observes`・`idempotent` | 2 秒おきに 3 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `決済`: `requires_payment_method`・`processing`・`succeeded` |
+| 112 | `決済 ← 与信を取り消す(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`・`sends cancel`・`key` | — | — | `状態の不一致` → 113 行目<br>`timeout`・`failure` → 114 行目 | `決済`: `canceled` |
+| 122 | `決済 ← 与信を取り消す(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`・`sends cancel`・`key` | — | — | `状態の不一致` → 123 行目<br>`timeout`・`failure` → 124 行目 | `決済`: `canceled` |
 
 ## 終わり方
 
@@ -153,14 +153,14 @@ flowchart TD
 | 94 | `fail 与信の有効期限切れ` "チェックアウトまでに与信の有効期限が切れていました" | `canceled` |
 | 96 | `succeed 結果 = 宿泊済` | `succeeded` |
 | 105 | `succeed 結果 = 宿泊済` | `succeeded` |
-| 106 | `fail 確定の結果不明` "売上の確定の結果が分かりません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded` |
-| 113 | `fail 取消の失敗` "Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded`, `canceled` |
-| 114 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`, `requires_confirmation`, `requires_action`, `processing`, `requires_capture`, `succeeded`, `canceled` |
-| 115 | `fail 確定の結果不明` "売上の確定の途中で失敗しました。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded` |
-| 115 | `on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する | 始まっていないか、`canceled` |
-| 123 | `fail 取消の失敗` "Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded`, `canceled` |
-| 124 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`, `requires_confirmation`, `requires_action`, `processing`, `requires_capture`, `succeeded`, `canceled` |
-| 125 | `fail 確定の結果不明` "売上の確定の途中でキャンセルされました。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded` |
+| 106 | `fail 確定の結果不明` "売上の確定の結果が分かりません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded` |
+| 113 | `fail 取消の失敗` "Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded`・`canceled` |
+| 114 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`requires_confirmation`・`requires_action`・`processing`・`requires_capture`・`succeeded`・`canceled` |
+| 115 | `fail 確定の結果不明` "売上の確定の途中で失敗しました。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded` |
+| 115 | `on failure` が最後まで走り、ワークフローは元のエラーで失敗する | 始まっていないか、`canceled` |
+| 123 | `fail 取消の失敗` "Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded`・`canceled` |
+| 124 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`requires_confirmation`・`requires_action`・`processing`・`requires_capture`・`succeeded`・`canceled` |
+| 125 | `fail 確定の結果不明` "売上の確定の途中でキャンセルされました。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded` |
 | 125 | `on cancel` が最後まで走り、ワークフローはキャンセルで終わる | 始まっていないか、`canceled` |
 
 ## 規則

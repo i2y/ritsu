@@ -78,7 +78,7 @@ flow
 <div class="dd-term" markdown>
 
 ```text
-エラー[E020]: tests/fixtures/hotel_naive.flow:95:1: 案件 `pi` が requires_payment_method, processing のまま、ここでワークフローが終わることがあります（終わりの状態は succeeded, canceled）
+エラー[E020]: tests/fixtures/hotel_naive.flow:95:1: 案件 `pi` が requires_payment_method・processing のまま、ここでワークフローが終わることがあります（終わりの状態は succeeded・canceled）
     95 |   succeed outcome = stayed
   そうなる例:
       81  quote = hold(…)

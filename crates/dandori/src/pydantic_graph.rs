@@ -113,7 +113,7 @@ struct Gen<'a> {
 pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let mut errs: Vec<crate::diag::Diag> = m
         .refuse_on_cancel(
-            tr!("pydantic-graph 向けの `on cancel` はまだ書けません。そこでは、走らせているタスクがキャンセルされたところで実行が止まります", "dandori does not write `on cancel` for pydantic-graph yet; there, a run stops where the task that runs it is cancelled"),
+            tr!("dandori は、pydantic-graph 向けの `on cancel` をまだ生成しません。pydantic-graph では、走らせているタスクがキャンセルされたところで実行が止まります", "dandori does not write `on cancel` for pydantic-graph yet; there, a run stops where the task that runs it is cancelled"),
         )
         .into_iter()
         .collect();

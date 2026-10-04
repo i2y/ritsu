@@ -41,11 +41,11 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 49 | `r = score(…)` | `jev · jev-1.13.0` | 10 秒おきに 2 回（busy, overloaded） | 10 秒 | `busy`, `overloaded`, `timeout`, `failure` → 50 行目 |
-| 51 | `d = policy(…)` | 規則 `review_policy.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
+| 49 | `r = score(…)` | `jev · jev-1.13.0` | 10 秒おきに 2 回（busy・overloaded） | 10 秒 | `busy`・`overloaded`・`timeout`・`failure` → 50 行目 |
+| 51 | `d = policy(…)` | 規則 `review_policy.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
 | 55 | `a = ask_for_approval(…)` | 自分で書くタスク（応答はコールバック） | — | 3 日 | `timeout` → 56 行目<br>`failure` → ワークフローが失敗する |
-| 57 | `notify(…)` | 自分で書くタスク, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 59 | `notify(…)` | 自分で書くタスク, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
+| 57 | `notify(…)` | 自分で書くタスク・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 59 | `notify(…)` | 自分で書くタスク・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

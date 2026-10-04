@@ -17,7 +17,7 @@
       25  見積 = 与信(…)
       28  match 見積.扱い: 確認
       29  m = notify(…)
-エラー[E011]: tests/fixtures/mistakes.flow:34:1: 分岐 `確認` は通りません。ここで `見積.扱い` は 自動 のどれかです
+エラー[E011]: tests/fixtures/mistakes.flow:34:1: 分岐 `確認` は通りません。ここで `見積.扱い` がとりうる値は 自動 だけです
     34 |     確認 => pass
   そうなる例:
       23  match 見積.扱い: 自動

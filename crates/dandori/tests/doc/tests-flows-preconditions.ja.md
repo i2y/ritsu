@@ -2,7 +2,7 @@
 
 Pays a refund back at once or sends it to review, and settles it on a payment day. ritsu cannot decide the rules' preconditions here (the amount asked and the day come from tasks with no range), so the workflow checks each as soon as its values are made: right after the task that answers them, at the start of the arm that calls the rule, at the start of each round. Runs on every platform
 
-`tests/flows/preconditions.flow` を `dandori doc` で描いたものです。入力は `order: string`, `paid: int` です。
+`tests/flows/preconditions.flow` を `dandori doc` で描いたものです。入力は `order: string`・`paid: int` です。
 
 ## flow
 
@@ -53,15 +53,15 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 39 | `asked = ask_amount(…)` | `lambda ask-amount`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 40 | `note_request(…)` | `lambda note-request`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 41 | `decision = check(…)` | 規則 `refund_check.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 42 | `day = pick_day(…)` | `lambda pick-day`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 46 | `run = settle(…)` | 規則 `settlement.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 47 | `pay_back(…)` | `lambda pay-back`, `key` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 49 | `claims = list_claims(…)` | `lambda list-claims`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 52 | `one = check(…)` | 規則 `refund_check.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 54 | `each = check(…)` | 規則 `refund_check.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 39 | `asked = ask_amount(…)` | `lambda ask-amount`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 40 | `note_request(…)` | `lambda note-request`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 41 | `decision = check(…)` | 規則 `refund_check.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 42 | `day = pick_day(…)` | `lambda pick-day`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 46 | `run = settle(…)` | 規則 `settlement.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 47 | `pay_back(…)` | `lambda pay-back`・`key` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 49 | `claims = list_claims(…)` | `lambda list-claims`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 52 | `one = check(…)` | 規則 `refund_check.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 54 | `each = check(…)` | 規則 `refund_check.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
 
 ## 終わり方
 

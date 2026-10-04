@@ -1,2 +1,2 @@
-エラー[E015]: tests/fixtures/children/自分.flow:8:3: `自分.flow` はこのフローをまた走らせます（自分.flow → 自分.flow）。フローは自分を、直接にもほかのフローを通しても走らせられません
+エラー[E015]: tests/fixtures/children/自分.flow:8:3: `自分.flow` はこのフローをまた走らせます（自分.flow → 自分.flow）。フローは、直接にもほかのフローを通しても、自分自身を走らせられません
      8 |   flow "自分.flow"

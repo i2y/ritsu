@@ -26,15 +26,15 @@
     89 |     請求 "請求のこと"
 エラー[E006]: tests/fixtures/jev.flow:95:5: `返品` の意味が二度書かれています（94 行目）
     95 |     返品 "交換したい"
-エラー[E007]: tests/fixtures/jev.flow:99:13: Jev は score の段階を、書いた意味だけで見分けます。`種類` のすべての値の意味を、低い段階から高い段階の順に下に書いてください。その他 がありません
+エラー[E007]: tests/fixtures/jev.flow:99:13: Jev は score の段階を、書いた意味だけで見分けます。`種類` のすべての値の意味を、低い段階から高い段階の順に下に書いてください。その他 の意味がありません
     99 |   jev score "どの段階か"
 エラー[E007]: tests/fixtures/jev.flow:105:7: score の段階は 2 から 10 までで、`十一` の値は 11 個です
    105 |   jev score "どの段階か"
-エラー[E007]: tests/fixtures/jev.flow:110:7: score は、列挙の値を低いものから並べた段階のどこかを答えます。`bool` は、はいかいいえで尋ねます
+エラー[E007]: tests/fixtures/jev.flow:110:7: score で尋ねられるのは、列挙の値を低いものから並べた段階のどこかです。`bool` は、`score` を付けずに、はいかいいえで尋ねてください
    110 |   jev score "どの段階か"
-エラー[E007]: tests/fixtures/jev.flow:116:7: `true` と `false` の意味は、両方書くか、どちらも書かないかです
+エラー[E007]: tests/fixtures/jev.flow:116:7: `true` と `false` の意味は、両方書くか、どちらも書かないかにしてください
    116 |   jev "人を求めているか"
-エラー[E002]: tests/fixtures/jev.flow:122:5: 答えははいかいいえなので、`yes` ではなく `true` と `false` の意味を書きます
+エラー[E002]: tests/fixtures/jev.flow:122:5: 答えははいかいいえなので、`yes` ではなく `true` と `false` の意味を書いてください
    122 |     yes "はっきり書いている"
 エラー[E007]: tests/fixtures/jev.flow:128:3: `confidence` は Jev の答えにどれだけの確信が要るかを書くところです。このタスクには `jev` がありません
    128 |   confidence 0.8 else 迷い
@@ -52,13 +52,13 @@
    152 |   confidence 0.5 else 迷い
 エラー[E007]: tests/fixtures/jev.flow:158:20: Jev は同じ入力にはほぼ同じように答えるので、尋ね直しても確信度は上がりません。`迷い` はリトライできません
    158 |   retry 2 times on 迷い
-エラー[E007]: tests/fixtures/jev.flow:163:10: Jev の API はエラーを HTTP ステータスで伝えます。`混雑` が返ってくるときのステータスを、`混雑 = 429`（レート制限）や `混雑 = 529`（過負荷）のように書きます
+エラー[E007]: tests/fixtures/jev.flow:163:10: Jev の API はエラーを HTTP ステータスで伝えます。`混雑` が返ってくるときのステータスを、`混雑 = 429`（レート制限）や `混雑 = 529`（過負荷）のように書いてください
    163 |   errors 混雑
 エラー[E007]: tests/fixtures/jev.flow:168:3: Jev は答えるだけで外部のデータを何も変えないので、`key` は要りません
    168 |   key
 エラー[E007]: tests/fixtures/jev.flow:173:3: `callback` のタスクがトークンを渡せるのは `lambda` か `aws sqs:sendMessage` です
    173 |   callback
-エラー[E007]: tests/fixtures/jev.flow:178:3: Jev はいつも TypeSafe の API で呼びます。`url` は、エージェントの Open Responses の API がどのサーバーにあるかを書くところです
+エラー[E007]: tests/fixtures/jev.flow:178:3: dandori は、Jev をいつも TypeSafe の API で呼びます。`url` は、エージェントの Open Responses の API がどのサーバーにあるかを書くところです
    178 |   url "https://api.example.com/v1"
 エラー[E007]: tests/fixtures/jev.flow:183:3: Jev はすぐに答え、長く推論しません。`effort` はエージェントのモデルが推論にどれだけ力を入れるかを書くところです
    183 |   effort high

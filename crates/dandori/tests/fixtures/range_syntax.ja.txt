@@ -1,8 +1,8 @@
 エラー[E003]: tests/fixtures/range_syntax.flow:8:25: 範囲の端 `1.5g` を `mass[g]` で数えると、整数になりません
      8 |   端数 : mass[g]  range >=1.5g
-  = 値は型の単位で数えた整数で運ぶので、端も換算して整数にならなければなりません
+  = 値は型の単位で数えた整数として受け渡すので、範囲の端も、その単位に換算して整数にならなければなりません
 エラー[E003]: tests/fixtures/range_syntax.flow:9:21: 範囲の端 `1kg` は `int` の値ではありません
      9 |   件数 : int  range >=1kg
-  = `int` の端は、単位を付けずに書きます
+  = `int` の端は、単位を付けずに書いてください
 エラー[E003]: tests/fixtures/range_syntax.flow:10:38: 範囲の端 `1kg` は `money[円, incl_tax]` の値ではありません
     10 |   別の次元 : money[円, incl_tax]  range <=1kg

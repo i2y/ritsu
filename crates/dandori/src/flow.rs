@@ -465,7 +465,7 @@ impl<'a> Flow<'a> {
                     }
                     let mut np = p.clone();
                     let (from, to) = (self.state_name(c, s), self.state_name(c, o.next));
-                    np.push(Step::new(0, tr!("ワークフローが見る前に `{ev}`: {} {from} → {to}", "before the workflow looks: `{ev}`, {} {from} → {to}", case.name)));
+                    np.push(Step::new(0, tr!("ワークフローが見る前に `{ev}` が起きる: {} {from} → {to}", "before the workflow looks: `{ev}`, {} {from} → {to}", case.name)));
                     out.insert(o.next, np);
                     work.push(o.next);
                 }
@@ -722,13 +722,13 @@ impl<'a> Flow<'a> {
             if bad.is_empty() {
                 continue;
             }
-            let names = self.names(c, bad.iter().map(|(s, _)| *s)).join(", ");
-            let finals = self.names(c, mc.finals.iter().cloned()).join(", ");
+            let (names, names_ja) = joined(self.names(c, bad.iter().map(|(s, _)| *s)));
+            let (finals, finals_ja) = joined(self.names(c, mc.finals.iter().cloned()));
             let cn = self.case_name(c).to_string();
             let message = match &how {
-                Exit::Succeed | Exit::End => tr!("案件 `{cn}` が {names} のまま、ここでワークフローが終わることがあります（終わりの状態は {finals}）", "the workflow can end here with the case `{cn}` in {names}, which is not final ({finals} are)"),
-                Exit::Fail(_) | Exit::FailEnd => tr!("案件 `{cn}` が {names} のまま、ここでワークフローが失敗することがあります（終わりの状態は {finals}）。先に片付けるか、そのまま引き渡すなら `leaving {cn}` と書いてください", "the workflow can fail here with the case `{cn}` in {names}, which is not final ({finals} are); settle it first, or write `leaving {cn}` to hand it over as it is"),
-                Exit::CancelEnd => tr!("案件 `{cn}` が {names} のまま、ここでワークフローがキャンセルで終わることがあります（終わりの状態は {finals}）。`on cancel` で片付けるか、そのまま引き渡すなら `fail … leaving {cn}` で終えてください", "the workflow can end cancelled here with the case `{cn}` in {names}, which is not final ({finals} are); settle it in `on cancel`, or end with `fail … leaving {cn}` to hand it over as it is"),
+                Exit::Succeed | Exit::End => tr!("案件 `{cn}` が {names_ja} のまま、ここでワークフローが終わることがあります（終わりの状態は {finals_ja}）", "the workflow can end here with the case `{cn}` in {names}, which is not final ({finals} are)"),
+                Exit::Fail(_) | Exit::FailEnd => tr!("案件 `{cn}` が {names_ja} のまま、ここでワークフローが失敗することがあります（終わりの状態は {finals_ja}）。先に片付けるか、そのまま引き渡すなら `leaving {cn}` と書いてください", "the workflow can fail here with the case `{cn}` in {names}, which is not final ({finals} are); settle it first, or write `leaving {cn}` to hand it over as it is"),
+                Exit::CancelEnd => tr!("案件 `{cn}` が {names_ja} のまま、ここでワークフローがキャンセルで終わることがあります（終わりの状態は {finals_ja}）。`on cancel` で片付けるか、そのまま引き渡すなら `fail … leaving {cn}` で終えてください", "the workflow can end cancelled here with the case `{cn}` in {names}, which is not final ({finals} are); settle it in `on cancel`, or end with `fail … leaving {cn}` to hand it over as it is"),
             };
             let mut p = bad[0].1.clone();
             let x = match &how {
@@ -765,13 +765,13 @@ impl<'a> Flow<'a> {
             }
             if let Some((line, callee, path, states)) = first {
                 let cn = self.case_name(c).to_string();
-                let st = states.join(", ");
+                let (st, st_ja) = joined(states);
                 let message = match settling {
                     Settling::OnFailure | Settling::OnCancel => {
                         let block = if settling == Settling::OnFailure { "on failure" } else { "on cancel" };
-                        tr!("`{block}` が `{cn}` を片付けている最中に `{callee}` が失敗すると、`{cn}` が {st} のままワークフローが失敗します（そうなる呼び出しは {count} か所）", "if `{callee}` fails while `{block}` is settling `{cn}`, the workflow fails with `{cn}` in {st} ({count} such call(s))")
+                        tr!("`{block}` が `{cn}` を片付けている最中に `{callee}` が失敗すると、`{cn}` が {st_ja} のままワークフローが失敗します（そうなる呼び出しは {count} か所）", "if `{callee}` fails while `{block}` is settling `{cn}`, the workflow fails with `{cn}` in {st} ({count} such call(s))")
                     }
-                    Settling::No => tr!("`{callee}` が失敗すると、案件 `{cn}` が {st} のままワークフローが失敗します。そうなる呼び出しは {count} か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください", "if `{callee}` fails, the workflow fails with the case `{cn}` in {st}; {count} call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case"),
+                    Settling::No => tr!("`{callee}` が失敗すると、案件 `{cn}` が {st_ja} のままワークフローが失敗します。そうなる呼び出しは {count} か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください", "if `{callee}` fails, the workflow fails with the case `{cn}` in {st}; {count} call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case"),
                 };
                 self.push(Diag::warning("W101", line, 1, message).with_path(path));
             }
@@ -929,12 +929,12 @@ impl<'a> Flow<'a> {
                             }
                         }
                         if next.is_empty() {
-                            let names = self.names(c, now.keys().cloned()).join(", ");
+                            let (names, names_ja) = joined(self.names(c, now.keys().cloned()));
                             let p = now.values().next().cloned().unwrap_or_default();
                             let msg = if hold {
-                                tr!("ここで `{cn}` は {names} のどれかで、帳簿はどの状態でも `{event}` を断ります", "`{cn}` can be in {names} here, and the book refuses `{event}` in every one of them")
+                                tr!("ここで `{cn}` がとりうる状態（{names_ja}）では、帳簿はいつも `{event}` を断ります", "`{cn}` can be in {names} here, and the book refuses `{event}` in every one of them")
                             } else {
-                                tr!("ここで `{cn}` は {names} のどれかで、ステートマシンはどの状態でも `{event}` を拒否します", "`{cn}` can be in {names} here, and the machine refuses `{event}` in every one of them")
+                                tr!("ここで `{cn}` がとりうる状態（{names_ja}）では、ステートマシンはいつも `{event}` を拒否します", "`{cn}` can be in {names} here, and the machine refuses `{event}` in every one of them")
                             };
                             self.push(Diag::error("E021", s.line, 1, msg).with_path(p));
                             ok = Abs::dead();
@@ -949,7 +949,7 @@ impl<'a> Flow<'a> {
                             Flow::assign(&mut ok, &cn);
                         }
                         for (refused_err, refusing) in &refusing {
-                            let names = self.names(c, refusing.keys().cloned()).join(", ");
+                            let (names, names_ja) = joined(self.names(c, refusing.keys().cloned()));
                             let p = refusing.values().next().cloned().unwrap_or_default();
                             match refused_err {
                                 Some(err) if hold && t.error(err).is_none() => self.push(
@@ -957,7 +957,7 @@ impl<'a> Flow<'a> {
                                         "E022",
                                         s.line,
                                         1,
-                                        tr!("ここでは帳簿が `{event}` を `{err}` で断ることがあります（`{cn}` が {names} のとき）。`{}` の `errors` に `{err}` を書き、`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); declare `{err}` in the `errors` of `{}`, and handle it with `on {err} =>`", t.name),
+                                        tr!("ここでは帳簿が `{event}` を `{err}` で断ることがあります（`{cn}` が {names_ja} のとき）。`{}` の `errors` に `{err}` を書き、`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); declare `{err}` in the `errors` of `{}`, and handle it with `on {err} =>`", t.name),
                                     )
                                     .with_path(p),
                                 ),
@@ -966,16 +966,16 @@ impl<'a> Flow<'a> {
                                         "E022",
                                         s.line,
                                         1,
-                                        tr!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`{}` には拒否されたときの返り方が書かれていません。タスクの下に `refused as <エラー>` を書いてください", "the machine may refuse `{event}` here (when `{cn}` is in {names}), but `{}` does not say how a refusal comes back; write `refused as <error>` under the task", t.name),
+                                        tr!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names_ja} のとき）。`{}` には、拒否がどう返ってくるかが書かれていません。タスクの下に `refused as <エラー>` を書いてください", "the machine may refuse `{event}` here (when `{cn}` is in {names}), but `{}` does not say how a refusal comes back; write `refused as <error>` under the task", t.name),
                                     )
                                     .with_path(p),
                                 ),
                                 Some(err) => {
                                     if !handles(&HErr::Declared(err.clone())) {
                                         let msg = if hold {
-                                            tr!("ここでは帳簿が `{event}` を `{err}` で断ることがあります（`{cn}` が {names} のとき）。`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); handle it with `on {err} =>`")
+                                            tr!("ここでは帳簿が `{event}` を `{err}` で断ることがあります（`{cn}` が {names_ja} のとき）。`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); handle it with `on {err} =>`")
                                         } else {
-                                            tr!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names} のとき）。`on {err} =>` で処理してください", "the machine may refuse `{event}` here, when `{cn}` is in {names}; handle it with `on {err} =>`")
+                                            tr!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names_ja} のとき）。`on {err} =>` で処理してください", "the machine may refuse `{event}` here, when `{cn}` is in {names}; handle it with `on {err} =>`")
                                         };
                                         self.push(Diag::error("E022", s.line, 1, msg).with_path(p));
                                     }
@@ -996,8 +996,8 @@ impl<'a> Flow<'a> {
                         if let (true, Some(err)) = (refusing.is_empty(), &t.refused_as) {
                             let only_refusal = handlers.iter().any(|h| h.errors.len() == 1 && h.errors[0] == HErr::Declared(err.clone()));
                             if only_refusal {
-                                let names = self.names(c, now.keys().cloned()).join(", ");
-                                self.push(Diag::warning("W102", s.line, 1, tr!("ここでは `on {err}` は動きません。`{cn}` は {names} のどれかで、そこでは `{event}` は拒否されません", "`on {err}` never runs here: `{cn}` is in {names}, where `{event}` is never refused")));
+                                let (names, names_ja) = joined(self.names(c, now.keys().cloned()));
+                                self.push(Diag::warning("W102", s.line, 1, tr!("ここでは `on {err}` は動きません。ここで `{cn}` がとりうる状態（{names_ja}）では、`{event}` は拒否されません", "`on {err}` never runs here: `{cn}` is in {names}, where `{event}` is never refused")));
                             }
                         }
                         // any other error: the event may or may not have happened on the other side, and the
@@ -1204,7 +1204,7 @@ impl<'a> Flow<'a> {
                         let message = if v == "none" {
                             tr!("分岐 `none` は通りません。ここに来るときは、いつも案件 `{name}` が始まっています", "the arm `none` can never be taken: the case `{name}` has been started on every run that gets here")
                         } else {
-                            tr!("分岐 `{v}` は通りません。ここで `{key}` は {} のどれかです", "the arm `{v}` can never be taken: `{key}` is one of {} here", listed.join("・"); listed.join(", "))
+                            tr!("分岐 `{v}` は通りません。ここで `{key}` がとりうる値は {} だけです", "the arm `{v}` can never be taken: `{key}` is one of {} here", listed.join("・"); listed.join(", "))
                         };
                         let why = if v == "none" { a.path.clone() } else { possible.values().next().cloned().unwrap_or_else(|| a.path.clone()) };
                         self.push(Diag::error("E011", arm.line, 1, message).with_path(why));
@@ -1304,4 +1304,9 @@ fn show(e: &TExpr) -> String {
         TExpr::Interp(_) => format!("\"{}\"", e.show()),
         other => other.show(),
     }
+}
+
+/// A list of states as the two languages write it: "a, b" in English, "a・b" in Japanese.
+fn joined(names: Vec<String>) -> (String, String) {
+    (names.join(", "), names.join("・"))
 }

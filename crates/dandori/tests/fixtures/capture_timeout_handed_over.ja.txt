@@ -1,6 +1,6 @@
 警告[W103]: tests/fixtures/capture_timeout_handed_over.flow:35:1: 外部のサービスで案件ができたあとに `open_payment` が失敗すると、ワークフローはその案件を見失います。リトライしたときに同じ案件が返るよう、タスクに `key` を付けてください
     35 |   p <- open_payment()
-警告[W101]: tests/fixtures/capture_timeout_handed_over.flow:36:1: `capture_payment` が失敗すると、案件 `p` が pending, processing のままワークフローが失敗します。そうなる呼び出しは 3 か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください
+警告[W101]: tests/fixtures/capture_timeout_handed_over.flow:36:1: `capture_payment` が失敗すると、案件 `p` が pending・processing のままワークフローが失敗します。そうなる呼び出しは 3 か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください
     36 |   p <- capture_payment(id: p.id)
   そうなる例:
       35  open_payment: p が pending で始まる

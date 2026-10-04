@@ -72,9 +72,9 @@ Stripe と在庫のサービスを呼ぶ下書き
 <div class="dd-term" markdown>
 
 ```text
-エラー[E016]: tests/fixtures/api_calls.flow:23:1: `stripe` の POST /v1/payment_intents のレスポンスは `PaymentIntent` に合いません。`created` で、整数は `timestamp` ではありません
+エラー[E016]: tests/fixtures/api_calls.flow:23:1: `stripe` の POST /v1/payment_intents のレスポンスは `PaymentIntent` に合いません。`created` は、整数で、`timestamp` ではありません
     23 | task create_intent(amount: int, currency: string, capture_method: CaptureMethod) -> PaymentIntent
-エラー[E016]: tests/fixtures/api_calls.flow:26:1: `warehouse` の StockService/Reserve のレスポンスは `Reservation` に合いません。`count` で、64 ビットの整数は、protobuf の JSON では文字列で来ます。`string` にしてください
+エラー[E016]: tests/fixtures/api_calls.flow:26:1: `warehouse` の StockService/Reserve のレスポンスは `Reservation` に合いません。`count` は、64 ビットの整数で、protobuf の JSON では文字列で届きます。`string` にしてください
     26 | task reserve_stock(sku: string, quantity: int) -> Reservation
 ```
 
@@ -267,9 +267,9 @@ AWS 向けの注文の例は、急ぎの規則をこの形で呼びます（[ord
 <div class="dd-term" markdown>
 
 ```text
-エラー[E015]: tests/fixtures/fulfillment_child.flow:18:1: 引数 `carrier` は、`arrange_delivery` が入力 `carrier` として受け取るものと合いません。`Carrier` の `drone` は `carrier` の値にありません
+エラー[E015]: tests/fixtures/fulfillment_child.flow:18:1: 引数 `carrier` は、`arrange_delivery` が入力 `carrier` として受け取るものと合いません。`Carrier` の `drone` が `carrier` の値にありません
     18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery
-エラー[E015]: tests/fixtures/fulfillment_child.flow:18:1: `arrange_delivery` が返す `tracking_number` は、`Delivery` のフィールド `tracking_number` と合いません。`string` は `int` ではありません
+エラー[E015]: tests/fixtures/fulfillment_child.flow:18:1: `arrange_delivery` が返す `tracking_number` は、`Delivery` のフィールド `tracking_number` と合いません。`string` で、`int` ではありません
     18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery
 ```
 

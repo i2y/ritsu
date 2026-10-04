@@ -2,7 +2,7 @@
 
 Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released. Written for Temporal: the warehouse's calls are activities dandori writes, by Connect; a workflow of the delivery team, on its own task queue, arranges the delivery (a child workflow, arrange_delivery.flow), and when it finds no next-day van the standard carrier is asked; and the packing request, the notice and the audit log are activities you write, the packing crew answering the callback by the update the generated client sends
 
-`examples/fulfillment/temporal/fulfillment.flow` を `dandori doc` で描いたものです。入力は `order: Order`、出力は `reservations: list[warehouse.ReserveResponse]`, `tracking_number: string` です。このワークフローは `shop.v1.FulfillmentService`（`../specs/fulfillment.proto`）を実装します。
+`examples/fulfillment/temporal/fulfillment.flow` を `dandori doc` で描いたものです。入力は `order: Order`、出力は `reservations: list[warehouse.ReserveResponse]`・`tracking_number: string` です。このワークフローは `shop.v1.FulfillmentService`（`../specs/fulfillment.proto`）を実装します。
 
 ## flow
 
@@ -79,21 +79,21 @@ flowchart TD
 
 | メソッド | 何をするか | タスク |
 |---|---|---|
-| `Fulfill` | 実行を始めます。失敗の名前は `OutOfStock`・`DeliveryFailed`・`PackingLate` | — |
+| `Fulfill` | 実行を始めます。失敗の名前は `OutOfStock`・`DeliveryFailed`・`PackingLate` です | — |
 | `AnswerPacking` | コールバックに応答します | `wait_for_packing` |
 
 ## 呼び出し
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 73 | `decision = urgency(…)` | 規則 `urgency.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 75 | `r = reserve_stock(…)` | `connect warehouse StockService/Reserve`, `key` | 1 秒おきに 2 回（busy） | — | `busy`, `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
-| 86 | `release_stock(…)` | `connect warehouse StockService/Release`, `idempotent` | — | — | `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
-| 95 | `audit(…)` | 自分で書くタスク, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 98 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan` → 99 行目<br>`timeout`, `failure` → 102 行目 |
-| 100 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan`, `timeout`, `failure` → 101 行目 |
+| 73 | `decision = urgency(…)` | 規則 `urgency.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 75 | `r = reserve_stock(…)` | `connect warehouse StockService/Reserve`・`key` | 1 秒おきに 2 回（busy） | — | `busy`・`timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 86 | `release_stock(…)` | `connect warehouse StockService/Release`・`idempotent` | — | — | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 95 | `audit(…)` | 自分で書くタスク・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 98 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan` → 99 行目<br>`timeout`・`failure` → 102 行目 |
+| 100 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan`・`timeout`・`failure` → 101 行目 |
 | 103 | `packed = wait_for_packing(…)` | 自分で書くタスク（応答はコールバック） | — | 2 日 | `timeout` → 104 行目<br>`failure` → ワークフローが失敗する |
-| 105 | `notify(…)` | 自分で書くタスク | — | — | `no_recipient` → 106 行目<br>`timeout`, `failure` → ワークフローが失敗する |
+| 105 | `notify(…)` | 自分で書くタスク | — | — | `no_recipient` → 106 行目<br>`timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

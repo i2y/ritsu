@@ -290,7 +290,7 @@ pub fn smithy_op<'a>(api: &'a Api, action: &str) -> Result<Op<'a>, Words> {
 /// The method of a `.proto`'s service, written `Service/Method`.
 pub fn proto_op<'a>(api: &'a Api, method: &str) -> Result<Op<'a>, Words> {
     let ApiDoc::Proto(pf) = &api.doc else { unreachable!("a .proto") };
-    let not = || tr!("`{}` にメソッド `{method}` はありません。`Service/Method` と書きます", "`{}` has no method `{method}`; write it as `Service/Method`", api.name);
+    let not = || tr!("`{}` にメソッド `{method}` はありません。`Service/Method` と書いてください", "`{}` has no method `{method}`; write it as `Service/Method`", api.name);
     let (svc, m) = method.split_once('/').ok_or_else(not)?;
     let service = pf.services.iter().find(|s| s.name == svc || s.name.rsplit('.').next() == Some(svc)).ok_or_else(not)?;
     let found = service.methods.iter().find(|x| x.name == m).ok_or_else(not)?;
@@ -348,7 +348,7 @@ impl<'a> Op<'a> {
         }
         // a message nothing read has: what the task sends or reads cannot be held to it
         if let Shape::Unread(u) = self.shape(&self.input) {
-            out.push(tr!("`{api}` の {op} が受け取る `{u}` が分かりません（それがあるはずのファイルを読めませんでした）。`{}` の引数をそれに合わせて確かめられません", "`{api}` {op} takes `{u}`, a type that is not known (a file it may be in was not read), so the parameters of `{}` cannot be held to it", task.name));
+            out.push(tr!("`{api}` の {op} が受け取る `{u}` が分かりません（それがあるはずのファイルを読めませんでした）。dandori は、`{}` の引数がそれに合っているかを確かめられません", "`{api}` {op} takes `{u}`, a type that is not known (a file it may be in was not read), so the parameters of `{}` cannot be held to it", task.name));
             return out;
         }
         // what goes: the path's and the query's parameters, and the body's
@@ -440,7 +440,7 @@ impl<'a> Op<'a> {
     /// Whether every value of `t` (its numbers in `rg`) is one the API takes at `n`.
     fn sends(&self, m: &Model, t: &Ty, rg: Option<Range>, n: &Node, seen: &mut Vec<RecordId>) -> Result<(), Words> {
         let s = self.shape(n);
-        let differ = || tr!("`{}` は{}ではありません", "`{}` is not {}", m.ty_name(t), describe_ja(&s); m.ty_name(t), describe(&s));
+        let differ = || tr!("`{}` で、{}ではありません", "`{}` is not {}", m.ty_name(t), describe_ja(&s); m.ty_name(t), describe(&s));
         match (t, &s) {
             (_, Shape::Any) => Ok(()),
             // the flow sends null for an absent value, which the APIs take as not given
@@ -457,9 +457,9 @@ impl<'a> Op<'a> {
             (Ty::Str, Shape::Str(None)) | (Ty::Str, Shape::Bytes) => Ok(()),
             // protobuf's JSON takes a 64-bit integer as a string, which is how a flow has it from an answer
             (Ty::Str, Shape::Int { text: true, .. }) => Ok(()),
-            (Ty::Str, Shape::Str(Some(vs))) => Err(tr!("受け取るのは {} のどれかで、`string` は何でもありえます。列挙にしてください", "`{}` takes one of {}, and `string` can be anything; give it an enum", vs.join("・"); m.ty_name(t), vs.join(", "))),
+            (Ty::Str, Shape::Str(Some(vs))) => Err(tr!("受け取るのは {} のどれかですが、`string` はどんな値にもなりえます。列挙にしてください", "`{}` takes one of {}, and `string` can be anything; give it an enum", vs.join("・"); m.ty_name(t), vs.join(", "))),
             (Ty::Enum(e), Shape::Str(vs)) => match (vs, m.enums[*e].values.iter().find(|v| vs.as_ref().is_some_and(|vs| !vs.contains(v)))) {
-                (_, Some(v)) => Err(tr!("`{}` の `{v}` は、受け取る値（{}）にありません", "`{v}` of `{}` is not one of the values it takes ({})", m.enums[*e].name, vs.as_ref().unwrap().join("・"); m.enums[*e].name, vs.as_ref().unwrap().join(", "))),
+                (_, Some(v)) => Err(tr!("`{}` の `{v}` が、受け取る値（{}）にありません", "`{v}` of `{}` is not one of the values it takes ({})", m.enums[*e].name, vs.as_ref().unwrap().join("・"); m.enums[*e].name, vs.as_ref().unwrap().join(", "))),
                 _ => Ok(()),
             },
             (Ty::Int | Ty::Num(_), Shape::Int { min, max, .. }) => within(rg, *min, *max),
@@ -481,7 +481,7 @@ impl<'a> Op<'a> {
                 let rd = &m.records[*r];
                 for (f, ft) in &rd.fields {
                     let Some(mb) = ms.iter().find(|x| x.name == *f || x.alias.as_deref() == Some(f)) else {
-                        return Err(tr!("`{f}`（`{}` のフィールド）は受け取りません", "it takes no `{f}` (a field of `{}`)", rd.name));
+                        return Err(tr!("`{f}`（`{}` のフィールド）を受け取りません", "it takes no `{f}` (a field of `{}`)", rd.name));
                     };
                     self.sends(m, ft, rd.ranges.get(f).copied(), &mb.node, seen).map_err(|w| field_words(f, w))?;
                 }
@@ -501,7 +501,7 @@ impl<'a> Op<'a> {
     /// Whether every value the API answers at `n` is one of `t` (its numbers in `rg`).
     fn reads(&self, n: &Node, m: &Model, t: &Ty, rg: Option<Range>, seen: &mut Vec<RecordId>) -> Result<(), Words> {
         let s = self.shape(n);
-        let differ = || tr!("{}は `{}` ではありません", "{} is not `{}`", describe_ja(&s), m.ty_name(t); describe(&s), m.ty_name(t));
+        let differ = || tr!("{}で、`{}` ではありません", "{} is not `{}`", describe_ja(&s), m.ty_name(t); describe(&s), m.ty_name(t));
         match (&s, t) {
             (_, Ty::Json) => Ok(()),
             (_, Ty::Opt(x)) => self.reads(n, m, x, rg, seen),
@@ -511,7 +511,7 @@ impl<'a> Op<'a> {
                 }
                 Ok(())
             }
-            (Shape::Any, _) => Err(tr!("何でもありえますが、`{}` はそうではありません。`json` にしてください", "it can be anything, which `{}` is not; declare it `json`", m.ty_name(t))),
+            (Shape::Any, _) => Err(tr!("どんな値にもなりえますが、`{}` はそうではありません。`json` にしてください", "it can be anything, which `{}` is not; declare it `json`", m.ty_name(t))),
             (Shape::Unread(u), _) => Err(unknown_type(u)),
             (Shape::Str(_), Ty::Str) | (Shape::Bytes, Ty::Str) | (Shape::Int { text: true, .. }, Ty::Str) => Ok(()),
             (Shape::Str(Some(vs)), Ty::Enum(e)) => {
@@ -522,7 +522,7 @@ impl<'a> Op<'a> {
                 }
             }
             (Shape::Str(None), Ty::Enum(e)) => Err(tr!("どんな文字列でもありえますが、`{}` は自分の値しか取りません。`string` にしてください", "it is any string, and `{}` takes only its values; declare it `string`", m.enums[*e].name)),
-            (Shape::Int { text: true, .. }, Ty::Int | Ty::Num(_)) => Err(tr!("64 ビットの整数は、protobuf の JSON では文字列で来ます。`string` にしてください", "a 64-bit integer comes as a string in protobuf's JSON; declare it `string`")),
+            (Shape::Int { text: true, .. }, Ty::Int | Ty::Num(_)) => Err(tr!("64 ビットの整数で、protobuf の JSON では文字列で届きます。`string` にしてください", "a 64-bit integer comes as a string in protobuf's JSON; declare it `string`")),
             (Shape::Int { min, max, .. }, Ty::Int | Ty::Num(_)) => match rg {
                 Some(want) if (min.is_some() || max.is_some()) && !(Range { lo: *min, hi: *max }).within(&want) => Err(tr!("`{}` の外の `{}` になりえます", "it can be `{}`, outside `{}`", want.show(), Range { lo: *min, hi: *max }.show(); Range { lo: *min, hi: *max }.show(), want.show())),
                 _ => Ok(()),
@@ -729,13 +729,13 @@ pub fn omit_zeros(v: &Value, zeros: &Value) -> Value {
 }
 
 fn field_words(f: &str, Text { en, ja }: Words) -> Words {
-    tr!("`{f}` で、{ja}", "in `{f}`, {en}")
+    tr!("`{f}` は、{ja}", "in `{f}`, {en}")
 }
 
 /// What differs where a `.proto` names a type that no file read has: nothing can be said of it
 /// but that, and `json` takes whatever it is.
 fn unknown_type(n: &str) -> Words {
-    tr!("型 `{n}` が分かりません。それがあるはずのファイルを読めませんでした。`json` にすれば受け渡せます", "its type `{n}` is not known, since a file it may be in was not read; `json` takes it")
+    tr!("型が `{n}` ですが、それがあるはずのファイルを読めなかったので、その型が分かりません。`json` にすれば受け渡せます", "its type `{n}` is not known, since a file it may be in was not read; `json` takes it")
 }
 
 /// The note for what a flow comes to of a `.proto` that imports files which were not read: which
@@ -789,10 +789,10 @@ fn describe_ja(s: &Shape) -> String {
         Shape::Any => "何でもよい値".into(),
         Shape::Str(Some(vs)) => format!("{} のどれか", vs.join("・")),
         Shape::Str(None) => "文字列".into(),
-        Shape::Int { text: true, .. } => "文字列で運ぶ 64 ビットの整数".into(),
+        Shape::Int { text: true, .. } => "文字列で受け渡す 64 ビットの整数".into(),
         Shape::Int { .. } => "整数".into(),
         Shape::Float => "数".into(),
-        Shape::Bool => "真偽".into(),
+        Shape::Bool => "真偽値".into(),
         Shape::Timestamp => "日時".into(),
         Shape::Bytes => "バイト列".into(),
         Shape::List(_) => "リスト".into(),

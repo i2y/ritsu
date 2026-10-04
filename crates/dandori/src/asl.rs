@@ -101,7 +101,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
             Some(Via::Agent { provider, url, .. }) if t.connection.is_none() => {
                 let Text { en: whose_en, ja: whose_ja } = match (provider, url) {
                     (Provider::OpenAi, None) => tr!("OpenAI の API キー", "the OpenAI API key"),
-                    (Provider::OpenAi, Some(_)) => tr!("サーバーの鍵（EventBridge の接続はいつも鍵を持つので、鍵の要らないサーバーでも何かを入れる）", "the key of the server (an EventBridge connection has one, even for a server that wants none)"),
+                    (Provider::OpenAi, Some(_)) => tr!("サーバーの鍵（鍵の要らないサーバーでも、EventBridge の接続には何かの値が要ります）", "the key of the server (an EventBridge connection has one, even for a server that wants none)"),
                     (Provider::Claude, _) => tr!("Claude の API キー（ヘッダ x-api-key）", "the Claude API key (as the header x-api-key)"),
                 };
                 errs.push(Diag::error(

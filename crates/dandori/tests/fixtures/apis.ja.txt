@@ -1,12 +1,12 @@
-エラー[E016]: tests/fixtures/apis.flow:8:11: `.proto` はサービスの場所を言いません。`use proto 場所の無い倉庫` の下に `url "<場所>"` を書いてください
+エラー[E016]: tests/fixtures/apis.flow:8:11: `.proto` にはサービスの場所が書かれていません。`use proto 場所の無い倉庫` の下に `url "<場所>"` を書いてください
      8 | use proto 場所の無い倉庫 from "apis/warehouse.proto"
-エラー[E016]: tests/fixtures/apis.flow:37:1: 引数 `capture_method` は、`stripe` の POST /v1/payment_intents が受け取るものと合いません。`取り方` の `later` は、受け取る値（automatic・automatic_async・manual）にありません
+エラー[E016]: tests/fixtures/apis.flow:37:1: 引数 `capture_method` は、`stripe` の POST /v1/payment_intents が受け取るものと合いません。`取り方` の `later` が、受け取る値（automatic・automatic_async・manual）にありません
     37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
 エラー[E016]: tests/fixtures/apis.flow:37:1: `stripe` の POST /v1/payment_intents は `amout` を受け取りません
     37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
-エラー[E016]: tests/fixtures/apis.flow:37:1: `stripe` の POST /v1/payment_intents のレスポンスは `支払い` に合いません。`status` で、`canceled` のことがありますが、`状態` にその値はありません
+エラー[E016]: tests/fixtures/apis.flow:37:1: `stripe` の POST /v1/payment_intents のレスポンスは `支払い` に合いません。`status` は、`canceled` のことがありますが、`状態` にその値はありません
     37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
-エラー[E016]: tests/fixtures/apis.flow:37:1: `stripe` の POST /v1/payment_intents のレスポンスは `支払い` に合いません。`created` で、整数は `timestamp` ではありません
+エラー[E016]: tests/fixtures/apis.flow:37:1: `stripe` の POST /v1/payment_intents のレスポンスは `支払い` に合いません。`created` は、整数で、`timestamp` ではありません
     37 | task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
 エラー[E016]: tests/fixtures/apis.flow:41:1: `stripe` の POST /v1/payment_intents には `currency` が要りますが、`金額だけで作る` はそれを渡しません
     41 | task 金額だけで作る(amount: int) -> 請求
@@ -22,13 +22,13 @@
     47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
 エラー[E016]: tests/fixtures/apis.flow:47:1: `ClientToken` は `sns` の Publish の冪等トークンではありません。この操作は冪等トークンを受け取りません
     47 | task 知らせる(TopicArn: string, Message: string?, Subjekt: string) -> 送信
-エラー[E016]: tests/fixtures/apis.flow:52:1: 引数 `quantity` は、`倉庫` の StockService/Reserve が受け取るものと合いません。`string` は整数ではありません
+エラー[E016]: tests/fixtures/apis.flow:52:1: 引数 `quantity` は、`倉庫` の StockService/Reserve が受け取るものと合いません。`string` で、整数ではありません
     52 | task 引き当てる(sku: string, quantity: string) -> 引当
 エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve のレスポンスは `引当` に合いません。`id` は無いことがあります。`string?` にしてください
     52 | task 引き当てる(sku: string, quantity: string) -> 引当
-エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve のレスポンスは `引当` に合いません。`count` で、64 ビットの整数は、protobuf の JSON では文字列で来ます。`string` にしてください
+エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve のレスポンスは `引当` に合いません。`count` は、64 ビットの整数で、protobuf の JSON では文字列で届きます。`string` にしてください
     52 | task 引き当てる(sku: string, quantity: string) -> 引当
-エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve のレスポンスは `引当` に合いません。`price` で、小数のことがあり、dandori にはその型がありません。`json` にしてください
+エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve のレスポンスは `引当` に合いません。`price` は、小数のことがあり、dandori にはその型がありません。`json` にしてください
     52 | task 引き当てる(sku: string, quantity: string) -> 引当
 エラー[E016]: tests/fixtures/apis.flow:52:1: `倉庫` の StockService/Reserve のレスポンスは `引当` に合いません。レスポンスでは `reserved_at` は `reservedAt` という名前です
     52 | task 引き当てる(sku: string, quantity: string) -> 引当

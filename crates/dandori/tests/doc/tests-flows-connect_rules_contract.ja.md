@@ -34,9 +34,9 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 29 | `決定 = 手数料(…)` | 規則 `account_fee.rule`（Connect で `https://rules.example.com` に） | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 31 | `手数料を引く(…)` | `lambda charge-fee`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 32 | `解約を記す(…)` | `lambda record-closing`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
+| 29 | `決定 = 手数料(…)` | 規則 `account_fee.rule`（Connect で `https://rules.example.com` に） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 31 | `手数料を引く(…)` | `lambda charge-fee`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 32 | `解約を記す(…)` | `lambda record-closing`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

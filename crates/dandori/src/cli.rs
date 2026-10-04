@@ -80,7 +80,7 @@ pub fn commands() -> Vec<Cmd> {
             name: "run",
             args: "<file.flow> --scenario <file.json>",
             purpose: tr!(
-                "シナリオに書いた結果で、参照インタプリタがワークフローを動かし、呼び出しをターゲットが出す形で出す",
+                "シナリオに書いた結果を使って参照インタプリタでワークフローを動かし、トレースをターゲットでの形で出す",
                 "run the workflow in the reference interpreter against scripted answers, and print the trace as the target would show it"
             ),
             params: vec![("<file.flow>", tr!("動かす .flow のファイル", "the .flow file to run"))],
@@ -159,11 +159,11 @@ pub fn table() -> Table {
                 "Every command takes --lang ja|en (default en; the DANDORI_LANG or RITSU_LANG environment variable works too)."
             ),
             tr!(
-                "規則、日付のファイル、帳簿（`use rule`、`use dates`、`use book`）を使うワークフローは `ritsu dandori` で走らせます。それらを同じプロセスの中で読みます。",
+                "規則、日付のファイル、帳簿（`use rule`、`use dates`、`use book`）を使うワークフローは、`ritsu dandori` で走らせてください。`ritsu dandori` は、それらを同じプロセスの中で読みます。",
                 "A workflow that uses rules, dates files or books (`use rule`, `use dates`, `use book`) runs as `ritsu dandori`, which reads them in the same process."
             ),
             tr!(
-                "exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル、規則、日付のファイル、帳簿を読めないこの dandori で、それらを使うフロー（E018）",
+                "exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか読めないファイル、または規則・日付のファイル・帳簿を使うフローを、それらを読めないこの dandori で走らせた（E018）",
                 "Exit codes: 0 notes only / 1 errors found / 2 bad arguments or an unreadable file, or a flow that uses rules, dates files or books run with this dandori, which reads none of them (E018)"
             ),
         ],
@@ -369,7 +369,7 @@ fn cmd_explain(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -
         return 0;
     }
     let [code] = a.pos.as_slice() else {
-        return refuse(tr!("`dandori explain <CODE>` か `dandori explain --all` です", "it is `dandori explain <CODE>` or `dandori explain --all`"), lang, err);
+        return refuse(tr!("`dandori explain <CODE>` か `dandori explain --all` と書いてください", "it is `dandori explain <CODE>` or `dandori explain --all`"), lang, err);
     };
     match ledger.find(code) {
         Some(e) => {

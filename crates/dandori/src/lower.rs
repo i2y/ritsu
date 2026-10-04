@@ -91,7 +91,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
         None => {
             return (
                 None,
-                vec![Diag::error("E001", 1, 1, tr!(".flow は `workflow <名前> v<番号>` で始めます", "a .flow starts with `workflow <name> v<n>`"))],
+                vec![Diag::error("E001", 1, 1, tr!(".flow のファイルは `workflow <名前> v<番号>` で始めてください", "a .flow starts with `workflow <name> v<n>`"))],
             )
         }
     };
@@ -233,7 +233,7 @@ impl<'a> Lowerer<'a> {
                 None
             }
             None => {
-                self.push(e("E002", *sp, tr!("API `{name}` はありません。`use {}` で読んだものを書きます", "there is no API `{name}`; name one read by `use {}`", kind.word())));
+                self.push(e("E002", *sp, tr!("API `{name}` はありません。`use {}` で読んだものを書いてください", "there is no API `{name}`; name one read by `use {}`", kind.word())));
                 None
             }
         }
@@ -499,7 +499,7 @@ impl<'a> Lowerer<'a> {
             self.push(e(
                 "E007",
                 *nsp,
-                tr!("`connection` は `connect` で呼ぶ規則に書きます。`lambda` の規則は、Step Functions が接続なしで呼びます", "`connection` is for a rule called by `connect`; Step Functions invokes a rule's `lambda` without one"),
+                tr!("`connection` を書けるのは、`connect` で呼ぶ規則だけです。`lambda` の規則は、Step Functions が接続なしで呼びます", "`connection` is for a rule called by `connect`; Step Functions invokes a rule's `lambda` without one"),
             ));
         }
         let (url, csp) = u.connect.as_ref()?;
@@ -507,7 +507,7 @@ impl<'a> Lowerer<'a> {
             self.push(e(
                 "E007",
                 *csp,
-                tr!("`connect` には、規則のサービスの場所を http:// か https:// で書きます", "`connect` says where the rule's service is, with http:// or https://"),
+                tr!("`connect` には、規則のサービスの場所を http:// か https:// で書いてください", "`connect` says where the rule's service is, with http:// or https://"),
             ));
             return None;
         }
@@ -646,7 +646,7 @@ impl<'a> Lowerer<'a> {
                                     _ => Text::new("shape", "shapes"),
                                 };
                                 self.push(e("E002", sp, tr!("型 `{text}` はありません", "there is no type `{text}`")).note(
-                                    tr!("型を作れるのは、`use proto` で読んだ `.proto` からです。`{api}` は {what_ja}で、その{shapes_ja}からは型を作りません", "types are made from a `.proto` read by `use proto`; `{api}` is {what_en}, and its {shapes_en} are not made into types"),
+                                    tr!("型を作れるのは、`use proto` で読んだ `.proto` からだけです。`{api}` は {what_ja}で、dandori はその{shapes_ja}から型を作りません", "types are made from a `.proto` read by `use proto`; `{api}` is {what_en}, and its {shapes_en} are not made into types"),
                                 ));
                                 None
                             }
@@ -1018,7 +1018,7 @@ impl<'a> Lowerer<'a> {
                     // an activity of rules.py would take the place of what it imports: the one to rename is the rule `use rule` named so
                     let act = name.to_string();
                     out.push(
-                        e("E006", at(owner), tr!("規則 `{owner}` のアクティビティ `{act}` は、rulec が規則 `{n}` のために生成するコードの名前でもあり、rules.py で二つがぶつかります", "`{act}`, the activity of the rule `{owner}`, is also a name of the code rulec generates for the rule `{n}`, and the two clash in rules.py"))
+                        e("E006", at(owner), tr!("規則 `{owner}` のアクティビティ `{act}` は、rulec が規則 `{n}` のために生成するコードの名前でもあるので、rules.py で二つがぶつかります", "`{act}`, the activity of the rule `{owner}`, is also a name of the code rulec generates for the rule `{n}`, and the two clash in rules.py"))
                             .note(tr!("`use rule` で付けた名前 `{owner}` を変えてください", "Give the rule another name than `{owner}` in `use rule`.")),
                     );
                 }
@@ -1032,8 +1032,8 @@ impl<'a> Lowerer<'a> {
                 let ja: Vec<String> = places.iter().map(|p| p.ja.clone()).collect();
                 let en_places: Vec<String> = places.iter().map(|p| p.en.clone()).collect();
                 let (message, fix) = match en.as_deref() {
-                    None => (tr!("規則 `{n}` は、rulec が生成するコードで `{name}` という名前になり、dandori がそのまわりに書くコードの名前とぶつかります", "the rule `{n}` is `{name}` in the code rulec generates, a name the code dandori writes around it uses already"), fix_rule.clone()),
-                    Some(en) => (tr!("規則 `{n}` の列挙 `{en}` は、rulec が生成するコードで `{name}` という名前になり、dandori がそのまわりに書くコードの名前とぶつかります", "the enum `{en}` of the rule `{n}` is `{name}` in the code rulec generates, a name the code dandori writes around it uses already"), fix_enum.clone()),
+                    None => (tr!("規則 `{n}` は、rulec が生成するコードで `{name}` という名前になり、dandori がそのまわりに生成するコードの名前とぶつかります", "the rule `{n}` is `{name}` in the code rulec generates, a name the code dandori writes around it uses already"), fix_rule.clone()),
+                    Some(en) => (tr!("規則 `{n}` の列挙 `{en}` は、rulec が生成するコードで `{name}` という名前になり、dandori がそのまわりに生成するコードの名前とぶつかります", "the enum `{en}` of the rule `{n}` is `{name}` in the code rulec generates, a name the code dandori writes around it uses already"), fix_enum.clone()),
                 };
                 out.push(e("E006", at(n), message).note(tr!("ぶつかるところ：{}", "Where: {}", ja.join("、"); en_places.join("; "))).note(fix));
             }
@@ -1062,7 +1062,7 @@ impl<'a> Lowerer<'a> {
             let n = m.rules[*r].name.as_str();
             let act = crate::render::rule_activity(n);
             match acts.get(&act) {
-                Some(first) => out.push(e("E006", at(n), tr!("規則 `{first}` と `{n}` は、dandori が書くコードで同じアクティビティ `{act}` になります。どちらかの名前を変えてください", "the rules `{first}` and `{n}` would be one activity, `{act}`, in the code dandori writes; rename one"))),
+                Some(first) => out.push(e("E006", at(n), tr!("規則 `{first}` と `{n}` は、dandori が生成するコードで同じアクティビティ `{act}` になります。どちらかの名前を変えてください", "the rules `{first}` and `{n}` would be one activity, `{act}`, in the code dandori writes; rename one"))),
                 None => {
                     acts.insert(act, n);
                 }
@@ -1074,7 +1074,7 @@ impl<'a> Lowerer<'a> {
             if let Some(n) = owner {
                 let act = crate::render::rule_activity(n);
                 out.push(
-                    e("E006", sp, tr!("タスク `{tn}` と規則 `{n}` は、dandori が書くコードで同じアクティビティ `{act}` になります", "the task `{tn}` and the rule `{n}` would be one activity, `{act}`, in the code dandori writes"))
+                    e("E006", sp, tr!("タスク `{tn}` と規則 `{n}` は、dandori が生成するコードで同じアクティビティ `{act}` になります", "the task `{tn}` and the rule `{n}` would be one activity, `{act}`, in the code dandori writes"))
                         .note(tr!("タスクの名前を変えてください。`rule_` で始まる名前は、規則のアクティビティのものです", "Rename the task: a name that starts with `rule_` is a rule's activity.")),
                 );
             }
@@ -1092,7 +1092,7 @@ impl<'a> Lowerer<'a> {
             Err(ChildTrouble::Cycle(chain)) => {
                 let names: Vec<String> = chain.iter().map(|p| p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default()).collect();
                 (
-                    tr!("`{path}` はこのフローをまた走らせます（{}）。フローは自分を、直接にもほかのフローを通しても走らせられません", "`{path}` runs this flow again ({}); a flow cannot run itself, directly or through others", names.join(" → ")),
+                    tr!("`{path}` はこのフローをまた走らせます（{}）。フローは、直接にもほかのフローを通しても、自分自身を走らせられません", "`{path}` runs this flow again ({}); a flow cannot run itself, directly or through others", names.join(" → ")),
                     None,
                 )
             }
@@ -1119,7 +1119,7 @@ impl<'a> Lowerer<'a> {
         }
         if !matches!(inner, Ty::Int | Ty::Num(_)) {
             let n = self.m.ty_name(t);
-            self.push(e("E003", r.span, tr!("範囲を書けるのは数（`int` か単位の付いた数）で、これは `{n}` です", "a range is for a number (`int` or a unit), and this is `{n}`")));
+            self.push(e("E003", r.span, tr!("範囲を書けるのは数（`int` か単位の付いた数）だけです。これは `{n}` です", "a range is for a number (`int` or a unit), and this is `{n}`")));
             return None;
         }
         let lo = match &r.lo {
@@ -1153,7 +1153,7 @@ impl<'a> Lowerer<'a> {
         let tn = self.m.ty_name(ty);
         let not_of = tr!("範囲の端 `{raw}` は `{tn}` の値ではありません", "the bound `{raw}` is not a value of `{tn}`");
         let Ty::Num(to) = ty else {
-            self.push(e("E003", sp, not_of).note(tr!("`int` の端は、単位を付けずに書きます", "a bound of `int` is written without a unit")));
+            self.push(e("E003", sp, not_of).note(tr!("`int` の端は、単位を付けずに書いてください", "a bound of `int` is written without a unit")));
             return None;
         };
         let counted = match &to.dim {
@@ -1171,7 +1171,7 @@ impl<'a> Lowerer<'a> {
             None => {
                 self.push(
                     e("E003", sp, tr!("範囲の端 `{raw}` を `{tn}` で数えると、整数になりません", "the bound `{raw}`, counted in `{tn}`, is not a whole number")).note(tr!(
-                        "値は型の単位で数えた整数で運ぶので、端も換算して整数にならなければなりません",
+                        "値は型の単位で数えた整数として受け渡すので、範囲の端も、その単位に換算して整数にならなければなりません",
                         "a value travels as a whole number in the unit of its type, so a bound must come to one too"
                     )),
                 );
@@ -1250,11 +1250,11 @@ impl<'a> Lowerer<'a> {
                         match crate::apis::openapi_op(&api, method, url) {
                             Ok(op) => {
                                 if *form {
-                                    self.push(e("E007", *bsp, tr!("本文の書き方は OpenAPI の記述が言うので、`form` は外してください", "the OpenAPI document says how the body is written; leave out `form`")));
+                                    self.push(e("E007", *bsp, tr!("本文の形式は OpenAPI の記述で決まるので、`form` は外してください", "the OpenAPI document says how the body is written; leave out `form`")));
                                 }
                                 match api.base_url() {
                                     Some(base) => spec_url = Some((format!("{base}{url}"), op.form)),
-                                    None => self.push(e("E016", *bsp, tr!("`{}` はサーバーを言いません。`use openapi {}` の下に `url \"<場所>\"` を書いてください", "`{}` names no server; write `url \"<where it is>\"` under `use openapi {}`", a.0, a.0))),
+                                    None => self.push(e("E016", *bsp, tr!("`{}` にはサーバーが書かれていません。`use openapi {}` の下に `url \"<場所>\"` を書いてください", "`{}` names no server; write `url \"<where it is>\"` under `use openapi {}`", a.0, a.0))),
                                 }
                                 described = Some((api.clone(), b.clone()));
                             }
@@ -1271,7 +1271,7 @@ impl<'a> Lowerer<'a> {
                             self.push(e(
                                 "E016",
                                 at,
-                                tr!("`.proto` はサービスの場所を言いません。`use proto {name}` の下に `url \"<場所>\"` を書いてください", "a `.proto` does not say where the service is; write `url \"<where it is>\"` under `use proto {name}`"),
+                                tr!("`.proto` にはサービスの場所が書かれていません。`use proto {name}` の下に `url \"<場所>\"` を書いてください", "a `.proto` does not say where the service is; write `url \"<where it is>\"` under `use proto {name}`"),
                             ));
                         }
                         match crate::apis::proto_op(&api, method) {
@@ -1368,7 +1368,7 @@ impl<'a> Lowerer<'a> {
             for er in &t.errors {
                 let (en, esp) = &er.name;
                 if en == "timeout" || en == "failure" {
-                    self.push(e("E007", *esp, tr!("`{en}` は宣言しなくても使えます。タスク自身のエラーだけを宣言します", "`{en}` is always there; declare only the task's own errors")));
+                    self.push(e("E007", *esp, tr!("`{en}` は宣言しなくても使えます。タスク自身のエラーだけを宣言してください", "`{en}` is always there; declare only the task's own errors")));
                     continue;
                 }
                 if errors.iter().any(|x| x.name == *en) {
@@ -1383,7 +1383,7 @@ impl<'a> Lowerer<'a> {
                     let reasons = self.book_reasons(b);
                     if !reasons.contains(en) {
                         let (tn, op) = (&b.transfer, &b.op);
-                        self.push(e("E016", *esp, tr!("`{en}` は、帳簿が `{tn}.{op}` を断る理由ではありません（{}）", "`{en}` is not a reason the book refuses `{tn}.{op}` with ({})", reasons.join("・"); reasons.join(", "))));
+                        self.push(e("E016", *esp, tr!("`{en}` は、帳簿が `{tn}.{op}` を断る理由ではありません（理由は {}）", "`{en}` is not a reason the book refuses `{tn}.{op}` with ({})", reasons.join("・"); reasons.join(", "))));
                         continue;
                     }
                     errors.push(ErrDef { name: en.clone(), status: None, exception: None });
@@ -1410,7 +1410,7 @@ impl<'a> Lowerer<'a> {
                             continue;
                         }
                         _ => {
-                            self.push(e("E007", *esp, tr!("Connect のエラーは、`{en} = not_found` のようにコードで書きます", "a Connect error is named by its code, as `{en} = not_found`")));
+                            self.push(e("E007", *esp, tr!("Connect のエラーは、`{en} = not_found` のようにコードで書いてください", "a Connect error is named by its code, as `{en} = not_found`")));
                             continue;
                         }
                     }
@@ -1419,25 +1419,25 @@ impl<'a> Lowerer<'a> {
                 };
                 match (&binding, status, &exception) {
                     (Some(Binding::Http { .. }), None, _) => {
-                        self.push(e("E007", *esp, tr!("`{en}` が返ってくるときの HTTP ステータスを `{en} = 402` のように書きます", "give `{en}` the HTTP status it comes back with, as `{en} = 402`")));
+                        self.push(e("E007", *esp, tr!("`{en}` が返ってくるときの HTTP ステータスを、`{en} = 402` のように書いてください", "give `{en}` the HTTP status it comes back with, as `{en} = 402`")));
                     }
                     // TypeSafe's API says an error by its status: 429 for the rate limit, 529 when it is overloaded
                     (Some(Binding::Jev(_)), None, _) => {
                         self.push(e(
                             "E007",
                             *esp,
-                            tr!("Jev の API はエラーを HTTP ステータスで伝えます。`{en}` が返ってくるときのステータスを、`{en} = 429`（レート制限）や `{en} = 529`（過負荷）のように書きます", "Jev's API says an error by its HTTP status; give `{en}` the one it comes back with, as `{en} = 429` (the rate limit) or `{en} = 529` (overloaded)"),
+                            tr!("Jev の API はエラーを HTTP ステータスで伝えます。`{en}` が返ってくるときのステータスを、`{en} = 429`（レート制限）や `{en} = 529`（過負荷）のように書いてください", "Jev's API says an error by its HTTP status; give `{en}` the one it comes back with, as `{en} = 429` (the rate limit) or `{en} = 529` (overloaded)"),
                         ));
                     }
                     (Some(Binding::Jev(_)), Some(_), _) => {}
                     (Some(Binding::Http { .. }), Some(_), None) => {}
                     (Some(Binding::Aws { .. }), None, _) => {}
                     (Some(Binding::Aws { .. }), Some(_), _) => {
-                        self.push(e("E007", *esp, tr!("AWS の API のエラーは、ステータスではなく `{en} = ConditionalCheckFailedException` のように例外の名前で書きます", "an AWS API's error is named by its exception, as `{en} = ConditionalCheckFailedException`, not by a status")));
+                        self.push(e("E007", *esp, tr!("AWS の API のエラーは、ステータスではなく `{en} = ConditionalCheckFailedException` のように例外の名前で書いてください", "an AWS API's error is named by its exception, as `{en} = ConditionalCheckFailedException`, not by a status")));
                     }
                     (Some(Binding::Lambda(_)), None, None) => {}
                     (Some(Binding::Lambda(_)), _, _) => {
-                        self.push(e("E007", *esp, tr!("Lambda のタスクのエラーは関数が投げるエラーの型の名前で表し、ステータスは書きません", "a Lambda task's error is named by the error type the function raises, without a status")));
+                        self.push(e("E007", *esp, tr!("Lambda のタスクのエラーは、関数が投げるエラーの型の名前で表します。ステータスは外してください", "a Lambda task's error is named by the error type the function raises, without a status")));
                     }
                     (None, None, None) => {}
                     (None, _, _) => {
@@ -1545,7 +1545,7 @@ impl<'a> Lowerer<'a> {
                             self.push(e("E007", *kpsp, tr!("`{kp}` は `key` が埋めるので、引数からは外してください", "`{kp}` is filled by `key`; leave it out of the parameters")));
                         }
                     }
-                    (_, Some((_, kpsp))) => self.push(e("E007", *kpsp, tr!("`key <引数>` は AWS の API のための書き方です。ここでは `key` だけを書きます", "`key <parameter>` is for an AWS API; write just `key`"))),
+                    (_, Some((_, kpsp))) => self.push(e("E007", *kpsp, tr!("`key <引数>` は AWS の API のための書き方です。ここでは `key` だけを書いてください", "`key <parameter>` is for an AWS API; write just `key`"))),
                     _ => {}
                 }
             }
@@ -1581,7 +1581,7 @@ impl<'a> Lowerer<'a> {
             if let (Some(Binding::Book(_)), Some((_, rsp))) = (&binding, &t.refused_as) {
                 self.push(e("E007", *rsp, tr!("帳簿は、仮押さえの状態ごとに理由を付けて断ります。`refused as` は外し、理由を `errors` に書いてください", "a book refuses with a reason for each state of the hold; leave out `refused as`, and declare the reasons in `errors`")));
             } else if t.refused_as.is_some() && !matches!(machine, Some(TaskMachine::Sends { .. })) {
-                self.push(e("E007", t.refused_as.as_ref().unwrap().1, tr!("`refused as` はイベントを `sends` するタスクに書きます", "`refused as` belongs to a task that `sends` an event")));
+                self.push(e("E007", t.refused_as.as_ref().unwrap().1, tr!("`refused as` を書けるのは、イベントを送る（`sends`）タスクだけです", "`refused as` belongs to a task that `sends` an event")));
             }
             if machine.is_some() && result.is_none() {
                 self.push(e("E008", *sp, tr!("`{name}` は案件を動かすので、案件のレコードを返します。`-> <レコード>` を書いてください", "`{name}` moves a case, so it answers with the case's record; write `-> <record>`")));
@@ -1605,9 +1605,9 @@ impl<'a> Lowerer<'a> {
                     };
                     let msp = t.machine.as_ref().map(|(_, s)| *s).unwrap_or(*sp);
                     let d = if want.is_empty() {
-                        e("E008", msp, tr!("`{tn}.do` はすぐに確定する振替で、案件の始まりも終わりもしません", "`{tn}.do` is a transfer done at once, which neither starts nor ends a case"))
+                        e("E008", msp, tr!("`{tn}.do` はすぐに確定する振替で、案件を始めることも終えることもしません", "`{tn}.do` is a transfer done at once, which neither starts nor ends a case"))
                     } else {
-                        e("E008", msp, tr!("`{tn}.{op}` が仮押さえにすることは `{want}` です", "what `{tn}.{op}` does to the hold is `{want}`"))
+                        e("E008", msp, tr!("`{tn}.{op}` が仮押さえに対してするのは `{want}` です", "what `{tn}.{op}` does to the hold is `{want}`"))
                     };
                     self.push(d);
                 }
@@ -1691,13 +1691,13 @@ impl<'a> Lowerer<'a> {
     /// (`<book>.<transfer>`), or nothing, and `do` nothing.
     fn book_task(&mut self, t: &syntax::TaskDecl, book: &syntax::Name, transfer: &syntax::Name, op: &syntax::Name, bsp: Span, params: &[(String, Ty)], result: Option<&Ty>) -> Option<BookOp> {
         let Some(&bix) = self.book_ix.get(&book.0) else {
-            self.push(e("E002", book.1, tr!("帳簿 `{}` はありません。`use book` で読んだものを書きます", "there is no book `{}`; name one read by `use book`", book.0)));
+            self.push(e("E002", book.1, tr!("帳簿 `{}` はありません。`use book` で読んだものを書いてください", "there is no book `{}`; name one read by `use book`", book.0)));
             return None;
         };
         let bu = self.m.books[bix].clone();
         let Some(tr) = bu.transfer(&transfer.0) else {
             let names: Vec<&str> = bu.facts.transfers.iter().map(|x| x.name.as_str()).collect();
-            self.push(e("E002", transfer.1, tr!("帳簿 `{}` に振替 `{}` はありません（{}）", "the book `{}` has no transfer `{}` ({})", book.0, transfer.0, names.join("・"); book.0, transfer.0, names.join(", "))));
+            self.push(e("E002", transfer.1, tr!("帳簿 `{}` に振替 `{}` はありません（あるのは {}）", "the book `{}` has no transfer `{}` ({})", book.0, transfer.0, names.join("・"); book.0, transfer.0, names.join(", "))));
             return None;
         };
         let holds = tr.pending.is_some();
@@ -1829,7 +1829,7 @@ impl<'a> Lowerer<'a> {
             // a description that could not be read is said where it is read
             None if self.prog.apis.iter().any(|u| u.name.0 == api) => return,
             None => {
-                self.push(e("E002", at, tr!("API `{api}` はありません。`use proto` で読んだものを書きます", "there is no API `{api}`; name one read by `use proto`")));
+                self.push(e("E002", at, tr!("API `{api}` はありません。`use proto` で読んだものを書いてください", "there is no API `{api}`; name one read by `use proto`")));
                 return;
             }
         };
@@ -1845,7 +1845,7 @@ impl<'a> Lowerer<'a> {
             let pkg = format!("{}.", pf.package);
             let names: Vec<String> = pf.services.iter().map(|x| if pf.package.is_empty() { x.name.clone() } else { x.name.strip_prefix(&pkg).unwrap_or(&x.name).to_string() }).collect();
             let message = if names.is_empty() {
-                tr!("`{api}` にサービス `{rel}` はありません（サービスはありません）", "`{api}` has no service `{rel}` (it has no services)")
+                tr!("`{api}` にサービス `{rel}` はありません（`{api}` にはサービスが一つもありません）", "`{api}` has no service `{rel}` (it has no services)")
             } else {
                 tr!("`{api}` にサービス `{rel}` はありません（サービスは {}）", "`{api}` has no service `{rel}` (its services are {})", names.join("・"); names.join(", "))
             };
@@ -1914,7 +1914,7 @@ impl<'a> Lowerer<'a> {
             self.push(e(
                 "E007",
                 *usp,
-                tr!("Jev はいつも TypeSafe の API で呼びます。`url` は、エージェントの Open Responses の API がどのサーバーにあるかを書くところです", "Jev is always called at TypeSafe's API; `url` says which server an agent's Open Responses API is on"),
+                tr!("dandori は、Jev をいつも TypeSafe の API で呼びます。`url` は、エージェントの Open Responses の API がどのサーバーにあるかを書くところです", "Jev is always called at TypeSafe's API; `url` says which server an agent's Open Responses API is on"),
             ));
             return;
         }
@@ -1929,7 +1929,7 @@ impl<'a> Lowerer<'a> {
             self.push(e(
                 "E007",
                 *usp,
-                tr!("`url` はエージェントの Open Responses の API がどのサーバーにあるかを書くところです。このタスクには `agent` がありません（HTTP のタスクの URL は `http` のあとに書きます）", "`url` says which server an agent's Open Responses API is on; this task has no `agent` (an HTTP task writes its URL after `http`)"),
+                tr!("`url` はエージェントの Open Responses の API がどのサーバーにあるかを書くところです。このタスクには `agent` がありません（HTTP のタスクの URL は `http` のあとに書いてください）", "`url` says which server an agent's Open Responses API is on; this task has no `agent` (an HTTP task writes its URL after `http`)"),
             ));
         }
         if let (Some((_, esp)), false) = (&t.effort, matches!(t.binding, Some((syntax::Binding::Agent { .. }, _)))) {
@@ -2245,7 +2245,7 @@ impl<'a> Lowerer<'a> {
                         self.push(e(
                             "E007",
                             ask.span,
-                            tr!("Jev は score の段階を、書いた意味だけで見分けます。`{}` のすべての値の意味を、低い段階から高い段階の順に下に書いてください。{} がありません", "Jev sees a score's levels only by what each means, so write under it what every value of `{}` means, from the lowest level to the highest; {} is missing", def.name, names.join("・"); def.name, names.join(", ")),
+                            tr!("Jev は score の段階を、書いた意味だけで見分けます。`{}` のすべての値の意味を、低い段階から高い段階の順に下に書いてください。{} の意味がありません", "Jev sees a score's levels only by what each means, so write under it what every value of `{}` means, from the lowest level to the highest; {} is missing", def.name, names.join("・"); def.name, names.join(", ")),
                         ));
                         return None;
                     }
@@ -2262,12 +2262,12 @@ impl<'a> Lowerer<'a> {
             }
             Ty::Bool => {
                 if let Some(ssp) = ask.score {
-                    self.push(e("E007", ssp, tr!("score は、列挙の値を低いものから並べた段階のどこかを答えます。`bool` は、はいかいいえで尋ねます", "a score is a place on a scale of an enum's values; a `bool` is asked as yes or no")));
+                    self.push(e("E007", ssp, tr!("score で尋ねられるのは、列挙の値を低いものから並べた段階のどこかです。`bool` は、`score` を付けずに、はいかいいえで尋ねてください", "a score is a place on a scale of an enum's values; a `bool` is asked as yes or no")));
                     return None;
                 }
                 for ((v, vsp), _) in &ask.criteria {
                     if v != "true" && v != "false" {
-                        self.push(e("E002", *vsp, tr!("答えははいかいいえなので、`{v}` ではなく `true` と `false` の意味を書きます", "the answer is yes or no, so write what `true` and `false` mean, not `{v}`")));
+                        self.push(e("E002", *vsp, tr!("答えははいかいいえなので、`{v}` ではなく `true` と `false` の意味を書いてください", "the answer is yes or no, so write what `true` and `false` mean, not `{v}`")));
                         return None;
                     }
                 }
@@ -2275,7 +2275,7 @@ impl<'a> Lowerer<'a> {
                     (Some(y), Some(n)) => vec![("true".into(), Some(y)), ("false".into(), Some(n))],
                     (None, None) => vec![],
                     _ => {
-                        self.push(e("E007", ask.span, tr!("`true` と `false` の意味は、両方書くか、どちらも書かないかです", "write what both `true` and `false` mean, or neither")));
+                        self.push(e("E007", ask.span, tr!("`true` と `false` の意味は、両方書くか、どちらも書かないかにしてください", "write what both `true` and `false` mean, or neither")));
                         return None;
                     }
                 };
@@ -2289,7 +2289,7 @@ impl<'a> Lowerer<'a> {
     /// book and its transfer that holds, whose holds' life is chobo's machine.
     fn machine_rule(&mut self, q: &[(String, Span)], sp: Span) -> Option<usize> {
         if q.len() != 2 {
-            self.push(e("E002", sp, tr!("ステートマシンは <規則>.<ステートマシン> と書きます", "name a machine as <rule>.<machine>")));
+            self.push(e("E002", sp, tr!("ステートマシンは <規則>.<ステートマシン> と書いてください", "name a machine as <rule>.<machine>")));
             return None;
         }
         if let Some(&bix) = self.book_ix.get(&q[0].0) {
@@ -2341,7 +2341,7 @@ impl<'a> Lowerer<'a> {
                     self.push(e(
                         "E008",
                         c.record.span(),
-                        tr!("案件の型には、このファイルで宣言したレコードか、`.proto` から作ったレコードを使います", "a case is held in a record declared in this file or made from a `.proto`"),
+                        tr!("案件の型には、このファイルで宣言したレコードか、`.proto` から作ったレコードを使ってください", "a case is held in a record declared in this file or made from a `.proto`"),
                     ));
                     continue;
                 }
@@ -2426,7 +2426,7 @@ impl<'a> Lowerer<'a> {
                     self.push(e(
                         "E008",
                         *isp,
-                        tr!("`{inp}` はステートマシンの held ではありません（held は {}）", "`{inp}` is not held by the machine; its held inputs are {}", if mc.held.is_empty() { "ありません".to_string() } else { mc.held.join("・") }; if mc.held.is_empty() { "none".to_string() } else { mc.held.join(", ") }),
+                        tr!("`{inp}` は、ステートマシンの `held` の入力ではありません（`held` の入力は {}）", "`{inp}` is not held by the machine; its held inputs are {}", if mc.held.is_empty() { "ありません".to_string() } else { mc.held.join("・") }; if mc.held.is_empty() { "none".to_string() } else { mc.held.join(", ") }),
                     ));
                     continue;
                 }
@@ -2434,7 +2434,7 @@ impl<'a> Lowerer<'a> {
                     match mc.axes[a].coords.iter().position(|x| x == val) {
                         Some(ci) => held.push((a, ci)),
                         None => {
-                            self.push(e("E003", *vsp, tr!("`{val}` は `{inp}` の値ではありません（{}）", "`{val}` is not a value of `{inp}` ({})", mc.axes[a].coords.join("・"); mc.axes[a].coords.join(", "))));
+                            self.push(e("E003", *vsp, tr!("`{val}` は `{inp}` の値ではありません（値は {}）", "`{val}` is not a value of `{inp}` ({})", mc.axes[a].coords.join("・"); mc.axes[a].coords.join(", "))));
                             continue;
                         }
                     }
@@ -2447,7 +2447,7 @@ impl<'a> Lowerer<'a> {
                 // a hold expires on its own when the book says it does: the workflow need not say so
                 for (ev, esp) in &c.external {
                     if ev != "expire" || mc.axes_with_value(ev).is_empty() {
-                        self.push(e("E008", *esp, tr!("仮押さえに外で起きるのは、有効期限のある振替の `expire` だけです", "what happens to a hold on its own is `expire`, of a transfer whose holds expire")));
+                        self.push(e("E008", *esp, tr!("仮押さえにワークフローの外で起きることは、有効期限のある振替の `expire` だけです", "what happens to a hold on its own is `expire`, of a transfer whose holds expire")));
                     }
                 }
                 if let Some(a) = mc.axes_with_value("expire").first() {
@@ -2471,7 +2471,7 @@ impl<'a> Lowerer<'a> {
                 Some(((o, osp), (v, _))) => match mc.decides.iter().position(|d| d == o) {
                     Some(i) => Some((i, v.clone())),
                     None => {
-                        self.push(e("E008", *osp, tr!("ステートマシンの表は `{o}` を書きません（書くのは {}）", "the machine's table does not write `{o}`; it writes {}", mc.decides.join("・"); mc.decides.join(", "))));
+                        self.push(e("E008", *osp, tr!("ステートマシンの表は `{o}` を出力しません（出力するのは {}）", "the machine's table does not write `{o}`; it writes {}", mc.decides.join("・"); mc.decides.join(", "))));
                         None
                     }
                 },
@@ -2535,7 +2535,7 @@ impl<'a> Lowerer<'a> {
                 let (a, b) = (self.m.ty_name(&prev), self.m.ty_name(&t));
                 problems.insert(
                     (sp.line, sp.col),
-                    e("E003", sp, tr!("`{n}` はほかの場所で `{a}`、ここで `{b}` です。名前の型は一つです", "`{n}` was `{a}` elsewhere and is `{b}` here; a name keeps one type")),
+                    e("E003", sp, tr!("`{n}` は、ほかの場所では `{a}`、ここでは `{b}` です。一つの名前に型は一つだけです", "`{n}` was `{a}` elsewhere and is `{b}` here; a name keeps one type")),
                 );
             }
             Some(_) => {}
@@ -2716,7 +2716,7 @@ impl<'a> Lowerer<'a> {
                 let ti = match callee {
                     Callee::Task(t) => t,
                     Callee::Rule(_) => {
-                        self.push(e("E008", call.callee.1, tr!("案件を動かすのは `starts`・`sends`・`observes` を書いたタスクです。規則は `let` で呼びます", "a case moves by a task that `starts`, `sends` or `observes`; a rule is called with `let`")));
+                        self.push(e("E008", call.callee.1, tr!("案件を動かすのは `starts`・`sends`・`observes` を書いたタスクです。規則は `let` で呼んでください", "a case moves by a task that `starts`, `sends` or `observes`; a rule is called with `let`")));
                         return None;
                     }
                 };
@@ -2752,7 +2752,7 @@ impl<'a> Lowerer<'a> {
             StmtKind::Match { expr, arms } => self.lower_match(expr, arms)?,
             StmtKind::Wait { seconds } => {
                 if *seconds == 0 {
-                    self.push(e("E009", s.span, tr!("0 の待ちは何もしません", "a wait of zero does nothing")));
+                    self.push(e("E009", s.span, tr!("0 秒の待ちは何もしません", "a wait of zero does nothing")));
                 }
                 TK::Wait { seconds: *seconds }
             }
@@ -2838,14 +2838,14 @@ impl<'a> Lowerer<'a> {
                 TK::For { var: var.0.clone(), list: lx, max: *max, parallel: *parallel, body: b, result, locals: vec![] }
             }
             StmtKind::Yield { expr } => {
-                self.push(e("E009", expr.span(), tr!("`yield` は `let <名前> = for …` の本体の最後の行に書きます", "`yield` is the last line of the body of `let <name> = for …`")));
+                self.push(e("E009", expr.span(), tr!("`yield` は `let <名前> = for …` の本体の最後の行に書いてください", "`yield` is the last line of the body of `let <name> = for …`")));
                 return None;
             }
             StmtKind::Pass => TK::Pass,
             StmtKind::Break => {
                 match self.loops.last() {
                     None => {
-                        self.push(e("E009", s.span, tr!("`break` は `repeat` か `for` の中に書きます", "`break` is written inside `repeat` or `for`")));
+                        self.push(e("E009", s.span, tr!("`break` は `repeat` か `for` の中に書いてください", "`break` is written inside `repeat` or `for`")));
                         return None;
                     }
                     Some(true) => {
@@ -2991,7 +2991,7 @@ impl<'a> Lowerer<'a> {
                 }
                 if !domain.contains(v) {
                     let n = self.m.ty_name(ty.inner());
-                    self.push(e("E003", *vsp, tr!("`{v}` は `{n}` の値ではありません（{}）", "`{v}` is not a value of `{n}` ({})", domain.join("・"); domain.join(", "))));
+                    self.push(e("E003", *vsp, tr!("`{v}` は `{n}` の値ではありません（値は {}）", "`{v}` is not a value of `{n}` ({})", domain.join("・"); domain.join(", "))));
                     continue;
                 }
                 values.push(v.clone());
@@ -3024,7 +3024,7 @@ impl<'a> Lowerer<'a> {
                     _ if declared.contains(n) => errs.push(HErr::Declared(n.clone())),
                     _ => {
                         let list = if declared.is_empty() { "timeout, failure".to_string() } else { format!("{}, timeout, failure", declared.join(", ")) };
-                        self.push(e("E002", *sp, tr!("`{n}` はこの呼び出しが投げるエラーではありません（{list}）", "`{n}` is not an error this call can raise ({list})")));
+                        self.push(e("E002", *sp, tr!("`{n}` はこの呼び出しが投げるエラーではありません（投げるのは {list}）", "`{n}` is not an error this call can raise ({list})")));
                     }
                 }
             }
@@ -3065,7 +3065,7 @@ impl<'a> Lowerer<'a> {
             // a date that the dates file does not have: say which it has
             let date = &name[file.len() + 1..];
             let names: Vec<&str> = facts.functions.iter().map(|f| f.name.as_str()).collect();
-            self.push(e("E002", *sp, tr!("日付のファイル `{file}` に日付 `{date}` はありません（{}）", "the dates file `{file}` has no date `{date}` ({})", names.join("・"); names.join(", "))));
+            self.push(e("E002", *sp, tr!("日付のファイル `{file}` に日付 `{date}` はありません（あるのは {}）", "the dates file `{file}` has no date `{date}` ({})", names.join("・"); names.join(", "))));
             return None;
         } else {
             self.push(e("E002", *sp, tr!("タスクか規則 `{name}` はありません", "there is no task or rule `{name}`")));
@@ -3078,7 +3078,7 @@ impl<'a> Lowerer<'a> {
                 Some((_, t)) => t.clone(),
                 None => {
                     let list: Vec<&str> = params.iter().map(|(p, _)| p.as_str()).collect();
-                    self.push(e("E004", *asp, tr!("`{name}` に引数 `{an}` はありません（{}）", "`{name}` has no parameter `{an}` ({})", list.join("・"); list.join(", "))));
+                    self.push(e("E004", *asp, tr!("`{name}` に引数 `{an}` はありません（あるのは {}）", "`{name}` has no parameter `{an}` ({})", list.join("・"); list.join(", "))));
                     ok = false;
                     continue;
                 }
@@ -3098,7 +3098,7 @@ impl<'a> Lowerer<'a> {
                     if dc.offset.is_none() {
                         let file = &dc.file;
                         self.push(e("E003", ex.span(), tr!("ここには `date` が要りますが、これは `timestamp` です", "expected `date` here, but this is `timestamp`")).note(tr!(
-                            "`{file}` のカレンダーは UTC オフセットを言わないので、時刻がどの日にあたるかが決まりません。カレンダーに `offset +09:00` のように書くか、日付を渡してください",
+                            "`{file}` のカレンダーには UTC オフセットが書かれていないので、時刻がどの日にあたるかが決まりません。カレンダーに `offset +09:00` のように書くか、日付を渡してください",
                             "the calendar of `{file}` says no UTC offset, so which day a time falls on is not known; give the calendar an offset (`offset +09:00`), or pass a day"
                         )));
                         ok = false;
@@ -3178,7 +3178,7 @@ impl<'a> Lowerer<'a> {
                                 Some((_, t)) => t.clone(),
                                 None => {
                                     let list: Vec<String> = decl.iter().map(|(n, _)| n.clone()).collect();
-                                    self.push(e("E002", *fsp, tr!("`{rn}` にフィールド `{fname}` はありません（{}）", "`{rn}` has no field `{fname}` ({})", list.join("・"); list.join(", "))));
+                                    self.push(e("E002", *fsp, tr!("`{rn}` にフィールド `{fname}` はありません（あるのは {}）", "`{rn}` has no field `{fname}` ({})", list.join("・"); list.join(", "))));
                                     return None;
                                 }
                             };
@@ -3213,7 +3213,7 @@ impl<'a> Lowerer<'a> {
                         self.push(e(
                             "E003",
                             *sp,
-                            tr!("`{{…}}` で書いたレコードは、型が決まるところ（引数・出力・`let x: <レコード> = {{…}}`）に書きます", "a record written as `{{…}}` takes its type from where it goes: an argument, an output, or `let x: <record> = {{…}}`"),
+                            tr!("`{{…}}` で書いたレコードは、型が決まるところ（引数・出力・`let x: <レコード> = {{…}}`）に書いてください", "a record written as `{{…}}` takes its type from where it goes: an argument, an output, or `let x: <record> = {{…}}`"),
                         ));
                         return None;
                     }
@@ -3297,7 +3297,7 @@ impl<'a> Lowerer<'a> {
                             return None;
                         }
                         Ty::Json => {
-                            self.push(e("E003", *fsp2, tr!("`{so_far}` は `json` で、中を見ずにそのまま運ぶ値です", "`{so_far}` is `json`, which is carried as it is and not looked into")));
+                            self.push(e("E003", *fsp2, tr!("`{so_far}` は `json` で、中を見ずにそのまま受け渡す値です", "`{so_far}` is `json`, which is carried as it is and not looked into")));
                             return None;
                         }
                         ref other => {
@@ -3314,7 +3314,7 @@ impl<'a> Lowerer<'a> {
                         None => {
                             let rn = self.m.records[rec].name.clone();
                             let list: Vec<String> = self.m.records[rec].fields.iter().map(|(n, _)| n.clone()).collect();
-                            self.push(e("E002", *fsp2, tr!("`{rn}` にフィールド `{f}` はありません（{}）", "`{rn}` has no field `{f}` ({})", list.join("・"); list.join(", "))));
+                            self.push(e("E002", *fsp2, tr!("`{rn}` にフィールド `{f}` はありません（あるのは {}）", "`{rn}` has no field `{f}` ({})", list.join("・"); list.join(", "))));
                             return None;
                         }
                     }

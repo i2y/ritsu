@@ -129,17 +129,17 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき | 呼び出しのあとの案件 |
 |---:|---|---|---|---|---|---|
-| 75 | `quote = hold(…)` | 規則 `hold_amount.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → `on failure` | — |
-| 78 | `pi ← create_intent(…)` | `POST stripe /v1/payment_intents`, `starts payment_intent.payment then attach`, `key` | 2 秒おきに 2 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | `pi`: `requires_confirmation` |
-| 79 | `pi ← confirm_intent(…)` | `POST stripe /v1/payment_intents/{intent}/confirm`, `sends confirm`, `key` | — | — | `card_declined` → 80 行目<br>`unexpected_state`, `timeout`, `failure` → `on failure` | `pi`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
-| 80 | `pi ← get_intent(…)` | `GET stripe /v1/payment_intents/{intent}`, `observes`, `idempotent` | 2 秒おきに 3 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | `pi`: `requires_payment_method`, `requires_confirmation`, `requires_action`, `requires_capture`, `canceled` |
-| 83 | `pi ← customer_authenticated()` | `event`, `observes` | — | 1 時間 | `timeout` → 84 行目<br>`failure` → `on failure` | `pi`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
-| 84 | `pi ← get_intent(…)` | `GET stripe /v1/payment_intents/{intent}`, `observes`, `idempotent` | 2 秒おきに 3 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | `pi`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
-| 89 | `pi ← cancel_intent(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`, `sends cancel`, `key` | — | — | `unexpected_state` → 90 行目<br>`timeout`, `failure` → `on failure` | `pi`: `canceled` |
-| 93 | `pi ← capture_intent(…)` | `POST stripe /v1/payment_intents/{intent}/capture`, `sends capture`, `key` | 5 秒おきに 2 回（failure, timeout） | — | `unexpected_state` → 94 行目<br>`timeout`, `failure` → `on failure` | `pi`: `processing`, `succeeded` |
-| 100 | `pi ← get_intent(…)` | `GET stripe /v1/payment_intents/{intent}`, `observes`, `idempotent` | 2 秒おきに 3 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | `pi`: `requires_payment_method`, `processing`, `succeeded` |
-| 112 | `pi ← cancel_intent(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`, `sends cancel`, `key` | — | — | `unexpected_state` → 113 行目<br>`timeout`, `failure` → 114 行目 | `pi`: `canceled` |
-| 122 | `pi ← cancel_intent(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`, `sends cancel`, `key` | — | — | `unexpected_state` → 123 行目<br>`timeout`, `failure` → 124 行目 | `pi`: `canceled` |
+| 75 | `quote = hold(…)` | 規則 `hold_amount.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 78 | `pi ← create_intent(…)` | `POST stripe /v1/payment_intents`・`starts payment_intent.payment then attach`・`key` | 2 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `pi`: `requires_confirmation` |
+| 79 | `pi ← confirm_intent(…)` | `POST stripe /v1/payment_intents/{intent}/confirm`・`sends confirm`・`key` | — | — | `card_declined` → 80 行目<br>`unexpected_state`・`timeout`・`failure` → `on failure` | `pi`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
+| 80 | `pi ← get_intent(…)` | `GET stripe /v1/payment_intents/{intent}`・`observes`・`idempotent` | 2 秒おきに 3 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `pi`: `requires_payment_method`・`requires_confirmation`・`requires_action`・`requires_capture`・`canceled` |
+| 83 | `pi ← customer_authenticated()` | `event`・`observes` | — | 1 時間 | `timeout` → 84 行目<br>`failure` → `on failure` | `pi`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
+| 84 | `pi ← get_intent(…)` | `GET stripe /v1/payment_intents/{intent}`・`observes`・`idempotent` | 2 秒おきに 3 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `pi`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
+| 89 | `pi ← cancel_intent(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`・`sends cancel`・`key` | — | — | `unexpected_state` → 90 行目<br>`timeout`・`failure` → `on failure` | `pi`: `canceled` |
+| 93 | `pi ← capture_intent(…)` | `POST stripe /v1/payment_intents/{intent}/capture`・`sends capture`・`key` | 5 秒おきに 2 回（failure・timeout） | — | `unexpected_state` → 94 行目<br>`timeout`・`failure` → `on failure` | `pi`: `processing`・`succeeded` |
+| 100 | `pi ← get_intent(…)` | `GET stripe /v1/payment_intents/{intent}`・`observes`・`idempotent` | 2 秒おきに 3 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `pi`: `requires_payment_method`・`processing`・`succeeded` |
+| 112 | `pi ← cancel_intent(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`・`sends cancel`・`key` | — | — | `unexpected_state` → 113 行目<br>`timeout`・`failure` → 114 行目 | `pi`: `canceled` |
+| 122 | `pi ← cancel_intent(…)` | `POST stripe /v1/payment_intents/{intent}/cancel`・`sends cancel`・`key` | — | — | `unexpected_state` → 123 行目<br>`timeout`・`failure` → 124 行目 | `pi`: `canceled` |
 
 ## 終わり方
 
@@ -153,14 +153,14 @@ flowchart TD
 | 94 | `fail HoldExpired` "The hold had expired by check-out" | `canceled` |
 | 96 | `succeed outcome = stayed` | `succeeded` |
 | 105 | `succeed outcome = stayed` | `succeeded` |
-| 106 | `fail SettlementUnclear` "The capture has no clear outcome; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded` |
-| 113 | `fail CleanupFailed` "Stripe refused to release the hold; the capture may have gone through. Handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded`, `canceled` |
-| 114 | `fail CleanupFailed` "Releasing the hold failed; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `requires_confirmation`, `requires_action`, `processing`, `requires_capture`, `succeeded`, `canceled` |
-| 115 | `fail SettlementUnclear` "Failed in the middle of the capture; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded` |
-| 115 | `on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する | 始まっていないか、`canceled` |
-| 123 | `fail CleanupFailed` "Stripe refused to release the hold; the capture may have gone through. Handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded`, `canceled` |
-| 124 | `fail CleanupFailed` "Releasing the hold failed; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `requires_confirmation`, `requires_action`, `processing`, `requires_capture`, `succeeded`, `canceled` |
-| 125 | `fail SettlementUnclear` "Cancelled in the middle of the capture; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded` |
+| 106 | `fail SettlementUnclear` "The capture has no clear outcome; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded` |
+| 113 | `fail CleanupFailed` "Stripe refused to release the hold; the capture may have gone through. Handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded`・`canceled` |
+| 114 | `fail CleanupFailed` "Releasing the hold failed; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`・`requires_confirmation`・`requires_action`・`processing`・`requires_capture`・`succeeded`・`canceled` |
+| 115 | `fail SettlementUnclear` "Failed in the middle of the capture; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded` |
+| 115 | `on failure` が最後まで走り、ワークフローは元のエラーで失敗する | 始まっていないか、`canceled` |
+| 123 | `fail CleanupFailed` "Stripe refused to release the hold; the capture may have gone through. Handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded`・`canceled` |
+| 124 | `fail CleanupFailed` "Releasing the hold failed; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`・`requires_confirmation`・`requires_action`・`processing`・`requires_capture`・`succeeded`・`canceled` |
+| 125 | `fail SettlementUnclear` "Cancelled in the middle of the capture; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded` |
 | 125 | `on cancel` が最後まで走り、ワークフローはキャンセルで終わる | 始まっていないか、`canceled` |
 
 ## 規則

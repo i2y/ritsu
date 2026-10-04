@@ -10,7 +10,7 @@
       38  引き当てる: 押さえ が held で始まる
       42  match 受注.急ぎ: false
           外部のサービスで `expire` が起きる: 押さえ held → expired
-エラー[E021]: tests/fixtures/book_refusals.flow:44:1: ここで `押さえ` は posted のどれかで、帳簿はどの状態でも `void` を断ります
+エラー[E021]: tests/fixtures/book_refusals.flow:44:1: ここで `押さえ` がとりうる状態（posted）では、帳簿はいつも `void` を断ります
     44 |   押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
   そうなる例:
       38  引き当てる: 押さえ が held で始まる
@@ -31,7 +31,7 @@
       41  出荷する が失敗する（timeout・failure）
       48  on failure
       50  match 押さえ.state: held
-エラー[E011]: tests/fixtures/book_refusals.flow:54:1: 分岐 `expired` は通りません。ここで `押さえ.state` は held・none・posted のどれかです
+エラー[E011]: tests/fixtures/book_refusals.flow:54:1: 分岐 `expired` は通りません。ここで `押さえ.state` がとりうる値は held・none・posted だけです
     54 |     posted, expired => pass
   そうなる例:
       38  引き当てる: 押さえ が held で始まる

@@ -2,7 +2,7 @@
 
 注文の配送を、急ぎの規則が選んだ便で頼み、追跡番号を返す。呼び出しはどれも、dandori がプラットフォームごとに生成する HTTP の呼び出しなので、すべてのプラットフォーム向けにこの一つだけを書く（`connection` は Step Functions のためのもの）。引当と発送のどの版も、これを子として走らせる。Temporal では子ワークフロー、Lambda durable functions では invoke する durable function、Argo ではこの WorkflowTemplate のワークフロー、Step Functions ではネストした実行になる
 
-`examples/fulfillment/arrange_delivery.ja.flow` を `dandori doc` で描いたものです。入力は `注文ID: string`, `便: 便`, `宛名: string?`, `付帯: json`、出力は `追跡番号: string` です。
+`examples/fulfillment/arrange_delivery.ja.flow` を `dandori doc` で描いたものです。入力は `注文ID: string`・`便: 便`・`宛名: string?`・`付帯: json`、出力は `追跡番号: string` です。
 
 ## flow
 
@@ -33,8 +33,8 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 35 | `受付 = 翌日便を頼む(…)` | `POST https://next-day.example.com/v1/pickups`, `key` | 5 秒おきに 2 回（failure, timeout） | — | `空きなし` → 36 行目<br>`timeout`, `failure` → ワークフローが失敗する |
-| 39 | `受付 = 通常便を頼む(…)` | `POST https://post.example.com/v1/parcels`, `key` | 5 秒おきに 2 回（failure, timeout） | — | `timeout`, `failure` → ワークフローが失敗する |
+| 35 | `受付 = 翌日便を頼む(…)` | `POST https://next-day.example.com/v1/pickups`・`key` | 5 秒おきに 2 回（failure・timeout） | — | `空きなし` → 36 行目<br>`timeout`・`failure` → ワークフローが失敗する |
+| 39 | `受付 = 通常便を頼む(…)` | `POST https://post.example.com/v1/parcels`・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

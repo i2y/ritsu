@@ -71,7 +71,7 @@ pub fn document(m: &Model) -> Result<Value, Vec<Diag>> {
 fn fit(m: &Model) -> Result<(), Vec<Diag>> {
     let mut errs = Vec::new();
     errs.extend(m.refuse_on_cancel(
-        tr!("Argo Workflows 向けの `on cancel` はまだ書けません。書くなら、`argo stop` で走る exit handler にすることになります", "dandori does not write `on cancel` for Argo Workflows yet; there, it would have to be the exit handler that `argo stop` runs"),
+        tr!("dandori は、Argo Workflows 向けの `on cancel` をまだ生成しません。生成するなら、`argo stop` で走る exit handler になります", "dandori does not write `on cancel` for Argo Workflows yet; there, it would have to be the exit handler that `argo stop` runs"),
     ));
     errs.extend(crate::check::history_limit(m, Platform::Argo));
     errs.extend(m.refuse_events(Platform::Argo));

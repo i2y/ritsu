@@ -2,7 +2,7 @@
 
 注文の記述（.proto）から型を作る：メッセージと列挙をそのまま型に使い、案件の状態を .proto の列挙で運ぶ。範囲のある数、省かれたゼロ値、文字列で来る 64 ビットの整数、日時、`optional` の項目を通す。.proto の列挙の値は ASCII の識別子なので、ステートマシンには英語の規則 order_state を使う
 
-`tests/flows/proto_types.flow` を `dandori doc` で描いたものです。入力は `id: string`、出力は `明細: list[注文.Line]`, `票: list[string]`, `通し番号: string`, `置いた日: timestamp?` です。
+`tests/flows/proto_types.flow` を `dandori doc` で描いたものです。入力は `id: string`、出力は `明細: list[注文.Line]`・`票: list[string]`・`通し番号: string`・`置いた日: timestamp?` です。
 
 ## flow
 
@@ -63,11 +63,11 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき | 呼び出しのあとの案件 |
 |---:|---|---|---|---|---|---|
-| 51 | `受注 ← 注文を見る(…)` | `connect 注文 OrderService/Get`, `observes`, `idempotent` | — | — | `無い注文` → 52 行目<br>`timeout`, `failure` → `on failure` | `受注`: `received`, `paid`, `shipped`, `delivered`, `cancelled` |
-| 55 | `受注 ← 出荷を頼む(…)` | `connect 注文 OrderService/Ship`, `sends ship`, `key` | — | — | `断られた` → 56 行目<br>`timeout`, `failure` → `on failure` | `受注`: `shipped` |
-| 56 | `受注 ← 注文を見る(…)` | `connect 注文 OrderService/Get`, `observes`, `idempotent` | — | — | `無い注文`, `timeout`, `failure` → `on failure` | `受注`: `cancelled` |
-| 59 | `取った = 棚から取る(…)` | `connect 注文 OrderService/Pick`, `key` | 1 秒おきに 2 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | — |
-| 62 | `一言を残す(…)` | `POST https://notes.example.com/notes`, `idempotent` | — | — | `timeout`, `failure` → `on failure` | — |
+| 51 | `受注 ← 注文を見る(…)` | `connect 注文 OrderService/Get`・`observes`・`idempotent` | — | — | `無い注文` → 52 行目<br>`timeout`・`failure` → `on failure` | `受注`: `received`・`paid`・`shipped`・`delivered`・`cancelled` |
+| 55 | `受注 ← 出荷を頼む(…)` | `connect 注文 OrderService/Ship`・`sends ship`・`key` | — | — | `断られた` → 56 行目<br>`timeout`・`failure` → `on failure` | `受注`: `shipped` |
+| 56 | `受注 ← 注文を見る(…)` | `connect 注文 OrderService/Get`・`observes`・`idempotent` | — | — | `無い注文`・`timeout`・`failure` → `on failure` | `受注`: `cancelled` |
+| 59 | `取った = 棚から取る(…)` | `connect 注文 OrderService/Pick`・`key` | 1 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | — |
+| 62 | `一言を残す(…)` | `POST https://notes.example.com/notes`・`idempotent` | — | — | `timeout`・`failure` → `on failure` | — |
 
 ## 終わり方
 
@@ -76,9 +76,9 @@ flowchart TD
 | 行 | 終わり方 | `受注` |
 |---:|---|---|
 | 52 | `fail Missing` "注文 {id} はありません" | 始まっていない |
-| 66 | `fail NotYet` "注文 {受注.id}（通し番号 {受注.serial}）はまだ終わっていません" `leaving 受注` | そのまま引き渡す: `received`, `paid`, `shipped`, `delivered`, `cancelled` |
-| 67 | `succeed 明細 = 受注.lines, 票 = 票, 通し番号 = 受注.serial, 置いた日 = 受注.placedAt` | `delivered`, `cancelled` |
-| 70 | `fail Stopped` "途中で止まりました" `leaving 受注` | そのまま引き渡す: 始まっていないか、`received`, `paid`, `shipped`, `delivered`, `cancelled` |
+| 66 | `fail NotYet` "注文 {受注.id}（通し番号 {受注.serial}）はまだ終わっていません" `leaving 受注` | そのまま引き渡す: `received`・`paid`・`shipped`・`delivered`・`cancelled` |
+| 67 | `succeed 明細 = 受注.lines, 票 = 票, 通し番号 = 受注.serial, 置いた日 = 受注.placedAt` | `delivered`・`cancelled` |
+| 70 | `fail Stopped` "途中で止まりました" `leaving 受注` | そのまま引き渡す: 始まっていないか、`received`・`paid`・`shipped`・`delivered`・`cancelled` |
 
 ## 規則
 

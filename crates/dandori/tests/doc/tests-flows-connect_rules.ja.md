@@ -2,7 +2,7 @@
 
 規則を Connect のサービスとして呼ぶ：呼ぶ規則は日本語の三つ（出荷の急ぎ・宿泊の与信額・審査の方針）で、どれも use rule の下の connect で呼ぶ。数は文字列で、列挙は .proto の名前で送る。答えは、protobuf の JSON が省く項目（false と 0）を埋め、数を文字列から、列挙を .proto の名前から読み直して、次の呼び出しに渡す。ローカルアクティビティ（local）で呼ぶ規則、並列のイテレーションの中の呼び出し、エラーを処理する呼び出しと処理しない呼び出しがある
 
-`tests/flows/connect_rules.flow` を `dandori doc` で描いたものです。入力は `注文: list[注文]`, `宿泊: list[宿泊]`, `見立て: 見立て`、出力は `決定: 方針.決定`, `与信: list[money[円, incl_tax]]` です。
+`tests/flows/connect_rules.flow` を `dandori doc` で描いたものです。入力は `注文: list[注文]`・`宿泊: list[宿泊]`・`見立て: 見立て`、出力は `決定: 方針.決定`・`与信: list[money[円, incl_tax]]` です。
 
 ## flow
 
@@ -64,15 +64,15 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 54 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule`（Connect で `https://rules.example.com` に）（Temporal ではローカルアクティビティ） | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → 55 行目 |
-| 56 | `失敗を記す(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → `on failure` |
-| 59 | `便を知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → `on failure` |
-| 60 | `便を知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → `on failure` |
-| 62 | `見積 = 与信(…)` | 規則 `宿泊の与信額.rule`（Connect で `https://rules.example.com` に） | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → そのイテレーションが失敗し、`on failure` へ |
-| 63 | `与信額を記す(…)` | `lambda record-hold`, `idempotent` | — | — | `timeout`, `failure` → そのイテレーションが失敗し、`on failure` へ |
-| 65 | `決まり = 方針(…)` | 規則 `審査の方針.rule`（Connect で `https://rules.example.com` に） | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → 66 行目 |
-| 67 | `失敗を記す(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → `on failure` |
-| 72 | `失敗を記す(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
+| 54 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule`（Connect で `https://rules.example.com` に）（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → 55 行目 |
+| 56 | `失敗を記す(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → `on failure` |
+| 59 | `便を知らせる(…)` | `lambda notify`・`idempotent` | — | — | `timeout`・`failure` → `on failure` |
+| 60 | `便を知らせる(…)` | `lambda notify`・`idempotent` | — | — | `timeout`・`failure` → `on failure` |
+| 62 | `見積 = 与信(…)` | 規則 `宿泊の与信額.rule`（Connect で `https://rules.example.com` に） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → そのイテレーションが失敗し、`on failure` へ |
+| 63 | `与信額を記す(…)` | `lambda record-hold`・`idempotent` | — | — | `timeout`・`failure` → そのイテレーションが失敗し、`on failure` へ |
+| 65 | `決まり = 方針(…)` | 規則 `審査の方針.rule`（Connect で `https://rules.example.com` に） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → 66 行目 |
+| 67 | `失敗を記す(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → `on failure` |
+| 72 | `失敗を記す(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 
@@ -83,7 +83,7 @@ flowchart TD
 | 57 | `fail 急ぎが決まらない` "注文 {一件.id} の急ぎを決められませんでした" |
 | 68 | `fail 方針が決まらない` "審査の方針を決められませんでした" |
 | 69 | `succeed 決定 = 決まり.決定, 与信 = 与信の額` |
-| 72 | `on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する |
+| 72 | `on failure` が最後まで走り、ワークフローは元のエラーで失敗する |
 
 ## 規則
 

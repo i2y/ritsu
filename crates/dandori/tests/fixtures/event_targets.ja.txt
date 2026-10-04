@@ -5,8 +5,8 @@ build --target durable:
 エラー[E050]: tests/fixtures/event_targets.flow:10:1: `承認の知らせ` はワークフローに名前で送られてくるイベントを待ちます。Lambda durable functions が実行に値を送れるのは、ステップが渡すコールバックの ID を通してだけです（`callback`）
     10 | task 承認の知らせ() -> 承認
 build --target argo:
-エラー[E050]: tests/fixtures/event_targets.flow:10:1: `承認の知らせ` はワークフローに名前で送られてくるイベントを待ちます。Argo Workflows 向けにはまだ書けません。書くなら、名前で再開されるまで止まる suspend のステップにすることになります
+エラー[E050]: tests/fixtures/event_targets.flow:10:1: `承認の知らせ` はワークフローに名前で送られてくるイベントを待ちます。dandori は、Argo Workflows 向けにはまだこれを生成しません。生成するなら、名前で再開されるまで止まる suspend のステップになります
     10 | task 承認の知らせ() -> 承認
 build --target pydantic-graph:
-エラー[E050]: tests/fixtures/event_targets.flow:10:1: `承認の知らせ` はワークフローに名前で送られてくるイベントを待ちます。pydantic-graph 向けにはまだ書けません。書くなら、値はタスクの名前で `Deps` に届くことになります
+エラー[E050]: tests/fixtures/event_targets.flow:10:1: `承認の知らせ` はワークフローに名前で送られてくるイベントを待ちます。dandori は、pydantic-graph 向けにはまだこれを生成しません。生成するなら、値はタスクの名前で `Deps` に届くことになります
     10 | task 承認の知らせ() -> 承認

@@ -139,7 +139,7 @@ fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<
 fn unjoined(sp: Span, said: Text) -> Diag {
     let cmd = crate::cli::with_ritsu();
     Diag::error("E018", sp.line, sp.col, said).note(tr!(
-        "dandori のクレートのバイナリは、ほかの言語を持ちません。同じコマンドを、すべての言語をつないだ `{cmd}` のように ritsu で走らせます。",
+        "dandori 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`{cmd}` のように走らせてください。",
         "The binary of dandori's own crate holds no other language; run it with every language joined, through ritsu: `{cmd}`."
     ))
 }
@@ -209,8 +209,8 @@ pub fn history_limit(m: &Model, p: Platform) -> Option<Diag> {
                 return None;
             }
             let Text { en: more_en, ja: more_ja } = match p {
-                Platform::Temporal if m.flow.iter().any(continues_as_new) => tr!("。フローの一番外のループは履歴が長くなると新しい実行で続ける（Continue-As-New）ので、長すぎるのはその外の部分か、ループのイテレーション一つです", "; the loops at the top of the flow go on in a new run (Continue-As-New) as the history grows, so what is too long is the rest of the flow, or one round of such a loop"),
-                Platform::Temporal => tr!("。フローの一番外に置いた `repeat` や並列でない `for` なら、履歴が長くなると新しい実行で続けます（Continue-As-New）", "; a `repeat`, or a `for` that is not parallel, at the top of the flow would go on in a new run (Continue-As-New) as the history grows"),
+                Platform::Temporal if m.flow.iter().any(continues_as_new) => tr!("。フローの一番外のループは、履歴が長くなると新しい実行に引き継ぐ（Continue-As-New）ので、長すぎるのは、ループの外の部分か、ループのイテレーション一つです", "; the loops at the top of the flow go on in a new run (Continue-As-New) as the history grows, so what is too long is the rest of the flow, or one round of such a loop"),
+                Platform::Temporal => tr!("。フローの一番外に置いた `repeat` や並列でない `for` なら、履歴が長くなると新しい実行に引き継ぎます（Continue-As-New）", "; a `repeat`, or a `for` that is not parallel, at the top of the flow would go on in a new run (Continue-As-New) as the history grows"),
                 _ => Text::default(),
             };
             tr!("{name} では、このワークフローの一回の実行が実行履歴を最大でおよそ {n} 件書きます。上限の {limit} 件を超えます{more_ja}。ループの回数を減らすか、続きを新しい実行で始めてください", "on {name}, an execution of this workflow can write up to about {n} history events, past the limit of {limit}{more_en}; lower the loop counts, or start a new execution to continue")

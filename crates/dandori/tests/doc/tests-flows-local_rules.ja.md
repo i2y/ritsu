@@ -2,7 +2,7 @@
 
 規則をローカルアクティビティで呼ぶ（Temporal）：注文ごとに規則で便を決めて知らせる。規則のタイムアウトを処理してタスクを呼ぶ呼び出しと、ふつうのアクティビティで呼ぶ規則も通る。ほかのプラットフォームでは、ふつうの規則の呼び出しと同じ
 
-`tests/flows/local_rules.flow` を `dandori doc` で描いたものです。入力は `注文: list[注文]`, `まとめ: 注文` です。
+`tests/flows/local_rules.flow` を `dandori doc` で描いたものです。入力は `注文: list[注文]`・`まとめ: 注文` です。
 
 ## flow
 
@@ -37,11 +37,11 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 32 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule`（Temporal ではローカルアクティビティ） | 2 回（1 秒後と 2 秒後、failure） | — | `timeout` → 33 行目<br>`failure` → ワークフローが失敗する |
-| 34 | `記録する(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 36 | `知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 37 | `見直し = 急ぎの見直し(…)` | 規則 `出荷の急ぎ.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 38 | `記録する(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
+| 32 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout` → 33 行目<br>`failure` → ワークフローが失敗する |
+| 34 | `記録する(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 36 | `知らせる(…)` | `lambda notify`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 37 | `見直し = 急ぎの見直し(…)` | 規則 `出荷の急ぎ.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 38 | `記録する(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

@@ -1,4 +1,4 @@
-エラー[E007]: tests/fixtures/bindings.flow:9:10: AWS の API のエラーは、ステータスではなく `重複 = ConditionalCheckFailedException` のように例外の名前で書きます
+エラー[E007]: tests/fixtures/bindings.flow:9:10: AWS の API のエラーは、ステータスではなく `重複 = ConditionalCheckFailedException` のように例外の名前で書いてください
      9 |   errors 重複 = 409
 エラー[E007]: tests/fixtures/bindings.flow:10:3: AWS の API は冪等キーを自分の引数の一つで受け取ります。`key ClientToken` のように `key <引数>` と書いてください
     10 |   key

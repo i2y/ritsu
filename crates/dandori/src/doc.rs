@@ -768,7 +768,7 @@ fn call_row(i: &Input, s: &TStmt, target: Option<&Target>, callee: &Callee, args
                 how.push_str(&tr(lang, ", a local activity on Temporal", "（Temporal ではローカルアクティビティ）"));
             }
             // every platform retries a rule's failure `check::RULE_RETRIES` times, one second apart and then two
-            let retries = tr(lang, "2 times, after 1 second and 2 (failure)", "2 回（1 秒後と 2 秒後、failure）");
+            let retries = tr(lang, "2 times, after 1 second and 2 (failure)", "1 秒後と 2 秒後の 2 回（failure）");
             (how, retries, String::new())
         }
         Callee::Task(t) => {
@@ -781,16 +781,16 @@ fn call_row(i: &Input, s: &TStmt, target: Option<&Target>, callee: &Callee, args
                     if !then.is_empty() {
                         s.push_str(&format!(" then {}", then.join(", ")));
                     }
-                    how.push_str(&format!(", `{s}`"));
+                    how.push_str(&format!("{}`{s}`", sep(lang)));
                 }
-                Some(TaskMachine::Sends { event, .. }) => how.push_str(&format!(", `sends {event}`")),
-                Some(TaskMachine::Observes) => how.push_str(", `observes`"),
+                Some(TaskMachine::Sends { event, .. }) => how.push_str(&format!("{}`sends {event}`", sep(lang))),
+                Some(TaskMachine::Observes) => how.push_str(&format!("{}`observes`", sep(lang))),
                 None => {}
             }
             if t.key {
-                how.push_str(", `key`");
+                how.push_str(&format!("{}`key`", sep(lang)));
             } else if t.idempotent {
-                how.push_str(", `idempotent`");
+                how.push_str(&format!("{}`idempotent`", sep(lang)));
             }
             let retries = t.retry.as_ref().map(|r| retry_words(r, lang)).unwrap_or_default();
             let timeout = t
@@ -863,7 +863,7 @@ fn retry_words(r: &Retry, lang: Lang) -> String {
             Lang::Ja => format!("（待ちは毎回 {} 倍）", r.backoff),
         });
     }
-    let on = if r.on.is_empty() { "failure, timeout".to_string() } else { r.on.join(", ") };
+    let on = if r.on.is_empty() { ["failure", "timeout"].join(sep(lang)) } else { r.on.join(sep(lang)) };
     s.push_str(&match lang {
         Lang::En => format!(" ({on})"),
         Lang::Ja => format!("（{on}）"),
@@ -873,7 +873,7 @@ fn retry_words(r: &Retry, lang: Lang) -> String {
 
 /// What a case can be, in words.
 pub fn case_words(f: &CaseFact, lang: Lang) -> String {
-    let states = f.states.iter().map(|s| format!("`{s}`")).collect::<Vec<_>>().join(", ");
+    let states = f.states.iter().map(|s| format!("`{s}`")).collect::<Vec<_>>().join(sep(lang));
     let body = match f.started {
         Tri::No => tr(lang, "not started", "始まっていない"),
         Tri::Maybe if states.is_empty() => tr(lang, "not started", "始まっていない"),
@@ -931,7 +931,7 @@ pub fn end_rows(i: &Input) -> Vec<EndRow> {
             Ending::Flow => (last(&m.flow), tr(lang, "the flow runs to its end, and the workflow succeeds", "flow が最後まで走り、ワークフローは成功する")),
             Ending::OnFailure => (
                 m.on_failure.as_deref().map(last).unwrap_or(0),
-                tr(lang, "`on failure` runs to its end, and the workflow fails with the error that started it", "`on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する"),
+                tr(lang, "`on failure` runs to its end, and the workflow fails with the error that started it", "`on failure` が最後まで走り、ワークフローは元のエラーで失敗する"),
             ),
             Ending::OnCancel => (m.on_cancel.as_deref().map(last).unwrap_or(0), tr(lang, "`on cancel` runs to its end, and the workflow ends cancelled", "`on cancel` が最後まで走り、ワークフローはキャンセルで終わる")),
         };
@@ -992,6 +992,7 @@ pub fn markdown(i: &Input) -> String {
         }
         Lang::Ja => {
             let _ = write!(o, "`{}` を `dandori doc` で描いたものです。", i.file);
+            let io = |list: &[(String, Ty)]| list.iter().map(|(n, t)| format!("`{n}: {}`", m.ty_name(t))).collect::<Vec<_>>().join("・");
             if !m.inputs.is_empty() {
                 let _ = write!(o, "入力は {}", io(&m.inputs));
                 let _ = write!(o, "{}", if m.outputs.is_empty() { " です。" } else { "、" });
@@ -1011,7 +1012,7 @@ pub fn markdown(i: &Input) -> String {
             "{}\n",
             match lang {
                 Lang::En => format!("**`dandori check` finds {} error(s) in this workflow**; they are at the end, each with the run that gets there.", diag_errors(i.diags)),
-                Lang::Ja => format!("**`dandori check` はこのワークフローにエラーを {} 件見つけています。** 最後に、それぞれのそうなる例と一緒に載せています。", diag_errors(i.diags)),
+                Lang::Ja => format!("**`dandori check` はこのワークフローにエラーを {} 件見つけています。** ページの最後に、それぞれのエラーを、そうなる例と一緒に載せています。", diag_errors(i.diags)),
             }
         );
     }
@@ -1084,10 +1085,10 @@ pub fn markdown(i: &Input) -> String {
         }
         o.push('\n');
         for r in &rows {
-            let fails = r.fails.iter().map(|(ks, d)| format!("{} → {d}", ks.iter().map(|k| format!("`{k}`")).collect::<Vec<_>>().join(", "))).collect::<Vec<_>>().join("<br>");
+            let fails = r.fails.iter().map(|(ks, d)| format!("{} → {d}", ks.iter().map(|k| format!("`{k}`")).collect::<Vec<_>>().join(sep(lang)))).collect::<Vec<_>>().join("<br>");
             let _ = write!(o, "| {} | `{}` | {} | {} | {} | {} |", r.line, r.call, r.how, dash(&r.retries), dash(&r.timeout), fails);
             if cased {
-                let after = r.after.as_ref().map(|(c, st)| format!("`{c}`: {}", st.iter().map(|s| format!("`{s}`")).collect::<Vec<_>>().join(", "))).unwrap_or_default();
+                let after = r.after.as_ref().map(|(c, st)| format!("`{c}`: {}", st.iter().map(|s| format!("`{s}`")).collect::<Vec<_>>().join(sep(lang)))).unwrap_or_default();
                 let _ = write!(o, " {} |", dash(&after));
             }
             o.push('\n');
@@ -1165,7 +1166,7 @@ fn service_rows(s: &ServiceUse, lang: Lang) -> Vec<(String, String, Option<Strin
                     let names: Vec<String> = fails.iter().map(|f| format!("`{f}`")).collect();
                     let what = match lang {
                         Lang::En => format!("starts a run; it can fail with {}", names.join(", ")),
-                        Lang::Ja => format!("実行を始めます。失敗の名前は {}", names.join("・")),
+                        Lang::Ja => format!("実行を始めます。失敗の名前は {} です", names.join("・")),
                     };
                     (what, None)
                 }
@@ -1536,10 +1537,10 @@ impl<'a> Page<'a> {
         if !r.timeout.is_empty() {
             let _ = write!(o, "<dt>{}</dt><dd>{}</dd>", tr(lang, "Timeout", "タイムアウト"), inline(&r.timeout));
         }
-        let fails = r.fails.iter().map(|(ks, d)| format!("{} → {}", ks.iter().map(|k| format!("<code>{}</code>", esc(k))).collect::<Vec<_>>().join(", "), inline(d))).collect::<Vec<_>>().join("<br>");
+        let fails = r.fails.iter().map(|(ks, d)| format!("{} → {}", ks.iter().map(|k| format!("<code>{}</code>", esc(k))).collect::<Vec<_>>().join(sep(lang)), inline(d))).collect::<Vec<_>>().join("<br>");
         let _ = write!(o, "<dt>{}</dt><dd>{fails}</dd>", tr(lang, "When it fails", "失敗したとき"));
         if let Some((c, st)) = &r.after {
-            let _ = write!(o, "<dt>{}</dt><dd><code>{}</code>: {}</dd>", tr(lang, "The case after it", "呼び出しのあとの案件"), esc(c), st.iter().map(|s| format!("<code>{}</code>", esc(s))).collect::<Vec<_>>().join(", "));
+            let _ = write!(o, "<dt>{}</dt><dd><code>{}</code>: {}</dd>", tr(lang, "The case after it", "呼び出しのあとの案件"), esc(c), st.iter().map(|s| format!("<code>{}</code>", esc(s))).collect::<Vec<_>>().join(sep(lang)));
         }
         o.push_str("</dl>");
         o
@@ -1582,7 +1583,7 @@ impl<'a> Page<'a> {
                 if !m.description.is_empty() {
                     let _ = write!(o, "<p>{}</p>", esc(&m.description));
                 }
-                let io = |list: &[(String, Ty)]| list.iter().map(|(n, t)| format!("<code>{}: {}</code>", esc(n), esc(&m.ty_name(t)))).collect::<Vec<_>>().join(", ");
+                let io = |list: &[(String, Ty)]| list.iter().map(|(n, t)| format!("<code>{}: {}</code>", esc(n), esc(&m.ty_name(t)))).collect::<Vec<_>>().join(sep(lang));
                 o.push_str("<dl class=\"facts\">");
                 if !m.inputs.is_empty() {
                     let _ = write!(o, "<dt>{}</dt><dd>{}</dd>", tr(lang, "Inputs", "入力"), io(&m.inputs));
@@ -1618,7 +1619,7 @@ impl<'a> Page<'a> {
                 return o;
             }
             "onfEnd" => {
-                let _ = write!(o, "<p>{}</p>{}", tr(lang, "`on failure` runs to its end, and the workflow fails with the error that started it.", "`on failure` が最後まで走り、ワークフローは始まりのエラーで失敗します。").replace('`', ""), self.ends_of(Ending::OnFailure));
+                let _ = write!(o, "<p>{}</p>{}", tr(lang, "`on failure` runs to its end, and the workflow fails with the error that started it.", "`on failure` が最後まで走り、ワークフローは元のエラーで失敗します。").replace('`', ""), self.ends_of(Ending::OnFailure));
                 return o;
             }
             "oncEnd" => {
@@ -1800,10 +1801,10 @@ fn calls_table(rows: &[CallRow], cased: bool, lang: Lang) -> String {
     }
     o.push_str("</tr></thead><tbody>");
     for r in rows {
-        let fails = r.fails.iter().map(|(ks, d)| format!("{} → {}", ks.iter().map(|k| format!("<code>{}</code>", esc(k))).collect::<Vec<_>>().join(", "), inline(d))).collect::<Vec<_>>().join("<br>");
+        let fails = r.fails.iter().map(|(ks, d)| format!("{} → {}", ks.iter().map(|k| format!("<code>{}</code>", esc(k))).collect::<Vec<_>>().join(sep(lang)), inline(d))).collect::<Vec<_>>().join("<br>");
         let _ = write!(o, "<tr><td class=\"num\">{}</td><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td>{fails}</td>", r.line, esc(&r.call), inline(&r.how), inline(dash(&r.retries)), inline(dash(&r.timeout)));
         if cased {
-            let after = r.after.as_ref().map(|(c, st)| format!("<code>{}</code>: {}", esc(c), st.iter().map(|s| format!("<code>{}</code>", esc(s))).collect::<Vec<_>>().join(", "))).unwrap_or_else(|| "—".into());
+            let after = r.after.as_ref().map(|(c, st)| format!("<code>{}</code>: {}", esc(c), st.iter().map(|s| format!("<code>{}</code>", esc(s))).collect::<Vec<_>>().join(sep(lang)))).unwrap_or_else(|| "—".into());
             let _ = write!(o, "<td>{after}</td>");
         }
         o.push_str("</tr>");
@@ -1936,7 +1937,7 @@ pub fn html(i: &Input) -> String {
             o,
             "<section><h2>{}</h2><p class=\"note\">{}</p><ul class=\"rules\">",
             tr(lang, "Rules", "規則"),
-            tr(lang, "Each as <code>rulec doc</code> renders it for whoever approves it; a case can be tried on it.", "<code>rulec doc</code> が承認する人向けに描いたページです。ケースを打って試せます。")
+            tr(lang, "Each as <code>rulec doc</code> renders it for whoever approves it; a case can be tried on it.", "<code>rulec doc</code> が承認する人向けに描いたページです。ケースを入力して試せます。")
         );
         for (k, (r, _)) in docs.iter().enumerate() {
             let _ = write!(o, "<li><button class=\"rule\" type=\"button\" data-rule=\"{k}\"><code>{}</code> <span class=\"dl\">{} v{}</span></button></li>", esc(&r.name), esc(&r.info.rule), esc(&r.info.version));
@@ -2019,7 +2020,7 @@ pub fn html(i: &Input) -> String {
         o,
         "<template id=\"t-default\"><h2 class=\"dh\">{}</h2><p>{}</p>{}</template>",
         tr(lang, "Reading the picture", "図の読み方"),
-        tr(lang, "Pick a step to see what the checker knows there. Pick a scenario on the left to light up the way its run goes; the number beside a step is how often the run passes it.", "ステップを選ぶと、そこで検査が知っていることが出ます。左のシナリオを選ぶと、その実行が通るところが光ります。ステップの横の数は、その実行が通った回数です。"),
+        tr(lang, "Pick a step to see what the checker knows there. Pick a scenario on the left to light up the way its run goes; the number beside a step is how often the run passes it.", "ステップを選ぶと、そこについて検査で分かったことが出ます。左のシナリオを選ぶと、その実行が通るところが光ります。ステップの横の数は、その実行が通った回数です。"),
         legend(lang)
     );
     for n in &g.nodes {
@@ -2338,3 +2339,11 @@ const JS: &str = r#"
   fromHash();
 })();
 "#;
+
+/// What a list of names is joined with: ", " in English, "・" in Japanese.
+fn sep(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => ", ",
+        Lang::Ja => "・",
+    }
+}

@@ -2,7 +2,7 @@
 
 注文の明細ごとに在庫を引き当て、配送を手配し、倉庫の梱包を待ってから、お客さまに知らせる。明細は並べて引き当て、足りない明細があれば、引き当てたぶんを戻す。Temporal 向けの版：倉庫の呼び出しは dandori が Connect で生成するアクティビティ。配送チームのワークフローが専用のタスクキューで配送を手配し（子ワークフロー、arrange_delivery.ja.flow）、翌日便の車がなければ通常便で頼み直す。梱包の依頼、お知らせ、記録は自分で書くアクティビティで、梱包の担当者は、生成したクライアントが送る Update でコールバックに応答する
 
-`examples/fulfillment/temporal/fulfillment.ja.flow` を `dandori doc` で描いたものです。入力は `注文: 注文`、出力は `引当: list[warehouse.ReserveResponse]`, `追跡番号: string` です。このワークフローは `shop.ja.v1.FulfillmentService`（`../specs/fulfillment.ja.proto`）を実装します。
+`examples/fulfillment/temporal/fulfillment.ja.flow` を `dandori doc` で描いたものです。入力は `注文: 注文`、出力は `引当: list[warehouse.ReserveResponse]`・`追跡番号: string` です。このワークフローは `shop.ja.v1.FulfillmentService`（`../specs/fulfillment.ja.proto`）を実装します。
 
 ## flow
 
@@ -79,21 +79,21 @@ flowchart TD
 
 | メソッド | 何をするか | タスク |
 |---|---|---|
-| `Fulfill` | 実行を始めます。失敗の名前は `在庫不足`・`配送の手配の失敗`・`梱包の遅れ` | — |
+| `Fulfill` | 実行を始めます。失敗の名前は `在庫不足`・`配送の手配の失敗`・`梱包の遅れ` です | — |
 | `AnswerPacking` | コールバックに応答します | `梱包を待つ` |
 
 ## 呼び出し
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 73 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 75 | `答え = 在庫を引き当てる(…)` | `connect warehouse StockService/Reserve`, `key` | 1 秒おきに 2 回（混雑） | — | `混雑`, `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
-| 86 | `引当を戻す(…)` | `connect warehouse StockService/Release`, `idempotent` | — | — | `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
-| 95 | `記録する(…)` | 自分で書くタスク, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 98 | `配送 = 配送を手配する(…)` | `flow arrange_delivery.ja.flow` | — | — | `翌日便の空きなし` → 99 行目<br>`timeout`, `failure` → 102 行目 |
-| 100 | `配送 = 配送を手配する(…)` | `flow arrange_delivery.ja.flow` | — | — | `翌日便の空きなし`, `timeout`, `failure` → 101 行目 |
+| 73 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 75 | `答え = 在庫を引き当てる(…)` | `connect warehouse StockService/Reserve`・`key` | 1 秒おきに 2 回（混雑） | — | `混雑`・`timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 86 | `引当を戻す(…)` | `connect warehouse StockService/Release`・`idempotent` | — | — | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 95 | `記録する(…)` | 自分で書くタスク・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 98 | `配送 = 配送を手配する(…)` | `flow arrange_delivery.ja.flow` | — | — | `翌日便の空きなし` → 99 行目<br>`timeout`・`failure` → 102 行目 |
+| 100 | `配送 = 配送を手配する(…)` | `flow arrange_delivery.ja.flow` | — | — | `翌日便の空きなし`・`timeout`・`failure` → 101 行目 |
 | 103 | `箱 = 梱包を待つ(…)` | 自分で書くタスク（応答はコールバック） | — | 2 日 | `timeout` → 104 行目<br>`failure` → ワークフローが失敗する |
-| 105 | `知らせる(…)` | 自分で書くタスク | — | — | `宛先なし` → 106 行目<br>`timeout`, `failure` → ワークフローが失敗する |
+| 105 | `知らせる(…)` | 自分で書くタスク | — | — | `宛先なし` → 106 行目<br>`timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

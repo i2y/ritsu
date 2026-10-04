@@ -2,7 +2,7 @@
      1 | workflow fulfillment v1 implements shop.FulfillmentService
 エラー[E017]: tests/fixtures/service.flow:1:36: `FulfillRequest` の `priority` は、ワークフローの入力にありません
      1 | workflow fulfillment v1 implements shop.FulfillmentService
-エラー[E017]: tests/fixtures/service.flow:1:36: 入力 `order` では、`FulfillRequest` の `order` を読めません。`amount` で、64 ビットの整数は、protobuf の JSON では文字列で来ます。`string` にしてください
+エラー[E017]: tests/fixtures/service.flow:1:36: 入力 `order` では、`FulfillRequest` の `order` を読めません。`amount` は、64 ビットの整数で、protobuf の JSON では文字列で届きます。`string` にしてください
      1 | workflow fulfillment v1 implements shop.FulfillmentService
 エラー[E017]: tests/fixtures/service.flow:1:36: 入力 `rush` は `FulfillRequest` のフィールドにありません（フィールドは order・priority・address）
      1 | workflow fulfillment v1 implements shop.FulfillmentService
@@ -12,7 +12,7 @@
      1 | workflow fulfillment v1 implements shop.FulfillmentService
 エラー[E017]: tests/fixtures/service.flow:1:36: 出力 `note` は無いことがありますが、`FulfillResponse` の `note` は `optional` でないので、無いことを表せません。フィールドを `optional` にするか、出力を `string` にしてください
      1 | workflow fulfillment v1 implements shop.FulfillmentService
-エラー[E017]: tests/fixtures/service.flow:1:36: 出力 `count` は、`FulfillResponse` の `count` が受け取るものと合いません。`bool` は文字列で運ぶ 64 ビットの整数ではありません
+エラー[E017]: tests/fixtures/service.flow:1:36: 出力 `count` は、`FulfillResponse` の `count` が受け取るものと合いません。`bool` で、文字列で受け渡す 64 ビットの整数ではありません
      1 | workflow fulfillment v1 implements shop.FulfillmentService
 エラー[E017]: tests/fixtures/service.flow:1:36: 出力 `tags` は無いことがありますが、`FulfillResponse` の `tags` は `repeated` か `map` のフィールドなので、無いことを表せません。出力を `list[string]` にしてください
      1 | workflow fulfillment v1 implements shop.FulfillmentService

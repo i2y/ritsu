@@ -393,9 +393,9 @@ impl<'a> Spans<'a> {
             Callee::Rule(r) => {
                 let u = &self.m.rules[*r];
                 Err(if u.date().is_some() {
-                    tr!("{line} 行目の日付 `{}` の呼び出しにかかる時間は、`.flow` が限りません", "nothing in the flow bounds how long the call of the date `{}` (line {line}) takes", u.name; u.name)
+                    tr!("{line} 行目の日付 `{}` の呼び出しにかかる時間には、`.flow` のどこにも上限がありません", "nothing in the flow bounds how long the call of the date `{}` (line {line}) takes", u.name; u.name)
                 } else {
-                    tr!("{line} 行目の規則 `{}` の呼び出しにかかる時間は、`.flow` が限りません", "nothing in the flow bounds how long the call of the rule `{}` (line {line}) takes", u.name; u.name)
+                    tr!("{line} 行目の規則 `{}` の呼び出しにかかる時間には、`.flow` のどこにも上限がありません", "nothing in the flow bounds how long the call of the rule `{}` (line {line}) takes", u.name; u.name)
                 })
             }
         }

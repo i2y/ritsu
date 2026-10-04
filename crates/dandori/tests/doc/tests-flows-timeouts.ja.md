@@ -33,8 +33,8 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 29 | `s = 数える(…)` | `lambda count`, `idempotent` | 5 秒おきに 1 回（timeout） | 30 秒 | `timeout` → 30 行目<br>`failure` → ワークフローが失敗する |
-| 31 | `r = 確かめる(…)` | `POST https://inventory.example.com/v1/items/{品番}/check`, `idempotent` | — | — | `timeout` → 32 行目<br>`failure` → 33 行目 |
+| 29 | `s = 数える(…)` | `lambda count`・`idempotent` | 5 秒おきに 1 回（timeout） | 30 秒 | `timeout` → 30 行目<br>`failure` → ワークフローが失敗する |
+| 31 | `r = 確かめる(…)` | `POST https://inventory.example.com/v1/items/{品番}/check`・`idempotent` | — | — | `timeout` → 32 行目<br>`failure` → 33 行目 |
 
 ## 終わり方
 

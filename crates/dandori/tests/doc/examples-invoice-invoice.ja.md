@@ -2,7 +2,7 @@
 
 An order holds its goods until its payment is due, then ships them once paid, or puts them back
 
-`examples/invoice/invoice.flow` を `dandori doc` で描いたものです。入力は `order: Order`、出力は `outcome: Outcome`, `due: date?` です。
+`examples/invoice/invoice.flow` を `dandori doc` で描いたものです。入力は `order: Order`、出力は `outcome: Outcome`・`due: date?` です。
 
 ## flow
 
@@ -66,12 +66,12 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき | 呼び出しのあとの案件 |
 |---:|---|---|---|---|---|---|
-| 56 | `hold ← reserve(…)` | `book stock.reserve.hold`, `starts stock.reserve` | — | — | `out_of_stock` → 57 行目<br>`timeout`, `failure` → `on failure` | `hold`: `held` |
-| 58 | `due = terms.payment(…)` | `payment_terms.cal` の日付 `payment` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → `on failure` | — |
-| 60 | `payment = check_payment(…)` | `GET https://payments.example.com/orders/{order}/payment`, `idempotent` | 10 秒おきに 2 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | — |
-| 63 | `hold ← ship(…)` | `book stock.reserve.post`, `sends post` | — | — | `expired` → 64 行目<br>`timeout`, `failure` → `on failure` | `hold`: `posted` |
-| 67 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → 68 行目<br>`already_posted`, `timeout`, `failure` → `on failure` | `hold`: `voided` |
-| 75 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → 76 行目<br>`already_posted` → 77 行目<br>`timeout`, `failure` → 78 行目 | `hold`: `voided` |
+| 56 | `hold ← reserve(…)` | `book stock.reserve.hold`・`starts stock.reserve` | — | — | `out_of_stock` → 57 行目<br>`timeout`・`failure` → `on failure` | `hold`: `held` |
+| 58 | `due = terms.payment(…)` | `payment_terms.cal` の日付 `payment` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 60 | `payment = check_payment(…)` | `GET https://payments.example.com/orders/{order}/payment`・`idempotent` | 10 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | — |
+| 63 | `hold ← ship(…)` | `book stock.reserve.post`・`sends post` | — | — | `expired` → 64 行目<br>`timeout`・`failure` → `on failure` | `hold`: `posted` |
+| 67 | `hold ← put_back(…)` | `book stock.reserve.void`・`sends void` | — | — | `expired` → 68 行目<br>`already_posted`・`timeout`・`failure` → `on failure` | `hold`: `voided` |
+| 75 | `hold ← put_back(…)` | `book stock.reserve.void`・`sends void` | — | — | `expired` → 76 行目<br>`already_posted` → 77 行目<br>`timeout`・`failure` → 78 行目 | `hold`: `voided` |
 
 ## 終わり方
 
@@ -82,7 +82,7 @@ flowchart TD
 | 57 | `succeed outcome = out_of_stock, due = none` | 始まっていない |
 | 64 | `succeed outcome = not_paid, due = due.day` | `expired` |
 | 65 | `succeed outcome = shipped, due = due.day` | `posted` |
-| 69 | `succeed outcome = not_paid, due = due.day` | `voided`, `expired` |
-| 78 | `fail NotPutBack` "the goods held for the order could not be put back" `leaving hold` | そのまま引き渡す: `held`, `posted`, `voided`, `expired` |
-| 78 | `on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する | 始まっていないか、`posted`, `voided`, `expired` |
+| 69 | `succeed outcome = not_paid, due = due.day` | `voided`・`expired` |
+| 78 | `fail NotPutBack` "the goods held for the order could not be put back" `leaving hold` | そのまま引き渡す: `held`・`posted`・`voided`・`expired` |
+| 78 | `on failure` が最後まで走り、ワークフローは元のエラーで失敗する | 始まっていないか、`posted`・`voided`・`expired` |
 

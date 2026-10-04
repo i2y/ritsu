@@ -531,7 +531,7 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                     let end = k + unit.chars().count();
                     let raw: String = chars[start..end].iter().collect();
                     if unit.is_empty() {
-                        return Err(err(span, tr!("`{raw}` のあとに単位を書きます", "a unit is expected after `{raw}`")));
+                        return Err(err(span, tr!("`{raw}` のあとに単位を書いてください", "a unit is expected after `{raw}`")));
                     }
                     let Some(value) = quantity(&text, mult) else {
                         return Err(err(span, tr!("数が大きすぎます", "this number is too large")));
@@ -706,7 +706,7 @@ impl<'a> Cur<'a> {
                 self.i += 1;
                 Ok((s, sp))
             }
-            _ => Err(err(sp, tr!("ここには{}を二重引用符で書きます", "expected {} in double quotes here", what.ja; what.en))),
+            _ => Err(err(sp, tr!("ここには{}を二重引用符で囲んで書いてください", "expected {} in double quotes here", what.ja; what.en))),
         }
     }
 
@@ -783,7 +783,7 @@ fn duration(cur: &mut Cur) -> Result<u64, Diag> {
         _ => {
             return Err(err(
                 unit_sp,
-                tr!("`{u}` は時間の単位ではありません。seconds・minutes・hours・days のどれかを書きます", "`{u}` is not a unit of time; write seconds, minutes, hours or days"),
+                tr!("`{u}` は時間の単位ではありません。seconds・minutes・hours・days のどれかを書いてください", "`{u}` is not a unit of time; write seconds, minutes, hours or days"),
             ))
         }
     };
@@ -796,7 +796,7 @@ fn type_expr(cur: &mut Cur) -> Result<TypeExpr, Diag> {
         let sp = cur.span();
         cur.i += 1;
         if cur.is_sym("?") {
-            return Err(err(cur.span(), tr!("`?` は一つだけ書きます", "a type is made optional once; write one `?`")));
+            return Err(err(cur.span(), tr!("`?` は一つだけ書いてください", "a type is made optional once; write one `?`")));
         }
         return Ok(TypeExpr::Opt(Box::new(base), sp));
     }
@@ -916,7 +916,7 @@ fn range_decl(cur: &mut Cur) -> Result<Option<RangeDecl>, Diag> {
         });
     }
     if lo.is_none() && hi.is_none() {
-        return Err(err(cur.span(), tr!("範囲は `range >=<下限> <=<上限>` と書きます。端は片方だけでもかまいません", "a range is written `range >=<low> <=<high>`, with one end or both")));
+        return Err(err(cur.span(), tr!("範囲は `range >=<下限> <=<上限>` と書いてください。端は片方だけでもかまいません", "a range is written `range >=<low> <=<high>`, with one end or both")));
     }
     Ok(Some(RangeDecl { lo, hi, span }))
 }
@@ -997,7 +997,7 @@ fn string_expr(s: &str, sp: Span) -> Result<Expr, Diag> {
                 j += 1;
             }
             if j >= chars.len() {
-                return Err(err(sp, tr!("文字列の中の `{{` が閉じていません。波括弧そのものは `{{{{` と書きます", "a `{{` in this string is not closed; write `{{{{` for a brace itself")));
+                return Err(err(sp, tr!("文字列の中の `{{` が閉じていません。波括弧そのものは `{{{{` と書いてください", "a `{{` in this string is not closed; write `{{{{` for a brace itself")));
             }
             let inner: String = chars[start..j].iter().collect();
             let mut path = Vec::new();
@@ -1007,7 +1007,7 @@ fn string_expr(s: &str, sp: Span) -> Result<Expr, Diag> {
                 if !ok {
                     return Err(err(
                         sp,
-                        tr!("文字列の中の `{{{inner}}}` は変数やそのフィールドではありません。波括弧そのものは `{{{{` と書きます", "`{{{inner}}}` in this string is not a variable or a field of one; write `{{{{` for a brace itself"),
+                        tr!("文字列の中の `{{{inner}}}` は変数やそのフィールドではありません。波括弧そのものは `{{{{` と書いてください", "`{{{inner}}}` in this string is not a variable or a field of one; write `{{{{` for a brace itself"),
                     ));
                 }
                 path.push((p.to_string(), sp));
@@ -1026,7 +1026,7 @@ fn string_expr(s: &str, sp: Span) -> Result<Expr, Diag> {
                 i += 2;
                 continue;
             }
-            return Err(err(sp, tr!("文字列の中の `}}` に対応する `{{` がありません。波括弧そのものは `}}}}` と書きます", "a `}}` in this string has no `{{`; write `}}}}` for a brace itself")));
+            return Err(err(sp, tr!("文字列の中の `}}` に対応する `{{` がありません。波括弧そのものは `}}}}` と書いてください", "a `}}` in this string has no `{{`; write `}}}}` for a brace itself")));
         }
         lit.push(c);
         i += 1;
@@ -1414,14 +1414,14 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 let n = v.strip_prefix('v').and_then(|s| s.parse::<u32>().ok());
                 match n {
                     Some(n) => prog.version = n,
-                    None => return Err(err(vsp, tr!("バージョンは v1、v2 のように書きます", "write the version as v1, v2, ..."))),
+                    None => return Err(err(vsp, tr!("バージョンは v1、v2 のように書いてください", "write the version as v1, v2, ..."))),
                 }
                 // the service of a `.proto` the workflow implements: `<api>.<Service>`
                 if cur.eat_kw("implements") {
                     let isp = cur.span();
                     let q = cur.qualname()?;
                     if q.len() < 2 {
-                        return Err(err(isp, tr!("サービスは、`use proto` で付けた名前のあとに `implements shop.FulfillmentService` のように書きます", "write the service after the name `use proto` gave the `.proto`, as `implements shop.FulfillmentService`")));
+                        return Err(err(isp, tr!("サービスは、`use proto` で付けた名前のあとに `implements shop.FulfillmentService` のように書いてください", "write the service after the name `use proto` gave the `.proto`, as `implements shop.FulfillmentService`")));
                     }
                     prog.implements = Some(q);
                 }
@@ -1489,7 +1489,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     "openapi" => crate::apis::ApiKind::OpenApi,
                     "smithy" => crate::apis::ApiKind::Smithy,
                     "proto" => crate::apis::ApiKind::Proto,
-                    _ => return Err(err(ksp, tr!("`use rule`・`use dates`・`use book`・`use openapi`・`use smithy`・`use proto` のどれかを書きます", "write `use rule`, `use dates`, `use book`, `use openapi`, `use smithy` or `use proto`"))),
+                    _ => return Err(err(ksp, tr!("`use rule`・`use dates`・`use book`・`use openapi`・`use smithy`・`use proto` のどれかを書いてください", "write `use rule`, `use dates`, `use book`, `use openapi`, `use smithy` or `use proto`"))),
                 };
                 let name = cur.ident(tr!("API の名前", "the API's name"))?;
                 cur.expect_kw("from")?;
@@ -1698,7 +1698,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     } else {
                         return Err(err(
                             csp,
-                            tr!("`case` の下には held・external・state・refused when を書きます", "under `case` write held, external, state or refused when"),
+                            tr!("`case` の下に書けるのは held・external・state・refused when です", "under `case` write held, external, state or refused when"),
                         ));
                     }
                     cc.expect_end()?;
@@ -1765,7 +1765,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             let at = cc.span();
             let q = cc.qualname()?;
             if q.len() != 3 {
-                return Err(err(at, tr!("帳簿の振替の操作は `book <帳簿>.<振替>.<操作>` と書きます（操作は do・hold・post・void）", "write an operation of a book's transfer as `book <book>.<transfer>.<operation>` (the operation is do, hold, post or void)")));
+                return Err(err(at, tr!("帳簿の振替の操作は `book <帳簿>.<振替>.<操作>` と書いてください（操作は do・hold・post・void）", "write an operation of a book's transfer as `book <book>.<transfer>.<operation>` (the operation is do, hold, post or void)")));
             }
             let mut q = q.into_iter();
             let (book, transfer, op) = (q.next().unwrap(), q.next().unwrap(), q.next().unwrap());
@@ -1780,7 +1780,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
                 let (text, tsp) = cc.string(tr!("AWS の API", "the AWS API"))?;
                 match text.split_once(':') {
                     Some((a, b)) if !a.is_empty() && !b.is_empty() => (a.to_string(), b.to_string()),
-                    _ => return Err(err(tsp, tr!("AWS の API は sns:publish のように <サービス>:<操作> と書きます", "write the AWS API as <service>:<action>, such as sns:publish"))),
+                    _ => return Err(err(tsp, tr!("AWS の API は sns:publish のように <サービス>:<操作> と書いてください", "write the AWS API as <service>:<action>, such as sns:publish"))),
                 }
             } else {
                 let (a, _) = cc.ident(tr!("AWS のサービス（sns など）", "an AWS service, such as sns"))?;
@@ -1848,7 +1848,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
                     let (instructions, isp) = cc.string(tr!("Jev に尋ねること", "the question Jev answers"))?;
                     Some(JevAsk { instructions, score, criteria: vec![], span: isp })
                 }
-                _ if score.is_some() => return Err(err(cc.span(), tr!("`jev score` のあとに、尋ねることを二重引用符で書きます", "write the question after `jev score`, in double quotes"))),
+                _ if score.is_some() => return Err(err(cc.span(), tr!("`jev score` のあとに、尋ねることを二重引用符で囲んで書いてください", "write the question after `jev score`, in double quotes"))),
                 _ => None,
             };
             t.binding = Some((Binding::Jev(JevDecl { ask, fields: vec![] }), sp));
@@ -1858,7 +1858,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             let v = match cc.peek().cloned() {
                 Some(Tok::Float(f)) => f,
                 Some(Tok::Int(n)) => n as f64,
-                _ => return Err(err(vsp, tr!("ここには Jev がどれだけ確かでなければならないかを、0.8 のような 0 から 1 の数で書きます", "expected how sure Jev must be, a number from 0 to 1 such as 0.8"))),
+                _ => return Err(err(vsp, tr!("ここには Jev がどれだけ確かでなければならないかを、0.8 のような 0 から 1 の数で書いてください", "expected how sure Jev must be, a number from 0 to 1 such as 0.8"))),
             };
             cc.i += 1;
             if !(v > 0.0 && v <= 1.0) {
@@ -1989,7 +1989,7 @@ fn jev_block(p: &mut Parser, indent: usize, jd: &mut JevDecl) -> Result<(), Diag
                 // a value's meaning, under a field's question
                 let criteria = match jd.fields.last_mut() {
                     Some((_, JevField::Ask(a))) => &mut a.criteria,
-                    Some((_, JevField::Confidence(_))) => return Err(err(sp, tr!("確信度を受け取るフィールドは何も尋ねないので、その下には何も書きません", "a field that takes how sure Jev is asks nothing, so nothing is written under it"))),
+                    Some((_, JevField::Confidence(_))) => return Err(err(sp, tr!("確信度を受け取るフィールドは何も尋ねないので、その下には何も書けません", "a field that takes how sure Jev is asks nothing, so nothing is written under it"))),
                     None => return Err(err(sp, tr!("この行は前の行より深く字下げされています", "this line is indented more than the lines before it"))),
                 };
                 criteria.push(meaning(&mut cc)?);
@@ -2026,7 +2026,7 @@ fn jev_block(p: &mut Parser, indent: usize, jd: &mut JevDecl) -> Result<(), Diag
                 _ => {
                     return Err(err(
                         cc.span(),
-                        tr!("`jev` の下には、`{}` について尋ねることを書きます（`{} \"<質問>\"`、`{} score \"<質問>\"`、`{} confidence of <フィールド>` のどれか）", "under `jev`, write what Jev is asked for `{}`: `{} \"<question>\"`, `{} score \"<question>\"`, or `{} confidence of <field>`", field.0, field.0, field.0, field.0),
+                        tr!("`jev` の下には、`{}` について尋ねることを書いてください（`{} \"<質問>\"`、`{} score \"<質問>\"`、`{} confidence of <フィールド>` のどれか）", "under `jev`, write what Jev is asked for `{}`: `{} \"<question>\"`, `{} score \"<question>\"`, or `{} confidence of <field>`", field.0, field.0, field.0, field.0),
                     ))
                 }
             }

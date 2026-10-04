@@ -984,8 +984,8 @@ impl Model {
             Platform::Temporal => return vec![],
             Platform::StepFunctions => tr!("Step Functions が実行に値を送れるのは、タスクが渡すトークンを通してだけです（`callback`）", "Step Functions sends a value to an execution only through the token a task hands on (`callback`)"),
             Platform::Durable => tr!("Lambda durable functions が実行に値を送れるのは、ステップが渡すコールバックの ID を通してだけです（`callback`）", "Lambda durable functions sends a value to an execution only through the id of a callback a step hands on (`callback`)"),
-            Platform::Argo => tr!("Argo Workflows 向けにはまだ書けません。書くなら、名前で再開されるまで止まる suspend のステップにすることになります", "dandori does not write it for Argo Workflows yet; there, it would be a step suspended until it is resumed by its name"),
-            Platform::Graph => tr!("pydantic-graph 向けにはまだ書けません。書くなら、値はタスクの名前で `Deps` に届くことになります", "dandori does not write it for pydantic-graph yet; there, the value would come to `Deps` by the task's name"),
+            Platform::Argo => tr!("dandori は、Argo Workflows 向けにはまだこれを生成しません。生成するなら、名前で再開されるまで止まる suspend のステップになります", "dandori does not write it for Argo Workflows yet; there, it would be a step suspended until it is resumed by its name"),
+            Platform::Graph => tr!("dandori は、pydantic-graph 向けにはまだこれを生成しません。生成するなら、値はタスクの名前で `Deps` に届くことになります", "dandori does not write it for pydantic-graph yet; there, the value would come to `Deps` by the task's name"),
         };
         self.tasks
             .iter()
@@ -1006,7 +1006,7 @@ impl Model {
             }
             Platform::Argo | Platform::Graph => {
                 let name = if p == Platform::Argo { "Argo Workflows" } else { "pydantic-graph" };
-                Some(tr!("`{label}` は実行がいまどこにいるかを聞きますが、{name} ではまだ答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、{name} 向けのフローが実装するサービスからは、このメソッドを外してください", "`{label}` asks a run where it is, and dandori does not answer it on {name} yet; only Temporal answers it, by the query `dandori.status`, so leave the method out of the service the flow implements for {name}"))
+                Some(tr!("`{label}` は実行がいまどこにいるかを聞きますが、dandori は {name} ではまだそれに答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、{name} 向けのフローが実装するサービスからは、このメソッドを外してください", "`{label}` asks a run where it is, and dandori does not answer it on {name} yet; only Temporal answers it, by the query `dandori.status`, so leave the method out of the service the flow implements for {name}"))
             }
         };
         s.methods.iter().filter(|x| x.is_status()).filter_map(|x| words(&s.label(x))).map(|why| crate::diag::Diag::error("E050", s.line, 1, why)).collect()

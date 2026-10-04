@@ -4,5 +4,5 @@
     24 |     break
 エラー[E009]: tests/fixtures/rounds.flow:26:5: ほかのイテレーションがまだ動いていることがあるので、`for … in parallel` の中からは `succeed` できません
     26 |     succeed n = 1
-エラー[E009]: tests/fixtures/rounds.flow:28:11: `yield` は `let <名前> = for …` の本体の最後の行に書きます
+エラー[E009]: tests/fixtures/rounds.flow:28:11: `yield` は `let <名前> = for …` の本体の最後の行に書いてください
     28 |     yield z

@@ -2,7 +2,7 @@
 
 言語のエッジケース：配列の json をリストに入れる、yield した json を集める、並列の中の並列、理由の無い fail
 
-`tests/flows/edges.flow` を `dandori doc` で描いたものです。入力は `箱: list[箱]`, `一つ: json`、出力は `集め: list[json]` です。
+`tests/flows/edges.flow` を `dandori doc` で描いたものです。入力は `箱: list[箱]`・`一つ: json`、出力は `集め: list[json]` です。
 
 ## flow
 
@@ -44,10 +44,10 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 28 | `置く(…)` | `lambda put`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
-| 30 | `答え = 見る(…)` | `lambda look`, `idempotent` | — | — | `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
-| 33 | `置く(…)` | `lambda put`, `idempotent` | — | — | `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
-| 38 | `置く(…)` | `lambda put`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
+| 28 | `置く(…)` | `lambda put`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
+| 30 | `答え = 見る(…)` | `lambda look`・`idempotent` | — | — | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 33 | `置く(…)` | `lambda put`・`idempotent` | — | — | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 38 | `置く(…)` | `lambda put`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

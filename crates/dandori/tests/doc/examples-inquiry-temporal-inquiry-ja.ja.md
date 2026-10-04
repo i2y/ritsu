@@ -2,7 +2,7 @@
 
 お客さまの問い合わせの種類を Jev が選び、その確信度も返す。エージェントは問い合わせを読んで注文番号と要点を取り出し、種類も読む。Jev が種類に十分な確信を持てないときは、エージェントが読んだ種類を使う。受け持つ窓口と最初の返事までの時間は規則が決め、返事の下書きは別のエージェントが書き、窓口のシステムに起票する。選ぶことは Jev が、読むことと書くことはエージェント（読むのは会社が自分で動かしているモデル、書くのは Claude）が、決めることは規則が受け持つ。Temporal 向けの版：Jev とエージェントは生成したアクティビティで、Jev は TypeSafe の API キー（TYPESAFE_API_KEY）で呼び、読み取りは Open Responses を話す会社の Ollama に（`url`）、下書きはワーカーが持つ鍵で Claude に送る。規則はワークフローと同じワーカーでローカルアクティビティとして動き、その結果はマーカーとして履歴に残る。起票は自分で書くアクティビティ
 
-`examples/inquiry/temporal/inquiry.ja.flow` を `dandori doc` で描いたものです。入力は `問い合わせ: 問い合わせ`、出力は `チケットID: string`, `窓口: 振り分け.窓口` です。
+`examples/inquiry/temporal/inquiry.ja.flow` を `dandori doc` で描いたものです。入力は `問い合わせ: 問い合わせ`、出力は `チケットID: string`・`窓口: 振り分け.窓口` です。
 
 ## flow
 
@@ -49,12 +49,12 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 61 | `読み = 読み取る(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure, timeout） | 1 分 | `timeout`, `failure` → 62 行目 |
-| 63 | `手作業 = 起票する(…)` | 自分で書くタスク, `key` | 5 秒おきに 2 回（failure, timeout） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 66 | `種類 = 種類を選ぶ(…)` | `jev · jev-1.13.0 · confidence 0.8 else 迷い` | 1 秒おきに 2 回（failure, timeout） | 10 秒 | `迷い`, `timeout`, `failure` → 67 行目 |
-| 68 | `判定 = 振り分け(…)` | 規則 `問い合わせの振り分け.rule`（Temporal ではローカルアクティビティ） | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → ワークフローが失敗する |
-| 73 | `下書き = 下書きする(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`, `failure` → 74 行目 |
-| 75 | `票 = 起票する(…)` | 自分で書くタスク, `key` | 5 秒おきに 2 回（failure, timeout） | — | `timeout`, `failure` → ワークフローが失敗する |
+| 61 | `読み = 読み取る(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 62 行目 |
+| 63 | `手作業 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 66 | `種類 = 種類を選ぶ(…)` | `jev · jev-1.13.0 · confidence 0.8 else 迷い` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `迷い`・`timeout`・`failure` → 67 行目 |
+| 68 | `判定 = 振り分け(…)` | 規則 `問い合わせの振り分け.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 73 | `下書き = 下書きする(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 74 行目 |
+| 75 | `票 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

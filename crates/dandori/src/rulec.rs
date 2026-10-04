@@ -253,7 +253,7 @@ fn named_enums(c: &ritsu_ports::Connect, py: &Call) -> Result<BTreeMap<String, N
             Some(unset) => unset.clone(),
             None => e.values.iter().find(|(_, _, n)| *n == 0).map(|(_, proto, _)| proto.clone()).ok_or_else(|| {
                 tr!(
-                    "rulec が、規則のサービスが列挙 `{name}` の 0 番の値を何と呼ぶかを言いません。サービスがレスポンスから省いたフィールドは、その値になります",
+                    "規則のサービスが列挙 `{name}` の 0 番の値を何と呼ぶかを、rulec から得られません。サービスがレスポンスから省いたフィールドは、その値になります",
                     "rulec does not say what the rule's service calls value 0 of the enum `{name}`, which a field it leaves out of its answer holds"
                 )
             })?,
@@ -261,7 +261,7 @@ fn named_enums(c: &ritsu_ports::Connect, py: &Call) -> Result<BTreeMap<String, N
         let theirs = py.enums.iter().find(|x| x.name == *name);
         for (v, _) in theirs.map(|x| x.values.as_slice()).unwrap_or_default() {
             if !e.values.iter().any(|(n, _, _)| n == v) {
-                return Err(tr!("rulec が、規則のサービスが列挙 `{name}` の値 `{v}` を何と呼ぶかを言いません", "rulec does not say what the rule's service calls the value `{v}` of the enum `{name}`"));
+                return Err(tr!("規則のサービスが列挙 `{name}` の値 `{v}` を何と呼ぶかを、rulec から得られません", "rulec does not say what the rule's service calls the value `{v}` of the enum `{name}`"));
             }
         }
         out.insert(name.clone(), (zero, e.values.iter().map(|(n, proto, _)| (n.clone(), proto.clone())).collect()));
@@ -278,19 +278,19 @@ fn named_enums(c: &ritsu_ports::Connect, py: &Call) -> Result<BTreeMap<String, N
 /// even where it gives its values no prefix and puts a value of its own at 0 (DESIGN 1.13).
 pub fn connect_shape(info: &RuleInfo) -> Result<ConnectShape, Text> {
     let Some(c) = info.connect.as_ref().filter(|c| !c.path.is_empty()) else {
-        return Err(tr!("rulec が規則の Connect のサービスについて何も言わないので、`connect` で呼べません", "rulec says nothing of the rule's Connect service, which `connect` calls"));
+        return Err(tr!("rulec から規則の Connect のサービスの情報を得られないので、`connect` で呼べません", "rulec says nothing of the rule's Connect service, which `connect` calls"));
     };
     if c.json_names != "lowerCamelCase" {
         let n = &c.json_names;
         return Err(tr!(
-            "規則のサービスは、フィールド名を `{n}` で書きます。dandori が読めるのは lowerCamelCase だけなので、`connect` で呼べません",
+            "規則のサービスのフィールド名は `{n}` の形です。dandori が読めるのは lowerCamelCase だけなので、`connect` で呼べません",
             "the rule's service writes its field names as `{n}`, and dandori reads only lowerCamelCase, so `connect` cannot call it"
         ));
     }
     if c.json_int64 != "string" {
         let n = &c.json_int64;
         return Err(tr!(
-            "規則のサービスは、64 ビットの整数を `{n}` で書きます。dandori が読めるのは文字列だけなので、`connect` で呼べません",
+            "規則のサービスは、64 ビットの整数を `{n}` として送ります。dandori が読めるのは文字列だけなので、`connect` で呼べません",
             "the rule's service writes 64-bit integers as `{n}`, and dandori reads only strings, so `connect` cannot call it"
         ));
     }

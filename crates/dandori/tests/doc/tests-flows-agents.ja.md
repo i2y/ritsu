@@ -2,7 +2,7 @@
 
 エージェントのエッジケース：リスト・単位・時刻・オプショナルな値・範囲のある数を持つ応答、応答を読まない呼び出し、並列のイテレーションの中のエージェント、大文字と小文字の違う列挙の値で応答する Claude のエージェント、OpenAI のほかの Open Responses のサーバーで読むエージェント
 
-`tests/flows/agents.flow` を `dandori doc` で描いたものです。入力は `写し: list[string]`、出力は `領収書: list[領収書]`, `急ぎ: 急ぎ`, `印: list[急ぎ]` です。
+`tests/flows/agents.flow` を `dandori doc` で描いたものです。入力は `写し: list[string]`、出力は `領収書: list[領収書]`・`急ぎ: 急ぎ`・`印: list[急ぎ]` です。
 
 ## flow
 
@@ -34,9 +34,9 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 57 | `確かめる(…)` | `agent openai · gpt-5.4-mini` | — | 30 秒 | `timeout`, `failure` → ワークフローが失敗する |
-| 59 | `r = 読み取る(…)` | `agent · gpt-oss:20b · https://llm.example.com/v1` | 5 秒おきに 1 回（failure, timeout） | — | `timeout`, `failure` → そのイテレーションが失敗し、ワークフローも失敗する |
-| 61 | `仕 = 仕分ける(…)` | `agent claude · claude-sonnet-5` | 5 秒おきに 1 回（failure, timeout） | 1 分 | `timeout`, `failure` → ワークフローが失敗する |
+| 57 | `確かめる(…)` | `agent openai · gpt-5.4-mini` | — | 30 秒 | `timeout`・`failure` → ワークフローが失敗する |
+| 59 | `r = 読み取る(…)` | `agent · gpt-oss:20b · https://llm.example.com/v1` | 5 秒おきに 1 回（failure・timeout） | — | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 61 | `仕 = 仕分ける(…)` | `agent claude · claude-sonnet-5` | 5 秒おきに 1 回（failure・timeout） | 1 分 | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

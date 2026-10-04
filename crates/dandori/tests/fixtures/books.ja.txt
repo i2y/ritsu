@@ -7,9 +7,9 @@
   = E002: 勘定 `倉` が宣言されていません（books/壊れた.book の 11 行目）
 エラー[E006]: tests/fixtures/books.flow:8:10: `倉庫` が二度読み込まれています（規則と日付のファイルと帳簿は名前を共有します）
      8 | use book 倉庫 from "../flows/books/倉庫.book"
-エラー[E002]: tests/fixtures/books.flow:19:8: 帳簿 `棚卸し` はありません。`use book` で読んだものを書きます
+エラー[E002]: tests/fixtures/books.flow:19:8: 帳簿 `棚卸し` はありません。`use book` で読んだものを書いてください
     19 |   book 棚卸し.引当.hold
-エラー[E002]: tests/fixtures/books.flow:22:11: 帳簿 `倉庫` に振替 `廃棄` はありません（入荷・引当）
+エラー[E002]: tests/fixtures/books.flow:22:11: 帳簿 `倉庫` に振替 `廃棄` はありません（あるのは 入荷・引当）
     22 |   book 倉庫.廃棄.do
 エラー[E007]: tests/fixtures/books.flow:25:14: `入荷` はすぐに確定する振替で、操作は do です
     25 |   book 倉庫.入荷.hold
@@ -31,13 +31,13 @@
     44 | task 色も渡す(注文: string, sku: string, 色: string) -> 倉庫.引当
 エラー[E016]: tests/fixtures/books.flow:48:1: `入荷.do` は何も返しません。`->` は外してください
     48 | task 入荷を返す(便: string, sku: string, 数: int) -> 倉庫.引当
-エラー[E008]: tests/fixtures/books.flow:53:3: `引当.post` が仮押さえにすることは `sends post` です
+エラー[E008]: tests/fixtures/books.flow:53:3: `引当.post` が仮押さえに対してするのは `sends post` です
     53 |   sends void
 エラー[E007]: tests/fixtures/books.flow:58:14: 帳簿は、仮押さえの状態ごとに理由を付けて断ります。`refused as` は外し、理由を `errors` に書いてください
     58 |   refused as 断られた
-エラー[E008]: tests/fixtures/books.flow:62:3: `引当.hold` が仮押さえにすることは `starts 倉庫.引当` です
+エラー[E008]: tests/fixtures/books.flow:62:3: `引当.hold` が仮押さえに対してするのは `starts 倉庫.引当` です
     62 |   sends post
-エラー[E008]: tests/fixtures/books.flow:75:12: 仮押さえに外で起きるのは、有効期限のある振替の `expire` だけです
+エラー[E008]: tests/fixtures/books.flow:75:12: 仮押さえにワークフローの外で起きることは、有効期限のある振替の `expire` だけです
     75 |   external post
 エラー[E008]: tests/fixtures/books.flow:76:16: 仮押さえを断るのは帳簿で、理由は状態ごとに決まっています。`refused when` は外してください
     76 |   refused when refused = true

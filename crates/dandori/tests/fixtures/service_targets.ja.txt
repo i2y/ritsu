@@ -9,12 +9,12 @@ build --target durable:
 エラー[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` は実行がいまどこにいるかを聞きますが、Lambda durable functions にはそれに答える手段がありません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、Lambda durable functions 向けのフローが実装するサービスからは、このメソッドを外してください
      1 | workflow targets v1 implements targets.TargetsService
 build --target argo:
-エラー[E050]: tests/fixtures/service_targets.flow:12:1: `approval` はワークフローに名前で送られてくるイベントを待ちます。Argo Workflows 向けにはまだ書けません。書くなら、名前で再開されるまで止まる suspend のステップにすることになります
+エラー[E050]: tests/fixtures/service_targets.flow:12:1: `approval` はワークフローに名前で送られてくるイベントを待ちます。dandori は、Argo Workflows 向けにはまだこれを生成しません。生成するなら、名前で再開されるまで止まる suspend のステップになります
     12 | task approval() -> Approval
-エラー[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` は実行がいまどこにいるかを聞きますが、Argo Workflows ではまだ答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、Argo Workflows 向けのフローが実装するサービスからは、このメソッドを外してください
+エラー[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` は実行がいまどこにいるかを聞きますが、dandori は Argo Workflows ではまだそれに答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、Argo Workflows 向けのフローが実装するサービスからは、このメソッドを外してください
      1 | workflow targets v1 implements targets.TargetsService
 build --target pydantic-graph:
-エラー[E050]: tests/fixtures/service_targets.flow:12:1: `approval` はワークフローに名前で送られてくるイベントを待ちます。pydantic-graph 向けにはまだ書けません。書くなら、値はタスクの名前で `Deps` に届くことになります
+エラー[E050]: tests/fixtures/service_targets.flow:12:1: `approval` はワークフローに名前で送られてくるイベントを待ちます。dandori は、pydantic-graph 向けにはまだこれを生成しません。生成するなら、値はタスクの名前で `Deps` に届くことになります
     12 | task approval() -> Approval
-エラー[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` は実行がいまどこにいるかを聞きますが、pydantic-graph ではまだ答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、pydantic-graph 向けのフローが実装するサービスからは、このメソッドを外してください
+エラー[E050]: tests/fixtures/service_targets.flow:1:1: `TargetsService/GetStatus` は実行がいまどこにいるかを聞きますが、dandori は pydantic-graph ではまだそれに答えられません。答えるのはクエリ `dandori.status` を持つ Temporal だけなので、pydantic-graph 向けのフローが実装するサービスからは、このメソッドを外してください
      1 | workflow targets v1 implements targets.TargetsService

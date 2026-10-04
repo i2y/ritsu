@@ -99,7 +99,7 @@ pub fn check(m: &Model) -> Vec<Diag> {
     match svc.options.get("dandori.v1.workflow") {
         None => {
             let opt = format!("option (dandori.v1.workflow) = {{name: {}, version: {}}};", serde_json::to_string(&m.name).unwrap(), m.version);
-            said.say(tr!("`{full}` は、どのワークフローが実装するかを言いません。`{opt}` を書いてください", "`{full}` does not say which workflow implements it; give it `{opt}`"));
+            said.say(tr!("`{full}` には、どのワークフローが実装するかが書かれていません。`{opt}` を書いてください", "`{full}` does not say which workflow implements it; give it `{opt}`"));
         }
         Some(v) => {
             let name = crate::proto::strings_of(&v["name"]).into_iter().next().unwrap_or_default();
@@ -290,7 +290,7 @@ pub fn check(m: &Model) -> Vec<Diag> {
         let Text { en, ja } = and_list(methods);
         let Text { en: what_en, ja: what_ja } = if *event { tr!("`{task}` のイベントを送ります", "send the event of `{task}`") } else { tr!("`{task}` のコールバックに応答します", "answer the callback of `{task}`") };
         let Text { en: all_en, ja: all_ja } = if methods.len() == 2 { tr!("どちらも", "both") } else { tr!("どれも", "all") };
-        said.say(tr!("{ja} が{all_ja}{what_ja}。一つにしてください", "{en} {all_en} {what_en}; one method does"));
+        said.say(tr!("{ja} が{all_ja} {what_ja}。一つにしてください", "{en} {all_en} {what_en}; one method does"));
     }
 
     // the method that asks a run where it is

@@ -2,7 +2,7 @@
 
 Book the delivery of an order with the carrier the urgency rule chose, and answer with its tracking number. Written once for every platform, since its calls are HTTP ones that dandori writes for each (`connection` is what Step Functions needs of them): each version of fulfillment runs it as its child, a child workflow on Temporal, an invoked durable function on Lambda durable functions, a workflow of this WorkflowTemplate on Argo, a nested execution on Step Functions
 
-`examples/fulfillment/arrange_delivery.flow` を `dandori doc` で描いたものです。入力は `order_id: string`, `carrier: carrier`, `recipient: string?`, `extra: json`、出力は `tracking_number: string` です。
+`examples/fulfillment/arrange_delivery.flow` を `dandori doc` で描いたものです。入力は `order_id: string`・`carrier: carrier`・`recipient: string?`・`extra: json`、出力は `tracking_number: string` です。
 
 ## flow
 
@@ -33,8 +33,8 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 35 | `booked = book_next_day(…)` | `POST https://next-day.example.com/v1/pickups`, `key` | 5 秒おきに 2 回（failure, timeout） | — | `no_van` → 36 行目<br>`timeout`, `failure` → ワークフローが失敗する |
-| 39 | `booked = book_standard(…)` | `POST https://post.example.com/v1/parcels`, `key` | 5 秒おきに 2 回（failure, timeout） | — | `timeout`, `failure` → ワークフローが失敗する |
+| 35 | `booked = book_next_day(…)` | `POST https://next-day.example.com/v1/pickups`・`key` | 5 秒おきに 2 回（failure・timeout） | — | `no_van` → 36 行目<br>`timeout`・`failure` → ワークフローが失敗する |
+| 39 | `booked = book_standard(…)` | `POST https://post.example.com/v1/parcels`・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

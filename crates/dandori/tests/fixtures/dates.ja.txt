@@ -6,11 +6,11 @@
   = E010: 公開する名前「起点」に ASCII の別名がありません（dates/壊れた.cal の 6 行目）
 エラー[E006]: tests/fixtures/dates.flow:8:10: `期限` が二度読み込まれています（規則と日付のファイルと帳簿は名前を共有します）
      8 | use book 期限 from "../flows/books/倉庫.book"
-エラー[E002]: tests/fixtures/dates.flow:22:11: 日付のファイル `期限` に日付 `無い日` はありません（期日）
+エラー[E002]: tests/fixtures/dates.flow:22:11: 日付のファイル `期限` に日付 `無い日` はありません（あるのは 期日）
     22 |   let a = 期限.無い日(起点: 受注.受けた)
 エラー[E003]: tests/fixtures/dates.flow:23:21: ここには `date` が要りますが、これは `timestamp` です
     23 |   let b = 期限.期日(起点: now)
-  = `期限` のカレンダーは UTC オフセットを言わないので、時刻がどの日にあたるかが決まりません。カレンダーに `offset +09:00` のように書くか、日付を渡してください
+  = `期限` のカレンダーには UTC オフセットが書かれていないので、時刻がどの日にあたるかが決まりません。カレンダーに `offset +09:00` のように書くか、日付を渡してください
 エラー[E003]: tests/fixtures/dates.flow:24:21: ここには `date` が要りますが、これは `int` です
     24 |   let c = 期限.期日(起点: 受注.数)
 エラー[E003]: tests/fixtures/dates.flow:25:21: ここには `date` が要りますが、これは `string` です

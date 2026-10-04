@@ -110,15 +110,15 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき | 呼び出しのあとの案件 |
 |---:|---|---|---|---|---|---|
-| 61 | `order ← get_order(…)` | `GET https://warehouse.example.com/v1/orders/{id}`, `observes`, `idempotent` | 1 秒おきに 3 回（busy） | — | `busy`, `timeout`, `failure` → `on failure` | `order`: `received`, `paid`, `shipped`, `delivered`, `cancelled` |
-| 65 | `r = notify(…)` | 自分で書くタスク, `key` | 5 秒おきに 2 回（failure, timeout） | — | `no_recipient` → 66 行目<br>`timeout`, `failure` → `on failure` | — |
-| 68 | `order ← get_order(…)` | `GET https://warehouse.example.com/v1/orders/{id}`, `observes`, `idempotent` | 1 秒おきに 3 回（busy） | — | `busy`, `timeout`, `failure` → `on failure` | `order`: `received`, `paid`, `cancelled` |
-| 72 | `order ← request_cancel(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`, `sends cancel`, `key` | — | — | `conflict` → 73 行目<br>`timeout`, `failure` → `on failure` | `order`: `cancelled` |
-| 78 | `decision = urgency(…)` | 規則 `urgency.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → `on failure` | — |
-| 79 | `order ← request_shipment(…)` | `POST https://warehouse.example.com/v1/orders/{id}/shipments`, `sends ship`, `key` | — | — | `conflict` → 80 行目<br>`timeout`, `failure` → `on failure` | `order`: `shipped` |
-| 82 | `n = notify(…)` | 自分で書くタスク, `key` | 5 秒おきに 2 回（failure, timeout） | — | `no_recipient`, `timeout`, `failure` → `on failure` | — |
-| 84 | `order ← delivered()` | `event`, `observes` | — | 7 日 | `timeout` → 85 行目<br>`failure` → `on failure` | `order`: `shipped`, `delivered` |
-| 99 | `order ← request_cancel(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`, `sends cancel`, `key` | — | — | `conflict` → 100 行目<br>`timeout`, `failure` → 101 行目 | `order`: `cancelled` |
+| 61 | `order ← get_order(…)` | `GET https://warehouse.example.com/v1/orders/{id}`・`observes`・`idempotent` | 1 秒おきに 3 回（busy） | — | `busy`・`timeout`・`failure` → `on failure` | `order`: `received`・`paid`・`shipped`・`delivered`・`cancelled` |
+| 65 | `r = notify(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `no_recipient` → 66 行目<br>`timeout`・`failure` → `on failure` | — |
+| 68 | `order ← get_order(…)` | `GET https://warehouse.example.com/v1/orders/{id}`・`observes`・`idempotent` | 1 秒おきに 3 回（busy） | — | `busy`・`timeout`・`failure` → `on failure` | `order`: `received`・`paid`・`cancelled` |
+| 72 | `order ← request_cancel(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`・`sends cancel`・`key` | — | — | `conflict` → 73 行目<br>`timeout`・`failure` → `on failure` | `order`: `cancelled` |
+| 78 | `decision = urgency(…)` | 規則 `urgency.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 79 | `order ← request_shipment(…)` | `POST https://warehouse.example.com/v1/orders/{id}/shipments`・`sends ship`・`key` | — | — | `conflict` → 80 行目<br>`timeout`・`failure` → `on failure` | `order`: `shipped` |
+| 82 | `n = notify(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `no_recipient`・`timeout`・`failure` → `on failure` | — |
+| 84 | `order ← delivered()` | `event`・`observes` | — | 7 日 | `timeout` → 85 行目<br>`failure` → `on failure` | `order`: `shipped`・`delivered` |
+| 99 | `order ← request_cancel(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`・`sends cancel`・`key` | — | — | `conflict` → 100 行目<br>`timeout`・`failure` → 101 行目 | `order`: `cancelled` |
 
 ## 終わり方
 
@@ -126,18 +126,18 @@ flowchart TD
 
 | 行 | 終わり方 | `order` |
 |---:|---|---|
-| 66 | `fail NoContact` `leaving order` | そのまま引き渡す: `received`, `paid`, `cancelled` |
+| 66 | `fail NoContact` `leaving order` | そのまま引き渡す: `received`・`paid`・`cancelled` |
 | 74 | `fail NotPaid` "No payment came in three days" | `cancelled` |
 | 75 | `fail Canceled` "The order was canceled" | `cancelled` |
-| 76 | `fail AlreadyShipped` "The order has shipped already" `leaving order` | そのまま引き渡す: `shipped`, `delivered` |
+| 76 | `fail AlreadyShipped` "The order has shipped already" `leaving order` | そのまま引き渡す: `shipped`・`delivered` |
 | 80 | `fail Canceled` "The order was canceled before it shipped" | `cancelled` |
-| 85 | `fail DeliveryLate` "No word of the delivery in seven days" `leaving order` | そのまま引き渡す: `shipped`, `delivered` |
+| 85 | `fail DeliveryLate` "No word of the delivery in seven days" `leaving order` | そのまま引き渡す: `shipped`・`delivered` |
 | 87 | `succeed carrier = decision.carrier` | `delivered` |
-| 88 | `fail DeliveryLate` "Still shipped after word of the delivery" `leaving order` | そのまま引き渡す: `shipped`, `delivered` |
-| 91 | `fail Stopped` "Stopped on the way; the order stays in the warehouse's system as it is" `leaving order` | そのまま引き渡す: 始まっていないか、`received`, `paid`, `shipped`, `delivered`, `cancelled` |
-| 100 | `fail ShippedAlready` "The warehouse refused to cancel order {order.id}; it may have shipped" `leaving order` | そのまま引き渡す: `shipped`, `delivered`, `cancelled` |
-| 101 | `fail CancelFailed` "Could not cancel order {order.id} at the warehouse" `leaving order` | そのまま引き渡す: `received`, `paid`, `shipped`, `delivered`, `cancelled` |
-| 102 | `fail ShippedAlready` "Order {order.id} has shipped already" `leaving order` | そのまま引き渡す: `shipped`, `delivered` |
+| 88 | `fail DeliveryLate` "Still shipped after word of the delivery" `leaving order` | そのまま引き渡す: `shipped`・`delivered` |
+| 91 | `fail Stopped` "Stopped on the way; the order stays in the warehouse's system as it is" `leaving order` | そのまま引き渡す: 始まっていないか、`received`・`paid`・`shipped`・`delivered`・`cancelled` |
+| 100 | `fail ShippedAlready` "The warehouse refused to cancel order {order.id}; it may have shipped" `leaving order` | そのまま引き渡す: `shipped`・`delivered`・`cancelled` |
+| 101 | `fail CancelFailed` "Could not cancel order {order.id} at the warehouse" `leaving order` | そのまま引き渡す: `received`・`paid`・`shipped`・`delivered`・`cancelled` |
+| 102 | `fail ShippedAlready` "Order {order.id} has shipped already" `leaving order` | そのまま引き渡す: `shipped`・`delivered` |
 | 102 | `on cancel` が最後まで走り、ワークフローはキャンセルで終わる | 始まっていないか、`cancelled` |
 
 ## 規則

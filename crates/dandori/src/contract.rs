@@ -18,7 +18,7 @@ pub fn check(pm: &Model, task: &TaskDef, cm: &Model) -> Vec<Diag> {
     for (p, pt) in &task.params {
         let Some((_, it)) = cm.inputs.iter().find(|(i, _)| i == p) else {
             let names: Vec<&str> = cm.inputs.iter().map(|(i, _)| i.as_str()).collect();
-            push(tr!("`{child}` に入力 `{p}` はありません（入力は {}）", "`{child}` has no input `{p}` (its inputs are {})", names.join("・"); names.join(", ")));
+            push(tr!("`{child}` に入力 `{p}` はありません（あるのは {}）", "`{child}` has no input `{p}` (its inputs are {})", names.join("・"); names.join(", ")));
             continue;
         };
         if let Err(Text { en, ja }) = fits(pm, pt, task.param_ranges.get(p).copied(), cm, it, cm.input_ranges.get(p).copied(), &mut vec![]) {
@@ -74,18 +74,18 @@ pub(crate) fn fail_names(m: &Model) -> Vec<String> {
 /// `brg`) takes. `seen` holds the pairs of records being compared, for records that hold themselves.
 fn fits(am: &Model, a: &Ty, arg: Option<Range>, bm: &Model, b: &Ty, brg: Option<Range>, seen: &mut Vec<(RecordId, RecordId)>) -> Result<(), Words> {
     let (an, bn) = (am.ty_name(a), bm.ty_name(b));
-    let differ = || tr!("`{an}` は `{bn}` ではありません", "`{an}` is not `{bn}`");
+    let differ = || tr!("`{an}` で、`{bn}` ではありません", "`{an}` is not `{bn}`");
     match (a, b) {
         (_, Ty::Json) => Ok(()),
         (Ty::Opt(x), Ty::Opt(y)) => fits(am, x, arg, bm, y, brg, seen),
-        (Ty::Opt(_), _) => Err(tr!("`{an}` は無いことがありますが、`{bn}` は無いことがありません", "`{an}` may be absent, and `{bn}` may not")),
+        (Ty::Opt(_), _) => Err(tr!("`{an}` で無いことがありますが、`{bn}` は無いことがありません", "`{an}` may be absent, and `{bn}` may not")),
         (x, Ty::Opt(y)) => fits(am, x, arg, bm, y, brg, seen),
         (Ty::List(x), Ty::List(y)) => fits(am, x, arg, bm, y, brg, seen),
         (Ty::Int, Ty::Int) => within(arg, brg),
         (Ty::Num(u), Ty::Num(v)) if u.same(v) => within(arg, brg),
         (Ty::Str, Ty::Str) | (Ty::Bool, Ty::Bool) | (Ty::Timestamp, Ty::Timestamp) => Ok(()),
         (Ty::Enum(x), Ty::Enum(y)) => match am.enums[*x].values.iter().find(|v| !bm.enums[*y].values.contains(v)) {
-            Some(v) => Err(tr!("`{an}` の `{v}` は `{bn}` の値にありません", "`{v}` of `{an}` is not a value of `{bn}`")),
+            Some(v) => Err(tr!("`{an}` の `{v}` が `{bn}` の値にありません", "`{v}` of `{an}` is not a value of `{bn}`")),
             None => Ok(()),
         },
         (Ty::Record(x), Ty::Record(y)) => {
@@ -100,7 +100,7 @@ fn fits(am: &Model, a: &Ty, arg: Option<Range>, bm: &Model, b: &Ty, brg: Option<
                     None if matches!(ft, Ty::Opt(_)) => Ok(()),
                     None => Err(tr!("`{an}` にフィールド `{f}` がありません", "`{an}` has no field `{f}`")),
                 };
-                r.map_err(|Text { en, ja }| tr!("`{bn}` のフィールド `{f}` で、{ja}", "in the field `{f}` of `{bn}`, {en}"))?;
+                r.map_err(|Text { en, ja }| tr!("`{bn}` のフィールド `{f}` は、{ja}", "in the field `{f}` of `{bn}`, {en}"))?;
             }
             seen.pop();
             Ok(())

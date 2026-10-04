@@ -95,7 +95,7 @@ fn a_flow_with_rules_is_told_to_run_with_ritsu_dandori() {
     );
     let (code, _, ja) = binary(&["check", flow, "--lang", "ja"]);
     assert_eq!(code, 2);
-    assert!(ja.contains("  = dandori のクレートのバイナリは、ほかの言語を持ちません。同じコマンドを、すべての言語をつないだ `ritsu dandori check examples/hotel/temporal/hotel.flow --lang ja` のように ritsu で走らせます。"), "{ja}");
+    assert!(ja.contains("  = dandori 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`ritsu dandori check examples/hotel/temporal/hotel.flow --lang ja` のように走らせてください。"), "{ja}");
     let (code, json, _) = binary(&["build", flow, "--target", "temporal", "--format", "json"]);
     assert_eq!(code, 2, "{json}");
     assert_eq!(with_rulec(&["check", flow]), (0, String::new(), format!("{flow}: ok\n")));

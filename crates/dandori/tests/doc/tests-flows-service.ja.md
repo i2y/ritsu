@@ -2,7 +2,7 @@
 
 サービスを実装する（どのプラットフォームでも）：protos/shipping.proto のサービスの入口で、入力とコールバックの応答に、protobuf の JSON が省くゼロ値を埋めてから読む。箱のリストの中の品のリスト、中のメッセージ、ゼロ値が値でもある列挙を通る。値が設定されていない google.protobuf.Value は省かれるので、json の入力は無いことがあり、無ければ null として読む。出力は無く、実行は {} で終わる（protobuf の JSON を読む側は、null からメッセージを読まない）
 
-`tests/flows/service.flow` を `dandori doc` で描いたものです。入力は `注文ID: string`, `箱: list[箱]`, `宛先: 宛先`, `区分: 受付.Kind`, `付帯: json` です。このワークフローは `shipping.v1.ShippingService`（`protos/shipping.proto`）を実装します。
+`tests/flows/service.flow` を `dandori doc` で描いたものです。入力は `注文ID: string`・`箱: list[箱]`・`宛先: 宛先`・`区分: 受付.Kind`・`付帯: json` です。このワークフローは `shipping.v1.ShippingService`（`protos/shipping.proto`）を実装します。
 
 ## flow
 
@@ -47,16 +47,16 @@ flowchart TD
 
 | メソッド | 何をするか | タスク |
 |---|---|---|
-| `Ship` | 実行を始めます。失敗の名前は `梱包の遅れ`・`検品漏れ` | — |
+| `Ship` | 実行を始めます。失敗の名前は `梱包の遅れ`・`検品漏れ` です | — |
 | `AnswerPacking` | コールバックに応答します | `梱包を待つ` |
 
 ## 呼び出し
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 48 | `記録する(…)` | `lambda shipping-log`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
+| 48 | `記録する(…)` | `lambda shipping-log`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 49 | `済み = 梱包を待つ(…)` | `lambda packing · callback` | — | 1 日 | `timeout` → 50 行目<br>`failure` → ワークフローが失敗する |
-| 55 | `知らせる(…)` | `lambda shipping-notice`, `idempotent` | — | — | `timeout`, `failure` → ワークフローが失敗する |
+| 55 | `知らせる(…)` | `lambda shipping-notice`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

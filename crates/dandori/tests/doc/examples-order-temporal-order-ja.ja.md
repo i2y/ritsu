@@ -110,15 +110,15 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき | 呼び出しのあとの案件 |
 |---:|---|---|---|---|---|---|
-| 60 | `受注 ← 注文を見る(…)` | `GET https://warehouse.example.com/v1/orders/{id}`, `observes`, `idempotent` | 1 秒おきに 3 回（混雑） | — | `混雑`, `timeout`, `failure` → `on failure` | `受注`: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
-| 64 | `催促の控え = 知らせる(…)` | 自分で書くタスク, `key` | 5 秒おきに 2 回（failure, timeout） | — | `宛先なし` → 65 行目<br>`timeout`, `failure` → `on failure` | — |
-| 67 | `受注 ← 注文を見る(…)` | `GET https://warehouse.example.com/v1/orders/{id}`, `observes`, `idempotent` | 1 秒おきに 3 回（混雑） | — | `混雑`, `timeout`, `failure` → `on failure` | `受注`: `受付`, `入金済`, `取消` |
-| 71 | `受注 ← 取消を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`, `sends 取消依頼`, `key` | — | — | `断られた` → 72 行目<br>`timeout`, `failure` → `on failure` | `受注`: `取消` |
-| 77 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → `on failure` | — |
-| 78 | `受注 ← 出荷を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/shipments`, `sends 出荷`, `key` | — | — | `断られた` → 79 行目<br>`timeout`, `failure` → `on failure` | `受注`: `出荷済` |
-| 81 | `出荷の控え = 知らせる(…)` | 自分で書くタスク, `key` | 5 秒おきに 2 回（failure, timeout） | — | `宛先なし`, `timeout`, `failure` → `on failure` | — |
-| 83 | `受注 ← 配達の知らせ()` | `event`, `observes` | — | 7 日 | `timeout` → 84 行目<br>`failure` → `on failure` | `受注`: `出荷済`, `配達済` |
-| 97 | `受注 ← 取消を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`, `sends 取消依頼`, `key` | — | — | `断られた` → 98 行目<br>`timeout`, `failure` → 99 行目 | `受注`: `取消` |
+| 60 | `受注 ← 注文を見る(…)` | `GET https://warehouse.example.com/v1/orders/{id}`・`observes`・`idempotent` | 1 秒おきに 3 回（混雑） | — | `混雑`・`timeout`・`failure` → `on failure` | `受注`: `受付`・`入金済`・`出荷済`・`配達済`・`取消` |
+| 64 | `催促の控え = 知らせる(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `宛先なし` → 65 行目<br>`timeout`・`failure` → `on failure` | — |
+| 67 | `受注 ← 注文を見る(…)` | `GET https://warehouse.example.com/v1/orders/{id}`・`observes`・`idempotent` | 1 秒おきに 3 回（混雑） | — | `混雑`・`timeout`・`failure` → `on failure` | `受注`: `受付`・`入金済`・`取消` |
+| 71 | `受注 ← 取消を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`・`sends 取消依頼`・`key` | — | — | `断られた` → 72 行目<br>`timeout`・`failure` → `on failure` | `受注`: `取消` |
+| 77 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 78 | `受注 ← 出荷を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/shipments`・`sends 出荷`・`key` | — | — | `断られた` → 79 行目<br>`timeout`・`failure` → `on failure` | `受注`: `出荷済` |
+| 81 | `出荷の控え = 知らせる(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `宛先なし`・`timeout`・`failure` → `on failure` | — |
+| 83 | `受注 ← 配達の知らせ()` | `event`・`observes` | — | 7 日 | `timeout` → 84 行目<br>`failure` → `on failure` | `受注`: `出荷済`・`配達済` |
+| 97 | `受注 ← 取消を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`・`sends 取消依頼`・`key` | — | — | `断られた` → 98 行目<br>`timeout`・`failure` → 99 行目 | `受注`: `取消` |
 
 ## 終わり方
 
@@ -126,18 +126,18 @@ flowchart TD
 
 | 行 | 終わり方 | `受注` |
 |---:|---|---|
-| 65 | `fail 連絡先なし` `leaving 受注` | そのまま引き渡す: `受付`, `入金済`, `取消` |
+| 65 | `fail 連絡先なし` `leaving 受注` | そのまま引き渡す: `受付`・`入金済`・`取消` |
 | 73 | `fail 未入金` "三日たっても入金がありませんでした" | `取消` |
 | 74 | `fail 取消済み` "取り消された注文です" | `取消` |
-| 75 | `fail 既に出荷` "もう出荷されています" `leaving 受注` | そのまま引き渡す: `出荷済`, `配達済` |
+| 75 | `fail 既に出荷` "もう出荷されています" `leaving 受注` | そのまま引き渡す: `出荷済`・`配達済` |
 | 79 | `fail 取消済み` "出荷の前に取り消されました" | `取消` |
-| 84 | `fail 配達の遅れ` "七日たっても配達の知らせがありません" `leaving 受注` | そのまま引き渡す: `出荷済`, `配達済` |
+| 84 | `fail 配達の遅れ` "七日たっても配達の知らせがありません" `leaving 受注` | そのまま引き渡す: `出荷済`・`配達済` |
 | 86 | `succeed 便 = 判定.便` | `配達済` |
-| 87 | `fail 配達の遅れ` "配達の知らせのあとも出荷済のままです" `leaving 受注` | そのまま引き渡す: `出荷済`, `配達済` |
-| 90 | `fail 中断` "途中で止まりました。注文は倉庫のシステムにそのまま残ります" `leaving 受注` | そのまま引き渡す: 始まっていないか、`受付`, `入金済`, `出荷済`, `配達済`, `取消` |
-| 98 | `fail 出荷後の取消` "倉庫が注文 {受注.id} の取消を断りました。出荷されたのかもしれません" `leaving 受注` | そのまま引き渡す: `出荷済`, `配達済`, `取消` |
-| 99 | `fail 取消の失敗` "倉庫で注文 {受注.id} を取り消せませんでした" `leaving 受注` | そのまま引き渡す: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
-| 100 | `fail 出荷後の取消` "注文 {受注.id} はもう出荷されています" `leaving 受注` | そのまま引き渡す: `出荷済`, `配達済` |
+| 87 | `fail 配達の遅れ` "配達の知らせのあとも出荷済のままです" `leaving 受注` | そのまま引き渡す: `出荷済`・`配達済` |
+| 90 | `fail 中断` "途中で止まりました。注文は倉庫のシステムにそのまま残ります" `leaving 受注` | そのまま引き渡す: 始まっていないか、`受付`・`入金済`・`出荷済`・`配達済`・`取消` |
+| 98 | `fail 出荷後の取消` "倉庫が注文 {受注.id} の取消を断りました。出荷されたのかもしれません" `leaving 受注` | そのまま引き渡す: `出荷済`・`配達済`・`取消` |
+| 99 | `fail 取消の失敗` "倉庫で注文 {受注.id} を取り消せませんでした" `leaving 受注` | そのまま引き渡す: `受付`・`入金済`・`出荷済`・`配達済`・`取消` |
+| 100 | `fail 出荷後の取消` "注文 {受注.id} はもう出荷されています" `leaving 受注` | そのまま引き渡す: `出荷済`・`配達済` |
 | 100 | `on cancel` が最後まで走り、ワークフローはキャンセルで終わる | 始まっていないか、`取消` |
 
 ## 規則
