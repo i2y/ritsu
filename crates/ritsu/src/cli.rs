@@ -119,6 +119,41 @@ pub fn commands() -> Vec<Cmd> {
     }];
     cmds.push(run());
     cmds.push(Cmd {
+        usage: None,
+        name: "gen",
+        args: "[<path>...]",
+        purpose: tr!(
+            "プロジェクトの規則、期日、帳簿のクライアント、ワークフローを、TypeScript、Python、Go のそれぞれ一つのパッケージにする。ワークフローは同じパッケージの規則と期日と帳簿を読む",
+            "write the rules, the dates, the clients of the books and the workflows of a project as one package for each of TypeScript, Python and Go, whose workflows read the package's own rules, dates and books"
+        ),
+        params: vec![(
+            "<path>...",
+            tr!(
+                "ファイルかディレクトリ。無ければ今いるディレクトリ。下の .rule、.cal、.book、.flow がパッケージに入る",
+                "files or directories; else the directory you are in. The .rule, .cal, .book and .flow files under them go into the package"
+            ),
+        )],
+        flags: vec![
+            flag("--target", Some("<language>"), tr!("書くパッケージの言語。無ければ三つとも", "the language of the package to write; else all three")).choices(&["typescript", "python", "go"]),
+            flag("--out", Some("<dir>"), tr!("パッケージを書く先。言語ごとに <dir>/<language> に書く", "where the packages go: each in <dir>/<language>")).default("generated"),
+            flag("--check", None, tr!("書かずに、パッケージが古ければ 1 で落ちる（CI 用）", "write nothing, and exit 1 if a package is stale (for CI)")),
+            flag("--books", Some("<database>"), tr!("帳簿のクライアントがつなぐ先", "what the clients of the books call")).choices(&["postgres", "tigerbeetle"]).default("postgres"),
+            flag("--name", Some("<name>"), tr!("パッケージの名前（npm のパッケージ、Python のパッケージのディレクトリ、Go の import のパスの既定）", "the package's name: the npm package's, the Python package's directory, and the Go import path unless --module says one")).default("generated"),
+            flag("--module", Some("<path>"), tr!("Go のパッケージのディレクトリの import のパス", "the Go import path of the package's directory")),
+            root_flag(),
+        ],
+        exits: vec![
+            (0, tr!("書いた、または --check で古いものが無い", "written, or --check found nothing stale")),
+            (1, tr!("検査を通らないファイルがある、または --check で古いものがある", "a file does not pass its check, or --check found something stale")),
+            (2, tr!(
+                "引数の誤り、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、生成先の言語が予約している語のモジュールの名前",
+                "bad arguments, a file that cannot be read or written, two files that write one file of a package, or a module named by a word the language keeps"
+            )),
+        ],
+        examples: vec!["ritsu gen", "ritsu gen --target typescript --out generated --books tigerbeetle", "ritsu gen --check"],
+        codes: vec![],
+    });
+    cmds.push(Cmd {
         usage: Some("ritsu explain <CODE> | --all [--format markdown|json]"),
         name: "explain",
         args: "<CODE>",

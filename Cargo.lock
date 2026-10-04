@@ -112,6 +112,7 @@ dependencies = [
  "koyomi",
  "ritsu-base",
  "ritsu-cross",
+ "ritsu-emit",
  "ritsu-ports",
  "ritsu-project",
  "ritsu-testkit",

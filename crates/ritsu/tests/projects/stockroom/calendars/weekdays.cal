@@ -1,0 +1,6 @@
+# Copied from dandori's examples/invoice/calendars/weekdays.cal (unchanged)
+calendar weekdays v1
+description "A business that keeps its days in UTC, open Monday to Friday. No holidays: the example keeps to what any calendar has"
+offset +00:00
+
+closed weekly sat, sun

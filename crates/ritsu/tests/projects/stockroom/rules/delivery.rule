@@ -1,0 +1,24 @@
+rule delivery v1
+description "Which carrier takes an order: a member's always goes next day, and anyone else's from 300 pounds. Written for the example"
+
+enum carrier = standard | next_day
+
+inputs
+  member : bool
+  amount : money[GBP, incl_tax]  range >=0GBP <=10000GBP
+
+outputs
+  carrier : carrier
+
+table decide
+policy unique
+| member | amount   | -> carrier |
+| true   | -        | next_day   |
+| false  | >=300GBP | next_day   |
+| false  | <300GBP  | standard   |
+
+examples
+| member | amount | -> carrier |
+| true   | 10GBP  | next_day   |
+| false  | 50GBP  | standard   |
+| false  | 300GBP | next_day   |

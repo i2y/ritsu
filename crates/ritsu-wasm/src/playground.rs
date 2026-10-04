@@ -412,7 +412,8 @@ fn chobo_build(path: &str, l: Lang, target: &str) -> Ran {
     };
     let Some((src, book, _)) = chobo_load(path, l, &mut r) else { return r };
     let stem = Path::new(path).file_name().map(|f| f.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
-    let files = match chobo::target::build(&book, &stem, t) {
+    let origin = chobo::target::Origin::named(path, src.as_bytes());
+    let files = match chobo::target::build(&book, &stem, t, &origin) {
         Ok(f) => f,
         Err(diags) => {
             for d in &diags {

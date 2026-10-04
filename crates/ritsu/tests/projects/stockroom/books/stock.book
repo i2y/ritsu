@@ -1,0 +1,22 @@
+# Copied from dandori's examples/invoice/books/stock.book (unchanged)
+# Stock held for an order until it is paid: shipping posts the hold, and an unpaid order voids it.
+book stock v1
+description "Stock per SKU. A delivery adds to it; an order holds what it takes until the payment is due, for 60 days at most; shipping posts the hold, and an order that is not paid voids it"
+
+unit pcs
+
+account shelf(sku: string) : pcs
+  description "what is on the shelves"
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to shelf(sku)
+
+transfer reserve(order: string, sku: string, qty: pcs)
+  description "posted when the order ships, voided when it is not paid"
+  key order, sku
+  pending expires after 60 days
+  move qty from shelf(sku) to customers

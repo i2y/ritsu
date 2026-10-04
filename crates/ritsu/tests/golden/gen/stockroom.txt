@@ -1,0 +1,61 @@
+typescript:
+  books/index.ts: ritsu
+  books/stock.sql: chobo <- books/stock.book
+  books/stock.ts: chobo <- books/stock.book
+  dates/index.ts: ritsu
+  dates/payment_terms.ts: koyomi <- dates/payment_terms.cal
+  dates/weekdays.ts: koyomi <- calendars/weekdays.cal
+  flows/index.ts: ritsu
+  flows/order/activities.ts: dandori <- orders/order.flow
+  flows/order/client.ts: dandori <- orders/order.flow
+  flows/order/io.ts: dandori <- orders/order.flow
+  flows/order/rules.ts: dandori <- orders/order.flow
+  flows/order/runtime.ts: dandori <- orders/order.flow
+  flows/order/types.ts: dandori <- orders/order.flow
+  flows/order/worker.ts: dandori <- orders/order.flow
+  flows/order/workflow.ts: dandori <- orders/order.flow
+  index.ts: ritsu
+  package.json: ritsu
+  rules/delivery.ts: rulec <- rules/delivery.rule
+  rules/index.ts: ritsu
+python:
+  generated/__init__.py: ritsu
+  generated/books/__init__.py: ritsu
+  generated/books/stock.py: chobo <- books/stock.book
+  generated/books/stock.sql: chobo <- books/stock.book
+  generated/dates/__init__.py: ritsu
+  generated/dates/payment_terms.py: koyomi <- dates/payment_terms.cal
+  generated/dates/weekdays.py: koyomi <- calendars/weekdays.cal
+  generated/flows/__init__.py: ritsu
+  generated/flows/order/__init__.py: dandori <- orders/order.flow
+  generated/flows/order/activities.py: dandori <- orders/order.flow
+  generated/flows/order/client.py: dandori <- orders/order.flow
+  generated/flows/order/io.py: dandori <- orders/order.flow
+  generated/flows/order/rules.py: dandori <- orders/order.flow
+  generated/flows/order/runtime.py: dandori <- orders/order.flow
+  generated/flows/order/types.py: dandori <- orders/order.flow
+  generated/flows/order/worker.py: dandori <- orders/order.flow
+  generated/flows/order/workflow.py: dandori <- orders/order.flow
+  generated/py.typed: (empty)
+  generated/rules/__init__.py: ritsu
+  generated/rules/delivery.py: rulec <- rules/delivery.rule
+  pyproject.toml: ritsu
+go:
+  books/stock.sql: chobo <- books/stock.book
+  books/stock/book.go: chobo <- books/stock.book
+  books/stock/runtime.go: chobo
+  dates/paymentterms/paymentterms.go: koyomi <- dates/payment_terms.cal
+  dates/weekdays/weekdays.go: koyomi <- calendars/weekdays.cal
+  doc.go: ritsu
+  flows/order/activities.go: dandori <- orders/order.flow
+  flows/order/client.go: dandori <- orders/order.flow
+  flows/order/doc.go: dandori <- orders/order.flow
+  flows/order/io.go: dandori <- orders/order.flow
+  flows/order/io_books.go: dandori <- orders/order.flow
+  flows/order/rules.go: dandori <- orders/order.flow
+  flows/order/runtime.go: dandori <- orders/order.flow
+  flows/order/types.go: dandori <- orders/order.flow
+  flows/order/values.go: dandori <- orders/order.flow
+  flows/order/worker.go: dandori <- orders/order.flow
+  flows/order/workflow.go: dandori <- orders/order.flow
+  rules/delivery/delivery.go: rulec <- rules/delivery.rule

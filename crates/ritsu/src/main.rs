@@ -5,7 +5,10 @@
 //! the binary of a receiving language's crate cannot do, since that crate holds no other language
 //! (DESIGN 2.3). Called by a language's name (a link named `rulec`), ritsu is that command
 //! (DESIGN 2.3, 8.2). `ritsu run` runs a workflow with its rules, dates and books computed by
-//! their languages (DESIGN 7.9); `ritsu gen` comes later in stage E, `ritsu lsp` in F.
+//! their languages (DESIGN 7.9); `ritsu gen` writes a project as one package for each of
+//! TypeScript, Python and Go (DESIGN 9.3).
+
+mod package;
 
 use ritsu::{check, cli, explain, run};
 use ritsu_base::text::{Lang, Text};
@@ -135,10 +138,14 @@ fn run() -> ExitCode {
             println!("ritsu {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        "check" | "explain" => {
+        "check" | "explain" | "gen" => {
             let mut rest: Vec<String> = args[..at].to_vec();
             rest.extend(args[at + 1..].iter().cloned());
-            ExitCode::from(if first == "check" { check::command(&rest, lang) } else { explain::command(&rest, lang) })
+            ExitCode::from(match first.as_str() {
+                "check" => check::command(&rest, lang),
+                "gen" => package::command(&rest, lang),
+                _ => explain::command(&rest, lang),
+            })
         }
         "run" => {
             let mut rest: Vec<String> = args[..at].to_vec();

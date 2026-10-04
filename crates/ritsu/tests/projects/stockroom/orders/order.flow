@@ -1,0 +1,85 @@
+# An order holds its goods until its payment is due, then ships them by the carrier the delivery
+# rule picks once paid, or puts them back. The rule, the due date and the stock are the project's
+# own: a rule of rulec's, a dates file of koyomi's and a book of chobo's, which `ritsu gen` writes
+# into one package with the workflow.
+workflow order v1
+description "An order holds its goods until its payment is due, then ships them by the carrier a rule picks, or puts them back"
+
+use rule delivery from "../rules/delivery.rule"
+use dates terms from "../dates/payment_terms.cal"
+use book stock from "../books/stock.book"
+
+record Order
+  id       : string
+  sku      : string
+  quantity : int  range >=1 <=100
+  member   : bool
+  amount   : money[GBP, incl_tax]  range >=0GBP <=10000GBP
+
+record Payment
+  paid : bool
+
+enum Outcome = shipped | not_paid | out_of_stock
+
+inputs
+  order : Order
+
+outputs
+  outcome : Outcome
+  carrier : delivery.carrier?
+  due     : date?
+
+# The book holds the goods for the order: chobo's client runs the hold.
+task reserve(order: string, sku: string, qty: int) -> stock.reserve
+  book stock.reserve.hold
+  starts stock.reserve
+  errors out_of_stock
+
+task ship(order: string, sku: string) -> stock.reserve
+  book stock.reserve.post
+  sends post
+  errors expired
+
+task put_back(order: string, sku: string) -> stock.reserve
+  book stock.reserve.void
+  sends void
+  errors expired, already_posted
+
+task check_payment(order: string, due: date) -> Payment
+  http GET "https://payments.example.com/orders/{order}/payment"
+  retry 2 times every 10 seconds
+  idempotent
+
+task hand_over(order: string, carrier: delivery.carrier)
+  http POST "https://carriers.example.com/shipments"
+  key
+
+case hold : stock.reserve follows stock.reserve
+
+flow
+  hold <- reserve(order: order.id, sku: order.sku, qty: order.quantity)
+    on out_of_stock => succeed outcome = out_of_stock, carrier = none, due = none
+  let due = terms.payment(received: now)
+  wait until due.at
+  let payment = check_payment(order: order.id, due: due.day)
+  match payment.paid
+    true =>
+      hold <- ship(order: order.id, sku: order.sku)
+        on expired => succeed outcome = not_paid, carrier = none, due = due.day
+      let pick = delivery(member: order.member, amount: order.amount)
+      hand_over(order: order.id, carrier: pick.carrier)
+      succeed outcome = shipped, carrier = pick.carrier, due = due.day
+    false =>
+      hold <- put_back(order: order.id, sku: order.sku)
+        on expired => pass
+      succeed outcome = not_paid, carrier = none, due = due.day
+
+on failure
+  match hold.state
+    none => pass
+    held =>
+      hold <- put_back(order: order.id, sku: order.sku)
+        on expired => pass
+        on already_posted => pass
+        on failure => fail NotPutBack "the goods held for the order could not be put back" leaving hold
+    posted => pass
