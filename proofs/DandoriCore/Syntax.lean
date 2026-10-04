@@ -1,7 +1,8 @@
 /-
-  The core of a dandori flow (dandori's DESIGN 1.5, 2): the statements, the tasks and rules they
-  call, and the cases that follow state machines — as `crates/dandori/src/model.rs` has them once a
-  `.flow` is checked. How some answers are read before the flow sees them — Jev's, a Claude agent's
+  The core of a dandori flow (dandori's DESIGN 1.5, 1.16, 2): the statements, the tasks and rules
+  they call, the dates of the dates files and the books of chobo's it uses (`use dates`, `use book`),
+  and the cases that follow state machines — a rule's, or the life of a hold of a book's transfer
+  (`case … follows`) — as `crates/dandori/src/model.rs` has them once a `.flow` is checked. How some answers are read before the flow sees them — Jev's, a Claude agent's
   enum values, protobuf's zero values of a Connect service or of a service the flow implements, a
   rule's answer from its Connect service — is not modelled: a run is handed what dandori reads
   each such answer as (`St.reads`), and the model holds what the flow does with it.
@@ -22,6 +23,8 @@ inductive Ty where
   | str
   | bool
   | timestamp
+  /-- a day of the calendar, `2026-10-01` (koyomi's and rulec's `date`) -/
+  | date
   | json
   | enum (values : List String)
   | record (r : Nat)
@@ -41,13 +44,15 @@ structure Field where
   deriving Repr, Inhabited
 
 /-- An expression: a variable and the fields read from it, a value written out, a record, a list,
-    or a string with values put in (its parts, each a literal string or a value). -/
+    a string with values put in (its parts, each a literal string or a value), or `now`, the moment
+    the statement runs as the platform's clock reads it. -/
 inductive Expr where
   | var (name : String) (fields : List String)
   | lit (v : Json)
   | record (fields : List (String × Expr))
   | list (items : List Expr)
   | interp (parts : List Expr)
+  | now
   deriving Inhabited
 
 /-- An error a handler takes: one the task declares, `timeout`, or `failure` (any). A declared
@@ -76,8 +81,9 @@ inductive Callee where
 
 mutual
   inductive Stmt where
-    /-- `[let x =] t(…)` or `c <- t(…)`, and the handlers under it. -/
-    | call (site line : Nat) (target : Option Target) (callee : Callee) (handlers : List Handler)
+    /-- `[let x =] t(…)` or `c <- t(…)`: the arguments, and the handlers under it. -/
+    | call (site line : Nat) (target : Option Target) (callee : Callee) (args : List (String × Expr))
+        (handlers : List Handler)
     | assign (site : Nat) (name : String) (e : Expr)
     /-- `match`: what it reads, as the flow writes it, and the arms. -/
     | matchOn (site line : Nat) (e : Expr) (shown : String) (arms : List Arm)
@@ -115,6 +121,14 @@ structure Retrier where
   max : Nat
   deriving Repr, Inhabited
 
+/-- `book <book>.<transfer>.<op>`: the operation of a book's transfer a task runs (`do`, `hold`,
+    `post` or `void`), by chobo's client. -/
+structure BookOp where
+  book : Nat
+  transfer : String
+  op : String
+  deriving Repr, Inhabited
+
 structure Task where
   name : String
   /-- What it answers; none for a task with no `->`, read as `json`. -/
@@ -124,6 +138,18 @@ structure Task where
   effect : Effect
   /-- `refused as`: the error the call comes back with when the machine refuses its event. -/
   refusedAs : Option String
+  /-- the operation of a book the task runs; a refusal then comes back with the reason the book
+      gives, and a hold, posted or voided answers the hold the arguments make -/
+  book : Option BookOp := none
+  deriving Repr, Inhabited
+
+/-- What a name a flow uses is: a rule of rulec's (`use rule`), a date of a dates file that koyomi
+    computes (`use dates`, called as a rule is, answering the day and its time), or the holds of a
+    book's transfer (`use book`), which a case follows and nothing calls. -/
+inductive RuleKind where
+  | rule
+  | date (file date : String)
+  | hold (book : Nat) (transfer : String)
   deriving Repr, Inhabited
 
 structure Rule where
@@ -131,11 +157,28 @@ structure Rule where
   /-- The record of its outputs. -/
   outputs : Nat
   retriers : List Retrier
+  kind : RuleKind := .rule
+  deriving Repr, Inhabited
+
+/-- A transfer of a book that the tasks run: its name, and the parameters of its key in the order
+    the transfer declares them, which a hold's record carries. -/
+structure Transfer where
+  name : String
+  key : List String
+  deriving Repr, Inhabited
+
+/-- `use book <name> from "<file.book>"`: a book of chobo's, by the transfers the tasks run. -/
+structure Book where
+  name : String
+  transfers : List Transfer
   deriving Repr, Inhabited
 
 structure Case where
   name : String
   stateField : String
+  /-- what it follows (`case … follows`): a rule's machine, or the holds of a book's transfer — the
+      place in `Flow.rules` of one or the other -/
+  rule : Nat := 0
   deriving Repr, Inhabited
 
 structure Flow where
@@ -143,6 +186,7 @@ structure Flow where
   inputs : List Field
   tasks : List Task
   rules : List Rule
+  books : List Book := []
   cases : List Case
   /-- For a call on a case, by its site: the states its answer may carry. -/
   monitors : List (Nat × List String)

@@ -636,7 +636,7 @@ theorem go_on {env : Env} {f : Nat} {rest : List Stmt} {r1 r : Res} {A1 : Abs} {
 
 theorem chkHead_call {env : Env} {rec : List Stmt → Abs → Option Res} {site line : Nat} {tgt : Option Target}
     {callee : Callee} {hs : List Handler} {A : Abs} {r1 : Res}
-    (hh : chkHead env rec (.call site line tgt callee hs) A = some r1) :
+    {args : List (String × Expr)} (hh : chkHead env rec (.call site line tgt callee args hs) A = some r1) :
     ∃ aok aerr rh, callAbs env tgt callee A = some (aok, aerr) ∧ chkHandlers rec aerr hs = some rh ∧
       r1 = { normal := joinO (some aok) rh.normal, brk := rh.brk,
              raised := joinO (if catchesAll hs then none else some aerr) rh.raised } := by

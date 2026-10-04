@@ -18,6 +18,12 @@ open Lean (Json JsonNumber)
 
 /-! ## Values -/
 
+/-- Where a run keeps what `now` reads: a name no variable can have (`interp::NOW_VAR`). -/
+def nowVar : String := "(now)"
+
+/-- What `now` reads when the scenario says nothing else (`render::SCENARIO_NOW`). -/
+def scenarioNow : String := "2026-03-31T15:30:00Z"
+
 def lookupVar (vars : List (String × Json)) (x : String) : Json :=
   match vars.find? (fun p => p.1 == x) with
   | some (_, v) => v
@@ -38,6 +44,7 @@ mutual
     | .record fs => Json.mkObj (evalFields vars fs)
     | .list items => Json.arr (evalList vars items).toArray
     | .interp parts => Json.str (String.join ((evalList vars parts).map valueText))
+    | .now => lookupVar vars nowVar
   def evalFields (vars : List (String × Json)) : List (String × Expr) → List (String × Json)
     | [] => []
     | (f, e) :: rest => (f, eval vars e) :: evalFields vars rest
@@ -60,6 +67,12 @@ def isTimestamp (s : String) : Bool :=
       let frac := rest.dropLast
       frac.isEmpty || (frac.length > 1 && frac.head? == some '.' && frac.tail.all Char.isDigit)
     | _ => false
+
+/-- A day of the calendar, `YYYY-MM-DD`, as `render::is_date` reads it. -/
+def isDate (s : String) : Bool :=
+  let b := s.toList
+  b.length == 10 && b[4]? == some '-' && b[7]? == some '-' &&
+    [0, 1, 2, 3, 5, 6, 8, 9].all (fun i => (b[i]?.map Char.isDigit).getD false)
 
 /-- A JSON number that is a whole number. -/
 def numInt (n : JsonNumber) : Option Int :=
@@ -89,6 +102,9 @@ def fits (recs : List (List Field)) : Nat → Json → Ty → Option Range → B
       | _ => false
     | .timestamp => match v with
       | .str s => isTimestamp s
+      | _ => false
+    | .date => match v with
+      | .str s => isDate s
       | _ => false
     | .int => match v with
       | .num k => match numInt k with
@@ -121,6 +137,8 @@ structure St where
   answers : List Json
   taken : Nat := 0
   visits : Array String := #[]
+  /-- for every answer a call takes, the call's site and the arguments it was given -/
+  args : Array Json := #[]
   ended : Option Json := none
   error : Option String := none
   inOnFailure : Bool := false
@@ -175,6 +193,21 @@ def Flow.answerTy (f : Flow) : Callee → Ty × Option Range
     service. -/
 def Flow.noOutput (f : Flow) : Json := if f.service then Json.mkObj [] else Json.null
 
+/-- What a book's operation, done now or before, answers (`render::book_value`): the hold the
+    arguments make — the parameters of the transfer's key, as the call gives them — in the state
+    the operation leaves it in. An operation done at once (`do`) answers nothing. -/
+def bookValue (f : Flow) (b : BookOp) (args : List (String × Json)) : Json :=
+  let state : Option String := match b.op with
+    | "hold" => some "held"
+    | "post" => some "posted"
+    | "void" => some "voided"
+    | _ => none
+  match state with
+  | none => Json.null
+  | some st =>
+    let key := ((f.books[b.book]?.bind (fun bk => bk.transfers.find? (fun t => t.name == b.transfer))).map Transfer.key).getD []
+    Json.mkObj (key.map (fun k => (k, lookupVar args k)) ++ [("state", Json.str st)])
+
 /-- How a call's tries came out. -/
 inductive Tried where
   | ok (v : Json)
@@ -183,8 +216,10 @@ inductive Tried where
   | stop
 
 /-- Take answers until the call is settled: answered, failed with an error no retrier takes
-    again, or cancelled. The first retrier whose errors match decides. -/
-def tries (site : Nat) (callee : Callee) (cname : String) (retr : List Retrier) : Nat → List Nat → St → Tried × St
+    again, or cancelled. The first retrier whose errors match decides. A book's operation answers
+    the hold its arguments make (`book`), whatever its answer says. -/
+def tries (site : Nat) (callee : Callee) (cname : String) (retr : List Retrier) (args : Json) (book : Option Json) :
+    Nat → List Nat → St → Tried × St
   | 0, _, st => (.stop, st.oops "a call tried more often than any scenario has answers")
   | fuel + 1, counts, st =>
     match st.answers with
@@ -196,20 +231,23 @@ def tries (site : Nat) (callee : Callee) (cname : String) (retr : List Retrier) 
       let okv := (ans.getObjVal? "ok").toOption
       let kind := if isCancel then "cancel" else if okv.isSome then "ok"
         else ((ans.getObjValD "error").getStr?.toOption.getD "failure")
-      let st := st.visit s!"r{site}:{kind}"
+      let st := { (st.visit s!"r{site}:{kind}") with args := st.args.push (Json.arr #[Json.num site, args]) }
       if isCancel then (.cancel, { st with cancelled := true }) else
       match okv with
       | some v =>
-        match st.reads.find? (fun p => p.1.1 == place && p.1.2 == callee) with
-        | some (_, r) =>
-          match (r.getObjVal? "error").toOption with
-          | some e => (.err (e.getStr?.toOption.getD "") ((r.getObjValD "cause").getStr?.toOption.getD ""), st)
-          | none => (.ok (r.getObjValD "value"), st)
-        | none => (.ok v, st)
+        match book with
+        | some bv => (.ok bv, st)
+        | none =>
+          match st.reads.find? (fun p => p.1.1 == place && p.1.2 == callee) with
+          | some (_, r) =>
+            match (r.getObjVal? "error").toOption with
+            | some e => (.err (e.getStr?.toOption.getD "") ((r.getObjValD "cause").getStr?.toOption.getD ""), st)
+            | none => (.ok (r.getObjValD "value"), st)
+          | none => (.ok v, st)
       | none =>
         match (retr.zipIdx).find? (fun (r, _) => matchesError r.names kind) with
         | some (r, i) =>
-          if counts.getD i 0 < r.max then tries site callee cname retr fuel (counts.set i (counts.getD i 0 + 1)) st
+          if counts.getD i 0 < r.max then tries site callee cname retr args book fuel (counts.set i (counts.getD i 0 + 1)) st
           else (.err kind "scripted", st)
         | none => (.err kind "scripted", st)
 
@@ -295,10 +333,14 @@ mutual
             | none => st
           block f fuel body st
         | none => (.stop, st.failWith "Dandori.UnexpectedValue" (Json.str s!"line {line}: {shown} took a value that no arm names"))
-      | .call site line target callee handlers =>
+      | .call site line target callee args handlers =>
         let st := st.visit s!"s{site}"
         let cname := f.calleeName callee
-        match tries site callee cname (f.retriers callee) fuelLimit ((f.retriers callee).map (fun _ => 0)) st with
+        let given := evalFields st.vars args
+        let book : Option Json := match callee with
+          | .task t => ((f.tasks[t]?).bind Task.book).map (fun b => bookValue f b given)
+          | .rule _ => none
+        match tries site callee cname (f.retriers callee) (Json.mkObj given) book fuelLimit ((f.retriers callee).map (fun _ => 0)) st with
         | (.stop, st) => (.stop, st)
         | (.cancel, st) => (.stop, st)
         | (.ok v, st) =>
@@ -422,9 +464,11 @@ end
 
 /-- **One run**: the input checked against its declared shape, the flow, and `on cancel` when a
     cancellation stopped it. Err when the scenario does not fit the flow (an answer missing). -/
-def run (f : Flow) (input : Json) (answers : List Json) (reads : List ((Nat × Callee) × Json)) :
+def run (f : Flow) (input : Json) (answers : List Json) (reads : List ((Nat × Callee) × Json)) (now : String) :
     Except String St := Id.run do
   let mut st : St := { answers := answers, reads := reads }
+  -- what `now` reads: the scenario's moment, which the runners give the platforms' clocks too
+  st := st.set nowVar (Json.str now)
   let mut ok := true
   for fd in f.inputs do
     let v := input.getObjValD fd.name
@@ -451,11 +495,13 @@ def run (f : Flow) (input : Json) (answers : List Json) (reads : List ((Nat × C
   | some e => return .error e
   | none => return .ok st
 
-/-- What `ritsu-model` prints for a run: what it went through, how it ended, and each case's
-    state at the end (null for a case it did not start). -/
+/-- What `ritsu-model` prints for a run: what it went through, the arguments each call was given
+    (once for every answer it took), how it ended, and each case's state at the end (null for a case
+    it did not start). -/
 def runJson (f : Flow) (st : St) : Json :=
   Json.mkObj [
     ("visits", Json.arr (st.visits.map Json.str)),
+    ("args", Json.arr st.args),
     ("end", st.ended.getD Json.null),
     ("cases", Json.mkObj (f.cases.map (fun c => (c.name, (lookupVar st.vars c.name).getObjValD c.stateField))))]
 

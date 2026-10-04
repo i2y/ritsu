@@ -32,6 +32,9 @@ structure Machine where
   next : Nat → String → List Nat
   /-- whether the machine refuses the event in the state -/
   refuses : Nat → String → Bool
+  /-- why a book refuses the event in the state (chobo's `reason`), which its refusal comes back
+      as; nothing for a rule's machine, whose refusal comes back as the task's `refused as` -/
+  reason : Nat → String → Option String := fun _ _ => none
   /-- what the events on the other side lead to from a state -/
   ext : Nat → List Nat
   /-- what any event leads to: a case the flow finds already started can be anywhere these lead -/
@@ -262,7 +265,7 @@ def chkHead (env : Env) (rec : List Stmt → Abs → Option Res) (s : Stmt) (A :
     | .none => chkArms env rec e A arms
   | .repeat _ _ body => loopRes env.n (rec body) A
   | .forEach _ _ _ _ _ body _ parallel => if parallel.isSome then .none else loopRes env.n (rec body) A
-  | .call _ _ tgt callee hs =>
+  | .call _ _ tgt callee _ hs =>
     match callAbs env tgt callee A with
     | .none => .none
     | some (aok, aerr) =>

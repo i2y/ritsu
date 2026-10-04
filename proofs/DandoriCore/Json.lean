@@ -25,6 +25,7 @@ partial def readTy (j : Json) : Except String Ty :=
   | .ok "string" => pure .str
   | .ok "bool" => pure .bool
   | .ok "timestamp" => pure .timestamp
+  | .ok "date" => pure .date
   | .ok "json" => pure .json
   | .ok other => throw s!"unknown type {other}"
   | .error _ =>
@@ -66,6 +67,8 @@ partial def readExpr (j : Json) : Except String Expr := do
     return .list (← (← xs.getArr?).toList.mapM readExpr)
   if let some xs := optField j "interp" then
     return .interp (← (← xs.getArr?).toList.mapM readExpr)
+  if let .ok _ := j.getObjVal? "now" then
+    return .now
   throw "unknown expression"
 
 def readHErr (j : Json) : Except String HErr :=
@@ -91,9 +94,12 @@ mutual
       let callee ← match optField cl "task" with
         | some t => Callee.task <$> t.getNat?
         | none => do pure (Callee.rule (← (← field cl "rule").getNat?))
+      let args ← (← arrOf c "args").mapM (fun p => do
+        let xs ← p.getArr?
+        return (← (xs[0]?.getD Json.null).getStr?, ← readExpr (xs[1]?.getD Json.null)))
       let handlers ← (← arrOf c "handlers").mapM (fun h => do
         return Handler.mk (← (← arrOf h "errors").mapM readHErr) (← readBlock (← field h "body")))
-      return .call site line target callee handlers
+      return .call site line target callee args handlers
     if let some a := optField j "assign" then
       return .assign site (← (← field a "name").getStr?) (← readExpr (← field a "expr"))
     if let some m := optField j "match" then
@@ -136,6 +142,26 @@ mutual
     (← j.getArr?).toList.mapM readStmt
 end
 
+/-- What a name a flow uses is: `"rule"`, `{"date": [file, date]}` or `{"hold": [book, transfer]}`. -/
+def readRuleKind (j : Option Json) : Except String RuleKind :=
+  match j with
+  | none => pure .rule
+  | some k =>
+    if let some d := optField k "date" then do
+      let xs ← d.getArr?
+      return .date (← (xs[0]?.getD Json.null).getStr?) (← (xs[1]?.getD Json.null).getStr?)
+    else if let some h := optField k "hold" then do
+      let xs ← h.getArr?
+      return .hold (← (xs[0]?.getD Json.null).getNat?) (← (xs[1]?.getD Json.null).getStr?)
+    else pure .rule
+
+def readBookOp (j : Option Json) : Except String (Option BookOp) :=
+  match j with
+  | none => pure none
+  | some b => do
+    return some { book := ← (← field b "book").getNat?, transfer := ← (← field b "transfer").getStr?,
+                  op := ← (← field b "op").getStr? }
+
 def readFlow (j : Json) : Except String Flow := do
   let onFailure ← match optField j "on_failure" with
     | some b => some <$> readBlock b
@@ -153,12 +179,20 @@ def readFlow (j : Json) : Except String Flow := do
                   | none => pure none),
                 range := ← readRange (optField t "range"),
                 retriers := ← (← arrOf t "retriers").mapM readRetrier,
-                effect := .none, refusedAs := none } : Task)),
+                effect := .none, refusedAs := none, book := ← readBookOp (optField t "book") } : Task)),
     rules := ← (← arrOf j "rules").mapM (fun r => do
       return ({ name := ← (← field r "name").getStr?, outputs := ← (← field r "outputs").getNat?,
-                retriers := ← (← arrOf r "retriers").mapM readRetrier } : Rule)),
+                retriers := ← (← arrOf r "retriers").mapM readRetrier,
+                kind := ← readRuleKind (optField r "kind") } : Rule)),
+    books := ← ((optField j "books").map (fun bs => do
+        (← bs.getArr?).toList.mapM (fun b => do
+          return ({ name := ← (← field b "name").getStr?,
+                    transfers := ← (← arrOf b "transfers").mapM (fun t => do
+                      return ({ name := ← (← field t "name").getStr?,
+                                key := ← (← arrOf t "key").mapM (·.getStr?) } : Transfer)) } : Book)))).getD (pure []),
     cases := ← (← arrOf j "cases").mapM (fun c => do
-      return ({ name := ← (← field c "name").getStr?, stateField := ← (← field c "state_field").getStr? } : Case)),
+      return ({ name := ← (← field c "name").getStr?, stateField := ← (← field c "state_field").getStr?,
+                rule := ((optField c "rule").bind (fun r => r.getNat?.toOption)).getD 0 } : Case)),
     monitors := ← (← arrOf j "monitors").mapM (fun m => do
       let xs ← m.getArr?
       return (← (xs[0]?.getD Json.null).getNat?, ← (← (xs[1]?.getD Json.null).getArr?).toList.mapM (·.getStr?))),
@@ -187,7 +221,8 @@ def answer (f : Flow) (sc : Json) : Json :=
   let answers := match sc.getObjValD "answers" with
     | .arr xs => xs.toList
     | _ => []
-  match run f (sc.getObjValD "input") answers (readReads sc) with
+  let now := ((sc.getObjValD "now").getStr?.toOption).getD scenarioNow
+  match run f (sc.getObjValD "input") answers (readReads sc) now with
   | .ok st => runJson f st
   | .error e => Json.mkObj [("error", Json.str e)]
 

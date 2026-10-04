@@ -1,12 +1,15 @@
 //! dandori's reference interpreter, held to `DandoriCore` (DESIGN 11.3).
 //!
-//! Every flow of dandori's examples and tests: each scenario `dandori scenarios` writes for it is
-//! run by the reference interpreter (as Temporal sees a run: an error known by its kind) and by the
-//! Lean model, and the two are compared — everything the run went through (each statement, arm,
-//! answer, handler, round and loop's end, `on failure` and `on cancel`), how it ended (the outputs,
-//! or the error and its cause), and the state each case's record says at the end. How some answers
-//! are read before the flow sees them is not the core (DESIGN 11.2), and the model is handed what
-//! dandori's own functions read each one as (`read_as`). `-- --nocapture` shows a
+//! Every flow of dandori's examples and tests, the ones that use koyomi's dates and chobo's books
+//! too (`use dates`, `use book`, `now`): each scenario `dandori scenarios` writes for it is run by
+//! the reference interpreter (as Temporal sees a run: an error known by its kind) and by the Lean
+//! model, and the two are compared — everything the run went through (each statement, arm, answer,
+//! handler, round and loop's end, `on failure` and `on cancel`), how it ended (the outputs, or the
+//! error and its cause), the state each case's record says at the end, and the arguments each call
+//! is given, where the call the platform sees carries them as they are. How some answers are read
+//! before the flow sees them is not the core (DESIGN 11.2), and the model is handed what dandori's
+//! own functions read each one as (`read_as`); a book's operation, whose answer is the hold its
+//! arguments make, is the model's own (`DandoriCore.bookValue`). `-- --nocapture` shows a
 //! `compared dandori <flow>: <n> lines` line for each flow.
 
 use dandori::interp::{self, Visit};
@@ -21,13 +24,14 @@ fn dandori_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../dandori")
 }
 
-/// Run `f` reading the rules through rulec's own answer to the port, as `ritsu dandori` does.
+/// Run `f` reading the rules, the dates files and the books through rulec's, koyomi's and chobo's
+/// own answers to the ports, as a program that joins them all reads them.
 fn with_rules<R>(f: impl FnOnce() -> R) -> R {
     thread_local! {
         static RULEC: std::rc::Rc<rulec::ports::Engine> = std::rc::Rc::new(rulec::ports::Engine::new());
     }
     let rules: std::rc::Rc<dyn ritsu_ports::Rules> = RULEC.with(|r| r.clone());
-    dandori::sources::with_rules(rules, f)
+    dandori::sources::with_ports(rules, std::rc::Rc::new(koyomi::ports::Engine), std::rc::Rc::new(chobo::ports::Engine), f)
 }
 
 /// Every `.flow` under a directory, in order, the English ones before their Japanese twins.
@@ -90,7 +94,7 @@ fn scenario_line(m: &Model, sc: &Value) -> String {
             }
         }
     }
-    json!({"input": input, "answers": sc["answers"], "reads": reads}).to_string()
+    json!({"input": input, "answers": sc["answers"], "reads": reads, "now": sc.get("now").cloned().unwrap_or(Value::Null)}).to_string()
 }
 
 fn range(r: Option<Range>) -> Value {
@@ -176,13 +180,14 @@ fn block(m: &Model, ss: &[TStmt]) -> Value {
 
 fn stmt(m: &Model, s: &TStmt) -> Value {
     let k = match &s.kind {
-        TK::Call { target, callee, handlers, .. } => json!({"call": {
+        TK::Call { target, callee, args, handlers } => json!({"call": {
             "target": match target {
                 None => Value::Null,
                 Some(Target::Let(x)) => json!({"let": x}),
                 Some(Target::Case(c)) => json!({"case": c}),
             },
             "callee": match callee { Callee::Task(t) => json!({"task": t}), Callee::Rule(r) => json!({"rule": r}) },
+            "args": args.iter().map(|(n, e)| json!([n, expr(e)])).collect::<Vec<_>>(),
             "handlers": handlers.iter().map(|h| json!({
                 "errors": h.errors.iter().map(|e| match e {
                     HErr::Failure => json!("failure"),
@@ -230,9 +235,28 @@ fn flow_json(m: &Model) -> Value {
             "result": t.result.as_ref().map(|r| ty(m, r)),
             "range": range(t.result_range),
             "retriers": retriers(m, &Callee::Task(i)),
+            "book": t.book().map(|b| json!({"book": b.book, "transfer": b.transfer, "op": b.op})),
         })).collect::<Vec<_>>(),
-        "rules": m.rules.iter().enumerate().map(|(i, r)| json!({"name": r.name, "outputs": r.outputs, "retriers": retriers(m, &Callee::Rule(i))})).collect::<Vec<_>>(),
-        "cases": m.cases.iter().map(|c| json!({"name": c.name, "state_field": c.state_field})).collect::<Vec<_>>(),
+        "rules": m.rules.iter().enumerate().map(|(i, r)| json!({
+            "name": r.name,
+            "outputs": r.outputs,
+            "retriers": retriers(m, &Callee::Rule(i)),
+            "kind": match &r.kind {
+                RuleKind::Rule => json!("rule"),
+                RuleKind::Date(d) => json!({"date": [d.file, d.date]}),
+                RuleKind::Hold { book, transfer } => json!({"hold": [book, transfer]}),
+            },
+        })).collect::<Vec<_>>(),
+        // the parameters of each transfer's key in the order the transfer declares them: what a hold's
+        // record carries (`render::book_value`)
+        "books": m.books.iter().map(|b| json!({
+            "name": b.name,
+            "transfers": b.facts.transfers.iter().map(|t| json!({
+                "name": t.name,
+                "key": t.params.iter().filter(|p| t.key.contains(&p.name)).map(|p| p.name.clone()).collect::<Vec<_>>(),
+            })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+        "cases": m.cases.iter().map(|c| json!({"name": c.name, "state_field": c.state_field, "rule": c.rule})).collect::<Vec<_>>(),
         "monitors": m.monitors.iter().map(|(site, (_, allowed))| json!([site, allowed])).collect::<Vec<_>>(),
         "flow": block(m, &m.flow),
         "on_failure": m.on_failure.as_ref().map(|b| block(m, b)),
@@ -258,24 +282,92 @@ fn visit(v: &Visit) -> String {
     }
 }
 
-/// What the reference interpreter says of one scenario, as the model prints it.
-fn ours(m: &Model, sc: &Value) -> String {
+/// The callee of every call, by the call's site.
+fn callees(m: &Model) -> std::collections::BTreeMap<usize, Callee> {
+    m.all_stmts().into_iter().filter_map(|s| match &s.kind {
+        TK::Call { callee, .. } => Some((s.site, callee.clone())),
+        _ => None,
+    }).collect()
+}
+
+/// The sites of the calls whose wire carries their arguments as they are (`carried`): a rule's or a
+/// date's (not one called at its Connect service), and a task that Temporal runs as its own
+/// activity or a Lambda function. The binding decides it, whatever the run.
+fn carrying(m: &Model) -> std::collections::BTreeSet<usize> {
+    callees(m)
+        .into_iter()
+        .filter(|(_, c)| match c {
+            Callee::Rule(r) => m.rules[*r].connect.is_none(),
+            Callee::Task(t) => matches!(m.tasks[*t].via(Platform::Temporal), Some(Via::Own) | Some(Via::Image(_)) | Some(Via::Lambda(_))),
+        })
+        .map(|(site, _)| site)
+        .collect()
+}
+
+/// The arguments a call was given, where the call as Temporal sees it carries them as they are: a
+/// rule's or a date's activity, a task's own activity or its Lambda function (the idempotency key
+/// beside them taken out). None for the other ways a call goes out (HTTP, an agent, a book, …),
+/// which make something else of the arguments.
+fn carried(m: &Model, callee: &Callee, wire: &Value) -> Option<Value> {
+    let mut a = if wire.get("activity").is_some() {
+        wire.get("args")?.clone()
+    } else if wire.get("lambda").is_some() {
+        wire.get("payload")?.clone()
+    } else {
+        return None;
+    };
+    if let Callee::Task(t) = callee {
+        if m.tasks[*t].key {
+            a.as_object_mut()?.remove("idempotency_key");
+        }
+    }
+    Some(a)
+}
+
+/// What the reference interpreter says of one scenario, as the model prints it, with the arguments
+/// of the calls whose wire carries them (the sites in `shown`, which `same` holds the model to).
+fn ours(m: &Model, sc: &Value, shown: &std::collections::BTreeSet<usize>) -> String {
     let run = interp::run_visits(m, sc, View::Temporal).and_then(|(trace, visits)| interp::cases_at_end(m, sc, View::Temporal).map(|cases| (trace, visits, cases)));
     match run {
-        Ok((trace, visits, cases)) => json!({
-            "visits": visits.iter().map(visit).collect::<Vec<_>>(),
-            "end": trace["end"],
-            "cases": cases,
-        })
-        .to_string(),
+        Ok((trace, visits, cases)) => {
+            // every answer a call takes is one step of the trace, in the order of the visits' answers
+            let by_site = callees(m);
+            let steps = trace["steps"].as_array().cloned().unwrap_or_default();
+            let answered = visits.iter().filter_map(|v| match v {
+                Visit::Answer(site, _) => Some(*site),
+                _ => None,
+            });
+            let mut args = Vec::new();
+            for (site, step) in answered.zip(&steps) {
+                if !shown.contains(&site) {
+                    continue;
+                }
+                // a call `carrying` names whose wire does not carry its arguments goes in as null, and
+                // differs from the model's
+                let a = by_site.get(&site).and_then(|c| carried(m, c, &step["call"])).unwrap_or(Value::Null);
+                args.push(json!([site, a]));
+            }
+            json!({
+                "visits": visits.iter().map(visit).collect::<Vec<_>>(),
+                "args": args,
+                "end": trace["end"],
+                "cases": cases,
+            })
+            .to_string()
+        }
         Err(e) => json!({"error": e}).to_string(),
     }
 }
 
-fn same(ours: &str, model: &str) -> bool {
-    let (Ok(a), Ok(b)) = (serde_json::from_str::<Value>(ours), serde_json::from_str::<Value>(model)) else { return false };
+/// Whether the model's run is ours: the same in everything, the arguments compared for the calls
+/// whose wire carries them (the model prints them for every call).
+fn same(ours: &str, model: &str, shown: &std::collections::BTreeSet<usize>) -> bool {
+    let (Ok(a), Ok(mut b)) = (serde_json::from_str::<Value>(ours), serde_json::from_str::<Value>(model)) else { return false };
     if a.get("error").is_some() || b.get("error").is_some() {
         return a.get("error").is_some() && b.get("error").is_some();
+    }
+    if let Some(args) = b.get_mut("args").and_then(|x| x.as_array_mut()) {
+        args.retain(|e| e[0].as_u64().is_some_and(|site| shown.contains(&(site as usize))));
     }
     a == b
 }
@@ -292,16 +384,9 @@ fn every_scenario_of_every_flow_runs_as_the_model_says() {
     for d in ["examples", "tests/flows", "tests/children"] {
         flows_in(&root.join(d), &mut files);
     }
-    let (mut flows, mut lines, mut outside, mut later) = (0, 0usize, Vec::new(), Vec::new());
+    let (mut flows, mut lines, mut outside, mut arg_calls) = (0, 0usize, Vec::new(), 0usize);
     for (i, p) in files.iter().enumerate() {
         let shown = p.strip_prefix(&root).unwrap().display().to_string();
-        // DandoriCore does not model koyomi's dates and chobo's books yet (`use dates`, `use book`,
-        // `now`): those flows wait for it, and are named so that none is passed over unsaid.
-        let src = std::fs::read_to_string(p).unwrap_or_default();
-        if src.contains("use dates") || src.contains("use book") {
-            later.push(shown);
-            continue;
-        }
         let m = with_rules(|| dandori::check::check_file(p)).unwrap_or_else(|e| panic!("{shown}: {e}")).1.model;
         let Some(m) = m else {
             outside.push(format!("{shown}: does not pass check"));
@@ -309,20 +394,20 @@ fn every_scenario_of_every_flow_runs_as_the_model_says() {
         };
         let scenarios = dandori::scenarios::generate(&m);
         let file = tmp.write(&format!("{i}.json"), flow_json(&m).to_string());
-        let rows = scenarios.iter().map(|sc| (scenario_line(&m, sc), ours(&m, sc)));
-        let c = with_rules(|| compare(&bin, "dandori", &file, rows, &same)).unwrap_or_else(|e| panic!("{shown}: {e}"));
+        let sites = carrying(&m);
+        let rows = scenarios.iter().map(|sc| (scenario_line(&m, sc), ours(&m, sc, &sites)));
+        let c = with_rules(|| compare(&bin, "dandori", &file, rows, &|a: &str, b: &str| same(a, b, &sites))).unwrap_or_else(|e| panic!("{shown}: {e}"));
         assert_eq!(c.differ, 0, "{}", c.report(&shown));
-        println!("compared dandori {shown}: {} lines", c.lines);
+        println!("compared dandori {shown}: {} lines, the arguments of {} call(s)", c.lines, sites.len());
         flows += 1;
         lines += c.lines;
+        arg_calls += sites.len();
     }
     for o in &outside {
         println!("not compared: {o}");
     }
-    for l in &later {
-        println!("not compared yet: {l} (dates and books are not in DandoriCore yet)");
-    }
     assert!(outside.is_empty(), "every flow of the examples and tests passes check");
-    assert!(flows >= 49, "the flows are fewer than they were: {flows}");
-    assert!(lines >= 1100, "the scenarios are fewer than they were: {lines}");
+    assert!(flows >= 52, "the flows are fewer than they were: {flows}");
+    assert!(lines >= 1150, "the scenarios are fewer than they were: {lines}");
+    assert!(arg_calls >= 40, "the calls whose arguments are compared are fewer than they were: {arg_calls}");
 }

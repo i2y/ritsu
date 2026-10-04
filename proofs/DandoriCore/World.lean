@@ -49,10 +49,15 @@ def caseCall (env : Env) (tgt : Option Target) (callee : Callee) : Option (Nat �
   | some (.case c), .task t => (env.flow.tasks[t]?).map (fun tk => (c, tk.effect))
   | _, _ => none
 
-/-- The error a refused event comes back as. -/
-def refusedName (env : Env) (callee : Callee) : String :=
+/-- The error a refused event comes back as: for a book's operation, the reason the book refuses it
+    with in the case's state (chobo's `reason`); for a rule's machine, the task's `refused as`. -/
+def refusedName (env : Env) (callee : Callee) (c s : Nat) (e : String) : String :=
   match callee with
-  | .task t => ((env.flow.tasks[t]?).bind (·.refusedAs)).getD "failure"
+  | .task t => match env.flow.tasks[t]? with
+    | some tk => match tk.book with
+      | some _ => ((env.ms c).reason s e).getD "failure"
+      | none => tk.refusedAs.getD "failure"
+    | none => "failure"
   | .rule _ => "failure"
 
 /-- **One call, on the other side.** -/
@@ -62,7 +67,7 @@ inductive CallStep (env : Env) (tgt : Option Target) (callee : Callee) : World �
   | sendOk {w c e s s'} : caseCall env tgt callee = some (c, .sends e) → (w c).2 = some s →
       s' ∈ (env.ms c).next s e → CallStep env tgt callee w (.ok (setW w c (some s', some s')))
   | sendRefused {w c e s} : caseCall env tgt callee = some (c, .sends e) → (w c).2 = some s →
-      (env.ms c).refuses s e = true → CallStep env tgt callee w (.err (refusedName env callee) w)
+      (env.ms c).refuses s e = true → CallStep env tgt callee w (.err (refusedName env callee c s e) w)
   | sendFailed {w c e k} : caseCall env tgt callee = some (c, .sends e) → CallStep env tgt callee w (.err k w)
   | sendFailedAfter {w c e k s s'} : caseCall env tgt callee = some (c, .sends e) → (w c).2 = some s →
       s' ∈ (env.ms c).next s e → CallStep env tgt callee w (.err k (setW w c ((w c).1, some s')))
@@ -147,15 +152,15 @@ inductive Exec (env : Env) : List Stmt → World → Out → Prop
       Exec env (.forEach site line x list max body result par :: rest) w o
   | forTooMany {site line x list max body result par rest w} :
       Exec env (.forEach site line x list max body result par :: rest) w (.ended none w)
-  | callOk {site line tgt callee hs rest w w1 w2 o} : ExtW env w w1 → CallStep env tgt callee w1 (.ok w2) →
-      Exec env rest w2 o → Exec env (.call site line tgt callee hs :: rest) w o
-  | callHandled {site line tgt callee hs rest w w1 w2 w3 o k h} : ExtW env w w1 → CallStep env tgt callee w1 (.err k w2) →
+  | callOk {site line tgt callee args hs rest w w1 w2 o} : ExtW env w w1 → CallStep env tgt callee w1 (.ok w2) →
+      Exec env rest w2 o → Exec env (.call site line tgt callee args hs :: rest) w o
+  | callHandled {site line tgt callee args hs rest w w1 w2 w3 o k h} : ExtW env w w1 → CallStep env tgt callee w1 (.err k w2) →
       h ∈ hs → h.takes k → Exec env h.body w2 (.normal w3) → Exec env rest w3 o →
-      Exec env (.call site line tgt callee hs :: rest) w o
-  | callHandledStop {site line tgt callee hs rest w w1 w2 o k h} : ExtW env w w1 → CallStep env tgt callee w1 (.err k w2) →
-      h ∈ hs → h.takes k → Exec env h.body w2 o → o.stops → Exec env (.call site line tgt callee hs :: rest) w o
-  | callRaised {site line tgt callee hs rest w w1 w2 k} : ExtW env w w1 → CallStep env tgt callee w1 (.err k w2) →
-      (∀ h ∈ hs, ¬ h.takes k) → Exec env (.call site line tgt callee hs :: rest) w (.raised w2)
+      Exec env (.call site line tgt callee args hs :: rest) w o
+  | callHandledStop {site line tgt callee args hs rest w w1 w2 o k h} : ExtW env w w1 → CallStep env tgt callee w1 (.err k w2) →
+      h ∈ hs → h.takes k → Exec env h.body w2 o → o.stops → Exec env (.call site line tgt callee args hs :: rest) w o
+  | callRaised {site line tgt callee args hs rest w w1 w2 k} : ExtW env w w1 → CallStep env tgt callee w1 (.err k w2) →
+      (∀ h ∈ hs, ¬ h.takes k) → Exec env (.call site line tgt callee args hs :: rest) w (.raised w2)
 
 /-- **A run that ends where the check looks**, handing over the cases `leaving`: at the end of
     the flow, at a `succeed` or a `fail`, or at the end of `on failure` after a task's error
