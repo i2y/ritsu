@@ -111,7 +111,7 @@ e62b96ac475dbcde8599ea905d088f65d90778f86e259b856a49fa5c4ea256ec  junit-platform
 
 #### api の形（DESIGN 9 章）
 
-キーはこの順に出す：`sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings`、`not_checked`（ritsu の D.8 から、`crossings[].via` は参照の種類ごとの語で、`not_checked` はいつも空。DESIGN 9 章）。名前は名指しの形の JSON。`relationships[].kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。役割の語は `conformist`、`anticorruption_layer`、`customer`、`supplier`、`open_host_service`、`published_language`。B で形を決め、`tests/golden/api/` に固定する。C と D は、キーを足すことはあっても、名前を変えない。
+キーはこの順に出す：`sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings`（ritsu の D.8 から、`crossings[].via` は参照の種類ごとの語。いつも空だった `not_checked` は ritsu の段階 E で消した。DESIGN 9 章）。名前は名指しの形の JSON。`relationships[].kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。役割の語は `conformist`、`anticorruption_layer`、`customer`、`supplier`、`open_host_service`、`published_language`。B で形を決め、`tests/golden/api/` に固定する。C と D は、キーを足すことはあっても、名前を変えない。
 
 ## 1. ディレクトリ
 
@@ -879,7 +879,7 @@ sakai が ritsu に取り込まれ、一式の言語を一つの処理系にま�
 - 規則の同梱、Lambda、ローカル、`apply` は、規則そのものを使う参照で、共有カーネルの中でなければ E202。`use openapi` と `use smithy` の記述、JSON Schema、出典の写しは、それを読む成果物の一部で、参照に数えない（DESIGN 3.3）。
 - koyomi と dandori は、構文を読めるファイルに参照を答える（rulec は検査を通る規則にだけ事実を答える）。
 - sakai のクレートのバイナリは、地図が規則、カレンダー、ワークフローを含むと、`check`、`api`、`build`、`export` のどれでも E104 で止まる。
-- api の `not_checked` は、いつも空のまま残した。
+- api の `not_checked` は、いつも空のまま残した（ritsu の段階 E で消した。DESIGN 9 章）。
 
 5.3 の申し送りの「C.1〜C.5 を作るときに気をつけること」は、次のとおりにした。
 

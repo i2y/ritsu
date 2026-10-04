@@ -1293,7 +1293,7 @@ BoundedContext ordering {
 
 **決定**：`sakai api <map.ctx>` は、地図と属し方と境界を越える参照を JSON で出す。読むのは yuen（成果物がどのコンテキストに属し、持ち主はだれか）と、将来の dandori（自分の参照が地図に沿うか）で、検査を通らない地図には出さない（exit 1。診断は標準エラーに出す）。形は一式の api にそろえ、キーを決まった順に出す（serde_json の `preserve_order`）。名前は 2 章の JSON の形、パスはルートからの相対で書く。
 
-キーは `sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings`、`not_checked` の順。`tests/maps/基本/` の api（全文は `tests/golden/api/基本.json`）から、頭と、関係と成果物と境界を越える参照の一つめずつを抜き出す（`…` は省いたところ）。
+キーは `sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings` の順。`tests/maps/基本/` の api（全文は `tests/golden/api/基本.json`）から、頭と、関係と成果物と境界を越える参照の一つめずつを抜き出す（`…` は省いたところ）。
 
 ```json
 {
@@ -1393,7 +1393,7 @@ BoundedContext ordering {
 - `relationships[]`：`kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。上流と下流の関係は、`roles` の `upstream`（`supplier`、`open_host_service`、`published_language`）と `downstream`（`conformist`、`anticorruption_layer`、`customer`）、`through`、`layer`、`enums`（上流の列挙の名指し、先、`checked`、値の対応）、`terms`、`declared`（宣言した `.ctx` の行）を持つ。対応の先が名前だけなら `"to": {"name": "出荷の可否"}` で、`checked` は false になる。共有カーネルは `sides` に両側の並びを持つ。
 - `artifacts[]`：範囲の成果物の全部。名指しと、属するコンテキストと、それを決めた `owns` の行と、ファイルの SHA-256（先頭 16 桁）。yuen が、成果物の定義が変わったかを知るのに使える。
 - `crossings[]`：境界を越える参照の全部。もとと先の名指し、行、二つのコンテキスト、参照の仕方（`via`。proto の import は `proto import`、ほかは、もとの言語が口で言う語：`import proto`、`shape`、`apply`、`use calendar`、`use rule`、`use rule … connect` など、`use proto`、`connect`、`flow`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3。proto の import と、規則の `import proto` と `shape` のほかは空）、許した関係（`allowed_by`）。
-- `not_checked[]`：確かめていない成果物。いつも空の並びである。ほかの言語の成果物を読めなければ、検査が E104 か E105 を出し、api は検査を通らない地図には出さないからである。キーは api の形を変えないために残した（★）。
+- 確かめていない成果物を並べる `not_checked[]` は、ritsu の段階 E で消した。ritsu の口で一式を読むようになってから、いつも空の並びだったからである。ほかの言語の成果物を読めなければ、検査が E104 か E105 を出し、api は検査を通らない地図には出さないので、api を出すときには、確かめていない成果物は無い。言語をまたいで決められなかったこと（ritsu の口の答えの `Undecided`）は、sakai が尋ねる口（`Rules` の事実、索引の `References` と `Items`、`Books` の事実）には無く、言語の境目の検査（ritsu の DESIGN 7 章）の結果として `ritsu check` が言う（要約の境目の数と JSON の `borders`、`tool` が `ritsu` の診断）。実行のときにしか見えない呼び出し（3.7）は成果物ごとのものではなく、doc の「確かめていないこと」に書く（10 章）。いつも空のキーを残すと、読む人がそこに何かが入ると思って待つことになる。
 
 ## 10. doc
 
@@ -1507,6 +1507,7 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 - 参照と規則が持つものを、言語ごとにではなく、プロジェクトの索引で引く（4.1）。コマンドの振る舞いは変えていない（例と fixture の全部の 238 回の出力が、クレートのバイナリでも `ritsu sakai` でも一字も違わない）。
 - `ritsu check` のために、`sakai::run::checked` が、`sakai check` が地図ごとに印字するもの（診断一つずつのテキストと `--format json` のオブジェクト、通った地図の `ok —` の行）を、コマンドと同じ関数で作って渡す（ritsu の DESIGN 8.3）。ルートの決め方と、パスをルートからの相対にする部分は、コマンドと同じ関数を使う（`run::root_from`、`run::from_root`）。コマンドの振る舞いは変えていない。
 - E104 で止まったときの exit code を 1 から 2 にした（`check`、`api`、`build`、`export`。4.1）。ritsu の受け取る側の三つの言語（dandori の E018、yuen の E206）と同じ断り方にそろえた（ritsu の DESIGN 2.3）。sakai のクレートのバイナリで、規則、カレンダー、ワークフローを含む地図を渡したときの終了コードだけが変わる。台帳の E104 の説明と、`check --help` と `sakai --help` の終了コードの行にも書いた。
+- api から `not_checked` を消した（9 章に理由）。api の JSON のキーが一つ減る。`tests/golden/api/` の二つを取り直した。
 
 ## 13. 捨てたもの
 

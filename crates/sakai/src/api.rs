@@ -123,7 +123,6 @@ pub fn api(c: &Checked) -> Value {
                 "allowed_by": allowed,
             })
         }).collect::<Vec<_>>(),
-        "not_checked": Vec::<Value>::new(),
     })
 }
 

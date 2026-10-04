@@ -24,7 +24,7 @@ fn the_keys_come_in_their_order() {
     let os = common::check_dir(dir.path());
     let v = sakai::api::api(os[0].checked.as_ref().unwrap());
     let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
-    assert_eq!(keys, ["sakai", "map", "covers", "except", "contexts", "relationships", "artifacts", "crossings", "not_checked"]);
+    assert_eq!(keys, ["sakai", "map", "covers", "except", "contexts", "relationships", "artifacts", "crossings"]);
     let a = &v["artifacts"][0];
     let keys: Vec<&String> = a.as_object().unwrap().keys().collect();
     assert_eq!(keys, ["name", "context", "by", "sha256"]);
@@ -73,5 +73,7 @@ fn each_crossing_says_how_it_refers() {
     // a rule's enum and a shape's message cross with what they reach
     let shape = &v["crossings"][1]["elements"];
     assert_eq!(shape.as_array().unwrap().len(), 4, "{shape}");
-    assert!(v["not_checked"].as_array().unwrap().is_empty());
+    // what is not checked is said where it is: a map that does not pass is not printed (ritsu's
+    // stage E took the always empty `not_checked` out; DESIGN 9)
+    assert!(v.get("not_checked").is_none());
 }
