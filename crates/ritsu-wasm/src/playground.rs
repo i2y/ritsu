@@ -16,7 +16,8 @@
 //!
 //! Each answer is what the command prints (`out`, `err`), its exit code, and what it writes. Where
 //! a language's command takes the writers it prints to (ritsu's `check`, rulec's `gen`, dandori,
-//! yuen, sakai), the command itself runs. rulec's `doc`, koyomi's and chobo's commands print to the
+//! yuen, sakai), the command itself runs; dandori's as `ritsu dandori` runs it, with a flow's rules,
+//! dates files and books read in the same process (`ritsu::languages::dandori`). rulec's `doc`, koyomi's and chobo's commands print to the
 //! process's own output, which a page has none of; for them the functions here call the functions
 //! the command calls, in its order, and say what it says. crates/ritsu/tests/playground.rs holds
 //! every answer to what the `ritsu` binary prints and writes in a directory holding the same files.
@@ -166,7 +167,7 @@ pub fn generate(r: &Request) -> Value {
             Tool::Chobo => chobo_build(p, l, target.as_deref().unwrap_or_default()),
             Tool::Dandori => {
                 let (args, shown) = words(&["dandori", "build", p, "--target", target.as_deref().unwrap_or_default(), "--out", OUT], l);
-                ran(shown, |o, e| dandori::cli::run(&args[1..], joined.rules(), o, e))
+                ran(shown, |o, e| ritsu::languages::dandori(&args[1..], o, e))
             }
             Tool::Sakai => {
                 let (args, shown) = words(&["sakai", "export", "cml", p, "--root", "."], l);
@@ -201,7 +202,6 @@ pub fn doc(r: &Request) -> Value {
     let p = r.path.as_str();
     let l = r.lang;
     let pages = fs::with(r.memory(), || -> Option<(Ran, Ran)> {
-        let joined = Joined::new();
         let one = |html: bool| -> Ran {
             match tool {
                 Tool::Rulec => rulec_doc(p, l, html),
@@ -210,7 +210,7 @@ pub fn doc(r: &Request) -> Value {
                 _ => {
                     let w: &[&str] = if html { &["dandori", "doc", p, "--format", "html"] } else { &["dandori", "doc", p] };
                     let (args, shown) = words(w, l);
-                    ran(shown, |o, e| dandori::cli::run(&args[1..], joined.rules(), o, e))
+                    ran(shown, |o, e| ritsu::languages::dandori(&args[1..], o, e))
                 }
             }
         };

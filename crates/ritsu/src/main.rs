@@ -67,14 +67,9 @@ fn language(name: &str, args: &[String]) -> ExitCode {
             let _ = out.flush();
             std::process::exit(code);
         }
-        "dandori" => {
-            // a flow reads its rules, dates files and books in the same process (DESIGN 7.8), and
-            // the code dandori writes checks the preconditions ritsu cannot decide at a flow's calls
-            // of rules when the workflow runs (DESIGN 7.4)
-            let j = Joined::new();
-            let undecided = std::rc::Rc::new(ritsu_cross::UndecidedCalls::new(&j));
-            dandori::cli::run_with_undecided(args, j.rules(), j.koyomi.clone(), j.chobo.clone(), undecided, &mut out, &mut err)
-        }
+        // a flow reads its rules, dates files and books in the same process (DESIGN 7.8), as the
+        // page in the browser runs it too
+        "dandori" => ritsu::languages::dandori(args, &mut out, &mut err),
         "yuen" => yuen::run::run(args, Joined::new().yuen(), &mut out, &mut err),
         "sakai" => sakai::run::run(args, Joined::new().sakai(), &mut out, &mut err),
         _ => unreachable!("only the seven languages come here"),
