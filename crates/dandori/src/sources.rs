@@ -164,6 +164,16 @@ impl Rules for NoRules {
     fn doc(&self, rule: &Path, _: &str, _: bool, _: Lang) -> Result<String, Vec<Said>> {
         Err(no_rules(rule))
     }
+
+    fn joined(&self) -> bool {
+        false
+    }
+}
+
+/// Whether the rules a flow uses can be read here: false in the dandori binary of this crate,
+/// which holds no rulec (E018).
+pub fn rules_joined() -> bool {
+    current().rules().joined()
 }
 
 /// A path as a bundle names it: without `.` and `..`, with `/` between the parts.

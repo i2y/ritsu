@@ -38,15 +38,15 @@ fn path_of(t: &common::TempDir, name: &str) -> String {
 // ── C.1 the ports, joined ─────────────────────────────────────────────────────
 
 /// The binary of this crate holds no other language: for each, a project that names one of its
-/// things is refused with exit 2, the language named, and told to run `ritsu yuen`.
+/// things is told so (E206) with exit 2, the language named, and to run `ritsu yuen`.
 #[test]
 fn the_binary_refuses_each_language_it_does_not_hold() {
     for (fixture, tool) in [("rulec", "rulec"), ("koyomi", "koyomi"), ("chobo", "chobo"), ("geas", "geas"), ("dandori", "dandori"), ("sakai", "sakai")] {
         let dir = format!("tests/fixtures/{fixture}");
         let r = common::yuen(Path::new("."), &["check", &dir, "--root", &dir]);
         assert_eq!(r.code, 2, "{fixture}: {}{}", r.stdout, r.stderr);
-        assert!(r.stderr.contains(&format!("this yuen cannot read {tool} ")), "{fixture}: {}", r.stderr);
-        assert!(r.stderr.contains(&format!("`ritsu yuen check {dir} --root {dir}`")), "{fixture}: {}", r.stderr);
+        assert!(r.stdout.contains("[E206]: ") && r.stdout.contains(&format!("this yuen cannot read {tool} ")), "{fixture}: {}", r.stdout);
+        assert!(r.stdout.contains(&format!("`ritsu yuen check {dir} --root {dir}`")), "{fixture}: {}", r.stdout);
         let joined = common::run(&["check", &dir, "--root", &dir]);
         assert_eq!(joined.code, 0, "{fixture}: {}{}", joined.stdout, joined.stderr);
     }

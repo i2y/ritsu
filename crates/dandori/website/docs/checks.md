@@ -85,4 +85,4 @@ loop, or one round that is too large, and the diagnostic says which.
 
 ## Every code
 
-[Diagnostics](reference/codes.md) lists all 30, with what each one finds.
+[Diagnostics](reference/codes.md) lists all 31, with what each one finds.

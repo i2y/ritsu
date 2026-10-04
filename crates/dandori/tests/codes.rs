@@ -53,9 +53,11 @@ fn every_code_the_checker_gives_is_in_the_ledger_once_and_in_order() {
     }
 }
 
-/// The codes the example of an entry gives: the check's, and when it passes, every build's.
-fn codes_of(dir: &Path) -> Vec<String> {
-    dandori::sources::with_rules(Rc::new(rulec::ports::Engine::new()), || {
+/// The codes the example of an entry gives: the check's, and when it passes, every build's. With
+/// `joined`, the rules are read through rulec; without (E018), as the dandori binary reads them.
+fn codes_of(dir: &Path, joined: bool) -> Vec<String> {
+    let rules: Rc<dyn ritsu_ports::Rules> = if joined { Rc::new(rulec::ports::Engine::new()) } else { Rc::new(dandori::sources::NoRules) };
+    dandori::sources::with_rules(rules, || {
         let (_, c) = dandori::check::check_file(&dir.join("example.flow")).unwrap();
         let mut codes: Vec<String> = c.diags.iter().map(|d| d.code.to_string()).collect();
         if let Some(m) = &c.model {
@@ -73,7 +75,7 @@ fn codes_of(dir: &Path) -> Vec<String> {
 fn every_example_gives_its_code() {
     let ledger = dandori::codes::ledger();
     let scratch = ritsu_testkit::TempDir::new("codes");
-    let failures = ritsu_base::ledger::check_every(&ledger, scratch.path(), |_, dir| codes_of(dir));
+    let failures = ritsu_base::ledger::check_every(&ledger, scratch.path(), |e, dir| codes_of(dir, e.code != "E018"));
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

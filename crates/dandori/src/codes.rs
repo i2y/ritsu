@@ -76,12 +76,12 @@ pub fn ledger() -> Ledger {
             "E005",
             tr!("規則を読めません", "A rule that could not be read"),
             tr!(
-                "rulec の検査を通らない規則、`dandori` のコマンドだけで読もうとした規則（フローは `ritsu dandori` で走らせます）、要素の並び（`elements`）をたどる規則（dandori は規則に並びを渡せません）、無いことがある入力か出力（`T?`）を持つ規則。`connect` で呼ぶ規則なら、rulec が Connect のサービスについて何も言わないものと、列挙の値をサービスが何と呼ぶかを言わないものも。",
-                "A rule that does not pass rulec's check, one the `dandori` binary alone is asked to read (run the flow with `ritsu dandori`), one that walks a list of elements (`elements`), which dandori does not pass a rule, or one with an input or an output that may be none (`T?`); for `connect`, one whose Connect service rulec says nothing of, or does not say what the service calls the values of an enum."
+                "rulec の検査を通らない規則、要素の並び（`elements`）をたどる規則（dandori は規則に並びを渡せません）、無いことがある入力か出力（`T?`）を持つ規則。`connect` で呼ぶ規則なら、rulec が Connect のサービスについて何も言わないものと、列挙の値をサービスが何と呼ぶかを言わないものも。規則を読めない `dandori` のコマンドだけで走らせたときは、E018 です。",
+                "A rule that does not pass rulec's check, one that walks a list of elements (`elements`), which dandori does not pass a rule, or one with an input or an output that may be none (`T?`); for `connect`, one whose Connect service rulec says nothing of, or does not say what the service calls the values of an enum. Run with the `dandori` binary alone, which reads no rule, it is E018."
             ),
-            tr!("注に出る rulec の診断を、規則のファイルで直します。規則を使うフローは `ritsu dandori` で走らせます。", "Correct the rule as the notes, rulec's diagnostics, say; run a flow that uses rules with `ritsu dandori`."),
+            tr!("注に出る rulec の診断を、規則のファイルで直します。", "Correct the rule as the notes, rulec's diagnostics, say."),
             "workflow w v1\n\nuse rule fee from \"fee.rule\"\n\nflow\n  pass\n",
-            &["E002"],
+            &["E002", "E018"],
         ),
         Entry::new(
             "E006",
@@ -192,6 +192,20 @@ pub fn ledger() -> Ledger {
             tr!("`.proto` のサービスとワークフローの入力・出力・`fail` を合わせます。", "Make the inputs, outputs and `fail`s of the workflow and the service of the `.proto` agree."),
             Repro::File { body: "workflow w v1 implements shop.OrderService\n\nuse proto shop from \"shop.proto\"\n\nflow\n  pass\n", beside: &[SHOP] },
             &["E016"],
+        ),
+        Entry::new(
+            "E018",
+            tr!("規則を読めない dandori で、規則を使うフローを確かめています", "A flow that uses rules, run with a dandori that reads none"),
+            tr!(
+                "dandori のクレートのバイナリ（`dandori`）で、`use rule` のあるフローを確かめるとき。このバイナリはほかの言語を持たず（ritsu の DESIGN 2.3）、規則を読めません。最初の `use rule` で一度だけ言い、規則を読めないことから起きるほかの診断は出しません。exit code は 2（走らせ方の問題で、フローの誤りではないため）。",
+                "A flow with a `use rule`, checked with the binary of dandori's own crate (`dandori`), which holds no other language (ritsu's DESIGN 2.3) and reads no rule. It is said once, at the first `use rule`, and nothing that follows from the rules it cannot read is said. The exit code is 2: it is how the command is run, not what the flow says."
+            ),
+            tr!(
+                "同じコマンドを `ritsu dandori` で走らせます（`ritsu dandori check flow.flow`）。規則を同じプロセスの中で読みます。",
+                "Run the same command as `ritsu dandori` (`ritsu dandori check flow.flow`), which reads the rules in the same process."
+            ),
+            Repro::File { body: "workflow w v1\n\nuse rule door from \"door.rule\"\n\nflow\n  pass\n", beside: &[DOOR] },
+            &["E005"],
         ),
         Entry::new(
             "E020",

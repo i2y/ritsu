@@ -261,7 +261,7 @@ fn a_file_source_is_held_to_its_url() {
 
 /// A borrowed source is the rule's or the calendar's to fetch and to pin: `fetch` and `pin` say
 /// which command does it. `outdated` asks about it from the calendar's pins and copies, which
-/// only `ritsu yuen` can read (the binary of this crate is told so, exit 2); `crates/ritsu/tests`
+/// only `ritsu yuen` can read (the binary of this crate says so, E206 and exit 2); `crates/ritsu/tests`
 /// asks it of the test's own e-Gov.
 #[test]
 fn a_borrowed_source_is_its_tools_to_fetch() {
@@ -273,7 +273,7 @@ fn a_borrowed_source_is_its_tools_to_fetch() {
     assert!(r.stdout.contains("koyomi source pin does"), "{}", r.stdout);
     let r = common::yuen(t.path(), &["source", "outdated", "koyomi", "--root", "koyomi"]);
     assert_eq!(r.code, 2, "{}", r.stdout);
-    assert!(r.stderr.contains("this yuen cannot read koyomi sources: koyomi \"calendars/東京の営業日.cal\" source 祝日"), "{}", r.stderr);
+    assert!(r.stderr.contains("[E206]: ") && r.stderr.contains("this yuen cannot read koyomi artifacts: koyomi \"calendars/東京の営業日.cal\" source 祝日"), "{}", r.stderr);
     assert!(r.stderr.contains("`ritsu yuen source outdated koyomi --root koyomi`"), "{}", r.stderr);
 }
 

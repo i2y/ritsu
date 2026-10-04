@@ -1,0 +1,8 @@
+requirements shipping v1
+role legal
+
+requirement r1
+  text "a fee for every amount"
+  owner legal
+  decided 2026-10-04 by legal "an example"
+  satisfied by rulec "fee.rule" table fees

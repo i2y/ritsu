@@ -1,0 +1,12 @@
+rule fee v1
+
+inputs
+  amount : money[USD]  range >=0USD <=10000USD
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fees
+| amount    | -> fee |
+| <5000USD  | 5USD   |
+| >=5000USD | 0USD   |

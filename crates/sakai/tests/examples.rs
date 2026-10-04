@@ -47,11 +47,15 @@ fn the_example_passes_check() {
 }
 
 /// The binary of sakai's own crate holds no other language (ritsu's DESIGN 2.3): on the example it
-/// says, once a language, that it cannot read its artifacts (E104), and to run `ritsu sakai`.
+/// says, once a language, that it cannot read its artifacts (E104), and to run `ritsu sakai`, with
+/// exit 2 (where sakai runs, not what the map says).
 #[test]
 fn the_binary_of_this_crate_says_what_it_cannot_read() {
     let o = common::sakai(&["check", "examples/通販/通販.ctx"]);
-    assert_eq!(o.status.code(), Some(1));
+    assert_eq!(o.status.code(), Some(2));
+    for cmd in [vec!["api", "examples/通販/通販.ctx"], vec!["export", "cml", "examples/通販/通販.ctx"], vec!["build", "examples/通販/通販.ctx", "--target", "import-linter", "--check"]] {
+        assert_eq!(common::sakai(&cmd).status.code(), Some(2), "{cmd:?}");
+    }
     let out = String::from_utf8_lossy(&o.stdout).to_string();
     assert_eq!(common::printed_codes(&out), ["E104", "E104", "E104"], "{out}");
     assert!(out.contains("This sakai cannot read rulec artifacts (4 of them, the first examples/通販/billing/rules/出荷の送料.rule)"), "{out}");

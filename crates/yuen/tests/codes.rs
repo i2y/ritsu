@@ -1,7 +1,8 @@
 //! Every code of the ledger (src/codes.rs) has an example that, checked with what is beside
 //! it, gives that code (DESIGN 6.2), and every code has at least one mutant in tests/mutants.
 //! The examples are checked with every language joined, as `ritsu yuen` checks them: some need a
-//! rule or a calendar to come out (E106, E107, E203). The retired codes (E204, W201) keep their
+//! rule or a calendar to come out (E106, E107, E203); E206 comes out of the binary of yuen's own
+//! crate, which joins none. The retired codes (E204, W201) keep their
 //! entries and print nothing.
 
 mod common;
@@ -14,14 +15,15 @@ fn every_example_gives_its_code() {
     let failures = ritsu_base::ledger::check_every(&ledger, scratch.path(), |e, dir| {
         n += 1;
         let example = dir.join("example.req").to_string_lossy().to_string();
-        let r = common::run(&["check", &example]);
+        // E206 comes out of the binary of yuen's own crate, which joins no other language
+        let r = if e.code == "E206" { common::yuen(dir, &["check", "example.req"]) } else { common::run(&["check", &example]) };
         let got = common::codes(&r.stdout);
         if !got.iter().any(|c| c == e.code) {
             eprintln!("{}:\n{}{}", e.code, r.stdout, r.stderr);
         }
         got
     });
-    assert_eq!(n, 41, "every code but the two retired ones is reproduced");
+    assert_eq!(n, 42, "every code but the two retired ones is reproduced");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -65,5 +67,5 @@ fn the_ledger_has_each_code_of_design_once_and_in_order() {
     let design = std::fs::read_to_string("DESIGN.md").unwrap();
     let table: Vec<String> = design.lines().filter_map(|l| l.strip_prefix("| ")).filter_map(|l| l.split(' ').next()).filter(|c| c.len() == 4 && (c.starts_with('E') || c.starts_with('W')) && c[1..].chars().all(|d| d.is_ascii_digit())).map(|s| s.to_string()).collect();
     assert_eq!(codes, table, "the ledger is DESIGN 6.2's table");
-    assert_eq!(codes.len(), 43);
+    assert_eq!(codes.len(), 44);
 }

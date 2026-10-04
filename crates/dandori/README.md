@@ -52,7 +52,7 @@ rulec state machine. The workflow says which events happen on their own
 (`external authenticate, settle, expire`), and the checker follows them too: waiting until
 check-out, the authorization can expire, and then the capture is refused. Every diagnostic comes
 with a run that gets there; [Diagnostics](https://i2y.github.io/dandori/reference/codes/) lists
-all 30 codes.
+all 31 codes.
 
 ## A workflow
 

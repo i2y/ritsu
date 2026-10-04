@@ -101,7 +101,13 @@ impl Engine {
                         if c.model.is_some() {
                             parts.push(Part::Text(crate::commands::passed(f, c.diags.len(), lang)));
                         }
-                        let verdict = if crate::diag::has_errors(&c.diags) { Verdict::Fails } else { Verdict::Passes };
+                        let verdict = if c.diags.iter().any(|d| d.code == "E018") {
+                            Verdict::Unchecked
+                        } else if crate::diag::has_errors(&c.diags) {
+                            Verdict::Fails
+                        } else {
+                            Verdict::Passes
+                        };
                         Unit { label: f.clone(), parts, verdict }
                     }
                     Err(msg) => Unit::unchecked(f, format!("{msg}\n")),

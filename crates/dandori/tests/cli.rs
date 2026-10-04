@@ -80,19 +80,24 @@ fn a_flow_without_rules_runs_as_it_does_with_rulec() {
     assert_eq!(compared, 5);
 }
 
-/// A flow that uses a rule is told, at each `use rule`, that this binary reads no rule and what to
-/// run instead (E005, in either language); with rulec's port the same flow passes.
+/// A flow that uses a rule is told once, at its first `use rule`, that this binary reads no rule
+/// and the same command to run through `ritsu dandori` (E018, in either language), with exit 2;
+/// nothing that follows from the rules it cannot read is said. With rulec's port the same flow
+/// passes (ritsu's DESIGN 2.3).
 #[test]
 fn a_flow_with_rules_is_told_to_run_with_ritsu_dandori() {
     let flow = "examples/hotel/temporal/hotel.flow";
     let (code, out, err) = binary(&["check", flow]);
-    assert_eq!((code, out.as_str()), (1, ""), "{err}");
-    let lines: Vec<&str> = err.lines().collect();
-    assert_eq!(lines[0], "error[E005]: examples/hotel/temporal/hotel.flow:4:10: could not read the rule `../rules/hold_amount.rule`", "{err}");
-    assert_eq!(lines[2], "  = this dandori does not read rules; run a workflow that uses rules with `ritsu dandori …`", "{err}");
-    assert_eq!(err.matches("error[E005]").count(), 2, "one for each `use rule`: {err}");
-    let (_, _, ja) = binary(&["check", flow, "--lang", "ja"]);
-    assert!(ja.contains("  = この dandori は規則を読めません。規則を使うワークフローは `ritsu dandori …` で走らせてください"), "{ja}");
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert_eq!(
+        err,
+        format!("error[E018]: {flow}:4:10: this dandori cannot read rules, and the flow uses the rule `hold`\n     4 | use rule hold from \"../rules/hold_amount.rule\"\n  = The binary of dandori's own crate holds no other language; run it with every language joined, through ritsu: `ritsu dandori check {flow}`.\n")
+    );
+    let (code, _, ja) = binary(&["check", flow, "--lang", "ja"]);
+    assert_eq!(code, 2);
+    assert!(ja.contains("  = dandori のクレートのバイナリは、ほかの言語を持ちません。同じコマンドを、すべての言語をつないだ `ritsu dandori check examples/hotel/temporal/hotel.flow --lang ja` のように ritsu で走らせます。"), "{ja}");
+    let (code, json, _) = binary(&["build", flow, "--target", "temporal", "--format", "json"]);
+    assert_eq!(code, 2, "{json}");
     assert_eq!(with_rulec(&["check", flow]), (0, String::new(), format!("{flow}: ok\n")));
 }
 

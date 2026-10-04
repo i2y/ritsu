@@ -182,7 +182,8 @@ pub fn review_with(args: &[String], root: Option<&str>, c: &Choice, by: &str, da
     };
     let checked: Checked = check::check_with(args, root, suite)?;
     let Some(m) = checked.model.as_ref() else {
-        return Ok(Outcome { lines: vec![tr!("構文か名前にエラーがあるので、何も書きません", "Nothing was written: the words or the names have errors")], diags: checked.diags, exit: 1 });
+        let exit = if check::has_unjoined(&checked.diags) { 2 } else { 1 };
+        return Ok(Outcome { lines: vec![tr!("構文か名前にエラーがあるので、何も書きません", "Nothing was written: the words or the names have errors")], diags: checked.diags, exit });
     };
     let p = checked.project.as_ref().unwrap();
     if !p.files.iter().any(|f| f.ast.roles.iter().any(|r| r.name == by)) {

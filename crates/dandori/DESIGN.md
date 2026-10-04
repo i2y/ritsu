@@ -92,6 +92,7 @@ dandori は ritsu（七つの言語を一つにまとめる処理系）に取り
 - **規則の名前のぶつかりと `explain`**（ritsu の D の二つ目の部分）：規則の別名が、dandori が規則のまわりに書くコードの名前とぶつかると生成物が壊れるので（ritsu の PLAN 7.5）、そういう規則を `check` が E006 で断る。別名が同じ二つの規則と、タスクと規則のアクティビティが同じ名前になるものも断る。二つの規則のあいだで重なる名前（同じ名前の列挙、同じ単位の型）は、断らずに生成するコードの側で避けるようにした（1.15）。あわせて、診断のコードの台帳（`src/codes.rs`）と `dandori explain <コード> | --all [--format markdown|json]` を足した（ritsu の DESIGN 4.3。台帳の形は ritsu-base のもの）。どのコードにも、いつ出るか、直し方、そのコードを出す最小の `.flow`（要る規則や `.proto` は隣に置く）があり、`tests/codes.rs` が、どの例も自分のコードを出すことと、検査が出しうるコードがどれも台帳にあることを確かめる。サイトの診断コードの表は、これまでどおり一行ずつの表のままにした。
   - 変わったこと：上の三つのフローが E006 になる（どの例とテストのフローも当たらない）。重なる名前を持つフローの `rules.ts` と `rules.py` が、壊れたものから通るものになる。`dandori explain` が加わり、`--help` の一覧に `explain` の行が増えた。
 
+- **規則を読めない dandori の断り方**（ritsu の段階 E の最初の部分。ritsu の DESIGN 2.3）：このクレートのバイナリ（規則を読めない口を持つ）で `use rule` のあるフローを確かめると、最初の `use rule` に新しい E018 を一つ出し、同じコマンドを `ritsu dandori` で走らせる形を注に書いて、exit 2 で終わる。規則を読めないことから起きるほかの診断は出さない。前は規則ごとに E005 を出し、規則の型を使うところに E002 が続いて、exit 1 だった（`examples/hotel/temporal/hotel.flow` で 16 件）。ritsu の受け取る側の三つの言語（dandori、yuen、sakai）を、同じ形の断り方にそろえた。E005 の説明から、このバイナリのことを外した。`--help` の終了コードの行に E018 を書いた。規則の口に `joined`（rulec がつながっているか）を足し、規則を読めない口（`NoRules`）は false を返す。
 - **`ritsu check` に渡す `check` の結果**（ritsu の段階 E の最初の部分。ritsu の DESIGN 8.3）：`dandori::ports::Engine::checked` が、渡された規則の口で、`dandori check` が印字するもの（診断一つずつのテキストと `--format json` のオブジェクト、通ったファイルの行）を、コマンドと同じ関数（`commands::render`、`commands::passed`）で作って渡す。コマンドの振る舞いは変えていない。
 
 ## 1. 言語

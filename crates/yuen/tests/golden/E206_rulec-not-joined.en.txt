@@ -1,0 +1,4 @@
+error[E206]: tests/mutants/E206_rulec-not-joined/shipping.req:8:16: this yuen cannot read rulec artifacts: rulec "fee.rule" table fees
+     8 |   satisfied by rulec "fee.rule" table fees
+  = The binary of yuen's own crate holds no other language; run it with every language joined, through ritsu: `ritsu yuen check tests/mutants/E206_rulec-not-joined --root tests/mutants/E206_rulec-not-joined`.
+tests/mutants/E206_rulec-not-joined: 1 error

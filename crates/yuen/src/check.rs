@@ -15,7 +15,7 @@ use ritsu_base::text::{Lang, Text, plural};
 use crate::marks::{self, Ctx, LinkKind, LinkState};
 use crate::names::Name;
 use crate::project::{self, Project, Refusal};
-use crate::sources::{self, Resolved, Sources};
+use crate::sources::{self, Sources};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
@@ -77,18 +77,63 @@ pub fn with_ritsu(p: &Project) -> String {
     format!("ritsu yuen {}", shown.join(" "))
 }
 
-/// A project names something only another language reads, and that language is not handed to
-/// yuen: the binary of yuen's own crate holds no other language (ritsu's DESIGN 2.3). `ritsu
-/// yuen` runs the same command with every language joined. Exit 2, as for a tool that is not
-/// found (DESIGN 3.1): it is where yuen runs, not what the project says.
-pub fn no_port(p: &Project, tool: crate::names::Tool, what: &str, fi: usize, line: usize) -> Refusal {
-    let t = tool.word();
-    let at = format!("{}:{line}", p.files[fi].display);
+/// E206 (ritsu's DESIGN 2.3): the languages a project's names need, and that are not handed to
+/// yuen — the binary of yuen's own crate holds no other language. Said once for each language, at
+/// the first thing named of it (a link, a scope, or with `only_sources` a borrowed source alone),
+/// with the same command to run through `ritsu yuen`. A command that meets one exits 2: it is
+/// where yuen runs, not what the project says.
+pub fn unjoined(p: &Project, only_sources: bool) -> Vec<Diag> {
+    use crate::suite::Suite;
+    // (file, line, column, naming), in the order written
+    let mut needed: Vec<(usize, usize, usize, Name)> = Vec::new();
+    if !only_sources {
+        for r in 0..p.reqs.len() {
+            let fi = p.reqs[r].file;
+            for (li, n) in p.names.links[r].iter().enumerate() {
+                if let Some(n) = n {
+                    let l = &p.decl(r).links[li];
+                    needed.push((fi, l.span.line, l.naming.tool.at, n.clone()));
+                }
+            }
+        }
+        for fi in 0..p.files.len() {
+            for (si, sc) in p.names.scopes[fi].iter().enumerate() {
+                if let Some((n, _)) = sc {
+                    let d = &p.files[fi].ast.scopes[si];
+                    needed.push((fi, d.span.line, d.naming.tool.at, n.clone()));
+                }
+            }
+        }
+    }
+    for fi in 0..p.files.len() {
+        for (si, n) in p.names.sources[fi].iter().enumerate() {
+            let s = &p.files[fi].ast.sources[si];
+            if let (Some(n), crate::ast::SourceKind::Borrowed { naming }) = (n, &s.kind) {
+                needed.push((fi, s.span.line, naming.tool.at, n.clone()));
+            }
+        }
+    }
+    needed.sort_by_key(|(fi, line, col, _)| (*fi, *line, *col));
+    let mut said: Vec<crate::names::Tool> = Vec::new();
+    let mut out = Vec::new();
     let cmd = with_ritsu(p);
-    Refusal(tr!(
-        "この yuen は {t} の成果物を読めません: {what}（{at}）。ほかの言語を読むところは、すべての言語をつないだ `{cmd}` のように ritsu で走らせます",
-        "this yuen cannot read {t} artifacts: {what} ({at}); run it with every language joined, through ritsu: `{cmd}`"
-    ))
+    for (fi, line, col, n) in needed {
+        if !Suite::READ.contains(&n.tool) || p.suite.reads(n.tool) || said.contains(&n.tool) {
+            continue;
+        }
+        said.push(n.tool);
+        let (t, what) = (n.tool.word(), n.text());
+        out.push(p.err(fi, "E206", crate::ast::Span { line, col }, tr!("この yuen は {t} の成果物を読めません: {what}", "this yuen cannot read {t} artifacts: {what}")).note(tr!(
+            "yuen のクレートのバイナリは、ほかの言語を持ちません。同じコマンドを、すべての言語をつないだ `{cmd}` のように ritsu で走らせます。",
+            "The binary of yuen's own crate holds no other language; run it with every language joined, through ritsu: `{cmd}`."
+        )));
+    }
+    out
+}
+
+/// Whether diagnostics hold an E206: the command exits 2.
+pub fn has_unjoined(diags: &[Diag]) -> bool {
+    diags.iter().any(|d| d.code == "E206")
 }
 
 /// E203: the language of what a line names cannot answer for its file — it does not pass the
@@ -217,17 +262,15 @@ pub fn check_with(args: &[String], root: Option<&str>, suite: crate::suite::Suit
     if stop {
         return Ok(Checked { project: Some(p), diags, stage: 2, model: None });
     }
+    // The languages the names need are joined (E206); else nothing more can be read.
+    let d2b = unjoined(&p, false);
+    if !d2b.is_empty() {
+        diags.extend(d2b);
+        return Ok(Checked { project: Some(p), diags, stage: 2, model: None });
+    }
     // 3. Sources.
     let (srcs, d3) = sources::check_sources(&p);
     diags.extend(d3);
-    for (fi, f) in srcs.files.iter().enumerate() {
-        for (si, (_, r)) in f.iter().enumerate() {
-            if let Resolved::NoPort { name } = r {
-                let line = p.files[fi].ast.sources[si].span.line;
-                return Err(no_port(&p, name.tool, &name.text(), fi, line));
-            }
-        }
-    }
     // 4. Artifacts.
     let mut artifacts: BTreeMap<Name, Result<End, Unread>> = BTreeMap::new();
     let mut d4 = Vec::new();
@@ -239,9 +282,6 @@ pub fn check_with(args: &[String], root: Option<&str>, suite: crate::suite::Suit
             let (line, col) = (link.span.line, link.naming.tool.at);
             let e = artifacts.entry(n.clone()).or_insert_with(|| ends::artifact_end(&p, n)).clone();
             if let Err(u) = &e {
-                if let Unread::NoPort(t) = u {
-                    return Err(no_port(&p, *t, &n.text(), fi, line));
-                }
                 let recorded = link.record.as_ref().and_then(|r| r.parsed.as_ref().ok()).and_then(|r| r.down.clone());
                 d4.extend(unread_diag(&p, fi, line, col, n, u, recorded.as_deref()));
             }
@@ -257,7 +297,6 @@ pub fn check_with(args: &[String], root: Option<&str>, suite: crate::suite::Suit
                 None => n.text(),
             };
             match coverage::gather(&p, n, kind.as_deref()) {
-                Err(Unread::NoPort(t)) => return Err(no_port(&p, t, &text, fi, decl.span.line)),
                 Err(Unread::Missing { .. }) => {
                     let path = p.shown(&n.path);
                     d4.push(p.err(fi, "E201", crate::ast::Span { line: decl.span.line, col: decl.naming.path.as_ref().map(|w| w.at).unwrap_or(1) }, tr!("範囲のパス {path} がありません", "The path {path} of the scope is not there")));

@@ -81,6 +81,13 @@ fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<
         Ok(p) => p,
         Err(d) => return (None, Default::default(), vec![d]),
     };
+    // the dandori binary of this crate holds no rulec: a flow that uses a rule is said once to run
+    // through ritsu (E018), and nothing that follows from the rules it cannot read is said
+    if let Some(u) = prog.uses.first() {
+        if !crate::sources::rules_joined() {
+            return (None, Default::default(), vec![unjoined(u)]);
+        }
+    }
     let (model, mut diags) = crate::lower::lower(&prog, path);
     let mut model = match model {
         Some(m) => m,
@@ -97,6 +104,17 @@ fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<
     diags.extend(crate::service::check(&model));
     diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
     (Some(model), fr.facts, diags)
+}
+
+/// E018: a flow that uses a rule, checked where rulec is not joined (ritsu's DESIGN 2.3), at its
+/// first `use rule`, with the command to run instead.
+fn unjoined(u: &syntax::UseRule) -> Diag {
+    let (name, sp) = &u.name;
+    let cmd = crate::cli::with_ritsu();
+    Diag::error("E018", sp.line, sp.col, tr!("この dandori は規則を読めません。このフローは規則 `{name}` を使います", "this dandori cannot read rules, and the flow uses the rule `{name}`")).note(tr!(
+        "dandori のクレートのバイナリは、ほかの言語を持ちません。同じコマンドを、すべての言語をつないだ `{cmd}` のように ritsu で走らせます。",
+        "The binary of dandori's own crate holds no other language; run it with every language joined, through ritsu: `{cmd}`."
+    ))
 }
 
 fn whole(m: &Model) -> Vec<Diag> {

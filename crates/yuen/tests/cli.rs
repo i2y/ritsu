@@ -123,8 +123,8 @@ fn a_root_above_where_yuen_runs() {
 }
 
 /// The binary of this crate holds no other language (ritsu's DESIGN 2.3): a project that names
-/// what only another language reads is refused with exit 2, and told to run through `ritsu yuen`,
-/// rather than passed unchecked. The same project, with every language joined, is checked.
+/// what only another language reads is told so (E206) with exit 2, and to run through `ritsu
+/// yuen`, rather than passed unchecked. The same project, with every language joined, is checked.
 #[test]
 fn the_binary_of_this_crate_reads_no_other_language() {
     let t = common::TempDir::new("noport");
@@ -135,9 +135,16 @@ fn the_binary_of_this_crate_reads_no_other_language() {
     t.write("a.cal", "dates 例(example) v1\n\ninputs\n  起点(origin) : date  range >=2026-01-01 <=2026-12-31\n\ndate 翌日(next_day) = 起点\n  + 1 day\n".as_bytes());
     let r = common::yuen(t.path(), &["check", ".", "--root", "."]);
     assert_eq!(r.code, 2);
-    assert_eq!(r.stderr, "error: this yuen cannot read koyomi artifacts: koyomi \"a.cal\" date 翌日 (./t.req:8); run it with every language joined, through ritsu: `ritsu yuen check . --root .`\n");
+    assert_eq!(
+        r.stdout,
+        "error[E206]: ./t.req:8:16: this yuen cannot read koyomi artifacts: koyomi \"a.cal\" date 翌日\n     8 |   satisfied by koyomi \"a.cal\" date 翌日\n  = The binary of yuen's own crate holds no other language; run it with every language joined, through ritsu: `ritsu yuen check . --root .`.\n.: 1 error\n"
+    );
     let ja = common::yuen(t.path(), &["check", ".", "--root", ".", "--lang", "ja"]);
-    assert!(ja.stderr.contains("すべての言語をつないだ `ritsu yuen check . --root . --lang ja`"), "{}", ja.stderr);
+    assert!(ja.stdout.contains("すべての言語をつないだ `ritsu yuen check . --root . --lang ja`"), "{}", ja.stdout);
+    // the commands built on the check say the same, on standard error, with exit 2
+    let api = common::yuen(t.path(), &["api", ".", "--root", "."]);
+    assert_eq!(api.code, 2);
+    assert!(api.stderr.starts_with("error[E206]: ./t.req:8:16: "), "{}", api.stderr);
     let path = t.path().to_string_lossy().to_string();
     let joined = common::run(&["check", &path, "--root", &path]);
     assert_eq!(joined.code, 1, "{}{}", joined.stdout, joined.stderr);
@@ -150,10 +157,10 @@ fn the_binary_of_this_crate_reads_no_other_language() {
 fn explain_prints_every_code() {
     let r = run(&["explain", "--all"]);
     assert_eq!(r.code, 0);
-    assert!(r.stdout.matches(" — ").count() >= 43);
+    assert!(r.stdout.matches(" — ").count() >= 44);
     let md = run(&["explain", "--all", "--format", "markdown", "--lang", "ja"]);
     assert!(md.stdout.starts_with("# 診断のコード\n"));
-    assert_eq!(md.stdout.matches("<a id=\"").count(), 43);
+    assert_eq!(md.stdout.matches("<a id=\"").count(), 44);
     let one = run(&["explain", "E302"]);
     assert!(one.stdout.starts_with("E302 (error) — The upper end changed after the link was looked at\n"), "{}", one.stdout);
     let e107 = run(&["explain", "E107"]);

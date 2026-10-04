@@ -119,7 +119,19 @@ fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
     } else {
         let _ = write!(out, "{}", crate::check::render(&c, &label, lang));
     }
-    (if c.has_errors() { 1 } else { 0 }) as u8
+    exit_of(&c)
+}
+
+/// 2 when a language the project names is not joined (E206: where yuen runs, not what the
+/// project says), 1 for any other error, else 0.
+fn exit_of(c: &crate::check::Checked) -> u8 {
+    if crate::check::has_unjoined(&c.diags) {
+        2
+    } else if c.has_errors() {
+        1
+    } else {
+        0
+    }
 }
 
 fn review_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
@@ -156,7 +168,7 @@ fn checked_paths(paths: &[String], root: Option<&str>, lang: Lang, cmd: &str, su
     if !c.named() {
         let label = paths.join(", ");
         let _ = write!(err, "{}", crate::check::render(&c, &label, lang));
-        return Err((1) as u8);
+        return Err(exit_of(&c));
     }
     Ok(c)
 }
@@ -232,6 +244,10 @@ fn source_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
     };
     let named = project.map(|mut p| {
         diags.extend(crate::project::check_names(&mut p));
+        // `outdated` asks the sources a rule or a calendar pins: their languages are joined (E206)
+        if verb == "outdated" && !crate::diag::has_errors(&diags) {
+            diags.extend(crate::check::unjoined(&p, true));
+        }
         p
     });
     let p = match named {
@@ -242,7 +258,7 @@ fn source_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
             }
             let (e, _) = crate::diag::count(&diags);
             let _ = writeln!(err, "{}", tr!("{label}: エラー {e} 件", "{label}: {}", ; ritsu_base::text::plural(e, "error", "errors")).get(lang));
-            return (1) as u8;
+            return if crate::check::has_unjoined(&diags) { 2 } else { 1 };
         }
     };
     let result = match verb {

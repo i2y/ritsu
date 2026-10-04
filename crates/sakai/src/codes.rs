@@ -280,8 +280,8 @@ pub fn ledger() -> Ledger {
             "E104",
             tr!("ほかの言語の成果物を読めません（言語がつながっていません）", "Another language's artifacts cannot be read: the language is not joined"),
             tr!(
-                "地図が rulec、koyomi、dandori の成果物を含むのに、その言語を読む ritsu の口がつながっていないとき（sakai のクレートのバイナリ）。言語ごとに一度、その最初の成果物を持つ `owns` の行で言います。確かめていないことを黙って通しません。",
-                "The map holds rulec, koyomi or dandori artifacts, and the ports of ritsu that read that language are not joined (the binary of sakai's own crate). Told once a language, at the line of `owns` that holds its first artifact. What is not checked is not passed in silence."
+                "地図が rulec、koyomi、dandori の成果物を含むのに、その言語を読む ritsu の口がつながっていないとき（sakai のクレートのバイナリ）。言語ごとに一度、その最初の成果物を持つ `owns` の行で言います。確かめていないことを黙って通しません。exit code は 2（走らせ方の問題で、地図の誤りではないため）。",
+                "The map holds rulec, koyomi or dandori artifacts, and the ports of ritsu that read that language are not joined (the binary of sakai's own crate). Told once a language, at the line of `owns` that holds its first artifact. What is not checked is not passed in silence. The exit code is 2: it is how the command is run, not what the map says."
             ),
             tr!("すべての言語をつないだ `ritsu sakai` で走らせます。", "Run it as `ritsu sakai`, which joins every language."),
             &[A_RULE_TAKES_KIND],

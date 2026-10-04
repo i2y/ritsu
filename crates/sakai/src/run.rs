@@ -200,16 +200,26 @@ fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
         Err(e) => return refuse(err, e, lang),
     };
     let json = a.get("--format") == Some("json");
-    let mut errors = false;
     for o in &outcomes {
-        errors |= o.has_errors();
         if json {
             let _ = writeln!(out, "{}", check::to_json(o, lang));
         } else {
             let _ = write!(out, "{}", check::render(o, lang));
         }
     }
-    if errors { 1 } else { 0 }
+    outcomes.iter().map(|o| exit_of(&o.diags)).max().unwrap_or(0)
+}
+
+/// 2 when a language the map holds artifacts of is not joined (E104: where sakai runs, not what the
+/// map says, as for a file that cannot be read), 1 for any other error, else 0.
+fn exit_of(diags: &[crate::diag::Diag]) -> u8 {
+    if diags.iter().any(|d| d.code == "E104") {
+        2
+    } else if crate::diag::has_errors(diags) {
+        1
+    } else {
+        0
+    }
 }
 
 /// The one map file a command takes: the root, the map from it, and the paths shown from here.
@@ -248,7 +258,7 @@ fn build_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
     if let Some(done) = &built.done {
         let _ = write!(out, "{}", crate::build::render_done(&root, done, lang));
     }
-    if o.has_errors() { 1 } else { 0 }
+    exit_of(&o.diags)
 }
 
 fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
@@ -266,7 +276,7 @@ fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
     };
     if o.has_errors() {
         let _ = write!(err, "{}", check::render(&o, lang));
-        return 1;
+        return exit_of(&o.diags);
     }
     let c = o.checked.as_ref().expect("a map with no errors is checked through");
     let name = Path::new(&map).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
@@ -307,7 +317,7 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     };
     if o.has_errors() {
         let _ = write!(err, "{}", check::render(&o, lang));
-        return 1;
+        return exit_of(&o.diags);
     }
     let v = crate::api::api(o.checked.as_ref().expect("a map with no errors is checked through"));
     let _ = writeln!(out, "{}", serde_json::to_string_pretty(&v).unwrap());

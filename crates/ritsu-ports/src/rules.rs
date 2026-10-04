@@ -264,4 +264,11 @@ pub trait Rules {
     /// The approver's page, as `rulec doc` draws it — Markdown, or with `html` the page that
     /// tries a case — in `lang`, naming the file `shown` (dandori names the file alone).
     fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>>;
+
+    /// Whether rulec is joined at all: false for the port the binary of a receiving language's own
+    /// crate holds, which reads no rule (ritsu's DESIGN 2.3), so that the language can say so once,
+    /// in its own code, rather than for each rule it asks of.
+    fn joined(&self) -> bool {
+        true
+    }
 }

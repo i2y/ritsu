@@ -49,7 +49,7 @@ pub fn commands() -> Vec<Cmd> {
             exits: vec![
                 (0, tr!("エラーなし（警告はありうる）", "no errors (there may be warnings)")),
                 (1, tr!("エラーが一つ以上", "at least one error")),
-                (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
+                (2, tr!("引数の誤り、読めないファイル、つながっていない言語の成果物（E104）", "bad arguments, a file that cannot be read, or an artifact of a language not joined (E104)")),
             ],
             examples: vec!["sakai check tests/maps/基本/基本.ctx", "sakai check tests/maps --format json --lang ja"],
             codes: check_codes(),
@@ -154,7 +154,10 @@ pub fn table() -> Table {
                 "どのコマンドにも --lang ja|en を付けられます（既定は en。環境変数 SAKAI_LANG か RITSU_LANG でも指定できます）。",
                 "Every command takes --lang ja|en (default en; the SAKAI_LANG or RITSU_LANG environment variable works too)."
             ),
-            tr!("exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル", "Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be read"),
+            tr!(
+                "exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル、つながっていない言語の成果物（E104）",
+                "Exit codes: 0 no errors / 1 errors / 2 bad arguments, a file that cannot be read, or an artifact of a language not joined (E104)"
+            ),
         ],
         reading: Reading { no_dashes_in_values: true, ..Reading::default() },
     }

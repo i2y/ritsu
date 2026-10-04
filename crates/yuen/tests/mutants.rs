@@ -2,7 +2,7 @@
 //! `yuen check` prints for it, in English and in Japanese, is its golden file in
 //! `tests/golden/`. Each mutant is its own root, so the golden files do not depend on where
 //! the repository is. They are checked with every language joined, as `ritsu yuen` checks them
-//! (some name a rule or a calendar). `YUEN_BLESS=1 cargo test` writes the golden files again;
+//! (some name a rule or a calendar), but for E206's, which the binary of yuen's own crate gives. `YUEN_BLESS=1 cargo test` writes the golden files again;
 //! read the diff.
 
 mod common;
@@ -27,7 +27,9 @@ fn every_mutant_gives_its_code_and_says_what_its_golden_files_say() {
     for name in mutants() {
         let path = format!("tests/mutants/{name}");
         let code = name.split('_').next().unwrap();
-        let c = match check(std::slice::from_ref(&path), Some(&path)) {
+        // E206 is what the binary of yuen's own crate says, which joins no other language
+        let checked = if code == "E206" { yuen::check::check_with(std::slice::from_ref(&path), Some(&path), yuen::suite::Suite::default()) } else { check(std::slice::from_ref(&path), Some(&path)) };
+        let c = match checked {
             Ok(c) => c,
             Err(r) => {
                 failures.push(format!("{path} is refused: {}", r.0.en));

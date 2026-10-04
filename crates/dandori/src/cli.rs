@@ -37,7 +37,7 @@ fn exits(done: ritsu_base::text::Text) -> Vec<(u8, ritsu_base::text::Text)> {
     vec![
         (0, done),
         (1, tr!("エラーがある", "errors found")),
-        (2, tr!("引数が正しくないか、ファイルが読めない", "bad arguments, or a file that cannot be read")),
+        (2, tr!("引数が正しくないか、ファイルが読めない。規則を使うフローを、規則を読めないこの dandori で走らせた（E018）", "bad arguments, or a file that cannot be read; a flow that uses rules, run with this dandori, which reads none (E018)")),
     ]
 }
 
@@ -162,7 +162,10 @@ pub fn table() -> Table {
                 "規則を使うワークフローは `ritsu dandori` で走らせます。規則を同じプロセスの中で読みます。",
                 "A workflow that uses rules runs as `ritsu dandori`, which reads the rules in the same process."
             ),
-            tr!("exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル", "Exit codes: 0 notes only / 1 errors found / 2 bad arguments or an unreadable file"),
+            tr!(
+                "exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル、規則を読めないこの dandori で規則を使うフロー（E018）",
+                "Exit codes: 0 notes only / 1 errors found / 2 bad arguments or an unreadable file, or a flow that uses rules run with this dandori, which reads none (E018)"
+            ),
         ],
         reading: Reading::default(),
     }
@@ -217,7 +220,37 @@ fn lang_asked(args: &[String]) -> Option<String> {
 /// hands it a port that reads no rule (crate::sources::NoRules); `ritsu dandori` and the tests hand
 /// it rulec's own answer (ritsu's DESIGN 3.3).
 pub fn run(args: &[String], rules: Rc<dyn Rules>, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
-    crate::sources::with_rules(rules, || run_here(args, out, err))
+    COMMAND.with(|c| *c.borrow_mut() = Some(args.to_vec()));
+    let code = crate::sources::with_rules(rules, || run_here(args, out, err));
+    COMMAND.with(|c| *c.borrow_mut() = None);
+    code
+}
+
+thread_local! {
+    /// The command line `run` was given, the words after the program's name, to say again with
+    /// `ritsu dandori` in front when rulec is not joined (E018).
+    static COMMAND: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// A word as a shell reads it back: as it is, or in single quotes.
+fn shell_word(w: &str) -> String {
+    if !w.is_empty() && w.chars().all(|c| !c.is_whitespace() && !"'\"\\$`;&|<>()*?[]#~".contains(c)) {
+        w.to_string()
+    } else {
+        format!("'{}'", w.replace('\'', "'\\''"))
+    }
+}
+
+/// The command to run instead, where rulec is not joined: the one given, with `ritsu dandori` in
+/// front (`ritsu dandori …` when no command line is known, as for the library).
+pub fn with_ritsu() -> String {
+    match COMMAND.with(|c| c.borrow().clone()) {
+        Some(words) => {
+            let shown: Vec<String> = words.iter().map(|w| shell_word(w)).collect();
+            format!("ritsu dandori {}", shown.join(" "))
+        }
+        None => "ritsu dandori …".to_string(),
+    }
 }
 
 fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
@@ -361,6 +394,10 @@ fn load(path: &Path, a: &Asked, print_ok: bool, out: &mut dyn Write, err: &mut d
         if print_ok && checked.model.is_some() {
             let _ = write!(err, "{}", commands::passed(&file, checked.diags.len(), a.lang));
         }
+    }
+    // E018: rulec is not joined, which is where the command runs, not what the flow says
+    if checked.diags.iter().any(|d| d.code == "E018") {
+        return Err(2);
     }
     if diag::has_errors(&checked.diags) {
         return Err(1);
@@ -528,8 +565,9 @@ fn cmd_doc(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     };
     let shown = file.display().to_string();
     let _ = write!(err, "{}", commands::render(&drawn.diags, &shown, &src, a.lang));
-    // a workflow whose names or types do not resolve has nothing to draw
-    let Some(model) = &drawn.model else { return 1 };
+    // a workflow whose names or types do not resolve has nothing to draw; nor has one whose rules
+    // this dandori cannot read (E018), which is where it runs, not what the flow says
+    let Some(model) = &drawn.model else { return if drawn.diags.iter().any(|d| d.code == "E018") { 2 } else { 1 } };
     let input = crate::doc::Input { m: model, src: &src, file: &shown, facts: &drawn.facts, diags: &drawn.diags, lang: a.lang };
     let page = if a.format_html { crate::doc::html(&input) } else { crate::doc::markdown(&input) };
     match &a.out {
