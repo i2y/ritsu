@@ -566,7 +566,7 @@ DESIGN 8.1、8.3、8.4。テキストと JSON の形を決めて golden にし�
 
 **確かめたこと**：触ったクレート（ritsu-ports、ritsu-project、ritsu、rulec、koyomi、chobo、geas、dandori、yuen、sakai）のテストを、ツールを全部つないだ環境（PostgreSQL つき）で一度回した。1,472 件が通り、落ちた 3 件（rulec のフラグのテストが `src/main.rs` を読んでいたこと、テストの二つの書き誤り）を直して、その 3 件を回し直して通った。SKIP 0、ignored 1（rulec の、前からあるもの）。dandori の重いテストは、生成器と runner と規則の読み方に触れていないので回していない。
 
-コマンドの出力を、E の前のバイナリと突き合わせた（`scratchpad` の `cap.py`。geas の分を足した）。rulec はコーパスの 1,675 回、koyomi は 289 回、chobo は 277 回、geas は 339 回（`--help`、`explain`、`tests/specs` の 109 の主張のファイルの `check` を写しの上で）、dandori は `ritsu dandori` で 702 回、yuen は 1,026 回と sakai は 238 回をクレートのバイナリと `ritsu yuen`・`ritsu sakai` の両方で走らせ、どれも一字も違わなかった。新しい `ritsu rulec`・`ritsu koyomi`・`ritsu chobo`・`ritsu geas` の出力も、E の前のそれぞれのバイナリと一字も違わなかった。
+コマンドの出力を、E の前のバイナリと突き合わせた（作業場所の `cap.py`。geas の分を足した）。rulec はコーパスの 1,675 回、koyomi は 289 回、chobo は 277 回、geas は 339 回（`--help`、`explain`、`tests/specs` の 109 の主張のファイルの `check` を写しの上で）、dandori は `ritsu dandori` で 702 回、yuen は 1,026 回と sakai は 238 回をクレートのバイナリと `ritsu yuen`・`ritsu sakai` の両方で走らせ、どれも一字も違わなかった。新しい `ritsu rulec`・`ritsu koyomi`・`ritsu chobo`・`ritsu geas` の出力も、E の前のそれぞれのバイナリと一字も違わなかった。
 
 ### E.3 ritsu の台帳と `ritsu explain`
 
@@ -820,3 +820,18 @@ DESIGN 11 章。`crates/rulec/proofs/` を根の `proofs/` に移し、rulec の
 - 見つけたこと（直していない）：rulec のテスト関数の名前のうち七つが、Rust の `non_snake_case` の警告を出す（C の前からある。C.13）。
 - 片づけ：sakai の環境変数 `SAKAI_RULEC`・`SAKAI_KOYOMI`・`SAKAI_CHOBO`・`SAKAI_RITSU` は、どのテストも読まなくなった（作業場所の `env.sh` には残っていても害は無い）。OS の一時ディレクトリは、テストを回す前と後で、`rulec-*`・`dandori-*`・`TemporaryDirectory.*` は 0 個と 0 個、`com.google.Chrome.*` は 2,391 個と 2,391 個（そのうち今日のものは 18 個と 18 個）、親のいない MCP のサーバーは 0 個と 0 個だった。dandori の Ollama のテストが残す `ritsu-test-*`（四つ、約 106 MB）は、決めたとおりプロセスが終わるまで持つもので、次にテストを回したときに消える（dandori の `tests/examples.rs` の `scratch`）。
 - テストの回し方：7.5 と同じ。根から `cargo test --workspace --no-fail-fast -- --nocapture` に、dandori の重い十二を外す `--skip` を付け、十二は `cargo test -p dandori -- --exact <名前>` で一つずつ回す（`cargo xtask test` でも同じ）。rulec の PostgreSQL は使い捨てのクラスタを `PG*` で渡す。yuen と sakai のテストは、ほかの言語のバイナリを要らない（同じプロセスでつなぐ）。TypeSafe の鍵は、手元では作者の環境のものを使い、Jev のテストも回す。CI には鍵を置かない（DESIGN 10.5）。
+
+### 7.9 E の最初の部分から、E の残りへ（E の最初の部分の終わりに書いた）
+
+- 済んだもの：E.1（`ritsu-project`、索引、名指しを索引で引くこと）、E.2（`ritsu check` と、七つの言語の `ritsu <言語>`）、E.3（ritsu の台帳と `ritsu explain`）、E.8（ritsu 自身の地図）。ほかに、受け取る側のクレートのバイナリの断り方を一つにし（dandori の E018、yuen の E206、sakai の E104。どれもコードのある診断で、`ritsu <言語> …` で走らせるように言い、exit 2。DESIGN 2.3）、sakai の api の `not_checked` を消した（sakai の DESIGN 9 章）。7.8 の手がかりのうち、入口、名指し、断り方、確かめていないことの四つは済んだ。
+- E の残りの手がかり：
+  - 言語をまたぐ検査（E.4）の置き場所：`ritsu_cross::check` が、ritsu 自身の診断（`Finding`。`tool` は `ritsu`）と、境目の検査の数（`Borders`。確かめた数と決められない数）を返し、`ritsu check` が言語の診断のあとに出す。要約の行の「borders between the languages」と、JSON の `borders` がその結果である（DESIGN 8.3）。台帳は `crates/ritsu-cross/src/codes.rs` で、E2xx の帯を境目の検査に空けてある（DESIGN 7.1）。再現は英語の名前の小さなプロジェクトにし、`crates/ritsu/tests/codes.rs` が全部を英語と日本語で走らせる。ページ（`crates/ritsu-cross/docs/codes.md` と `codes.ja.md`）は、テストが台帳と突き合わせる。
+  - 読み込み：`ritsu_project::Project::load` がプロジェクトを一度歩いて種類を分け、`Joined` が出す側の実装を一度作って受け取る側に渡す（rulec の `Engine` は、読んだ規則の検査の結果を覚えていて、同じ規則を二度読まない）。ファイルをまたぐ参照は `Project::references`、名指しは `ritsu_ports::Index`（各言語の `Items` と `References` を、ファイルごとに一度だけ尋ねる）で引く。E.4〜E.7 はこれを使う。
+  - 言語の検査の結果：`ritsu check` は、各言語の `checked`（rulec、koyomi、chobo、geas、dandori の `ports::Engine::checked`、yuen と sakai の `run::checked`）を呼ぶ。言語の `check` の出力を変えると、`crates/ritsu/tests/check.rs` の突き合わせ（ファイルごとに、言語の `check` の出力と比べる）が落ちる。
+  - テストのプロジェクト：`crates/ritsu/tests/projects/通販/` は sakai の例を写したもので、日本語の名前のままである。英語を先にしたプロジェクトへの置き換えは、指示する側が別の段階でまとめて行う（作者の決まり）。`crates/ritsu/tests/golden/check/` の golden も、そのときに取り直す。
+  - ritsu の地図：クレートを足すとき（F の `ritsu-wasm` など）は、`contexts/` のどれかの `owns` に足し、関係を書く（足さなければ `ritsu check ritsu.ctx` が E101 で落ちる）。言語のクレートの下に、わざと通らないファイルを置く新しいディレクトリを作るなら、`ritsu.ctx` の `except` に足す。
+- 見つけたこと（直していない）：
+  - rulec のテスト関数の名前のうち七つが、Rust の `non_snake_case` の警告を出す（7.8 から変わらない）。
+  - 全体のテストで、chobo の `what_only_postgres_has`（REPEATABLE READ で四つの接続から 200 回呼ぶもの）が一度、シリアライズの失敗（40001）で落ちた。生成するクライアントは 10 回までリトライする（chobo の DESIGN）が、ほかの作業で機械が混んでいて使い切ったと見られる。単独で回し直すと通った。この部分は chobo の生成器にもクライアントにも触れていない。
+- テストの回し方：段階 E から、作者と決めた回し方にした。書いているあいだは `cargo check` だけにし、項目を書き終えるごとに関わるテストを一回、部分の最後にワークスペースの全体を一回回す。全体は、根から `cargo test --workspace --no-fail-fast -- --nocapture` に、dandori の重い十二を外す `--skip` を付けたもの（7.8 と同じ）で、13 分 17 秒かかり、1,596 件が通った（ignored 1、SKIP 0。chobo の一件は上の「見つけたこと」）。dandori の重い十二は、この部分では回していない。生成器、runner、`.proto` には触れておらず、規則を読むところは、規則がつながっていないとき（dandori のクレートのバイナリ）の止まり方だけを変えたからである（重いテストはどれも規則をつないで走る）。sakai のテストと `crates/ritsu/tests/map.rs` は、Rust の地図のために cargo を子プロセスで走らせる（`CARGO` があればそれ、無ければ PATH の `cargo`。fast の段の決まりのとおり、cargo のほかは要らない）。
+- 片づけ：OS の一時ディレクトリは、テストを回す前と後で、`rulec-*`・`dandori-*`・`TemporaryDirectory.*` は 0 個と 0 個、`com.google.Chrome.*` は 2,391 個と 2,391 個（そのうち今日のものは 18 個と 18 個）、親のいない MCP のサーバーは 0 個と 0 個だった。
