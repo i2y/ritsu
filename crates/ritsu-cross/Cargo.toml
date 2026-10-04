@@ -1,0 +1,19 @@
+[package]
+name = "ritsu-cross"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "The checks of ritsu across its languages, and the ledger of their codes: what one language checks, held to what the next one takes for granted"
+publish = false
+
+# The connecting layer (DESIGN 3.1): the base layer and ritsu-project. A language is read
+# through the ports only.
+[dependencies]
+ritsu-base = { path = "../ritsu-base" }
+ritsu-ports = { path = "../ritsu-ports" }
+ritsu-proto = { path = "../ritsu-proto" }
+ritsu-project = { path = "../ritsu-project" }
+
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }

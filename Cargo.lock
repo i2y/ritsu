@@ -109,6 +109,7 @@ dependencies = [
  "geas",
  "koyomi",
  "ritsu-base",
+ "ritsu-cross",
  "ritsu-ports",
  "ritsu-project",
  "ritsu-testkit",
@@ -122,6 +123,17 @@ dependencies = [
 name = "ritsu-base"
 version = "0.1.0"
 dependencies = [
+ "ritsu-testkit",
+]
+
+[[package]]
+name = "ritsu-cross"
+version = "0.1.0"
+dependencies = [
+ "ritsu-base",
+ "ritsu-ports",
+ "ritsu-project",
+ "ritsu-proto",
  "ritsu-testkit",
 ]
 

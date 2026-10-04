@@ -572,6 +572,22 @@ DESIGN 8.1、8.3、8.4。テキストと JSON の形を決めて golden にし�
 
 `crates/ritsu-cross/src/codes.rs` に、言語をまたぐ検査のコードを置く（土台の `ledger`）。どのコードにも、出すプロジェクトの最小の再現を置き、テストが走らせる。
 
+**したこと**（E の最初の部分）：
+
+- `crates/ritsu-cross` を作った。`ritsu_cross::check(プロジェクト, Joined, 言語)` が ritsu 自身の診断（`Finding`、`tool` は `ritsu`）と境目の検査の数（`Borders`）を返し、`ritsu check` がそれを各言語の診断のあとに出す。
+- 台帳（`src/codes.rs`）に E101（`.proto` として読めないファイル）を載せた。番号の帯は E1xx がプロジェクトのファイルを読むところ、E2xx が言語の境目の検査（DESIGN 7.1）。再現は小さなプロジェクトのファイルで、英語の名前（`shop.proto`）にした。
+- `ritsu explain <コード> | --all [--format markdown|json]` を作った（`crates/ritsu/src/explain.rs`）。言語のコードは `ritsu <言語> explain` で引くように言う。
+- `crates/ritsu-cross/docs/codes.md` と `codes.ja.md`（`ritsu explain --all --format markdown` の出力）。
+- テスト：`crates/ritsu/tests/codes.rs`（再現の全部が自分のコードを英語と日本語で出すこと、`ritsu explain`）、`crates/ritsu-cross/tests/codes.rs`（同じコードが二度無いこと、二つのページが台帳と同じこと）。
+
+**決めたこと**：
+
+- X10（名指しの解決）のコードは ritsu の台帳に載せない。名指しを書いた言語が自分のコードで言うので（DESIGN 7.10）、ritsu が言えば同じことを二度言う。この部分で ritsu が自分で言うことは、どの言語も確かめない `.proto` の読めなさだけで、それを E101 にした。
+- E101 は、`.proto` を読む言語がそれぞれ言う診断（rulec の E013 など）と重なることがある。ファイルのところで一度言い、読む言語が読むところでも言う形にした（直す先はファイルである）。
+- 台帳の型（`Borders` を含む）は ritsu-cross に置き、`ritsu check` の JSON の `borders` と要約がそれを読む。
+
+**確かめたこと**：触ったクレート（ritsu-cross、ritsu）のテストを一度回し、18 件が通った（SKIP 0）。`cargo xtask deps` は 17 のクレートで通る。テストのプロジェクトの `ritsu check` の golden は、`.proto` がどれも読めるので変わらない。
+
 ### E.4 X1〜X4 と X6 の検査
 
 DESIGN 7.3〜7.6、7.8 のうち、dandori の新しい書き方が要らないもの（X1、X2、X3 の (a)、X4 の rulec の側）から作り、X3 の (b)（rulec の新しい書き方。DESIGN 7.5）を作る。どの検査にも、通るプロジェクトと、落ちる変異（成り立たない例が出るもの、決められないもの）を置き、英語と日本語の golden を取る。X3 の (b) では、rulec の証明書に集合の出どころと集合を書き、`tools/recheck.py` と Lean の再検査が集合の上で通ることも確かめる。

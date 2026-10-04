@@ -380,6 +380,8 @@ JSON は、キーを英語で固定し、`code`、`severity`、`file`、`line`�
 
 `Entry`（コード、重さ、一行の題、いつ出るか、直し方、最小の再現、隣に置くファイル、関連するコード）と、`find`、テキストと Markdown（コードごとのアンカーつき）と JSON の書き出し、そしてどの再現も自分のコードを出すことを確かめるテストの共通部分を置く。台帳の中身は言語ごとに残す。`docs/codes.md` と `docs/codes.ja.md` は、どの言語も `explain --all --format markdown` の出力そのものにする（いまもそうしている五つの形）。dandori の台帳と `explain` は D の二つ目の部分で足した（dandori の `src/codes.rs`）。dandori の診断コードの一覧は、サイトの一行ずつの表（`website/docs/reference/codes.md`）のままで、`explain` の Markdown にはまだしていない（サイトを ritsu に移す F で決める）。
 
+ritsu 自身の台帳（言語をまたぐ検査のコード）は `crates/ritsu-cross/src/codes.rs` で、`ritsu explain` が引き、`crates/ritsu-cross/docs/codes.md` と `codes.ja.md` がその Markdown である（E.3。7.1）。
+
 退いたコードは、台帳に残して引けるようにし、番号を使い回さない（7.10）。D の最後の部分で、再現の代わりに退いた理由と版を持つ形（`Repro::Retired`、`Entry::retired`）を足した。`explain` は再現の見出しの下に理由を書き、再現を走らせるテスト（`check_every`）は退いたコードを飛ばす。yuen の E204 と W201 が最初に使い、sakai の N101 が続いた。
 
 再現をディレクトリで持つ台帳（sakai）では、再現を走らせるコマンドを `explain` が書く（`sakai check .` を走らせます）。D.8 で、`ritsu` で始まるコマンドは、言語のコマンドの名前を前に付けずに、そのまま書くようにした。ほかの言語の成果物を含む再現は、すべての言語をつないだ `ritsu sakai check .` で走らせるからである（sakai の DESIGN 5.2）。
@@ -656,6 +658,14 @@ yuen と sakai は、名指しを自分で言語ごとに引くのをやめ、�
 
 検査の診断は、ritsu の台帳（`crates/ritsu-cross/src/codes.rs`）のコードで出す。言語ごとの台帳とは番号を分け、`ritsu explain <コード>` で引く。どの言語の診断かは、テキストでは見出しの括弧に（`error[ritsu E201]`）、JSON では `tool` に書く（8.3）。
 
+**E.3 で作った形**（PLAN の E.3）。台帳は ritsu-base の `ledger` で書き、番号を帯で分ける。E1xx はプロジェクトのファイルを ritsu が読むところ、E2xx は言語の境目の検査（7.2 の X1〜X7。E の二つ目の部分から）である。E の最初の部分で載せたのは、次の一つである。
+
+| コード | いつ出るか |
+|---|---|
+| E101 | プロジェクトの `.proto` を、ritsu の一つの読み手（ritsu-proto）が読めない。どの言語もこの読み手で読むので、どの言語からも読めない。読む言語は、読むところで自分のコードでも言う（rulec の E013、dandori の E016、sakai の E106、yuen の E205）。どの言語も読まない `.proto` は、これが無ければ誰も言わない |
+
+ritsu の台帳に X10（名指しの解決）のコードは無い。名指しを書いた言語が、自分のコードで言うからである（7.10）。どのコードも、再現（小さなプロジェクトのファイル）を持ち、`crates/ritsu/tests/codes.rs` がそれを一時ディレクトリに置いて `ritsu check .` を英語と日本語で走らせ、見出しが `[ritsu <コード>]` の診断が出ることを確かめる。`ritsu explain` は、ritsu-base の台帳の書き方で、テキスト、Markdown、JSON を出す。言語のコードを渡されたら、`ritsu <言語> explain` で引くように言って 2 で終わる。`crates/ritsu-cross/docs/codes.md` と `codes.ja.md` は `ritsu explain --all --format markdown` の出力そのもので、`crates/ritsu-cross/tests/codes.rs` がそれを確かめる。
+
 ### 7.2 一覧
 
 | | 検査 | 示すこと | 読むもの（口） | 確かめる場所 | 段階 |
@@ -787,6 +797,7 @@ ritsu --help | --version
 - 各言語は、自分のコマンドが印字に使う関数で、単位（ファイル、yuen のプロジェクト、sakai の地図）ごとに、何をどう印字するかを返す（`ritsu_ports::Checked`。診断一つずつのテキストと JSON、そのほかの行、単位の結果）。`ritsu check` は言語の出したテキストを読み直さない。言語ごとの関数は `rulec::ports::Engine::checked`、`koyomi::ports::Engine::checked`、`chobo::ports::Engine::checked`、`geas::cli::checked`、`dandori::ports::Engine::checked`、`yuen::ports::Engine::checked`、`sakai::run::checked` である。
 - geas の `check` は主張を走らせる（プログラムを動かし、ジャーナルを書く）。`ritsu check` でも同じで、`geas check` が走らせるものを走らせる。
 - 言語は `--lang` で選び、無ければ `RITSU_LANG`、どちらも無ければ英語である。各言語の `<名前>_LANG` は読まない（一つのコマンドの文面を一つの言語にする）。
+- `ritsu explain <コード> | --all [--format markdown|json]` は E.3 で作った（7.1）。
 - 言語のコマンドは、どれもライブラリの関数になった。rulec、koyomi、chobo、geas は、E.2 で `src/main.rs` の中身を `rulec::cli::run`、`koyomi::run::run`、`chobo::run::run`、`geas::cli::run` に移した（振る舞いは変えていない。各言語の DESIGN.md）。これで `ritsu <言語>` は七つの全部にある（8.2）。
 
 ### 8.2 各言語のコマンドの残し方

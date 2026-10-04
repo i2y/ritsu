@@ -12,6 +12,7 @@ publish = false
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
 ritsu-project = { path = "../ritsu-project" }
+ritsu-cross = { path = "../ritsu-cross" }
 ritsu-ports = { path = "../ritsu-ports" }
 chobo = { path = "../chobo" }
 dandori = { path = "../dandori" }

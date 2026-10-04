@@ -11,18 +11,9 @@ use ritsu_base::json::Json;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
 use ritsu_ports::{Checked, Finding, Part, Verdict};
+use ritsu_cross::Borders;
 use ritsu_project::{File, Joined, Project};
 use std::io::Write;
-
-/// What the checks across the languages came to (DESIGN 7.1, P5): each border shown to hold, with
-/// an example where it does not, or undecided. The checks themselves come in the second part of
-/// stage E (PLAN E.4); until then every count is 0.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Borders {
-    pub held: usize,
-    pub failed: usize,
-    pub undecided: usize,
-}
 
 /// How a file of the project came out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,7 +130,7 @@ impl Report<'_> {
             }
             (ja.join("、"), en.join(", "))
         };
-        let (checked, undecided) = (self.borders.held + self.borders.failed + self.borders.undecided, self.borders.undecided);
+        let (checked, undecided) = (self.borders.checked(), self.borders.undecided);
         let files_en = if n == 1 { "file" } else { "files" };
         Text::new(
             format!("ritsu check: ファイル {n} 個（{ja_by}）。{ja}。言語の境目: 確かめた {checked} か所、決められない {undecided} か所"),
@@ -226,7 +217,8 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     }
     let joined = Joined::new();
     let units = project.check(&joined, lang);
-    let report = Report { project: &project, units, ours: vec![], borders: Borders::default() };
+    let crossed = ritsu_cross::check(&project, &joined, lang);
+    let report = Report { project: &project, units, ours: crossed.findings, borders: crossed.borders };
     let mut out = std::io::stdout();
     if a.get("--format") == Some("json") {
         let _ = writeln!(out, "{}", report.json().pretty());

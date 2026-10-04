@@ -1,5 +1,6 @@
 //! `ritsu`: the one command of the toolchain (DESIGN 8.1). `ritsu check` checks a project's files,
-//! each with its language's own check, the languages joined once by ritsu-project (DESIGN 6);
+//! each with its language's own check, the languages joined once by ritsu-project (DESIGN 6), and
+//! then across the languages (ritsu-cross, whose codes `ritsu explain` looks up);
 //! `ritsu <language> …` is the language's own command, with the languages it reads joined — what
 //! the binary of a receiving language's crate cannot do, since that crate holds no other language
 //! (DESIGN 2.3). Called by a language's name (a link named `rulec`), ritsu is that command
@@ -7,6 +8,7 @@
 
 mod check;
 mod cli;
+mod explain;
 
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
@@ -127,10 +129,10 @@ fn run() -> ExitCode {
             println!("ritsu {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        "check" => {
+        "check" | "explain" => {
             let mut rest: Vec<String> = args[..at].to_vec();
             rest.extend(args[at + 1..].iter().cloned());
-            ExitCode::from(check::command(&rest, lang))
+            ExitCode::from(if first == "check" { check::command(&rest, lang) } else { explain::command(&rest, lang) })
         }
         l if cli::LANGUAGES.contains(&l) => language(l, &args[at + 1..]),
         other => refuse(tr!("`{other}` というコマンドはありません。`ritsu --help` を読んでください", "there is no command `{other}`; run `ritsu --help`"), lang),

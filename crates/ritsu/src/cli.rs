@@ -77,8 +77,25 @@ pub fn commands() -> Vec<Cmd> {
             (2, tr!("引数の誤り、読めないファイル、言語が確かめられなかったファイル", "bad arguments, a file that cannot be read, or one a language could not check")),
         ],
         examples: vec!["ritsu check", "ritsu check rules/ flows/order.flow --format json", "ritsu check . --lang ja"],
-        codes: vec![],
+        codes: ritsu_cross::codes::codes(),
     }];
+    cmds.push(Cmd {
+        usage: Some("ritsu explain <CODE> | --all [--format markdown|json]"),
+        name: "explain",
+        args: "<CODE>",
+        purpose: tr!(
+            "ritsu の診断のコードを引く。いつ出るか、どう直すか、最小の再現（言語のコードは `ritsu <言語> explain`）",
+            "look one of ritsu's diagnostic codes up: when it comes, how to fix it, the smallest reproduction (a language's code: `ritsu <language> explain`)"
+        ),
+        params: vec![("<CODE>", tr!("`E101` のような ritsu のコード。`--all` なら要らない", "one of ritsu's codes, such as `E101`; not needed with `--all`"))],
+        flags: vec![
+            flag("--all", None, tr!("全部のコードを出す", "print every code")),
+            flag("--format", Some("markdown|json"), tr!("Markdown（docs/codes.md の元）か JSON で出す", "print Markdown (what docs/codes.md is made from) or JSON")).choices(&["markdown", "json"]),
+        ],
+        exits: vec![(0, tr!("引けた", "found")), (2, tr!("ritsu にそのコードが無い、または引数の誤り", "ritsu has no such code, or bad arguments"))],
+        examples: vec!["ritsu explain E101", "ritsu explain --all --format markdown --lang ja"],
+        codes: vec![],
+    });
     cmds.extend(LANGUAGES.into_iter().map(language));
     cmds
 }
