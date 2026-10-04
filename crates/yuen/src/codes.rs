@@ -44,6 +44,40 @@ const E203_RULE: (&str, &[u8]) = ("a.rule", include_bytes!("../tests/mutants/E20
 const E205_PROTO: (&str, &[u8]) = ("a.proto", include_bytes!("../tests/mutants/E205_読めないproto/a.proto"));
 const E206_RULE: (&str, &[u8]) = ("fee.rule", include_bytes!("../tests/mutants/E206_rulec-not-joined/fee.rule"));
 
+// ── The same, for the examples in English (the eCFR for the law, English names) ──
+
+const COPY_1_7: (&str, &[u8]) = (
+    "sources/law/37-CFR-1@2026-01-01/1.7.xml",
+    include_bytes!("../tests/fixtures/period_of_months/sources/law/37-CFR-1@2026-01-01/1.7.xml"),
+);
+const NOT_XML_EN: (&str, &[u8]) = ("sources/law/37-CFR-1@2026-01-01/1.7.xml", b"not xml\n");
+const E106_CAL_EN: (&str, &[u8]) = ("a.cal", include_bytes!("../tests/mutants/E106_borrows_an_undeclared_source/a.cal"));
+const E107_RULE_EN: (&str, &[u8]) = ("rules/osha_extinguisher.rule", include_bytes!("../tests/mutants/E107_same_article_different_text/rules/osha_extinguisher.rule"));
+const E107_RULE_COPY_EN: (&str, &[u8]) = (
+    "rules/sources/law/29-CFR-1910@2026-01-01/1910.157.xml",
+    include_bytes!("../tests/mutants/E107_same_article_different_text/rules/sources/law/29-CFR-1910@2026-01-01/1910.157.xml"),
+);
+const E107_COPY_EN: (&str, &[u8]) = (
+    "sources/law/29-CFR-1910@2026-01-01/1910.157.xml",
+    include_bytes!("../tests/mutants/E107_same_article_different_text/sources/law/29-CFR-1910@2026-01-01/1910.157.xml"),
+);
+const E202_PROTO_EN: (&str, &[u8]) = ("a.proto", include_bytes!("../tests/mutants/E202_no_such_message/a.proto"));
+const E203_RULE_EN: (&str, &[u8]) = ("a.rule", include_bytes!("../tests/mutants/E203_rule_that_does_not_pass/a.rule"));
+const E205_PROTO_EN: (&str, &[u8]) = ("a.proto", include_bytes!("../tests/mutants/E205_unreadable_proto/a.proto"));
+
+/// The example of an entry in English: the same kind of `.req` as the Japanese one, in names of
+/// English and, for a law, in the eCFR. `explain` shows it with `--lang en`; `--lang ja` shows the
+/// Japanese one, as it did.
+trait English {
+    fn en(self, body: &'static str, beside: &'static [(&'static str, &'static [u8])]) -> Entry;
+}
+
+impl English for Entry {
+    fn en(self, body: &'static str, beside: &'static [(&'static str, &'static [u8])]) -> Entry {
+        self.english(Repro::File { body, beside })
+    }
+}
+
 pub fn ledger() -> Ledger {
     let entries = vec![
         // ── Words and lines ──
@@ -60,7 +94,8 @@ pub fn ledger() -> Ledger {
             ),
             "requirements 例 v1\ndescription \"閉じていない\n",
             &["E002"],
-        ),
+        )
+        .en("requirements example v1\ndescription \"not closed\n", &[]),
         e(
             "E002",
             tr!("この位置に書けない語があります", "A word is written where it does not belong"),
@@ -71,7 +106,8 @@ pub fn ledger() -> Ledger {
             tr!("注に挙がる書き方のどれかにします。", "Use one of the forms the note gives."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  because \"y\"\n",
             &["E004"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  because \"y\"\n", &[]),
         e(
             "E003",
             tr!("ファイルが `requirements` の行で始まっていません", "The file does not start with a `requirements` line"),
@@ -79,7 +115,8 @@ pub fn ledger() -> Ledger {
             tr!("`requirements 民法の期間 v1` のように、要件の集まりの名前と版で書き始めます。", "Start with the name and version of the set of requirements, like `requirements payment_terms v1`."),
             "role 法務\n",
             &["E004"],
-        ),
+        )
+        .en("role legal\n", &[]),
         e(
             "E004",
             tr!("節や行の順序か数が違います", "A section or a line is out of order, or there are too many"),
@@ -90,7 +127,8 @@ pub fn ledger() -> Ledger {
             tr!("決まった順序に並べ替え、二つめを消します。", "Put them in their order, and delete the second one."),
             "requirements 例 v1\nrole 法務\ndescription \"役割より後ろ\"\n",
             &["E002"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\ndescription \"after the role\"\n", &[]),
         e(
             "E005",
             tr!("字下げが合いません", "The indentation does not line up"),
@@ -101,7 +139,8 @@ pub fn ledger() -> Ledger {
             tr!("スペースで字下げし、同じブロックの行はそろえ、記録はリンクの行より深くします。", "Indent with spaces, every line of a block alike, and a record deeper than its link."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n\ttext \"x\"\n",
             &[],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n\ttext \"x\"\n", &[]),
         e(
             "E006",
             tr!("無い日付か、逆さまの期間が書かれています", "A date that does not exist, or a period that ends before it starts"),
@@ -109,7 +148,8 @@ pub fn ledger() -> Ledger {
             tr!("暦にある日付に直し、期間は始まりを先に書きます。", "Write a date that exists, and a period start first."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-02-30 by 法務 \"例\"\n",
             &["E001"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-02-30 by legal \"example\"\n", &[]),
         // ── Names ──
         e(
             "E007",
@@ -121,7 +161,8 @@ pub fn ledger() -> Ledger {
             tr!("どちらかの名前を変えます。同じ要件の版なら `v1`、`v2` と書き分けます。", "Rename one of them; if they are versions of one requirement, write `v1` and `v2`."),
             "requirements 例 v1\nrole 法務\nrole 法務\n",
             &["E009"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\nrole legal\n", &[]),
         e(
             "E008",
             tr!("宣言されていない名前です", "A name that is not declared"),
@@ -132,7 +173,8 @@ pub fn ledger() -> Ledger {
             tr!("`role 法務 \"…\"` で役割を宣言するか、名前の書き間違いを直します。", "Declare the role with `role legal \"…\"`, or correct the misspelling."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務部\n  decided 2026-10-03 by 法務 \"例\"\n",
             &["E007"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal_dept\n  decided 2026-10-03 by legal \"example\"\n", &[]),
         e(
             "E009",
             tr!("版の書き方が違います", "A version is wrong"),
@@ -143,7 +185,8 @@ pub fn ledger() -> Ledger {
             tr!("版は `v1` から数え、二つ以上あるなら、どの版にも書き、指すときも書きます。", "Versions count from `v1`; when there are two or more, every version writes its own, and so does whatever points at one."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1 v0\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n",
             &["E007", "E408"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1 v0\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n", &[]),
         e(
             "E010",
             tr!("要件に要るものがありません", "A requirement lacks something it needs"),
@@ -151,10 +194,11 @@ pub fn ledger() -> Ledger {
                 "要件に `text` か `owner` が無いとき、出どころ（`from` も `decided` も）が無いとき、名前が ASCII の小文字・数字・`_` でない要件に別名が無いとき。",
                 "A requirement has no `text` or no `owner`, no origin (neither `from` nor `decided`), or no alias although its name is not lowercase ASCII, digits and `_`."
             ),
-            tr!("足りない行を書きます。別名は `支払日(payment_day)` のように名前のすぐあとに付けます。", "Write the line missing; an alias goes right after the name, as in `支払日(payment_day)`."),
+            tr!("足りない行を書きます。別名は `支払日(payment_day)` のように名前のすぐあとに付けます。", "Write the line missing; an alias goes right after the name, as in `PaymentDay(payment_day)`."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n",
             &[],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n", &[]),
         e(
             "E011",
             tr!("知らないツールの語です", "A tool that does not exist"),
@@ -165,7 +209,8 @@ pub fn ledger() -> Ledger {
             tr!("九つのどれかで書きます。ほかのファイルは `file \"…\"` で名指します。", "Write one of the nine; name any other file with `file \"…\"`."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by excel \"a.xlsx\"\n",
             &["E012", "E013"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by excel \"a.xlsx\"\n", &[]),
         e(
             "E012",
             tr!("その種類や組は、そこに書けません", "A kind or pair that cannot be written there"),
@@ -176,7 +221,8 @@ pub fn ledger() -> Ledger {
             tr!("文に挙がる種類で書きます。file はファイルを丸ごと名指します（`file \"src/app.py\"`）。", "Write one of the kinds the message gives; file names a whole file (`file \"src/app.py\"`)."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by dandori \"order.flow\" table reserve\n",
             &["E011", "E013"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by dandori \"order.flow\" table reserve\n", &[]),
         e(
             "E013",
             tr!("パスの書き方が違います", "A path that cannot be read"),
@@ -184,7 +230,8 @@ pub fn ledger() -> Ledger {
             tr!("名指しを書いたファイルのディレクトリからの相対で、`\"…\"` で囲んで書きます。", "Write it in quotes, from the directory of the file the naming is in."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"/etc/hosts\"\n",
             &["E011", "E012"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by file \"/etc/hosts\"\n", &[]),
         // ── Sources ──
         e(
             "E101",
@@ -193,7 +240,8 @@ pub fn ledger() -> Ledger {
             tr!("`yuen source fetch` で写しを取ってくるか、パスを直します。", "Bring the copy with `yuen source fetch`, or correct the path."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:fc8c35a0769d3b35\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E102", "E103"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nsource cfr = law ecfr \"37 CFR 1\" asof 2026-01-01\n  \"§1.7\" sha256:01de176ebe4740d7\n\nrequirement r1\n  text \"x\"\n  owner legal\n  from @cfr \"§1.7\"\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n", &[]),
         e(
             "E102",
             tr!("出典が固定されていません", "A source is not pinned"),
@@ -202,7 +250,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E101", "E103"],
         )
-        .beside(&[COPY_142]),
+        .beside(&[COPY_142])
+        .en("requirements example v1\nrole legal\n\nsource cfr = law ecfr \"37 CFR 1\" asof 2026-01-01\n  \"§1.7\"\n\nrequirement r1\n  text \"x\"\n  owner legal\n  from @cfr \"§1.7\"\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n", &[COPY_1_7]),
         e(
             "E103",
             tr!("写しが固定と違います", "A copy does not match its pin"),
@@ -211,7 +260,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:0000000000000000\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E102", "E302"],
         )
-        .beside(&[COPY_142]),
+        .beside(&[COPY_142])
+        .en("requirements example v1\nrole legal\n\nsource cfr = law ecfr \"37 CFR 1\" asof 2026-01-01\n  \"§1.7\" sha256:0000000000000000\n\nrequirement r1\n  text \"x\"\n  owner legal\n  from @cfr \"§1.7\"\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n", &[COPY_1_7]),
         e(
             "E104",
             tr!("写しが読めません", "A copy cannot be read"),
@@ -220,7 +270,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:6210aedce8fd1601\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E101"],
         )
-        .beside(&[NOT_XML]),
+        .beside(&[NOT_XML])
+        .en("requirements example v1\nrole legal\n\nsource cfr = law ecfr \"37 CFR 1\" asof 2026-01-01\n  \"§1.7\" sha256:6210aedce8fd1601\n\nrequirement r1\n  text \"x\"\n  owner legal\n  from @cfr \"§1.7\"\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n", &[NOT_XML_EN]),
         e(
             "E105",
             tr!("引用が使えません", "A citation cannot be used"),
@@ -228,10 +279,11 @@ pub fn ledger() -> Ledger {
                 "引用の条が読めない形のとき、同じファイルで宣言されていない出典を引いたとき、法令を条なしで引いたとき、`file` の出典に条を書いたとき。",
                 "The article of a citation is not in a form read, the source is not declared in the same file, a law is cited without an article, or a `file` source is cited with one."
             ),
-            tr!("出典を同じファイルで宣言し、法令は `@民法 第142条` のように条で、`file` の出典は `@約款` と丸ごと引きます。", "Declare the source in the same file; cite a law by article (`@民法 第142条`) and a `file` source whole (`@terms`)."),
+            tr!("出典を同じファイルで宣言し、法令は `@民法 第142条` のように条で、`file` の出典は `@約款` と丸ごと引きます。", "Declare the source in the same file; cite a law by article or section (`@cfr \"§1.7\"`) and a `file` source whole (`@terms`)."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @商法 第1条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E102"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  from @usc \"§1.1\"\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n", &[]),
         e(
             "E106",
             tr!("借りた出典が使えません", "A borrowed source cannot be used"),
@@ -243,7 +295,8 @@ pub fn ledger() -> Ledger {
             include_str!("../tests/mutants/E106_宣言されていない出典を借りる/例.req"),
             &["E105", "E203"],
         )
-        .beside(&[E106_CAL]),
+        .beside(&[E106_CAL])
+        .en(include_str!("../tests/mutants/E106_borrows_an_undeclared_source/example.req"), &[E106_CAL_EN]),
         e(
             "E107",
             tr!("要件と成果物が、同じ条の違う本文を読んでいます", "A requirement and what meets it read different texts of one article"),
@@ -255,7 +308,8 @@ pub fn ledger() -> Ledger {
             include_str!("../tests/mutants/E107_同じ条の違う本文/例.req"),
             &["E103"],
         )
-        .beside(&[CHANGED_142, E107_CAL, E107_CAL_142]),
+        .beside(&[CHANGED_142, E107_CAL, E107_CAL_142])
+        .en(include_str!("../tests/mutants/E107_same_article_different_text/fire_extinguishers.req"), &[E107_RULE_EN, E107_RULE_COPY_EN, E107_COPY_EN]),
         e(
             "W101",
             tr!("固定した条が、どの要件からも引かれていません", "A pinned article is cited by no requirement"),
@@ -264,7 +318,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:fc8c35a0769d3b35\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E102"],
         )
-        .beside(&[COPY_142]),
+        .beside(&[COPY_142])
+        .en("requirements example v1\nrole legal\n\nsource cfr = law ecfr \"37 CFR 1\" asof 2026-01-01\n  \"§1.7\" sha256:01de176ebe4740d7\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[COPY_1_7]),
         // ── Artifacts ──
         e(
             "E201",
@@ -273,7 +328,8 @@ pub fn ledger() -> Ledger {
             tr!("パスを直します。ファイルの名前を変えたのなら、リンクも直します。", "Correct the path; if the file was renamed, correct the link."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"missing.txt\"\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E013"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by file \"missing.txt\"\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[]),
         e(
             "E202",
             tr!("成果物の名前が、そのファイルにありません", "The name of an artifact is not in its file"),
@@ -285,7 +341,8 @@ pub fn ledger() -> Ledger {
             include_str!("../tests/mutants/E202_無いメッセージ/例.req"),
             &["E201"],
         )
-        .beside(&[E202_PROTO]),
+        .beside(&[E202_PROTO])
+        .en(include_str!("../tests/mutants/E202_no_such_message/example.req"), &[E202_PROTO_EN]),
         e(
             "E203",
             tr!("名指したものの言語が、そのファイルについて答えられません", "The language of what is named cannot answer for its file"),
@@ -297,7 +354,8 @@ pub fn ledger() -> Ledger {
             include_str!("../tests/mutants/E203_検査を通らない規則/例.req"),
             &["E106", "E202"],
         )
-        .beside(&[E203_RULE]),
+        .beside(&[E203_RULE])
+        .en(include_str!("../tests/mutants/E203_rule_that_does_not_pass/example.req"), &[E203_RULE_EN]),
         e(
             "E204",
             tr!("ツールの JSON が知らない形です", "The tool's JSON is not of a known shape"),
@@ -318,7 +376,8 @@ pub fn ledger() -> Ledger {
             include_str!("../tests/mutants/E205_読めないproto/例.req"),
             &["E201"],
         )
-        .beside(&[E205_PROTO]),
+        .beside(&[E205_PROTO])
+        .en(include_str!("../tests/mutants/E205_unreadable_proto/example.req"), &[E205_PROTO_EN]),
         e(
             "E206",
             tr!("名指したものの言語がつながっていません", "The language of what a line names is not joined"),
@@ -355,7 +414,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E302", "E303"],
         )
-        .beside(&[A_TXT]),
+        .beside(&[A_TXT])
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by file \"a.txt\"\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[A_TXT]),
         e(
             "E302",
             tr!("確かめたあとで、リンク元が変わりました", "The upper end changed after the link was looked at"),
@@ -367,7 +427,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:f1e653e8ce72c16f -> sha256:87428fc522803d31\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E303", "E304", "W301"],
         )
-        .beside(&[A_TXT, OLD_X]),
+        .beside(&[A_TXT, OLD_X])
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by legal sha256:f1e653e8ce72c16f -> sha256:87428fc522803d31\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[A_TXT, OLD_X]),
         e(
             "E303",
             tr!("確かめたあとで、リンク先が変わりました", "The lower end changed after the link was looked at"),
@@ -376,7 +437,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f -> sha256:0263829989b6fd95\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E302", "W301"],
         )
-        .beside(&[A_TXT, OLD_A]),
+        .beside(&[A_TXT, OLD_A])
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by legal sha256:fbdfb71af500ce5f -> sha256:0263829989b6fd95\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[A_TXT, OLD_A]),
         e(
             "E304",
             tr!("見送りが承認されていないか、承認のあとで要件が変わりました", "A waiver is not approved, or the requirement changed after it was"),
@@ -384,7 +446,8 @@ pub fn ledger() -> Ledger {
             tr!("持ち主が理由を読んで承認したら、`yuen review … --by <役割>` で承認を書きます。", "Once the owner has read the reason and approves it, write the approval with `yuen review … --by <role>`."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E301"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[]),
         e(
             "E305",
             tr!("確かめた記録の形が崩れています", "A record is not written right"),
@@ -393,7 +456,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E301"],
         )
-        .beside(&[A_TXT]),
+        .beside(&[A_TXT])
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by legal sha256:fbdfb71af500ce5f\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[A_TXT]),
         e(
             "W301",
             tr!("確かめたときの中身が reviewed/ に無いので、差分を見せられません", "What was looked at is not in reviewed/, so no diff can be shown"),
@@ -402,7 +466,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f -> sha256:0263829989b6fd95\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E302", "E303"],
         )
-        .beside(&[A_TXT]),
+        .beside(&[A_TXT])
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by legal sha256:fbdfb71af500ce5f -> sha256:0263829989b6fd95\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[A_TXT]),
         // ── Structure and coverage ──
         e(
             "E401",
@@ -411,7 +476,8 @@ pub fn ledger() -> Ledger {
             tr!("`satisfied by <成果物>` を書くか、`not satisfied \"<理由>\"` を書いて承認してもらいます。", "Write `satisfied by <artifact>`, or `not satisfied \"<why>\"` and have it approved."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E402"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[]),
         e(
             "E402",
             tr!("確かめる主張も、その見送りもありません", "Nothing checks the requirement, and no waiver says so"),
@@ -419,7 +485,8 @@ pub fn ledger() -> Ledger {
             tr!("`verified by <主張>` を書くか、`not verified \"<理由>\"` を書いて承認してもらいます。", "Write `verified by <claim>`, or `not verified \"<why>\"` and have it approved."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E401"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[]),
         e(
             "E403",
             tr!("確かめる側に、主張でないものを書きました", "Something that checks nothing is on the side that verifies"),
@@ -427,7 +494,8 @@ pub fn ledger() -> Ledger {
             tr!("満たすものなら `satisfied by` に書き、確かめる側には落ちることのあるものを書きます。", "If it meets the requirement, write it after `satisfied by`; the side that verifies takes what can fail."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  verified by koyomi \"支払条件.cal\" date 支払日\n",
             &["E012"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  verified by koyomi \"payment_terms.cal\" date payment_day\n", &[]),
         e(
             "E404",
             tr!("範囲の成果物が、どの要件にも辿れません", "An artifact in scope traces to no requirement"),
@@ -436,7 +504,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nscope file \"b.txt\"\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E401"],
         )
-        .beside(&[B_TXT]),
+        .beside(&[B_TXT])
+        .en("requirements example v1\nrole legal\n\nscope file \"b.txt\"\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[B_TXT]),
         e(
             "E405",
             tr!("要件のあいだに循環があります", "The requirements make a cycle"),
@@ -444,7 +513,8 @@ pub fn ledger() -> Ledger {
             tr!("どちらが元かを決め、もう一方の `from` か `replaces` を消します。", "Decide which one comes first, and delete the other's `from` or `replaces`."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from r2\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n\nrequirement r2\n  text \"y\"\n  owner 法務\n  from r1\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E409"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  from r2\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n\nrequirement r2\n  text \"y\"\n  owner legal\n  from r1\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n", &[]),
         e(
             "E406",
             tr!("版の期間に隙間があります", "The periods of the versions leave a gap"),
@@ -452,7 +522,8 @@ pub fn ledger() -> Ledger {
             tr!("次の版の始まりを、前の版の終わりの翌日にします（直した行が出ます）。", "Start the next version on the day after the one before ends (the fixed line is shown)."),
             "requirements 例 v1\nrole 法務\n\nrequirement x v1\n  text \"x\"\n  in force 2026-01-01..2026-12-31\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b\n\nrequirement x v2\n  text \"x\"\n  in force 2027-01-02..\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:4e7392102a031a5b\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:4e7392102a031a5b\n",
             &["E407", "E408"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement x v1\n  text \"x\"\n  in force 2026-01-01..2026-12-31\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:5ca1701c0312a54b\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:5ca1701c0312a54b\n\nrequirement x v2\n  text \"x\"\n  in force 2027-01-02..\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:4e7392102a031a5b\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:4e7392102a031a5b\n", &[]),
         e(
             "E407",
             tr!("版の期間が重なります", "The periods of the versions overlap"),
@@ -460,7 +531,8 @@ pub fn ledger() -> Ledger {
             tr!("一つの日に効く版は一つです。前の版の終わりか、次の版の始まりを直します。", "One version holds on a day: correct the end of the one or the start of the other."),
             "requirements 例 v1\nrole 法務\n\nrequirement x v1\n  text \"x\"\n  in force 2026-01-01..2026-12-31\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b\n\nrequirement x v2\n  text \"x\"\n  in force 2026-12-30..\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:7523d312c91d81c0\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:7523d312c91d81c0\n",
             &["E406", "E408"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement x v1\n  text \"x\"\n  in force 2026-01-01..2026-12-31\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:5ca1701c0312a54b\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:5ca1701c0312a54b\n\nrequirement x v2\n  text \"x\"\n  in force 2026-12-30..\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:7523d312c91d81c0\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:7523d312c91d81c0\n", &[]),
         e(
             "E408",
             tr!("版の期間の書き方が足りません", "The periods of the versions are not all written"),
@@ -468,7 +540,8 @@ pub fn ledger() -> Ledger {
             tr!("どの版にも `in force` を書き、版の番号を期間の順にそろえます。", "Give every version an `in force`, and number them in the order of their periods."),
             "requirements 例 v1\nrole 法務\n\nrequirement x v1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n\nrequirement x v2\n  text \"x\"\n  in force 2027-01-01..\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fa2942b05a851b79\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fa2942b05a851b79\n",
             &["E406", "E407"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement x v1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n\nrequirement x v2\n  text \"x\"\n  in force 2027-01-01..\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fa2942b05a851b79\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fa2942b05a851b79\n", &[]),
         e(
             "E409",
             tr!("置き換える要件の期間が、置き換えられる要件の終わりの翌日から始まりません", "What replaces a requirement does not start the day after it ends"),
@@ -476,7 +549,8 @@ pub fn ledger() -> Ledger {
             tr!("置き換えられる要件を終わらせ、置き換える版をその翌日から始めます（直した行が出ます）。", "End what is replaced, and start what replaces it on the day after (the fixed line is shown)."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  in force 2026-01-01..2026-12-31\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:5ca1701c0312a54b\n\nrequirement r2\n  text \"y\"\n  in force 2027-01-02..\n  owner 法務\n  replaces r1\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:cb98f1b81b3a40fd\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:cb98f1b81b3a40fd\n",
             &["E406", "E405"],
-        ),
+        )
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  in force 2026-01-01..2026-12-31\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:5ca1701c0312a54b\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:5ca1701c0312a54b\n\nrequirement r2\n  text \"y\"\n  in force 2027-01-02..\n  owner legal\n  replaces r1\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:cb98f1b81b3a40fd\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:cb98f1b81b3a40fd\n", &[]),
         e(
             "W401",
             tr!("見送りと、同じ側のリンクの両方があります", "A waiver and a link on the same side"),
@@ -485,7 +559,8 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by 法務 sha256:fbdfb71af500ce5f -> sha256:87428fc522803d31\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E401"],
         )
-        .beside(&[A_TXT]),
+        .beside(&[A_TXT])
+        .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by legal sha256:fbdfb71af500ce5f -> sha256:87428fc522803d31\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[A_TXT]),
     ];
     // every code that is printed has its example; the words are for one that has none yet
     let later = tr!("（再現はまだありません。）", "(No example yet.)");

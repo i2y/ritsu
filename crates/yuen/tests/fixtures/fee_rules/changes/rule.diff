@@ -1,0 +1,11 @@
+--- a/rules/extension_fees.rule
++++ b/rules/extension_fees.rule
+@@ -32,7 +32,7 @@
+ policy unique
+ overrides standard_fee
+ | reduced_period | small | months  | -> extension_fee |
+-| true           | true  | >0 <=1  | 94USD            |
++| true           | true  | >0 <=1  | 100USD           |
+ | true           | true  | >1 <=2  | 276USD           |
+ | true           | true  | >2 <=3  | 636USD           |
+ | true           | true  | >3 <=4  | 998USD           |

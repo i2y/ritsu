@@ -1,0 +1,12 @@
+error[E302]: tests/mutants/E304_requirement_changed_after_approval/payment.req:11:3: payment_day changed after accounting looked at this link on 2026-10-03
+    11 |   satisfied by file "pay.py"
+  what changed in payment_day:
+      @@ -1,1 +1,1 @@
+      - text Closes on the 20th, pays on the 10th of the next month
+      + text Closes on the 20th, pays on the 10th of the next month, or the business day before when that day is closed
+  = Once a person has looked: yuen review tests/mutants/E304_requirement_changed_after_approval --root tests/mutants/E304_requirement_changed_after_approval --at tests/mutants/E304_requirement_changed_after_approval/payment.req:11 --by <role>
+error[E304]: tests/mutants/E304_requirement_changed_after_approval/payment.req:13:3: payment_day changed, so this waiver needs approving again (the same change as at tests/mutants/E304_requirement_changed_after_approval/payment.req:11)
+    13 |   not verified "Accounting compares them once a month"
+  = accounting approved this waiver on 2026-10-03.
+  = Once a person has looked: yuen review tests/mutants/E304_requirement_changed_after_approval --root tests/mutants/E304_requirement_changed_after_approval --at tests/mutants/E304_requirement_changed_after_approval/payment.req:13 --by <role>
+tests/mutants/E304_requirement_changed_after_approval: 2 errors

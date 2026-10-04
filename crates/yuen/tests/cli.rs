@@ -163,9 +163,15 @@ fn explain_prints_every_code() {
     assert_eq!(md.stdout.matches("<a id=\"").count(), 44);
     let one = run(&["explain", "E302"]);
     assert!(one.stdout.starts_with("E302 (error) — The upper end changed after the link was looked at\n"), "{}", one.stdout);
+    // The example is the one in the language asked for: English output shows the English example
+    // (a requirement and a rule that read the eCFR), Japanese output the Japanese one (a calendar
+    // that pins an article of e-Gov's).
     let e107 = run(&["explain", "E107"]);
-    assert!(e107.stdout.contains("Example:\n    requirements 例 v1\n"), "{}", e107.stdout);
-    assert!(e107.stdout.contains("beside it: cal/a.cal"), "{}", e107.stdout);
+    assert!(e107.stdout.contains("Example:\n    requirements fire_extinguishers v1\n"), "{}", e107.stdout);
+    assert!(e107.stdout.contains("beside it: rules/osha_extinguisher.rule"), "{}", e107.stdout);
+    let e107_ja = run(&["explain", "E107", "--lang", "ja"]);
+    assert!(e107_ja.stdout.contains("再現:\n    requirements 例 v1\n"), "{}", e107_ja.stdout);
+    assert!(e107_ja.stdout.contains("隣に置くファイル: cal/a.cal"), "{}", e107_ja.stdout);
     let retired = run(&["explain", "E204"]);
     assert!(retired.stdout.contains("Example:\n    Retired in ritsu 0.23.0"), "{}", retired.stdout);
 }

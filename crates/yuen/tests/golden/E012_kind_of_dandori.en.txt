@@ -1,0 +1,3 @@
+error[E012]: tests/mutants/E012_kind_of_dandori/payment.req:11:37: `table` is not a kind of dandori; the kinds of dandori are task, case, record, enum, input and output
+    11 |   satisfied by dandori "order.flow" table reserve
+tests/mutants/E012_kind_of_dandori: 1 error

@@ -1,0 +1,4 @@
+エラー[E013]: tests/mutants/E013_outside_the_root/payment.req:11:21: `../pay.py` はルートの外に出ます
+    11 |   satisfied by file "../pay.py"
+  = ルートは、渡したパスの上で `.git` を持つ一番近いディレクトリです（無ければ渡したディレクトリ、`--root` で替えられます）。
+tests/mutants/E013_outside_the_root: エラー 1 件

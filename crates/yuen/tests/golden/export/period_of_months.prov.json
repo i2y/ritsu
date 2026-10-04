@@ -1,0 +1,419 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/legal": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "legal",
+      "yuen:description": "Decides how the words of a rule are read"
+    },
+    "y:role/development": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "development",
+      "yuen:description": "Writes and fixes koyomi's file"
+    }
+  },
+  "entity": {
+    "y:source/e84ba3f4a99b8ea4bac0903a6fc248ea": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "cfr §1.6",
+      "yuen:law": "ecfr 37 CFR 1",
+      "yuen:asof": "2026-01-01",
+      "yuen:sha256": "6bcdc27c3428886c"
+    },
+    "y:source/00fd4bc0170b9a2c30b57b1f929540bb": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "cfr §1.7",
+      "yuen:law": "ecfr 37 CFR 1",
+      "yuen:asof": "2026-01-01",
+      "yuen:sha256": "01de176ebe4740d7"
+    },
+    "y:source/84638740d411f87e4ed257f8ad78cca7": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "cfr §1.8",
+      "yuen:law": "ecfr 37 CFR 1",
+      "yuen:asof": "2026-01-01",
+      "yuen:sha256": "fa698e3ea7cb1e49"
+    },
+    "y:source/d27bfab399fd415f4b55a5cd03982594": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "cfr §1.10",
+      "yuen:law": "ecfr 37 CFR 1",
+      "yuen:asof": "2026-01-01",
+      "yuen:sha256": "5adcbc193371fd26"
+    },
+    "y:artifact/596c1d9858d19fec65caf225a9386604": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "file \"period_of_months.cal\"",
+      "yuen:sha256": "0f1a06d9b71a39f6",
+      "yuen:end": "file"
+    },
+    "y:requirement/date_of_receipt/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "date_of_receipt",
+      "yuen:version": "1",
+      "yuen:text": "Correspondence received in the Patent and Trademark Office is stamped with the date of receipt",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "c6a57f069e4638f2"
+    },
+    "y:requirement/timely_filing/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "timely_filing",
+      "yuen:version": "1",
+      "yuen:text": "Correspondence required to be filed within a set period of time is considered timely filed if it is mailed or transmitted before the period ends, with a certificate of the date of deposit or transmission",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "8d02c6a1f0ad3364"
+    },
+    "y:requirement/next_business_day/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "next_business_day",
+      "yuen:version": "1",
+      "yuen:text": "When the last day fixed for taking an action falls on a Saturday, Sunday or Federal holiday, the action may be taken on the next succeeding business day which is not one",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "8d9c6066ea40430f"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/date_of_receipt/v1",
+      "prov:agent": "y:role/legal",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r12": {
+      "prov:entity": "y:requirement/timely_filing/v1",
+      "prov:agent": "y:role/legal",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r25": {
+      "prov:entity": "y:requirement/next_business_day/v1",
+      "prov:agent": "y:role/legal",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/date_of_receipt/v1",
+      "prov:usedEntity": "y:source/e84ba3f4a99b8ea4bac0903a6fc248ea",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r13": {
+      "prov:generatedEntity": "y:requirement/timely_filing/v1",
+      "prov:usedEntity": "y:source/84638740d411f87e4ed257f8ad78cca7",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r14": {
+      "prov:generatedEntity": "y:requirement/timely_filing/v1",
+      "prov:usedEntity": "y:source/d27bfab399fd415f4b55a5cd03982594",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r26": {
+      "prov:generatedEntity": "y:requirement/next_business_day/v1",
+      "prov:usedEntity": "y:source/00fd4bc0170b9a2c30b57b1f929540bb",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/596c1d9858d19fec65caf225a9386604",
+      "prov:influencer": "y:requirement/date_of_receipt/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r15": {
+      "prov:influencee": "y:artifact/596c1d9858d19fec65caf225a9386604",
+      "prov:influencer": "y:requirement/timely_filing/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r28": {
+      "prov:influencee": "y:requirement/next_business_day/v1",
+      "prov:influencer": "y:decision/c787a73297895736a974f3692fe7ac52"
+    },
+    "_:r30": {
+      "prov:influencee": "y:artifact/596c1d9858d19fec65caf225a9386604",
+      "prov:influencer": "y:requirement/next_business_day/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/567aa28f239957cc12fbc1dc8fea16c7": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "6bcdc27c3428886c",
+      "yuen:down": "c6a57f069e4638f2",
+      "yuen:status": "ok"
+    },
+    "y:review/aef579c1179735612a261b8c8dbea127": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "c6a57f069e4638f2",
+      "yuen:down": "0f1a06d9b71a39f6",
+      "yuen:status": "ok"
+    },
+    "y:waiver/2f1966701401cb51ed6acb093dea5244": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "That the day of receipt is not counted is checked on koyomi doc's page, by reading the rule and its restatement side by side. This material has no claim that checks it",
+      "yuen:sha256": "c6a57f069e4638f2",
+      "yuen:status": "ok"
+    },
+    "y:review/2cb95fb16b2dc7e2d9b43187e19cb81a": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "fa698e3ea7cb1e49 5adcbc193371fd26",
+      "yuen:down": "8d02c6a1f0ad3364",
+      "yuen:status": "ok"
+    },
+    "y:review/5c32a218fbdc0ddf207db9048eb59c5f": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "8d02c6a1f0ad3364",
+      "yuen:down": "0f1a06d9b71a39f6",
+      "yuen:status": "ok"
+    },
+    "y:waiver/eb0fb49bd817430b9f55949d3c95bb18": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "A function that writes the rule's cases as they are, held against every origin of 2000 to 2027 and every month count of 1 to 12, was checked in koyomi's design stage. This material has no claim that checks it",
+      "yuen:sha256": "8d02c6a1f0ad3364",
+      "yuen:status": "ok"
+    },
+    "y:decision/c787a73297895736a974f3692fe7ac52": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Decision",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:why": "The next succeeding business day is read as the day after the closed day, and not moved further if that day is closed too. Decided for this material; it does not say how any rule is read"
+    },
+    "y:review/be613e08fe9472082271d462bb39e912": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "01de176ebe4740d7",
+      "yuen:down": "8d9c6066ea40430f",
+      "yuen:status": "ok"
+    },
+    "y:review/74528b1617b4aa7974d152787b6453f9": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "8d9c6066ea40430f",
+      "yuen:down": "0f1a06d9b71a39f6",
+      "yuen:status": "ok"
+    },
+    "y:waiver/47c9c33046f802ffffed751f256bd919": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim",
+      "yuen:sha256": "8d9c6066ea40430f",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r4": {
+      "prov:activity": "y:review/567aa28f239957cc12fbc1dc8fea16c7",
+      "prov:entity": "y:source/e84ba3f4a99b8ea4bac0903a6fc248ea"
+    },
+    "_:r5": {
+      "prov:activity": "y:review/567aa28f239957cc12fbc1dc8fea16c7",
+      "prov:entity": "y:requirement/date_of_receipt/v1"
+    },
+    "_:r7": {
+      "prov:activity": "y:review/aef579c1179735612a261b8c8dbea127",
+      "prov:entity": "y:requirement/date_of_receipt/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/aef579c1179735612a261b8c8dbea127",
+      "prov:entity": "y:artifact/596c1d9858d19fec65caf225a9386604"
+    },
+    "_:r10": {
+      "prov:activity": "y:waiver/2f1966701401cb51ed6acb093dea5244",
+      "prov:entity": "y:requirement/date_of_receipt/v1"
+    },
+    "_:r16": {
+      "prov:activity": "y:review/2cb95fb16b2dc7e2d9b43187e19cb81a",
+      "prov:entity": "y:source/84638740d411f87e4ed257f8ad78cca7"
+    },
+    "_:r17": {
+      "prov:activity": "y:review/2cb95fb16b2dc7e2d9b43187e19cb81a",
+      "prov:entity": "y:source/d27bfab399fd415f4b55a5cd03982594"
+    },
+    "_:r18": {
+      "prov:activity": "y:review/2cb95fb16b2dc7e2d9b43187e19cb81a",
+      "prov:entity": "y:requirement/timely_filing/v1"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/5c32a218fbdc0ddf207db9048eb59c5f",
+      "prov:entity": "y:requirement/timely_filing/v1"
+    },
+    "_:r21": {
+      "prov:activity": "y:review/5c32a218fbdc0ddf207db9048eb59c5f",
+      "prov:entity": "y:artifact/596c1d9858d19fec65caf225a9386604"
+    },
+    "_:r23": {
+      "prov:activity": "y:waiver/eb0fb49bd817430b9f55949d3c95bb18",
+      "prov:entity": "y:requirement/timely_filing/v1"
+    },
+    "_:r29": {
+      "prov:activity": "y:decision/c787a73297895736a974f3692fe7ac52",
+      "prov:entity": "y:source/00fd4bc0170b9a2c30b57b1f929540bb"
+    },
+    "_:r31": {
+      "prov:activity": "y:review/be613e08fe9472082271d462bb39e912",
+      "prov:entity": "y:source/00fd4bc0170b9a2c30b57b1f929540bb"
+    },
+    "_:r32": {
+      "prov:activity": "y:review/be613e08fe9472082271d462bb39e912",
+      "prov:entity": "y:requirement/next_business_day/v1"
+    },
+    "_:r34": {
+      "prov:activity": "y:review/74528b1617b4aa7974d152787b6453f9",
+      "prov:entity": "y:requirement/next_business_day/v1"
+    },
+    "_:r35": {
+      "prov:activity": "y:review/74528b1617b4aa7974d152787b6453f9",
+      "prov:entity": "y:artifact/596c1d9858d19fec65caf225a9386604"
+    },
+    "_:r37": {
+      "prov:activity": "y:waiver/47c9c33046f802ffffed751f256bd919",
+      "prov:entity": "y:requirement/next_business_day/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r6": {
+      "prov:activity": "y:review/567aa28f239957cc12fbc1dc8fea16c7",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/aef579c1179735612a261b8c8dbea127",
+      "prov:agent": "y:role/development"
+    },
+    "_:r11": {
+      "prov:activity": "y:waiver/2f1966701401cb51ed6acb093dea5244",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r19": {
+      "prov:activity": "y:review/2cb95fb16b2dc7e2d9b43187e19cb81a",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r22": {
+      "prov:activity": "y:review/5c32a218fbdc0ddf207db9048eb59c5f",
+      "prov:agent": "y:role/development"
+    },
+    "_:r24": {
+      "prov:activity": "y:waiver/eb0fb49bd817430b9f55949d3c95bb18",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r27": {
+      "prov:activity": "y:decision/c787a73297895736a974f3692fe7ac52",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r33": {
+      "prov:activity": "y:review/be613e08fe9472082271d462bb39e912",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r36": {
+      "prov:activity": "y:review/74528b1617b4aa7974d152787b6453f9",
+      "prov:agent": "y:role/development"
+    },
+    "_:r38": {
+      "prov:activity": "y:waiver/47c9c33046f802ffffed751f256bd919",
+      "prov:agent": "y:role/legal"
+    }
+  }
+}

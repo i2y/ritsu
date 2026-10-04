@@ -1,0 +1,428 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/warehouse_proto",
+  "files": [
+    {
+      "path": "inventory.req",
+      "name": "inventory",
+      "version": "1",
+      "sha256": "bb61316da234b757"
+    }
+  ],
+  "roles": [
+    {
+      "name": "warehouse",
+      "description": "Decides the promises of the stock service"
+    },
+    {
+      "name": "development",
+      "description": "Writes and fixes the .proto files"
+    }
+  ],
+  "sources": [
+    {
+      "file": "inventory.req",
+      "name": "contract",
+      "kind": "file",
+      "path": "contract.md",
+      "url": null,
+      "sha256": "997c973ba5bd5798",
+      "borrowed": null
+    }
+  ],
+  "requirements": [
+    {
+      "name": "reserve",
+      "alias": null,
+      "version": 1,
+      "file": "inventory.req",
+      "line": 11,
+      "text": "The warehouse holds stock for each line of an order. When there is not enough, it answers so without holding any",
+      "in_force": null,
+      "owner": "warehouse",
+      "replaces": [],
+      "sha256": "054a0be4bb4bbe79",
+      "from": [
+        {
+          "line": 14,
+          "sources": [
+            {
+              "source": "contract",
+              "fragment": null,
+              "sha256": "997c973ba5bd5798"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "warehouse",
+            "up": [
+              "997c973ba5bd5798"
+            ],
+            "down": "054a0be4bb4bbe79"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 16,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"warehouse.proto\" service StockService method Reserve",
+            "tool": "proto",
+            "path": "warehouse.proto",
+            "items": [
+              [
+                "service",
+                "StockService"
+              ],
+              [
+                "method",
+                "Reserve"
+              ]
+            ]
+          },
+          "sha256": "cadb2fc727e9af81",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "054a0be4bb4bbe79"
+            ],
+            "down": "cadb2fc727e9af81"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 18,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"warehouse.proto\" enum Stock",
+            "tool": "proto",
+            "path": "warehouse.proto",
+            "items": [
+              [
+                "enum",
+                "Stock"
+              ]
+            ]
+          },
+          "sha256": "d7450e7503c905f7",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "054a0be4bb4bbe79"
+            ],
+            "down": "d7450e7503c905f7"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 20,
+          "role": "verified",
+          "why": "This material has no claim that runs the service",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "warehouse",
+            "sha256": "054a0be4bb4bbe79"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "alias": null,
+      "version": 1,
+      "file": "inventory.req",
+      "line": 23,
+      "text": "Stock held is released with the number it was held with",
+      "in_force": null,
+      "owner": "warehouse",
+      "replaces": [],
+      "sha256": "870d0744de8ff13a",
+      "from": [
+        {
+          "line": 26,
+          "sources": [
+            {
+              "source": "contract",
+              "fragment": null,
+              "sha256": "997c973ba5bd5798"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "warehouse",
+            "up": [
+              "997c973ba5bd5798"
+            ],
+            "down": "870d0744de8ff13a"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 28,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"warehouse.proto\" service StockService method Release",
+            "tool": "proto",
+            "path": "warehouse.proto",
+            "items": [
+              [
+                "service",
+                "StockService"
+              ],
+              [
+                "method",
+                "Release"
+              ]
+            ]
+          },
+          "sha256": "2a0912a66889e515",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "870d0744de8ff13a"
+            ],
+            "down": "2a0912a66889e515"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 30,
+          "role": "verified",
+          "why": "This material has no claim that runs the service",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "warehouse",
+            "sha256": "870d0744de8ff13a"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "fulfill",
+      "alias": null,
+      "version": 1,
+      "file": "inventory.req",
+      "line": 33,
+      "text": "Fulfillment starts with an order, and answers with the stock held and a tracking number",
+      "in_force": null,
+      "owner": "warehouse",
+      "replaces": [],
+      "sha256": "83acaba766b0b3b5",
+      "from": [
+        {
+          "line": 36,
+          "sources": [
+            {
+              "source": "contract",
+              "fragment": null,
+              "sha256": "997c973ba5bd5798"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "warehouse",
+            "up": [
+              "997c973ba5bd5798"
+            ],
+            "down": "83acaba766b0b3b5"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 38,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"fulfillment.proto\" service FulfillmentService method Fulfill",
+            "tool": "proto",
+            "path": "fulfillment.proto",
+            "items": [
+              [
+                "service",
+                "FulfillmentService"
+              ],
+              [
+                "method",
+                "Fulfill"
+              ]
+            ]
+          },
+          "sha256": "6c73e17bf5bedba7",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "83acaba766b0b3b5"
+            ],
+            "down": "6c73e17bf5bedba7"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 40,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"fulfillment.proto\" message FulfillResponse field tracking_number",
+            "tool": "proto",
+            "path": "fulfillment.proto",
+            "items": [
+              [
+                "message",
+                "FulfillResponse"
+              ],
+              [
+                "field",
+                "tracking_number"
+              ]
+            ]
+          },
+          "sha256": "fb7f7e2617539e54",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "83acaba766b0b3b5"
+            ],
+            "down": "fb7f7e2617539e54"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 42,
+          "role": "verified",
+          "why": "This material has no claim that runs the service",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "warehouse",
+            "sha256": "83acaba766b0b3b5"
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "proto \"fulfillment.proto\" message FulfillResponse field tracking_number",
+      "tool": "proto",
+      "path": "fulfillment.proto",
+      "items": [
+        [
+          "message",
+          "FulfillResponse"
+        ],
+        [
+          "field",
+          "tracking_number"
+        ]
+      ],
+      "sha256": "fb7f7e2617539e54",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "proto \"fulfillment.proto\" service FulfillmentService method Fulfill",
+      "tool": "proto",
+      "path": "fulfillment.proto",
+      "items": [
+        [
+          "service",
+          "FulfillmentService"
+        ],
+        [
+          "method",
+          "Fulfill"
+        ]
+      ],
+      "sha256": "6c73e17bf5bedba7",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "proto \"warehouse.proto\" enum Stock",
+      "tool": "proto",
+      "path": "warehouse.proto",
+      "items": [
+        [
+          "enum",
+          "Stock"
+        ]
+      ],
+      "sha256": "d7450e7503c905f7",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "proto \"warehouse.proto\" service StockService method Release",
+      "tool": "proto",
+      "path": "warehouse.proto",
+      "items": [
+        [
+          "service",
+          "StockService"
+        ],
+        [
+          "method",
+          "Release"
+        ]
+      ],
+      "sha256": "2a0912a66889e515",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "proto \"warehouse.proto\" service StockService method Reserve",
+      "tool": "proto",
+      "path": "warehouse.proto",
+      "items": [
+        [
+          "service",
+          "StockService"
+        ],
+        [
+          "method",
+          "Reserve"
+        ]
+      ],
+      "sha256": "cadb2fc727e9af81",
+      "end": "item",
+      "pins": []
+    }
+  ],
+  "scopes": [
+    {
+      "file": "inventory.req",
+      "line": 9,
+      "text": "proto \"warehouse.proto\" service StockService method",
+      "artifacts": 2,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/warehouse_proto: ok — 3 requirements, whose 8 links and 3 waivers are as they were looked at; every requirement is met and checked, or waived; the 2 methods in scope all trace to a requirement",
+    "diagnostics": []
+  }
+}

@@ -1,0 +1,5 @@
+error[E103]: tests/mutants/E103_pin_differs/period_of_months.req:9:3: The copy of cfr §1.7 does not match its pin (pinned sha256:01de176ebe4740d7, the copy is sha256:4b9dea2a1e492f63)
+     9 |   "§1.7" sha256:01de176ebe4740d7
+  = The copy changed after it was pinned. Read what changed in the text, then pin it again.
+  = The line, fixed: "§1.7" sha256:4b9dea2a1e492f63
+tests/mutants/E103_pin_differs: 1 error

@@ -1,0 +1,21 @@
+dates period_of_months v1
+description "The end of a period of months counted from a day, written as this example reads it: the day itself is not counted, the period ends on the day before the corresponding day of the last month, or on the last day of that month when it has no such day, and an end that falls on a day closed in England and Wales moves to the day after. It says nothing of how any law is read"
+use calendar "calendars/england_and_wales.cal"
+
+inputs
+  origin      : date  range >=2026-01-01 <=2026-12-31
+  month_count : int   range >=1 <=12
+
+date first_day = origin
+  + 1 day                                        # the day itself is not counted
+date last_day = first_day
+  + month_count months else start_of_next_month  # the corresponding day of the last month; with none, the 1st of the month after
+  - 1 day                                        # the day before it: the last day of the last month when it had no corresponding day
+date last_day_moved = last_day
+  roll following                                 # an end on a closed day moves on until the closure ends
+
+claims
+  last_day_is_monotonic       : last_day is monotonic
+  moved_last_day_is_monotonic : last_day_moved is monotonic
+  last_day_after_origin       : last_day > origin
+  moved_on_or_after_last_day  : last_day_moved >= last_day

@@ -1,0 +1,624 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <THE-HEADER>
+    <REQ-IF-HEADER IDENTIFIER="_630e02120e736c15b7e98b5388c9859d">
+      <CREATION-TIME>2026-10-03T00:00:00Z</CREATION-TIME>
+      <REQ-IF-TOOL-ID>yuen 0.1.0</REQ-IF-TOOL-ID>
+      <REQ-IF-VERSION>1.0</REQ-IF-VERSION>
+      <SOURCE-TOOL-ID>yuen 0.1.0</SOURCE-TOOL-ID>
+      <TITLE>period_of_months</TITLE>
+    </REQ-IF-HEADER>
+  </THE-HEADER>
+  <CORE-CONTENT>
+    <REQ-IF-CONTENT>
+      <DATATYPES>
+        <DATATYPE-DEFINITION-STRING IDENTIFIER="_32be546f997c9c83dced94b60229c8a6" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen string" MAX-LENGTH="100000"/>
+        <DATATYPE-DEFINITION-XHTML IDENTIFIER="_263168489adb4427155ad11893c9b71a" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen xhtml"/>
+      </DATATYPES>
+      <SPEC-TYPES>
+        <SPEC-OBJECT-TYPE IDENTIFIER="_78405f0d7ed8bcbb711673cc8c4a4bb4" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen requirement">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_0e55a1623323e7efaa94ed254185f196" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="ReqIF.ForeignID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_86e2773d004ee20e74aa766f2ce351f3" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="ReqIF.Name">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_53c969acbb77c12b793b52095a0ca59c" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="ReqIF.Text">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_ca9ff16428087823eedc317e47afc0da" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.inForce">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_3066d61d13e61978b5093daf3448f446" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.owner">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_10b2c8aa7aa8351e17bc9aa38f52880f" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.decided">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_7ffe71e9e8ed2f78b159d299efe86c10" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.waived">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_3053884aad8bf228da5264102c7adaac" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.sha256">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_13771252e733d3434da73527976c1b22" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-OBJECT-TYPE IDENTIFIER="_82a6d3ab90a94a7ccf25b592606a5115" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen source">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_d25e08f6214748c0cd1d68fa1f87b80a" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="ReqIF.ForeignID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_0b9aa24442f3ad57982a28447861b522" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="ReqIF.Name">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_4fc7e75843037eb57c34609682b06ec8" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="ReqIF.Text">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_1e09bce460a4dd79730f1f5407f250c8" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.law">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_136496664827b3bec533a03b9e4fd398" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.asof">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_f41e83db6af06a69d5804e09da82ad7b" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.revision">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_98a6b0f0202d9d6c4ee8d655ae4513ff" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.file">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_8a03008e174c00bb0e5a0ff55f022312" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.url">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_7314c50b9580cb3fab0eadf2fd681a6e" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.sha256">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-OBJECT-TYPE IDENTIFIER="_9ead4f4f276c9201130bf5c65e31cf9b" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen artifact">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_a0b93a2cd2f3c84d917442e8738a29f2" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="ReqIF.ForeignID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_1f6096fffb5ed2006bc20f2e3d15382d" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="ReqIF.Name">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_0b735c9a0ac4d4a3d4349fc9d3d39210" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.sha256">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c905983964f6577658e837ff98752643" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.end">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_38ebadf3c7922dafd9bd709143b69410" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen from">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_309e5c9fc4d3093cabfe553f89398883" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.reviewedOn">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_de5a8b06f4ed15039cb9a8ce229e3882" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.reviewedBy">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_0412d94d758f9f274f57ea3801ecc1a5" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.up">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c4d6a9290a375591cd9afdab52a93f83" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.down">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_444acc8a6cf372af8a7a57ed2c063fe4" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-RELATION-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_43a798f0336eb0c0267b2c2c301a56a5" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen satisfied by">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_806b8ccc2a866d34cf305899d9f530f4" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.reviewedOn">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_f4b120327cf8e7466ec4aeb959fd4626" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.reviewedBy">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_b87a9ec95e675e99db67fa27f368682f" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.up">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_919e85b662746a5174590e7f97557d28" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.down">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_8b9b83b089a55c5fecbe786a836bffdb" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-RELATION-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_d16e2a866476b8b92a72e406745c9245" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen verified by">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_66d0775a01c0f55cd7e34bb43522a70d" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.reviewedOn">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c32c02714dad87e97bbd0639a88bfb3f" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.reviewedBy">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_65c7b8ae9aa05c66641aea9ac0930814" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.up">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_6eca6b127176dcf39ed8de7edb908604" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.down">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_711ab6b8a373db2b8a1e266b430a76e0" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-RELATION-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_1a0507407285a092120bc7a69ff8862a" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen replaces"/>
+        <SPECIFICATION-TYPE IDENTIFIER="_820590da3b6bc96b1abc4c87219e99d1" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen requirements">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c044e086f813f00e08a35f6d1fe57d1d" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.file">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_4d29b822c24952edd439e093b5d3165a" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.version">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_a839768f26076ff8651b726d23c1ccaa" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen.description">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPECIFICATION-TYPE>
+        <SPECIFICATION-TYPE IDENTIFIER="_cbcb5eb37af5fd6294167ff3a8a1c59a" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen list"/>
+        <RELATION-GROUP-TYPE IDENTIFIER="_241f53b5261e61efa600e572ce116499" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="yuen relation group"/>
+      </SPEC-TYPES>
+      <SPEC-OBJECTS>
+        <SPEC-OBJECT IDENTIFIER="_66c053b9710e2546d2684a5b14f874ea" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="date_of_receipt v1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0e55a1623323e7efaa94ed254185f196</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_86e2773d004ee20e74aa766f2ce351f3</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>date_of_receipt</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_53c969acbb77c12b793b52095a0ca59c</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>Correspondence received in the Patent and Trademark Office is stamped with the date of receipt</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-01..">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_ca9ff16428087823eedc317e47afc0da</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3066d61d13e61978b5093daf3448f446</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "That the day of receipt is not counted is checked on koyomi doc's page, by reading the rule and its restatement side by side. This material has no claim that checks it"</xhtml:p><xhtml:p>approved 2026-10-03 by legal sha256:c6a57f069e4638f2</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="c6a57f069e4638f2">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_13771252e733d3434da73527976c1b22</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_78405f0d7ed8bcbb711673cc8c4a4bb4</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_453a8d91f52543b4bee0e48425818d0d" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="timely_filing v1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0e55a1623323e7efaa94ed254185f196</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_86e2773d004ee20e74aa766f2ce351f3</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>timely_filing</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_53c969acbb77c12b793b52095a0ca59c</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>Correspondence required to be filed within a set period of time is considered timely filed if it is mailed or transmitted before the period ends, with a certificate of the date of deposit or transmission</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-01..">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_ca9ff16428087823eedc317e47afc0da</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3066d61d13e61978b5093daf3448f446</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "A function that writes the rule's cases as they are, held against every origin of 2000 to 2027 and every month count of 1 to 12, was checked in koyomi's design stage. This material has no claim that checks it"</xhtml:p><xhtml:p>approved 2026-10-03 by legal sha256:8d02c6a1f0ad3364</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="8d02c6a1f0ad3364">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_13771252e733d3434da73527976c1b22</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_78405f0d7ed8bcbb711673cc8c4a4bb4</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_71020b7f8b72a477bab08912f8bcb8a2" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="next_business_day v1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0e55a1623323e7efaa94ed254185f196</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_86e2773d004ee20e74aa766f2ce351f3</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>next_business_day</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_53c969acbb77c12b793b52095a0ca59c</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>When the last day fixed for taking an action falls on a Saturday, Sunday or Federal holiday, the action may be taken on the next succeeding business day which is not one</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-01..">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_ca9ff16428087823eedc317e47afc0da</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3066d61d13e61978b5093daf3448f446</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_10b2c8aa7aa8351e17bc9aa38f52880f</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>decided 2026-10-03 by legal "The next succeeding business day is read as the day after the closed day, and not moved further if that day is closed too. Decided for this material; it does not say how any rule is read"</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim"</xhtml:p><xhtml:p>approved 2026-10-03 by legal sha256:8d9c6066ea40430f</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="8d9c6066ea40430f">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_13771252e733d3434da73527976c1b22</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_78405f0d7ed8bcbb711673cc8c4a4bb4</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_e84ba3f4a99b8ea4bac0903a6fc248ea" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="cfr §1.6">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_d25e08f6214748c0cd1d68fa1f87b80a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_0b9aa24442f3ad57982a28447861b522</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>cfr §1.6</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_4fc7e75843037eb57c34609682b06ec8</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>§ 1.6 Receipt of correspondence.</xhtml:p><xhtml:p>(a) Date of receipt and Priority Mail Express® date of deposit. Correspondence received in the Patent and Trademark Office is stamped with the date of receipt except as follows:</xhtml:p><xhtml:p>(1) The Patent and Trademark Office is not open for the filing of correspondence on any day that is a Saturday, Sunday, or Federal holiday within the District of Columbia. Except for correspondence transmitted by facsimile under paragraph (a)(3) of this section, or filed electronically under paragraph (a)(4) of this section, no correspondence is received in the Office on Saturdays, Sundays, or Federal holidays within the District of Columbia.</xhtml:p><xhtml:p>(2) Correspondence filed in accordance with § 1.10 will be stamped with the date of deposit as Priority Mail Express® with the United States Postal Service.</xhtml:p><xhtml:p>(3) Correspondence transmitted by facsimile to the Patent and Trademark Office will be stamped with the date on which the complete transmission is received in the Patent and Trademark Office unless that date is a Saturday, Sunday, or Federal holiday within the District of Columbia, in which case the date stamped will be the next succeeding day which is not a Saturday, Sunday, or Federal holiday within the District of Columbia.</xhtml:p><xhtml:p>(4) Correspondence may be submitted using the USPTO patent electronic filing system only in accordance with the USPTO patent electronic filing system requirements. Correspondence officially submitted to the Office by way of the USPTO patent electronic filing system will be accorded a receipt date, which is the date in Eastern Time when the correspondence is received in the Office, regardless of whether that date is a Saturday, Sunday, or Federal holiday within the District of Columbia.</xhtml:p><xhtml:p>(b) [Reserved]</xhtml:p><xhtml:p>(c) Correspondence delivered by hand. In addition to being mailed, correspondence may be delivered by hand during hours the Office is open to receive correspondence.</xhtml:p><xhtml:p>(d) Facsimile transmission. Except in the cases enumerated below, correspondence, including authorizations to charge a deposit account, may be transmitted by facsimile. The receipt date accorded to the correspondence will be the date on which the complete transmission is received in the United States Patent and Trademark Office, unless that date is a Saturday, Sunday, or Federal holiday within the District of Columbia. See paragraph (a)(3) of this section. To facilitate proper processing, each transmission session should be limited to correspondence to be filed in a single application or other proceeding before the United States Patent and Trademark Office. The application number of a patent application, the control number of a reexamination or supplemental examination proceeding, the interference number of an interference proceeding, the trial number of a trial proceeding before the Board, or the patent number of a patent should be entered as a part of the sender's identification on a facsimile cover sheet. Facsimile transmissions are not permitted and, if submitted, will not be accorded a date of receipt in the following situations:</xhtml:p><xhtml:p>(1) [Reserved]</xhtml:p><xhtml:p>(2) Certified documents as specified in § 1.4(f);</xhtml:p><xhtml:p>(3) Correspondence that cannot receive the benefit of the certificate of mailing or transmission as specified in § 1.8(a)(2)(i)(A) through (D), (F), (I), and (K) and § 1.8(a)(2)(iii)(A), except that a continued prosecution application under § 1.53(d) may be transmitted to the Office by facsimile;</xhtml:p><xhtml:p>(4) Color drawings submitted under §§ 1.81, 1.83 through 1.85, 1.152, 1.165, 1.173, 1.437, or 1.1026;</xhtml:p><xhtml:p>(5) A request for reexamination under § 1.510 or § 1.913, or a request for supplemental examination under § 1.610;</xhtml:p><xhtml:p>(6) Correspondence to be filed in an application subject to a secrecy order under §§ 5.1 through 5.5 of this chapter and directly related to the secrecy order content of the application;</xhtml:p><xhtml:p>(7) In contested cases and trials before the Patent Trial and Appeal Board, except as the Board may expressly authorize.</xhtml:p><xhtml:p>(e) [Reserved]</xhtml:p><xhtml:p>(f) Facsimile transmission of a patent application under § 1.53(d). In the event that the Office has no evidence of receipt of an application under § 1.53(d) (a continued prosecution application) transmitted to the Office by facsimile transmission, the party who transmitted the application under § 1.53(d) may petition the Director to accord the application under § 1.53(d) a filing date as of the date the application under § 1.53(d) is shown to have been transmitted to and received in the Office,</xhtml:p><xhtml:p>(1) Provided that the party who transmitted such application under § 1.53(d):</xhtml:p><xhtml:p>(i) Informs the Office of the previous transmission of the application under § 1.53(d) promptly after becoming aware that the Office has no evidence of receipt of the application under § 1.53(d);</xhtml:p><xhtml:p>(ii) Supplies an additional copy of the previously transmitted application under § 1.53(d); and</xhtml:p><xhtml:p>(iii) Includes a statement which attests on a personal knowledge basis or to the satisfaction of the Director to the previous transmission of the application under § 1.53(d) and is accompanied by a copy of the sending unit's report confirming transmission of the application under § 1.53(d) or evidence that came into being after the complete transmission and within one business day of the complete transmission of the application under § 1.53(d).</xhtml:p><xhtml:p>(2) The Office may require additional evidence to determine if the application under § 1.53(d) was transmitted to and received in the Office on the date in question.</xhtml:p><xhtml:p>(g) Submission of the national stage correspondence required by § 1.495 via the USPTO patent electronic filing system . In the event that the Office has no evidence of receipt of the national stage correspondence required by § 1.495, which was submitted to the Office by the USPTO patent electronic filing system, the party who submitted the correspondence may petition the Director to accord the national stage correspondence a receipt date as of the date the correspondence is shown to have been officially submitted to the Office.</xhtml:p><xhtml:p>(1) The petition of this paragraph (g) requires that the party who submitted such national stage correspondence:</xhtml:p><xhtml:p>(i) Informs the Office of the previous submission of the correspondence promptly after becoming aware that the Office has no evidence of receipt of the correspondence under § 1.495;</xhtml:p><xhtml:p>(ii) Supplies an additional copy of the previously submitted correspondence;</xhtml:p><xhtml:p>(iii) Includes a statement that attests on a personal knowledge basis, or to the satisfaction of the Director, that the correspondence was previously officially submitted; and</xhtml:p><xhtml:p>(iv) Supplies a copy of an acknowledgment receipt generated by the USPTO patent electronic filing system, or equivalent evidence, confirming the submission to support the statement of paragraph (g)(1)(iii) of this section.</xhtml:p><xhtml:p>(2) The Office may require additional evidence to determine if the national stage correspondence was submitted to the Office on the date in question.</xhtml:p><xhtml:p>[58 FR 54501, Oct. 22, 1993; 58 FR 64154, Dec. 6, 1993; 61 FR 56447, Nov. 1, 1996; 62 FR 53180, Oct. 10, 1997; 64 FR 48917, Sept. 8, 1999; 65 FR 54657, Sept. 8, 2000; 65 FR 76772, Dec. 7, 2000; 68 FR 14336, Mar. 25, 2003; 68 FR 48288, Aug. 13, 2003; 69 FR 49997, Aug. 12, 2004; 69 FR 56536, Sept. 21, 2004; 72 FR 2775, Jan. 23, 2007; 77 FR 42173, July 17, 2012; 77 FR 46624, Aug. 6, 2012; 78 FR 62394, Oct. 21, 2013; 79 FR 63039, Oct. 22, 2014; 80 FR 17952, Apr. 2, 2015; 86 FR 35229, July 2, 2021; 87 FR 68904, Nov. 17, 2022]</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ecfr 37 CFR 1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_1e09bce460a4dd79730f1f5407f250c8</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_136496664827b3bec533a03b9e4fd398</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="6bcdc27c3428886c">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7314c50b9580cb3fab0eadf2fd681a6e</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_82a6d3ab90a94a7ccf25b592606a5115</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_00fd4bc0170b9a2c30b57b1f929540bb" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="cfr §1.7">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_d25e08f6214748c0cd1d68fa1f87b80a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_0b9aa24442f3ad57982a28447861b522</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>cfr §1.7</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_4fc7e75843037eb57c34609682b06ec8</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>§ 1.7 Times for taking action; Expiration on Saturday, Sunday or Federal holiday.</xhtml:p><xhtml:p>(a) Whenever periods of time are specified in this part in days, calendar days are intended. When the day, or the last day fixed by statute or by or under this part for taking any action or paying any fee in the United States Patent and Trademark Office falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the action may be taken, or the fee paid, on the next succeeding business day which is not a Saturday, Sunday, or a Federal holiday. See § 90.3 of this chapter for time for appeal or for commencing civil action.</xhtml:p><xhtml:p>(b) If the day that is twelve months after the filing date of a provisional application under 35 U.S.C. 111(b) and § 1.53(c) falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the period of pendency shall be extended to the next succeeding secular or business day which is not a Saturday, Sunday, or a Federal holiday.</xhtml:p><xhtml:p>[65 FR 14871, Mar. 20, 2000, as amended at 78 FR 62395, Oct. 21, 2013]</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ecfr 37 CFR 1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_1e09bce460a4dd79730f1f5407f250c8</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_136496664827b3bec533a03b9e4fd398</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="01de176ebe4740d7">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7314c50b9580cb3fab0eadf2fd681a6e</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_82a6d3ab90a94a7ccf25b592606a5115</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_84638740d411f87e4ed257f8ad78cca7" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="cfr §1.8">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_d25e08f6214748c0cd1d68fa1f87b80a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_0b9aa24442f3ad57982a28447861b522</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>cfr §1.8</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_4fc7e75843037eb57c34609682b06ec8</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>§ 1.8 Certificate of mailing or transmission.</xhtml:p><xhtml:p>(a) Except in the situations enumerated in paragraph (a)(2) of this section or as otherwise expressly excluded in this chapter, correspondence required to be filed in the U.S. Patent and Trademark Office within a set period of time will be considered as being timely filed if the procedure described in this section is followed. The actual date of receipt will be used for all other purposes.</xhtml:p><xhtml:p>(1) Correspondence will be considered as being timely filed if:</xhtml:p><xhtml:p>(i) The correspondence is mailed or transmitted prior to expiration of the set period of time by being:</xhtml:p><xhtml:p>(A) Addressed as set out in § 1.1(a) and deposited with the U.S. Postal Service with sufficient postage as first class mail;</xhtml:p><xhtml:p>(B) Transmitted by facsimile to the Patent and Trademark Office in accordance with § 1.6(d); or</xhtml:p><xhtml:p>(C) Transmitted via the USPTO patent electronic filing system in accordance with § 1.6(a)(4); and</xhtml:p><xhtml:p>(ii) The correspondence includes a certificate for each piece of correspondence stating the date of deposit or transmission. The person signing the certificate should have reasonable basis to expect that the correspondence would be mailed or transmitted on or before the date indicated.</xhtml:p><xhtml:p>(2) The procedure described in paragraph (a)(1) of this section does not apply to, and no benefit will be given to a Certificate of Mailing or Transmission on the following:</xhtml:p><xhtml:p>(i) Relative to Patents and Patent Applications—</xhtml:p><xhtml:p>(A) The filing of a national patent application specification and drawing or other correspondence for the purpose of obtaining an application filing date, including a request for a continued prosecution application under § 1.53(d);</xhtml:p><xhtml:p>(B) Papers filed in trials before the Patent Trial and Appeal Board, which are governed by § 42.6(b) of this title;</xhtml:p><xhtml:p>(C) Papers filed in contested cases before the Patent Trial and Appeal Board, which are governed by § 41.106 (f) of this title;</xhtml:p><xhtml:p>(D) The filing of an international application for patent;</xhtml:p><xhtml:p>(E) The filing of correspondence in an international application before the U.S. Receiving Office, the U.S. International Searching Authority, or the U.S. International Preliminary Examining Authority;</xhtml:p><xhtml:p>(F) The filing of a copy of the international application and the basic national fee necessary to enter the national stage, as specified in § 1.495(b).</xhtml:p><xhtml:p>(G) The filing of a written declaration of abandonment under § 1.138;</xhtml:p><xhtml:p>(H) The filing of a submission under § 1.217 for publication of a redacted copy of an application;</xhtml:p><xhtml:p>(I) The filing of a third-party submission under § 1.290;</xhtml:p><xhtml:p>(J) The calculation of any period of adjustment, as specified in § 1.703(f); and</xhtml:p><xhtml:p>(K) The filing of an international design application.</xhtml:p><xhtml:p>(ii) [Reserved]</xhtml:p><xhtml:p>(iii) Relative to Disciplinary Proceedings—</xhtml:p><xhtml:p>(A) Correspondence filed in connection with a disciplinary proceeding under part 11 of this chapter.</xhtml:p><xhtml:p>(B) [Reserved]</xhtml:p><xhtml:p>(b) In the event that correspondence is considered timely filed by being mailed or transmitted in accordance with paragraph (a) of this section, but not received in the U.S. Patent and Trademark Office after a reasonable amount of time has elapsed from the time of mailing or transmitting of the correspondence, or after the application is held to be abandoned, or after the proceeding is dismissed or decided with prejudice, or the prosecution of a reexamination proceeding is terminated pursuant to § 1.550(d) or § 1.957(b) or limited pursuant to § 1.957(c), or a requester paper is refused consideration pursuant to § 1.957(a), the correspondence will be considered timely if the party who forwarded such correspondence:</xhtml:p><xhtml:p>(1) Informs the Office of the previous mailing or transmission of the correspondence promptly after becoming aware that the Office has no evidence of receipt of the correspondence;</xhtml:p><xhtml:p>(2) Supplies an additional copy of the previously mailed or transmitted correspondence and certificate; and</xhtml:p><xhtml:p>(3) Includes a statement that attests on a personal knowledge basis or to the satisfaction of the Director to the previous timely mailing, transmission or submission. If the correspondence was sent by facsimile transmission, a copy of the sending unit's report confirming transmission may be used to support this statement. If the correspondence was transmitted via the USPTO patent electronic filing system , a copy of an acknowledgment receipt generated by the USPTO patent electronic filing system confirming submission may be used to support this statement.</xhtml:p><xhtml:p>(c) The Office may require additional evidence to determine if the correspondence was timely filed.</xhtml:p><xhtml:p>[58 FR 54502, Oct. 22, 1993; 58 FR 64154, Dec. 6, 1993, as amended at 61 FR 56447, Nov. 1, 1996; 62 FR 53181, Oct. 10, 1997; 67 FR 523, Jan. 4, 2002; 68 FR 48288, Aug. 13, 2003; 69 FR 49997, Aug. 12, 2004; 69 FR 56536, Sept. 21, 2004; 72 FR 2775, Jan. 23, 2007; 72 FR 18904, Apr. 16, 2007; 73 FR 47684, Aug. 14, 2008; 77 FR 42173, July 17, 2012; 80 FR 17953, Apr. 2, 2015]</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ecfr 37 CFR 1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_1e09bce460a4dd79730f1f5407f250c8</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_136496664827b3bec533a03b9e4fd398</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="fa698e3ea7cb1e49">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7314c50b9580cb3fab0eadf2fd681a6e</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_82a6d3ab90a94a7ccf25b592606a5115</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_d27bfab399fd415f4b55a5cd03982594" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="cfr §1.10">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_d25e08f6214748c0cd1d68fa1f87b80a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_0b9aa24442f3ad57982a28447861b522</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>cfr §1.10</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_4fc7e75843037eb57c34609682b06ec8</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>§ 1.10 Filing of correspondence by Priority Mail Express®.</xhtml:p><xhtml:p>(a)(1) Any correspondence received by the U.S. Patent and Trademark Office (USPTO) that was delivered by the Priority Mail Express® Post Office to Addressee service of the United States Postal Service (USPS) will be considered filed with the USPTO on the date of deposit with the USPS.</xhtml:p><xhtml:p>(2) The date of deposit with USPS is shown by the “date accepted” on the Priority Mail Express® label or other official USPS notation. If the USPS deposit date cannot be determined, the correspondence will be accorded the USPTO receipt date as the filing date. See § 1.6(a).</xhtml:p><xhtml:p>(b) Correspondence should be deposited directly with an employee of the USPS to ensure that the person depositing the correspondence receives a legible copy of the Priority Mail Express® mailing label with the “date accepted” clearly marked. Persons dealing indirectly with the employees of the USPS (such as by deposit in a Priority Mail Express® drop box) do so at the risk of not receiving a copy of the Priority Mail Express® mailing label with the desired “date accepted” clearly marked. The paper(s) or fee(s) that constitute the correspondence should also include the Priority Mail Express® mailing label number thereon. See paragraphs (c), (d) and (e) of this section.</xhtml:p><xhtml:p>(c) Any person filing correspondence under this section that was received by the Office and delivered by the Priority Mail Express® Post Office to Addressee service of the USPS, who can show that there is a discrepancy between the filing date accorded by the Office to the correspondence and the date of deposit as shown by the “date accepted” on the Priority Mail Express® mailing label or other official USPS notation, may petition the Director to accord the correspondence a filing date as of the “date accepted” on the Priority Mail Express® mailing label or other official USPS notation, provided that:</xhtml:p><xhtml:p>(1) The petition is filed promptly after the person becomes aware that the Office has accorded, or will accord, a filing date other than the USPS deposit date;</xhtml:p><xhtml:p>(2) The number of the Priority Mail Express® mailing label was placed on the paper(s) or fee(s) that constitute the correspondence prior to the original mailing by Priority Mail Express®; and</xhtml:p><xhtml:p>(3) The petition includes a true copy of the Priority Mail Express® mailing label showing the “date accepted,” and of any other official notation by the USPS relied upon to show the date of deposit.</xhtml:p><xhtml:p>(d) Any person filing correspondence under this section that was received by the Office and delivered by the Priority Mail Express® Post Office to Addressee service of the USPS, who can show that the “date accepted” on the Priority Mail Express® mailing label or other official notation entered by the USPS was incorrectly entered or omitted by the USPS, may petition the Director to accord the correspondence a filing date as of the date the correspondence is shown to have been deposited with the USPS, provided that:</xhtml:p><xhtml:p>(1) The petition is filed promptly after the person becomes aware that the Office has accorded, or will accord, a filing date based upon an incorrect entry by the USPS;</xhtml:p><xhtml:p>(2) The number of the Priority Mail Express® mailing label was placed on the paper(s) or fee(s) that constitute the correspondence prior to the original mailing by Priority Mail Express®; and</xhtml:p><xhtml:p>(3) The petition includes a showing which establishes, to the satisfaction of the Director, that the requested filing date was the date the correspondence was deposited in the Priority Mail Express® Post Office to Addressee service prior to the last scheduled pickup for that day. Any showing pursuant to this paragraph must be corroborated by evidence from the USPS or that came into being after deposit and within one business day of the deposit of the correspondence in the Priority Mail Express® Post Office to Addressee service of the USPS.</xhtml:p><xhtml:p>(e) Any person mailing correspondence addressed as set out in § 1.1(a) to the Office with sufficient postage utilizing the Priority Mail Express® Post Office to Addressee service of the USPS but not received by the Office, may petition the Director to consider such correspondence filed in the Office on the USPS deposit date, provided that:</xhtml:p><xhtml:p>(1) The petition is filed promptly after the person becomes aware that the Office has no evidence of receipt of the correspondence;</xhtml:p><xhtml:p>(2) The number of the Priority Mail Express® mailing label was placed on the paper(s) or fee(s) that constitute the correspondence prior to the original mailing by Priority Mail Express®;</xhtml:p><xhtml:p>(3) The petition includes a copy of the originally deposited paper(s) or fee(s) that constitute the correspondence showing the number of the Priority Mail Express® mailing label thereon, a copy of any returned postcard receipt, a copy of the Priority Mail Express® mailing label showing the “date accepted,” a copy of any other official notation by the USPS relied upon to show the date of deposit, and, if the requested filing date is a date other than the “date accepted” on the Priority Mail Express® mailing label or other official notation entered by the USPS, a showing pursuant to paragraph (d)(3) of this section that the requested filing date was the date the correspondence was deposited in the Priority Mail Express® Post Office to Addressee service prior to the last scheduled pickup for that day; and</xhtml:p><xhtml:p>(4) The petition includes a statement which establishes, to the satisfaction of the Director, the original deposit of the correspondence and that the copies of the correspondence, the copy of the Priority Mail Express® mailing label, the copy of any returned postcard receipt, and any official notation entered by the USPS are true copies of the originally mailed correspondence, original Priority Mail Express® mailing label, returned postcard receipt, and official notation entered by the USPS.</xhtml:p><xhtml:p>(f) The Office may require additional evidence to determine if the correspondence was deposited as Priority Mail Express® with the USPS on the date in question.</xhtml:p><xhtml:p>(g) Any person who mails correspondence addressed as set out in § 1.1(a) to the Office with sufficient postage utilizing the Priority Mail Express® Post Office to Addressee service of the USPS, but has the correspondence returned by the USPS due to an interruption or emergency in Priority Mail Express® service, may petition the Director to consider such correspondence as filed on a particular date in the Office, provided that:</xhtml:p><xhtml:p>(1) The petition is filed promptly after the person becomes aware of the return of the correspondence;</xhtml:p><xhtml:p>(2) The number of the Priority Mail Express® mailing label was placed on the paper(s) or fee(s) that constitute the correspondence prior to the original mailing by Priority Mail Express®;</xhtml:p><xhtml:p>(3) The petition includes the original correspondence or a copy of the original correspondence showing the number of the Priority Mail Express® mailing label thereon and a copy of the Priority Mail Express® mailing label showing the “date accepted”; and</xhtml:p><xhtml:p>(4) The petition includes a statement which establishes, to the satisfaction of the Director, the original deposit of the correspondence and that the correspondence or copy of the correspondence is the original correspondence or a true copy of the correspondence originally deposited with the USPS on the requested filing date. The Office may require additional evidence to determine if the correspondence was returned by the USPS due to an interruption or emergency in Priority Mail Express® service.</xhtml:p><xhtml:p>(h) Any person who attempts to mail correspondence addressed as set out in § 1.1(a) to the Office with sufficient postage utilizing the Priority Mail Express® Post Office to Addressee service of the USPS, but has the correspondence refused by an employee of the USPS due to an interruption or emergency in Priority Mail Express® service, may petition the Director to consider such correspondence as filed on a particular date in the Office, provided that:</xhtml:p><xhtml:p>(1) The petition is filed promptly after the person becomes aware of the refusal of the correspondence;</xhtml:p><xhtml:p>(2) The number of the Priority Mail Express® mailing label was placed on the paper(s) or fee(s) that constitute the correspondence prior to the attempted mailing by Priority Mail Express®;</xhtml:p><xhtml:p>(3) The petition includes the original correspondence or a copy of the original correspondence showing the number of the Priority Mail Express® mailing label thereon; and</xhtml:p><xhtml:p>(4) The petition includes a statement by the person who originally attempted to deposit the correspondence with the USPS which establishes, to the satisfaction of the Director, the original attempt to deposit the correspondence and that the correspondence or copy of the correspondence is the original correspondence or a true copy of the correspondence originally attempted to be deposited with the USPS on the requested filing date. The Office may require additional evidence to determine if the correspondence was refused by an employee of the USPS due to an interruption or emergency in Priority Mail Express® service.</xhtml:p><xhtml:p>(i) Any person attempting to file correspondence under this section that was unable to be deposited with the USPS due to an interruption or emergency in Priority Mail Express® service which has been so designated by the Director, may petition the Director to consider such correspondence as filed on a particular date in the Office, provided that:</xhtml:p><xhtml:p>(1) The petition is filed in a manner designated by the Director promptly after the person becomes aware of the designated interruption or emergency in Priority Mail Express® service;</xhtml:p><xhtml:p>(2) The petition includes the original correspondence or a copy of the original correspondence; and</xhtml:p><xhtml:p>(3) The petition includes a statement which establishes, to the satisfaction of the Director, that the correspondence would have been deposited with the USPS but for the designated interruption or emergency in Priority Mail Express® service, and that the correspondence or copy of the correspondence is the original correspondence or a true copy of the correspondence originally attempted to be deposited with the USPS on the requested filing date.</xhtml:p><xhtml:p>[79 FR 63039, Oct. 22, 2014]</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ecfr 37 CFR 1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_1e09bce460a4dd79730f1f5407f250c8</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_136496664827b3bec533a03b9e4fd398</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="5adcbc193371fd26">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7314c50b9580cb3fab0eadf2fd681a6e</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_82a6d3ab90a94a7ccf25b592606a5115</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_596c1d9858d19fec65caf225a9386604" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="file &quot;period_of_months.cal&quot;">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>file "period_of_months.cal"</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="0f1a06d9b71a39f6">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="file">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+      </SPEC-OBJECTS>
+      <SPEC-RELATIONS>
+        <SPEC-RELATION IDENTIFIER="_51734c26f56f4d4f44405390d57fce75" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-03">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="6bcdc27c3428886c">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="c6a57f069e4638f2">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_66c053b9710e2546d2684a5b14f874ea</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_e84ba3f4a99b8ea4bac0903a6fc248ea</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_c12a0a97f394691f93fb484eef6f5be8" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-03">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="development">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="c6a57f069e4638f2">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="0f1a06d9b71a39f6">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_66c053b9710e2546d2684a5b14f874ea</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_596c1d9858d19fec65caf225a9386604</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_b18192548e2b39771badddd1017b8a67" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-03">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="fa698e3ea7cb1e49">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="8d02c6a1f0ad3364">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_453a8d91f52543b4bee0e48425818d0d</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_84638740d411f87e4ed257f8ad78cca7</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_4a6c235e3a49f2e764d8a71ff564a541" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-03">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="5adcbc193371fd26">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="8d02c6a1f0ad3364">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_453a8d91f52543b4bee0e48425818d0d</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_d27bfab399fd415f4b55a5cd03982594</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_c98047dd7e9875cd33a9e9df26c06d98" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-03">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="development">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="8d02c6a1f0ad3364">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="0f1a06d9b71a39f6">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_453a8d91f52543b4bee0e48425818d0d</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_596c1d9858d19fec65caf225a9386604</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_38ebf785f5f23ad0966d82a70c331814" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-03">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="01de176ebe4740d7">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="8d9c6066ea40430f">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_71020b7f8b72a477bab08912f8bcb8a2</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_00fd4bc0170b9a2c30b57b1f929540bb</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_bc6062ff7b292990d728e5f81edf8813" LAST-CHANGE="2026-10-03T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-03">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="development">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="8d9c6066ea40430f">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="0f1a06d9b71a39f6">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_71020b7f8b72a477bab08912f8bcb8a2</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_596c1d9858d19fec65caf225a9386604</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+      </SPEC-RELATIONS>
+      <SPECIFICATIONS>
+        <SPECIFICATION IDENTIFIER="_44a6e5cbfba89cb739fabca9e7a9bc88" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="period_of_months">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="period_of_months.req">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c044e086f813f00e08a35f6d1fe57d1d</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="Where the dates of koyomi's example period_of_months.cal could come from, if it followed the time rules of the USPTO's regulations in 37 CFR part 1. The sources are copied and pinned here, and what meets a requirement is read as a file. Written for this test material; it does not say how any rule is read">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_31cc508a4ea20579291e3284a2bcd20b" LAST-CHANGE="2026-10-03T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_66c053b9710e2546d2684a5b14f874ea</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_5cbf90e2386ac0f22d0b17fbf5eaf939" LAST-CHANGE="2026-10-03T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_453a8d91f52543b4bee0e48425818d0d</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_0d7087962b8c128c3e704eb09c58e518" LAST-CHANGE="2026-10-03T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_71020b7f8b72a477bab08912f8bcb8a2</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_820590da3b6bc96b1abc4c87219e99d1</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+        <SPECIFICATION IDENTIFIER="_2660d37bb6c2f8242d385db43f0c8a74" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="sources">
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_c129e27c79b8d6304987033021ee1aa4" LAST-CHANGE="2026-10-03T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_e84ba3f4a99b8ea4bac0903a6fc248ea</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_8e79562ce2ca98ce7927ce3f6a54d42d" LAST-CHANGE="2026-10-03T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_00fd4bc0170b9a2c30b57b1f929540bb</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_5296a5c4ca5d519fd0da50c5109ff1f9" LAST-CHANGE="2026-10-03T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_84638740d411f87e4ed257f8ad78cca7</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_ded4e4d69cfead1e0da4ba650e74c0f5" LAST-CHANGE="2026-10-03T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_d27bfab399fd415f4b55a5cd03982594</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_cbcb5eb37af5fd6294167ff3a8a1c59a</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+        <SPECIFICATION IDENTIFIER="_d60e4f94b2559d660006737835481a50" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="artifacts">
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_24cc0f48b9a08c3b2b98cea00b6540bc" LAST-CHANGE="2026-10-03T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_596c1d9858d19fec65caf225a9386604</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_cbcb5eb37af5fd6294167ff3a8a1c59a</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+      </SPECIFICATIONS>
+      <SPEC-RELATION-GROUPS>
+        <RELATION-GROUP IDENTIFIER="_8097f528fb7c2cd6cb089ef202f24ea8" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="period_of_months -> sources">
+          <SOURCE-SPECIFICATION><SPECIFICATION-REF>_44a6e5cbfba89cb739fabca9e7a9bc88</SPECIFICATION-REF></SOURCE-SPECIFICATION>
+          <SPEC-RELATIONS>
+            <SPEC-RELATION-REF>_51734c26f56f4d4f44405390d57fce75</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_b18192548e2b39771badddd1017b8a67</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_4a6c235e3a49f2e764d8a71ff564a541</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_38ebf785f5f23ad0966d82a70c331814</SPEC-RELATION-REF>
+          </SPEC-RELATIONS>
+          <TARGET-SPECIFICATION><SPECIFICATION-REF>_2660d37bb6c2f8242d385db43f0c8a74</SPECIFICATION-REF></TARGET-SPECIFICATION>
+          <TYPE><RELATION-GROUP-TYPE-REF>_241f53b5261e61efa600e572ce116499</RELATION-GROUP-TYPE-REF></TYPE>
+        </RELATION-GROUP>
+        <RELATION-GROUP IDENTIFIER="_2ac0c312338c0c369bba1c459ae7a453" LAST-CHANGE="2026-10-03T00:00:00Z" LONG-NAME="period_of_months -> artifacts">
+          <SOURCE-SPECIFICATION><SPECIFICATION-REF>_44a6e5cbfba89cb739fabca9e7a9bc88</SPECIFICATION-REF></SOURCE-SPECIFICATION>
+          <SPEC-RELATIONS>
+            <SPEC-RELATION-REF>_c12a0a97f394691f93fb484eef6f5be8</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_c98047dd7e9875cd33a9e9df26c06d98</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_bc6062ff7b292990d728e5f81edf8813</SPEC-RELATION-REF>
+          </SPEC-RELATIONS>
+          <TARGET-SPECIFICATION><SPECIFICATION-REF>_d60e4f94b2559d660006737835481a50</SPECIFICATION-REF></TARGET-SPECIFICATION>
+          <TYPE><RELATION-GROUP-TYPE-REF>_241f53b5261e61efa600e572ce116499</RELATION-GROUP-TYPE-REF></TYPE>
+        </RELATION-GROUP>
+      </SPEC-RELATION-GROUPS>
+    </REQ-IF-CONTENT>
+  </CORE-CONTENT>
+</REQ-IF>

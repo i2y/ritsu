@@ -1,0 +1,24 @@
+requirements payment v1
+description "A test material"
+
+role accounting "Decides the rules of payment"
+
+requirement payment_day v1
+  text "Closes at the end of the month, pays at the end of the next month"
+  in force 2026-01-01..
+  owner accounting
+  decided 2026-10-03 by accounting "decided for the example"
+  satisfied by file "pay.py"
+    reviewed 2026-10-03 by accounting sha256:08e6ab2f48458675 -> sha256:8a668601c703003d
+  not verified "Accounting compares them once a month"
+    approved 2026-10-03 by accounting sha256:08e6ab2f48458675
+
+requirement payment_day v2
+  text "Closes on the 20th, pays on the 10th of the next month"
+  in force 2027-04-01..
+  owner accounting
+  decided 2026-10-03 by accounting "From April 2027 the closing day moves to the 20th"
+  satisfied by file "pay.py"
+    reviewed 2026-10-03 by accounting sha256:1cdd5d765f89fc0d -> sha256:8a668601c703003d
+  not verified "Accounting compares them once a month"
+    approved 2026-10-03 by accounting sha256:1cdd5d765f89fc0d

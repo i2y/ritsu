@@ -1,0 +1,4 @@
+error[E106]: tests/mutants/E106_borrows_an_undeclared_source/example.req:4:8: tests/mutants/E106_borrows_an_undeclared_source/a.cal declares no source cfr
+     4 | source cfr = koyomi "a.cal" source cfr
+  = tests/mutants/E106_borrows_an_undeclared_source/a.cal declares no source at all.
+tests/mutants/E106_borrows_an_undeclared_source: 1 error

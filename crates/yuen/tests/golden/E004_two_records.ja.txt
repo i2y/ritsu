@@ -1,0 +1,4 @@
+エラー[E004]: tests/mutants/E004_two_records/payment.req:13:5: 確かめた記録は、一つのリンクに一つです
+    13 |     reviewed 2026-10-03 by accounting sha256:54009bc976fdc31c -> sha256:8a668601c703003d
+  = 確かめ直したときは、`yuen review` が記録を書き換えます。前の記録は git の履歴に残ります。
+tests/mutants/E004_two_records: エラー 1 件

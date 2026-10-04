@@ -1,0 +1,4 @@
+error[E201]: tests/mutants/E201_artifact_file_missing/payment.req:11:16: file "pay.py" is not there
+    11 |   satisfied by file "pay.py"
+  = The path is written from the directory of this .req; if the file was renamed, correct the link.
+tests/mutants/E201_artifact_file_missing: 1 error

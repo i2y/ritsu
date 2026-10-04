@@ -1,0 +1,515 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/calendar_sources",
+  "files": [
+    {
+      "path": "payment_terms.req",
+      "name": "payment_terms",
+      "version": "1",
+      "sha256": "c703e5d670dca626"
+    },
+    {
+      "path": "period_of_months.req",
+      "name": "period_of_months",
+      "version": "1",
+      "sha256": "171bf376b2bb600f"
+    }
+  ],
+  "roles": [
+    {
+      "name": "accounting",
+      "description": "Decides the terms of payment"
+    },
+    {
+      "name": "legal",
+      "description": "Decides how the words of a rule are read"
+    },
+    {
+      "name": "development",
+      "description": "Writes and fixes koyomi's file"
+    }
+  ],
+  "sources": [
+    {
+      "file": "payment_terms.req",
+      "name": "holidays",
+      "kind": "file",
+      "path": "calendars/data/syukujitsu.csv",
+      "url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+      "sha256": "cec37a743c96995c",
+      "borrowed": {
+        "text": "koyomi \"calendars/tokyo_business_days.cal\" source national_holidays",
+        "tool": "koyomi",
+        "path": "calendars/tokyo_business_days.cal",
+        "items": [
+          [
+            "source",
+            "national_holidays"
+          ]
+        ]
+      }
+    },
+    {
+      "file": "period_of_months.req",
+      "name": "bank_holidays",
+      "kind": "file",
+      "path": "calendars/data/bank-holidays.json",
+      "url": "https://www.gov.uk/bank-holidays.json",
+      "sha256": "538b3482c28b85ec",
+      "borrowed": {
+        "text": "koyomi \"calendars/england_and_wales.cal\" source bank_holidays",
+        "tool": "koyomi",
+        "path": "calendars/england_and_wales.cal",
+        "items": [
+          [
+            "source",
+            "bank_holidays"
+          ]
+        ]
+      }
+    }
+  ],
+  "requirements": [
+    {
+      "name": "payment_day",
+      "alias": null,
+      "version": 1,
+      "file": "payment_terms.req",
+      "line": 8,
+      "text": "Closes on the 20th, pays on the 10th of the next month. When the payment day is closed, pays on the business day before",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "accounting",
+      "replaces": [],
+      "sha256": "dd7089d2bc2f76e0",
+      "from": [
+        {
+          "line": 12,
+          "sources": [
+            {
+              "source": "holidays",
+              "fragment": null,
+              "sha256": "cec37a743c96995c"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "accounting",
+            "up": [
+              "cec37a743c96995c"
+            ],
+            "down": "dd7089d2bc2f76e0"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 14,
+          "role": "satisfied",
+          "artifact": {
+            "text": "koyomi \"payment_20th_close_next_10th.cal\" date payment",
+            "tool": "koyomi",
+            "path": "payment_20th_close_next_10th.cal",
+            "items": [
+              [
+                "date",
+                "payment"
+              ]
+            ]
+          },
+          "sha256": "77727589d8318079",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "accounting",
+            "up": [
+              "dd7089d2bc2f76e0"
+            ],
+            "down": "77727589d8318079"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 16,
+          "role": "verified",
+          "artifact": {
+            "text": "koyomi \"payment_20th_close_next_10th.cal\" claim paid_on_a_business_day",
+            "tool": "koyomi",
+            "path": "payment_20th_close_next_10th.cal",
+            "items": [
+              [
+                "claim",
+                "paid_on_a_business_day"
+              ]
+            ]
+          },
+          "sha256": "a30c094c89e283df",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "accounting",
+            "up": [
+              "dd7089d2bc2f76e0"
+            ],
+            "down": "a30c094c89e283df"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    },
+    {
+      "name": "first_day",
+      "alias": null,
+      "version": 1,
+      "file": "period_of_months.req",
+      "line": 11,
+      "text": "The day itself is not counted",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "legal",
+      "replaces": [],
+      "sha256": "29836b1424129486",
+      "from": [],
+      "decided": [
+        {
+          "date": "2026-10-03",
+          "by": "legal",
+          "why": "The period starts on the day after the origin. Decided for this material"
+        }
+      ],
+      "links": [
+        {
+          "line": 16,
+          "role": "satisfied",
+          "artifact": {
+            "text": "koyomi \"period_of_months.cal\" date first_day",
+            "tool": "koyomi",
+            "path": "period_of_months.cal",
+            "items": [
+              [
+                "date",
+                "first_day"
+              ]
+            ]
+          },
+          "sha256": "f7fbde9442fad208",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "29836b1424129486"
+            ],
+            "down": "f7fbde9442fad208"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 18,
+          "role": "verified",
+          "why": "That the first day is not counted is checked on koyomi doc's page, by reading the rule and its restatement side by side. This material has no claim that checks it",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "legal",
+            "sha256": "29836b1424129486"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "last_day",
+      "alias": null,
+      "version": 1,
+      "file": "period_of_months.req",
+      "line": 21,
+      "text": "A period of months ends on the day before the corresponding day of the last month, or on the last day of that month when it has no such day",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "legal",
+      "replaces": [],
+      "sha256": "534cb97e1ca8a94c",
+      "from": [],
+      "decided": [
+        {
+          "date": "2026-10-03",
+          "by": "legal",
+          "why": "The corresponding day is counted from the first day. Decided for this material"
+        }
+      ],
+      "links": [
+        {
+          "line": 26,
+          "role": "satisfied",
+          "artifact": {
+            "text": "koyomi \"period_of_months.cal\" date last_day",
+            "tool": "koyomi",
+            "path": "period_of_months.cal",
+            "items": [
+              [
+                "date",
+                "last_day"
+              ]
+            ]
+          },
+          "sha256": "e4d5741e15aeb403",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "534cb97e1ca8a94c"
+            ],
+            "down": "e4d5741e15aeb403"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 28,
+          "role": "verified",
+          "artifact": {
+            "text": "koyomi \"period_of_months.cal\" claim last_day_after_origin",
+            "tool": "koyomi",
+            "path": "period_of_months.cal",
+            "items": [
+              [
+                "claim",
+                "last_day_after_origin"
+              ]
+            ]
+          },
+          "sha256": "d88a046cef583e8a",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "534cb97e1ca8a94c"
+            ],
+            "down": "d88a046cef583e8a"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    },
+    {
+      "name": "last_day_moved",
+      "alias": null,
+      "version": 1,
+      "file": "period_of_months.req",
+      "line": 31,
+      "text": "An end that falls on a day closed in England and Wales moves to the day after",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "legal",
+      "replaces": [],
+      "sha256": "edc4cc0bb4910f57",
+      "from": [
+        {
+          "line": 35,
+          "sources": [
+            {
+              "source": "bank_holidays",
+              "fragment": null,
+              "sha256": "538b3482c28b85ec"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "legal",
+            "up": [
+              "538b3482c28b85ec"
+            ],
+            "down": "edc4cc0bb4910f57"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [
+        {
+          "date": "2026-10-03",
+          "by": "legal",
+          "why": "The day after is taken as it is, and not moved on if it is closed too. Decided for this material"
+        }
+      ],
+      "links": [
+        {
+          "line": 38,
+          "role": "satisfied",
+          "artifact": {
+            "text": "koyomi \"period_of_months.cal\" date last_day_moved",
+            "tool": "koyomi",
+            "path": "period_of_months.cal",
+            "items": [
+              [
+                "date",
+                "last_day_moved"
+              ]
+            ]
+          },
+          "sha256": "da1536d15d1da2b6",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "edc4cc0bb4910f57"
+            ],
+            "down": "da1536d15d1da2b6"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 40,
+          "role": "verified",
+          "artifact": {
+            "text": "koyomi \"period_of_months.cal\" claim moved_on_or_after_last_day",
+            "tool": "koyomi",
+            "path": "period_of_months.cal",
+            "items": [
+              [
+                "claim",
+                "moved_on_or_after_last_day"
+              ]
+            ]
+          },
+          "sha256": "82aece4919f854bb",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "edc4cc0bb4910f57"
+            ],
+            "down": "82aece4919f854bb"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "koyomi \"payment_20th_close_next_10th.cal\" claim paid_on_a_business_day",
+      "tool": "koyomi",
+      "path": "payment_20th_close_next_10th.cal",
+      "items": [
+        [
+          "claim",
+          "paid_on_a_business_day"
+        ]
+      ],
+      "sha256": "a30c094c89e283df",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "koyomi \"payment_20th_close_next_10th.cal\" date payment",
+      "tool": "koyomi",
+      "path": "payment_20th_close_next_10th.cal",
+      "items": [
+        [
+          "date",
+          "payment"
+        ]
+      ],
+      "sha256": "77727589d8318079",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "koyomi \"period_of_months.cal\" claim last_day_after_origin",
+      "tool": "koyomi",
+      "path": "period_of_months.cal",
+      "items": [
+        [
+          "claim",
+          "last_day_after_origin"
+        ]
+      ],
+      "sha256": "d88a046cef583e8a",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "koyomi \"period_of_months.cal\" claim moved_on_or_after_last_day",
+      "tool": "koyomi",
+      "path": "period_of_months.cal",
+      "items": [
+        [
+          "claim",
+          "moved_on_or_after_last_day"
+        ]
+      ],
+      "sha256": "82aece4919f854bb",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "koyomi \"period_of_months.cal\" date first_day",
+      "tool": "koyomi",
+      "path": "period_of_months.cal",
+      "items": [
+        [
+          "date",
+          "first_day"
+        ]
+      ],
+      "sha256": "f7fbde9442fad208",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "koyomi \"period_of_months.cal\" date last_day",
+      "tool": "koyomi",
+      "path": "period_of_months.cal",
+      "items": [
+        [
+          "date",
+          "last_day"
+        ]
+      ],
+      "sha256": "e4d5741e15aeb403",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "koyomi \"period_of_months.cal\" date last_day_moved",
+      "tool": "koyomi",
+      "path": "period_of_months.cal",
+      "items": [
+        [
+          "date",
+          "last_day_moved"
+        ]
+      ],
+      "sha256": "da1536d15d1da2b6",
+      "end": "item",
+      "pins": []
+    }
+  ],
+  "scopes": [
+    {
+      "file": "period_of_months.req",
+      "line": 9,
+      "text": "koyomi \"period_of_months.cal\" date",
+      "artifacts": 3,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/calendar_sources: ok — 4 requirements, whose 9 links and 1 waiver are as they were looked at; every requirement is met and checked, or waived; the 3 dates in scope all trace to a requirement",
+    "diagnostics": []
+  }
+}

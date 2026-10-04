@@ -1,0 +1,20 @@
+error[E302]: tests/mutants/W301_no_content/period_of_months.req:41:3: cfr §1.7 changed after legal looked at this link on 2026-10-03
+    41 |   from @cfr "§1.7"
+  = cfr §1.7 is now sha256:4b9dea2a1e492f63; it was sha256:01de176ebe4740d7 when it was looked at.
+  = Once a person has looked: yuen review tests/mutants/W301_no_content --root tests/mutants/W301_no_content --at tests/mutants/W301_no_content/period_of_months.req:41 --by <role>
+warning[W301]: tests/mutants/W301_no_content/period_of_months.req:41:3: What was looked at on 2026-10-03 is not in reviewed/, so what changed cannot be shown
+    41 |   from @cfr "§1.7"
+  = reviewed/01de176ebe4740d7 beside tests/mutants/W301_no_content/period_of_months.req is missing: `yuen review` writes it when a link is looked at, and it is kept in git.
+error[E302]: tests/mutants/W301_no_content/period_of_months.req:44:3: next_business_day comes from something that changed (cfr §1.7), so this link needs a look again
+    44 |   satisfied by file "period_of_months.cal"
+  = development looked at this link on 2026-10-03.
+  = next_business_day is now sha256:28c83108ffece677; it was sha256:8d9c6066ea40430f when it was looked at.
+  = Once a person has looked: yuen review tests/mutants/W301_no_content --root tests/mutants/W301_no_content --at tests/mutants/W301_no_content/period_of_months.req:44 --by <role>
+warning[W301]: tests/mutants/W301_no_content/period_of_months.req:44:3: What was looked at on 2026-10-03 is not in reviewed/, so what changed cannot be shown
+    44 |   satisfied by file "period_of_months.cal"
+  = reviewed/8d9c6066ea40430f beside tests/mutants/W301_no_content/period_of_months.req is missing: `yuen review` writes it when a link is looked at, and it is kept in git.
+error[E304]: tests/mutants/W301_no_content/period_of_months.req:46:3: next_business_day changed, so this waiver needs approving again (the same change as at tests/mutants/W301_no_content/period_of_months.req:44)
+    46 |   not verified "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim"
+  = legal approved this waiver on 2026-10-03.
+  = Once a person has looked: yuen review tests/mutants/W301_no_content --root tests/mutants/W301_no_content --at tests/mutants/W301_no_content/period_of_months.req:46 --by <role>
+tests/mutants/W301_no_content: 3 errors, 2 warnings

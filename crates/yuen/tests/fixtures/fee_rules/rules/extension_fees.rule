@@ -1,0 +1,47 @@
+rule extension_fees(fees_split) v1
+description "The fee for an extension of time to reply, shaped like the tables of 37 CFR 1.17(a): a standard table, and the lower fees of a small entity (37 CFR 1.27(a)) that take its place for replies made by a date. A sketch for yuen's tests, not a transcription: the dates are made up"
+
+source cfr = law ecfr "37 CFR 1" asof 2026-01-01
+  "§1.17" sha256:9b48f2c46284140a
+  "§1.27" sha256:fea1289ebe564f77
+
+inputs
+  months(months) : number  range >=0 <=5
+  small(small)   : bool
+  made(made)     : date  range >=2020-01-01 <=2030-12-31
+
+outputs
+  extension_fee(fee) : money[USD]  round down(1USD)
+
+define reduced_period(reduced) : bool = made <= 2027-03-31  @cfr "§1.27"
+
+table standard_fee(standard)  @cfr "§1.17"
+policy unique
+          | months  | -> extension_fee(fee) : money[USD] |
+first     | >0 <=1  | 235USD                              |
+second    | >1 <=2  | 690USD                              |
+third     | >2 <=3  | 1590USD                             |
+fourth    | >3 <=4  | 2495USD                             |
+fifth     | >4 <=5  | 3395USD                             |
+
+clause no_extension(no_ext) -> extension_fee  @cfr "§1.17"
+  when months <=0
+  then 0USD
+
+table small_entity_fee(reduced_rate)  @cfr "§1.27"
+policy unique
+overrides standard_fee
+| reduced_period | small | months  | -> extension_fee |
+| true           | true  | >0 <=1  | 94USD            |
+| true           | true  | >1 <=2  | 276USD           |
+| true           | true  | >2 <=3  | 636USD           |
+| true           | true  | >3 <=4  | 998USD           |
+| true           | true  | >4 <=5  | 1358USD          |
+
+examples
+| months | small | made       | -> extension_fee |
+| 1      | true  | 2026-09-16 | 94USD            |
+| 1      | true  | 2027-04-01 | 235USD           |
+| 3      | false | 2026-09-16 | 1590USD          |
+| 5      | true  | 2026-09-16 | 1358USD          |
+| 0      | false | 2026-09-16 | 0USD             |

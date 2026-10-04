@@ -1,0 +1,395 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/payment_policy",
+  "files": [
+    {
+      "path": "payment.req",
+      "name": "payment_terms",
+      "version": "1",
+      "sha256": "0dd5657dbee569a9"
+    },
+    {
+      "path": "policy.req",
+      "name": "payment_policy",
+      "version": "1",
+      "sha256": "1757227fa7b4e882"
+    }
+  ],
+  "roles": [
+    {
+      "name": "accounting",
+      "description": "Decides the payment policy"
+    },
+    {
+      "name": "development",
+      "description": "Writes and fixes the payment calculation"
+    }
+  ],
+  "sources": [
+    {
+      "file": "policy.req",
+      "name": "terms",
+      "kind": "file",
+      "path": "docs/terms.md",
+      "url": "https://example.org/terms.md",
+      "sha256": "9b646f638f835af8",
+      "borrowed": null
+    }
+  ],
+  "requirements": [
+    {
+      "name": "month_end_close",
+      "alias": null,
+      "version": 1,
+      "file": "payment.req",
+      "line": 6,
+      "text": "Invoices close at the end of the month",
+      "in_force": {
+        "from": "2026-01-01",
+        "to": "2027-03-31"
+      },
+      "owner": "accounting",
+      "replaces": [],
+      "sha256": "57e93b89b6e853e5",
+      "from": [],
+      "decided": [
+        {
+          "date": "2025-12-01",
+          "by": "accounting",
+          "why": "Closing is made the end of the month. Decided for this material"
+        }
+      ],
+      "links": [
+        {
+          "line": 11,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"src/close.py\"",
+            "tool": "file",
+            "path": "src/close.py",
+            "items": []
+          },
+          "sha256": "9bb0abb20fa56cb7",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "57e93b89b6e853e5"
+            ],
+            "down": "9bb0abb20fa56cb7"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 13,
+          "role": "verified",
+          "why": "The closing day only returns the last date of the month, so no claim is set to check it",
+          "approved": {
+            "date": "2026-10-03",
+            "by": "accounting",
+            "sha256": "57e93b89b6e853e5"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "payment_day",
+      "alias": null,
+      "version": 1,
+      "file": "payment.req",
+      "line": 16,
+      "text": "Closes at the end of the month, pays at the end of the next month",
+      "in_force": {
+        "from": "2026-01-01",
+        "to": "2027-03-31"
+      },
+      "owner": "accounting",
+      "replaces": [],
+      "sha256": "d78a1ef755846010",
+      "from": [
+        {
+          "line": 20,
+          "sources": [],
+          "requirement": {
+            "name": "payment_policy",
+            "version": 1,
+            "sha256": "0a46828266bf9f74"
+          },
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "accounting",
+            "up": [
+              "0a46828266bf9f74"
+            ],
+            "down": "d78a1ef755846010"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 22,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"src/pay.py\"",
+            "tool": "file",
+            "path": "src/pay.py",
+            "items": []
+          },
+          "sha256": "93e39b25842afd07",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "d78a1ef755846010"
+            ],
+            "down": "93e39b25842afd07"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 24,
+          "role": "verified",
+          "artifact": {
+            "text": "file \"tests/test_pay.py\"",
+            "tool": "file",
+            "path": "tests/test_pay.py",
+            "items": []
+          },
+          "sha256": "df4a7416b584ec48",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "d78a1ef755846010"
+            ],
+            "down": "df4a7416b584ec48"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    },
+    {
+      "name": "payment_day",
+      "alias": null,
+      "version": 2,
+      "file": "payment.req",
+      "line": 27,
+      "text": "Closes on the 20th, pays on the 10th of the next month",
+      "in_force": {
+        "from": "2027-04-01",
+        "to": null
+      },
+      "owner": "accounting",
+      "replaces": [
+        {
+          "name": "month_end_close",
+          "version": 1
+        }
+      ],
+      "sha256": "86e2461203be3e7c",
+      "from": [
+        {
+          "line": 32,
+          "sources": [],
+          "requirement": {
+            "name": "payment_policy",
+            "version": 1,
+            "sha256": "0a46828266bf9f74"
+          },
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "accounting",
+            "up": [
+              "0a46828266bf9f74"
+            ],
+            "down": "86e2461203be3e7c"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [
+        {
+          "date": "2026-10-03",
+          "by": "accounting",
+          "why": "From April 2027 the closing day moves to the 20th. Decided for this material"
+        }
+      ],
+      "links": [
+        {
+          "line": 35,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"src/pay.py\"",
+            "tool": "file",
+            "path": "src/pay.py",
+            "items": []
+          },
+          "sha256": "93e39b25842afd07",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "86e2461203be3e7c"
+            ],
+            "down": "93e39b25842afd07"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 37,
+          "role": "verified",
+          "artifact": {
+            "text": "file \"tests/test_pay.py\"",
+            "tool": "file",
+            "path": "tests/test_pay.py",
+            "items": []
+          },
+          "sha256": "df4a7416b584ec48",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "86e2461203be3e7c"
+            ],
+            "down": "df4a7416b584ec48"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    },
+    {
+      "name": "payment_policy",
+      "alias": null,
+      "version": 1,
+      "file": "policy.req",
+      "line": 9,
+      "text": "The price of an invoice received is paid within 60 days of the closing day",
+      "in_force": null,
+      "owner": "accounting",
+      "replaces": [],
+      "sha256": "0a46828266bf9f74",
+      "from": [
+        {
+          "line": 12,
+          "sources": [
+            {
+              "source": "terms",
+              "fragment": null,
+              "sha256": "9b646f638f835af8"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "accounting",
+            "up": [
+              "9b646f638f835af8"
+            ],
+            "down": "0a46828266bf9f74"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [
+        {
+          "date": "2026-09-01",
+          "by": "accounting",
+          "why": "Clause 4's 'from the closing day' is read as counted from the day after the closing day. Decided for this material"
+        }
+      ],
+      "links": [
+        {
+          "line": 15,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"src/pay.py\"",
+            "tool": "file",
+            "path": "src/pay.py",
+            "items": []
+          },
+          "sha256": "93e39b25842afd07",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "0a46828266bf9f74"
+            ],
+            "down": "93e39b25842afd07"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 17,
+          "role": "verified",
+          "artifact": {
+            "text": "file \"tests/test_pay.py\"",
+            "tool": "file",
+            "path": "tests/test_pay.py",
+            "items": []
+          },
+          "sha256": "df4a7416b584ec48",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "0a46828266bf9f74"
+            ],
+            "down": "df4a7416b584ec48"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "file \"src/close.py\"",
+      "tool": "file",
+      "path": "src/close.py",
+      "items": [],
+      "sha256": "9bb0abb20fa56cb7",
+      "end": "file",
+      "pins": []
+    },
+    {
+      "text": "file \"src/pay.py\"",
+      "tool": "file",
+      "path": "src/pay.py",
+      "items": [],
+      "sha256": "93e39b25842afd07",
+      "end": "file",
+      "pins": []
+    },
+    {
+      "text": "file \"tests/test_pay.py\"",
+      "tool": "file",
+      "path": "tests/test_pay.py",
+      "items": [],
+      "sha256": "df4a7416b584ec48",
+      "end": "file",
+      "pins": []
+    }
+  ],
+  "scopes": [
+    {
+      "file": "payment.req",
+      "line": 4,
+      "text": "file \"src\"",
+      "artifacts": 2,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/payment_policy: ok — 3 requirements (4 versions), whose 10 links and 1 waiver are as they were looked at; every requirement is met and checked, or waived; the 2 files in scope all trace to a requirement",
+    "diagnostics": []
+  }
+}

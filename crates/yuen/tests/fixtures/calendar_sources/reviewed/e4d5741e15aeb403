@@ -1,0 +1,3 @@
+date last_day = first_day
++ month_count months else start_of_next_month
+- 1 day

@@ -111,7 +111,47 @@ Doorstop との違いは、もう一つある。Doorstop の疑わしいリン�
 
 ### 1.1 ファイルの形
 
-koyomi の例 `民法の期間.cal`（民法 140〜143 条を文字どおりに書いた期間の計算）に、要件と来歴を書いたもの（15 章の例 `examples/民法の期間/民法の期間.req` の一部）。
+要件と来歴を書いたファイルの例を二つ並べる。英語の例は、米国の連邦規則（eCFR の 37 CFR 1 の四つの節）を出典にし、koyomi の例 `period_of_months.cal` を満たすものとして書いた `tests/fixtures/period_of_months/period_of_months.req` の一部である（出典は yuen が写して固定し、成果物はファイルとして読む。三つめの要件は、読み方を決めたことも書く）。
+
+```
+requirements period_of_months v1
+description "Where the dates of koyomi's example period_of_months.cal could come from, if it followed the time rules of the USPTO's regulations in 37 CFR part 1. The sources are copied and pinned here, and what meets a requirement is read as a file. Written for this test material; it does not say how any rule is read"
+
+role legal "Decides how the words of a rule are read"
+role development "Writes and fixes koyomi's file"
+
+source cfr = law ecfr "37 CFR 1" asof 2026-01-01
+  "§1.6" sha256:6bcdc27c3428886c
+  "§1.7" sha256:01de176ebe4740d7
+  "§1.8" sha256:fa698e3ea7cb1e49
+  "§1.10" sha256:5adcbc193371fd26
+
+scope file "period_of_months.cal"
+
+requirement date_of_receipt
+  text "Correspondence received in the Patent and Trademark Office is stamped with the date of receipt"
+  in force 2026-10-01..
+  owner legal
+  from @cfr "§1.6"
+    reviewed 2026-10-03 by legal sha256:6bcdc27c3428886c -> sha256:c6a57f069e4638f2
+  satisfied by file "period_of_months.cal"
+    reviewed 2026-10-03 by development sha256:c6a57f069e4638f2 -> sha256:0f1a06d9b71a39f6
+  not verified "That the day of receipt is not counted is checked on koyomi doc's page, by reading the rule and its restatement side by side. This material has no claim that checks it"
+    approved 2026-10-03 by legal sha256:c6a57f069e4638f2
+
+requirement timely_filing
+  text "Correspondence required to be filed within a set period of time is considered timely filed if it is mailed or transmitted before the period ends, with a certificate of the date of deposit or transmission"
+  in force 2026-10-01..
+  owner legal
+  from @cfr "§1.8", "§1.10"
+    reviewed 2026-10-03 by legal sha256:fa698e3ea7cb1e49, sha256:5adcbc193371fd26 -> sha256:8d02c6a1f0ad3364
+  satisfied by file "period_of_months.cal"
+    reviewed 2026-10-03 by development sha256:8d02c6a1f0ad3364 -> sha256:0f1a06d9b71a39f6
+  not verified "A function that writes the rule's cases as they are, held against every origin of 2000 to 2027 and every month count of 1 to 12, was checked in koyomi's design stage. This material has no claim that checks it"
+    approved 2026-10-03 by legal sha256:8d02c6a1f0ad3364
+```
+
+日本語の例は、koyomi の例 `民法の期間.cal`（民法 140〜143 条を文字どおりに書いた期間の計算）に、要件と来歴を書いたもの（15 章の例 `examples/民法の期間/民法の期間.req` の一部）である。
 
 ```
 requirements 民法の期間 v1
@@ -639,6 +679,14 @@ from law egov 129AC0000000089 第140条 sha256:e880059021fbb67d
 in force 2026-10-01..
 ```
 
+英語の例（1.1 の `period_of_months`）の `date_of_receipt` の端の中身は次の 3 行で、ハッシュは `c6a57f069e4638f2` になる。出典は eCFR で、`from law` の行にはデータベースの語 `ecfr` と、節の名前 `§1.6` が入る。
+
+```
+text Correspondence received in the Patent and Trademark Office is stamped with the date of receipt
+from law ecfr 37 CFR 1 §1.6 sha256:6bcdc27c3428886c
+in force 2026-10-01..
+```
+
 **決定**：要件の端の中身に、リンク元のハッシュを入れる。
 
 こうすると、出典の条が変われば、その条を引く要件の端のハッシュが変わり、その要件から先のリンクのハッシュも食い違う。元になった要件の端が変われば、それを元にした要件の端も変わる。変わったことが、確かめた記録と今のハッシュを比べるだけで、先へ先へと伝わる。どのリンクに印が付いているかを、yuen は記録の外に覚えておかなくてよい。
@@ -701,7 +749,34 @@ in force 2026-10-01..
 
 **例**：1.1 の例で、koyomi の `民法の期間.cal` が固定している 142 条の写しが変わったとする（改正を `koyomi source fetch` で取り込み、`koyomi source pin` で固定し直した）。印が付くのは三本で、142 条を引く要件 `満了日_142条` の `from`、`satisfied by`、`verified by` が E302 になる。koyomi の固定の行が書き換わって `.cal` のバイト列は変わるが、日付と条件の端はその定義の文（3.2）で、固定の行を含まないので、ほかの要件のリンクには印が付かない（`tests/suite.rs` が、借りた出典で書いたテストの材料 `tests/fixtures/koyomi` で確かめる）。取り込む前は日付の端がファイル全体だったので、同じ `.cal` を満たす側に書いたほかの要件の二本（`起算日` と `満了日` の `satisfied by`）にも E303 が付き、五本になるはずだった。
 
-次は、テストの材料 `tests/fixtures/period`（出典を自分で写し、`.cal` をファイルとして名指し、確かめる側を見送りにしたもの）で同じ変更をしたときの、実際の出力である。`tests/mutants/E302_条が変わった` は、その 142 条の写しを一文字変え、固定を書き直したものである。`.cal` は変わっていないので印は三本で、条の変わった `from` が先に、その条から来る要件の `satisfied by` と見送りが後に、一つのまとまりとして並ぶ。
+英語の材料 `tests/fixtures/period_of_months`（米国の連邦規則 37 CFR 1 の四つの節を出典にし、出典を自分で写し、`.cal` をファイルとして名指し、確かめる側を見送りにしたもの。1.1 の英語の例）で、同じ変更をしたときの実際の出力は次のとおりである。`tests/mutants/E302_article_changed` は、1.7 節の写しの一語を変え、固定を書き直したものである。印は三本で、変わった節を引く `from` が先に、その節から来る要件の `satisfied by` と見送りが後に並ぶ。
+
+```
+$ yuen check tests/mutants/E302_article_changed
+error[E302]: tests/mutants/E302_article_changed/period_of_months.req:41:3: cfr §1.7 changed after legal looked at this link on 2026-10-03
+    41 |   from @cfr "§1.7"
+  = cfr §1.7 is now sha256:4b9dea2a1e492f63; it was sha256:01de176ebe4740d7 when it was looked at.
+  what changed in the text (the copy tests/mutants/E302_article_changed/sources/law/37-CFR-1@2026-01-01/1.7.xml):
+      @@ -1,4 +1,4 @@
+        § 1.7 Times for taking action; Expiration on Saturday, Sunday or Federal holiday.
+      - (a) Whenever periods of time are specified in this part in days, calendar days are intended. When the day, or the last day fixed by statute or by or under this part for taking any action or paying any fee in the United States Patent and Trademark Office falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the action may be taken, or the fee paid, on the next succeeding business day which is not a Saturday, Sunday, or a Federal holiday. See § 90.3 of this chapter for time for appeal or for commencing civil action.
+      + (a) Whenever periods of time are specified in this part in days, calendar days are intended. When the day, or the last day fixed by statute or by or under this part for taking any action or paying any fee in the United States Patent and Trademark Office falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the action may be taken, or the fee paid, on the second succeeding business day which is not a Saturday, Sunday, or a Federal holiday. See § 90.3 of this chapter for time for appeal or for commencing civil action.
+        (b) If the day that is twelve months after the filing date of a provisional application under 35 U.S.C. 111(b) and § 1.53(c) falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the period of pendency shall be extended to the next succeeding secular or business day which is not a Saturday, Sunday, or a Federal holiday.
+        [65 FR 14871, Mar. 20, 2000, as amended at 78 FR 62395, Oct. 21, 2013]
+  = Once a person has looked: yuen review tests/mutants/E302_article_changed --at tests/mutants/E302_article_changed/period_of_months.req:41 --by <role>
+error[E302]: tests/mutants/E302_article_changed/period_of_months.req:44:3: next_business_day comes from something that changed (cfr §1.7), so this link needs a look again
+    44 |   satisfied by file "period_of_months.cal"
+  = development looked at this link on 2026-10-03.
+  = Look at what changed first, where its own diagnostic shows it.
+  = Once a person has looked: yuen review tests/mutants/E302_article_changed --at tests/mutants/E302_article_changed/period_of_months.req:44 --by <role>
+error[E304]: tests/mutants/E302_article_changed/period_of_months.req:46:3: next_business_day changed, so this waiver needs approving again (the same change as at tests/mutants/E302_article_changed/period_of_months.req:44)
+    46 |   not verified "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim"
+  = legal approved this waiver on 2026-10-03.
+  = Once a person has looked: yuen review tests/mutants/E302_article_changed --at tests/mutants/E302_article_changed/period_of_months.req:46 --by <role>
+tests/mutants/E302_article_changed: 3 errors
+```
+
+日本語の材料 `tests/fixtures/period`（出典を自分で写し、`.cal` をファイルとして名指し、確かめる側を見送りにしたもの）で同じ変更をしたときの、実際の出力は次のとおりである。`tests/mutants/E302_条が変わった` は、その 142 条の写しを一文字変え、固定を書き直したものである。`.cal` は変わっていないので印は三本で、条の変わった `from` が先に、その条から来る要件の `satisfied by` と見送りが後に、一つのまとまりとして並ぶ。
 
 ```
 $ yuen check tests/mutants/E302_条が変わった
@@ -770,7 +845,14 @@ tests/mutants/E302_条が変わった: 3 errors
 
 E403（確かめる側に、主張でないものを書いた）を 2 の段に置くのは、成果物を読まなくても、名指しの種類だけで決まるからである。2 の段で止めれば、ツールを呼ぶ前に言える。
 
-通れば、何を確かめたかを一行で言う。テストの材料 `tests/fixtures/period`（15 章の例 `民法の期間` の要件三つを、出典を自分で写し、`.cal` をファイルとして名指し、確かめる側を見送りにして書いたもの）では、次のとおりである。
+通れば、何を確かめたかを一行で言う。英語の材料 `tests/fixtures/period_of_months`（37 CFR 1 の四つの節を出典にした要件三つを、出典を自分で写し、`.cal` をファイルとして名指し、確かめる側を見送りにして書いたもの）では、次のとおりである。
+
+```
+$ yuen check tests/fixtures/period_of_months
+tests/fixtures/period_of_months: ok — 3 requirements, whose 6 links and 3 waivers are as they were looked at; every requirement is met and checked, or waived; the file in scope traces to a requirement
+```
+
+日本語の材料 `tests/fixtures/period`（15 章の例 `民法の期間` の要件三つを、同じように書いたもの）では、次のとおりである。
 
 ```
 $ yuen check tests/fixtures/period
@@ -901,9 +983,22 @@ exit code は 0（エラーなし。警告はあってよい）、1（エラー�
 
 退いたコードは、台帳に残して `yuen explain` で引けるようにし、退いた理由と版を書く。番号はほかのものに使い回さない（ritsu の DESIGN 7.10、rulec の docs/compatibility.md と同じ決まり）。ritsu の D.7 で、子プロセスと JSON のために決めていた E204 と、記録で主張の名前を確かめていた W201 を退かせ、E203 は、言語がファイルについて答えられないこと（その言語の検査を通らない、読めない、定義の文を渡さない）を、その言語の診断を名指して言う意味に替えた。E106、E107、E202、E203、E205 の再現は、ほかの言語のファイルを隣に置く `.req` で、テストはすべての言語をつないで走らせる（`ritsu yuen` と同じ）。
 
+台帳は、コードごとに再現を二つ持つ（E206 の一つは英語で、両方の言語で同じものを見せる。退いたコードは持たない）。`yuen explain` は、`--lang en` では英語の再現（名前も英語で、法令は eCFR）を、`--lang ja` では日本語の再現を見せる。日本語の出力は変えていない。英語の出力に出る再現が日本語から英語になったのは、決めて変えたことである（英語を先にする）。テストは、どちらの再現も同じに走らせ、そのコードが出ることを確かめる（`tests/codes.rs`。42 と 41 の 83 回）。
+
 ### 6.3 診断の例
 
-範囲のファイルが要件に辿れないとき（`tests/mutants/E404_範囲のファイル`。範囲は `src` で、リンクが名指すのは `src/pay.py` だけ）：
+範囲のファイルが要件に辿れないとき（`tests/mutants/E404_file_in_scope`。範囲は `src` で、リンクが名指すのは `src/pay.py` だけ）：
+
+```
+$ yuen check tests/mutants/E404_file_in_scope --root tests/mutants/E404_file_in_scope
+error[E404]: tests/mutants/E404_file_in_scope/payment.req:7:1: file "src/report.py" is in scope, and no requirement leads to it
+     7 | scope file "src"
+  = The rest of the scope is reached: file "src/pay.py"
+  = Add a requirement whose `satisfied by` or `verified by` names it, or narrow the scope.
+tests/mutants/E404_file_in_scope: 1 error
+```
+
+日本語の材料では（`tests/mutants/E404_範囲のファイル`）：
 
 ```
 $ yuen check tests/mutants/E404_範囲のファイル --root tests/mutants/E404_範囲のファイル
@@ -914,7 +1009,21 @@ error[E404]: tests/mutants/E404_範囲のファイル/支払.req:7:1: file "src/
 tests/mutants/E404_範囲のファイル: 1 error
 ```
 
-版の期間に隙間があるとき（`tests/mutants/E406_隙間が一日`）：
+版の期間に隙間があるとき（`tests/mutants/E406_gap_of_one_day`）：
+
+```
+$ yuen check tests/mutants/E406_gap_of_one_day
+error[E406]: tests/mutants/E406_gap_of_one_day/payment.req:18:3: 2027-04-01, between payment_day v1 and v2, falls in no version's period
+    18 |   in force 2027-04-02..
+  = v1 is in force `2026-01-01..2027-03-31`, and v2 `2027-04-02..`.
+  in the order of the periods:
+      v1 in force 2026-01-01..2027-03-31 (tests/mutants/E406_gap_of_one_day/payment.req:8)
+      v2 in force 2027-04-02.. (tests/mutants/E406_gap_of_one_day/payment.req:18)
+  = The line, fixed: in force 2027-04-01..
+tests/mutants/E406_gap_of_one_day: 1 error
+```
+
+日本語の材料では（`tests/mutants/E406_隙間が一日`）：
 
 ```
 $ yuen check tests/mutants/E406_隙間が一日 --lang ja
@@ -993,7 +1102,29 @@ requirements touched:
 
 前の記録だけを渡すと、geas は差分が足した行を引ける記録が無いと言い（geas の E063）、yuen はそれを主張の節に書き、ほかの節も答えてから exit 2 で終わる。
 
-借りた出典の写しを変える差分（koyomi のカレンダーが固定している 142 条の写しを一文字変えたもの）と、規則を変える差分（軽減の表の一行を変えたもの）には、次のように答える。
+借りた出典の写しを変える差分（koyomi のカレンダーが固定している 142 条の写しを一文字変えたもの）と、規則を変える差分（軽減の表の一行を変えたもの）には、次のように答える。英語の材料では、`tests/fixtures/calendar_sources` のカレンダーが固定している英国の祝日の表（`bank-holidays.json`）の一件の日付を変えた差分と、`tests/fixtures/fee_rules` の小さな事業体の表の一行を変えた差分が、同じ形で答えられる。
+
+```
+$ yuen affected tests/fixtures/calendar_sources --root tests/fixtures/calendar_sources --diff tests/fixtures/calendar_sources/changes/copy.diff
+diff: tests/fixtures/calendar_sources/changes/copy.diff
+copies of sources the diff touches:
+  tests/fixtures/calendar_sources/calendars/data/bank-holidays.json (bank_holidays): cited by last_day_moved
+changes no requirement reaches: none
+requirements touched:
+  last_day_moved (tests/fixtures/calendar_sources/period_of_months.req:31): owner legal; from bank_holidays; decided 2026-10-03 by legal: "The day after is taken as it is, and not moved on if it is closed too. Decided for this material"
+1 requirement touched; ask legal
+$ yuen affected tests/fixtures/fee_rules --root tests/fixtures/fee_rules --diff tests/fixtures/fee_rules/changes/rule.diff
+diff: tests/fixtures/fee_rules/changes/rule.diff
+files that requirements name, that the diff touches:
+  rulec "rules/extension_fees.rule": met by standard_fee, small_entity_fee
+changes no requirement reaches: none
+requirements touched:
+  standard_fee (tests/fixtures/fee_rules/extension_fees.req:13): owner legal; from cfr §1.17
+  small_entity_fee (tests/fixtures/fee_rules/extension_fees.req:26): owner legal; from cfr §1.27
+2 requirements touched; ask legal
+```
+
+日本語の材料では、次のとおりである。
 
 ```
 $ yuen affected tests/fixtures/koyomi --root tests/fixtures/koyomi --diff tests/fixtures/koyomi/changes/copy.diff
@@ -1037,7 +1168,25 @@ exit code は、答えられて、要件の届かない変更が無ければ 0�
 - **成果物**から：それを名指すリンクの要件ごとに、上の要件のたどり方。成果物のファイルが固定している条と、要件の出典が同じ本文かどうか（E107 と同じ比べ方）。
 - **出典の条**から：その条を引く要件と、その条を固定している成果物。
 
-テストの材料 `tests/fixtures/period` の `満了日_142条` からたどると、次のとおりである。
+英語の材料 `tests/fixtures/period_of_months` の `next_business_day` からたどると、次のとおりである。
+
+```
+$ yuen trace tests/fixtures/period_of_months --root tests/fixtures/period_of_months --requirement next_business_day
+next_business_day (tests/fixtures/period_of_months/period_of_months.req:37), owned by legal, in force from 2026-10-01
+  "When the last day fixed for taking an action falls on a Saturday, Sunday or Federal holiday, the action may be taken on the next succeeding business day which is not one"
+  comes from cfr §1.7 (eCFR 37 CFR 1 as of 2026-01-01; the copy tests/fixtures/period_of_months/sources/law/37-CFR-1@2026-01-01/1.7.xml)
+    > § 1.7 Times for taking action; Expiration on Saturday, Sunday or Federal holiday.
+    > (a) Whenever periods of time are specified in this part in days, calendar days are intended. When the day, or the last day fixed by statute or by or under this part for taking any action or paying any fee in the United States Patent and Trademark Office falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the action may be taken, or the fee paid, on the next succeeding business day which is not a Saturday, Sunday, or a Federal holiday. See § 90.3 of this chapter for time for appeal or for commencing civil action.
+    > (b) If the day that is twelve months after the filing date of a provisional application under 35 U.S.C. 111(b) and § 1.53(c) falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the period of pendency shall be extended to the next succeeding secular or business day which is not a Saturday, Sunday, or a Federal holiday.
+    > [65 FR 14871, Mar. 20, 2000, as amended at 78 FR 62395, Oct. 21, 2013]
+    looked at by legal on 2026-10-03; as it was looked at
+  decided:
+    2026-10-03 legal: The next succeeding business day is read as the day after the closed day, and not moved further if that day is closed too. Decided for this material; it does not say how any rule is read
+  met by file "period_of_months.cal" — looked at by development on 2026-10-03; as it was looked at
+  not verified: "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim" — approved by legal on 2026-10-03; as it was approved
+```
+
+日本語の材料 `tests/fixtures/period` の `満了日_142条` からたどると、次のとおりである。
 
 ```
 $ yuen trace tests/fixtures/period --root tests/fixtures/period --requirement 満了日_142条 --lang ja
@@ -1378,6 +1527,16 @@ ritsu の D.7 で、一式の読み込みを口で作った（3 章）。その�
 段階 E の最初の部分（ritsu の PLAN の E.1、E.2）で、ほかの言語のものの中身を、言語ごとにではなく、プロジェクトの索引で引くようにした（3.1）。`ritsu check` のために、`yuen::ports::Engine::checked` が、`yuen check` が印字するもの（診断一つずつのテキストと `--format json` のオブジェクト、要約の行）を、コマンドと同じ関数で作って渡す（ritsu の DESIGN 8.3）。コマンドの振る舞いは変えていない（例と fixture の全部の 1,026 回の出力が、クレートのバイナリでも `ritsu yuen` でも一字も違わない）。
 
 同じ部分で、言語がつながっていないときの断り方を、コードのある診断（E206）と exit 2 にした（3.1）。出力が変わるのは、yuen のクレートのバイナリが、ほかの言語のものを名指すプロジェクトを渡されたときだけである（標準エラーの一行の文が、標準出力の診断と要約の行になる。`api`・`export`・`trace`・`affected` は、これまでどおり標準エラーに出す）。`ritsu yuen` の出力は変わらない。
+
+### 16.2 英語の材料と日本語の材料
+
+テストの材料、変異、golden、文書の例は、英語を先にし、日本語のものは名前も中身もそのまま横に置く（ritsu の決まり）。yuen では、次のとおりにした。
+
+- **変異**：`tests/mutants/<コード>_<名前>/` の名前が英語のものは、ファイルの名前も中身も英語である。名前が日本語のもの（65）はそのままで、対の英語のもの（65）を足した。名前が ASCII でも中身が日本語だった `E011_dir` は日本語の側に数え、英語の対は `E011_scope_directory` である（合わせて 66 組）。`E206_rulec-not-joined` は、もとから英語である。対は診断のコードの頭でそろえ、`tests/english_mutants.rs` の `PAIRS` が書き、英語のものに日本語の文字が無いこと、対が同じコードを同じ順で出すことを確かめる。日本語の変異を足して対を足さなければ、そのテストが落ちる。golden（`tests/golden/<変異の名前>.en.txt` と `.ja.txt`）は、英語の変異にも日本語の変異にも、英語の出力と日本語の出力を一つずつ持つ。
+- **テストの材料**：`tests/fixtures/` の日本語のもの（`period`、`payment`、`rulec`、`koyomi`、`chobo`、`proto`、`dandori`、`sakai`）に、英語のもの（`period_of_months`、`payment_policy`、`fee_rules`、`calendar_sources`、`refunds_book`、`warehouse_proto`、`delivery_flow`、`ordering_terms`）を足した。法令は eCFR（37 CFR 1 の §1.6、1.7、1.8、1.10、1.17、1.27）で、`yuen source fetch` が取った本物の写しを固定している。確かめた記録（`reviewed/`）は `yuen review` が書いた。`ecfr`（29 CFR 1910.157）と `geas` は、もとから英語である。
+- **テスト**：日本語のテストは名前も本体もそのままで、同じ振る舞いを英語の材料で確かめる対のテスト（名前の終わりが `_in_english`）を `tests/english*.rs` に足した。材料を順に歩くテスト（`mutants.rs`、`export.rs` の `PROJECTS`、`codes.rs`）は、英語の材料も歩く。golden は材料の名前ごとにあるので、英語のものは別の名前で足した（`period_cal`、`chobo-refund.json` など）。
+- **日本語でしか確かめられないもの**：e-Gov の条の漢数字と、項・号・別表・附則の写しのファイルの名前（`copies.rs` の `the_files_articles_are_copied_into`）、e-Gov の版の ID と施行日を使う問い合わせ（`fetch.rs` の e-Gov の流れ）、koyomi が固定した条の話（E106 の「カレンダーが固定していない条」、142 条の改正が日付の端に届く範囲を見る `suite.rs` の `an_article_taken_into_a_calendar_marks_only_what_reads_it`）には、英語の対を持たない。eCFR の節には漢数字も版の ID も無く、koyomi が固定できる法令は e-Gov のものだけだからである。写しの固定と本文（`the_pins_of_the_copies_of_the_civil_code`、`the_text_of_a_copy`）、問い合わせの流れ、借りた出典の端と印の付く範囲は、eCFR の節と、カレンダーが固定する英国の祝日の JSON で、同じことを確かめる対がある。
+- **`explain` の再現**：6.2 のとおり、コードごとに英語と日本語の二つを持つ。
 
 ## 17. 捨てたもの
 

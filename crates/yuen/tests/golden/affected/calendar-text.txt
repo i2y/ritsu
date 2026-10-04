@@ -1,0 +1,7 @@
+diff: tests/fixtures/calendar_sources/changes/text.diff
+requirements the diff changes (tests/fixtures/calendar_sources/period_of_months.req):
+  last_day_moved: its text or period changes, so its links are to be looked at again
+changes no requirement reaches: none
+requirements touched:
+  last_day_moved (tests/fixtures/calendar_sources/period_of_months.req:31): owner legal; from bank_holidays; decided 2026-10-03 by legal: "The day after is taken as it is, and not moved on if it is closed too. Decided for this material"
+1 requirement touched; ask legal

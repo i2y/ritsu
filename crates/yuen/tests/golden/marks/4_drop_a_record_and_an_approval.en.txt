@@ -1,0 +1,9 @@
+error[E301]: period_of_months/period_of_months.req:21:3: No one has looked at the link from date_of_receipt to file "period_of_months.cal" yet
+    21 |   satisfied by file "period_of_months.cal"
+  = Once a person has read both ends and the link holds, `yuen review` writes who looked, when, and the hashes of both ends under the link.
+  = Once a person has looked: yuen review period_of_months --root period_of_months --at period_of_months/period_of_months.req:21 --by <role>
+error[E304]: period_of_months/period_of_months.req:33:3: This waiver has not been approved yet
+    33 |   not verified "A function that writes the rule's cases as they are, held against every origin of 2000 to 2027 and every month count of 1 to 12, was checked in koyomi's design stage. This material has no claim that checks it"
+  = A waiver is a decision too: once the owner has read the reason and approves it, `yuen review` writes who approved it, when, and the requirement's hash under it.
+  = Once a person has looked: yuen review period_of_months --root period_of_months --at period_of_months/period_of_months.req:33 --by <role>
+period_of_months: 2 errors

@@ -1,0 +1,310 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/period_of_months",
+  "files": [
+    {
+      "path": "period_of_months.req",
+      "name": "period_of_months",
+      "version": "1",
+      "sha256": "3d4059ece97c9f81"
+    }
+  ],
+  "roles": [
+    {
+      "name": "legal",
+      "description": "Decides how the words of a rule are read"
+    },
+    {
+      "name": "development",
+      "description": "Writes and fixes koyomi's file"
+    }
+  ],
+  "sources": [
+    {
+      "file": "period_of_months.req",
+      "name": "cfr",
+      "kind": "law",
+      "db": "ecfr",
+      "id": "37 CFR 1",
+      "asof": "2026-01-01",
+      "revision": null,
+      "borrowed": null,
+      "pins": [
+        {
+          "fragment": "§1.6",
+          "sha256": "6bcdc27c3428886c"
+        },
+        {
+          "fragment": "§1.7",
+          "sha256": "01de176ebe4740d7"
+        },
+        {
+          "fragment": "§1.8",
+          "sha256": "fa698e3ea7cb1e49"
+        },
+        {
+          "fragment": "§1.10",
+          "sha256": "5adcbc193371fd26"
+        }
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "name": "date_of_receipt",
+      "alias": null,
+      "version": 1,
+      "file": "period_of_months.req",
+      "line": 15,
+      "text": "Correspondence received in the Patent and Trademark Office is stamped with the date of receipt",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "legal",
+      "replaces": [],
+      "sha256": "c6a57f069e4638f2",
+      "from": [
+        {
+          "line": 19,
+          "sources": [
+            {
+              "source": "cfr",
+              "fragment": "§1.6",
+              "sha256": "6bcdc27c3428886c"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "legal",
+            "up": [
+              "6bcdc27c3428886c"
+            ],
+            "down": "c6a57f069e4638f2"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 21,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"period_of_months.cal\"",
+            "tool": "file",
+            "path": "period_of_months.cal",
+            "items": []
+          },
+          "sha256": "0f1a06d9b71a39f6",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "c6a57f069e4638f2"
+            ],
+            "down": "0f1a06d9b71a39f6"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 23,
+          "role": "verified",
+          "why": "That the day of receipt is not counted is checked on koyomi doc's page, by reading the rule and its restatement side by side. This material has no claim that checks it",
+          "approved": {
+            "date": "2026-10-03",
+            "by": "legal",
+            "sha256": "c6a57f069e4638f2"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "timely_filing",
+      "alias": null,
+      "version": 1,
+      "file": "period_of_months.req",
+      "line": 26,
+      "text": "Correspondence required to be filed within a set period of time is considered timely filed if it is mailed or transmitted before the period ends, with a certificate of the date of deposit or transmission",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "legal",
+      "replaces": [],
+      "sha256": "8d02c6a1f0ad3364",
+      "from": [
+        {
+          "line": 30,
+          "sources": [
+            {
+              "source": "cfr",
+              "fragment": "§1.8",
+              "sha256": "fa698e3ea7cb1e49"
+            },
+            {
+              "source": "cfr",
+              "fragment": "§1.10",
+              "sha256": "5adcbc193371fd26"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "legal",
+            "up": [
+              "fa698e3ea7cb1e49",
+              "5adcbc193371fd26"
+            ],
+            "down": "8d02c6a1f0ad3364"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 32,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"period_of_months.cal\"",
+            "tool": "file",
+            "path": "period_of_months.cal",
+            "items": []
+          },
+          "sha256": "0f1a06d9b71a39f6",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "8d02c6a1f0ad3364"
+            ],
+            "down": "0f1a06d9b71a39f6"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 34,
+          "role": "verified",
+          "why": "A function that writes the rule's cases as they are, held against every origin of 2000 to 2027 and every month count of 1 to 12, was checked in koyomi's design stage. This material has no claim that checks it",
+          "approved": {
+            "date": "2026-10-03",
+            "by": "legal",
+            "sha256": "8d02c6a1f0ad3364"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "next_business_day",
+      "alias": null,
+      "version": 1,
+      "file": "period_of_months.req",
+      "line": 37,
+      "text": "When the last day fixed for taking an action falls on a Saturday, Sunday or Federal holiday, the action may be taken on the next succeeding business day which is not one",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "legal",
+      "replaces": [],
+      "sha256": "8d9c6066ea40430f",
+      "from": [
+        {
+          "line": 41,
+          "sources": [
+            {
+              "source": "cfr",
+              "fragment": "§1.7",
+              "sha256": "01de176ebe4740d7"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "legal",
+            "up": [
+              "01de176ebe4740d7"
+            ],
+            "down": "8d9c6066ea40430f"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [
+        {
+          "date": "2026-10-03",
+          "by": "legal",
+          "why": "The next succeeding business day is read as the day after the closed day, and not moved further if that day is closed too. Decided for this material; it does not say how any rule is read"
+        }
+      ],
+      "links": [
+        {
+          "line": 44,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"period_of_months.cal\"",
+            "tool": "file",
+            "path": "period_of_months.cal",
+            "items": []
+          },
+          "sha256": "0f1a06d9b71a39f6",
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "8d9c6066ea40430f"
+            ],
+            "down": "0f1a06d9b71a39f6"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 46,
+          "role": "verified",
+          "why": "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim",
+          "approved": {
+            "date": "2026-10-03",
+            "by": "legal",
+            "sha256": "8d9c6066ea40430f"
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "file \"period_of_months.cal\"",
+      "tool": "file",
+      "path": "period_of_months.cal",
+      "items": [],
+      "sha256": "0f1a06d9b71a39f6",
+      "end": "file",
+      "pins": []
+    }
+  ],
+  "scopes": [
+    {
+      "file": "period_of_months.req",
+      "line": 13,
+      "text": "file \"period_of_months.cal\"",
+      "artifacts": 1,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/period_of_months: ok — 3 requirements, whose 6 links and 3 waivers are as they were looked at; every requirement is met and checked, or waived; the file in scope traces to a requirement",
+    "diagnostics": []
+  }
+}

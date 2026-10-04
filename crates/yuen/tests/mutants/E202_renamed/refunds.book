@@ -1,0 +1,21 @@
+# A refund never exceeds the sale: what is left to refund on each order is an account of its own.
+book refunds v1
+description "What is left to refund on each order is an account of its own: the sale adds to it, a refund takes from it, and it never goes below 0. A refund is held while it waits for approval"
+
+unit USD scale 2
+
+account refundable(order: string) : USD
+  description "what is left to refund on the order"
+  at least 0 refused as refund_exceeds_sale
+account sales : USD outside
+account refunded : USD outside
+
+transfer sale(order: string, amount: USD)
+  key order
+  move amount from sales to refundable(order)
+
+transfer refund_request(request: string, order: string, amount: USD)
+  description "held while it waits for approval: posted when it is approved, voided when it is turned down"
+  key request
+  pending expires after 7 days
+  move amount from refundable(order) to refunded

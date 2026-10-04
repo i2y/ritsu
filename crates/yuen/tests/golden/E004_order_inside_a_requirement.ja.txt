@@ -1,0 +1,4 @@
+エラー[E004]: tests/mutants/E004_order_inside_a_requirement/payment.req:9:3: `text` の行が、決まった順序より後ろにあります
+     9 |   text "Closes on the 20th, pays on the 10th of the next month"
+  = 要件の中は、`text`、`in force`、`owner`、`replaces`、`from`、`decided`、`satisfied by` と `not satisfied`、`verified by` と `not verified` の順に書きます。
+tests/mutants/E004_order_inside_a_requirement: エラー 1 件

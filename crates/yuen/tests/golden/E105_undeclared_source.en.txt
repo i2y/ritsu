@@ -1,0 +1,7 @@
+warning[W101]: tests/mutants/E105_undeclared_source/period_of_months.req:9:3: cfr §1.7 is pinned but no requirement cites it
+     9 |   "§1.7" sha256:01de176ebe4740d7
+  = If it is what is left after a citation was removed, delete the pin line.
+error[E105]: tests/mutants/E105_undeclared_source/period_of_months.req:41:9: The source cfr_part is not declared in this file
+    41 |   from @cfr_part "§1.7"
+  = Declare the source in the same file, like `source cfr_part = law "<law id>" asof <date>`; source names belong to a file.
+tests/mutants/E105_undeclared_source: 1 error, 1 warning

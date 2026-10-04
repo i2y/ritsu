@@ -1,0 +1,4 @@
+date payment = closing
+day 10 of month +1
+roll preceding
+at 09:00

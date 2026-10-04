@@ -1,0 +1,4 @@
+error[E011]: tests/mutants/E011_scope_directory/payment.req:7:7: `dir` is not a tool; a naming starts with one of rulec, dandori, koyomi, chobo, geas, proto, file, yuen, sakai
+     7 | scope dir "src"
+  = A directory is not named with a tool word of its own; in a scope, write `scope file "src/"`.
+tests/mutants/E011_scope_directory: 1 error

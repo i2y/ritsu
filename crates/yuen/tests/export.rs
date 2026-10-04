@@ -15,7 +15,7 @@ use std::process::Command;
 /// Every test project: the ones of yuen's own requirements alone (sources copied by yuen,
 /// artifacts that are files), and the ones that name the things of another language — a rule, a
 /// calendar, a book, a spec, a `.proto`, a workflow, a context — read through ritsu's ports.
-const PROJECTS: [(&str, &str); 10] = [
+const PROJECTS: [(&str, &str); 18] = [
     ("period", "tests/fixtures/period"),
     ("ecfr", "tests/fixtures/ecfr"),
     ("payment", "tests/fixtures/payment"),
@@ -26,6 +26,15 @@ const PROJECTS: [(&str, &str); 10] = [
     ("proto", "tests/fixtures/proto"),
     ("dandori", "tests/fixtures/dandori"),
     ("sakai", "tests/fixtures/sakai"),
+    // the same, with the English fixtures (the eCFR for the law, English names in every language's file)
+    ("period_of_months", "tests/fixtures/period_of_months"),
+    ("payment_policy", "tests/fixtures/payment_policy"),
+    ("fee_rules", "tests/fixtures/fee_rules"),
+    ("calendar_sources", "tests/fixtures/calendar_sources"),
+    ("refunds_book", "tests/fixtures/refunds_book"),
+    ("warehouse_proto", "tests/fixtures/warehouse_proto"),
+    ("delivery_flow", "tests/fixtures/delivery_flow"),
+    ("ordering_terms", "tests/fixtures/ordering_terms"),
 ];
 
 /// The command with every language joined, as `ritsu yuen` runs it.

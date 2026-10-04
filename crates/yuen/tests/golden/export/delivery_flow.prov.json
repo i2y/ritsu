@@ -1,0 +1,411 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/logistics": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "logistics",
+      "yuen:description": "Decides the delivery procedure"
+    },
+    "y:role/development": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "development",
+      "yuen:description": "Writes and fixes the workflow"
+    }
+  },
+  "entity": {
+    "y:source/17f055e5515ab4c30251ea3f16e3188c": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "procedure",
+      "yuen:file": "delivery_procedure.md",
+      "yuen:sha256": "9a98840e2a559185"
+    },
+    "y:artifact/bff8633f93604c39edd0123431060840": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dandori \"arrange_delivery.flow\" task book_next_day",
+      "yuen:sha256": "06fdb81a96fb18d4",
+      "yuen:end": "item"
+    },
+    "y:artifact/5b14a504fcfe607dc48db968edaa5777": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dandori \"arrange_delivery.flow\" task book_standard",
+      "yuen:sha256": "9275484a06b3b217",
+      "yuen:end": "item"
+    },
+    "y:artifact/5dcbbd826a57a380b5ab5032e65edf60": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dandori \"arrange_delivery.flow\" record Booking field tracking_number",
+      "yuen:sha256": "a65b57058f985f17",
+      "yuen:end": "item"
+    },
+    "y:artifact/ce12caf1805a984a0d8551ba1bd647b7": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dandori \"arrange_delivery.flow\" output tracking_number",
+      "yuen:sha256": "a65b57058f985f17",
+      "yuen:end": "item"
+    },
+    "y:requirement/next_day/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "next_day",
+      "yuen:version": "1",
+      "yuen:text": "A next-day parcel is booked with a carrier. When no van is free, it says so and stops",
+      "yuen:sha256": "854ea074c3b4093e"
+    },
+    "y:requirement/regular/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "regular",
+      "yuen:version": "1",
+      "yuen:text": "A standard parcel is booked with the post",
+      "yuen:sha256": "2d8beaedbaa117d5"
+    },
+    "y:requirement/tracking_number/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "tracking_number",
+      "yuen:version": "1",
+      "yuen:text": "Either way, a tracking number is returned",
+      "yuen:sha256": "42d300c1d0357478"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/next_day/v1",
+      "prov:agent": "y:role/logistics",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r12": {
+      "prov:entity": "y:requirement/regular/v1",
+      "prov:agent": "y:role/logistics",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r23": {
+      "prov:entity": "y:requirement/tracking_number/v1",
+      "prov:agent": "y:role/logistics",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/next_day/v1",
+      "prov:usedEntity": "y:source/17f055e5515ab4c30251ea3f16e3188c",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r13": {
+      "prov:generatedEntity": "y:requirement/regular/v1",
+      "prov:usedEntity": "y:source/17f055e5515ab4c30251ea3f16e3188c",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r24": {
+      "prov:generatedEntity": "y:requirement/tracking_number/v1",
+      "prov:usedEntity": "y:source/17f055e5515ab4c30251ea3f16e3188c",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/bff8633f93604c39edd0123431060840",
+      "prov:influencer": "y:requirement/next_day/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r14": {
+      "prov:influencee": "y:artifact/5b14a504fcfe607dc48db968edaa5777",
+      "prov:influencer": "y:requirement/regular/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r25": {
+      "prov:influencee": "y:artifact/5dcbbd826a57a380b5ab5032e65edf60",
+      "prov:influencer": "y:requirement/tracking_number/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r26": {
+      "prov:influencee": "y:artifact/ce12caf1805a984a0d8551ba1bd647b7",
+      "prov:influencer": "y:requirement/tracking_number/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/ee58b74279eba69bdeec0102e85be3a2": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "9a98840e2a559185",
+      "yuen:down": "854ea074c3b4093e",
+      "yuen:status": "ok"
+    },
+    "y:review/2a66fe24a1523e6217c263beb29ec2ea": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "854ea074c3b4093e",
+      "yuen:down": "06fdb81a96fb18d4",
+      "yuen:status": "ok"
+    },
+    "y:waiver/3373bb203c3c417e67339543625e2d98": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "This material has no claim that runs the workflow",
+      "yuen:sha256": "854ea074c3b4093e",
+      "yuen:status": "ok"
+    },
+    "y:review/67b0cdaac517804fa808ba756d3c560d": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "9a98840e2a559185",
+      "yuen:down": "2d8beaedbaa117d5",
+      "yuen:status": "ok"
+    },
+    "y:review/7ab8ad3306bb39f71bf33b3397fb0bbf": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "2d8beaedbaa117d5",
+      "yuen:down": "9275484a06b3b217",
+      "yuen:status": "ok"
+    },
+    "y:waiver/b74ea1906bb022b75f817c0551b5746d": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "This material has no claim that runs the workflow",
+      "yuen:sha256": "2d8beaedbaa117d5",
+      "yuen:status": "ok"
+    },
+    "y:review/8794445b8237ef53a3176ed212f7b18b": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "9a98840e2a559185",
+      "yuen:down": "42d300c1d0357478",
+      "yuen:status": "ok"
+    },
+    "y:review/2d128f9d68c1cca7a8abc616afd99c1a": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "42d300c1d0357478",
+      "yuen:down": "a65b57058f985f17",
+      "yuen:status": "ok"
+    },
+    "y:review/7658cb12662799532f48afd0d80ae79c": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "42d300c1d0357478",
+      "yuen:down": "a65b57058f985f17",
+      "yuen:status": "ok"
+    },
+    "y:waiver/5c4c0148f5cbc56a7ab23f5899c290aa": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "This material has no claim that runs the workflow",
+      "yuen:sha256": "42d300c1d0357478",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r4": {
+      "prov:activity": "y:review/ee58b74279eba69bdeec0102e85be3a2",
+      "prov:entity": "y:source/17f055e5515ab4c30251ea3f16e3188c"
+    },
+    "_:r5": {
+      "prov:activity": "y:review/ee58b74279eba69bdeec0102e85be3a2",
+      "prov:entity": "y:requirement/next_day/v1"
+    },
+    "_:r7": {
+      "prov:activity": "y:review/2a66fe24a1523e6217c263beb29ec2ea",
+      "prov:entity": "y:requirement/next_day/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/2a66fe24a1523e6217c263beb29ec2ea",
+      "prov:entity": "y:artifact/bff8633f93604c39edd0123431060840"
+    },
+    "_:r10": {
+      "prov:activity": "y:waiver/3373bb203c3c417e67339543625e2d98",
+      "prov:entity": "y:requirement/next_day/v1"
+    },
+    "_:r15": {
+      "prov:activity": "y:review/67b0cdaac517804fa808ba756d3c560d",
+      "prov:entity": "y:source/17f055e5515ab4c30251ea3f16e3188c"
+    },
+    "_:r16": {
+      "prov:activity": "y:review/67b0cdaac517804fa808ba756d3c560d",
+      "prov:entity": "y:requirement/regular/v1"
+    },
+    "_:r18": {
+      "prov:activity": "y:review/7ab8ad3306bb39f71bf33b3397fb0bbf",
+      "prov:entity": "y:requirement/regular/v1"
+    },
+    "_:r19": {
+      "prov:activity": "y:review/7ab8ad3306bb39f71bf33b3397fb0bbf",
+      "prov:entity": "y:artifact/5b14a504fcfe607dc48db968edaa5777"
+    },
+    "_:r21": {
+      "prov:activity": "y:waiver/b74ea1906bb022b75f817c0551b5746d",
+      "prov:entity": "y:requirement/regular/v1"
+    },
+    "_:r27": {
+      "prov:activity": "y:review/8794445b8237ef53a3176ed212f7b18b",
+      "prov:entity": "y:source/17f055e5515ab4c30251ea3f16e3188c"
+    },
+    "_:r28": {
+      "prov:activity": "y:review/8794445b8237ef53a3176ed212f7b18b",
+      "prov:entity": "y:requirement/tracking_number/v1"
+    },
+    "_:r30": {
+      "prov:activity": "y:review/2d128f9d68c1cca7a8abc616afd99c1a",
+      "prov:entity": "y:requirement/tracking_number/v1"
+    },
+    "_:r31": {
+      "prov:activity": "y:review/2d128f9d68c1cca7a8abc616afd99c1a",
+      "prov:entity": "y:artifact/5dcbbd826a57a380b5ab5032e65edf60"
+    },
+    "_:r33": {
+      "prov:activity": "y:review/7658cb12662799532f48afd0d80ae79c",
+      "prov:entity": "y:requirement/tracking_number/v1"
+    },
+    "_:r34": {
+      "prov:activity": "y:review/7658cb12662799532f48afd0d80ae79c",
+      "prov:entity": "y:artifact/ce12caf1805a984a0d8551ba1bd647b7"
+    },
+    "_:r36": {
+      "prov:activity": "y:waiver/5c4c0148f5cbc56a7ab23f5899c290aa",
+      "prov:entity": "y:requirement/tracking_number/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r6": {
+      "prov:activity": "y:review/ee58b74279eba69bdeec0102e85be3a2",
+      "prov:agent": "y:role/logistics"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/2a66fe24a1523e6217c263beb29ec2ea",
+      "prov:agent": "y:role/development"
+    },
+    "_:r11": {
+      "prov:activity": "y:waiver/3373bb203c3c417e67339543625e2d98",
+      "prov:agent": "y:role/logistics"
+    },
+    "_:r17": {
+      "prov:activity": "y:review/67b0cdaac517804fa808ba756d3c560d",
+      "prov:agent": "y:role/logistics"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/7ab8ad3306bb39f71bf33b3397fb0bbf",
+      "prov:agent": "y:role/development"
+    },
+    "_:r22": {
+      "prov:activity": "y:waiver/b74ea1906bb022b75f817c0551b5746d",
+      "prov:agent": "y:role/logistics"
+    },
+    "_:r29": {
+      "prov:activity": "y:review/8794445b8237ef53a3176ed212f7b18b",
+      "prov:agent": "y:role/logistics"
+    },
+    "_:r32": {
+      "prov:activity": "y:review/2d128f9d68c1cca7a8abc616afd99c1a",
+      "prov:agent": "y:role/development"
+    },
+    "_:r35": {
+      "prov:activity": "y:review/7658cb12662799532f48afd0d80ae79c",
+      "prov:agent": "y:role/development"
+    },
+    "_:r37": {
+      "prov:activity": "y:waiver/5c4c0148f5cbc56a7ab23f5899c290aa",
+      "prov:agent": "y:role/logistics"
+    }
+  }
+}

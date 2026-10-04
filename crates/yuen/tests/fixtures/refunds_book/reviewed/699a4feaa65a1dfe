@@ -1,0 +1,60 @@
+{
+  "accounts": {
+    "refundable": {
+      "description": "what is left to refund on the order",
+      "lower": {
+        "refused_as": "refund_exceeds_sale",
+        "value": 0
+      },
+      "outside": false,
+      "params": [
+        "order"
+      ],
+      "unit": "USD",
+      "upper": null
+    },
+    "sales": {
+      "description": null,
+      "lower": null,
+      "outside": true,
+      "params": [],
+      "unit": "USD",
+      "upper": null
+    }
+  },
+  "description": null,
+  "key": [
+    "order"
+  ],
+  "moves": [
+    {
+      "amount": {
+        "param": "amount"
+      },
+      "from": {
+        "account": "sales",
+        "args": []
+      },
+      "to": {
+        "account": "refundable",
+        "args": [
+          {
+            "param": "order"
+          }
+        ]
+      }
+    }
+  ],
+  "params": [
+    {
+      "name": "order",
+      "type": "string"
+    },
+    {
+      "name": "amount",
+      "type": "amount",
+      "unit": "USD"
+    }
+  ],
+  "pending": null
+}

@@ -1,0 +1,4 @@
+エラー[E002]: tests/mutants/E002_reserved_word_as_a_name/payment.req:5:6: `text` は yuen の語なので、役割の名前にできません
+     5 | role text "Writes the code"
+  = 名前に使えないのは、行頭の語と、要件の中の語（確かめた記録の語を含む）です。
+tests/mutants/E002_reserved_word_as_a_name: エラー 1 件

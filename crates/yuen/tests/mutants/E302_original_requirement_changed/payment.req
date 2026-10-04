@@ -1,0 +1,24 @@
+requirements payment v1
+description "A test material. The rules are decided for the example, and are no company's"
+
+role accounting "Decides the rules of payment"
+role development "Writes the code"
+
+requirement payment_policy
+  text "An invoice received is paid in the next month, together with the others of its closing day"
+  owner accounting
+  decided 2026-10-03 by accounting "decided for the example"
+  not satisfied "No code meets the policy itself. The requirement below does"
+    approved 2026-10-03 by accounting sha256:fa5625d6e2c744f7
+  not verified "The requirement below checks it"
+    approved 2026-10-03 by accounting sha256:fa5625d6e2c744f7
+
+requirement payment_day
+  text "Closes on the 20th, pays on the 10th of the next month"
+  owner accounting
+  from payment_policy
+    reviewed 2026-10-03 by accounting sha256:fa5625d6e2c744f7 -> sha256:e82245878273672f
+  satisfied by file "pay.py"
+    reviewed 2026-10-03 by accounting sha256:e82245878273672f -> sha256:8a668601c703003d
+  not verified "Accounting compares them once a month"
+    approved 2026-10-03 by accounting sha256:e82245878273672f

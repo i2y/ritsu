@@ -1,0 +1,255 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/ordering": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "ordering",
+      "yuen:description": "Decides the terms of ordering"
+    }
+  },
+  "entity": {
+    "y:source/0cd50a0433b618992599f8a4d8a7a8f5": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "glossary",
+      "yuen:file": "glossary.md",
+      "yuen:sha256": "cb130a5f6f2a81ec"
+    },
+    "y:artifact/2978461348d8beee4d3b7a4dccb82caf": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "sakai \"contexts/ordering.ctx\" term order",
+      "yuen:sha256": "299fcb6a6845f6af",
+      "yuen:end": "item"
+    },
+    "y:artifact/40ca4a4cd789873190a5917a9ea5db32": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "sakai \"contexts/ordering.ctx\" term cancel",
+      "yuen:sha256": "4687c56296431a6b",
+      "yuen:end": "item"
+    },
+    "y:requirement/order/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "order",
+      "yuen:version": "1",
+      "yuen:text": "An order is a purchase the customer has confirmed, and it does not disappear when it is cancelled",
+      "yuen:sha256": "419ff25fab796bd2"
+    },
+    "y:requirement/cancel/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "cancel",
+      "yuen:version": "1",
+      "yuen:text": "Cancel is cancelling an order before it ships, at the customer's request",
+      "yuen:sha256": "9937cc2b5ce6aa4b"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/order/v1",
+      "prov:agent": "y:role/ordering",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r12": {
+      "prov:entity": "y:requirement/cancel/v1",
+      "prov:agent": "y:role/ordering",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/order/v1",
+      "prov:usedEntity": "y:source/0cd50a0433b618992599f8a4d8a7a8f5",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r13": {
+      "prov:generatedEntity": "y:requirement/cancel/v1",
+      "prov:usedEntity": "y:source/0cd50a0433b618992599f8a4d8a7a8f5",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/2978461348d8beee4d3b7a4dccb82caf",
+      "prov:influencer": "y:requirement/order/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r14": {
+      "prov:influencee": "y:artifact/40ca4a4cd789873190a5917a9ea5db32",
+      "prov:influencer": "y:requirement/cancel/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/2405486e6f1216751021f7f3571ba333": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "cb130a5f6f2a81ec",
+      "yuen:down": "419ff25fab796bd2",
+      "yuen:status": "ok"
+    },
+    "y:review/261e216aa556fd79f3ff0801c329b73f": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "419ff25fab796bd2",
+      "yuen:down": "299fcb6a6845f6af",
+      "yuen:status": "ok"
+    },
+    "y:waiver/7ae9eb9c78c65228a87b4d7a76d5f4f0": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "This material has no claim that checks how the word is used",
+      "yuen:sha256": "419ff25fab796bd2",
+      "yuen:status": "ok"
+    },
+    "y:review/fa06979e9ef0954bf856b176c977fe65": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "cb130a5f6f2a81ec",
+      "yuen:down": "9937cc2b5ce6aa4b",
+      "yuen:status": "ok"
+    },
+    "y:review/b29902cc046bf18afd199200c061a4c3": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "9937cc2b5ce6aa4b",
+      "yuen:down": "4687c56296431a6b",
+      "yuen:status": "ok"
+    },
+    "y:waiver/d1bb1bd39e054a76467a2dcf91cadd0b": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "This material has no claim that checks how the word is used",
+      "yuen:sha256": "9937cc2b5ce6aa4b",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r4": {
+      "prov:activity": "y:review/2405486e6f1216751021f7f3571ba333",
+      "prov:entity": "y:source/0cd50a0433b618992599f8a4d8a7a8f5"
+    },
+    "_:r5": {
+      "prov:activity": "y:review/2405486e6f1216751021f7f3571ba333",
+      "prov:entity": "y:requirement/order/v1"
+    },
+    "_:r7": {
+      "prov:activity": "y:review/261e216aa556fd79f3ff0801c329b73f",
+      "prov:entity": "y:requirement/order/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/261e216aa556fd79f3ff0801c329b73f",
+      "prov:entity": "y:artifact/2978461348d8beee4d3b7a4dccb82caf"
+    },
+    "_:r10": {
+      "prov:activity": "y:waiver/7ae9eb9c78c65228a87b4d7a76d5f4f0",
+      "prov:entity": "y:requirement/order/v1"
+    },
+    "_:r15": {
+      "prov:activity": "y:review/fa06979e9ef0954bf856b176c977fe65",
+      "prov:entity": "y:source/0cd50a0433b618992599f8a4d8a7a8f5"
+    },
+    "_:r16": {
+      "prov:activity": "y:review/fa06979e9ef0954bf856b176c977fe65",
+      "prov:entity": "y:requirement/cancel/v1"
+    },
+    "_:r18": {
+      "prov:activity": "y:review/b29902cc046bf18afd199200c061a4c3",
+      "prov:entity": "y:requirement/cancel/v1"
+    },
+    "_:r19": {
+      "prov:activity": "y:review/b29902cc046bf18afd199200c061a4c3",
+      "prov:entity": "y:artifact/40ca4a4cd789873190a5917a9ea5db32"
+    },
+    "_:r21": {
+      "prov:activity": "y:waiver/d1bb1bd39e054a76467a2dcf91cadd0b",
+      "prov:entity": "y:requirement/cancel/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r6": {
+      "prov:activity": "y:review/2405486e6f1216751021f7f3571ba333",
+      "prov:agent": "y:role/ordering"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/261e216aa556fd79f3ff0801c329b73f",
+      "prov:agent": "y:role/ordering"
+    },
+    "_:r11": {
+      "prov:activity": "y:waiver/7ae9eb9c78c65228a87b4d7a76d5f4f0",
+      "prov:agent": "y:role/ordering"
+    },
+    "_:r17": {
+      "prov:activity": "y:review/fa06979e9ef0954bf856b176c977fe65",
+      "prov:agent": "y:role/ordering"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/b29902cc046bf18afd199200c061a4c3",
+      "prov:agent": "y:role/ordering"
+    },
+    "_:r22": {
+      "prov:activity": "y:waiver/d1bb1bd39e054a76467a2dcf91cadd0b",
+      "prov:agent": "y:role/ordering"
+    }
+  }
+}

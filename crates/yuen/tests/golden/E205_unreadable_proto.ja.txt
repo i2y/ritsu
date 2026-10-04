@@ -1,0 +1,4 @@
+エラー[E205]: tests/mutants/E205_unreadable_proto/example.req:8:16: tests/mutants/E205_unreadable_proto/a.proto を proto として読めません: `}` が要るところにファイルの終わりがあります
+     8 |   satisfied by proto "a.proto" message Order
+  = yuen は ritsu の .proto の読み手で読みます。proto3 の `.proto` に直します。
+tests/mutants/E205_unreadable_proto: エラー 1 件

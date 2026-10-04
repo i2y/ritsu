@@ -1,0 +1,9 @@
+table small_entity_fee(reduced_rate)  @cfr "§1.27"
+policy unique
+overrides standard_fee
+| reduced_period | small | months | -> extension_fee |
+| true           | true  | >0 <=1 | 94USD            |
+| true           | true  | >1 <=2 | 276USD           |
+| true           | true  | >2 <=3 | 636USD           |
+| true           | true  | >3 <=4 | 998USD           |
+| true           | true  | >4 <=5 | 1358USD          |

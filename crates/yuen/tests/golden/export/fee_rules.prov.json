@@ -1,0 +1,381 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/legal": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "legal",
+      "yuen:description": "Decides how the words of a regulation are read"
+    },
+    "y:role/development": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "development",
+      "yuen:description": "Writes and fixes the rule"
+    }
+  },
+  "entity": {
+    "y:source/ef91f1999398cb2003af11a7fc038d4a": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "cfr §1.17",
+      "yuen:law": "ecfr 37 CFR 1",
+      "yuen:asof": "2026-01-01",
+      "yuen:sha256": "9b48f2c46284140a"
+    },
+    "y:source/e1358790cec6eec183a72613d6ff9bc6": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "cfr §1.27",
+      "yuen:law": "ecfr 37 CFR 1",
+      "yuen:asof": "2026-01-01",
+      "yuen:sha256": "fea1289ebe564f77"
+    },
+    "y:artifact/6dedb39642b43c982c483f228d1768e2": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/extension_fees.rule\" table standard_fee",
+      "yuen:sha256": "9c75e7072bde2938",
+      "yuen:end": "item"
+    },
+    "y:artifact/baaf5727aa4645ad73bf7095bef5e2bd": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/extension_fees.rule\" clause no_extension",
+      "yuen:sha256": "2391acd18f47abcb",
+      "yuen:end": "item"
+    },
+    "y:artifact/1e6ab1238825f64e97445a75df060ba7": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/extension_fees.rule\" table small_entity_fee",
+      "yuen:sha256": "5fd98a7705c641eb",
+      "yuen:end": "item"
+    },
+    "y:artifact/ac548101f4e3b6af5537b50d07b48797": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/extension_fees.rule\" define reduced_period",
+      "yuen:sha256": "611179d6b0c376c4",
+      "yuen:end": "item"
+    },
+    "y:artifact/5ce738195105a4614a2a417c255b8fb9": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/extension_fees.rule\"",
+      "yuen:sha256": "a6276fdf51f978ba",
+      "yuen:end": "file"
+    },
+    "y:requirement/standard_fee/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "standard_fee",
+      "yuen:version": "1",
+      "yuen:text": "The fee for an extension of time to reply is set by the month of the reply, from the first to the fifth, and no fee is charged when no extension is taken",
+      "yuen:inForce": "2026-01-01..",
+      "yuen:sha256": "717b0eb89e528849"
+    },
+    "y:requirement/small_entity_fee/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "small_entity_fee",
+      "yuen:version": "1",
+      "yuen:text": "A small entity pays the lower fee of its own table for a reply made by the date the table holds to",
+      "yuen:inForce": "2026-01-01..",
+      "yuen:sha256": "a1a6e62ebeedb230"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/standard_fee/v1",
+      "prov:agent": "y:role/legal",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r16": {
+      "prov:entity": "y:requirement/small_entity_fee/v1",
+      "prov:agent": "y:role/legal",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/standard_fee/v1",
+      "prov:usedEntity": "y:source/ef91f1999398cb2003af11a7fc038d4a",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r17": {
+      "prov:generatedEntity": "y:requirement/small_entity_fee/v1",
+      "prov:usedEntity": "y:source/e1358790cec6eec183a72613d6ff9bc6",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/6dedb39642b43c982c483f228d1768e2",
+      "prov:influencer": "y:requirement/standard_fee/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r4": {
+      "prov:influencee": "y:artifact/baaf5727aa4645ad73bf7095bef5e2bd",
+      "prov:influencer": "y:requirement/standard_fee/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r18": {
+      "prov:influencee": "y:artifact/1e6ab1238825f64e97445a75df060ba7",
+      "prov:influencer": "y:requirement/small_entity_fee/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r19": {
+      "prov:influencee": "y:artifact/ac548101f4e3b6af5537b50d07b48797",
+      "prov:influencer": "y:requirement/small_entity_fee/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r31": {
+      "prov:influencee": "y:artifact/5ce738195105a4614a2a417c255b8fb9",
+      "prov:influencer": "y:source/ef91f1999398cb2003af11a7fc038d4a",
+      "prov:type": {
+        "$": "yuen:pins",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r32": {
+      "prov:influencee": "y:artifact/5ce738195105a4614a2a417c255b8fb9",
+      "prov:influencer": "y:source/e1358790cec6eec183a72613d6ff9bc6",
+      "prov:type": {
+        "$": "yuen:pins",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/aac871b5329cd311df0b17c8a05ed8db": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "9b48f2c46284140a",
+      "yuen:down": "717b0eb89e528849",
+      "yuen:status": "ok"
+    },
+    "y:review/dde595b66be2748ac9cc2184d59c6bd1": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "717b0eb89e528849",
+      "yuen:down": "9c75e7072bde2938",
+      "yuen:status": "ok"
+    },
+    "y:review/ee10f5f5cefbe2ecf17d16f77a1df662": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "717b0eb89e528849",
+      "yuen:down": "2391acd18f47abcb",
+      "yuen:status": "ok"
+    },
+    "y:waiver/b9696b03e0dbcbe221f90c6f43a89b42": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "That the table covers every month and that its rows do not overlap is checked by rulec. This material has no claim that names it",
+      "yuen:sha256": "717b0eb89e528849",
+      "yuen:status": "ok"
+    },
+    "y:review/429a78b590a2c7fec48df8fc2fb4bfdc": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "fea1289ebe564f77",
+      "yuen:down": "a1a6e62ebeedb230",
+      "yuen:status": "ok"
+    },
+    "y:review/a43f8bc73a763354fa7429c6d37998c3": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "a1a6e62ebeedb230",
+      "yuen:down": "5fd98a7705c641eb",
+      "yuen:status": "ok"
+    },
+    "y:review/1e074933a8b742118d2793a3bfcba92a": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "a1a6e62ebeedb230",
+      "yuen:down": "611179d6b0c376c4",
+      "yuen:status": "ok"
+    },
+    "y:waiver/8f35e8027683a6587a1edc2bd677ac2d": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "That the small entity's table is read before the standard table is checked by rulec. This material has no claim that names it",
+      "yuen:sha256": "a1a6e62ebeedb230",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r5": {
+      "prov:activity": "y:review/aac871b5329cd311df0b17c8a05ed8db",
+      "prov:entity": "y:source/ef91f1999398cb2003af11a7fc038d4a"
+    },
+    "_:r6": {
+      "prov:activity": "y:review/aac871b5329cd311df0b17c8a05ed8db",
+      "prov:entity": "y:requirement/standard_fee/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/dde595b66be2748ac9cc2184d59c6bd1",
+      "prov:entity": "y:requirement/standard_fee/v1"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/dde595b66be2748ac9cc2184d59c6bd1",
+      "prov:entity": "y:artifact/6dedb39642b43c982c483f228d1768e2"
+    },
+    "_:r11": {
+      "prov:activity": "y:review/ee10f5f5cefbe2ecf17d16f77a1df662",
+      "prov:entity": "y:requirement/standard_fee/v1"
+    },
+    "_:r12": {
+      "prov:activity": "y:review/ee10f5f5cefbe2ecf17d16f77a1df662",
+      "prov:entity": "y:artifact/baaf5727aa4645ad73bf7095bef5e2bd"
+    },
+    "_:r14": {
+      "prov:activity": "y:waiver/b9696b03e0dbcbe221f90c6f43a89b42",
+      "prov:entity": "y:requirement/standard_fee/v1"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/429a78b590a2c7fec48df8fc2fb4bfdc",
+      "prov:entity": "y:source/e1358790cec6eec183a72613d6ff9bc6"
+    },
+    "_:r21": {
+      "prov:activity": "y:review/429a78b590a2c7fec48df8fc2fb4bfdc",
+      "prov:entity": "y:requirement/small_entity_fee/v1"
+    },
+    "_:r23": {
+      "prov:activity": "y:review/a43f8bc73a763354fa7429c6d37998c3",
+      "prov:entity": "y:requirement/small_entity_fee/v1"
+    },
+    "_:r24": {
+      "prov:activity": "y:review/a43f8bc73a763354fa7429c6d37998c3",
+      "prov:entity": "y:artifact/1e6ab1238825f64e97445a75df060ba7"
+    },
+    "_:r26": {
+      "prov:activity": "y:review/1e074933a8b742118d2793a3bfcba92a",
+      "prov:entity": "y:requirement/small_entity_fee/v1"
+    },
+    "_:r27": {
+      "prov:activity": "y:review/1e074933a8b742118d2793a3bfcba92a",
+      "prov:entity": "y:artifact/ac548101f4e3b6af5537b50d07b48797"
+    },
+    "_:r29": {
+      "prov:activity": "y:waiver/8f35e8027683a6587a1edc2bd677ac2d",
+      "prov:entity": "y:requirement/small_entity_fee/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r7": {
+      "prov:activity": "y:review/aac871b5329cd311df0b17c8a05ed8db",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r10": {
+      "prov:activity": "y:review/dde595b66be2748ac9cc2184d59c6bd1",
+      "prov:agent": "y:role/development"
+    },
+    "_:r13": {
+      "prov:activity": "y:review/ee10f5f5cefbe2ecf17d16f77a1df662",
+      "prov:agent": "y:role/development"
+    },
+    "_:r15": {
+      "prov:activity": "y:waiver/b9696b03e0dbcbe221f90c6f43a89b42",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r22": {
+      "prov:activity": "y:review/429a78b590a2c7fec48df8fc2fb4bfdc",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r25": {
+      "prov:activity": "y:review/a43f8bc73a763354fa7429c6d37998c3",
+      "prov:agent": "y:role/development"
+    },
+    "_:r28": {
+      "prov:activity": "y:review/1e074933a8b742118d2793a3bfcba92a",
+      "prov:agent": "y:role/development"
+    },
+    "_:r30": {
+      "prov:activity": "y:waiver/8f35e8027683a6587a1edc2bd677ac2d",
+      "prov:agent": "y:role/legal"
+    }
+  }
+}

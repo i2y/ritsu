@@ -1,0 +1,41 @@
+requirements delivery v1
+description "A test material: the tasks and records of dandori's example arrange_delivery.flow, named by where in the delivery procedure they come from"
+
+role logistics "Decides the delivery procedure"
+role development "Writes and fixes the workflow"
+
+source procedure = file "delivery_procedure.md" sha256:9a98840e2a559185
+
+scope dandori "arrange_delivery.flow" task
+
+requirement next_day
+  text "A next-day parcel is booked with a carrier. When no van is free, it says so and stops"
+  owner logistics
+  from @procedure
+    reviewed 2026-10-04 by logistics sha256:9a98840e2a559185 -> sha256:854ea074c3b4093e
+  satisfied by dandori "arrange_delivery.flow" task book_next_day
+    reviewed 2026-10-04 by development sha256:854ea074c3b4093e -> sha256:06fdb81a96fb18d4
+  not verified "This material has no claim that runs the workflow"
+    approved 2026-10-04 by logistics sha256:854ea074c3b4093e
+
+requirement regular
+  text "A standard parcel is booked with the post"
+  owner logistics
+  from @procedure
+    reviewed 2026-10-04 by logistics sha256:9a98840e2a559185 -> sha256:2d8beaedbaa117d5
+  satisfied by dandori "arrange_delivery.flow" task book_standard
+    reviewed 2026-10-04 by development sha256:2d8beaedbaa117d5 -> sha256:9275484a06b3b217
+  not verified "This material has no claim that runs the workflow"
+    approved 2026-10-04 by logistics sha256:2d8beaedbaa117d5
+
+requirement tracking_number
+  text "Either way, a tracking number is returned"
+  owner logistics
+  from @procedure
+    reviewed 2026-10-04 by logistics sha256:9a98840e2a559185 -> sha256:42d300c1d0357478
+  satisfied by dandori "arrange_delivery.flow" record Booking field tracking_number
+    reviewed 2026-10-04 by development sha256:42d300c1d0357478 -> sha256:a65b57058f985f17
+  satisfied by dandori "arrange_delivery.flow" output tracking_number
+    reviewed 2026-10-04 by development sha256:42d300c1d0357478 -> sha256:a65b57058f985f17
+  not verified "This material has no claim that runs the workflow"
+    approved 2026-10-04 by logistics sha256:42d300c1d0357478

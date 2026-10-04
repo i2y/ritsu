@@ -1,0 +1,4 @@
+error[E012]: tests/mutants/E012_yuen_named/payment.req:11:16: A `yuen` naming is not written in a .req
+    11 |   satisfied by yuen "policy.req" requirement payment_policy
+  = One requirement points at another with `from <requirement>`, by name; a `yuen` naming is how the other languages point at a requirement.
+tests/mutants/E012_yuen_named: 1 error

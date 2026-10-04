@@ -1,0 +1,3 @@
+error[E001]: tests/mutants/E001_unclosed_string/payment.req:8:8: The string is not closed (a `"` is missing)
+     8 |   text "Closes on the 20th, pays on the 10th of the next month
+tests/mutants/E001_unclosed_string: 1 error

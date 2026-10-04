@@ -1,0 +1,5 @@
+error[E304]: tests/mutants/E304_no_approval/period_of_months.req:34:3: This waiver has not been approved yet
+    34 |   not verified "A function that writes the rule's cases as they are, held against every origin of 2000 to 2027 and every month count of 1 to 12, was checked in koyomi's design stage. This material has no claim that checks it"
+  = A waiver is a decision too: once the owner has read the reason and approves it, `yuen review` writes who approved it, when, and the requirement's hash under it.
+  = Once a person has looked: yuen review tests/mutants/E304_no_approval --root tests/mutants/E304_no_approval --at tests/mutants/E304_no_approval/period_of_months.req:34 --by <role>
+tests/mutants/E304_no_approval: 1 error

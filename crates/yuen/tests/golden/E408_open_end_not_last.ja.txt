@@ -1,0 +1,4 @@
+エラー[E408]: tests/mutants/E408_open_end_not_last/payment.req:8:3: 要件「payment_day」の v1 は終わりを開けていますが、最後の版ではありません
+     8 |   in force 2026-01-01..
+  = 終わりを開けられるのは最後の版だけです。次の版が始まる前の日を、終わりに書きます。
+tests/mutants/E408_open_end_not_last: エラー 1 件

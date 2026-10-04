@@ -1,0 +1,5 @@
+error[E409]: tests/mutants/E409_replacement_starts_a_day_late/payment.req:18:3: tenth_day replaces end_of_month, and does not start on 2027-04-01, the day after end_of_month ends (2027-03-31)
+    18 |   in force 2027-04-02..
+  = Its period now is `2027-04-02..`.
+  = The line, fixed: in force 2027-04-01..
+tests/mutants/E409_replacement_starts_a_day_late: 1 error

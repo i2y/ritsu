@@ -1,0 +1,4 @@
+エラー[E002]: tests/mutants/E002_unknown_line/payment.req:10:3: 要件の中に `because` で始まる行はありません
+    10 |   because "example"
+  = 要件の中は、`text`、`in force`、`owner`、`replaces`、`from`、`decided`、`satisfied by` と `not satisfied`、`verified by` と `not verified` の順に書きます。
+tests/mutants/E002_unknown_line: エラー 1 件

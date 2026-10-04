@@ -1,0 +1,13 @@
+エラー[E107]: tests/mutants/E107_same_article_different_text/fire_extinguishers.req:14:14: travel_distance が読んだ osha §1910.157 と、rulec "rules/osha_extinguisher.rule" が固定している §1910.157 の本文が違います
+    14 |   from @osha "§1910.157"
+  = 要件の写しは tests/mutants/E107_same_article_different_text/sources/law/29-CFR-1910@2026-01-01/1910.157.xml、rulec "rules/osha_extinguisher.rule" の写しは tests/mutants/E107_same_article_different_text/rules/sources/law/29-CFR-1910@2026-01-01/1910.157.xml（2026-01-01 時点）です。
+  = どちらかの写しが古いということです。改正を確かめ、古いほうを取り直して固定し直します（yuen source fetch と yuen source pin、または規則やカレンダーの source fetch と source pin）。
+  要件の写しから rulec "rules/osha_extinguisher.rule" の写しへの差分:
+      @@ -9,5 +9,5 @@
+        (5) The employer shall remove from service all soldered or riveted shell self-generating soda acid or self-generating foam or gas cartridge water type portable fire extinguishers which are operated by inverting the extinguisher to rupture the cartridge or to initiate an uncontrollable pressure generating chemical reaction to expel the agent.
+        (d) Selection and distribution. (1) Portable fire extinguishers shall be provided for employee use and selected and distributed based on the classes of anticipated workplace fires and on the size and degree of hazard which would affect their use.
+      - (2) The employer shall distribute portable fire extinguishers for use by employees on Class A fires so that the travel distance for employees to any extinguisher is 70 feet (22.9 m) or less.
+      + (2) The employer shall distribute portable fire extinguishers for use by employees on Class A fires so that the travel distance for employees to any extinguisher is 75 feet (22.9 m) or less.
+        (3) The employer may use uniformly spaced standpipe systems or hose stations connected to a sprinkler system installed for emergency use by employees instead of Class A portable fire extinguishers, provided that such systems meet the respective requirements of § 1910.158 or § 1910.159, that they provide total coverage of the area to be protected, and that employees are trained at least annually in their use.
+        (4) The employer shall distribute portable fire extinguishers for use by employees on Class B fires so that the travel distance from the Class B hazard area to any extinguisher is 50 feet (15.2 m) or less.
+tests/mutants/E107_same_article_different_text: エラー 1 件

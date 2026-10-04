@@ -1,0 +1,12 @@
+rule fee v1
+
+inputs
+  amount : money[JPY]  range >=0JPY <=10000JPY
+
+outputs
+  fee : money[JPY]  round down(1JPY)
+
+table fees
+| amount       | -> fee  |
+| <5000JPY     | 500JPY  |
+| >5000JPY     | 0JPY    |

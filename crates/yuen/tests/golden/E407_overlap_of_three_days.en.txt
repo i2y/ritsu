@@ -1,0 +1,7 @@
+error[E407]: tests/mutants/E407_overlap_of_three_days/payment.req:18:3: payment_day v1 and v2 are both in force on 2027-03-29..2027-03-31
+    18 |   in force 2027-03-29..
+  = v1 is in force `2026-01-01..2027-03-31`, and v2 `2027-03-29..`; one version holds on a day.
+  in the order of the periods:
+      v1 in force 2026-01-01..2027-03-31 (tests/mutants/E407_overlap_of_three_days/payment.req:8)
+      v2 in force 2027-03-29.. (tests/mutants/E407_overlap_of_three_days/payment.req:18)
+tests/mutants/E407_overlap_of_three_days: 1 error

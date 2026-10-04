@@ -1,0 +1,11 @@
+calendar tokyo_business_days v1
+description "Saturdays, Sundays, Japan's national holidays and other days off, and 29 December to 3 January are closed. The English version of 東京の営業日.cal"
+offset +09:00
+
+source national_holidays = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
+  format csv shift_jis
+  covers 1955-01-01..2027-12-31
+
+closed weekly sat, sun
+closed national_holidays
+closed every 12-29..01-03 "New Year holidays"

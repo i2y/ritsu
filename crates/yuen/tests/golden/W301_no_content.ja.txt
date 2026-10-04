@@ -1,0 +1,20 @@
+エラー[E302]: tests/mutants/W301_no_content/period_of_months.req:41:3: cfr §1.7 は、2026-10-03 に legal がこのリンクを確かめたあとで変わりました
+    41 |   from @cfr "§1.7"
+  = cfr §1.7 はいま sha256:4b9dea2a1e492f63 です。確かめたときは sha256:01de176ebe4740d7 でした。
+  = 確かめたら: yuen review tests/mutants/W301_no_content --root tests/mutants/W301_no_content --at tests/mutants/W301_no_content/period_of_months.req:41 --by <役割>
+警告[W301]: tests/mutants/W301_no_content/period_of_months.req:41:3: 2026-10-03 に確かめたときの中身が reviewed/ に無いので、変わったところを見せられません
+    41 |   from @cfr "§1.7"
+  = tests/mutants/W301_no_content/period_of_months.req の隣の reviewed/01de176ebe4740d7 がありません。`yuen review` がリンクを確かめるときに書くファイルで、git に入れておきます。
+エラー[E302]: tests/mutants/W301_no_content/period_of_months.req:44:3: next_business_day の出どころ（cfr §1.7）が変わったので、このリンクを確かめ直します
+    44 |   satisfied by file "period_of_months.cal"
+  = 2026-10-03 に development が確かめたリンクです。
+  = next_business_day はいま sha256:28c83108ffece677 です。確かめたときは sha256:8d9c6066ea40430f でした。
+  = 確かめたら: yuen review tests/mutants/W301_no_content --root tests/mutants/W301_no_content --at tests/mutants/W301_no_content/period_of_months.req:44 --by <役割>
+警告[W301]: tests/mutants/W301_no_content/period_of_months.req:44:3: 2026-10-03 に確かめたときの中身が reviewed/ に無いので、変わったところを見せられません
+    44 |   satisfied by file "period_of_months.cal"
+  = tests/mutants/W301_no_content/period_of_months.req の隣の reviewed/8d9c6066ea40430f がありません。`yuen review` がリンクを確かめるときに書くファイルで、git に入れておきます。
+エラー[E304]: tests/mutants/W301_no_content/period_of_months.req:46:3: next_business_day が変わったので、この見送りを承認し直します（tests/mutants/W301_no_content/period_of_months.req:44 と同じ変更）
+    46 |   not verified "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim"
+  = 2026-10-03 に legal が承認した見送りです。
+  = 確かめたら: yuen review tests/mutants/W301_no_content --root tests/mutants/W301_no_content --at tests/mutants/W301_no_content/period_of_months.req:46 --by <役割>
+tests/mutants/W301_no_content: エラー 3 件、警告 2 件

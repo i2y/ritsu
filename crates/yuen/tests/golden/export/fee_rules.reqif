@@ -1,0 +1,569 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <THE-HEADER>
+    <REQ-IF-HEADER IDENTIFIER="_2b0b41cbaa5675075814842cdf6c21d7">
+      <CREATION-TIME>2026-10-04T00:00:00Z</CREATION-TIME>
+      <REQ-IF-TOOL-ID>yuen 0.1.0</REQ-IF-TOOL-ID>
+      <REQ-IF-VERSION>1.0</REQ-IF-VERSION>
+      <SOURCE-TOOL-ID>yuen 0.1.0</SOURCE-TOOL-ID>
+      <TITLE>extension_fees</TITLE>
+    </REQ-IF-HEADER>
+  </THE-HEADER>
+  <CORE-CONTENT>
+    <REQ-IF-CONTENT>
+      <DATATYPES>
+        <DATATYPE-DEFINITION-STRING IDENTIFIER="_32be546f997c9c83dced94b60229c8a6" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen string" MAX-LENGTH="100000"/>
+        <DATATYPE-DEFINITION-XHTML IDENTIFIER="_263168489adb4427155ad11893c9b71a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen xhtml"/>
+      </DATATYPES>
+      <SPEC-TYPES>
+        <SPEC-OBJECT-TYPE IDENTIFIER="_78405f0d7ed8bcbb711673cc8c4a4bb4" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen requirement">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_0e55a1623323e7efaa94ed254185f196" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.ForeignID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_86e2773d004ee20e74aa766f2ce351f3" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Name">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_53c969acbb77c12b793b52095a0ca59c" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Text">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_ca9ff16428087823eedc317e47afc0da" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.inForce">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_3066d61d13e61978b5093daf3448f446" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.owner">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_10b2c8aa7aa8351e17bc9aa38f52880f" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.decided">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_7ffe71e9e8ed2f78b159d299efe86c10" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.waived">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_3053884aad8bf228da5264102c7adaac" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.sha256">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_13771252e733d3434da73527976c1b22" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-OBJECT-TYPE IDENTIFIER="_82a6d3ab90a94a7ccf25b592606a5115" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen source">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_d25e08f6214748c0cd1d68fa1f87b80a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.ForeignID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_0b9aa24442f3ad57982a28447861b522" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Name">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_4fc7e75843037eb57c34609682b06ec8" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Text">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_1e09bce460a4dd79730f1f5407f250c8" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.law">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_136496664827b3bec533a03b9e4fd398" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.asof">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_f41e83db6af06a69d5804e09da82ad7b" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.revision">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_98a6b0f0202d9d6c4ee8d655ae4513ff" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.file">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_8a03008e174c00bb0e5a0ff55f022312" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.url">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_7314c50b9580cb3fab0eadf2fd681a6e" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.sha256">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-OBJECT-TYPE IDENTIFIER="_9ead4f4f276c9201130bf5c65e31cf9b" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen artifact">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_a0b93a2cd2f3c84d917442e8738a29f2" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.ForeignID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_1f6096fffb5ed2006bc20f2e3d15382d" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Name">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_0b735c9a0ac4d4a3d4349fc9d3d39210" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.sha256">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c905983964f6577658e837ff98752643" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.end">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_38ebadf3c7922dafd9bd709143b69410" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen from">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_309e5c9fc4d3093cabfe553f89398883" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedOn">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_de5a8b06f4ed15039cb9a8ce229e3882" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedBy">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_0412d94d758f9f274f57ea3801ecc1a5" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.up">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c4d6a9290a375591cd9afdab52a93f83" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.down">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_444acc8a6cf372af8a7a57ed2c063fe4" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-RELATION-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_43a798f0336eb0c0267b2c2c301a56a5" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen satisfied by">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_806b8ccc2a866d34cf305899d9f530f4" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedOn">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_f4b120327cf8e7466ec4aeb959fd4626" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedBy">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_b87a9ec95e675e99db67fa27f368682f" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.up">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_919e85b662746a5174590e7f97557d28" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.down">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_8b9b83b089a55c5fecbe786a836bffdb" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-RELATION-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_d16e2a866476b8b92a72e406745c9245" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen verified by">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_66d0775a01c0f55cd7e34bb43522a70d" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedOn">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c32c02714dad87e97bbd0639a88bfb3f" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedBy">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_65c7b8ae9aa05c66641aea9ac0930814" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.up">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_6eca6b127176dcf39ed8de7edb908604" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.down">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_711ab6b8a373db2b8a1e266b430a76e0" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-RELATION-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_1a0507407285a092120bc7a69ff8862a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen replaces"/>
+        <SPECIFICATION-TYPE IDENTIFIER="_820590da3b6bc96b1abc4c87219e99d1" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen requirements">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c044e086f813f00e08a35f6d1fe57d1d" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.file">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_4d29b822c24952edd439e093b5d3165a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.version">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_a839768f26076ff8651b726d23c1ccaa" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.description">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPECIFICATION-TYPE>
+        <SPECIFICATION-TYPE IDENTIFIER="_cbcb5eb37af5fd6294167ff3a8a1c59a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen list"/>
+        <RELATION-GROUP-TYPE IDENTIFIER="_241f53b5261e61efa600e572ce116499" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen relation group"/>
+      </SPEC-TYPES>
+      <SPEC-OBJECTS>
+        <SPEC-OBJECT IDENTIFIER="_4fae5720535f493ba47c1bc02fc70094" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="standard_fee v1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0e55a1623323e7efaa94ed254185f196</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_86e2773d004ee20e74aa766f2ce351f3</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>standard_fee</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_53c969acbb77c12b793b52095a0ca59c</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>The fee for an extension of time to reply is set by the month of the reply, from the first to the fifth, and no fee is charged when no extension is taken</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01..">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_ca9ff16428087823eedc317e47afc0da</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3066d61d13e61978b5093daf3448f446</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "That the table covers every month and that its rows do not overlap is checked by rulec. This material has no claim that names it"</xhtml:p><xhtml:p>approved 2026-10-04 by legal sha256:717b0eb89e528849</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="717b0eb89e528849">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_13771252e733d3434da73527976c1b22</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_78405f0d7ed8bcbb711673cc8c4a4bb4</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_02f0bf67022dc89cbb789d57342b5de0" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="small_entity_fee v1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0e55a1623323e7efaa94ed254185f196</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_86e2773d004ee20e74aa766f2ce351f3</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>small_entity_fee</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_53c969acbb77c12b793b52095a0ca59c</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>A small entity pays the lower fee of its own table for a reply made by the date the table holds to</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01..">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_ca9ff16428087823eedc317e47afc0da</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3066d61d13e61978b5093daf3448f446</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "That the small entity's table is read before the standard table is checked by rulec. This material has no claim that names it"</xhtml:p><xhtml:p>approved 2026-10-04 by legal sha256:a1a6e62ebeedb230</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="a1a6e62ebeedb230">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_13771252e733d3434da73527976c1b22</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_78405f0d7ed8bcbb711673cc8c4a4bb4</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_ef91f1999398cb2003af11a7fc038d4a" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="cfr §1.17">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_d25e08f6214748c0cd1d68fa1f87b80a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_0b9aa24442f3ad57982a28447861b522</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>cfr §1.17</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_4fc7e75843037eb57c34609682b06ec8</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>§ 1.17 Patent application and reexamination processing fees.</xhtml:p><xhtml:p>Link to an amendment published at 89 FR 92004, Nov. 20, 2024.</xhtml:p><xhtml:p>Link to a correction of the above amendment published at 90 FR 3037, Jan. 14, 2025.</xhtml:p><xhtml:p>Link to a correction published at 90 FR 3037, Jan. 14, 2025.</xhtml:p><xhtml:p>(a) Extension fees pursuant to § 1.136(a), except in provisional applications filed under § 1.53(c):</xhtml:p><xhtml:p>(1) For reply within first month:</xhtml:p><xhtml:p>Table 1 to Paragraph (a)(1)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$47.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>94.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>235.00</xhtml:p><xhtml:p>(2) For reply within second month:</xhtml:p><xhtml:p>Table 2 to Paragraph (a)(2)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$138.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>276.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>690.00</xhtml:p><xhtml:p>(3) For reply within third month:</xhtml:p><xhtml:p>Table 3 to Paragraph (a)(3)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$318.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>636.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>1,590.00</xhtml:p><xhtml:p>(4) For reply within fourth month:</xhtml:p><xhtml:p>Table 4 to Paragraph (a)(4)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$499.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>998.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>2,495.00</xhtml:p><xhtml:p>(5) For reply within fifth month:</xhtml:p><xhtml:p>Table 5 to Paragraph (a)(5)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$679.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>1,358.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>3,395.00</xhtml:p><xhtml:p>(b) For fees in proceedings before the Patent Trial and Appeal Board, see § 41.20 and § 42.15 of this title.</xhtml:p><xhtml:p>(c) For filing a request for prioritized examination under § 1.102(e):</xhtml:p><xhtml:p>Table 6 to Paragraph (c)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$903.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>1,806.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>4,515.00</xhtml:p><xhtml:p>(d) For correction of inventorship in an application after the first action on the merits:</xhtml:p><xhtml:p>Table 7 to Paragraph (d)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$138.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>276.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>690.00</xhtml:p><xhtml:p>(e) To request continued examination pursuant to § 1.114:</xhtml:p><xhtml:p>(1) For filing a first request for continued examination pursuant to § 1.114 in an application:</xhtml:p><xhtml:p>Table 8 to Paragraph (e)(1)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$300.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>600.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>1,500.00</xhtml:p><xhtml:p>(2) For filing a second or subsequent request for continued examination pursuant to § 1.114 in an application:</xhtml:p><xhtml:p>Table 9 to Paragraph (e)(2)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$572.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>1,144.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>2,860.00</xhtml:p><xhtml:p>(f) For filing a petition under one of the following sections that refers to this paragraph (f):</xhtml:p><xhtml:p>Table 10 to Paragraph (f)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$90.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>180.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>450.00</xhtml:p><xhtml:p>Note 1 to table 10 to paragraph (f):</xhtml:p><xhtml:p>§ 1.36(a)—for revocation of a power of attorney by fewer than all of the applicants.</xhtml:p><xhtml:p>§ 1.53(e)—to accord a filing date.</xhtml:p><xhtml:p>§ 1.182—for decision on a question not specifically provided for in an application for patent.</xhtml:p><xhtml:p>§ 1.183—to suspend the rules in an application for patent.</xhtml:p><xhtml:p>§ 1.741(b)—to accord a filing date to an application under § 1.740 for extension of a patent term.</xhtml:p><xhtml:p>§ 1.1023—to review the filing date of an international design application.</xhtml:p><xhtml:p>(g)(1) For filing a petition under one of the following sections which refers to this paragraph (g):</xhtml:p><xhtml:p>Table 11 to Paragraph (g)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$47.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>94.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>235.00</xhtml:p><xhtml:p>Note 2 to table 11 to paragraph (g)(1):</xhtml:p><xhtml:p>§ 1.12—for access to an assignment record.</xhtml:p><xhtml:p>§ 1.14—for access to an application.</xhtml:p><xhtml:p>§ 1.46—for filing an application on behalf of an inventor by a person who otherwise shows sufficient proprietary interest in the matter.</xhtml:p><xhtml:p>§ 1.55(f)—for filing a belated certified copy of a foreign application.</xhtml:p><xhtml:p>§ 1.55(g)—for filing a belated certified copy of a foreign application.</xhtml:p><xhtml:p>§ 1.57(a)—for filing a belated certified copy of a foreign application.</xhtml:p><xhtml:p>§ 1.59—for expungement of information.</xhtml:p><xhtml:p>§ 1.136(b)—for review of a request for extension of time when the provisions of § 1.136(a) are not available.</xhtml:p><xhtml:p>§ 1.377—for review of decision refusing to accept and record payment of a maintenance fee filed prior to expiration of a patent.</xhtml:p><xhtml:p>§ 1.550(c)—for patent owner requests for extension of time in ex parte reexamination proceedings.</xhtml:p><xhtml:p>§ 1.956—for patent owner requests for extension of time in inter partes reexamination proceedings.</xhtml:p><xhtml:p>§ 5.12 of this chapter—for expedited handling of a foreign filing license.</xhtml:p><xhtml:p>§ 5.15 of this chapter—for changing the scope of a license.</xhtml:p><xhtml:p>§ 5.25 of this chapter—for retroactive license.</xhtml:p><xhtml:p>(2) For filing a petition to suspend action in an application under § 1.103(a):</xhtml:p><xhtml:p>(i) For filing a first request for suspension pursuant to § 1.103(a) in an application:</xhtml:p><xhtml:p>Table 12 to Paragraph (g)(2)(i)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$60.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>120.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>300.00</xhtml:p><xhtml:p>(ii) For filing a second or subsequent request for suspension pursuant to § 1.103(a) in an application:</xhtml:p><xhtml:p>Table 13 to Paragraph (g)(2)(ii)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$90.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>180.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>450.00</xhtml:p><xhtml:p>(h) For filing a petition under one of the following sections that refers to this paragraph (h):</xhtml:p><xhtml:p>Table 12 to Paragraph (h)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$30.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>60.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>150.00</xhtml:p><xhtml:p>Note 3 to table 14 to paragraph (h):</xhtml:p><xhtml:p>1.84—for accepting color drawings or photographs.</xhtml:p><xhtml:p>§ 1.91—for entry of a model or exhibit.</xhtml:p><xhtml:p>§ 1.102(d)—to make an application special.</xhtml:p><xhtml:p>§ 1.138(c)—to expressly abandon an application to avoid publication.</xhtml:p><xhtml:p>§ 1.313—to withdraw an application from issue.</xhtml:p><xhtml:p>§ 1.314—to defer issuance of a patent.</xhtml:p><xhtml:p>(i) Processing fees. (1) For taking action under one of the following sections that refers to this paragraph (i)(1):</xhtml:p><xhtml:p>Table 13 to Paragraph (i)(1)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$30.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>60.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>150.00</xhtml:p><xhtml:p>Note 4 to table 15 to paragraph (i)(1):</xhtml:p><xhtml:p>§ 1.28(c)(3)—for processing a non-itemized fee deficiency based on an error in small entity status.</xhtml:p><xhtml:p>§ 1.29(k)(3)—for processing a non-itemized fee deficiency based on an error in micro entity status.</xhtml:p><xhtml:p>§ 1.41(b)—for supplying the name or names of the inventor or joint inventors in an application without either an application data sheet or the inventor's oath or declaration, except in provisional applications.</xhtml:p><xhtml:p>§ 1.48—for correcting inventorship, except in provisional applications.</xhtml:p><xhtml:p>§ 1.52(d)—for processing a nonprovisional application filed with a specification in a language other than English.</xhtml:p><xhtml:p>§ 1.53(c)(3)—to convert a provisional application filed under § 1.53(c) into a nonprovisional application under § 1.53(b).</xhtml:p><xhtml:p>§ 1.71(g)(2)—for processing a belated amendment under § 1.71(g).</xhtml:p><xhtml:p>§ 1.102(e)—for requesting prioritized examination of an application.</xhtml:p><xhtml:p>§ 1.103(b)—for requesting limited suspension of action, continued prosecution application for a design patent (§ 1.53(d)).</xhtml:p><xhtml:p>§ 1.103(c)—for requesting limited suspension of action, request for continued examination (§ 1.114).</xhtml:p><xhtml:p>§ 1.103(d)—for requesting deferred examination of an application.</xhtml:p><xhtml:p>§ 1.291(c)(5)—for processing a second or subsequent protest by the same real party in interest.</xhtml:p><xhtml:p>§ 3.81 of this chapter—for a patent to issue to assignee, assignment submitted after payment of the issue fee.</xhtml:p><xhtml:p>(2) For taking action under one of the following sections that refers to this paragraph (i)(2):</xhtml:p><xhtml:p>Table 14 to Paragraph (i)(2)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$151.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>151.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>151.00</xhtml:p><xhtml:p>Note 5 to table 16 to paragraph (i)(2):</xhtml:p><xhtml:p>§ 1.217—for processing a redacted copy of a paper submitted in the file of an application in which a redacted copy was submitted for the patent application publication.</xhtml:p><xhtml:p>§ 1.221—for requesting voluntary publication or republication of an application.</xhtml:p><xhtml:p>(j) [Reserved]-</xhtml:p><xhtml:p>(l) [Reserved]</xhtml:p><xhtml:p>(m)(1) For filing a petition under one of the following sections which refers to this paragraph (m), when the petition is filed more than two years after the date when the required action was due:</xhtml:p><xhtml:p>Table 18 to Paragraph (m)(1)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$600.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>1,200.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>3,000.00</xhtml:p><xhtml:p>Note 6 to table 18 to paragraph (m)(1):</xhtml:p><xhtml:p>§ 1.55(e)—for the delayed submission of a priority claim, when the petition is filed more than two years after the date when the priority claim was due.</xhtml:p><xhtml:p>§ 1.78(c) or (e)—for the delayed submission of a benefit claim, when the petition is filed more than two years after the date when the benefit claim was due.</xhtml:p><xhtml:p>§ 1.137—for filing a petition for the revival of an abandoned application for a patent, or for the delayed payment of the fee for issuing each patent, when the petition is filed more than two years after the abandonment of the application.</xhtml:p><xhtml:p>§ 1.137—for filing a petition for the revival of a reexamination proceeding that was terminated or limited due to a delayed response by the patent owner, when the petition is filed more than two years after the termination or limitation of the reexamination proceeding.</xhtml:p><xhtml:p>§ 1.378—for filing a petition to accept a delayed payment of the fee for maintaining a patent in force, when the petition is filed more than two years after the patent expiration date.</xhtml:p><xhtml:p>§ 1.1051—for filing a petition to excuse an applicant's failure to act within prescribed time limits in an international design application, when the petition is filed more than two years after the abandonment of the application.</xhtml:p><xhtml:p>(2) For filing a petition under § 1.55(e), § 1.78(c), § 1.78(e), § 1.137, § 1.1051, or § 1.378, when the petition is filed before the time period specified in paragraph (m)(1) of this section:</xhtml:p><xhtml:p>Table 19 to Paragraph (m)(2)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$452.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>904.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>2,260.00</xhtml:p><xhtml:p>(3) For filing a petition under § 1.55(c), § 1.78(b), or § 1.452 for the extension of the 12-month (six-month for designs) period for filing a subsequent application:</xhtml:p><xhtml:p>Table 20 to Paragraph (m)(3)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$452.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>904.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>2,260.00</xhtml:p><xhtml:p>(n) [Reserved]</xhtml:p><xhtml:p>(o) For every ten items or fraction thereof in a third-party submission under § 1.290:</xhtml:p><xhtml:p>Table 17 to Paragraph (o)</xhtml:p><xhtml:p>By a small entity (§ 1.27(a)) or micro entity (§ 1.29)</xhtml:p><xhtml:p>$78.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>195.00</xhtml:p><xhtml:p>(p) For an information disclosure statement under § 1.97(c) or (d):</xhtml:p><xhtml:p>Table 18 to Paragraph (p)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$56.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>112.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>280.00</xhtml:p><xhtml:p>(q) Processing fee for taking action under one of the following sections which refers to this paragraph (q): $54.00.</xhtml:p><xhtml:p>(1) Section 1.41—to supply the name or names of the inventor or inventors after the filing date without a cover sheet as prescribed by § 1.51(c)(1) in a provisional application.</xhtml:p><xhtml:p>(2) Section 1.48—for correction of inventorship in a provisional application.</xhtml:p><xhtml:p>(3) Section 1.53(c)(2)—to convert a nonprovisional application filed under § 1.53(b) to a provisional application under § 1.53(c).</xhtml:p><xhtml:p>(r) For entry of a submission after final rejection under § 1.129(a):</xhtml:p><xhtml:p>Table 19 to Paragraph (r)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$189.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>378.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>945.00</xhtml:p><xhtml:p>(s) For each additional invention requested to be examined under § 1.129(b):</xhtml:p><xhtml:p>Table 20 to Paragraph (s)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$189.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>378.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>945.00</xhtml:p><xhtml:p>(t) For filing a petition to convert an international design application to a design application under 35 U.S.C. chapter 16 (§ 1.1052):</xhtml:p><xhtml:p>Table 21 to Paragraph (t)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$39.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>78.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>195.00</xhtml:p><xhtml:p>(u) Extension fees pursuant to § 1.136(a) in provisional applications filed under § 1.53(c):</xhtml:p><xhtml:p>(1) For reply within first month:</xhtml:p><xhtml:p>Table 26 to Paragraph (u)(1)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$10.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>20.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>50.00</xhtml:p><xhtml:p>(2) For reply within second month:</xhtml:p><xhtml:p>Table 27 to Paragraph (u)(2)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$20.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>40.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>100.00</xhtml:p><xhtml:p>(3) For reply within third month:</xhtml:p><xhtml:p>Table 28 to Paragraph (u)(3)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$40.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>80.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>200.00</xhtml:p><xhtml:p>(4) For reply within fourth month:</xhtml:p><xhtml:p>Table 29 to Paragraph (u)(4)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$80.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>160.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>400.00</xhtml:p><xhtml:p>(5) For reply within fifth month:</xhtml:p><xhtml:p>Table 30 to Paragraph (u)(5)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$160.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>320.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>800.00</xhtml:p><xhtml:p>(v) Information disclosure statement size fee for an information disclosure statement filed under § 1.97 that, inclusive of the number of applicant-provided or patent owner-provided items of information listed under § 1.98(a)(1) on the information disclosure statement, causes the cumulative number of applicant-provided or patent owner-provided items of information under § 1.98(a)(1) during the pendency of the application or reexamination proceeding to:</xhtml:p><xhtml:p>(1) Exceed 50 but not exceed 100. . . . . .$200;</xhtml:p><xhtml:p>(2) Exceed 100 but not exceed 200. . . . . .$500, less any amount previously paid under paragraph (v)(1) of this section; and</xhtml:p><xhtml:p>(3) Exceed 200. . . . . .$800, less any amounts previously paid under paragraphs (v)(1) and/or (2) of this section.</xhtml:p><xhtml:p>(w) Additional fee for presenting a benefit claim in a nonprovisional application under 35 U.S.C. 120, 121, 365(c), or 386(c) and § 1.78(d):</xhtml:p><xhtml:p>(1) When the actual filing date of the nonprovisional application in which the benefit claim is presented is more than six years and no more than nine years from the earliest filing date for which benefit is claimed under 35 U.S.C. 120, 121, 365(c), or 386(c) and § 1.78(d):</xhtml:p><xhtml:p>Table 31 to Paragraph (w)(1)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$540.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>1,080.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>2,700.00</xhtml:p><xhtml:p>(2) When the actual filing date of the nonprovisional application in which the benefit claim is presented is more than nine years from the earliest filing date for which benefit is claimed under 35 U.S.C. 120, 121, 365(c), or 386(c) and § 1.78(d), the amount shown in this paragraph is due, less any amount previously paid under paragraph (w)(1) of this section:</xhtml:p><xhtml:p>Table 32 to Paragraph (w)(2)</xhtml:p><xhtml:p>By a micro entity (§ 1.29)</xhtml:p><xhtml:p>$800.00</xhtml:p><xhtml:p>By a small entity (§ 1.27(a))</xhtml:p><xhtml:p>1,600.00</xhtml:p><xhtml:p>By other than a small or micro entity</xhtml:p><xhtml:p>4,000.00</xhtml:p><xhtml:p>[78 FR 17105, Mar. 20, 2013, as amended at 78 FR 62395, Oct. 21, 2013; 78 FR 75252, Dec. 11, 2013; 80 FR 17954, Apr. 2, 2015; 82 FR 52814, Nov. 14, 2017; 85 FR 46986, Aug. 3, 2020; 85 FR 58283, Sept. 18, 2020; 88 FR 17154, Mar. 22, 2023; 89 FR 92004, Nov. 20, 2024; 90 FR 39126, Aug. 14, 2025]</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ecfr 37 CFR 1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_1e09bce460a4dd79730f1f5407f250c8</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_136496664827b3bec533a03b9e4fd398</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="9b48f2c46284140a">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7314c50b9580cb3fab0eadf2fd681a6e</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_82a6d3ab90a94a7ccf25b592606a5115</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_e1358790cec6eec183a72613d6ff9bc6" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="cfr §1.27">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_d25e08f6214748c0cd1d68fa1f87b80a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_0b9aa24442f3ad57982a28447861b522</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>cfr §1.27</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_4fc7e75843037eb57c34609682b06ec8</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>§ 1.27 Definition of small entities and establishing status as a small entity to permit payment of small entity fees; when a determination of entitlement to small entity status and notification of loss of entitlement to small entity status are required; fraud on the Office.</xhtml:p><xhtml:p>(a) Definition of small entities. A small entity as used in this chapter means any party (person, small business concern, or nonprofit organization) under paragraphs (a)(1) through (a)(3) of this section.</xhtml:p><xhtml:p>(1) Person. A person, as used in paragraph (c) of this section, means any inventor or other individual (e.g., an individual to whom an inventor has transferred some rights in the invention) who has not assigned, granted, conveyed, or licensed, and is under no obligation under contract or law to assign, grant, convey, or license, any rights in the invention. An inventor or other individual who has transferred some rights in the invention to one or more parties, or is under an obligation to transfer some rights in the invention to one or more parties, can also qualify for small entity status if all the parties who have had rights in the invention transferred to them also qualify for small entity status either as a person, small business concern, or nonprofit organization under this section.</xhtml:p><xhtml:p>(2) Small business concern. A small business concern, as used in paragraph (c) of this section, means any business concern that:</xhtml:p><xhtml:p>(i) Has not assigned, granted, conveyed, or licensed, and is under no obligation under contract or law to assign, grant, convey, or license, any rights in the invention to any person, concern, or organization which would not qualify for small entity status as a person, small business concern, or nonprofit organization; and</xhtml:p><xhtml:p>(ii) Meets the size standards set forth in 13 CFR 121.801 through 121.805 to be eligible for reduced patent fees. Questions related to standards for a small business concern may be directed to: Small Business Administration, Size Standards Staff, 409 Third Street, SW., Washington, DC 20416.</xhtml:p><xhtml:p>(3) Nonprofit organization. A nonprofit organization, as used in paragraph (c) of this section, means any nonprofit organization that:</xhtml:p><xhtml:p>(i) Has not assigned, granted, conveyed, or licensed, and is under no obligation under contract or law to assign, grant, convey, or license, any rights in the invention to any person, concern, or organization which would not qualify as a person, small business concern, or a nonprofit organization; and</xhtml:p><xhtml:p>(ii) Is either:</xhtml:p><xhtml:p>(A) A university or other institution of higher education located in any country;</xhtml:p><xhtml:p>(B) An organization of the type described in section 501(c)(3) of the Internal Revenue Code of 1986 (26 U.S.C. 501(c)(3)) and exempt from taxation under section 501(a) of the Internal Revenue Code (26 U.S.C. 501(a));</xhtml:p><xhtml:p>(C) Any nonprofit scientific or educational organization qualified under a nonprofit organization statute of a state of this country (35 U.S.C. 201(i)); or</xhtml:p><xhtml:p>(D) Any nonprofit organization located in a foreign country which would qualify as a nonprofit organization under paragraphs (a)(3)(ii)(B) of this section or (a)(3)(ii)(C) of this section if it were located in this country.</xhtml:p><xhtml:p>(4) Federal Government Use License Exceptions. In a patent application filed, prosecuted, and if patented, maintained at no expense to the Government, with the exception of any expense taken to deliver the application and fees to the Office on behalf of the applicant:</xhtml:p><xhtml:p>(i) For persons under paragraph (a)(1) of this section, claiming small entity status is not prohibited by:</xhtml:p><xhtml:p>(A) A use license to the Government resulting from a rights determination under Executive Order 10096 made in accordance with § 501.6 of this title;</xhtml:p><xhtml:p>(B) A use license to the Government resulting from Federal agency action pursuant to 15 U.S.C. 3710d(a) allowing the Federal employee-inventor to obtain or retain title to the invention; or</xhtml:p><xhtml:p>(C) A use license to a Federal agency resulting from retention of rights under 35 U.S.C. 202(d) by an inventor employed by a small business concern or nonprofit organization contractor, provided the license is equivalent to the license under 35 U.S.C. 202(c)(4) the Federal agency would have received had the contractor elected to retain title, and all the conditions applicable under § 401.9 of this title to an employee/inventor are met.</xhtml:p><xhtml:p>(ii) For small business concerns and nonprofit organizations under paragraphs (a)(2) and (3) of this section, a use license to a Federal agency resulting from a funding agreement with that agency pursuant to 35 U.S.C. 202(c)(4) does not preclude claiming small entity status, provided that:</xhtml:p><xhtml:p>(A) The subject invention was made solely by employees of the small business concern or nonprofit organization; or</xhtml:p><xhtml:p>(B) In the case of a Federal employee co-inventor, the Federal agency employing such co-inventor took action pursuant to 35 U.S.C. 202(e)(1) to exclusively license or assign whatever rights currently held or that it may acquire in the subject invention to the small business concern or nonprofit organization, subject to the license under 35 U.S.C. 202(c)(4).</xhtml:p><xhtml:p>(iii) For small business concerns and nonprofit organizations under paragraphs (a)(2) and (3) of this section that have collaborated with a Federal agency laboratory pursuant to a cooperative research and development agreement (CRADA) under 15 U.S.C. 3710a(a)(1), claiming small entity status is not prohibited by a use license to the Government pursuant to:</xhtml:p><xhtml:p>(A) 15 U.S.C. 3710a(b)(2) that results from retaining title to an invention made solely by the employee of the small business concern or nonprofit organization; or</xhtml:p><xhtml:p>(B) 15 U.S.C. 3710a(b)(3)(D), provided the laboratory has waived in whole any right of ownership the Government may have to the subject invention made by the small business concern or nonprofit organization, or has exclusively licensed whatever ownership rights the Government may acquire in the subject invention to the small business concern or nonprofit organization.</xhtml:p><xhtml:p>(iv) Regardless of whether an exception under this paragraph (a)(4) applies, no refund under § 1.28(a) is available for any patent fee paid by the Government.</xhtml:p><xhtml:p>(5) Security Interest. A security interest does not involve an obligation to transfer rights in the invention for the purposes of paragraphs (a)(1) through (a)(3) of this section unless the security interest is defaulted upon.</xhtml:p><xhtml:p>(b) Establishment of small entity status permits payment of reduced fees. (1) A small entity, as defined in paragraph (a) of this section, who has properly asserted entitlement to small entity status pursuant to paragraph (c) of this section will be accorded small entity status by the Office in the particular application or patent in which entitlement to small entity status was asserted. Establishment of small entity status allows the payment of certain reduced patent fees pursuant to 35 U.S.C. 41(h)(1).</xhtml:p><xhtml:p>(2) Submission of an original utility application in compliance with the USPTO patent electronic filing system by an applicant who has properly asserted entitlement to small entity status pursuant to paragraph (c) of this section in that application allows the payment of a reduced filing fee pursuant to 35 U.S.C. 41(h)(3).</xhtml:p><xhtml:p>(c) Assertion of small entity status. Any party (person, small business concern or nonprofit organization) should make a determination, pursuant to paragraph (f) of this section, of entitlement to be accorded small entity status based on the definitions set forth in paragraph (a) of this section, and must, in order to establish small entity status for the purpose of paying small entity fees, actually make an assertion of entitlement to small entity status, in the manner set forth in paragraphs (c)(1) or (c)(3) of this section, in the application or patent in which such small entity fees are to be paid.</xhtml:p><xhtml:p>(1) Assertion by writing. Small entity status may be established by a written assertion of entitlement to small entity status. A written assertion must:</xhtml:p><xhtml:p>(i) Be clearly identifiable;</xhtml:p><xhtml:p>(ii) Be signed (see paragraph (c)(2) of this section); and</xhtml:p><xhtml:p>(iii) Convey the concept of entitlement to small entity status, such as by stating that applicant is a small entity, or that small entity status is entitled to be asserted for the application or patent. While no specific words or wording are required to assert small entity status, the intent to assert small entity status must be clearly indicated in order to comply with the assertion requirement.</xhtml:p><xhtml:p>(2) Parties who can sign the written assertion. The written assertion can be signed by:</xhtml:p><xhtml:p>(i) The applicant (§ 1.42 or § 1.421);</xhtml:p><xhtml:p>(ii) A patent practitioner of record or a practitioner acting in a representative capacity under § 1.34;</xhtml:p><xhtml:p>(iii) The inventor or a joint inventor, if the inventor is the applicant; or</xhtml:p><xhtml:p>(iv) The assignee.</xhtml:p><xhtml:p>(3) Assertion by payment of the small entity basic filing, basic transmittal, basic national fee, international search fee, or individual designation fee in an international design application. The payment, by any party, of the exact amount of one of the small entity basic filing fees set forth in § 1.16(a), (b), (c), (d), or (e), the small entity transmittal fee set forth in § 1.445(a)(1) or § 1.1031(a), the small entity international search fee set forth in § 1.445(a)(2) to a Receiving Office other than the United States Receiving Office in the exact amount established for that Receiving Office pursuant to PCT Rule 16, or the small entity basic national fee set forth in § 1.492(a), will be treated as a written assertion of entitlement to small entity status even if the type of basic filing, basic transmittal, or basic national fee is inadvertently selected in error. The payment, by any party, of the small entity first part of the individual designation fee for the United States to the International Bureau (§ 1.1031) will be treated as a written assertion of entitlement to small entity status.</xhtml:p><xhtml:p>(i) If the Office accords small entity status based on payment of a small entity basic filing or basic national fee under paragraph (c)(3) of this section that is not applicable to that application, any balance of the small entity fee that is applicable to that application will be due along with the appropriate surcharge set forth in § 1.16(f), or § 1.16(g).</xhtml:p><xhtml:p>(ii) The payment of any small entity fee other than those set forth in paragraph (c)(3) of this section (whether in the exact fee amount or not) will not be treated as a written assertion of entitlement to small entity status and will not be sufficient to establish small entity status in an application or a patent.</xhtml:p><xhtml:p>(4) Assertion required in related, continuing, and reissue applications. Status as a small entity must be specifically established by an assertion in each related, continuing and reissue application in which status is appropriate and desired. Status as a small entity in one application or patent does not affect the status of any other application or patent, regardless of the relationship of the applications or patents. The refiling of an application under § 1.53 as a continuation, divisional, or continuation-in-part application (including a continued prosecution application under § 1.53(d)), or the filing of a reissue application, requires a new assertion as to continued entitlement to small entity status for the continuing or reissue application.</xhtml:p><xhtml:p>(d) When small entity fees can be paid. Any fee, other than the small entity basic filing fees and the small entity national fees of paragraph (c)(3) of this section, can be paid in the small entity amount only if it is submitted with, or subsequent to, the submission of a written assertion of entitlement to small entity status, except when refunds are permitted by § 1.28(a).</xhtml:p><xhtml:p>(e) Only one assertion required. (1) An assertion of small entity status need only be filed once in an application or patent. Small entity status, once established, remains in effect until changed pursuant to paragraph (g)(1) of this section. Where an assignment of rights or an obligation to assign rights to other parties who are small entities occurs subsequent to an assertion of small entity status, a second assertion is not required.</xhtml:p><xhtml:p>(2) Once small entity status is withdrawn pursuant to paragraph (g)(2) of this section, a new written assertion is required to again obtain small entity status.</xhtml:p><xhtml:p>(f) Assertion requires a determination of entitlement to pay small entity fees. Prior to submitting an assertion of entitlement to small entity status in an application, including a related, continuing, or reissue application, a determination of such entitlement should be made pursuant to the requirements of paragraph (a) of this section. It should be determined that all parties holding rights in the invention qualify for small entity status. The Office will generally not question any assertion of small entity status that is made in accordance with the requirements of this section, but note paragraph (h) of this section.</xhtml:p><xhtml:p>(g)(1) New determination of entitlement to small entity status is needed when issue and maintenance fees are due. Once status as a small entity has been established in an application or patent, fees as a small entity may thereafter be paid in that application or patent without regard to a change in status until the issue fee is due or any maintenance fee is due.</xhtml:p><xhtml:p>(2) Notification of loss of entitlement to small entity status is required when issue and maintenance fees are due. Notification of a loss of entitlement to small entity status must be filed in the application or patent prior to paying, or at the time of paying, the earliest of the issue fee or any maintenance fee due after the date on which status as a small entity as defined in paragraph (a) of this section is no longer appropriate. The notification that small entity status is no longer appropriate must be signed by a party identified in § 1.33(b). Payment of a fee in other than the small entity amount is not sufficient notification that small entity status is no longer appropriate.</xhtml:p><xhtml:p>(h) Fraud attempted or practiced on the Office. (1) Any attempt to fraudulently establish status as a small entity, or pay fees as a small entity, shall be considered as a fraud practiced or attempted on the Office.</xhtml:p><xhtml:p>(2) Improperly, and with intent to deceive, establishing status as a small entity, or paying fees as a small entity, shall be considered as a fraud practiced or attempted on the Office.</xhtml:p><xhtml:p>[65 FR 54659, Sept. 8, 2000, as amended at 69 FR 56538, Sept. 21, 2004; 70 FR 3889, Jan. 27, 2005; 77 FR 48813, Aug. 14, 2012; 78 FR 4289, Jan. 18, 2013; 80 FR 17955, Apr. 2, 2015; 85 FR 46990, Aug. 3, 2020; 85 FR 82923, Dec. 21, 2020]</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ecfr 37 CFR 1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_1e09bce460a4dd79730f1f5407f250c8</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_136496664827b3bec533a03b9e4fd398</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="fea1289ebe564f77">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7314c50b9580cb3fab0eadf2fd681a6e</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_82a6d3ab90a94a7ccf25b592606a5115</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_6dedb39642b43c982c483f228d1768e2" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec &quot;rules/extension_fees.rule&quot; table standard_fee">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>rulec "rules/extension_fees.rule" table standard_fee</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="9c75e7072bde2938">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="item">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_baaf5727aa4645ad73bf7095bef5e2bd" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec &quot;rules/extension_fees.rule&quot; clause no_extension">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>rulec "rules/extension_fees.rule" clause no_extension</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2391acd18f47abcb">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="item">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_1e6ab1238825f64e97445a75df060ba7" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec &quot;rules/extension_fees.rule&quot; table small_entity_fee">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>rulec "rules/extension_fees.rule" table small_entity_fee</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="5fd98a7705c641eb">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="item">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_ac548101f4e3b6af5537b50d07b48797" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec &quot;rules/extension_fees.rule&quot; define reduced_period">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>rulec "rules/extension_fees.rule" define reduced_period</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="611179d6b0c376c4">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="item">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+      </SPEC-OBJECTS>
+      <SPEC-RELATIONS>
+        <SPEC-RELATION IDENTIFIER="_2080fe5c9a5780bd0d61193ed68b0be0" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="9b48f2c46284140a">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="717b0eb89e528849">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_4fae5720535f493ba47c1bc02fc70094</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_ef91f1999398cb2003af11a7fc038d4a</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_772b917878ec4642cee2987a6813dc3c" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="development">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="717b0eb89e528849">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="9c75e7072bde2938">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_4fae5720535f493ba47c1bc02fc70094</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_6dedb39642b43c982c483f228d1768e2</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_b0fdecd6ba342b4e1590d7c942f1575c" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="development">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="717b0eb89e528849">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2391acd18f47abcb">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_4fae5720535f493ba47c1bc02fc70094</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_baaf5727aa4645ad73bf7095bef5e2bd</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_3901c22902a1dde8e9cf9f0a16a4644d" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="legal">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="fea1289ebe564f77">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="a1a6e62ebeedb230">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_02f0bf67022dc89cbb789d57342b5de0</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_e1358790cec6eec183a72613d6ff9bc6</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_d157c0e21bcb8c3edf633c4cc0e49f5f" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="development">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="a1a6e62ebeedb230">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="5fd98a7705c641eb">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_02f0bf67022dc89cbb789d57342b5de0</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_1e6ab1238825f64e97445a75df060ba7</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_f3d5f47c811ee20b200c101e6a2fcf27" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="development">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="a1a6e62ebeedb230">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="611179d6b0c376c4">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_02f0bf67022dc89cbb789d57342b5de0</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_ac548101f4e3b6af5537b50d07b48797</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+      </SPEC-RELATIONS>
+      <SPECIFICATIONS>
+        <SPECIFICATION IDENTIFIER="_b1045d3ca5bdf4bfda27297569e1252f" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="extension_fees">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="extension_fees.req">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c044e086f813f00e08a35f6d1fe57d1d</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="Where the tables of the rule extension_fees.rule come from: two sections of 37 CFR part 1, copied here and pinned (the copies have the bytes of the rule's own), and the rule's tables named one by one. A test material; the rule is a sketch and does not say how any regulation is read">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_a9dda5d006de08366d8a87ff7151ba23" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_4fae5720535f493ba47c1bc02fc70094</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_c382cee269121f972ff51e8267809a7a" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_02f0bf67022dc89cbb789d57342b5de0</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_820590da3b6bc96b1abc4c87219e99d1</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+        <SPECIFICATION IDENTIFIER="_2660d37bb6c2f8242d385db43f0c8a74" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="sources">
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_af196c438c824da78ae0d4e1c683bcae" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_ef91f1999398cb2003af11a7fc038d4a</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_25af4e8e27dd10df9a668d6db176228d" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_e1358790cec6eec183a72613d6ff9bc6</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_cbcb5eb37af5fd6294167ff3a8a1c59a</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+        <SPECIFICATION IDENTIFIER="_d60e4f94b2559d660006737835481a50" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="artifacts">
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_1857ea42f9485a4c628df2d157c84797" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_6dedb39642b43c982c483f228d1768e2</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_eefa5e0043d525652068352c7eed80bd" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_baaf5727aa4645ad73bf7095bef5e2bd</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_5531a625fe2f7097de16ae03a8e02bc0" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_1e6ab1238825f64e97445a75df060ba7</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_2ffea3ca8136c209d620f6e967fc1811" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_ac548101f4e3b6af5537b50d07b48797</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_cbcb5eb37af5fd6294167ff3a8a1c59a</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+      </SPECIFICATIONS>
+      <SPEC-RELATION-GROUPS>
+        <RELATION-GROUP IDENTIFIER="_a3326a6470bae177c14b062e6f09c137" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="extension_fees -> sources">
+          <SOURCE-SPECIFICATION><SPECIFICATION-REF>_b1045d3ca5bdf4bfda27297569e1252f</SPECIFICATION-REF></SOURCE-SPECIFICATION>
+          <SPEC-RELATIONS>
+            <SPEC-RELATION-REF>_2080fe5c9a5780bd0d61193ed68b0be0</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_3901c22902a1dde8e9cf9f0a16a4644d</SPEC-RELATION-REF>
+          </SPEC-RELATIONS>
+          <TARGET-SPECIFICATION><SPECIFICATION-REF>_2660d37bb6c2f8242d385db43f0c8a74</SPECIFICATION-REF></TARGET-SPECIFICATION>
+          <TYPE><RELATION-GROUP-TYPE-REF>_241f53b5261e61efa600e572ce116499</RELATION-GROUP-TYPE-REF></TYPE>
+        </RELATION-GROUP>
+        <RELATION-GROUP IDENTIFIER="_65f874d64e65bd942aa55099d944e01e" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="extension_fees -> artifacts">
+          <SOURCE-SPECIFICATION><SPECIFICATION-REF>_b1045d3ca5bdf4bfda27297569e1252f</SPECIFICATION-REF></SOURCE-SPECIFICATION>
+          <SPEC-RELATIONS>
+            <SPEC-RELATION-REF>_772b917878ec4642cee2987a6813dc3c</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_b0fdecd6ba342b4e1590d7c942f1575c</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_d157c0e21bcb8c3edf633c4cc0e49f5f</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_f3d5f47c811ee20b200c101e6a2fcf27</SPEC-RELATION-REF>
+          </SPEC-RELATIONS>
+          <TARGET-SPECIFICATION><SPECIFICATION-REF>_d60e4f94b2559d660006737835481a50</SPECIFICATION-REF></TARGET-SPECIFICATION>
+          <TYPE><RELATION-GROUP-TYPE-REF>_241f53b5261e61efa600e572ce116499</RELATION-GROUP-TYPE-REF></TYPE>
+        </RELATION-GROUP>
+      </SPEC-RELATION-GROUPS>
+    </REQ-IF-CONTENT>
+  </CORE-CONTENT>
+</REQ-IF>

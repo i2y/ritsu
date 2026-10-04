@@ -1,0 +1,3 @@
+error[E008]: tests/mutants/E008_undeclared_requirement/payment.req:10:8: The requirement payment_policy is not declared
+    10 |   from payment_policy
+tests/mutants/E008_undeclared_requirement: 1 error

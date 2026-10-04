@@ -1,0 +1,12 @@
+エラー[E302]: tests/mutants/E304_requirement_changed_after_approval/payment.req:11:3: payment_day は、2026-10-03 に accounting がこのリンクを確かめたあとで変わりました
+    11 |   satisfied by file "pay.py"
+  payment_day の変わったところ:
+      @@ -1,1 +1,1 @@
+      - text Closes on the 20th, pays on the 10th of the next month
+      + text Closes on the 20th, pays on the 10th of the next month, or the business day before when that day is closed
+  = 確かめたら: yuen review tests/mutants/E304_requirement_changed_after_approval --root tests/mutants/E304_requirement_changed_after_approval --at tests/mutants/E304_requirement_changed_after_approval/payment.req:11 --by <役割>
+エラー[E304]: tests/mutants/E304_requirement_changed_after_approval/payment.req:13:3: payment_day が変わったので、この見送りを承認し直します（tests/mutants/E304_requirement_changed_after_approval/payment.req:11 と同じ変更）
+    13 |   not verified "Accounting compares them once a month"
+  = 2026-10-03 に accounting が承認した見送りです。
+  = 確かめたら: yuen review tests/mutants/E304_requirement_changed_after_approval --root tests/mutants/E304_requirement_changed_after_approval --at tests/mutants/E304_requirement_changed_after_approval/payment.req:13 --by <役割>
+tests/mutants/E304_requirement_changed_after_approval: エラー 2 件

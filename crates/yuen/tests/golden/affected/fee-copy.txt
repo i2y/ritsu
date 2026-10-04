@@ -1,0 +1,7 @@
+diff: tests/fixtures/fee_rules/changes/copy.diff
+copies of sources the diff touches:
+  tests/fixtures/fee_rules/sources/law/37-CFR-1@2026-01-01/1.17.xml (cfr §1.17): cited by standard_fee; pinned by rulec "rules/extension_fees.rule"
+changes no requirement reaches: none
+requirements touched:
+  standard_fee (tests/fixtures/fee_rules/extension_fees.req:13): owner legal; from cfr §1.17
+1 requirement touched; ask legal

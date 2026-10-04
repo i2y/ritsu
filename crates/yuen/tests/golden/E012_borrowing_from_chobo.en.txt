@@ -1,0 +1,4 @@
+error[E012]: tests/mutants/E012_borrowing_from_chobo/payment.req:7:16: A borrowed source is the `source` of a rulec or a koyomi file
+     7 | source stock = chobo "stock.book" account stock
+  = Write it like `source 民法 = koyomi "civil_code.cal" source 民法`.
+tests/mutants/E012_borrowing_from_chobo: 1 error

@@ -1,0 +1,4 @@
+エラー[E006]: tests/mutants/E006_no_such_date/payment.req:10:11: 2026-02-30 という日付はありません
+    10 |   decided 2026-02-30 by accounting "decided for the example"
+  = 扱える日付は 0001-01-01〜9999-12-31 の暦にある日です。
+tests/mutants/E006_no_such_date: エラー 1 件

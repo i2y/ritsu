@@ -1,0 +1,4 @@
+エラー[E101]: tests/mutants/E101_copy_missing/period_of_months.req:9:3: cfr §1.7 の写し tests/mutants/E101_copy_missing/sources/law/37-CFR-1@2026-01-01/1.7.xml がありません
+     9 |   "§1.7" sha256:01de176ebe4740d7
+  = `yuen source fetch` が eCFR から取ってきて、そこに書きます。check は通信しません。
+tests/mutants/E101_copy_missing: エラー 1 件

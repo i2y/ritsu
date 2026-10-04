@@ -1,0 +1,1 @@
+define reduced_period(reduced) : bool = made <= 2027-03-31  @cfr "§1.27"

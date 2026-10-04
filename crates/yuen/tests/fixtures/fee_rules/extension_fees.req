@@ -1,0 +1,37 @@
+requirements extension_fees v1
+description "Where the tables of the rule extension_fees.rule come from: two sections of 37 CFR part 1, copied here and pinned (the copies have the bytes of the rule's own), and the rule's tables named one by one. A test material; the rule is a sketch and does not say how any regulation is read"
+
+role legal "Decides how the words of a regulation are read"
+role development "Writes and fixes the rule"
+
+source cfr = law ecfr "37 CFR 1" asof 2026-01-01
+  "§1.17" sha256:9b48f2c46284140a
+  "§1.27" sha256:fea1289ebe564f77
+
+scope rulec "rules/extension_fees.rule" table
+
+requirement standard_fee
+  text "The fee for an extension of time to reply is set by the month of the reply, from the first to the fifth, and no fee is charged when no extension is taken"
+  in force 2026-01-01..
+  owner legal
+  from @cfr "§1.17"
+    reviewed 2026-10-04 by legal sha256:9b48f2c46284140a -> sha256:717b0eb89e528849
+  satisfied by rulec "rules/extension_fees.rule" table standard_fee
+    reviewed 2026-10-04 by development sha256:717b0eb89e528849 -> sha256:9c75e7072bde2938
+  satisfied by rulec "rules/extension_fees.rule" clause no_extension
+    reviewed 2026-10-04 by development sha256:717b0eb89e528849 -> sha256:2391acd18f47abcb
+  not verified "That the table covers every month and that its rows do not overlap is checked by rulec. This material has no claim that names it"
+    approved 2026-10-04 by legal sha256:717b0eb89e528849
+
+requirement small_entity_fee
+  text "A small entity pays the lower fee of its own table for a reply made by the date the table holds to"
+  in force 2026-01-01..
+  owner legal
+  from @cfr "§1.27"
+    reviewed 2026-10-04 by legal sha256:fea1289ebe564f77 -> sha256:a1a6e62ebeedb230
+  satisfied by rulec "rules/extension_fees.rule" table small_entity_fee
+    reviewed 2026-10-04 by development sha256:a1a6e62ebeedb230 -> sha256:5fd98a7705c641eb
+  satisfied by rulec "rules/extension_fees.rule" define reduced_period
+    reviewed 2026-10-04 by development sha256:a1a6e62ebeedb230 -> sha256:611179d6b0c376c4
+  not verified "That the small entity's table is read before the standard table is checked by rulec. This material has no claim that names it"
+    approved 2026-10-04 by legal sha256:a1a6e62ebeedb230

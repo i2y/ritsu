@@ -1,0 +1,4 @@
+warning[W101]: tests/mutants/W101_pin_not_cited/payment.req:7:3: cfr §1.7 is pinned but no requirement cites it
+     7 |   "§1.7" sha256:01de176ebe4740d7
+  = If it is what is left after a citation was removed, delete the pin line.
+tests/mutants/W101_pin_not_cited: ok — 1 requirement, whose 1 link and 1 waiver are as they were looked at; every requirement is met and checked, or waived (1 warning)

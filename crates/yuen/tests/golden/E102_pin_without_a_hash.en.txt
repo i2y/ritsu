@@ -1,0 +1,5 @@
+error[E102]: tests/mutants/E102_pin_without_a_hash/period_of_months.req:9:3: cfr §1.7 is not pinned (it has no `sha256:`)
+     9 |   "§1.7"
+  = For the copy as it is, that is sha256:01de176ebe4740d7 (`yuen source pin` writes it too).
+  = The line, fixed: "§1.7" sha256:01de176ebe4740d7
+tests/mutants/E102_pin_without_a_hash: 1 error

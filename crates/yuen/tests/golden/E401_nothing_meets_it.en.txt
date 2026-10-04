@@ -1,0 +1,4 @@
+error[E401]: tests/mutants/E401_nothing_meets_it/payment.req:7:13: payment_day has nothing that meets it, and no waiver for that
+     7 | requirement payment_day
+  = Write `satisfied by <artifact>`, or, if nothing is to meet it, `not satisfied "<why>"`, and have that approved.
+tests/mutants/E401_nothing_meets_it: 1 error

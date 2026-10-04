@@ -1,0 +1,11 @@
+requirements example v1
+role legal
+
+source cfr = koyomi "a.cal" source cfr
+
+requirement r1
+  text "x"
+  owner legal
+  from @cfr "§1.7"
+  not satisfied "left out in this example"
+  not verified "left out in this example"

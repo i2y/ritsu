@@ -1,0 +1,20 @@
+error[E303]: tests/mutants/E303_artifact_changed/period_of_months.req:21:3: file "period_of_months.cal" changed after development looked at this link on 2026-10-03
+    21 |   satisfied by file "period_of_months.cal"
+  what changed in tests/mutants/E303_artifact_changed/period_of_months.cal:
+      @@ -13,5 +13,5 @@
+          - 1 day                                        # the day before it: the last day of the last month when it had no corresponding day
+        date last_day_moved = last_day
+      -   if closed + 1 day                              # an end on a closed day moves to the day after
+      +   roll following                                 # an end on a closed day moves on until the closure ends
+
+        claims
+  = Once a person has looked: yuen review tests/mutants/E303_artifact_changed --root tests/mutants/E303_artifact_changed --at tests/mutants/E303_artifact_changed/period_of_months.req:21 --by <role>
+error[E303]: tests/mutants/E303_artifact_changed/period_of_months.req:32:3: file "period_of_months.cal" changed after development looked at this link on 2026-10-03
+    32 |   satisfied by file "period_of_months.cal"
+  = The same change as at tests/mutants/E303_artifact_changed/period_of_months.req:21; the diff is not shown again.
+  = Once a person has looked: yuen review tests/mutants/E303_artifact_changed --root tests/mutants/E303_artifact_changed --at tests/mutants/E303_artifact_changed/period_of_months.req:32 --by <role>
+error[E303]: tests/mutants/E303_artifact_changed/period_of_months.req:44:3: file "period_of_months.cal" changed after development looked at this link on 2026-10-03
+    44 |   satisfied by file "period_of_months.cal"
+  = The same change as at tests/mutants/E303_artifact_changed/period_of_months.req:21; the diff is not shown again.
+  = Once a person has looked: yuen review tests/mutants/E303_artifact_changed --root tests/mutants/E303_artifact_changed --at tests/mutants/E303_artifact_changed/period_of_months.req:44 --by <role>
+tests/mutants/E303_artifact_changed: 3 errors

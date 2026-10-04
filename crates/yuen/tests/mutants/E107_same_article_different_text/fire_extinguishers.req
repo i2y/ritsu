@@ -1,0 +1,19 @@
+requirements fire_extinguishers v1
+description "A requirement and the rule that meets it read one section, each from a copy of its own, and the copies say different things. A test material"
+
+role safety "decides how the regulation reads"
+role dev "writes and corrects the rule"
+
+source osha = law ecfr "29 CFR 1910" asof 2026-01-01
+  "§1910.157" sha256:cacff282db4d47b4
+
+requirement travel_distance
+  text "Portable fire extinguishers for Class A hazards are placed so that the travel distance to any extinguisher is 75 feet or less, and for Class B hazards 50 feet or less"
+  in force 2026-01-01..
+  owner safety
+  from @osha "§1910.157"
+    reviewed 2026-10-04 by safety sha256:cacff282db4d47b4 -> sha256:8511f994d7d9e7a9
+  satisfied by rulec "rules/osha_extinguisher.rule" table distance
+    reviewed 2026-10-04 by safety sha256:8511f994d7d9e7a9 -> sha256:5681500476af8a56
+  not verified "rulec checks that the table covers every hazard; this material names no claim"
+    approved 2026-10-04 by safety sha256:8511f994d7d9e7a9

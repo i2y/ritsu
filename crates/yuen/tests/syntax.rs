@@ -62,7 +62,7 @@ fn every_req_design_shows_parses() {
 #[test]
 fn the_file_of_design_1_1_reads_as_it_says() {
     let design = std::fs::read_to_string("DESIGN.md").unwrap();
-    let b = blocks(section(&design, "### 1.1 ファイルの形", "### 1.2")).remove(0);
+    let b = blocks(section(&design, "### 1.1 ファイルの形", "### 1.2")).into_iter().find(|b| b.starts_with("requirements 民法の期間 v1")).unwrap();
     let f = parse("x.req", "x.req", &b).file.unwrap();
     assert_eq!((f.header.name.as_str(), f.header.version), ("民法の期間", 1));
     assert_eq!(f.roles.len(), 2);

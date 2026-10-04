@@ -1,0 +1,44 @@
+requirements refund v1
+description "A test material: the accounts and transfers of chobo's example refunds.book, named one by one, and where in the refund policy they come from. The source is a copy of the policy's document, pinned; what meets a requirement is an account or a transfer"
+
+role accounting "Decides the refund policy"
+role development "Writes and fixes the book"
+
+source policy = file "refund_policy.md" sha256:784ec7d47b0919f5
+
+scope chobo "refunds.book" transfer
+
+requirement within_sales
+  text "A refund does not exceed the sale of its order"
+  in force 2026-10-01..
+  owner accounting
+  from @policy
+    reviewed 2026-10-04 by accounting sha256:784ec7d47b0919f5 -> sha256:03c54d3019572784
+  satisfied by chobo "refunds.book" account refundable
+    reviewed 2026-10-04 by development sha256:03c54d3019572784 -> sha256:49d9b3dd2d4bf83b
+  satisfied by chobo "refunds.book" transfer sale
+    reviewed 2026-10-04 by development sha256:03c54d3019572784 -> sha256:699a4feaa65a1dfe
+  not verified "That what is left never goes below 0 is checked by chobo's check. This material has no claim that names it"
+    approved 2026-10-04 by accounting sha256:03c54d3019572784
+
+requirement hold_until_approved
+  text "A refund is not final until a person approves it. While it waits for approval, the amount is held"
+  in force 2026-10-01..
+  owner accounting
+  from @policy
+    reviewed 2026-10-04 by accounting sha256:784ec7d47b0919f5 -> sha256:beb5b3ab5c01bf55
+  satisfied by chobo "refunds.book" transfer refund
+    reviewed 2026-10-04 by development sha256:beb5b3ab5c01bf55 -> sha256:d4eb1e0e94a3b78f
+  not verified "That the amount held returns at the expiry is checked by chobo's scenarios. This material has no claim that names it"
+    approved 2026-10-04 by accounting sha256:beb5b3ab5c01bf55
+
+requirement record_together
+  text "The amount refunded is recorded in total, not per order"
+  in force 2026-10-01..
+  owner accounting
+  from @policy
+    reviewed 2026-10-04 by accounting sha256:784ec7d47b0919f5 -> sha256:166eee17bb57e3e0
+  satisfied by chobo "refunds.book" account refunded
+    reviewed 2026-10-04 by development sha256:166eee17bb57e3e0 -> sha256:8f80f74b076ccea8
+  not verified "This material has no claim that checks it"
+    approved 2026-10-04 by accounting sha256:166eee17bb57e3e0

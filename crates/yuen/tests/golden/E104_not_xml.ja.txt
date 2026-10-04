@@ -1,0 +1,4 @@
+エラー[E104]: tests/mutants/E104_not_xml/period_of_months.req:9:3: cfr §1.7 の写し tests/mutants/E104_not_xml/sources/law/37-CFR-1@2026-01-01/1.7.xml が読めません: XML ではありません
+     9 |   "§1.7" sha256:01de176ebe4740d7
+  = 写しは eCFR が配る XML のままにします。手で直さず、`yuen source fetch` で取り直します。
+tests/mutants/E104_not_xml: エラー 1 件

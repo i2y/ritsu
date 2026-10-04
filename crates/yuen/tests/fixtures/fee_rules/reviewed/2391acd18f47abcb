@@ -1,0 +1,3 @@
+clause no_extension(no_ext) -> extension_fee  @cfr "§1.17"
+  when months <=0
+  then 0USD

@@ -1,0 +1,4 @@
+error[E012]: tests/mutants/E012_source_as_a_link/payment.req:11:16: A source (`source`) is not written in a link or a scope
+    11 |   satisfied by koyomi "period_of_months.cal" source cfr
+  = A source is where a requirement comes from, not what meets it: borrow it with `source <name> = koyomi "…" source <name>` and cite it with `from @<name> <article>`.
+tests/mutants/E012_source_as_a_link: 1 error

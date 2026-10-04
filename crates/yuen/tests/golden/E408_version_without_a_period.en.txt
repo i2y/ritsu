@@ -1,0 +1,4 @@
+error[E408]: tests/mutants/E408_version_without_a_period/payment.req:16:13: payment_day v2 has no `in force`
+    16 | requirement payment_day v2
+  = When a requirement has more than one version, each has a period: the periods say which version holds on which day.
+tests/mutants/E408_version_without_a_period: 1 error

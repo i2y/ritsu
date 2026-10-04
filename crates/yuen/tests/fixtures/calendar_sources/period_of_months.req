@@ -1,0 +1,41 @@
+requirements period_of_months v1
+description "A test material: the dates and claims of koyomi's example period_of_months.cal, named one by one. The source of the closed days is borrowed from the bank holidays the calendar file pins. Written for this material; it does not say how any rule is read"
+
+role legal "Decides how the words of a rule are read"
+role development "Writes and fixes koyomi's file"
+
+source bank_holidays = koyomi "calendars/england_and_wales.cal" source bank_holidays
+
+scope koyomi "period_of_months.cal" date
+
+requirement first_day
+  text "The day itself is not counted"
+  in force 2026-10-01..
+  owner legal
+  decided 2026-10-03 by legal "The period starts on the day after the origin. Decided for this material"
+  satisfied by koyomi "period_of_months.cal" date first_day
+    reviewed 2026-10-04 by development sha256:29836b1424129486 -> sha256:f7fbde9442fad208
+  not verified "That the first day is not counted is checked on koyomi doc's page, by reading the rule and its restatement side by side. This material has no claim that checks it"
+    approved 2026-10-04 by legal sha256:29836b1424129486
+
+requirement last_day
+  text "A period of months ends on the day before the corresponding day of the last month, or on the last day of that month when it has no such day"
+  in force 2026-10-01..
+  owner legal
+  decided 2026-10-03 by legal "The corresponding day is counted from the first day. Decided for this material"
+  satisfied by koyomi "period_of_months.cal" date last_day
+    reviewed 2026-10-04 by development sha256:534cb97e1ca8a94c -> sha256:e4d5741e15aeb403
+  verified by koyomi "period_of_months.cal" claim last_day_after_origin
+    reviewed 2026-10-04 by development sha256:534cb97e1ca8a94c -> sha256:d88a046cef583e8a
+
+requirement last_day_moved
+  text "An end that falls on a day closed in England and Wales moves to the day after"
+  in force 2026-10-01..
+  owner legal
+  from @bank_holidays
+    reviewed 2026-10-04 by legal sha256:538b3482c28b85ec -> sha256:edc4cc0bb4910f57
+  decided 2026-10-03 by legal "The day after is taken as it is, and not moved on if it is closed too. Decided for this material"
+  satisfied by koyomi "period_of_months.cal" date last_day_moved
+    reviewed 2026-10-04 by development sha256:edc4cc0bb4910f57 -> sha256:da1536d15d1da2b6
+  verified by koyomi "period_of_months.cal" claim moved_on_or_after_last_day
+    reviewed 2026-10-04 by development sha256:edc4cc0bb4910f57 -> sha256:82aece4919f854bb

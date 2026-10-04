@@ -1,0 +1,365 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/delivery_flow",
+  "files": [
+    {
+      "path": "delivery.req",
+      "name": "delivery",
+      "version": "1",
+      "sha256": "e850abf958d62e04"
+    }
+  ],
+  "roles": [
+    {
+      "name": "logistics",
+      "description": "Decides the delivery procedure"
+    },
+    {
+      "name": "development",
+      "description": "Writes and fixes the workflow"
+    }
+  ],
+  "sources": [
+    {
+      "file": "delivery.req",
+      "name": "procedure",
+      "kind": "file",
+      "path": "delivery_procedure.md",
+      "url": null,
+      "sha256": "9a98840e2a559185",
+      "borrowed": null
+    }
+  ],
+  "requirements": [
+    {
+      "name": "next_day",
+      "alias": null,
+      "version": 1,
+      "file": "delivery.req",
+      "line": 11,
+      "text": "A next-day parcel is booked with a carrier. When no van is free, it says so and stops",
+      "in_force": null,
+      "owner": "logistics",
+      "replaces": [],
+      "sha256": "854ea074c3b4093e",
+      "from": [
+        {
+          "line": 14,
+          "sources": [
+            {
+              "source": "procedure",
+              "fragment": null,
+              "sha256": "9a98840e2a559185"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "logistics",
+            "up": [
+              "9a98840e2a559185"
+            ],
+            "down": "854ea074c3b4093e"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 16,
+          "role": "satisfied",
+          "artifact": {
+            "text": "dandori \"arrange_delivery.flow\" task book_next_day",
+            "tool": "dandori",
+            "path": "arrange_delivery.flow",
+            "items": [
+              [
+                "task",
+                "book_next_day"
+              ]
+            ]
+          },
+          "sha256": "06fdb81a96fb18d4",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "854ea074c3b4093e"
+            ],
+            "down": "06fdb81a96fb18d4"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 18,
+          "role": "verified",
+          "why": "This material has no claim that runs the workflow",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "logistics",
+            "sha256": "854ea074c3b4093e"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "regular",
+      "alias": null,
+      "version": 1,
+      "file": "delivery.req",
+      "line": 21,
+      "text": "A standard parcel is booked with the post",
+      "in_force": null,
+      "owner": "logistics",
+      "replaces": [],
+      "sha256": "2d8beaedbaa117d5",
+      "from": [
+        {
+          "line": 24,
+          "sources": [
+            {
+              "source": "procedure",
+              "fragment": null,
+              "sha256": "9a98840e2a559185"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "logistics",
+            "up": [
+              "9a98840e2a559185"
+            ],
+            "down": "2d8beaedbaa117d5"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 26,
+          "role": "satisfied",
+          "artifact": {
+            "text": "dandori \"arrange_delivery.flow\" task book_standard",
+            "tool": "dandori",
+            "path": "arrange_delivery.flow",
+            "items": [
+              [
+                "task",
+                "book_standard"
+              ]
+            ]
+          },
+          "sha256": "9275484a06b3b217",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "2d8beaedbaa117d5"
+            ],
+            "down": "9275484a06b3b217"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 28,
+          "role": "verified",
+          "why": "This material has no claim that runs the workflow",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "logistics",
+            "sha256": "2d8beaedbaa117d5"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "tracking_number",
+      "alias": null,
+      "version": 1,
+      "file": "delivery.req",
+      "line": 31,
+      "text": "Either way, a tracking number is returned",
+      "in_force": null,
+      "owner": "logistics",
+      "replaces": [],
+      "sha256": "42d300c1d0357478",
+      "from": [
+        {
+          "line": 34,
+          "sources": [
+            {
+              "source": "procedure",
+              "fragment": null,
+              "sha256": "9a98840e2a559185"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "logistics",
+            "up": [
+              "9a98840e2a559185"
+            ],
+            "down": "42d300c1d0357478"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 36,
+          "role": "satisfied",
+          "artifact": {
+            "text": "dandori \"arrange_delivery.flow\" record Booking field tracking_number",
+            "tool": "dandori",
+            "path": "arrange_delivery.flow",
+            "items": [
+              [
+                "record",
+                "Booking"
+              ],
+              [
+                "field",
+                "tracking_number"
+              ]
+            ]
+          },
+          "sha256": "a65b57058f985f17",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "42d300c1d0357478"
+            ],
+            "down": "a65b57058f985f17"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 38,
+          "role": "satisfied",
+          "artifact": {
+            "text": "dandori \"arrange_delivery.flow\" output tracking_number",
+            "tool": "dandori",
+            "path": "arrange_delivery.flow",
+            "items": [
+              [
+                "output",
+                "tracking_number"
+              ]
+            ]
+          },
+          "sha256": "a65b57058f985f17",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "42d300c1d0357478"
+            ],
+            "down": "a65b57058f985f17"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 40,
+          "role": "verified",
+          "why": "This material has no claim that runs the workflow",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "logistics",
+            "sha256": "42d300c1d0357478"
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "dandori \"arrange_delivery.flow\" output tracking_number",
+      "tool": "dandori",
+      "path": "arrange_delivery.flow",
+      "items": [
+        [
+          "output",
+          "tracking_number"
+        ]
+      ],
+      "sha256": "a65b57058f985f17",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "dandori \"arrange_delivery.flow\" record Booking field tracking_number",
+      "tool": "dandori",
+      "path": "arrange_delivery.flow",
+      "items": [
+        [
+          "record",
+          "Booking"
+        ],
+        [
+          "field",
+          "tracking_number"
+        ]
+      ],
+      "sha256": "a65b57058f985f17",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "dandori \"arrange_delivery.flow\" task book_next_day",
+      "tool": "dandori",
+      "path": "arrange_delivery.flow",
+      "items": [
+        [
+          "task",
+          "book_next_day"
+        ]
+      ],
+      "sha256": "06fdb81a96fb18d4",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "dandori \"arrange_delivery.flow\" task book_standard",
+      "tool": "dandori",
+      "path": "arrange_delivery.flow",
+      "items": [
+        [
+          "task",
+          "book_standard"
+        ]
+      ],
+      "sha256": "9275484a06b3b217",
+      "end": "item",
+      "pins": []
+    }
+  ],
+  "scopes": [
+    {
+      "file": "delivery.req",
+      "line": 9,
+      "text": "dandori \"arrange_delivery.flow\" task",
+      "artifacts": 2,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/delivery_flow: ok — 3 requirements, whose 7 links and 3 waivers are as they were looked at; every requirement is met and checked, or waived; the 2 tasks in scope all trace to a requirement",
+    "diagnostics": []
+  }
+}

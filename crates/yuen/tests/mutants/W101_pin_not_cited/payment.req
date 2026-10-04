@@ -1,0 +1,16 @@
+requirements payment v1
+description "A test material"
+
+role accounting "Decides the rules of payment"
+
+source cfr = law ecfr "37 CFR 1" asof 2026-01-01
+  "§1.7" sha256:01de176ebe4740d7
+
+requirement payment_day
+  text "Closes on the 20th, pays on the 10th of the next month"
+  owner accounting
+  decided 2026-10-03 by accounting "decided for the example"
+  satisfied by file "pay.py"
+    reviewed 2026-10-03 by accounting sha256:54009bc976fdc31c -> sha256:8a668601c703003d
+  not verified "Accounting compares them once a month"
+    approved 2026-10-03 by accounting sha256:54009bc976fdc31c

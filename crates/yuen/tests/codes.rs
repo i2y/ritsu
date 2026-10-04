@@ -23,7 +23,8 @@ fn every_example_gives_its_code() {
         }
         got
     });
-    assert_eq!(n, 42, "every code but the two retired ones is reproduced");
+    // 42 examples in Japanese, and 41 in English (E206's is English in both)
+    assert_eq!(n, 83, "every code but the two retired ones is reproduced, in each language it has an example in");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

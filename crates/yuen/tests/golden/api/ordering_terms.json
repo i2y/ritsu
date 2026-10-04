@@ -1,0 +1,217 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/ordering_terms",
+  "files": [
+    {
+      "path": "ordering_terms.req",
+      "name": "ordering_terms",
+      "version": "1",
+      "sha256": "cc2f844922e067bf"
+    }
+  ],
+  "roles": [
+    {
+      "name": "ordering",
+      "description": "Decides the terms of ordering"
+    }
+  ],
+  "sources": [
+    {
+      "file": "ordering_terms.req",
+      "name": "glossary",
+      "kind": "file",
+      "path": "glossary.md",
+      "url": null,
+      "sha256": "cb130a5f6f2a81ec",
+      "borrowed": null
+    }
+  ],
+  "requirements": [
+    {
+      "name": "order",
+      "alias": null,
+      "version": 1,
+      "file": "ordering_terms.req",
+      "line": 8,
+      "text": "An order is a purchase the customer has confirmed, and it does not disappear when it is cancelled",
+      "in_force": null,
+      "owner": "ordering",
+      "replaces": [],
+      "sha256": "419ff25fab796bd2",
+      "from": [
+        {
+          "line": 11,
+          "sources": [
+            {
+              "source": "glossary",
+              "fragment": null,
+              "sha256": "cb130a5f6f2a81ec"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "ordering",
+            "up": [
+              "cb130a5f6f2a81ec"
+            ],
+            "down": "419ff25fab796bd2"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 13,
+          "role": "satisfied",
+          "artifact": {
+            "text": "sakai \"contexts/ordering.ctx\" term order",
+            "tool": "sakai",
+            "path": "contexts/ordering.ctx",
+            "items": [
+              [
+                "term",
+                "order"
+              ]
+            ]
+          },
+          "sha256": "299fcb6a6845f6af",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "ordering",
+            "up": [
+              "419ff25fab796bd2"
+            ],
+            "down": "299fcb6a6845f6af"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 15,
+          "role": "verified",
+          "why": "This material has no claim that checks how the word is used",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "ordering",
+            "sha256": "419ff25fab796bd2"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "cancel",
+      "alias": null,
+      "version": 1,
+      "file": "ordering_terms.req",
+      "line": 18,
+      "text": "Cancel is cancelling an order before it ships, at the customer's request",
+      "in_force": null,
+      "owner": "ordering",
+      "replaces": [],
+      "sha256": "9937cc2b5ce6aa4b",
+      "from": [
+        {
+          "line": 21,
+          "sources": [
+            {
+              "source": "glossary",
+              "fragment": null,
+              "sha256": "cb130a5f6f2a81ec"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "ordering",
+            "up": [
+              "cb130a5f6f2a81ec"
+            ],
+            "down": "9937cc2b5ce6aa4b"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 23,
+          "role": "satisfied",
+          "artifact": {
+            "text": "sakai \"contexts/ordering.ctx\" term cancel",
+            "tool": "sakai",
+            "path": "contexts/ordering.ctx",
+            "items": [
+              [
+                "term",
+                "cancel"
+              ]
+            ]
+          },
+          "sha256": "4687c56296431a6b",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "ordering",
+            "up": [
+              "9937cc2b5ce6aa4b"
+            ],
+            "down": "4687c56296431a6b"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 25,
+          "role": "verified",
+          "why": "This material has no claim that checks how the word is used",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "ordering",
+            "sha256": "9937cc2b5ce6aa4b"
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "sakai \"contexts/ordering.ctx\" term cancel",
+      "tool": "sakai",
+      "path": "contexts/ordering.ctx",
+      "items": [
+        [
+          "term",
+          "cancel"
+        ]
+      ],
+      "sha256": "4687c56296431a6b",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "sakai \"contexts/ordering.ctx\" term order",
+      "tool": "sakai",
+      "path": "contexts/ordering.ctx",
+      "items": [
+        [
+          "term",
+          "order"
+        ]
+      ],
+      "sha256": "299fcb6a6845f6af",
+      "end": "item",
+      "pins": []
+    }
+  ],
+  "scopes": [],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/ordering_terms: ok — 2 requirements, whose 4 links and 2 waivers are as they were looked at; every requirement is met and checked, or waived",
+    "diagnostics": []
+  }
+}

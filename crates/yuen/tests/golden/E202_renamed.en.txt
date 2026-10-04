@@ -1,0 +1,5 @@
+error[E202]: tests/mutants/E202_renamed/refund.req:15:16: tests/mutants/E202_renamed/refunds.book has no transfer refund
+    15 |   satisfied by chobo "refunds.book" transfer refund
+  = It looks renamed: these have the definition that was looked at.
+  = Did you mean: chobo "refunds.book" transfer refund_request
+tests/mutants/E202_renamed: 1 error

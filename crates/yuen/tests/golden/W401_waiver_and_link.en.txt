@@ -1,0 +1,4 @@
+warning[W401]: tests/mutants/W401_waiver_and_link/payment.req:13:3: payment_day has a `satisfied by`, so this `not satisfied` is not needed
+    13 |   not satisfied "example"
+  = A waiver says no link is to be there; now that there is one, delete the waiver.
+tests/mutants/W401_waiver_and_link: ok — 1 requirement, whose 1 link and 2 waivers are as they were looked at; every requirement is met and checked, or waived (1 warning)

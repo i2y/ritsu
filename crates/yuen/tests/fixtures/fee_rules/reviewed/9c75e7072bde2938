@@ -1,0 +1,8 @@
+table standard_fee(standard)  @cfr "§1.17"
+policy unique
+       | months | -> extension_fee(fee) : money[USD] |
+first  | >0 <=1 | 235USD                             |
+second | >1 <=2 | 690USD                             |
+third  | >2 <=3 | 1590USD                            |
+fourth | >3 <=4 | 2495USD                            |
+fifth  | >4 <=5 | 3395USD                            |

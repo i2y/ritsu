@@ -1,0 +1,5 @@
+エラー[E202]: tests/mutants/E202_renamed/refund.req:15:16: tests/mutants/E202_renamed/refunds.book に transfer refund はありません
+    15 |   satisfied by chobo "refunds.book" transfer refund
+  = 名前が変わったようです。確かめたときと同じ定義のものがあります。
+  = 候補: chobo "refunds.book" transfer refund_request
+tests/mutants/E202_renamed: エラー 1 件

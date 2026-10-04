@@ -1,0 +1,4 @@
+error[E013]: tests/mutants/E013_outside_the_root/payment.req:11:21: `../pay.py` goes outside the root
+    11 |   satisfied by file "../pay.py"
+  = The root is the nearest directory above the path given that has a `.git` (else the directory given; `--root` changes it).
+tests/mutants/E013_outside_the_root: 1 error

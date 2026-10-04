@@ -1,0 +1,4 @@
+error[E002]: tests/mutants/E002_unknown_line/payment.req:10:3: No line of a requirement starts with `because`
+    10 |   because "example"
+  = The lines of a requirement go: `text`, `in force`, `owner`, `replaces`, `from`, `decided`, `satisfied by` and `not satisfied`, `verified by` and `not verified`.
+tests/mutants/E002_unknown_line: 1 error

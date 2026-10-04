@@ -1,0 +1,4 @@
+エラー[E408]: tests/mutants/E408_version_without_a_period/payment.req:16:13: 要件「payment_day」の v2 に `in force` がありません
+    16 | requirement payment_day v2
+  = 版が二つ以上ある要件は、どの版にも効力の期間を書きます。期間で、どの日にどの版が効くかが決まります。
+tests/mutants/E408_version_without_a_period: エラー 1 件

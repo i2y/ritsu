@@ -1,0 +1,4 @@
+エラー[E106]: tests/mutants/E106_borrows_an_undeclared_source/example.req:4:8: tests/mutants/E106_borrows_an_undeclared_source/a.cal は出典「cfr」を宣言していません
+     4 | source cfr = koyomi "a.cal" source cfr
+  = tests/mutants/E106_borrows_an_undeclared_source/a.cal が宣言している出典はありません。
+tests/mutants/E106_borrows_an_undeclared_source: エラー 1 件

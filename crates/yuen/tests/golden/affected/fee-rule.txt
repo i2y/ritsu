@@ -1,0 +1,8 @@
+diff: tests/fixtures/fee_rules/changes/rule.diff
+files that requirements name, that the diff touches:
+  rulec "rules/extension_fees.rule": met by standard_fee, small_entity_fee
+changes no requirement reaches: none
+requirements touched:
+  standard_fee (tests/fixtures/fee_rules/extension_fees.req:13): owner legal; from cfr §1.17
+  small_entity_fee (tests/fixtures/fee_rules/extension_fees.req:26): owner legal; from cfr §1.27
+2 requirements touched; ask legal

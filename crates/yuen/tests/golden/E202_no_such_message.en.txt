@@ -1,0 +1,5 @@
+error[E202]: tests/mutants/E202_no_such_message/example.req:8:16: tests/mutants/E202_no_such_message/a.proto has no message Orders
+     8 |   satisfied by proto "a.proto" message Orders
+  = The ones of the same kind no link names.
+  = Did you mean: proto "a.proto" message Order
+tests/mutants/E202_no_such_message: 1 error

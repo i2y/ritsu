@@ -1,0 +1,25 @@
+エラー[E304]: tests/mutants/E302_original_requirement_changed/payment.req:11:3: payment_policy は、2026-10-03 に accounting がこの見送りを承認したあとで変わりました
+    11 |   not satisfied "No code meets the policy itself. The requirement below does"
+  payment_policy の変わったところ:
+      @@ -1,1 +1,1 @@
+      - text An invoice received is paid together with the others of its closing day
+      + text An invoice received is paid in the next month, together with the others of its closing day
+  = 確かめたら: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:11 --by <役割>
+エラー[E304]: tests/mutants/E302_original_requirement_changed/payment.req:13:3: payment_policy が変わったので、この見送りを承認し直します（tests/mutants/E302_original_requirement_changed/payment.req:11 と同じ変更）
+    13 |   not verified "The requirement below checks it"
+  = 2026-10-03 に accounting が承認した見送りです。
+  = 確かめたら: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:13 --by <役割>
+エラー[E302]: tests/mutants/E302_original_requirement_changed/payment.req:19:3: payment_policy は、2026-10-03 に accounting がこのリンクを確かめたあとで変わりました
+    19 |   from payment_policy
+  = tests/mutants/E302_original_requirement_changed/payment.req:11 と同じ変更です。差分は繰り返しません。
+  = 確かめたら: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:19 --by <役割>
+エラー[E302]: tests/mutants/E302_original_requirement_changed/payment.req:21:3: payment_day の出どころ（payment_policy）が変わったので、このリンクを確かめ直します
+    21 |   satisfied by file "pay.py"
+  = 2026-10-03 に accounting が確かめたリンクです。
+  = 変わったものは、その診断で先に確かめます。
+  = 確かめたら: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:21 --by <役割>
+エラー[E304]: tests/mutants/E302_original_requirement_changed/payment.req:23:3: payment_day が変わったので、この見送りを承認し直します（tests/mutants/E302_original_requirement_changed/payment.req:21 と同じ変更）
+    23 |   not verified "Accounting compares them once a month"
+  = 2026-10-03 に accounting が承認した見送りです。
+  = 確かめたら: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:23 --by <役割>
+tests/mutants/E302_original_requirement_changed: エラー 5 件

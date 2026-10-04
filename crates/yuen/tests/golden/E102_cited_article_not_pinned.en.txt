@@ -1,0 +1,5 @@
+error[E102]: tests/mutants/E102_cited_article_not_pinned/period_of_months.req:40:13: cfr §1.7 is cited but not pinned
+    40 |   from @cfr "§1.7"
+  = Every article cited has a pin line under its source: it records which version of the text the requirement was read from.
+  = The line, fixed: "§1.7" sha256:01de176ebe4740d7
+tests/mutants/E102_cited_article_not_pinned: 1 error

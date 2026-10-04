@@ -1,0 +1,7 @@
+warning[W101]: tests/mutants/E105_not_an_article_form/period_of_months.req:9:3: cfr §1.7 is pinned but no requirement cites it
+     9 |   "§1.7" sha256:01de176ebe4740d7
+  = If it is what is left after a citation was removed, delete the pin line.
+error[E105]: tests/mutants/E105_not_an_article_form/period_of_months.req:41:13: `section 1.7` is not written as an article
+    41 |   from @cfr "section 1.7"
+  = The forms are `"§1910.157"` and `"1910.157"` (a section).
+tests/mutants/E105_not_an_article_form: 1 error, 1 warning

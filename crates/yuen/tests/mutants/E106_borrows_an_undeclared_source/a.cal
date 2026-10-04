@@ -1,0 +1,7 @@
+dates example v1
+
+inputs
+  origin : date  range >=2026-01-01 <=2026-12-31
+
+date next_day = origin
+  + 1 day

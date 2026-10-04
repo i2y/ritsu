@@ -1,0 +1,4 @@
+error[E205]: tests/mutants/E205_unreadable_proto/example.req:8:16: tests/mutants/E205_unreadable_proto/a.proto does not read as a .proto: `}` is expected where the end of the file is
+     8 |   satisfied by proto "a.proto" message Order
+  = yuen reads it with ritsu's reader of .proto files; make it a proto3 `.proto`.
+tests/mutants/E205_unreadable_proto: 1 error

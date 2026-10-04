@@ -1,0 +1,3 @@
+エラー[E007]: tests/mutants/E007_same_role/payment.req:5:6: 役割「accounting」は tests/mutants/E007_same_role/payment.req:4 でも宣言されています
+     5 | role accounting "a second time"
+tests/mutants/E007_same_role: エラー 1 件

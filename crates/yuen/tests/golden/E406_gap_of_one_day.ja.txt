@@ -1,0 +1,8 @@
+エラー[E406]: tests/mutants/E406_gap_of_one_day/payment.req:18:3: 要件「payment_day」の v1 と v2 のあいだの 2027-04-01 が、どの版の期間にも入りません
+    18 |   in force 2027-04-02..
+  = v1 の期間は `2026-01-01..2027-03-31`、v2 の期間は `2027-04-02..` です。
+  期間の順:
+      v1 in force 2026-01-01..2027-03-31（tests/mutants/E406_gap_of_one_day/payment.req:8）
+      v2 in force 2027-04-02..（tests/mutants/E406_gap_of_one_day/payment.req:18）
+  = 直した行: in force 2027-04-01..
+tests/mutants/E406_gap_of_one_day: エラー 1 件

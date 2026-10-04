@@ -1,0 +1,4 @@
+エラー[E007]: tests/mutants/E007_same_requirement/payment.req:14:13: 要件「payment_day」は tests/mutants/E007_same_requirement/payment.req:7 でも宣言されています
+    14 | requirement payment_day
+  = 同じ要件の版なら、`v1`、`v2` と書き分け、どの版にも `in force` を書きます。別の要件なら、名前を変えます。
+tests/mutants/E007_same_requirement: エラー 1 件

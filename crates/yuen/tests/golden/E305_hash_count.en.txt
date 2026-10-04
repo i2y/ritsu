@@ -1,0 +1,5 @@
+error[E305]: tests/mutants/E305_hash_count/period_of_months.req:31:5: The record holds 1 hashes for the upper ends, and the link has 2 (cfr §1.8, §1.10)
+    31 |     reviewed 2026-10-03 by legal sha256:fa698e3ea7cb1e49 -> sha256:8d02c6a1f0ad3364
+  = A record is what `yuen review` writes; look again, and let it write the record anew.
+  = Once a person has looked: yuen review tests/mutants/E305_hash_count --root tests/mutants/E305_hash_count --at tests/mutants/E305_hash_count/period_of_months.req:30 --by <role>
+tests/mutants/E305_hash_count: 1 error

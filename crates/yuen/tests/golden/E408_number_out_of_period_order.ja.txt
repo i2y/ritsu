@@ -1,0 +1,6 @@
+エラー[E408]: tests/mutants/E408_number_out_of_period_order/payment.req:8:3: 要件「payment_day」の版の番号が、期間の順に増えていません（v2 の期間が v1 より前）
+     8 |   in force 2027-04-01..
+  期間の順:
+      v2 in force 2026-01-01..2027-03-31（tests/mutants/E408_number_out_of_period_order/payment.req:18）
+      v1 in force 2027-04-01..（tests/mutants/E408_number_out_of_period_order/payment.req:8）
+tests/mutants/E408_number_out_of_period_order: エラー 1 件

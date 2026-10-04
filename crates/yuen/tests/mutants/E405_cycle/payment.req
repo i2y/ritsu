@@ -1,0 +1,18 @@
+requirements payment v1
+description "A test material"
+
+role accounting "Decides the rules of payment"
+
+requirement closing_day
+  text "Closes on the 20th"
+  owner accounting
+  from payment_day
+  not satisfied "example"
+  not verified "example"
+
+requirement payment_day
+  text "Pays on the 10th of the month after the closing day"
+  owner accounting
+  from closing_day
+  not satisfied "example"
+  not verified "example"

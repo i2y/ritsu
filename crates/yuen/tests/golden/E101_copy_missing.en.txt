@@ -1,0 +1,4 @@
+error[E101]: tests/mutants/E101_copy_missing/period_of_months.req:9:3: The copy of cfr §1.7 is not there: tests/mutants/E101_copy_missing/sources/law/37-CFR-1@2026-01-01/1.7.xml
+     9 |   "§1.7" sha256:01de176ebe4740d7
+  = `yuen source fetch` takes it from eCFR and writes it there; check never reads the network.
+tests/mutants/E101_copy_missing: 1 error

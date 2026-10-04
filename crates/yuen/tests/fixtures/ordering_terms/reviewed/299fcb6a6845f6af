@@ -1,0 +1,2 @@
+order "A purchase the customer has confirmed. It does not disappear when it is cancelled"
+means message Order

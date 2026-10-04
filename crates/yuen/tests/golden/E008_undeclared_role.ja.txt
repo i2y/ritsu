@@ -1,0 +1,4 @@
+エラー[E008]: tests/mutants/E008_undeclared_role/payment.req:9:9: 役割「accounting_dept」は宣言されていません
+     9 |   owner accounting_dept
+  = 役割は `role 法務 "条文の読み方を決める"` のように宣言してから使います。書き間違い（`法務部` と `法務`）を止めるためです。
+tests/mutants/E008_undeclared_role: エラー 1 件

@@ -1,0 +1,2 @@
+cancel "Cancelling an order before it ships, at the customer's request"
+means enum OrderStatus value ORDER_STATUS_CANCELLED

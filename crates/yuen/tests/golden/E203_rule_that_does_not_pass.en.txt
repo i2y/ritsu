@@ -1,0 +1,5 @@
+error[E203]: tests/mutants/E203_rule_that_does_not_pass/example.req:8:16: rulec cannot answer for rulec "a.rule" table fees
+     8 |   satisfied by rulec "a.rule" table fees
+  = what rulec says: [E101] tests/mutants/E203_rule_that_does_not_pass/a.rule:9: Completeness gap: some input matches no row
+  = Make the file pass rulec's check; no end is made from a file that does not.
+tests/mutants/E203_rule_that_does_not_pass: 1 error

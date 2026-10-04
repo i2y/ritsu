@@ -1,0 +1,18 @@
+requirements payment_policy v1
+description "A test material: the policy the requirements of the payment day come from, read and decided from the clause of an example set of terms. Written as an example; not real payment terms"
+
+role accounting "Decides the payment policy"
+role development "Writes and fixes the payment calculation"
+
+source terms = file "docs/terms.md" url "https://example.org/terms.md" sha256:9b646f638f835af8
+
+requirement payment_policy
+  text "The price of an invoice received is paid within 60 days of the closing day"
+  owner accounting
+  from @terms
+    reviewed 2026-10-03 by accounting sha256:9b646f638f835af8 -> sha256:0a46828266bf9f74
+  decided 2026-09-01 by accounting "Clause 4's 'from the closing day' is read as counted from the day after the closing day. Decided for this material"
+  satisfied by file "src/pay.py"
+    reviewed 2026-10-03 by development sha256:0a46828266bf9f74 -> sha256:93e39b25842afd07
+  verified by file "tests/test_pay.py"
+    reviewed 2026-10-03 by development sha256:0a46828266bf9f74 -> sha256:df4a7416b584ec48

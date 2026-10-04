@@ -1,0 +1,5 @@
+error[E301]: tests/mutants/E301_not_looked_at/period_of_months.req:21:3: No one has looked at the link from date_of_receipt to file "period_of_months.cal" yet
+    21 |   satisfied by file "period_of_months.cal"
+  = Once a person has read both ends and the link holds, `yuen review` writes who looked, when, and the hashes of both ends under the link.
+  = Once a person has looked: yuen review tests/mutants/E301_not_looked_at --root tests/mutants/E301_not_looked_at --at tests/mutants/E301_not_looked_at/period_of_months.req:21 --by <role>
+tests/mutants/E301_not_looked_at: 1 error

@@ -1,0 +1,4 @@
+error[E006]: tests/mutants/E006_no_such_date/payment.req:10:11: There is no date 2026-02-30
+    10 |   decided 2026-02-30 by accounting "decided for the example"
+  = A date is a day of the calendar from 0001-01-01 to 9999-12-31.
+tests/mutants/E006_no_such_date: 1 error

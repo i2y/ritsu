@@ -1,0 +1,4 @@
+エラー[E012]: tests/mutants/E012_yuen_named/payment.req:11:16: `yuen` の名指しは .req の中には書けません
+    11 |   satisfied by yuen "policy.req" requirement payment_policy
+  = 要件どうしは `from <要件>` で、名前だけで書きます。`yuen` の名指しは、ほかの言語が yuen の要件を指すためのものです。
+tests/mutants/E012_yuen_named: エラー 1 件

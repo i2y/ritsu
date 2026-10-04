@@ -1,0 +1,26 @@
+requirements ordering_terms v1
+description "A test material: the words of the context ordering.ctx of sakai's example, named by where in the glossary they come from"
+
+role ordering "Decides the terms of ordering"
+
+source glossary = file "glossary.md" sha256:cb130a5f6f2a81ec
+
+requirement order
+  text "An order is a purchase the customer has confirmed, and it does not disappear when it is cancelled"
+  owner ordering
+  from @glossary
+    reviewed 2026-10-04 by ordering sha256:cb130a5f6f2a81ec -> sha256:419ff25fab796bd2
+  satisfied by sakai "contexts/ordering.ctx" term order
+    reviewed 2026-10-04 by ordering sha256:419ff25fab796bd2 -> sha256:299fcb6a6845f6af
+  not verified "This material has no claim that checks how the word is used"
+    approved 2026-10-04 by ordering sha256:419ff25fab796bd2
+
+requirement cancel
+  text "Cancel is cancelling an order before it ships, at the customer's request"
+  owner ordering
+  from @glossary
+    reviewed 2026-10-04 by ordering sha256:cb130a5f6f2a81ec -> sha256:9937cc2b5ce6aa4b
+  satisfied by sakai "contexts/ordering.ctx" term cancel
+    reviewed 2026-10-04 by ordering sha256:9937cc2b5ce6aa4b -> sha256:4687c56296431a6b
+  not verified "This material has no claim that checks how the word is used"
+    approved 2026-10-04 by ordering sha256:9937cc2b5ce6aa4b

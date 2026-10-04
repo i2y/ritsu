@@ -1,0 +1,4 @@
+error[E003]: tests/mutants/E003_no_heading/payment.req:1:1: A file starts with a `requirements` line
+     1 | description "A test material. The rules are decided for the example, and are no company's"
+  = The first line names the set of requirements and its version, like `requirements payment_terms v1`.
+tests/mutants/E003_no_heading: 1 error

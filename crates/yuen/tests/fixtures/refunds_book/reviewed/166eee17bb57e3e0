@@ -1,0 +1,3 @@
+text The amount refunded is recorded in total, not per order
+from file refund_policy.md sha256:784ec7d47b0919f5
+in force 2026-10-01..

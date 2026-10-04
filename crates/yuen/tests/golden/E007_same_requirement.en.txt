@@ -1,0 +1,4 @@
+error[E007]: tests/mutants/E007_same_requirement/payment.req:14:13: The requirement payment_day is also declared at tests/mutants/E007_same_requirement/payment.req:7
+    14 | requirement payment_day
+  = If they are versions of one requirement, write `v1` and `v2` and give each an `in force`; if not, rename one.
+tests/mutants/E007_same_requirement: 1 error

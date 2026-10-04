@@ -1,0 +1,5 @@
+error[E305]: tests/mutants/E305_no_arrow/payment.req:12:63: The record is not written right: `->` belongs here (found `sha256:8a668601c703003d`)
+    12 |     reviewed 2026-10-03 by accounting sha256:54009bc976fdc31c sha256:8a668601c703003d
+  = A record is what `yuen review` writes; look again, and let it write the record anew.
+  = Once a person has looked: yuen review tests/mutants/E305_no_arrow --root tests/mutants/E305_no_arrow --at tests/mutants/E305_no_arrow/payment.req:11 --by <role>
+tests/mutants/E305_no_arrow: 1 error

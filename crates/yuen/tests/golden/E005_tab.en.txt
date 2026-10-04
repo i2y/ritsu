@@ -1,0 +1,4 @@
+error[E005]: tests/mutants/E005_tab/payment.req:9:1: The indentation has a tab; indent with spaces
+     9 | 	owner accounting
+  = How wide a tab is depends on the editor, so whether the lines line up cannot be told.
+tests/mutants/E005_tab: 1 error

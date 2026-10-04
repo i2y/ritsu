@@ -1,0 +1,4 @@
+error[E010]: tests/mutants/E010_no_alias/payment.req:7:13: The requirement PaymentDay has no alias
+     7 | requirement PaymentDay
+  = A requirement whose name is not lowercase ASCII, digits and `_` gets an alias, as in `PaymentDay(payment_day)`; ReqIF and PROV identify it by the alias, and so can a command line.
+tests/mutants/E010_no_alias: 1 error

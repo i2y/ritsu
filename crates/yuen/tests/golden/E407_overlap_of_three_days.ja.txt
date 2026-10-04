@@ -1,0 +1,7 @@
+エラー[E407]: tests/mutants/E407_overlap_of_three_days/payment.req:18:3: 要件「payment_day」の v1 と v2 の期間が 2027-03-29..2027-03-31 で重なります
+    18 |   in force 2027-03-29..
+  = v1 の期間は `2026-01-01..2027-03-31`、v2 の期間は `2027-03-29..` です。一つの日に効く版は一つです。
+  期間の順:
+      v1 in force 2026-01-01..2027-03-31（tests/mutants/E407_overlap_of_three_days/payment.req:8）
+      v2 in force 2027-03-29..（tests/mutants/E407_overlap_of_three_days/payment.req:18）
+tests/mutants/E407_overlap_of_three_days: エラー 1 件

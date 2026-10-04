@@ -1,0 +1,13 @@
+{
+  "description": "what is left to refund on the order",
+  "lower": {
+    "refused_as": "refund_exceeds_sale",
+    "value": 0
+  },
+  "outside": false,
+  "params": [
+    "order"
+  ],
+  "unit": "USD",
+  "upper": null
+}

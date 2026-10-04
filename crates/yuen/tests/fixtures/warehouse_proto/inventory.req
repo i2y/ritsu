@@ -1,0 +1,43 @@
+requirements inventory v1
+description "A test material: the promises of the warehouse and shipping services of dandori's example fulfillment, named by elements of the .proto files. The source is a copy of the document of the promises, pinned"
+
+role warehouse "Decides the promises of the stock service"
+role development "Writes and fixes the .proto files"
+
+source contract = file "contract.md" sha256:997c973ba5bd5798
+
+scope proto "warehouse.proto" service StockService method
+
+requirement reserve
+  text "The warehouse holds stock for each line of an order. When there is not enough, it answers so without holding any"
+  owner warehouse
+  from @contract
+    reviewed 2026-10-04 by warehouse sha256:997c973ba5bd5798 -> sha256:054a0be4bb4bbe79
+  satisfied by proto "warehouse.proto" service StockService method Reserve
+    reviewed 2026-10-04 by development sha256:054a0be4bb4bbe79 -> sha256:cadb2fc727e9af81
+  satisfied by proto "warehouse.proto" enum Stock
+    reviewed 2026-10-04 by development sha256:054a0be4bb4bbe79 -> sha256:d7450e7503c905f7
+  not verified "This material has no claim that runs the service"
+    approved 2026-10-04 by warehouse sha256:054a0be4bb4bbe79
+
+requirement release
+  text "Stock held is released with the number it was held with"
+  owner warehouse
+  from @contract
+    reviewed 2026-10-04 by warehouse sha256:997c973ba5bd5798 -> sha256:870d0744de8ff13a
+  satisfied by proto "warehouse.proto" service StockService method Release
+    reviewed 2026-10-04 by development sha256:870d0744de8ff13a -> sha256:2a0912a66889e515
+  not verified "This material has no claim that runs the service"
+    approved 2026-10-04 by warehouse sha256:870d0744de8ff13a
+
+requirement fulfill
+  text "Fulfillment starts with an order, and answers with the stock held and a tracking number"
+  owner warehouse
+  from @contract
+    reviewed 2026-10-04 by warehouse sha256:997c973ba5bd5798 -> sha256:83acaba766b0b3b5
+  satisfied by proto "fulfillment.proto" service FulfillmentService method Fulfill
+    reviewed 2026-10-04 by development sha256:83acaba766b0b3b5 -> sha256:6c73e17bf5bedba7
+  satisfied by proto "fulfillment.proto" message FulfillResponse field tracking_number
+    reviewed 2026-10-04 by development sha256:83acaba766b0b3b5 -> sha256:fb7f7e2617539e54
+  not verified "This material has no claim that runs the service"
+    approved 2026-10-04 by warehouse sha256:83acaba766b0b3b5

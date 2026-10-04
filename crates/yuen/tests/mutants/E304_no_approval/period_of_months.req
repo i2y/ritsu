@@ -1,0 +1,46 @@
+requirements period_of_months v1
+description "Where the dates of koyomi's example period_of_months.cal could come from, if it followed the time rules of the USPTO's regulations in 37 CFR part 1. The sources are copied and pinned here, and what meets a requirement is read as a file. Written for this test material; it does not say how any rule is read"
+
+role legal "Decides how the words of a rule are read"
+role development "Writes and fixes koyomi's file"
+
+source cfr = law ecfr "37 CFR 1" asof 2026-01-01
+  "§1.6" sha256:6bcdc27c3428886c
+  "§1.7" sha256:01de176ebe4740d7
+  "§1.8" sha256:fa698e3ea7cb1e49
+  "§1.10" sha256:5adcbc193371fd26
+
+scope file "period_of_months.cal"
+
+requirement date_of_receipt
+  text "Correspondence received in the Patent and Trademark Office is stamped with the date of receipt"
+  in force 2026-10-01..
+  owner legal
+  from @cfr "§1.6"
+    reviewed 2026-10-03 by legal sha256:6bcdc27c3428886c -> sha256:c6a57f069e4638f2
+  satisfied by file "period_of_months.cal"
+    reviewed 2026-10-03 by development sha256:c6a57f069e4638f2 -> sha256:0f1a06d9b71a39f6
+  not verified "That the day of receipt is not counted is checked on koyomi doc's page, by reading the rule and its restatement side by side. This material has no claim that checks it"
+    approved 2026-10-03 by legal sha256:c6a57f069e4638f2
+
+requirement timely_filing
+  text "Correspondence required to be filed within a set period of time is considered timely filed if it is mailed or transmitted before the period ends, with a certificate of the date of deposit or transmission"
+  in force 2026-10-01..
+  owner legal
+  from @cfr "§1.8", "§1.10"
+    reviewed 2026-10-03 by legal sha256:fa698e3ea7cb1e49, sha256:5adcbc193371fd26 -> sha256:8d02c6a1f0ad3364
+  satisfied by file "period_of_months.cal"
+    reviewed 2026-10-03 by development sha256:8d02c6a1f0ad3364 -> sha256:0f1a06d9b71a39f6
+  not verified "A function that writes the rule's cases as they are, held against every origin of 2000 to 2027 and every month count of 1 to 12, was checked in koyomi's design stage. This material has no claim that checks it"
+
+requirement next_business_day
+  text "When the last day fixed for taking an action falls on a Saturday, Sunday or Federal holiday, the action may be taken on the next succeeding business day which is not one"
+  in force 2026-10-01..
+  owner legal
+  from @cfr "§1.7"
+    reviewed 2026-10-03 by legal sha256:01de176ebe4740d7 -> sha256:8d9c6066ea40430f
+  decided 2026-10-03 by legal "The next succeeding business day is read as the day after the closed day, and not moved further if that day is closed too. Decided for this material; it does not say how any rule is read"
+  satisfied by file "period_of_months.cal"
+    reviewed 2026-10-03 by development sha256:8d9c6066ea40430f -> sha256:0f1a06d9b71a39f6
+  not verified "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim"
+    approved 2026-10-03 by legal sha256:8d9c6066ea40430f

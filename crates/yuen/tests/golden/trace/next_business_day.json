@@ -1,0 +1,95 @@
+{
+  "requirements": [
+    {
+      "name": "next_business_day",
+      "alias": null,
+      "version": 1,
+      "file": "period_of_months.req",
+      "line": 37,
+      "text": "When the last day fixed for taking an action falls on a Saturday, Sunday or Federal holiday, the action may be taken on the next succeeding business day which is not one",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "legal",
+      "replaces": [],
+      "sha256": "8d9c6066ea40430f",
+      "from": [
+        {
+          "line": 41,
+          "sources": [
+            {
+              "source": "cfr",
+              "fragment": "§1.7",
+              "db": "ecfr",
+              "id": "37 CFR 1",
+              "asof": "2026-01-01",
+              "revision": null,
+              "copy": "sources/law/37-CFR-1@2026-01-01/1.7.xml",
+              "sha256": "01de176ebe4740d7",
+              "text": [
+                "§ 1.7 Times for taking action; Expiration on Saturday, Sunday or Federal holiday.",
+                "(a) Whenever periods of time are specified in this part in days, calendar days are intended. When the day, or the last day fixed by statute or by or under this part for taking any action or paying any fee in the United States Patent and Trademark Office falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the action may be taken, or the fee paid, on the next succeeding business day which is not a Saturday, Sunday, or a Federal holiday. See § 90.3 of this chapter for time for appeal or for commencing civil action.",
+                "(b) If the day that is twelve months after the filing date of a provisional application under 35 U.S.C. 111(b) and § 1.53(c) falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the period of pendency shall be extended to the next succeeding secular or business day which is not a Saturday, Sunday, or a Federal holiday.",
+                "[65 FR 14871, Mar. 20, 2000, as amended at 78 FR 62395, Oct. 21, 2013]"
+              ]
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "legal",
+            "up": [
+              "01de176ebe4740d7"
+            ],
+            "down": "8d9c6066ea40430f"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [
+        {
+          "date": "2026-10-03",
+          "by": "legal",
+          "why": "The next succeeding business day is read as the day after the closed day, and not moved further if that day is closed too. Decided for this material; it does not say how any rule is read"
+        }
+      ],
+      "links": [
+        {
+          "line": 44,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"period_of_months.cal\"",
+            "tool": "file",
+            "path": "period_of_months.cal",
+            "items": []
+          },
+          "reviewed": {
+            "date": "2026-10-03",
+            "by": "development",
+            "up": [
+              "8d9c6066ea40430f"
+            ],
+            "down": "0f1a06d9b71a39f6"
+          },
+          "status": "ok",
+          "pins": []
+        },
+        {
+          "line": 46,
+          "role": "not verified",
+          "why": "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim",
+          "approved": {
+            "date": "2026-10-03",
+            "by": "legal",
+            "up": [
+              "8d9c6066ea40430f"
+            ],
+            "down": null
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ]
+}

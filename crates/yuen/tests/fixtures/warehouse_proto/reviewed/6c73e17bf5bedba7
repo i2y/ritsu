@@ -1,0 +1,28 @@
+rpc shop.v1.FulfillmentService.Fulfill(shop.v1.FulfillRequest) returns (shop.v1.FulfillResponse)
+  option (dandori.v1.start) = {fails: ["OutOfStock", "DeliveryFailed", "PackingLate"]}
+message shop.v1.FulfillRequest
+  shop.v1.Order order = 1
+message shop.v1.FulfillResponse
+  repeated warehouse.v1.ReserveResponse reservations = 1
+  string tracking_number = 2 [json_name = "tracking_number"]
+message shop.v1.Gift
+  string recipient = 1
+  optional string message = 2
+message shop.v1.Line
+  string sku = 1
+  int32 quantity = 2
+message shop.v1.Order
+  string id = 1
+  bool member = 2
+  int32 amount = 3
+  repeated shop.v1.Line lines = 4
+  shop.v1.Gift gift = 5
+  google.protobuf.Value extra = 6
+message warehouse.v1.ReserveResponse
+  string sku = 1
+  warehouse.v1.Stock stock = 2
+  optional string id = 3
+enum warehouse.v1.Stock
+  unspecified = 0
+  secured = 1
+  short = 2

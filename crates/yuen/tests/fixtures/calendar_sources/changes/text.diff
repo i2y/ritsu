@@ -1,0 +1,11 @@
+--- a/period_of_months.req
++++ b/period_of_months.req
+@@ -29,7 +29,7 @@
+     reviewed 2026-10-04 by development sha256:534cb97e1ca8a94c -> sha256:d88a046cef583e8a
+ 
+ requirement last_day_moved
+-  text "An end that falls on a day closed in England and Wales moves to the day after"
++  text "An end that falls on a day closed in England and Wales moves to the day after. If that day is closed too, it moves on until the closure ends"
+   in force 2026-10-01..
+   owner legal
+   from @bank_holidays

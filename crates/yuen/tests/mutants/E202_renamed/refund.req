@@ -1,0 +1,18 @@
+requirements refund v1
+description "A book whose transfer was renamed without mending the link. A test material"
+
+role accounting "Decides the refund policy"
+role development "Writes and fixes the book"
+
+source policy = file "refund_policy.md" sha256:784ec7d47b0919f5
+
+requirement hold_until_approved
+  text "A refund is not final until a person approves it. While it waits for approval, the amount is held"
+  in force 2026-10-01..
+  owner accounting
+  from @policy
+    reviewed 2026-10-04 by accounting sha256:784ec7d47b0919f5 -> sha256:beb5b3ab5c01bf55
+  satisfied by chobo "refunds.book" transfer refund
+    reviewed 2026-10-04 by accounting sha256:beb5b3ab5c01bf55 -> sha256:d4eb1e0e94a3b78f
+  not verified "That the amount held returns at the expiry is checked by chobo's scenarios. This material has no claim that names it"
+    approved 2026-10-04 by accounting sha256:beb5b3ab5c01bf55

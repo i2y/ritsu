@@ -1,0 +1,17 @@
+requirements payment_terms v1
+description "A test material: the payment day of koyomi's example payment_20th_close_next_10th.cal. The source of the closed days is borrowed from the table of national holidays the calendar file pins. The terms of payment are written for this material"
+
+role accounting "Decides the terms of payment"
+
+source holidays = koyomi "calendars/tokyo_business_days.cal" source national_holidays
+
+requirement payment_day
+  text "Closes on the 20th, pays on the 10th of the next month. When the payment day is closed, pays on the business day before"
+  in force 2026-10-01..
+  owner accounting
+  from @holidays
+    reviewed 2026-10-04 by accounting sha256:cec37a743c96995c -> sha256:dd7089d2bc2f76e0
+  satisfied by koyomi "payment_20th_close_next_10th.cal" date payment
+    reviewed 2026-10-04 by accounting sha256:dd7089d2bc2f76e0 -> sha256:77727589d8318079
+  verified by koyomi "payment_20th_close_next_10th.cal" claim paid_on_a_business_day
+    reviewed 2026-10-04 by accounting sha256:dd7089d2bc2f76e0 -> sha256:a30c094c89e283df

@@ -1,0 +1,2 @@
+text The warehouse holds stock for each line of an order. When there is not enough, it answers so without holding any
+from file contract.md sha256:997c973ba5bd5798

@@ -1,0 +1,4 @@
+エラー[E003]: tests/mutants/E003_no_heading/payment.req:1:1: ファイルは `requirements` の行で始めます
+     1 | description "A test material. The rules are decided for the example, and are no company's"
+  = 一行目は `requirements 民法の期間 v1` のように、要件の集まりの名前と版を書きます。
+tests/mutants/E003_no_heading: エラー 1 件

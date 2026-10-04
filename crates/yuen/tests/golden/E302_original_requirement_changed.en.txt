@@ -1,0 +1,25 @@
+error[E304]: tests/mutants/E302_original_requirement_changed/payment.req:11:3: payment_policy changed after accounting approved this waiver on 2026-10-03
+    11 |   not satisfied "No code meets the policy itself. The requirement below does"
+  what changed in payment_policy:
+      @@ -1,1 +1,1 @@
+      - text An invoice received is paid together with the others of its closing day
+      + text An invoice received is paid in the next month, together with the others of its closing day
+  = Once a person has looked: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:11 --by <role>
+error[E304]: tests/mutants/E302_original_requirement_changed/payment.req:13:3: payment_policy changed, so this waiver needs approving again (the same change as at tests/mutants/E302_original_requirement_changed/payment.req:11)
+    13 |   not verified "The requirement below checks it"
+  = accounting approved this waiver on 2026-10-03.
+  = Once a person has looked: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:13 --by <role>
+error[E302]: tests/mutants/E302_original_requirement_changed/payment.req:19:3: payment_policy changed after accounting looked at this link on 2026-10-03
+    19 |   from payment_policy
+  = The same change as at tests/mutants/E302_original_requirement_changed/payment.req:11; the diff is not shown again.
+  = Once a person has looked: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:19 --by <role>
+error[E302]: tests/mutants/E302_original_requirement_changed/payment.req:21:3: payment_day comes from something that changed (payment_policy), so this link needs a look again
+    21 |   satisfied by file "pay.py"
+  = accounting looked at this link on 2026-10-03.
+  = Look at what changed first, where its own diagnostic shows it.
+  = Once a person has looked: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:21 --by <role>
+error[E304]: tests/mutants/E302_original_requirement_changed/payment.req:23:3: payment_day changed, so this waiver needs approving again (the same change as at tests/mutants/E302_original_requirement_changed/payment.req:21)
+    23 |   not verified "Accounting compares them once a month"
+  = accounting approved this waiver on 2026-10-03.
+  = Once a person has looked: yuen review tests/mutants/E302_original_requirement_changed --root tests/mutants/E302_original_requirement_changed --at tests/mutants/E302_original_requirement_changed/payment.req:23 --by <role>
+tests/mutants/E302_original_requirement_changed: 5 errors

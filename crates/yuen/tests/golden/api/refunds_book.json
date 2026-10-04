@@ -1,0 +1,366 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/refunds_book",
+  "files": [
+    {
+      "path": "refund.req",
+      "name": "refund",
+      "version": "1",
+      "sha256": "38e45c398b7f00ec"
+    }
+  ],
+  "roles": [
+    {
+      "name": "accounting",
+      "description": "Decides the refund policy"
+    },
+    {
+      "name": "development",
+      "description": "Writes and fixes the book"
+    }
+  ],
+  "sources": [
+    {
+      "file": "refund.req",
+      "name": "policy",
+      "kind": "file",
+      "path": "refund_policy.md",
+      "url": null,
+      "sha256": "784ec7d47b0919f5",
+      "borrowed": null
+    }
+  ],
+  "requirements": [
+    {
+      "name": "within_sales",
+      "alias": null,
+      "version": 1,
+      "file": "refund.req",
+      "line": 11,
+      "text": "A refund does not exceed the sale of its order",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "accounting",
+      "replaces": [],
+      "sha256": "03c54d3019572784",
+      "from": [
+        {
+          "line": 15,
+          "sources": [
+            {
+              "source": "policy",
+              "fragment": null,
+              "sha256": "784ec7d47b0919f5"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "accounting",
+            "up": [
+              "784ec7d47b0919f5"
+            ],
+            "down": "03c54d3019572784"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 17,
+          "role": "satisfied",
+          "artifact": {
+            "text": "chobo \"refunds.book\" account refundable",
+            "tool": "chobo",
+            "path": "refunds.book",
+            "items": [
+              [
+                "account",
+                "refundable"
+              ]
+            ]
+          },
+          "sha256": "49d9b3dd2d4bf83b",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "03c54d3019572784"
+            ],
+            "down": "49d9b3dd2d4bf83b"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 19,
+          "role": "satisfied",
+          "artifact": {
+            "text": "chobo \"refunds.book\" transfer sale",
+            "tool": "chobo",
+            "path": "refunds.book",
+            "items": [
+              [
+                "transfer",
+                "sale"
+              ]
+            ]
+          },
+          "sha256": "699a4feaa65a1dfe",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "03c54d3019572784"
+            ],
+            "down": "699a4feaa65a1dfe"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 21,
+          "role": "verified",
+          "why": "That what is left never goes below 0 is checked by chobo's check. This material has no claim that names it",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "accounting",
+            "sha256": "03c54d3019572784"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "hold_until_approved",
+      "alias": null,
+      "version": 1,
+      "file": "refund.req",
+      "line": 24,
+      "text": "A refund is not final until a person approves it. While it waits for approval, the amount is held",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "accounting",
+      "replaces": [],
+      "sha256": "beb5b3ab5c01bf55",
+      "from": [
+        {
+          "line": 28,
+          "sources": [
+            {
+              "source": "policy",
+              "fragment": null,
+              "sha256": "784ec7d47b0919f5"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "accounting",
+            "up": [
+              "784ec7d47b0919f5"
+            ],
+            "down": "beb5b3ab5c01bf55"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 30,
+          "role": "satisfied",
+          "artifact": {
+            "text": "chobo \"refunds.book\" transfer refund",
+            "tool": "chobo",
+            "path": "refunds.book",
+            "items": [
+              [
+                "transfer",
+                "refund"
+              ]
+            ]
+          },
+          "sha256": "d4eb1e0e94a3b78f",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "beb5b3ab5c01bf55"
+            ],
+            "down": "d4eb1e0e94a3b78f"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 32,
+          "role": "verified",
+          "why": "That the amount held returns at the expiry is checked by chobo's scenarios. This material has no claim that names it",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "accounting",
+            "sha256": "beb5b3ab5c01bf55"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "record_together",
+      "alias": null,
+      "version": 1,
+      "file": "refund.req",
+      "line": 35,
+      "text": "The amount refunded is recorded in total, not per order",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "accounting",
+      "replaces": [],
+      "sha256": "166eee17bb57e3e0",
+      "from": [
+        {
+          "line": 39,
+          "sources": [
+            {
+              "source": "policy",
+              "fragment": null,
+              "sha256": "784ec7d47b0919f5"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "accounting",
+            "up": [
+              "784ec7d47b0919f5"
+            ],
+            "down": "166eee17bb57e3e0"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 41,
+          "role": "satisfied",
+          "artifact": {
+            "text": "chobo \"refunds.book\" account refunded",
+            "tool": "chobo",
+            "path": "refunds.book",
+            "items": [
+              [
+                "account",
+                "refunded"
+              ]
+            ]
+          },
+          "sha256": "8f80f74b076ccea8",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "development",
+            "up": [
+              "166eee17bb57e3e0"
+            ],
+            "down": "8f80f74b076ccea8"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 43,
+          "role": "verified",
+          "why": "This material has no claim that checks it",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "accounting",
+            "sha256": "166eee17bb57e3e0"
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "chobo \"refunds.book\" account refundable",
+      "tool": "chobo",
+      "path": "refunds.book",
+      "items": [
+        [
+          "account",
+          "refundable"
+        ]
+      ],
+      "sha256": "49d9b3dd2d4bf83b",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "chobo \"refunds.book\" account refunded",
+      "tool": "chobo",
+      "path": "refunds.book",
+      "items": [
+        [
+          "account",
+          "refunded"
+        ]
+      ],
+      "sha256": "8f80f74b076ccea8",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "chobo \"refunds.book\" transfer refund",
+      "tool": "chobo",
+      "path": "refunds.book",
+      "items": [
+        [
+          "transfer",
+          "refund"
+        ]
+      ],
+      "sha256": "d4eb1e0e94a3b78f",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "chobo \"refunds.book\" transfer sale",
+      "tool": "chobo",
+      "path": "refunds.book",
+      "items": [
+        [
+          "transfer",
+          "sale"
+        ]
+      ],
+      "sha256": "699a4feaa65a1dfe",
+      "end": "item",
+      "pins": []
+    }
+  ],
+  "scopes": [
+    {
+      "file": "refund.req",
+      "line": 9,
+      "text": "chobo \"refunds.book\" transfer",
+      "artifacts": 2,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/refunds_book: ok — 3 requirements, whose 7 links and 3 waivers are as they were looked at; every requirement is met and checked, or waived; the 2 transfers in scope all trace to a requirement",
+    "diagnostics": []
+  }
+}

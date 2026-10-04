@@ -1,0 +1,4 @@
+error[E002]: tests/mutants/E002_reserved_word_as_a_name/payment.req:5:6: `text` is a word of the language and cannot name a role
+     5 | role text "Writes the code"
+  = A name cannot be a word that starts a line or a word of the lines of a requirement, its records included.
+tests/mutants/E002_reserved_word_as_a_name: 1 error

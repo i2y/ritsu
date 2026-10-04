@@ -130,6 +130,27 @@ pub fn change_cal(d: &Path) {
     edit(d, "民法の期間.cal", "  if closed + 1 day                        # 末日が休みなら、その翌日", "  roll following                           # 末日が休みなら、休みが明けるまで");
 }
 
+// ── The twins of the changes above, for the fixture `period_of_months` ──
+
+const COPY_1_7: &str = "sources/law/37-CFR-1@2026-01-01/1.7.xml";
+
+/// Section 1.7 changed by a word, and its pin written again (the twin of `change_142`).
+pub fn change_section(d: &Path) {
+    edit(d, COPY_1_7, "on the next succeeding business day which is not a Saturday", "on the second succeeding business day which is not a Saturday");
+    let pin = ritsu_base::sha256::short(&std::fs::read(d.join(COPY_1_7)).unwrap());
+    edit(d, "period_of_months.req", "\"§1.7\" sha256:01de176ebe4740d7", &format!("\"§1.7\" sha256:{pin}"));
+}
+
+/// The text of `timely_filing` changed by a word (the twin of `change_text`).
+pub fn change_text_en(d: &Path) {
+    edit(d, "period_of_months.req", "before the period ends,", "before the period has ended,");
+}
+
+/// One line of the `.cal` (the twin of `change_cal`).
+pub fn change_cal_en(d: &Path) {
+    edit(d, "period_of_months.cal", "  if closed + 1 day                              # an end on a closed day moves to the day after", "  roll following                                 # an end on a closed day moves on until the closure ends");
+}
+
 
 // ── The outside tools the tests of stage C use (PLAN 0.1, C.10–C.12) ──
 

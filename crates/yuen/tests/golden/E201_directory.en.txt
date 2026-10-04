@@ -1,0 +1,8 @@
+error[E201]: tests/mutants/E201_directory/payment.req:11:16: file "src" is a directory; a link names a file
+    11 |   satisfied by file "src"
+  = Only a `scope` takes a directory (`scope file "src/"`).
+error[E304]: tests/mutants/E201_directory/payment.req:12:3: This waiver has not been approved yet
+    12 |   not verified "Accounting compares them once a month"
+  = A waiver is a decision too: once the owner has read the reason and approves it, `yuen review` writes who approved it, when, and the requirement's hash under it.
+  = Once a person has looked: yuen review tests/mutants/E201_directory --root tests/mutants/E201_directory --at tests/mutants/E201_directory/payment.req:12 --by <role>
+tests/mutants/E201_directory: 2 errors

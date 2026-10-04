@@ -1,0 +1,10 @@
+requirements example v1
+role legal
+
+requirement r1
+  text "x"
+  owner legal
+  decided 2026-10-03 by legal "example"
+  satisfied by rulec "a.rule" table fees
+  not verified "left out in this example"
+    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f

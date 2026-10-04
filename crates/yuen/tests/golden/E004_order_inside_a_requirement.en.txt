@@ -1,0 +1,4 @@
+error[E004]: tests/mutants/E004_order_inside_a_requirement/payment.req:9:3: The `text` line is out of order
+     9 |   text "Closes on the 20th, pays on the 10th of the next month"
+  = The lines of a requirement go: `text`, `in force`, `owner`, `replaces`, `from`, `decided`, `satisfied by` and `not satisfied`, `verified by` and `not verified`.
+tests/mutants/E004_order_inside_a_requirement: 1 error

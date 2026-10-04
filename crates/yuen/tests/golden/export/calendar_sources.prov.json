@@ -1,0 +1,555 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/accounting": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "accounting",
+      "yuen:description": "Decides the terms of payment"
+    },
+    "y:role/legal": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "legal",
+      "yuen:description": "Decides how the words of a rule are read"
+    },
+    "y:role/development": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "development",
+      "yuen:description": "Writes and fixes koyomi's file"
+    }
+  },
+  "entity": {
+    "y:source/cebc077ca90773913c12f80f1c05b892": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "holidays",
+      "yuen:file": "calendars/data/syukujitsu.csv",
+      "yuen:url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+      "yuen:sha256": "cec37a743c96995c"
+    },
+    "y:source/19b5775f38ba639d93a8abdae7c34a3d": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "bank_holidays",
+      "yuen:file": "calendars/data/bank-holidays.json",
+      "yuen:url": "https://www.gov.uk/bank-holidays.json",
+      "yuen:sha256": "538b3482c28b85ec"
+    },
+    "y:artifact/cddf219c729dc4564542e0f2505566c8": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "koyomi \"payment_20th_close_next_10th.cal\" date payment",
+      "yuen:sha256": "77727589d8318079",
+      "yuen:end": "item"
+    },
+    "y:artifact/acad219900b616640ccd7543a09d7faf": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "koyomi \"payment_20th_close_next_10th.cal\" claim paid_on_a_business_day",
+      "yuen:sha256": "a30c094c89e283df",
+      "yuen:end": "item"
+    },
+    "y:artifact/c183c65b7aa04eb57d5d5a2317eb77a4": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "koyomi \"period_of_months.cal\" date first_day",
+      "yuen:sha256": "f7fbde9442fad208",
+      "yuen:end": "item"
+    },
+    "y:artifact/b81fb7f87c08d37e29bcf1ce23c2e932": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "koyomi \"period_of_months.cal\" date last_day",
+      "yuen:sha256": "e4d5741e15aeb403",
+      "yuen:end": "item"
+    },
+    "y:artifact/231afc7d461e5cb1b2deb7f3bf811fff": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "koyomi \"period_of_months.cal\" claim last_day_after_origin",
+      "yuen:sha256": "d88a046cef583e8a",
+      "yuen:end": "item"
+    },
+    "y:artifact/72604af536e8e91dcd903e1c8bbd10d3": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "koyomi \"period_of_months.cal\" date last_day_moved",
+      "yuen:sha256": "da1536d15d1da2b6",
+      "yuen:end": "item"
+    },
+    "y:artifact/796818022521ba99a1ecdc03455e8664": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "koyomi \"period_of_months.cal\" claim moved_on_or_after_last_day",
+      "yuen:sha256": "82aece4919f854bb",
+      "yuen:end": "item"
+    },
+    "y:requirement/payment_day/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "payment_day",
+      "yuen:version": "1",
+      "yuen:text": "Closes on the 20th, pays on the 10th of the next month. When the payment day is closed, pays on the business day before",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "dd7089d2bc2f76e0"
+    },
+    "y:requirement/first_day/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "first_day",
+      "yuen:version": "1",
+      "yuen:text": "The day itself is not counted",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "29836b1424129486"
+    },
+    "y:requirement/last_day/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "last_day",
+      "yuen:version": "1",
+      "yuen:text": "A period of months ends on the day before the corresponding day of the last month, or on the last day of that month when it has no such day",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "534cb97e1ca8a94c"
+    },
+    "y:requirement/last_day_moved/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "last_day_moved",
+      "yuen:version": "1",
+      "yuen:text": "An end that falls on a day closed in England and Wales moves to the day after",
+      "yuen:inForce": "2026-10-01..",
+      "yuen:sha256": "edc4cc0bb4910f57"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/payment_day/v1",
+      "prov:agent": "y:role/accounting",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r14": {
+      "prov:entity": "y:requirement/first_day/v1",
+      "prov:agent": "y:role/legal",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r23": {
+      "prov:entity": "y:requirement/last_day/v1",
+      "prov:agent": "y:role/legal",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r34": {
+      "prov:entity": "y:requirement/last_day_moved/v1",
+      "prov:agent": "y:role/legal",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/payment_day/v1",
+      "prov:usedEntity": "y:source/cebc077ca90773913c12f80f1c05b892",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r35": {
+      "prov:generatedEntity": "y:requirement/last_day_moved/v1",
+      "prov:usedEntity": "y:source/19b5775f38ba639d93a8abdae7c34a3d",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/cddf219c729dc4564542e0f2505566c8",
+      "prov:influencer": "y:requirement/payment_day/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r4": {
+      "prov:influencee": "y:artifact/acad219900b616640ccd7543a09d7faf",
+      "prov:influencer": "y:requirement/payment_day/v1",
+      "prov:type": {
+        "$": "yuen:verifies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r16": {
+      "prov:influencee": "y:requirement/first_day/v1",
+      "prov:influencer": "y:decision/228b7ec83fe537fb75c01faa2eccd3fb"
+    },
+    "_:r17": {
+      "prov:influencee": "y:artifact/c183c65b7aa04eb57d5d5a2317eb77a4",
+      "prov:influencer": "y:requirement/first_day/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r25": {
+      "prov:influencee": "y:requirement/last_day/v1",
+      "prov:influencer": "y:decision/7b42384fc1023817759c24499eabcf2a"
+    },
+    "_:r26": {
+      "prov:influencee": "y:artifact/b81fb7f87c08d37e29bcf1ce23c2e932",
+      "prov:influencer": "y:requirement/last_day/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r27": {
+      "prov:influencee": "y:artifact/231afc7d461e5cb1b2deb7f3bf811fff",
+      "prov:influencer": "y:requirement/last_day/v1",
+      "prov:type": {
+        "$": "yuen:verifies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r37": {
+      "prov:influencee": "y:requirement/last_day_moved/v1",
+      "prov:influencer": "y:decision/512080008d7ee30d358f29f4c7726f7b"
+    },
+    "_:r39": {
+      "prov:influencee": "y:artifact/72604af536e8e91dcd903e1c8bbd10d3",
+      "prov:influencer": "y:requirement/last_day_moved/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r40": {
+      "prov:influencee": "y:artifact/796818022521ba99a1ecdc03455e8664",
+      "prov:influencer": "y:requirement/last_day_moved/v1",
+      "prov:type": {
+        "$": "yuen:verifies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/7348f1500b84df8f044361132d948d0b": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "cec37a743c96995c",
+      "yuen:down": "dd7089d2bc2f76e0",
+      "yuen:status": "ok"
+    },
+    "y:review/42c98ee06843c2c3554e464baa9067e5": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "dd7089d2bc2f76e0",
+      "yuen:down": "77727589d8318079",
+      "yuen:status": "ok"
+    },
+    "y:review/e0f97e234caf51422fb49feb27ccf2ce": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "verified by",
+      "yuen:up": "dd7089d2bc2f76e0",
+      "yuen:down": "a30c094c89e283df",
+      "yuen:status": "ok"
+    },
+    "y:decision/228b7ec83fe537fb75c01faa2eccd3fb": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Decision",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:why": "The period starts on the day after the origin. Decided for this material"
+    },
+    "y:review/56c250d4bbb7e003ebb5b35e067b37e2": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "29836b1424129486",
+      "yuen:down": "f7fbde9442fad208",
+      "yuen:status": "ok"
+    },
+    "y:waiver/b742cd3e56280e0bc6d6c27123a312ac": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "That the first day is not counted is checked on koyomi doc's page, by reading the rule and its restatement side by side. This material has no claim that checks it",
+      "yuen:sha256": "29836b1424129486",
+      "yuen:status": "ok"
+    },
+    "y:decision/7b42384fc1023817759c24499eabcf2a": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Decision",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:why": "The corresponding day is counted from the first day. Decided for this material"
+    },
+    "y:review/e223327726ada0265a20ef8ed15073b3": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "534cb97e1ca8a94c",
+      "yuen:down": "e4d5741e15aeb403",
+      "yuen:status": "ok"
+    },
+    "y:review/8b71058659be6d847ace3b7d641aca6c": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "verified by",
+      "yuen:up": "534cb97e1ca8a94c",
+      "yuen:down": "d88a046cef583e8a",
+      "yuen:status": "ok"
+    },
+    "y:decision/512080008d7ee30d358f29f4c7726f7b": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Decision",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:why": "The day after is taken as it is, and not moved on if it is closed too. Decided for this material"
+    },
+    "y:review/01e13fee2b4b990d5f44ea449b4c6ee1": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "538b3482c28b85ec",
+      "yuen:down": "edc4cc0bb4910f57",
+      "yuen:status": "ok"
+    },
+    "y:review/2754e0faf2899bef82e7116def49836e": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "edc4cc0bb4910f57",
+      "yuen:down": "da1536d15d1da2b6",
+      "yuen:status": "ok"
+    },
+    "y:review/588ad7214cc3d428f9bd9d297bedbeb7": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "verified by",
+      "yuen:up": "edc4cc0bb4910f57",
+      "yuen:down": "82aece4919f854bb",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r5": {
+      "prov:activity": "y:review/7348f1500b84df8f044361132d948d0b",
+      "prov:entity": "y:source/cebc077ca90773913c12f80f1c05b892"
+    },
+    "_:r6": {
+      "prov:activity": "y:review/7348f1500b84df8f044361132d948d0b",
+      "prov:entity": "y:requirement/payment_day/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/42c98ee06843c2c3554e464baa9067e5",
+      "prov:entity": "y:requirement/payment_day/v1"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/42c98ee06843c2c3554e464baa9067e5",
+      "prov:entity": "y:artifact/cddf219c729dc4564542e0f2505566c8"
+    },
+    "_:r11": {
+      "prov:activity": "y:review/e0f97e234caf51422fb49feb27ccf2ce",
+      "prov:entity": "y:requirement/payment_day/v1"
+    },
+    "_:r12": {
+      "prov:activity": "y:review/e0f97e234caf51422fb49feb27ccf2ce",
+      "prov:entity": "y:artifact/acad219900b616640ccd7543a09d7faf"
+    },
+    "_:r18": {
+      "prov:activity": "y:review/56c250d4bbb7e003ebb5b35e067b37e2",
+      "prov:entity": "y:requirement/first_day/v1"
+    },
+    "_:r19": {
+      "prov:activity": "y:review/56c250d4bbb7e003ebb5b35e067b37e2",
+      "prov:entity": "y:artifact/c183c65b7aa04eb57d5d5a2317eb77a4"
+    },
+    "_:r21": {
+      "prov:activity": "y:waiver/b742cd3e56280e0bc6d6c27123a312ac",
+      "prov:entity": "y:requirement/first_day/v1"
+    },
+    "_:r28": {
+      "prov:activity": "y:review/e223327726ada0265a20ef8ed15073b3",
+      "prov:entity": "y:requirement/last_day/v1"
+    },
+    "_:r29": {
+      "prov:activity": "y:review/e223327726ada0265a20ef8ed15073b3",
+      "prov:entity": "y:artifact/b81fb7f87c08d37e29bcf1ce23c2e932"
+    },
+    "_:r31": {
+      "prov:activity": "y:review/8b71058659be6d847ace3b7d641aca6c",
+      "prov:entity": "y:requirement/last_day/v1"
+    },
+    "_:r32": {
+      "prov:activity": "y:review/8b71058659be6d847ace3b7d641aca6c",
+      "prov:entity": "y:artifact/231afc7d461e5cb1b2deb7f3bf811fff"
+    },
+    "_:r38": {
+      "prov:activity": "y:decision/512080008d7ee30d358f29f4c7726f7b",
+      "prov:entity": "y:source/19b5775f38ba639d93a8abdae7c34a3d"
+    },
+    "_:r41": {
+      "prov:activity": "y:review/01e13fee2b4b990d5f44ea449b4c6ee1",
+      "prov:entity": "y:source/19b5775f38ba639d93a8abdae7c34a3d"
+    },
+    "_:r42": {
+      "prov:activity": "y:review/01e13fee2b4b990d5f44ea449b4c6ee1",
+      "prov:entity": "y:requirement/last_day_moved/v1"
+    },
+    "_:r44": {
+      "prov:activity": "y:review/2754e0faf2899bef82e7116def49836e",
+      "prov:entity": "y:requirement/last_day_moved/v1"
+    },
+    "_:r45": {
+      "prov:activity": "y:review/2754e0faf2899bef82e7116def49836e",
+      "prov:entity": "y:artifact/72604af536e8e91dcd903e1c8bbd10d3"
+    },
+    "_:r47": {
+      "prov:activity": "y:review/588ad7214cc3d428f9bd9d297bedbeb7",
+      "prov:entity": "y:requirement/last_day_moved/v1"
+    },
+    "_:r48": {
+      "prov:activity": "y:review/588ad7214cc3d428f9bd9d297bedbeb7",
+      "prov:entity": "y:artifact/796818022521ba99a1ecdc03455e8664"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r7": {
+      "prov:activity": "y:review/7348f1500b84df8f044361132d948d0b",
+      "prov:agent": "y:role/accounting"
+    },
+    "_:r10": {
+      "prov:activity": "y:review/42c98ee06843c2c3554e464baa9067e5",
+      "prov:agent": "y:role/accounting"
+    },
+    "_:r13": {
+      "prov:activity": "y:review/e0f97e234caf51422fb49feb27ccf2ce",
+      "prov:agent": "y:role/accounting"
+    },
+    "_:r15": {
+      "prov:activity": "y:decision/228b7ec83fe537fb75c01faa2eccd3fb",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/56c250d4bbb7e003ebb5b35e067b37e2",
+      "prov:agent": "y:role/development"
+    },
+    "_:r22": {
+      "prov:activity": "y:waiver/b742cd3e56280e0bc6d6c27123a312ac",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r24": {
+      "prov:activity": "y:decision/7b42384fc1023817759c24499eabcf2a",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r30": {
+      "prov:activity": "y:review/e223327726ada0265a20ef8ed15073b3",
+      "prov:agent": "y:role/development"
+    },
+    "_:r33": {
+      "prov:activity": "y:review/8b71058659be6d847ace3b7d641aca6c",
+      "prov:agent": "y:role/development"
+    },
+    "_:r36": {
+      "prov:activity": "y:decision/512080008d7ee30d358f29f4c7726f7b",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r43": {
+      "prov:activity": "y:review/01e13fee2b4b990d5f44ea449b4c6ee1",
+      "prov:agent": "y:role/legal"
+    },
+    "_:r46": {
+      "prov:activity": "y:review/2754e0faf2899bef82e7116def49836e",
+      "prov:agent": "y:role/development"
+    },
+    "_:r49": {
+      "prov:activity": "y:review/588ad7214cc3d428f9bd9d297bedbeb7",
+      "prov:agent": "y:role/development"
+    }
+  }
+}

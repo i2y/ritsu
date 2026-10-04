@@ -1,0 +1,7 @@
+error[E405]: tests/mutants/E405_cycle/payment.req:6:13: The requirements make a cycle: closing_day → payment_day → closing_day
+     6 | requirement closing_day
+  = `from <requirement>` points at what a requirement is read from, and `replaces` at what it replaces; following them comes back here, so which comes first cannot be told.
+  the cycle:
+      closing_day (tests/mutants/E405_cycle/payment.req:6)
+      payment_day (tests/mutants/E405_cycle/payment.req:13)
+tests/mutants/E405_cycle: 1 error

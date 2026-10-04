@@ -1,0 +1,4 @@
+エラー[E005]: tests/mutants/E005_tab/payment.req:9:1: 字下げにタブがあります。字下げはスペースで書きます
+     9 | 	owner accounting
+  = タブの幅はエディタによって違うので、行がそろっているかを決められません。
+tests/mutants/E005_tab: エラー 1 件

@@ -1,0 +1,5 @@
+error[E404]: tests/mutants/E404_file_in_scope/payment.req:7:1: file "src/report.py" is in scope, and no requirement leads to it
+     7 | scope file "src"
+  = The rest of the scope is reached: file "src/pay.py"
+  = Add a requirement whose `satisfied by` or `verified by` names it, or narrow the scope.
+tests/mutants/E404_file_in_scope: 1 error

@@ -1,0 +1,4 @@
+error[E008]: tests/mutants/E008_undeclared_role/payment.req:9:9: The role accounting_dept is not declared
+     9 |   owner accounting_dept
+  = Declare a role with `role legal "decides how the articles read"` before it is used; that stops a misspelling (`Legal` for `legal`).
+tests/mutants/E008_undeclared_role: 1 error

@@ -1,0 +1,7 @@
+差分: tests/fixtures/calendar_sources/changes/copy.diff
+差分が触る出典の写し:
+  tests/fixtures/calendar_sources/calendars/data/bank-holidays.json（bank_holidays）: 引く要件 last_day_moved
+どの要件にも届かない変更: なし
+触る要件:
+  last_day_moved（tests/fixtures/calendar_sources/period_of_months.req:31）持ち主 legal、出どころ bank_holidays。2026-10-03 に legal が決めた「The day after is taken as it is, and not moved on if it is closed too. Decided for this material」
+触る要件は 1 件です。legal に見てもらいます

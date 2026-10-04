@@ -1,0 +1,4 @@
+error[E013]: tests/mutants/E013_absolute_path/payment.req:11:21: `/etc/hosts` is an absolute path; write it from the directory of the file the naming is in
+    11 |   satisfied by file "/etc/hosts"
+  = An absolute path points somewhere else on someone else's machine.
+tests/mutants/E013_absolute_path: 1 error

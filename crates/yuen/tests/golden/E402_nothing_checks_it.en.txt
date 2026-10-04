@@ -1,0 +1,4 @@
+error[E402]: tests/mutants/E402_nothing_checks_it/payment.req:7:13: payment_day has nothing that checks it, and no waiver for that
+     7 | requirement payment_day
+  = Write `verified by <claim>`, or, if nothing is to check it, `not verified "<why>"`, and have that approved.
+tests/mutants/E402_nothing_checks_it: 1 error
