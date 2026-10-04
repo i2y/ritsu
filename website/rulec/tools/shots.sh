@@ -7,8 +7,8 @@
 #
 # Each language is photographed from the rule it shows. The Japanese pages show the shipping fee
 # (`送料.rule`); the English pages show `parcel_rate.rule`, a tariff written in English (pounds,
-# inches, USD), because the shipping fee's English twin still takes a prefecture of `std/都道府県`
-# as its destination, and the picture would show it.
+# inches, USD). (They were taken when the shipping fee's English twin still showed a prefecture in
+# Japanese; the twin spells it in English now, from `std/jp/prefectures`, DESIGN §15.182.)
 #
 #   $ website/rulec/tools/shots.sh [path/to/rulec [languages]]      e.g.  shots.sh ../../target/debug/rulec en
 #

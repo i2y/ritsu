@@ -558,7 +558,7 @@ note when there is no server to reach. The runner creates the function, calls it
 **by argument name**, holds the answers to the reference evaluator byte for byte like every other
 runner, and drops it again, so the run leaves nothing behind in the database.
 
-Call it by argument name yourself: `SELECT * FROM "member_shipping_fee"("dest" => '北海道', "weight" =>
+Call it by argument name yourself: `SELECT * FROM "member_shipping_fee"("dest" => 'Hokkaido', "weight" =>
 1200, "total" => 0, "member" => 'basic');`. Positionally it is ambiguous whenever the rule's alias
 is also the name of a built-in (`rank`), and a named argument is the one form a variadic built-in
 cannot answer to. In PostgREST — which is what Supabase runs — a function in an exposed
@@ -567,11 +567,11 @@ answers:
 
 ```
 $ curl -X POST localhost:3000/rpc/member_shipping_fee -H 'Content-Type: application/json' \
-       -d '{"dest":"北海道","weight":1200,"total":0,"member":"basic"}'
+       -d '{"dest":"Hokkaido","weight":1200,"total":0,"member":"basic"}'
 [{"fee":1200,"base_row":1,"payer_row":3}]                                  200
 
 $ curl -X POST localhost:3000/rpc/member_shipping_fee -H 'Content-Type: application/json' \
-       -d '{"dest":"北海道","weight":0,"total":0,"member":"basic"}'
+       -d '{"dest":"Hokkaido","weight":0,"total":0,"member":"basic"}'
 {"code":"22023","details":null,"hint":null,"message":"weight is out of range"}  400
 ```
 
@@ -625,7 +625,7 @@ function call(text) {
   ex.cabi_post_call(ret);
   return out;
 }
-call('{"dest":"北海道","weight":2500,"total":12000,"member":"gold"}');
+call('{"dest":"Hokkaido","weight":2500,"total":12000,"member":"gold"}');
 // {"in":{…},"observed":{"fee":1800},"trace":[{"table":"base","row":2},{"table":"payer","row":3}]}
 ```
 
@@ -635,7 +635,7 @@ component with no change to it, and a component host calls it like any other:
 ```console
 $ wasm-tools component embed member_shipping_fee.wit member_shipping_fee.wasm -o member_shipping_fee.embedded.wasm
 $ wasm-tools component new member_shipping_fee.embedded.wasm -o member_shipping_fee.component.wasm
-$ wasmtime run --invoke 'call("{\"dest\":\"北海道\",\"weight\":1,\"total\":0,\"member\":\"basic\"}")' member_shipping_fee.component.wasm
+$ wasmtime run --invoke 'call("{\"dest\":\"Hokkaido\",\"weight\":1,\"total\":0,\"member\":\"basic\"}")' member_shipping_fee.component.wasm
 ```
 
 `rulec test` builds the module and holds it to the vectors through the runner
@@ -834,7 +834,7 @@ takes the inputs, what the rule returned, the rows that matched and a tag, and g
 one line in the fixtures format of [formats.md](formats.md#fixtures-rulec-fixtures-lint-replay-diff):
 
 ```json
-{"tag":"order:1234567","in":{"dest":"鹿児島県","weight":800,"total":4200,"member":"basic"},"observed":{"fee":800},"trace":[{"table":"base","row":3},{"table":"payer","row":3}]}
+{"tag":"order:1234567","in":{"dest":"Kagoshima","weight":800,"total":4200,"member":"basic"},"observed":{"fee":800},"trace":[{"table":"base","row":3},{"table":"payer","row":3}]}
 ```
 
 Write that line to a log and the records `replay` and `diff` need come out of the generated
@@ -958,7 +958,7 @@ rate, the step in its description; an enum as its listed names; a date as `YYYY-
 its result is the line the record function writes, as text and as `structuredContent`:
 
 ```json
-{"in":{"dest":"鹿児島県","weight":800,"total":4200,"member":"basic"},"observed":{"fee":800},"trace":[{"table":"base","row":3},{"table":"payer","row":3}]}
+{"in":{"dest":"Kagoshima","weight":800,"total":4200,"member":"basic"},"observed":{"fee":800},"trace":[{"table":"base","row":3},{"table":"payer","row":3}]}
 ```
 
 So an answer carries the rows that decided it, and one call is one fixtures record. Started

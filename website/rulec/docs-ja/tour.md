@@ -159,7 +159,7 @@ group 遠隔地(remote) = 北海道, 沖縄県
 
 ### 組み込みの列挙
 
-組み込みの `std/都道府県`（47 値）は `import std/都道府県` で使えます。
+組み込みの `std/都道府県`（47 値）は `import std/都道府県` で使えます。ほかの十二か国の一段目の区分も組み込みで、`import std/us/states`（米国の 56）、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states` で使えます。値は英語の名前を ASCII にしたもの（`New_York`、`Bavaria`）で、セルには現地の綴り（`Bayern`）や ISO の符号（`NY`）でも書けます。どれも同じ値です。都道府県を英語の綴りで持つ `std/jp/prefectures` もあり、`std/都道府県` と同じ 47 の区分です（どちらでも `東京都` と `Tokyo` の両方を書けます）。
 
 ### 値を決めるのが自分たちでないとき
 

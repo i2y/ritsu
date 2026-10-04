@@ -92,7 +92,7 @@ input relation — so the two cannot drift apart. Unlike the query it
 client that reads one field should not be handed a number that looks like
 an answer beside an error column it ignored. Put it in a schema PostgREST
 or Supabase exposes and the rule is an endpoint with no server code of its
-own: `POST /rpc/member_shipping_fee` with `{"dest": "北海道", …}` answers
+own: `POST /rpc/member_shipping_fee` with `{"dest": "Hokkaido", …}` answers
 `[{"fee":1200,…}]`, and an input outside the declaration comes back as a
 **400** carrying the rule's own sentence. This one is
 PostgreSQL only — SQLite has no `CREATE FUNCTION` — so `rulec test` runs
@@ -367,7 +367,7 @@ rate in its description, and its answer is the record line the module
 writes — the inputs, the outputs, and **the rows that decided it**:
 
 ```json
-{"in":{"dest":"鹿児島県","weight":800,"total":4200,"member":"basic"},"observed":{"fee":800},"trace":[{"table":"base","row":3},{"table":"payer","row":3}]}
+{"in":{"dest":"Kagoshima","weight":800,"total":4200,"member":"basic"},"observed":{"fee":800},"trace":[{"table":"base","row":3},{"table":"payer","row":3}]}
 ```
 
 Two things follow. An answer can be audited, because it names the rows.

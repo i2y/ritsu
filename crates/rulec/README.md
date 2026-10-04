@@ -57,6 +57,8 @@ examples
 This example passes `rulec check` as it stands; the repository's tests run it on every commit.
 What one table produces is a column of the next, and `examples` is an executable specification.
 The keywords are English, and the names and cell values are the business's own words. The
+first-level divisions of thirteen countries are built in (`import std/us/states`, `std/de/states`,
+`std/jp/prefectures` and ten more), written by name, in the local spelling or by ISO code. The
 [examples page](https://i2y.github.io/rulec/examples/) writes them in English throughout,
 including the rules transcribed from Japanese terms and statutes; the originals, with their names
 in Japanese, are beside them in the repository and on the
@@ -337,4 +339,5 @@ assembly around those two.
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
-[MIT license](LICENSE-MIT), at your option.
+[MIT license](LICENSE-MIT), at your option. The names of the built-in divisions come from
+Unicode CLDR, under the Unicode License V3 ([THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)).

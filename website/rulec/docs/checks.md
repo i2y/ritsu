@@ -350,12 +350,12 @@ This is what `rulec doc` writes (excerpt; `--lang ja` asks for Japanese).
 
 A group is a named subset of an enum. One word written in a table cell stands for all the values below.
 
-- **kinki** (6 values) — 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
-- **cs** (9 values) — 鳥取県, 島根県, 岡山県, 広島県, 山口県, 徳島県, 香川県, 愛媛県, 高知県
-- **okinawa** (1 value) — 沖縄県
+- **kinki** (6 values) — Shiga, Kyoto, Osaka, Hyogo, Nara, Wakayama
+- **cs** (9 values) — Tottori, Shimane, Okayama, Hiroshima, Yamaguchi, Tokushima, Kagawa, Ehime, Kochi
+- **okinawa** (1 value) — Okinawa
 …
 
-These 6 groups partition the 47 values of 都道府県 exactly (counted from the declarations by this rendering).
+These 6 groups partition the 47 values of jp_prefecture exactly (counted from the declarations by this rendering).
 
 ## Table fee_table (policy unique)
 
@@ -432,8 +432,8 @@ decide what `<=60cm` means for 61cm.
 
 How the answer changes on either side of a threshold.
 
-- girth 60cm → fee 1410JPY; 61cm → fee 1710JPY (dest 北海道, weight 1g)
-- girth 80cm → fee 1710JPY; 81cm → fee 2020JPY (dest 北海道, weight 1g)
+- girth 60cm → fee 1410JPY; 61cm → fee 1710JPY (dest Hokkaido, weight 1g)
+- girth 80cm → fee 1710JPY; 81cm → fee 2020JPY (dest Hokkaido, weight 1g)
 …
 ```
 

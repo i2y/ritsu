@@ -181,6 +181,5 @@ $ website/rulec/tools/shots.sh ../../target/debug/rulec en    # only the English
 
 Each language shows its own rule: the Japanese pictures are of `tests/corpus/送料.rule`, the
 English ones of `tests/corpus/parcel_rate.rule`, a tariff written in English (pounds, inches,
-USD). The shipping fee's English twin (`member_shipping_fee.rule`) would show a prefecture of
-`std/都道府県` as its destination. Re-run it after anything that changes the page. They are
+USD). Re-run it after anything that changes the page. They are
 pictures of real output, not mock-ups.

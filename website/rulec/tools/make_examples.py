@@ -77,7 +77,7 @@ EXAMPLES = [
         "Japan Post's base tariff, shipping from Tokyo. 47 prefectures × 7 sizes = 329 combinations, folded into 42 rows by six groups. **This is where the tool first pays for itself**: drop one prefecture and it stops before anything runs, naming that prefecture.",
         [
             "A `group` names part of an enum. It is always expanded back to the values for checking, so **whether the grouping is an exact partition of the 47** is checked too.",
-            "`import std/都道府県` brings the 47 values in. The rule writes them as the namespace spells them, in Japanese; each has an ASCII alias, which is what the generated code calls it.",
+            "`import std/jp/prefectures` brings the 47 values in, spelled in English (`Tokyo`). The original imports the same 47 under the namespace's Japanese name, spelled in Japanese; either import reads both spellings, and the generated code is the same.",
             "42 rows, and `policy unique` still proves **reordering them cannot change the answer**.",
         ],
     ),
@@ -739,7 +739,7 @@ EXAMPLES = [
         [
             "**A `clause` is a one-row table.** The condition under `when`, the value under `then`; checked, generated and traced like a table, firing as `{\"table\":\"free\",\"row\":1}`.",
             "**`overrides regular` makes the proviso take precedence over the main text.** The approver's page says \"clause free takes precedence over clause regular. in all 1 pairs that meet, the rows of clause free lie inside the other's (an exception)\".",
-            "**A group without an alias** (`group remote = 北海道, 沖縄県`) is allowed; the generated identifiers number it.",
+            "**A group without an alias** (`group remote = Hokkaido, Okinawa`) is allowed; the generated identifiers number it.",
         ],
     ),
     (
@@ -848,8 +848,9 @@ tax](#the-us-federal-income-tax-bracket-by-bracket), [one section of the
 CFR](#one-section-of-the-us-code-of-federal-regulations) and the four after it. The rest began
 as transcriptions of Japanese published terms and statutes, and each is shown here as its
 English twin: the same rule with English names, `JPY` for the yen, and the amounts written out
-in digits. What stays in Japanese in them belongs to the documents: the 47 prefectures of
-`std/都道府県`, and the headings that a `source` line points at in a statute or a workbook.
+in digits. What stays in Japanese in them belongs to the documents: the headings that a
+`source` line points at in a statute or a workbook. The prefectures are spelled in English,
+from `std/jp/prefectures`.
 [The Japanese page](https://i2y.github.io/rulec/ja/examples/) shows the originals, with their
 names in Japanese, and the repository's tests hold each pair to the same findings, the same
 answers and the same claims.

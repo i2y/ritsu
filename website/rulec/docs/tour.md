@@ -220,8 +220,17 @@ what arrives is a set of names, not rows and not amounts.
 
 ### Built-in enums
 
-The built-in `std/都道府県` (47 values) arrives with
-`import std/都道府県`.
+The first-level divisions of thirteen countries are built in:
+`import std/us/states` brings in the 56 values of `us_state`, and
+`std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`,
+`std/kr/provinces`, `std/in/states`, `std/fr/regions`,
+`std/es/communities`, `std/it/regions`, `std/de/states`,
+`std/au/states`, `std/br/states` and `std/jp/prefectures` the rest. A
+value is the English name in ASCII (`New_York`, `Bavaria`, `Tokyo`), and
+a cell may also write a division in the local spelling (`Bayern`) or by
+its ISO code (`NY`): each is the same value. `import std/都道府県` is the
+same 47 prefectures with the values spelled in Japanese. See
+[the reference](reference.md#built-in-enums).
 
 ### When the set belongs to somebody else
 
@@ -985,9 +994,9 @@ order that goes on".
 
 ```rule
 examples
-| dest   | weight | total     | member   | -> fee |
-| 沖縄県 | 2500g  | 40_000JPY | basic    | 0JPY   |
-| 東京都 | 1999g  | 12_000JPY | platinum | 400JPY |
+| dest    | weight | total     | member   | -> fee |
+| Okinawa | 2500g  | 40_000JPY | basic    | 0JPY   |
+| Tokyo   | 1999g  | 12_000JPY | platinum | 400JPY |
 ```
 
 `examples` is an **executable specification**. `rulec check` runs every

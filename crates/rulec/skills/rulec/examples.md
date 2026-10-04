@@ -16,8 +16,9 @@ tax](#the-us-federal-income-tax-bracket-by-bracket), [one section of the
 CFR](#one-section-of-the-us-code-of-federal-regulations) and the four after it. The rest began
 as transcriptions of Japanese published terms and statutes, and each is shown here as its
 English twin: the same rule with English names, `JPY` for the yen, and the amounts written out
-in digits. What stays in Japanese in them belongs to the documents: the 47 prefectures of
-`std/都道府県`, and the headings that a `source` line points at in a statute or a workbook.
+in digits. What stays in Japanese in them belongs to the documents: the headings that a
+`source` line points at in a statute or a workbook. The prefectures are spelled in English,
+from `std/jp/prefectures`.
 [The Japanese page](https://i2y.github.io/rulec/ja/examples/) shows the originals, with their
 names in Japanese, and the repository's tests hold each pair to the same findings, the same
 answers and the same claims.
@@ -70,13 +71,13 @@ The design sketch written out as a rule. A boolean definition used as a column, 
 rule member_shipping_fee v4
 description "The sketch of §1.2 of the design document, written as a rule. It shows the normal case of a boolean definition used as a column, a rate output, the default mark, and one pair of rows that policy first leaves for review"
 
-import std/都道府県
+import std/jp/prefectures
 
 enum member_kind = basic default | gold default | platinum
-group remote = 北海道, 沖縄県
+group remote = Hokkaido, Okinawa
 
 inputs
-  dest   : 都道府県
+  dest   : jp_prefecture
   weight : mass[g]  range >=1g <=40kg
   total  : money[JPY, incl_tax]  range >=0JPY <=10_000_000JPY
   member : member_kind
@@ -105,10 +106,10 @@ policy first
 result fee = base * pay_rate
 
 examples
-| dest   | weight | total     | member   | -> fee  |
-| 沖縄県 | 2500g  | 40_000JPY | basic    | 0JPY    |
-| 東京都 | 1999g  | 12_000JPY | platinum | 400JPY  |
-| 北海道 | 500g   | 5000JPY   | basic    | 1200JPY |
+| dest     | weight | total     | member   | -> fee  |
+| Okinawa  | 2500g  | 40_000JPY | basic    | 0JPY    |
+| Tokyo    | 1999g  | 12_000JPY | platinum | 400JPY  |
+| Hokkaido | 500g   | 5000JPY   | basic    | 1200JPY |
 ```
 
 **What this one shows**
@@ -125,19 +126,19 @@ Japan Post's base tariff, shipping from Tokyo. 47 prefectures × 7 sizes = 329 c
 rule yupack_base_fee v1
 description "The base fee for sending from Tokyo"
 
-import std/都道府県
+import std/jp/prefectures
 
 enum size_class = S60 | S80 | S100 | S120 | S140 | S160 | S170
 
-group tokyo   = 東京都
-group hk      = 北海道, 福岡県, 佐賀県, 長崎県, 熊本県, 大分県, 宮崎県, 鹿児島県
-group near    = 青森県, 岩手県, 宮城県, 秋田県, 山形県, 福島県, 茨城県, 栃木県, 群馬県, 埼玉県, 千葉県, 神奈川県, 山梨県, 新潟県, 長野県, 富山県, 石川県, 福井県, 岐阜県, 静岡県, 愛知県, 三重県
-group kinki   = 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
-group cs      = 鳥取県, 島根県, 岡山県, 広島県, 山口県, 徳島県, 香川県, 愛媛県, 高知県
-group okinawa = 沖縄県
+group tokyo   = Tokyo
+group hk      = Hokkaido, Fukuoka, Saga, Nagasaki, Kumamoto, Oita, Miyazaki, Kagoshima
+group near    = Aomori, Iwate, Miyagi, Akita, Yamagata, Fukushima, Ibaraki, Tochigi, Gunma, Saitama, Chiba, Kanagawa, Yamanashi, Niigata, Nagano, Toyama, Ishikawa, Fukui, Gifu, Shizuoka, Aichi, Mie
+group kinki   = Shiga, Kyoto, Osaka, Hyogo, Nara, Wakayama
+group cs      = Tottori, Shimane, Okayama, Hiroshima, Yamaguchi, Tokushima, Kagawa, Ehime, Kochi
+group okinawa = Okinawa
 
 inputs
-  dest   : 都道府県
+  dest   : jp_prefecture
   girth  : length[cm]  range >=1cm <=170cm
   weight : mass[g]  range >=1g <=25kg  contract_only
 
@@ -202,16 +203,16 @@ policy unique
 | okinawa | S170 | 4350JPY                       |
 
 examples
-| dest   | girth | weight | -> fee  |
-| 東京都 | 55cm  | 1kg    | 820JPY  |
-| 沖縄県 | 100cm | 3kg    | 2160JPY |
-| 北海道 | 61cm  | 20kg   | 1710JPY |
+| dest     | girth | weight | -> fee  |
+| Tokyo    | 55cm  | 1kg    | 820JPY  |
+| Okinawa  | 100cm | 3kg    | 2160JPY |
+| Hokkaido | 61cm  | 20kg   | 1710JPY |
 ```
 
 **What this one shows**
 
 - A `group` names part of an enum. It is always expanded back to the values for checking, so **whether the grouping is an exact partition of the 47** is checked too.
-- `import std/都道府県` brings the 47 values in. The rule writes them as the namespace spells them, in Japanese; each has an ASCII alias, which is what the generated code calls it.
+- `import std/jp/prefectures` brings the 47 values in, spelled in English (`Tokyo`). The original imports the same 47 under the namespace's Japanese name, spelled in Japanese; either import reads both spellings, and the generated code is the same.
 - 42 rows, and `policy unique` still proves **reordering them cannot change the answer**.
 
 ## Two outputs at once
@@ -2537,13 +2538,13 @@ A tariff table decides the base fee, and two clauses decide the shipping fee: th
 rule shipping_fee_proviso v1
 description "The shipping fee of a regular delivery. A fare table decides the base fare, and a proviso that makes an order of 3,900 yen or more by a member free takes precedence over the main rule (the sketch of DESIGN.md §15.67)"
 
-import std/都道府県
+import std/jp/prefectures
 
 enum size_class = S60 | S80
-group remote = 北海道, 沖縄県
+group remote = Hokkaido, Okinawa
 
 inputs
-  dest   : 都道府県
+  dest   : jp_prefecture
   size   : size_class
   member : bool
   total  : money[JPY]  range >=0JPY <=10_000_000JPY
@@ -2569,17 +2570,17 @@ clause free -> fee  # Source: Article 3, paragraph 2, proviso
   overrides regular
 
 examples
-| dest   | size | member | total     | -> fee  |
-| 北海道 | S60  | true   | 3900JPY   | 0JPY    |
-| 北海道 | S60  | true   | 3899JPY   | 1150JPY |
-| 東京都 | S80  | false  | 10_000JPY | 1050JPY |
+| dest     | size | member | total     | -> fee  |
+| Hokkaido | S60  | true   | 3900JPY   | 0JPY    |
+| Hokkaido | S60  | true   | 3899JPY   | 1150JPY |
+| Tokyo    | S80  | false  | 10_000JPY | 1050JPY |
 ```
 
 **What this one shows**
 
 - **A `clause` is a one-row table.** The condition under `when`, the value under `then`; checked, generated and traced like a table, firing as `{"table":"free","row":1}`.
 - **`overrides regular` makes the proviso take precedence over the main text.** The approver's page says "clause free takes precedence over clause regular. in all 1 pairs that meet, the rows of clause free lie inside the other's (an exception)".
-- **A group without an alias** (`group remote = 北海道, 沖縄県`) is allowed; the generated identifiers number it.
+- **A group without an alias** (`group remote = Hokkaido, Okinawa`) is allowed; the generated identifiers number it.
 
 ## The rule the next one applies
 

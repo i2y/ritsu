@@ -260,8 +260,49 @@ rows, not amounts, not another rule.
 
 ### Built-in enums
 
-`import std/都道府県` brings in the 47 prefectures. It is the only built-in today (E013 for
-anything else).
+`import std/<country>/<kind>` brings in the first-level divisions of a country: ISO 3166-1's two
+letters in lower case, and the kind of division. The enum is named `<country>_<kind, singular>`.
+
+| import | enum | values | generated type |
+|---|---|---|---|
+| `std/us/states` | `us_state` | 56 (the 50 states, DC, 5 territories) | `UsState` |
+| `std/gb/nations` | `gb_nation` | 4 | `GbNation` |
+| `std/cn/provinces` | `cn_province` | 33 (Taiwan is `std/tw/divisions`) | `CnProvince` |
+| `std/tw/divisions` | `tw_division` | 22 | `TwDivision` |
+| `std/kr/provinces` | `kr_province` | 17 | `KrProvince` |
+| `std/in/states` | `in_state` | 36 (28 states, 8 union territories) | `InState` |
+| `std/fr/regions` | `fr_region` | 18 | `FrRegion` |
+| `std/es/communities` | `es_community` | 19 (17 communities, Ceuta, Melilla) | `EsCommunity` |
+| `std/it/regions` | `it_region` | 20 | `ItRegion` |
+| `std/de/states` | `de_state` | 16 | `DeState` |
+| `std/au/states` | `au_state` | 8 (6 states, 2 territories) | `AuState` |
+| `std/br/states` | `br_state` | 27 (26 states, the Federal District) | `BrState` |
+| `std/jp/prefectures` | `jp_prefecture` | 47 | `Prefecture` |
+
+A value is the division's English name in ASCII, with `_` for spaces and hyphens (`California`,
+`New_York`, `Bavaria`, `Ile_de_France`, `Sao_Paulo`, `Tokyo`); that is the spelling every
+output, the wire and the generated code use. Inside a rule a division may also be written in
+the country's own language (`Bayern`, `北京`, `서울특별시`, `Île_de_France`, `São_Paulo`) or by
+its ISO 3166-2 code without the country (`CA`, `BY`, `NSW`; a code that starts with a digit,
+such as Japan's, Korea's and Italy's, cannot be a name). Every spelling of a division is the
+same value: completeness, overlap, the vectors and the certificate see one value.
+
+```rule
+import std/us/states
+
+group west = CA, OR, WA, Nevada
+
+inputs
+  state : us_state
+```
+
+`import std/都道府県` brings in the same 47 prefectures as `std/jp/prefectures`, as the enum
+`都道府県` with the values spelled in Japanese (`東京都`); both accept both spellings, and the
+generated code is the same. One rule imports one country once (E013). A word that is no value
+gets the closest spelling, or the namespace of the country that has it, in E012's note; a code
+two imported countries share (`WA` is Washington and Western Australia) is E012 too, and is
+written by its name instead. The names come from Unicode CLDR (see `THIRD_PARTY_NOTICES`).
+Anything else after `import std/` is E013.
 
 ### An enum a `.proto` owns
 
@@ -446,9 +487,9 @@ shape order = jsonschema "api/order.json" "#/$defs/Order"
 shape order = proto "api/v1/order.proto" shop.v1.Order
 
 inputs
-  dest  : 都道府県  from order.shipping.prefecture
-  cold  : bool      from any order.lines where category = "chilled"
-  lines : number    range >=0 <=200  from count order.lines
+  dest  : jp_prefecture  from order.shipping.prefecture
+  cold  : bool           from any order.lines where category = "chilled"
+  lines : number         range >=0 <=200  from count order.lines
 ```
 
 **It changes no check of the table.** What comes out of a projection is a scalar input like
@@ -563,7 +604,7 @@ input, and the function in each language that reads them, under `projection`.
 
 ```rule
 inputs
-  dest   : 都道府県
+  dest   : jp_prefecture
   weight : mass[g]  range >=1g <=40kg
   total  : money[JPY, incl_tax]  range >=0JPY <=10_000_000JPY
   member : member_kind
@@ -1277,9 +1318,9 @@ One call decides one line. The loop stays with the caller, as everything else he
 ## 9. examples
 
 ```rule
-| dest   | weight | total     | member   | -> fee |
-| 沖縄県 | 2500g  | 40_000JPY | basic    | 0JPY   |
-| 東京都 | 1999g  | 12_000JPY | platinum | 400JPY |
+| dest    | weight | total     | member   | -> fee |
+| Okinawa | 2500g  | 40_000JPY | basic    | 0JPY   |
+| Tokyo   | 1999g  | 12_000JPY | platinum | 400JPY |
 ```
 
 `examples` is an **executable specification**: `rulec check` runs every row through the
