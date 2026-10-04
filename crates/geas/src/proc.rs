@@ -20,6 +20,7 @@ use std::ffi::OsString;
 use std::io::Read;
 use std::io::Write as _;
 use std::net::{SocketAddr, TcpListener, TcpStream};
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
@@ -36,10 +37,26 @@ const KILL_GRACE: Duration = Duration::from_secs(5);
 /// How many of the last lines of a program's stderr a claim error quotes.
 const STDERR_TAIL: usize = 5;
 
+#[cfg(unix)]
 unsafe extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
     fn signal(sig: i32, handler: extern "C" fn(i32)) -> usize;
     fn _exit(code: i32) -> !;
+}
+
+// Where there are no processes to signal (wasm32, in the page in the browser), no program starts
+// (`Command::spawn` says so, E030), so no group is ever killed and no handler is set.
+#[cfg(not(unix))]
+unsafe fn kill(_pid: i32, _sig: i32) -> i32 {
+    -1
+}
+#[cfg(not(unix))]
+unsafe fn signal(_sig: i32, _handler: extern "C" fn(i32)) -> usize {
+    0
+}
+#[cfg(not(unix))]
+unsafe fn _exit(code: i32) -> ! {
+    std::process::exit(code)
 }
 const SIGHUP: i32 = 1;
 const SIGINT: i32 = 2;
@@ -405,8 +422,14 @@ pub fn stderr_tail(stderr: &str) -> Vec<Text> {
 
 /// How a process ended, for a message.
 fn ended(st: ExitStatus) -> Text {
-    use std::os::unix::process::ExitStatusExt;
-    match (st.code(), st.signal()) {
+    #[cfg(unix)]
+    let signal = {
+        use std::os::unix::process::ExitStatusExt;
+        st.signal()
+    };
+    #[cfg(not(unix))]
+    let signal: Option<i32> = None;
+    match (st.code(), signal) {
         (Some(c), _) => tr!("終了コード {c}", "exit {c}"),
         (None, Some(s)) => tr!("シグナル {s} で終了", "killed by signal {s}"),
         (None, None) => tr!("終了", "ended"),
@@ -441,8 +464,9 @@ fn spawn_with(target: &str, words: &[String], shown: &[String], launch: &Launch,
         .current_dir(launch.dir)
         .stdin(stdin)
         .stdout(stdout)
-        .stderr(Stdio::piped())
-        .process_group(0);
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    cmd.process_group(0);
     if launch.env.clear {
         cmd.env_clear();
     }

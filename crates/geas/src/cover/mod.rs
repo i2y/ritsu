@@ -479,11 +479,19 @@ fn sysroot_bin() -> Option<PathBuf> {
 
 /// A program on PATH, as the OS would find it.
 pub fn on_path(name: &str) -> Option<PathBuf> {
-    use std::os::unix::fs::PermissionsExt;
     let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path).map(|d| d.join(name)).find(|p| {
-        std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
-    })
+    std::env::split_paths(&path).map(|d| d.join(name)).find(|p| std::fs::metadata(p).is_ok_and(|m| m.is_file() && executable(&m)))
+}
+
+#[cfg(unix)]
+fn executable(m: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    m.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn executable(_: &std::fs::Metadata) -> bool {
+    true
 }
 
 /// Whether a file is a Mach-O or ELF program with LLVM's coverage mapping in it:
