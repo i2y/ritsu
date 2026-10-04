@@ -146,6 +146,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ritsu-model"
+version = "0.1.0"
+dependencies = [
+ "chobo",
+ "dandori",
+ "koyomi",
+ "ritsu-ports",
+ "ritsu-testkit",
+ "rulec",
+ "serde_json",
+]
+
+[[package]]
 name = "ritsu-ports"
 version = "0.1.0"
 dependencies = [

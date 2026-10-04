@@ -126,7 +126,7 @@ fn layer(name: &str) -> Option<Layer> {
         match name {
             "ritsu-project" | "ritsu-cross" => Some(Layer::Glue),
             "ritsu" | "ritsu-wasm" => Some(Layer::Entry),
-            "ritsu-testkit" => Some(Layer::Test),
+            "ritsu-testkit" | "ritsu-model" => Some(Layer::Test),
             "xtask" => Some(Layer::Tool),
             _ => None,
         }
@@ -163,7 +163,7 @@ fn allowed(from: &str, to: &str) -> Result<(), String> {
             Layer::Test | Layer::Tool => Err(format!("{to} is not a dependency of an entry")),
             _ => Ok(()),
         },
-        Layer::Test => Err("ritsu-testkit depends on std only".into()),
+        Layer::Test => Err(format!("{from} depends on std only")),
         Layer::Tool => Err("xtask depends on std and serde_json only".into()),
     }
 }
@@ -179,11 +179,13 @@ fn check_deps(ks: &[Krate]) -> Vec<String> {
         for d in &k.deps {
             let what = format!("{} -> {} ({})", k.name, d.name, d.kind);
             if d.external {
+                // ritsu-model's tests read what the languages answer as JSON, as the languages' own do
                 let serde_ok = d.name == "serde_json"
                     && match lk {
                         Layer::Language => WITH_SERDE.contains(&k.name.as_str()),
                         Layer::Glue | Layer::Entry | Layer::Tool => true,
-                        Layer::Base | Layer::Test => false,
+                        Layer::Test => k.name == "ritsu-model" && d.kind == "dev",
+                        Layer::Base => false,
                     };
                 if !serde_ok {
                     out.push(format!("{what}: an outside crate; the only one is serde_json, for the five languages that use it, the layers above them and xtask (rule 4)"));
@@ -198,6 +200,11 @@ fn check_deps(ks: &[Krate]) -> Vec<String> {
                 if d.kind != "dev" {
                     out.push(format!("{what}: ritsu-testkit is a dev-dependency only"));
                 }
+                continue;
+            }
+            if d.name == "ritsu-model" {
+                // the comparison with the Lean models is a crate of tests that nothing builds on (DESIGN 11.3)
+                out.push(format!("{what}: nothing depends on ritsu-model"));
                 continue;
             }
             if d.kind == "dev" {
@@ -490,9 +497,18 @@ mod tests {
         ]
     }
 
+    /// The crate of the comparison with the Lean models, as it should be: the languages and
+    /// serde_json as dev-dependencies only.
+    fn model() -> Krate {
+        k("ritsu-model", "crates/ritsu-model", &[("koyomi", "dev", false), ("ritsu-testkit", "dev", false), ("serde_json", "dev", true)])
+    }
+
     #[test]
     fn the_workspace_as_it_should_be_passes() {
         assert_eq!(check_deps(&workspace()), Vec::<String>::new());
+        let mut ws = workspace();
+        ws.push(model());
+        assert_eq!(check_deps(&ws), Vec::<String>::new(), "ritsu-model takes the languages as dev-dependencies");
     }
 
     #[test]
@@ -505,6 +521,10 @@ mod tests {
         ws.push(k("ritsu-cross", "crates/ritsu-cross", &[("rulec", "normal", false), ("ritsu-project", "normal", false)]));
         ws.push(k("ritsu-project", "crates/ritsu-project", &[("ritsu", "normal", false)]));
         ws.push(k("ritsu-base-extra", "crates/x", &[]));
+        let mut m = model();
+        m.deps.push(Dep { name: "rulec".into(), kind: "normal".into(), external: false });
+        ws.push(m);
+        ws.iter_mut().find(|c| c.name == "chobo").unwrap().deps.push(Dep { name: "ritsu-model".into(), kind: "dev".into(), external: false });
         let broken = check_deps(&ws);
         let want = [
             "chobo -> koyomi (normal): a language does not depend on another language (rule 1; a dev-dependency may)",
@@ -515,6 +535,8 @@ mod tests {
             "ritsu-cross -> rulec (normal): ritsu-cross reads a language through the ports only",
             "ritsu-project -> ritsu (normal): ritsu-project depends on the base layer and the languages only",
             "ritsu-base-extra: a crate DESIGN 3.1 does not place in a layer; add it there and to xtask",
+            "ritsu-model -> rulec (normal): ritsu-model depends on std only",
+            "chobo -> ritsu-model (dev): nothing depends on ritsu-model",
         ];
         for w in want {
             assert!(broken.iter().any(|b| b == w), "missing: {w}\nall: {broken:#?}");

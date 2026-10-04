@@ -1,12 +1,16 @@
 name: proofs
 
-# The Lean development under crates/rulec/proofs (DESIGN 10.5, 11): the meaning of a rule, the
+# The Lean developments (DESIGN 10.5, 11). Under crates/rulec/proofs: the meaning of a rule, the
 # checks a certificate has to pass, and the theorems that say a `true` from each check settles
-# the matching claim. `lake build` is what makes "proved" a fact about this commit rather than
-# about a laptop, and the program it builds is the checks themselves, so running it over the
-# corpus is the proofs applied to every document there. It runs when the proofs change, or what
-# a certificate is made from and written with: rulec's sources, the base layer's (the digest and
-# the JSON), and the corpus.
+# the matching claim. Under proofs/: the models of chobo's transfers, koyomi's date arithmetic
+# and business days, and dandori's core with the check of what a case is left in, each with its
+# theorems, and `ritsu-model`, the program that runs those models. `lake build` is what makes
+# "proved" a fact about this commit rather than about a laptop. The program rulec's build makes
+# is the checks themselves, so running it over the corpus is the proofs applied to every document
+# there; the program proofs/ makes is held to each language's reference interpreter on every input
+# the tests make (crates/ritsu-model). It runs when the proofs change, or what they are about: the
+# sources of the four languages, the base layer's (the digest and the JSON), the corpus, and the
+# books, dates files and flows the comparison runs.
 
 on:
   push:
@@ -18,6 +22,18 @@ on:
       - "crates/rulec/tests/lean.rs"
       - "crates/rulec/tools/recheck.py"
       - "crates/ritsu-base/src/**"
+      - "proofs/**"
+      - "crates/ritsu-model/**"
+      - "crates/chobo/src/**"
+      - "crates/chobo/examples/**"
+      - "crates/chobo/tests/books/**"
+      - "crates/koyomi/src/**"
+      - "crates/koyomi/examples/**"
+      - "crates/koyomi/tests/fixtures/**"
+      - "crates/dandori/src/**"
+      - "crates/dandori/examples/**"
+      - "crates/dandori/tests/flows/**"
+      - "crates/dandori/tests/children/**"
       - "Cargo.lock"
       - ".github/workflows/proofs.yml"
   pull_request:
@@ -28,6 +44,18 @@ on:
       - "crates/rulec/tests/lean.rs"
       - "crates/rulec/tools/recheck.py"
       - "crates/ritsu-base/src/**"
+      - "proofs/**"
+      - "crates/ritsu-model/**"
+      - "crates/chobo/src/**"
+      - "crates/chobo/examples/**"
+      - "crates/chobo/tests/books/**"
+      - "crates/koyomi/src/**"
+      - "crates/koyomi/examples/**"
+      - "crates/koyomi/tests/fixtures/**"
+      - "crates/dandori/src/**"
+      - "crates/dandori/examples/**"
+      - "crates/dandori/tests/flows/**"
+      - "crates/dandori/tests/children/**"
       - "Cargo.lock"
       - ".github/workflows/proofs.yml"
   workflow_dispatch:
@@ -45,7 +73,8 @@ env:
 jobs:
   proofs:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # rulec's re-checker and the models' comparison both build the languages in release
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v7
@@ -62,14 +91,15 @@ jobs:
           key: cargo-proofs-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: cargo-proofs-${{ runner.os }}-
 
-      # The toolchain is pinned by proofs/lean-toolchain, so the cache key is that file: a new
-      # Lean is a change in the repository, read as such.
+      # The toolchain is pinned by lean-toolchain (the same in both developments), so the cache
+      # key is that file: a new Lean is a change in the repository, read as such.
       - uses: actions/cache@v6
         with:
           path: |
             ~/.elan
             crates/rulec/proofs/.lake
-          key: lean-${{ runner.os }}-${{ hashFiles('crates/rulec/proofs/lean-toolchain', 'crates/rulec/proofs/RulecCert/*.lean', 'crates/rulec/proofs/Main.lean') }}
+            proofs/.lake
+          key: lean-${{ runner.os }}-${{ hashFiles('crates/rulec/proofs/lean-toolchain', 'crates/rulec/proofs/RulecCert/*.lean', 'crates/rulec/proofs/Main.lean', 'proofs/lean-toolchain', 'proofs/**/*.lean', 'proofs/lakefile.toml') }}
           restore-keys: lean-${{ runner.os }}-
 
       - name: elan, for Lean
@@ -86,6 +116,13 @@ jobs:
           cd crates/rulec/proofs
           lake build
           lean --version
+
+      # ChoboModel, KoyomiModel and DandoriCore, and the program that runs them.
+      - name: The models build
+        run: |
+          set -eu
+          cd proofs
+          lake build
 
       - name: Every certificate passes the checks the theorems are about
         run: |
@@ -109,5 +146,21 @@ jobs:
           cargo test --release --locked -p rulec --test lean -- --nocapture | tee "$RUNNER_TEMP/lean.log"
           if grep -q "^SKIP: " "$RUNNER_TEMP/lean.log"; then
             echo "::error::the Lean tests did not run"
+            exit 1
+          fi
+
+      # crates/ritsu-model is of the tools level (it runs the program proofs/ builds): every
+      # scenario of chobo's books, every line of koyomi's vectors and the scenarios of dandori's
+      # core flows, run by the language and by its model and compared a line at a time; and every
+      # declaration of the models held to the three axioms Lean stands on. A SKIP line here would
+      # mean a comparison did not run, so one fails the step.
+      - name: The languages agree with their models, and nothing in the models is left open
+        env:
+          RITSU_TEST_LEVEL: tools
+        run: |
+          set -eu -o pipefail
+          cargo test --release --locked -p ritsu-model -- --nocapture | tee "$RUNNER_TEMP/model.log"
+          if grep -q "^SKIP: " "$RUNNER_TEMP/model.log"; then
+            echo "::error::a comparison with the models did not run"
             exit 1
           fi

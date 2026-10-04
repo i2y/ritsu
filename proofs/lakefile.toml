@@ -1,0 +1,20 @@
+name = "ritsu_proofs"
+version = "0.1.0"
+defaultTargets = ["ChoboModel", "KoyomiModel", "DandoriCore", "ritsu-model"]
+
+# The models of the meaning's core (DESIGN 11.2): each library states what one part of a language
+# means, as functions, and proves what its checks settle. `ritsu-model` runs those functions on the
+# inputs the Rust tests make (DESIGN 11.3).
+
+[[lean_lib]]
+name = "ChoboModel"
+
+[[lean_lib]]
+name = "KoyomiModel"
+
+[[lean_lib]]
+name = "DandoriCore"
+
+[[lean_exe]]
+name = "ritsu-model"
+root = "Main"

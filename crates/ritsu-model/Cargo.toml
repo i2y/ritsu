@@ -1,0 +1,17 @@
+[package]
+name = "ritsu-model"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "The Lean models of ritsu's languages, held to the Rust implementations: the inputs the tests make are run by both and compared a line at a time"
+publish = false
+
+[dev-dependencies]
+chobo = { path = "../chobo" }
+dandori = { path = "../dandori" }
+koyomi = { path = "../koyomi" }
+ritsu-ports = { path = "../ritsu-ports" }
+ritsu-testkit = { path = "../ritsu-testkit" }
+rulec = { path = "../rulec" }
+serde_json = { version = "1", features = ["preserve_order"] }
