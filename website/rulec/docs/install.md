@@ -133,25 +133,26 @@ stands.
 
 ## The agent skill
 
-The first user of this tool is an agent, and `skills/rulec/` (in ritsu's
-repository, under `crates/rulec`) is the skill that drives it: the procedure, the grammar, eighteen worked
+The first user of this tool is an agent, and `skills/rulec/` (at the root of
+ritsu's repository) is the skill that drives it: the procedure, the grammar, eighteen worked
 rules, the data formats, and how to target a language rulec does not
 generate. It does not copy the tool's own details down: it asks, through
 `--help`, `--format json` and `rulec explain`, so it does not go stale
 against the binary on the path.
 
-Copy the directory in, keeping its name:
+The `ritsu` binary carries it, with the skills of ritsu and of the other languages:
 
 ```console
-$ git clone https://github.com/i2y/ritsu /tmp/ritsu
-$ mkdir -p .claude/skills
-$ cp -r /tmp/ritsu/crates/rulec/skills/rulec .claude/skills/
+$ ritsu skills install rulec
 ```
 
-That gives `.claude/skills/rulec/SKILL.md` with five files beside it.
+That gives `.claude/skills/rulec/SKILL.md` with six files beside it.
 The folder is what makes the skill findable, so keep it whole. To have
-it in every project rather than one, put it in `~/.claude/skills/`
-instead.
+it in every project rather than one, add `--user`, which puts it in
+`~/.claude/skills/` instead; `--dir <dir>` puts it where another agent reads skills.
+In Claude Code, the plugin `ritsu` holds all eight skills: `/plugin marketplace add i2y/ritsu`,
+then `/plugin install ritsu@ritsu`. From a clone of the repository, copying `skills/rulec` does
+the same, and every release has the eight in `ritsu-skills-v<version>.zip`.
 
 The only thing it needs is `rulec` on the path, whichever way above put it there.
 

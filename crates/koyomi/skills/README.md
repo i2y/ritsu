@@ -6,13 +6,11 @@ and knowing what to ask a person. It is not about working on koyomi itself.
 
 ## Install
 
-```console
-$ cp -r skills/koyomi ~/.claude/skills/                  # every project on this machine
-$ cp -r skills/koyomi <your-project>/.claude/skills/     # one project, committed with it
-```
-
-It needs the `koyomi` binary on PATH. To let the skill run koyomi without a prompt each time, add
-this to the project's settings:
+The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
+Code plugin `ritsu`, `ritsu skills install koyomi`, a copy of `skills/koyomi/`, or the zip of a
+release. It needs `koyomi` on PATH, or `ritsu`, which runs it as `ritsu koyomi`. To let the skill run
+koyomi without a prompt each time, add this to the project's settings:
 
 ```json
 { "permissions": { "allow": ["Bash(koyomi:*)"] } }

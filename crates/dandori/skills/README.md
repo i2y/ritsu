@@ -6,13 +6,12 @@ is not about working on dandori itself.
 
 ## Install
 
-```console
-$ cp -r skills/dandori ~/.claude/skills/                  # every project on this machine
-$ cp -r skills/dandori <your-project>/.claude/skills/     # one project, committed with it
-```
-
-It needs the `dandori` binary on PATH, and `rulec` too when a workflow uses rules. To let the
-skill run dandori without a prompt each time, add this to the project's settings:
+The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
+Code plugin `ritsu`, `ritsu skills install dandori`, a copy of `skills/dandori/`, or the zip of a
+release. It needs `dandori` on PATH, or `ritsu`, which runs it as `ritsu dandori` with the rules, dates
+and books a workflow uses. To let the skill run dandori without a prompt each time, add this to
+the project's settings:
 
 ```json
 { "permissions": { "allow": ["Bash(dandori:*)"] } }

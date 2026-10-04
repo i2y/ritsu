@@ -18,10 +18,13 @@ name: release
 #   ritsu-v0.23.0-aarch64-apple-darwin.tar.gz
 #   ritsu_0.23.0-1_amd64.deb      ritsu-0.23.0-1.x86_64.rpm
 #   ritsu_0.23.0-1_arm64.deb      ritsu-0.23.0-1.aarch64.rpm
+#   ritsu-skills-v0.23.0.zip
 #   SHA256SUMS
 #
 # An archive holds `ritsu` and, beside it, `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen` and
-# `sakai`, links to it, and LICENSE-MIT and LICENSE-APACHE (packaging/archive.sh).
+# `sakai`, links to it, and LICENSE-MIT and LICENSE-APACHE (packaging/archive.sh). The zip holds the
+# eight Agent Skills of skills/, a folder each, and the two licenses (packaging/skills.sh): the same
+# files `ritsu skills install` writes, for an agent that is given folders rather than the binary.
 
 on:
   push:
@@ -95,13 +98,25 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
 
+      # The skills are the same on every platform, so they are zipped once, here, from the tag.
+      - name: The skills
+        run: |
+          set -eu
+          sh packaging/skills.sh "$GITHUB_REF_NAME" dist
+          unzip -l "dist/ritsu-skills-$GITHUB_REF_NAME.zip"
+          for skill in ritsu rulec dandori koyomi chobo geas yuen sakai; do
+            unzip -l "dist/ritsu-skills-$GITHUB_REF_NAME.zip" "$skill/SKILL.md" >/dev/null || { echo "::error::the zip has no $skill/SKILL.md"; exit 1; }
+          done
+
       - name: Checksums
-        run: cd dist && sha256sum ritsu-*.tar.gz ritsu_*.deb ritsu-*.rpm | tee SHA256SUMS
+        run: cd dist && sha256sum ritsu-*.tar.gz ritsu_*.deb ritsu-*.rpm ritsu-skills-*.zip | tee SHA256SUMS
 
       - name: Release
         env:
@@ -109,8 +124,8 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "ritsu $GITHUB_REF_NAME" \
-            --notes "One static binary per platform, with a link to it for each of the seven languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai); on Linux also as a .deb and an .rpm. Verify a download against SHA256SUMS before running it; the install page says how." \
-            dist/ritsu-*.tar.gz dist/ritsu_*.deb dist/ritsu-*.rpm dist/SHA256SUMS
+            --notes "One static binary per platform, with a link to it for each of the seven languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai); on Linux also as a .deb and an .rpm. The Agent Skills of ritsu and the seven languages are in ritsu-skills-$GITHUB_REF_NAME.zip, a folder each, to unzip where an agent reads skills. Verify a download against SHA256SUMS before running it; the install page says how." \
+            dist/ritsu-*.tar.gz dist/ritsu_*.deb dist/ritsu-*.rpm dist/ritsu-skills-*.zip dist/SHA256SUMS
 
   # The formula is written once, from the SHA256SUMS that was just published, so it points at
   # these very archives; the jobs below test that file and push that file.

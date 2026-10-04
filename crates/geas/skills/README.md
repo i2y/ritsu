@@ -6,7 +6,11 @@ person the claims that are missing. It is not about working on geas itself.
 
 ## Install
 
-The binary carries the skill, so a project needs nothing but `geas` on PATH:
+The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
+Code plugin `ritsu`, `ritsu skills install geas`, a copy of `skills/geas/`, or the zip of a
+release. geas's own binary carries this skill too, so a project that has only `geas` on PATH can
+install it with geas alone:
 
 ```console
 $ geas skill --install .claude/skills                # one project, committed with it

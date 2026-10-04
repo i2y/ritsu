@@ -45,12 +45,17 @@ examples/fulfillment/arrange_delivery.flow: ok
 
 ## AI エージェント向けのスキル
 
-リポジトリの `crates/dandori/skills/dandori` は、Claude Code のような AI コーディングエージェント向けの [Agent Skill](https://agentskills.io) です。dandori を使う場面、下書きからビルドまでの手順、言語の要点、人に聞くべきこと、診断ごとの直し方をまとめてあり、参照するサイトのページも一緒に入っています。
+ritsu のリポジトリの根の `skills/dandori` は、Claude Code のような AI コーディングエージェント向けの [Agent Skill](https://agentskills.io) です。dandori を使う場面、下書きからビルドまでの手順、言語の要点、人に聞くべきこと、診断ごとの直し方をまとめてあり、参照するサイトのページも一緒に入っています。
+
+`ritsu` のバイナリが、ritsu とほかの言語のスキルと一緒に持っています。
 
 ```console
-$ cp -r crates/dandori/skills/dandori ~/.claude/skills/                  # このマシンのすべてのプロジェクトで使う
-$ cp -r crates/dandori/skills/dandori <your-project>/.claude/skills/     # 一つのプロジェクトで使い、一緒にコミットする
+$ ritsu skills install dandori                                # 一つのプロジェクトの .claude/skills/ に入れる
+$ ritsu skills install dandori --user                         # このマシンのすべてのプロジェクトで使う
+$ ritsu skills install dandori --dir path/to/skills           # ほかのエージェントがスキルを読む場所に入れる
 ```
+
+Claude Code なら、プラグイン `ritsu` に八つが入っています。`/plugin marketplace add i2y/ritsu` を実行してから、`/plugin install ritsu@ritsu` を実行します。リポジトリのクローンから `skills/dandori` を `~/.claude/skills/` かプロジェクトの `.claude/skills/` にコピーしても同じで、リリースごとの `ritsu-skills-v<版>.zip` にも八つが入っています。
 
 スキルは、規則を使うワークフローでは PATH にある `ritsu dandori` を、規則を使わないワークフローでは `dandori` を動かします。
 

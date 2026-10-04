@@ -6,13 +6,12 @@ changed. It is not about working on rulec itself.
 
 ## Install
 
-```console
-$ cp -r skills/rulec ~/.claude/skills/            # every project on this machine
-$ cp -r skills/rulec <your-project>/.claude/skills/   # one project, committed with it
-```
-
-It needs the `rulec` binary on PATH. Nothing else: the skill reads rulec through its own
-`--help`, `--format json` and `rulec explain`, so it never has to read rulec's source.
+The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
+Code plugin `ritsu`, `ritsu skills install rulec`, a copy of `skills/rulec/`, or the zip of a
+release. It needs `rulec` on PATH, or `ritsu`, which runs it as `ritsu rulec`. Nothing else: the skill
+reads rulec through its own `--help`, `--format json` and `rulec explain`, so it never has to read
+rulec's source.
 
 To let it run rulec without a prompt each time, add this to the project's settings:
 

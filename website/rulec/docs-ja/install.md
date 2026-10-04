@@ -96,19 +96,17 @@ $ ./target/release/rulec --help
 
 ## エージェントスキル
 
-rulec を実際に使うのはたいていエージェントです。`skills/rulec/`（ritsu のリポジトリの `crates/rulec` の下）は、そのためのスキルです。
+rulec を実際に使うのはたいていエージェントです。`skills/rulec/`（ritsu のリポジトリの根）は、そのためのスキルです。
 
 入っているのは、作業の手順、文法、検査を通る規則が十八本、データの形式、それと対応していない言語へ生成するやり方です。ツールの仕様をスキルに書き写してはいません。`--help` と `--format json` と `rulec explain` で rulec 本体に聞くように書いてあるので、インストールしてあるバイナリが新しくなっても古びません。
 
-フォルダごとコピーします。
+`ritsu` のバイナリが、ritsu とほかの言語のスキルと一緒に持っています。
 
 ```console
-$ git clone https://github.com/i2y/ritsu /tmp/ritsu
-$ mkdir -p .claude/skills
-$ cp -r /tmp/ritsu/crates/rulec/skills/rulec .claude/skills/
+$ ritsu skills install rulec
 ```
 
-`.claude/skills/rulec/` の下に `SKILL.md` と五つのファイルが置かれます。フォルダの名前でスキルが見つかるので、中身をばらして置かないでください。一つのプロジェクトではなく全部で使うなら、`~/.claude/skills/` に置きます。
+`.claude/skills/rulec/` の下に `SKILL.md` と六つのファイルが置かれます。フォルダの名前でスキルが見つかるので、中身をばらして置かないでください。一つのプロジェクトではなく全部で使うなら、`--user` を付けて `~/.claude/skills/` に置きます。`--dir <dir>` を付けると、ほかのエージェントがスキルを読む場所に置きます。Claude Code なら、プラグイン `ritsu` に八つのスキルが入っています（`/plugin marketplace add i2y/ritsu` のあと `/plugin install ritsu@ritsu`）。リポジトリのクローンから `skills/rulec` をコピーしても同じで、リリースごとの `ritsu-skills-v<版>.zip` にも八つが入っています。
 
 要るのは `rulec` が PATH にあることだけです（上のどの入れ方でも構いません）。
 

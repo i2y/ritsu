@@ -1,5 +1,6 @@
 //! What a release hands out (DESIGN 13.2): the archive with `ritsu`, its seven links and the two
-//! licenses, the formula, the packages, the action, and the workflow that makes them. The scripts of `packaging/`
+//! licenses, the formula, the packages, the zip of the skills, the action, and the workflow that
+//! makes them. The scripts of `packaging/`
 //! are run on the binary of this crate; the files that say the same thing in five places — the
 //! seven names, the four platforms — are held to one another here, as the tests of the sites hold
 //! the pages to the commands.
@@ -220,6 +221,7 @@ fn the_workflows_run_the_scripts_and_the_action_unpacks_what_they_write() {
         (&release, "packaging/smoke.sh"),
         (&release, "packaging/linux.sh"),
         (&release, "packaging/homebrew.sh"),
+        (&release, "packaging/skills.sh"),
         (&packages, "packaging/archive.sh"),
         (&packages, "packaging/smoke.sh"),
         (&packages, "packaging/linux.sh"),
@@ -231,8 +233,11 @@ fn the_workflows_run_the_scripts_and_the_action_unpacks_what_they_write() {
     assert!(read("packaging/archive.sh").contains("ritsu-$tag-$target.tar.gz"));
     assert!(read("action.yml").contains("name=\"ritsu-$ver-$target.tar.gz\""));
     assert!(read("packaging/homebrew.sh").contains("ritsu-$tag-$1.tar.gz"));
-    // the SHA256SUMS holds the archive and both packages
-    assert!(release.contains("sha256sum ritsu-*.tar.gz ritsu_*.deb ritsu-*.rpm"));
+    // the SHA256SUMS holds the archive, both packages and the zip of the skills, and the release
+    // hands out each of them (tests/skill.rs holds what is in the zip)
+    assert!(release.contains("sha256sum ritsu-*.tar.gz ritsu_*.deb ritsu-*.rpm ritsu-skills-*.zip"));
+    assert!(release.contains("dist/ritsu-*.tar.gz dist/ritsu_*.deb dist/ritsu-*.rpm dist/ritsu-skills-*.zip dist/SHA256SUMS"));
+    assert!(read("packaging/skills.sh").contains("ritsu-skills-$tag.zip"));
     // the packages are named as the script names them, the formula's test and the release's
     // checks hold every name to one version
     let linux = read("packaging/linux.sh");

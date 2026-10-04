@@ -7,12 +7,10 @@ about working on yuen itself.
 
 ## Install
 
-```console
-$ cp -r skills/yuen ~/.claude/skills/                  # every project on this machine
-$ cp -r skills/yuen <your-project>/.claude/skills/     # one project, committed with it
-```
-
-It needs `ritsu` on PATH (yuen comes with it: `cargo install --git https://github.com/i2y/ritsu
+The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
+Code plugin `ritsu`, `ritsu skills install yuen`, a copy of `skills/yuen/`, or the zip of a
+release. It needs `ritsu` on PATH (yuen comes with it: `cargo install --git https://github.com/i2y/ritsu
 --locked ritsu`). To let the skill run yuen without a prompt each time, add this to the project's
 settings, and leave `review` out of it: a record says a person looked, so `ritsu yuen review` should
 always ask.

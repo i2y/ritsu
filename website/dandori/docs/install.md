@@ -63,15 +63,23 @@ examples/fulfillment/arrange_delivery.flow: ok
 
 ## The agent skill
 
-`crates/dandori/skills/dandori` in the repository is an [Agent Skill](https://agentskills.io) for AI coding agents
+`skills/dandori` at the root of ritsu's repository is an [Agent Skill](https://agentskills.io) for AI coding agents
 such as Claude Code: when to use dandori, the loop from a first draft to a build, the language on
 one page, what to ask a person, and the fix for each diagnostic. The pages of this site that it
 refers to come with it.
 
+The `ritsu` binary carries it, with the skills of ritsu and of the other languages:
+
 ```console
-$ cp -r crates/dandori/skills/dandori ~/.claude/skills/                  # every project on this machine
-$ cp -r crates/dandori/skills/dandori <your-project>/.claude/skills/     # one project, committed with it
+$ ritsu skills install dandori                                # one project: its .claude/skills/
+$ ritsu skills install dandori --user                         # every project on this machine
+$ ritsu skills install dandori --dir path/to/skills           # where another agent reads skills
 ```
+
+In Claude Code, the plugin `ritsu` holds all eight: `/plugin marketplace add i2y/ritsu`, then
+`/plugin install ritsu@ritsu`. From a clone of the repository, copying `skills/dandori` into
+`~/.claude/skills/` or a project's `.claude/skills/` does the same, and every release has the eight
+in `ritsu-skills-v<version>.zip`.
 
 The skill runs `ritsu dandori` from the PATH for a workflow that uses rules, and `dandori` alone for one without.
 

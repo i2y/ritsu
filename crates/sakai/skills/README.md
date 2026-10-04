@@ -4,12 +4,11 @@
 
 ## Install
 
-```console
-$ cp -r skills/sakai ~/.claude/skills/                  # every project on this machine
-$ cp -r skills/sakai <your-project>/.claude/skills/     # one project, committed with it
-```
-
-It needs ritsu on PATH (sakai comes with it). To let the skill run sakai without a prompt each time, add this to the project's settings:
+The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
+Code plugin `ritsu`, `ritsu skills install sakai`, a copy of `skills/sakai/`, or the zip of a
+release. It needs ritsu on PATH (sakai comes with it). To let the skill run sakai without a prompt
+each time, add this to the project's settings:
 
 ```json
 { "permissions": { "allow": ["Bash(ritsu sakai:*)", "Bash(sakai:*)"] } }

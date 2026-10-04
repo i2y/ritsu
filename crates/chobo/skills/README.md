@@ -6,13 +6,11 @@ ask a person. It is not about working on chobo itself.
 
 ## Install
 
-```console
-$ cp -r skills/chobo ~/.claude/skills/                  # every project on this machine
-$ cp -r skills/chobo <your-project>/.claude/skills/     # one project, committed with it
-```
-
-It needs the `chobo` binary on PATH. To let the skill run chobo without a prompt each time, add
-this to the project's settings:
+The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
+Code plugin `ritsu`, `ritsu skills install chobo`, a copy of `skills/chobo/`, or the zip of a
+release. It needs `chobo` on PATH, or `ritsu`, which runs it as `ritsu chobo`. To let the skill run
+chobo without a prompt each time, add this to the project's settings:
 
 ```json
 { "permissions": { "allow": ["Bash(chobo:*)"] } }

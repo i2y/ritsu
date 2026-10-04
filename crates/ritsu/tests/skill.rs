@@ -10,13 +10,33 @@
 //! - its table lists every code of ritsu's ledger, and no other;
 //! - the output it shows (the blocks marked `text`) is lines of one of ritsu's golden files;
 //! - the commands it names are commands.
+//!
+//! It holds the eight skills of `skills/` together too, and the three ways they are handed out
+//! (PLAN F.3):
+//!
+//! - `skills/` holds a folder for ritsu and one for each language, and no other, each with a
+//!   `SKILL.md` whose frontmatter names the folder, says in at most 1,024 characters when to use it,
+//!   and names the repository's license;
+//! - the plugin of Claude Code (`.claude-plugin/plugin.json`) and its marketplace
+//!   (`.claude-plugin/marketplace.json`) say what they must, in the version of the workspace, and the
+//!   plugin is the eight skills and nothing else Claude Code would load from its root;
+//! - the binary carries every file of the eight folders, `ritsu skills install` writes them as they
+//!   are, refuses a file changed by hand unless `--force` is given, and writes only the skills
+//!   named; `ritsu skills list` names the eight;
+//! - the zip of a release (`packaging/skills.sh`) holds the same files;
+//! - `skills/README.md` and `skills/README.ja.md` show what `ritsu skills list` prints, and their
+//!   links lead somewhere.
 
 mod common;
 
-use common::{Page, commands_named, link_targets, lines_in_order, page, root, shown_lines, trimmed};
+use common::{Page, commands_named, link_targets, lines_in_order, page, root, run_the_consoles, shown_lines, trimmed};
 use ritsu::cli::LANGUAGES;
+use ritsu::skills::SKILLS;
+use ritsu_testkit::TempDir;
+use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn skill() -> PathBuf {
     root().join("skills/ritsu")
@@ -156,4 +176,270 @@ fn the_commands_it_names_are_commands() {
     let (seen, wrong) = commands_named(&[skill_page()]);
     assert!(seen >= 10, "{seen} commands named in the skill: were they changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+// ---- the eight skills, and how they are handed out
+
+/// A value of `[workspace.package]` in the root Cargo.toml: `version`, `license`, `repository`.
+fn workspace(key: &str) -> String {
+    let cargo = fs::read_to_string(root().join("Cargo.toml")).unwrap();
+    cargo.lines().find_map(|l| l.strip_prefix(&format!("{key} = \""))).and_then(|l| l.strip_suffix('"')).unwrap_or_else(|| panic!("the workspace names its {key}")).to_string()
+}
+
+/// The names of the eight skills: ritsu's, then the languages in the order `ritsu --help` lists them.
+fn eight() -> Vec<&'static str> {
+    let mut names = vec!["ritsu"];
+    names.extend(LANGUAGES);
+    names
+}
+
+/// The files of `skills/<name>/`, by name, sorted.
+fn files_of(name: &str) -> Vec<String> {
+    let mut out: Vec<String> = fs::read_dir(root().join("skills").join(name)).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+    out.sort();
+    out
+}
+
+fn json(rel: &str) -> Value {
+    let text = fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"));
+    serde_json::from_str(&text).unwrap_or_else(|e| panic!("{rel} is not JSON: {e}"))
+}
+
+#[test]
+fn skills_holds_the_eight_each_with_its_frontmatter() {
+    let mut dirs: Vec<String> = fs::read_dir(root().join("skills")).unwrap().flatten().filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().to_string()).collect();
+    dirs.sort();
+    let mut want = eight();
+    want.sort();
+    assert_eq!(dirs, want, "skills/ holds a folder for ritsu and one for each language, and no other");
+    let license = workspace("license");
+    for name in eight() {
+        let md = root().join("skills").join(name).join("SKILL.md");
+        let front = frontmatter(&fs::read_to_string(&md).unwrap_or_else(|e| panic!("{}: {e}", md.display())));
+        assert_eq!(field(&front, "name").as_deref(), Some(name), "skills/{name}/SKILL.md names its folder");
+        let d = field(&front, "description").unwrap_or_else(|| panic!("skills/{name}/SKILL.md has no description"));
+        assert!(!d.is_empty() && d.chars().count() <= 1024, "skills/{name}: the description has {} characters; 1 to 1,024", d.chars().count());
+        assert_eq!(field(&front, "license").as_deref(), Some(license.as_str()), "skills/{name}/SKILL.md names the repository's license");
+    }
+}
+
+#[test]
+fn the_plugin_and_its_marketplace_say_what_they_are() {
+    let plugin = json(".claude-plugin/plugin.json");
+    assert_eq!(plugin["name"], "ritsu");
+    assert_eq!(plugin["version"].as_str(), Some(workspace("version").as_str()), "the plugin takes the version of the workspace");
+    assert!(plugin["description"].as_str().is_some_and(|d| !d.is_empty()), "the plugin says what it is");
+    assert_eq!(plugin["author"]["name"], "i2y");
+    assert!(plugin["author"].get("email").is_none(), "the manifest names no address");
+    assert_eq!(plugin["license"].as_str(), Some(workspace("license").as_str()));
+    assert_eq!(plugin["repository"].as_str(), Some(workspace("repository").as_str()));
+    // The skills are found where Claude Code looks by default, skills/ at the plugin's root.
+    for key in ["skills", "commands", "agents", "hooks", "mcpServers", "lspServers", "outputStyles"] {
+        assert!(plugin.get(key).is_none(), "plugin.json sets `{key}`: the plugin is the folders of skills/ alone");
+    }
+    // The root is the plugin's, so nothing else there may be a part Claude Code loads.
+    for part in ["commands", "agents", "hooks", "bin", "output-styles", "workflows", "themes", "monitors", ".mcp.json", ".lsp.json", "settings.json", "SKILL.md", "CLAUDE.md"] {
+        assert!(!root().join(part).exists(), "{part} at the root would be a part of the plugin `ritsu` too");
+    }
+
+    let market = json(".claude-plugin/marketplace.json");
+    assert_eq!(market["name"], "ritsu");
+    assert_eq!(market["owner"]["name"], "i2y");
+    assert!(market["owner"].get("email").is_none(), "the marketplace names no address");
+    assert!(market["description"].as_str().is_some_and(|d| !d.is_empty()), "the marketplace says what it is");
+    let plugins = market["plugins"].as_array().expect("the marketplace lists its plugins");
+    assert_eq!(plugins.len(), 1, "one plugin, ritsu");
+    assert_eq!(plugins[0]["name"], "ritsu", "the entry is named as the manifest is, so `/plugin install ritsu@ritsu` finds it");
+    assert_eq!(plugins[0]["source"], "./", "the plugin is the root of the repository");
+    assert!(plugins[0].get("version").is_none(), "the version is plugin.json's alone");
+}
+
+#[test]
+fn the_binary_carries_every_file_of_the_eight() {
+    assert_eq!(SKILLS.iter().map(|s| s.name).collect::<Vec<_>>(), eight(), "the skills ritsu carries, in order");
+    for s in SKILLS {
+        assert_eq!(s.files[0].0, "SKILL.md", "{}: SKILL.md first", s.name);
+        let mut carried: Vec<String> = s.files.iter().map(|(n, _)| n.to_string()).collect();
+        carried.sort();
+        assert_eq!(carried, files_of(s.name), "src/skills.rs carries every file of skills/{}/, and no other", s.name);
+        for (file, text) in s.files {
+            let on_disk = fs::read(root().join("skills").join(s.name).join(file)).unwrap();
+            assert!(on_disk == text.as_bytes(), "skills/{}/{file}: the binary carries another text (built before it changed?)", s.name);
+        }
+    }
+}
+
+/// `ritsu …` run in `dir`, with `HOME` set to `home`: the exit code, stdout and stderr.
+fn ritsu_in(dir: &Path, home: &Path, args: &[&str]) -> (i32, String, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).args(args).current_dir(dir).env("HOME", home).env_remove("RITSU_LANG").output().unwrap();
+    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+}
+
+/// Every file under `dir`, as a path from it, sorted.
+fn every_file(dir: &Path) -> Vec<String> {
+    fn walk(base: &Path, dir: &Path, out: &mut Vec<String>) {
+        for e in fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(base, &p, out);
+            } else {
+                out.push(p.strip_prefix(base).unwrap().display().to_string());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    if dir.exists() {
+        walk(dir, dir, &mut out);
+    }
+    out.sort();
+    out
+}
+
+/// The files of the skills named, as `ritsu skills install` writes them under its directory.
+fn files_of_skills(names: &[&str]) -> Vec<String> {
+    let mut out: Vec<String> = names.iter().flat_map(|n| files_of(n).into_iter().map(move |f| format!("{n}/{f}"))).collect();
+    out.sort();
+    out
+}
+
+/// Each file written under `dir` is the file of `skills/`, to the byte.
+fn same_as_skills(dir: &Path) {
+    for f in every_file(dir) {
+        assert!(fs::read(dir.join(&f)).unwrap() == fs::read(root().join("skills").join(&f)).unwrap(), "{f} is not skills/{f}");
+    }
+}
+
+#[test]
+fn ritsu_skills_install_writes_the_eight_as_they_are() {
+    let t = TempDir::new("skills-install");
+    let (code, out, err) = ritsu_in(t.path(), t.path(), &["skills", "install"]);
+    assert_eq!(code, 0, "{out}{err}");
+    let dir = t.path().join(".claude/skills");
+    assert_eq!(every_file(&dir), files_of_skills(&eight()), "the project's .claude/skills/ holds the eight, and nothing else");
+    same_as_skills(&dir);
+    assert_eq!(out.lines().count(), 8, "{out}");
+    assert!(out.starts_with("wrote .claude/skills/ritsu (1 file)\nwrote .claude/skills/rulec ("), "{out}");
+    // Again: every file is already the same, and nothing is written.
+    let (code, out, err) = ritsu_in(t.path(), t.path(), &["skills", "install"]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.lines().all(|l| l.contains(" is already the same (")), "{out}");
+}
+
+#[test]
+fn ritsu_skills_install_refuses_a_file_changed_by_hand_and_force_writes_over_it() {
+    let t = TempDir::new("skills-by-hand");
+    assert_eq!(ritsu_in(t.path(), t.path(), &["skills", "install"]).0, 0);
+    let dir = t.path().join(".claude/skills");
+    let changed = dir.join("rulec/SKILL.md");
+    let mut text = fs::read_to_string(&changed).unwrap();
+    text.push_str("\nA line of the project's own.\n");
+    fs::write(&changed, &text).unwrap();
+    let mine = t.write(".claude/skills/rulec/notes.md", "the project's notes\n");
+    fs::remove_dir_all(dir.join("dandori")).unwrap();
+    let (code, out, err) = ritsu_in(t.path(), t.path(), &["skills", "install"]);
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.is_empty(), "{out}");
+    assert!(err.starts_with("error: 1 file there differs from the one this ritsu carries") && err.contains("`--force` writes over it") && err.contains("\n  .claude/skills/rulec/SKILL.md\n"), "{err}");
+    assert_eq!(fs::read_to_string(&changed).unwrap(), text, "the file changed by hand is left as it is");
+    assert!(!dir.join("dandori").exists(), "nothing is written when a file is refused");
+    // With --force, the file is ritsu's again, the missing skill is written, and the project's own
+    // file is left as it is.
+    let (code, out, err) = ritsu_in(t.path(), t.path(), &["skills", "install", "--force"]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains("wrote .claude/skills/rulec (1 file)") && out.contains("wrote .claude/skills/dandori ("), "{out}");
+    assert_eq!(fs::read_to_string(&mine).unwrap(), "the project's notes\n");
+    fs::remove_file(&mine).unwrap();
+    assert_eq!(every_file(&dir), files_of_skills(&eight()));
+    same_as_skills(&dir);
+}
+
+#[test]
+fn ritsu_skills_install_writes_only_the_skills_named_where_it_is_told() {
+    let t = TempDir::new("skills-named");
+    let home = t.path().join("home");
+    fs::create_dir_all(&home).unwrap();
+    // --dir, for another agent
+    let (code, out, err) = ritsu_in(t.path(), &home, &["skills", "install", "rulec", "dandori", "--dir", "agent/skills"]);
+    assert_eq!(code, 0, "{out}{err}");
+    let dir = t.path().join("agent/skills");
+    assert_eq!(every_file(&dir), files_of_skills(&["rulec", "dandori"]));
+    same_as_skills(&dir);
+    assert!(!t.path().join(".claude").exists(), "--dir writes nowhere else");
+    // --user, into ~/.claude/skills
+    let (code, out, err) = ritsu_in(t.path(), &home, &["skills", "install", "geas", "--user"]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert_eq!(every_file(&home.join(".claude/skills")), files_of_skills(&["geas"]));
+    same_as_skills(&home.join(".claude/skills"));
+    // a skill that does not exist, and the two places at once, are bad arguments that write nothing
+    let (code, _, err) = ritsu_in(t.path(), &home, &["skills", "install", "rulec", "nope"]);
+    assert_eq!(code, 2);
+    assert_eq!(err, "error: there is no skill `nope`; the skills are ritsu, rulec, dandori, koyomi, chobo, geas, yuen, sakai\n");
+    let (code, _, err) = ritsu_in(t.path(), &home, &["skills", "install", "--dir", "x", "--user"]);
+    assert_eq!((code, err.as_str()), (2, "error: give `--dir` or `--user`, not both\n"));
+    assert!(!t.path().join(".claude").exists() && !t.path().join("x").exists());
+}
+
+#[test]
+fn ritsu_skills_list_names_the_eight() {
+    let t = TempDir::new("skills-list");
+    let (code, out, err) = ritsu_in(t.path(), t.path(), &["skills", "list"]);
+    assert_eq!(code, 0, "{err}");
+    let names: Vec<&str> = out.lines().filter_map(|l| l.split_whitespace().next()).collect();
+    assert_eq!(names, eight(), "{out}");
+    let (code, out, _) = ritsu_in(t.path(), t.path(), &["skills", "list", "--lang", "ja"]);
+    assert!(code == 0 && out.contains("rulec    業務の規則（.rule）"), "{out}");
+    // `skills` is in the table, and so in `ritsu --help`
+    let (code, out, _) = ritsu_in(t.path(), t.path(), &["--help"]);
+    assert!(code == 0 && out.contains("ritsu skills list | install [<name>...]"), "{out}");
+    let (code, out, _) = ritsu_in(t.path(), t.path(), &["skills"]);
+    assert!(code == 2 && out.is_empty());
+}
+
+#[test]
+fn the_release_zip_holds_the_eight_as_they_are() {
+    let t = TempDir::new("skills-zip");
+    let dist = t.path().join("dist");
+    let o = Command::new("sh").args(["packaging/skills.sh", "v0.0.0", dist.to_str().unwrap()]).current_dir(root()).output().unwrap();
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert!(o.status.success(), "{out}{}", String::from_utf8_lossy(&o.stderr));
+    let zip = dist.join("ritsu-skills-v0.0.0.zip");
+    assert_eq!(out.trim_end(), zip.to_str().unwrap(), "the script says what it wrote");
+    let into = t.path().join("unzipped");
+    let st = Command::new("unzip").args(["-q", zip.to_str().unwrap(), "-d", into.to_str().unwrap()]).status().expect("unzip");
+    assert!(st.success());
+    let mut want = files_of_skills(&eight());
+    want.extend(["LICENSE-APACHE".to_string(), "LICENSE-MIT".to_string()]);
+    want.sort();
+    assert_eq!(every_file(&into), want, "the zip holds the eight folders at its top, and the two licenses");
+    for f in every_file(&into) {
+        let from = if f.starts_with("LICENSE-") { root().join(&f) } else { root().join("skills").join(&f) };
+        assert!(fs::read(into.join(&f)).unwrap() == fs::read(from).unwrap(), "{f} in the zip is not the repository's");
+    }
+}
+
+#[test]
+fn the_readmes_of_the_skills_show_what_ritsu_prints() {
+    let pages: Vec<Page> = ["skills/README.md", "skills/README.ja.md"].iter().map(|n| page(n)).collect();
+    let (ran, wrong) = run_the_consoles(&pages);
+    assert!(ran >= 2, "{ran} commands run: `ritsu skills list` is shown with what it prints, on each page");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let mut bad = Vec::new();
+    for p in &pages {
+        for (line, target) in link_targets(&p.text) {
+            if target.starts_with("https://") || target.starts_with("http://") {
+                continue;
+            }
+            let (file, frag) = target.split_once('#').map_or((target.as_str(), None), |(f, a)| (f, Some(a)));
+            let to = root().join("skills").join(file);
+            if !to.exists() {
+                bad.push(format!("{}:{line}: {target} leads nowhere", p.name));
+            } else if let (Some(frag), true) = (frag, file.ends_with(".md")) {
+                let q = page(to.strip_prefix(root()).unwrap().to_str().unwrap());
+                if !q.anchors.iter().any(|a| a == frag) {
+                    bad.push(format!("{}:{line}: {file} has no heading anchored `#{frag}`", p.name));
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

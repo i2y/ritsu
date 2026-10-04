@@ -384,11 +384,23 @@ axiom of its own.
 
 ## For AI agents
 
-[skills/ritsu](skills/ritsu) is an [Agent Skill](https://agentskills.io) for using ritsu: the loop
-from `ritsu check` to a run and a package, how to read each diagnostic across the languages and fix
-it, and which language's skill to read for the rest. Each language has a skill of its own, in
-`skills/<language>/`. Copy the folders you need into `~/.claude/skills/`, or into
-a project's `.claude/skills/`.
+ritsu and its languages are made to be used by AI agents, and [skills/](skills) holds eight
+[Agent Skills](https://agentskills.io) for them: [skills/ritsu](skills/ritsu) for a project of more
+than one language (the loop from `ritsu check` to a run and a package, how to read each diagnostic
+across the languages and fix it, and which language's skill to read for the rest), and one for each
+of the seven languages, in `skills/<language>/`. [skills/README.md](skills/README.md) lists them.
+There are four ways to install them:
+
+- **Claude Code**: the repository is a plugin marketplace whose plugin `ritsu` holds the eight.
+  Run `/plugin marketplace add i2y/ritsu`, then `/plugin install ritsu@ritsu`.
+- **Any agent, from the binary**: `ritsu skills install` writes them into the project's
+  `.claude/skills/`; with `--user`, into `~/.claude/skills/`; with `--dir <dir>`, where another
+  agent reads skills. Names after it (`ritsu skills install rulec dandori`) write only those, and
+  `ritsu skills list` lists them.
+- **By hand**: copy the folders you need from `skills/` into `~/.claude/skills/`, or into a
+  project's `.claude/skills/`.
+- **From a release**: `ritsu-skills-v<version>.zip` holds the eight folders; unzip it where your
+  agent reads skills.
 
 ## Commands
 
@@ -397,6 +409,7 @@ ritsu check <dir>         every language's check, then the checks across them
 ritsu run <flow> …        a workflow run with its rules evaluated, dates computed, books moved
 ritsu gen <dir> --out …   one package of TypeScript, Python or Go for the whole project
 ritsu explain <code>      what a diagnostic means, with a reproduction
+ritsu skills install      the Agent Skills, written where an agent reads them
 ritsu <language> …        a language's own commands, as in ritsu rulec doc fee.rule
 ```
 
