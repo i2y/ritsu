@@ -1,0 +1,1450 @@
+{
+  "v": 1,
+  "book": "stock_reservation",
+  "version": 1,
+  "source_sha256": "4468d4c32ec54eddbd3998e61986c536f89fe4d23db37c725d22d4817417bf04",
+  "units": [
+    {
+      "name": "pcs",
+      "scale": 0,
+      "ledger": 1458849121
+    }
+  ],
+  "accounts": [
+    {
+      "name": "stock",
+      "params": [
+        "sku"
+      ],
+      "unit": "pcs",
+      "outside": false,
+      "lower": {
+        "value": 0,
+        "refused_as": "out_of_stock"
+      },
+      "upper": null,
+      "description": "what is on the shelves",
+      "code": 7670
+    },
+    {
+      "name": "suppliers",
+      "params": [],
+      "unit": "pcs",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 39430
+    },
+    {
+      "name": "customers",
+      "params": [],
+      "unit": "pcs",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 37684
+    }
+  ],
+  "transfers": [
+    {
+      "name": "receive",
+      "description": null,
+      "params": [
+        {
+          "name": "delivery",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "qty",
+          "type": "amount",
+          "unit": "pcs"
+        }
+      ],
+      "key": [
+        "delivery",
+        "sku"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "qty"
+          },
+          "from": {
+            "account": "suppliers",
+            "args": []
+          },
+          "to": {
+            "account": "stock",
+            "args": [
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 9315,
+      "definition": "49bb43bda0306877c643b98868e85c91",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "receive",
+                  "args": {
+                    "delivery": "delivery-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "receive",
+                  "args": {
+                    "delivery": "delivery-1",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "delivery",
+              "sku"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "qty",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "receive",
+                    "args": {
+                      "delivery": "delivery-1",
+                      "sku": "sku-2",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "receive",
+                    "args": {
+                      "delivery": "delivery-1",
+                      "sku": "sku-2",
+                      "qty": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "reserve",
+      "description": "posted when the order ships, voided when it is cancelled",
+      "params": [
+        {
+          "name": "order",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "qty",
+          "type": "amount",
+          "unit": "pcs"
+        }
+      ],
+      "key": [
+        "order",
+        "sku"
+      ],
+      "pending": {
+        "expires_after_seconds": 1800
+      },
+      "moves": [
+        {
+          "amount": {
+            "param": "qty"
+          },
+          "from": {
+            "account": "stock",
+            "args": [
+              {
+                "param": "sku"
+              }
+            ]
+          },
+          "to": {
+            "account": "customers",
+            "args": []
+          }
+        }
+      ],
+      "code": 34181,
+      "definition": "7e9bf2a35a14c09248d2976fa6a88bba",
+      "operations": {
+        "hold": {
+          "refusals": [
+            {
+              "name": "out_of_stock",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "out_of_stock"
+                }
+              ],
+              "account": "stock",
+              "as_written": "stock(sku)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "receive",
+                  "args": {
+                    "delivery": "delivery-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "out_of_stock"
+                },
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "order",
+              "sku"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "qty",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "receive",
+                    "args": {
+                      "delivery": "delivery-1",
+                      "sku": "sku-2",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "reserve",
+                    "args": {
+                      "order": "order-3",
+                      "sku": "sku-2",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "reserve",
+                    "args": {
+                      "order": "order-3",
+                      "sku": "sku-2",
+                      "qty": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "done_before",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "receive",
+                    "args": {
+                      "delivery": "delivery-1",
+                      "sku": "sku-2",
+                      "qty": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "reserve",
+                    "args": {
+                      "order": "order-3",
+                      "sku": "sku-2",
+                      "qty": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "pass",
+                    "duration": "30 minutes"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "reserve",
+                    "args": {
+                      "order": "order-3",
+                      "sku": "sku-2",
+                      "qty": 2
+                    },
+                    "result": "done_before"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "post": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "receive",
+                  "args": {
+                    "delivery": "delivery-1",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2"
+                  },
+                  "amounts": {
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_voided",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "receive",
+                  "args": {
+                    "delivery": "delivery-1",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "already_voided"
+                }
+              ]
+            },
+            {
+              "name": "expired",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "receive",
+                  "args": {
+                    "delivery": "delivery-1",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "pass",
+                  "duration": "30 minutes"
+                },
+                {
+                  "op": "post",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "expired"
+                }
+              ]
+            },
+            {
+              "name": "over_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "receive",
+                  "args": {
+                    "delivery": "delivery-1",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2"
+                  },
+                  "amounts": {
+                    "qty": 3
+                  },
+                  "result": "refused",
+                  "reason": "over_hold"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "post",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-1",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        },
+        "void": {
+          "refusals": [
+            {
+              "name": "already_posted",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "receive",
+                  "args": {
+                    "delivery": "delivery-1",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "already_posted"
+                }
+              ]
+            },
+            {
+              "name": "expired",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "receive",
+                  "args": {
+                    "delivery": "delivery-1",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "pass",
+                  "duration": "30 minutes"
+                },
+                {
+                  "op": "void",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "expired"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "void",
+                  "kind": "reserve",
+                  "args": {
+                    "order": "order-1",
+                    "sku": "sku-2"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "take_back",
+      "description": null,
+      "params": [
+        {
+          "name": "return_slip",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "qty",
+          "type": "amount",
+          "unit": "pcs"
+        }
+      ],
+      "key": [
+        "return_slip",
+        "sku"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "qty"
+          },
+          "from": {
+            "account": "customers",
+            "args": []
+          },
+          "to": {
+            "account": "stock",
+            "args": [
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 38611,
+      "definition": "cde500d4d50fcea4a55a9b9030fb4412",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "take_back",
+                  "args": {
+                    "return_slip": "return_slip-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "take_back",
+                  "args": {
+                    "return_slip": "return_slip-1",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "return_slip",
+              "sku"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "qty",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "take_back",
+                    "args": {
+                      "return_slip": "return_slip-1",
+                      "sku": "sku-2",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "take_back",
+                    "args": {
+                      "return_slip": "return_slip-1",
+                      "sku": "sku-2",
+                      "qty": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [
+    {
+      "name": "reserve",
+      "over": "reserve",
+      "carry": {
+        "input": "state",
+        "output": "next_state",
+        "enum": "state"
+      },
+      "held": [],
+      "never": [],
+      "once": [],
+      "states": [
+        "held",
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "initial": "held",
+      "final": [
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "events": [
+        "post",
+        "void",
+        "expire"
+      ],
+      "external": [
+        "expire"
+      ],
+      "certificate": {
+        "enums": {
+          "state": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "event": [
+            "post",
+            "void",
+            "expire"
+          ],
+          "reason": [
+            "none",
+            "already_posted",
+            "already_voided",
+            "expired"
+          ]
+        },
+        "types": {
+          "state": "state",
+          "event": "event",
+          "next_state": "state",
+          "refused": "bool",
+          "reason": "reason"
+        },
+        "machine": {
+          "table": "reserve",
+          "carry": {
+            "input": "state",
+            "output": "next_state"
+          },
+          "axis": 1,
+          "states": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "initial": 0,
+          "finals": [
+            1,
+            2,
+            3
+          ],
+          "rows": [
+            {
+              "row": 1,
+              "to": 1
+            },
+            {
+              "row": 2,
+              "to": 2
+            },
+            {
+              "row": 3,
+              "to": 3
+            },
+            {
+              "row": 4,
+              "stay": true
+            },
+            {
+              "row": 5,
+              "stay": true
+            },
+            {
+              "row": 6,
+              "stay": true
+            },
+            {
+              "row": 7,
+              "stay": true
+            },
+            {
+              "row": 8,
+              "stay": true
+            },
+            {
+              "row": 9,
+              "stay": true
+            }
+          ]
+        },
+        "tables": [
+          {
+            "table": "reserve",
+            "policy": "first",
+            "axes": [
+              {
+                "column": "event",
+                "coords": [
+                  "post",
+                  "void",
+                  "expire"
+                ]
+              },
+              {
+                "column": "state",
+                "coords": [
+                  "held",
+                  "posted",
+                  "voided",
+                  "expired"
+                ]
+              }
+            ],
+            "decides": [
+              "next_state",
+              "refused",
+              "reason"
+            ],
+            "rows": [
+              {
+                "row": 1,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "posted",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 2,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "voided",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 3,
+                "accepts": [
+                  [
+                    2
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "expired",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 4,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 5,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_posted"
+                ]
+              },
+              {
+                "row": 6,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_voided"
+                ]
+              },
+              {
+                "row": 7,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 8,
+                "accepts": [
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    3
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "expired"
+                ]
+              },
+              {
+                "row": 9,
+                "accepts": [
+                  [
+                    2
+                  ],
+                  [
+                    1,
+                    2,
+                    3
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "stock_reservation",
+      "functions": [
+        {
+          "kind": "receive",
+          "op": "do",
+          "name": "receive_do",
+          "params": [
+            "p_tenant",
+            "p_delivery",
+            "p_sku",
+            "p_qty"
+          ]
+        },
+        {
+          "kind": "reserve",
+          "op": "hold",
+          "name": "reserve_hold",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_sku",
+            "p_qty"
+          ]
+        },
+        {
+          "kind": "reserve",
+          "op": "post",
+          "name": "reserve_post",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_sku",
+            "p_qty"
+          ],
+          "default_null": [
+            "p_qty"
+          ]
+        },
+        {
+          "kind": "reserve",
+          "op": "void",
+          "name": "reserve_void",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_sku"
+          ]
+        },
+        {
+          "kind": "reserve",
+          "op": "status",
+          "name": "reserve_status",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_sku"
+          ]
+        },
+        {
+          "kind": "take_back",
+          "op": "do",
+          "name": "take_back_do",
+          "params": [
+            "p_tenant",
+            "p_return_slip",
+            "p_sku",
+            "p_qty"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "stock",
+          "name": "balance_stock",
+          "params": [
+            "p_tenant",
+            "p_sku"
+          ]
+        },
+        {
+          "account": "suppliers",
+          "name": "balance_suppliers",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "customers",
+          "name": "balance_customers",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "stock_reservation.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "receive",
+          "member": "receive",
+          "args": "receiveArgs"
+        },
+        {
+          "kind": "reserve",
+          "member": "reserve",
+          "args": "reserveArgs",
+          "key": "reserveKey",
+          "amounts": "reserveAmounts"
+        },
+        {
+          "kind": "take_back",
+          "member": "take_back",
+          "args": "take_backArgs"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "stock_reservation",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "receive",
+          "member": "receive",
+          "params": {
+            "delivery": "delivery",
+            "sku": "sku",
+            "qty": "qty"
+          }
+        },
+        {
+          "kind": "reserve",
+          "member": "reserve",
+          "params": {
+            "order": "order",
+            "sku": "sku",
+            "qty": "qty"
+          }
+        },
+        {
+          "kind": "take_back",
+          "member": "take_back",
+          "params": {
+            "return_slip": "return_slip",
+            "sku": "sku",
+            "qty": "qty"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "stock_reservation",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "receive",
+          "member": "Receive",
+          "args": "ReceiveArgs",
+          "fields": {
+            "delivery": "Delivery",
+            "sku": "Sku",
+            "qty": "Qty"
+          }
+        },
+        {
+          "kind": "reserve",
+          "member": "Reserve",
+          "args": "ReserveArgs",
+          "fields": {
+            "order": "Order",
+            "sku": "Sku",
+            "qty": "Qty"
+          },
+          "key": "ReserveKey",
+          "amounts": "ReserveAmounts"
+        },
+        {
+          "kind": "take_back",
+          "member": "Take_back",
+          "args": "Take_backArgs",
+          "fields": {
+            "return_slip": "Return_slip",
+            "sku": "Sku",
+            "qty": "Qty"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "stock",
+          "method": "Stock",
+          "args": "StockAccount",
+          "fields": {
+            "sku": "Sku"
+          }
+        },
+        {
+          "account": "suppliers",
+          "method": "Suppliers"
+        },
+        {
+          "account": "customers",
+          "method": "Customers"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "receive",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "reserve",
+          "op": "hold",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "reserve",
+          "op": "post",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "reserve",
+          "op": "void",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "take_back",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

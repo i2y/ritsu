@@ -201,7 +201,7 @@ none. The whole language is on [docs/reference.md](docs/reference.md).
 ## How it is checked
 
 The reference interpreter defines what a book means. The tests make the scenarios of every
-example and every test book, 339 of them with the ones written by hand, 27 with callers at the
+example and every test book, 468 of them with the ones written by hand, 38 with callers at the
 same time, and run each one on seven targets: the SQL itself through psql, the PostgreSQL
 clients in TypeScript, Python and Go, and the TigerBeetle clients in the three. Each answer, each
 balance at the end and the state of each hold must be the reference interpreter's (one of its

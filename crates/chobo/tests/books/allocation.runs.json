@@ -1,0 +1,1811 @@
+[
+  {
+    "scenario": {
+      "name": "bound: usd_payout.do move 1 takes shop_sales(shop) to 1, one above `at least 0`",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 105,
+            "fee": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-3",
+            "shop": "shop-2",
+            "jpy_amount": 1,
+            "usd_amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: usd_payout.do move 1 takes shop_sales(shop) to exactly 0, its `at least 0`",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 105,
+            "fee": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-3",
+            "shop": "shop-2",
+            "jpy_amount": 2,
+            "usd_amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: usd_payout.do move 1 would take shop_sales(shop) to -1, below `at least 0`",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 106,
+            "fee": 4
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-3",
+            "shop": "shop-2",
+            "jpy_amount": 3,
+            "usd_amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "refused",
+          "reason": "insufficient_sales"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -106,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: sale.do twice with the same arguments",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 1000,
+            "fee": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 1000,
+            "fee": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -1000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 899,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: sale.do again with another price",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 1000,
+            "fee": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 3,
+            "fee": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -1000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 899,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: sale.do refused with insufficient_sales, then again, and again once shop_sales(shop) has enough",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 1,
+            "fee": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 1,
+            "fee": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-3",
+            "shop": "shop-2",
+            "price": 105,
+            "fee": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 1,
+            "fee": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "refused",
+          "reason": "insufficient_sales"
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: usd_payout.do twice with the same arguments",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 104,
+            "fee": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-3",
+            "shop": "shop-2",
+            "jpy_amount": 1,
+            "usd_amount": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-3",
+            "shop": "shop-2",
+            "jpy_amount": 1,
+            "usd_amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -104,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: usd_payout.do again with another jpy_amount",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 104,
+            "fee": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-3",
+            "shop": "shop-2",
+            "jpy_amount": 1,
+            "usd_amount": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-3",
+            "shop": "shop-2",
+            "jpy_amount": 4,
+            "usd_amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -104,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: usd_payout.do refused with insufficient_sales, then again, and again once shop_sales(shop) has enough",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-1",
+            "shop": "shop-2",
+            "jpy_amount": 1,
+            "usd_amount": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-1",
+            "shop": "shop-2",
+            "jpy_amount": 1,
+            "usd_amount": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-3",
+            "shop": "shop-2",
+            "price": 104,
+            "fee": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-1",
+            "shop": "shop-2",
+            "jpy_amount": 1,
+            "usd_amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "refused",
+          "reason": "insufficient_sales"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -104,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: usd_transfer.do twice with the same arguments",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 105,
+            "fee": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-3",
+            "shop": "shop-2",
+            "jpy_amount": 2,
+            "usd_amount": 151
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "args": {
+            "transfer_id": "transfer_id-4",
+            "shop": "shop-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "args": {
+            "transfer_id": "transfer_id-4",
+            "shop": "shop-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": -151,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "overseas_bank",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "remittance_fee",
+          "args": [],
+          "posted": 150,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: usd_transfer.do again with another amount",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 105,
+            "fee": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-3",
+            "shop": "shop-2",
+            "jpy_amount": 2,
+            "usd_amount": 151
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "args": {
+            "transfer_id": "transfer_id-4",
+            "shop": "shop-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "args": {
+            "transfer_id": "transfer_id-4",
+            "shop": "shop-2",
+            "amount": 4
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": -151,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "overseas_bank",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "remittance_fee",
+          "args": [],
+          "posted": 150,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: usd_transfer.do refused with insufficient_usd, then again, and again once usd_account(shop) has enough",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "args": {
+            "transfer_id": "transfer_id-1",
+            "shop": "shop-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "args": {
+            "transfer_id": "transfer_id-1",
+            "shop": "shop-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-3",
+            "shop": "shop-2",
+            "price": 105,
+            "fee": 3
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-4",
+            "shop": "shop-2",
+            "jpy_amount": 2,
+            "usd_amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "args": {
+            "transfer_id": "transfer_id-1",
+            "shop": "shop-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "result": "refused",
+          "reason": "insufficient_usd"
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": -105,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 100,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "overseas_bank",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "remittance_fee",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "moves: sale.do refused at move 2 (shop_sales(shop)), and no move is made",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 1,
+            "fee": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "refused",
+          "reason": "insufficient_sales"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "moves: sale.do refused at move 3 (shop_sales(shop)), and no move is made",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 2,
+            "fee": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "result": "refused",
+          "reason": "insufficient_sales"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "buyers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "fee_income",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shipping",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "moves: usd_payout.do refused at move 1 (shop_sales(shop)), and no move is made",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "args": {
+            "payout_id": "payout_id-1",
+            "shop": "shop-2",
+            "jpy_amount": 1,
+            "usd_amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "usd_payout",
+          "result": "refused",
+          "reason": "insufficient_sales"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shop_sales",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "jpy_exchange",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_exchange",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "moves: usd_transfer.do refused at move 1 (usd_account(shop)), and no move is made",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "args": {
+            "transfer_id": "transfer_id-1",
+            "shop": "shop-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "usd_transfer",
+          "result": "refused",
+          "reason": "insufficient_usd"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "usd_account",
+          "args": [
+            "shop-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "overseas_bank",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "remittance_fee",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of shop_sales(shop) with usd_payout.do",
+      "book": "allocation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "sale",
+          "args": {
+            "order": "order-1",
+            "shop": "shop-2",
+            "price": 105,
+            "fee": 4
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "usd_payout",
+                "args": {
+                  "payout_id": "payout_id-3",
+                  "shop": "shop-2",
+                  "jpy_amount": 1,
+                  "usd_amount": 2
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "usd_payout",
+                "args": {
+                  "payout_id": "payout_id-4",
+                  "shop": "shop-2",
+                  "jpy_amount": 1,
+                  "usd_amount": 3
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "sale",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "result": "refused",
+                    "reason": "insufficient_sales"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "buyers",
+              "args": [],
+              "posted": -105,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "fee_income",
+              "args": [],
+              "posted": 4,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "shipping",
+              "args": [],
+              "posted": 100,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "shop_sales",
+              "args": [
+                "shop-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "jpy_exchange",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "usd_exchange",
+              "args": [],
+              "posted": -2,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "usd_account",
+              "args": [
+                "shop-2"
+              ],
+              "posted": 2,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "sale",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "result": "refused",
+                    "reason": "insufficient_sales"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "buyers",
+              "args": [],
+              "posted": -105,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "fee_income",
+              "args": [],
+              "posted": 4,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "shipping",
+              "args": [],
+              "posted": 100,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "shop_sales",
+              "args": [
+                "shop-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "jpy_exchange",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "usd_exchange",
+              "args": [],
+              "posted": -3,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "usd_account",
+              "args": [
+                "shop-2"
+              ],
+              "posted": 3,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  }
+]

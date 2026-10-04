@@ -1,0 +1,597 @@
+{
+  "v": 1,
+  "book": "safety_stock",
+  "version": 1,
+  "source_sha256": "a0c30e6c93f99d78ee7d01af3821f4d181308ff4f4e37b7b7e82d09dee5839c7",
+  "units": [
+    {
+      "name": "pcs",
+      "scale": 0,
+      "ledger": 1458849121
+    }
+  ],
+  "accounts": [
+    {
+      "name": "shelf",
+      "params": [
+        "sku"
+      ],
+      "unit": "pcs",
+      "outside": false,
+      "lower": {
+        "value": 3,
+        "refused_as": "below_safety_stock"
+      },
+      "upper": null,
+      "description": null,
+      "code": 45852
+    },
+    {
+      "name": "suppliers",
+      "params": [],
+      "unit": "pcs",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 1982
+    },
+    {
+      "name": "customers",
+      "params": [],
+      "unit": "pcs",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 13859
+    }
+  ],
+  "transfers": [
+    {
+      "name": "replenish",
+      "description": null,
+      "params": [
+        {
+          "name": "slip",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "qty",
+          "type": "amount",
+          "unit": "pcs"
+        }
+      ],
+      "key": [
+        "slip",
+        "sku"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "qty"
+          },
+          "from": {
+            "account": "suppliers",
+            "args": []
+          },
+          "to": {
+            "account": "shelf",
+            "args": [
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 47341,
+      "definition": "d06ff579c951bf691723d18ce70429c7",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "replenish",
+                  "args": {
+                    "slip": "slip-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "replenish",
+                  "args": {
+                    "slip": "slip-1",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "slip",
+              "sku"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "qty",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "replenish",
+                    "args": {
+                      "slip": "slip-1",
+                      "sku": "sku-2",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "replenish",
+                    "args": {
+                      "slip": "slip-1",
+                      "sku": "sku-2",
+                      "qty": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "ship",
+      "description": null,
+      "params": [
+        {
+          "name": "order",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "qty",
+          "type": "amount",
+          "unit": "pcs"
+        }
+      ],
+      "key": [
+        "order",
+        "sku"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "qty"
+          },
+          "from": {
+            "account": "shelf",
+            "args": [
+              {
+                "param": "sku"
+              }
+            ]
+          },
+          "to": {
+            "account": "customers",
+            "args": []
+          }
+        }
+      ],
+      "code": 16122,
+      "definition": "8b0f58e6b021cc11b7468029fee46928",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "below_safety_stock",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "ship",
+                  "args": {
+                    "order": "order-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "below_safety_stock"
+                }
+              ],
+              "account": "shelf",
+              "as_written": "shelf(sku)",
+              "bound": "at least 3",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "replenish",
+                  "args": {
+                    "slip": "slip-1",
+                    "sku": "sku-2",
+                    "qty": 4
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "ship",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "ship",
+                  "args": {
+                    "order": "order-3",
+                    "sku": "sku-2",
+                    "qty": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "ship",
+                  "args": {
+                    "order": "order-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "below_safety_stock"
+                },
+                {
+                  "op": "do",
+                  "kind": "ship",
+                  "args": {
+                    "order": "order-1",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "order",
+              "sku"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "qty",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "replenish",
+                    "args": {
+                      "slip": "slip-1",
+                      "sku": "sku-2",
+                      "qty": 4
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ship",
+                    "args": {
+                      "order": "order-3",
+                      "sku": "sku-2",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "ship",
+                    "args": {
+                      "order": "order-3",
+                      "sku": "sku-2",
+                      "qty": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "safety_stock",
+      "functions": [
+        {
+          "kind": "replenish",
+          "op": "do",
+          "name": "replenish_do",
+          "params": [
+            "p_tenant",
+            "p_slip",
+            "p_sku",
+            "p_qty"
+          ]
+        },
+        {
+          "kind": "ship",
+          "op": "do",
+          "name": "ship_do",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_sku",
+            "p_qty"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "shelf",
+          "name": "balance_shelf",
+          "params": [
+            "p_tenant",
+            "p_sku"
+          ]
+        },
+        {
+          "account": "suppliers",
+          "name": "balance_suppliers",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "customers",
+          "name": "balance_customers",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "safety_stock.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "replenish",
+          "member": "replenish",
+          "args": "replenishArgs"
+        },
+        {
+          "kind": "ship",
+          "member": "ship",
+          "args": "shipArgs"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "safety_stock",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "replenish",
+          "member": "replenish",
+          "params": {
+            "slip": "slip",
+            "sku": "sku",
+            "qty": "qty"
+          }
+        },
+        {
+          "kind": "ship",
+          "member": "ship",
+          "params": {
+            "order": "order",
+            "sku": "sku",
+            "qty": "qty"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "safety_stock",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "replenish",
+          "member": "Replenish",
+          "args": "ReplenishArgs",
+          "fields": {
+            "slip": "Slip",
+            "sku": "Sku",
+            "qty": "Qty"
+          }
+        },
+        {
+          "kind": "ship",
+          "member": "Ship",
+          "args": "ShipArgs",
+          "fields": {
+            "order": "Order",
+            "sku": "Sku",
+            "qty": "Qty"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "shelf",
+          "method": "Shelf",
+          "args": "ShelfAccount",
+          "fields": {
+            "sku": "Sku"
+          }
+        },
+        {
+          "account": "suppliers",
+          "method": "Suppliers"
+        },
+        {
+          "account": "customers",
+          "method": "Customers"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "replenish",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "ship",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "probe"
+            },
+            {
+              "move": 1,
+              "role": "probe_void"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+# stock reservation: a lower bound of 0, a hold with an expiry, returns
+book stock_reservation v1
+description "Stock per SKU. A delivery adds to it, an order holds what it takes for 30 minutes, shipping posts the hold, cancelling voids it"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  description "what is on the shelves"
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer reserve(order: string, sku: string, qty: pcs)
+  description "posted when the order ships, voided when it is cancelled"
+  key order, sku
+  pending expires after 30 minutes
+  move qty from stock(sku) to customers
+
+transfer take_back(return_slip: string, sku: string, qty: pcs)
+  key return_slip, sku
+  move qty from customers to stock(sku)

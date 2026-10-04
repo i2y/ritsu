@@ -1,0 +1,1890 @@
+[
+  {
+    "scenario": {
+      "name": "bound: pay_later.hold takes credit(member) to -49999, one above `at least -50000`",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 50001
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 50001
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 50001,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: pay_later.hold takes credit(member) to exactly -50000, its `at least -50000`",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 50002
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 50002
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 50002,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: pay_later.hold would take credit(member) to -50001, below `at least -50000`",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 50003
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "over_the_credit_line"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: repayment.do fills credit(member) to 9999, one below `at most 10000`",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 9998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 9999,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -9999,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: repayment.do fills credit(member) to exactly 10000, its `at most 10000`",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 9998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 10000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -10000,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: repayment.do would fill credit(member) to 10001, past `at most 10000`",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 9998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-3",
+            "member": "member-2",
+            "amount": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "refused",
+          "reason": "over_prepayment"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 9998,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -9998,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: pay_later.hold twice with the same arguments",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: pay_later.hold again with another amount",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: pay_later.hold refused with over_the_credit_line, then again, and again once credit(member) has enough",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 50001
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 50001
+          }
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 50001
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "over_the_credit_line"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: repayment.do twice with the same arguments",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: repayment.do again with another amount",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: repayment.do refused with over_prepayment, then again",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 10000
+          }
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "refused",
+          "reason": "over_prepayment"
+        },
+        {
+          "op": "do",
+          "kind": "repayment",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 10000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -10000,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: pay_later posted in full",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: pay_later posted in part",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          },
+          "amounts": {
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: pay_later voided",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "pay_later",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: pay_later posted, then voided",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        },
+        {
+          "op": "void",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "already_posted"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: pay_later voided, then posted",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "already_voided"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: pay_later posted for more than it holds, then for what it holds",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          },
+          "amounts": {
+            "amount": 3
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          },
+          "amounts": {
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "over_hold"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: pay_later posted before it is held, then held and posted",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "no_such_hold"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: pay_later posted twice, with the same amounts and with others",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          },
+          "amounts": {
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          },
+          "amounts": {
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "pass: pay_later expires, then is posted and voided",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "pass",
+          "duration": "1441 minutes"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        },
+        {
+          "op": "void",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "pass"
+        },
+        {
+          "op": "post",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "expired"
+        },
+        {
+          "op": "void",
+          "kind": "pay_later",
+          "result": "refused",
+          "reason": "expired"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "expired"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "pass: pay_later held again with the same key after it expired",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "pass",
+          "duration": "1441 minutes"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done"
+        },
+        {
+          "op": "pass"
+        },
+        {
+          "op": "hold",
+          "kind": "pay_later",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "credit",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "pay_later",
+          "key": [
+            "order-1"
+          ],
+          "state": "expired"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 50000 of credit(member) with pay_later.hold",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "hold",
+                "kind": "pay_later",
+                "args": {
+                  "order": "order-1",
+                  "member": "member-2",
+                  "amount": 50000
+                }
+              }
+            ],
+            [
+              {
+                "op": "hold",
+                "kind": "pay_later",
+                "args": {
+                  "order": "order-3",
+                  "member": "member-2",
+                  "amount": 50000
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "result": "refused",
+                    "reason": "over_the_credit_line"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "credit",
+              "args": [
+                "member-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 50000
+            },
+            {
+              "account": "shop",
+              "args": [],
+              "posted": 0,
+              "held_in": 50000,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "pay_later",
+              "key": [
+                "order-1"
+              ],
+              "state": "held"
+            }
+          ]
+        },
+        {
+          "steps": [
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "result": "refused",
+                    "reason": "over_the_credit_line"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "credit",
+              "args": [
+                "member-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 50000
+            },
+            {
+              "account": "shop",
+              "args": [],
+              "posted": 0,
+              "held_in": 50000,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "pay_later",
+              "key": [
+                "order-3"
+              ],
+              "state": "held"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers fill the last 1 of room in credit(member) with repayment.do",
+      "book": "credit",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "repayment",
+          "args": {
+            "repayment_id": "repayment_id-1",
+            "member": "member-2",
+            "amount": 9999
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "repayment",
+                "args": {
+                  "repayment_id": "repayment_id-3",
+                  "member": "member-2",
+                  "amount": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "repayment",
+                "args": {
+                  "repayment_id": "repayment_id-4",
+                  "member": "member-2",
+                  "amount": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "repayment",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "repayment",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "repayment",
+                    "result": "refused",
+                    "reason": "over_prepayment"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "credit",
+              "args": [
+                "member-2"
+              ],
+              "posted": 10000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "bank",
+              "args": [],
+              "posted": -10000,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "repayment",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "repayment",
+                    "result": "refused",
+                    "reason": "over_prepayment"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "repayment",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "credit",
+              "args": [
+                "member-2"
+              ],
+              "posted": 10000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "bank",
+              "args": [],
+              "posted": -10000,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,402 @@
+[
+  {
+    "scenario": {
+      "name": "more: reserve voided, then posted for more than it held",
+      "book": "stock_reservation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "args": {
+            "delivery": "delivery-1",
+            "sku": "sku-2",
+            "qty": 5
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2"
+          },
+          "amounts": {
+            "qty": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "reserve",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "reserve",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "result": "refused",
+          "reason": "already_voided"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "stock",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "reserve",
+          "key": [
+            "order-3",
+            "sku-2"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "more: reserve expired, then posted for more than it held",
+      "book": "stock_reservation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "args": {
+            "delivery": "delivery-1",
+            "sku": "sku-2",
+            "qty": 5
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 2
+          }
+        },
+        {
+          "op": "pass",
+          "duration": "31 minutes"
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2"
+          },
+          "amounts": {
+            "qty": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "reserve",
+          "result": "done"
+        },
+        {
+          "op": "pass"
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "result": "refused",
+          "reason": "expired"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "stock",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "reserve",
+          "key": [
+            "order-3",
+            "sku-2"
+          ],
+          "state": "expired"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "more: reserve posted, then posted again for more than it held",
+      "book": "stock_reservation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "args": {
+            "delivery": "delivery-1",
+            "sku": "sku-2",
+            "qty": 5
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2"
+          },
+          "amounts": {
+            "qty": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "reserve",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "stock",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "reserve",
+          "key": [
+            "order-3",
+            "sku-2"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "more: reserve held, posted for nothing, then the stock is all there",
+      "book": "stock_reservation",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "args": {
+            "delivery": "delivery-1",
+            "sku": "sku-2",
+            "qty": 5
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2"
+          },
+          "amounts": {
+            "qty": 0
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "reserve",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "reserve",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "stock",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "reserve",
+          "key": [
+            "order-3",
+            "sku-2"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  }
+]

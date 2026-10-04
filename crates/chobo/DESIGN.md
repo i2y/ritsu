@@ -108,7 +108,7 @@ transfer take_back(return_id: string, sku: string, qty: pcs)
   move qty from customers to stock(sku)
 ```
 
-同じ形の帳簿を日本語の名前で書いたもの（テストの帳簿 `tests/books/在庫.book`。例の日本語の版 `inventory.ja.book` も同じ形）：
+同じ形の帳簿を日本語の名前で書いたもの（テストの帳簿 `tests/books/在庫.book`。例の日本語の版 `inventory.ja.book` も同じ形。英語の版は `tests/books/stock_reservation.book`）：
 
 ```
 book 在庫 v1
@@ -989,6 +989,7 @@ chobo は帳簿から取った。拡張子 `.book` も同じ。
 
 - **例（`examples/`）**：dandori と同じ形で、英語の版を `<名前>.book`、日本語の版を `<名前>.ja.book` とする。chobo の例は段階 D からこの形なので、変えていない。
 - **テストの材料（`tests/fixtures/`）**：日本語の名前の帳簿は、名前も中身もそのまま残す。日本語の名前で日本語の版だと分かるからである。同じ振る舞いを確かめる英語の版を、日本語の名前を英語に訳した名前で足した（`型.book` と `types.book`、`名前の長さ.book` と `name_length.book`）。横に置く `<名前>.before.book`（`--diff-base` で比べる前の版）と `<名前>.target`（ビルドするターゲット）も、英語の版の横に同じものを置く。対の一覧は `tests/check.rs` の `TWINS` にあり、テストが、二つが同じコードを出し、同じくエラーで止まるか通ることを確かめる。golden は帳簿ごとに英語と日本語の出力の二つで、英語の版の帳簿にも二つある。テストは両方を回す。
+- **テストの帳簿（`tests/books/`）**：日本語の名前の 6 冊（`在庫`、`与信`、`ウォレット`、`安全在庫`、`自分あて`、`分配`）は、名前も中身もそのまま残し、同じ形の英語の名前の 6 冊を足した。`stock_reservation`、`credit`、`wallet`、`safety_stock`、`to_itself`、`allocation` である。手で書いたシナリオ（`在庫.more.json`）にも英語の版（`stock_reservation.more.json`）がある。英語の帳簿の名前は、例の帳簿の名前（`inventory`、`marketplace`、`points`、`refunds`）とも、ほかのテストの帳簿の名前ともぶつからないようにした。PostgreSQL では帳簿の名前がスキーマの名前になり、テストは全部の帳簿を一つのクラスタに入れるので、同じ名前の二冊は互いのデータを見る（英語の在庫の帳簿を `inventory` としたとき、例の `inventory` と同じスキーマに入って `done_before` が返った）。結果 `<帳簿>.runs.json`、チェーン `<帳簿>.chains.json`、`<帳簿>.api.json`、ページ（`tests/doc/`）の golden も、英語の帳簿ごとにある。七つの出力先の突き合わせ（`tests/backends.rs`）は、英語の帳簿 6 冊も流す。帳簿の名前を指すテスト（`tests/cli.rs`、`ports.rs`、`postgres.rs`、`tigerbeetle.rs` の `…_in_english`）は、英語の帳簿を指す同じ振る舞いのテストである。PostgreSQL に負荷をかけるテスト（`what_only_postgres_has` とその英語の版）は、同時には走らせない（`ONE_AT_A_TIME`）。REPEATABLE READ のクライアントが直列化の失敗をやり直す回数に限りがあり、それは一回分の負荷を想定しているからである。
 - 英語の名前は、キーワード（`account`、`from`、`to`、`move`、`refused` など）を避けて訳した。`口座` は `wallet`、`移動` は `relocate`、断られる帳簿の名前は `refusals` にした。
 
 日本語でしか確かめられない振る舞いは、日本語の帳簿のまま持ち、同じ振る舞いを英語の帳簿でも確かめる。PostgreSQL の名前の長さ（E061）は、日本語では一字 3 バイトなので 21 字で、英語では 64 字で超える（`name_length.book` の関数の名前は 67 バイト）。名前に分かれた結合文字（E001）は、日本語では「か」と濁点（U+3099）、英語では `e` と鋭アクセント（U+0301）で確かめる。
@@ -1016,8 +1017,6 @@ chobo は帳簿から取った。拡張子 `.book` も同じ。
 - Python のクライアントの、名前の NFKC。Python はソースの識別子を NFKC で正規化するので、正規化で変わる文字（全角の英字、半角のカナ）を含む名前は、Python の中では正規化した形になる。ソースに書いた呼び出しも同じく正規化されるので通るが、名前を文字列で渡す呼び方（`getattr`、`**args`）では合わない。chobo は名前を正規化しない（1.6）。
 
 ### 11.4 確かめていないこと
-
-- テストの帳簿（`tests/books/` の 6 冊。シナリオの結果 `<帳簿>.runs.json` と TigerBeetle へのチェーン `<帳簿>.chains.json` を固定しているもの）の英語の版は、まだ無い。英語を先にした段階は、診断の帳簿（`tests/fixtures/`）までにした。突き合わせの英語の帳簿は、例の英語の版（8 冊のうち 4 冊）が受け持っている。
 
 - TigerBeetle の本番の構成（六つのレプリカ、一つのリクエストに 8189 件）での確認。テストは `--development` のレプリカ一つで流す（3.1 の E060）。
 - TigerBeetle が、移動が二つ以上ある仮押さえを期限切れで戻すあいだに、ほかの操作が入ること（4.2）。参照インタプリタは、`expire` を一度に起きるものとして扱う。

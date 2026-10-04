@@ -1,0 +1,41 @@
+[
+  {
+    "name": "more: reserve voided, then posted for more than it held",
+    "book": "stock_reservation",
+    "steps": [
+      {"op": "do", "kind": "receive", "args": {"delivery": "delivery-1", "sku": "sku-2", "qty": 5}},
+      {"op": "hold", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2", "qty": 2}},
+      {"op": "void", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2"}},
+      {"op": "post", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2"}, "amounts": {"qty": 3}}
+    ]
+  },
+  {
+    "name": "more: reserve expired, then posted for more than it held",
+    "book": "stock_reservation",
+    "steps": [
+      {"op": "do", "kind": "receive", "args": {"delivery": "delivery-1", "sku": "sku-2", "qty": 5}},
+      {"op": "hold", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2", "qty": 2}},
+      {"op": "pass", "duration": "31 minutes"},
+      {"op": "post", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2"}, "amounts": {"qty": 3}}
+    ]
+  },
+  {
+    "name": "more: reserve posted, then posted again for more than it held",
+    "book": "stock_reservation",
+    "steps": [
+      {"op": "do", "kind": "receive", "args": {"delivery": "delivery-1", "sku": "sku-2", "qty": 5}},
+      {"op": "hold", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2", "qty": 2}},
+      {"op": "post", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2"}},
+      {"op": "post", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2"}, "amounts": {"qty": 3}}
+    ]
+  },
+  {
+    "name": "more: reserve held, posted for nothing, then the stock is all there",
+    "book": "stock_reservation",
+    "steps": [
+      {"op": "do", "kind": "receive", "args": {"delivery": "delivery-1", "sku": "sku-2", "qty": 5}},
+      {"op": "hold", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2", "qty": 2}},
+      {"op": "post", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2"}, "amounts": {"qty": 0}}
+    ]
+  }
+]

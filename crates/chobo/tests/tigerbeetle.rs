@@ -164,3 +164,69 @@ fn an_operation_too_big_for_one_request_in_english() {
     assert!(out.status.code() == Some(1) && err.contains("error[E060]"), "{err}");
     assert_eq!(std::fs::read_dir(out_dir.path()).unwrap().count(), 0, "nothing is written");
 }
+
+/// reserve.post of a hold that is not there, with the English book (`post_before_hold`'s twin).
+fn post_before_hold_in_english(tb: &TigerBeetle, lang: &str, work: &Path, go: Option<&GoRunner>) {
+    let c = case_of(
+        &root().join("tests/books/stock_reservation.book"),
+        json!([{"name": "post before hold", "steps": [
+            {"op": "do", "kind": "receive", "args": {"delivery": "delivery-1", "sku": "sku-2", "qty": 5}},
+            {"op": "post", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2"}},
+            {"op": "hold", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2", "qty": 2}},
+            {"op": "post", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2"}}
+        ]}]),
+    );
+    let Some(out) = run(tb, lang, std::slice::from_ref(&c), work, go) else { return };
+    let got = &out["books"][0]["scenarios"][0];
+    assert!(got["error"].is_null(), "{lang}: {}", got["error"]);
+    let answers: Vec<String> = got["result"]["steps"].as_array().unwrap().iter().map(|s| format!("{}{}", s["result"].as_str().unwrap(), s["reason"].as_str().map(|r| format!(" {r}")).unwrap_or_default())).collect();
+    assert_eq!(answers, ["done", "refused no_such_hold", "done", "done"], "{lang}");
+    let first_post = got["sent"].as_array().unwrap().iter().find(|s| s["step"] == 2).unwrap();
+    let requests = first_post["requests"].as_array().unwrap();
+    assert!(requests.len() == 1 && requests[0].get("lookup_transfers").is_some(), "{lang}: the post of a hold that is not there sent {requests:?}");
+    assert!(agrees(&c.reference[0], &got["result"]), "{lang}");
+    eprintln!("no_such_hold (English book): {lang}: the post is not sent, and the same post goes through once the hold is made");
+}
+
+/// The twin of `what_only_tigerbeetle_has`, on the English books: credit opened with an upper
+/// bound of 10000, then called with a book that says 20000; a post of a hold that is not there.
+#[test]
+fn what_only_tigerbeetle_has_in_english() {
+    if !need(Need::TigerBeetle) {
+        return;
+    }
+    let tb = match TigerBeetle::start() {
+        Ok(tb) => tb,
+        Err(why) => {
+            skip(&format!("{why}; what only TigerBeetle has is not tried"));
+            return;
+        }
+    };
+    let work = TempDir::new("tigerbeetle-only-en");
+    let one = json!([{"name": "open", "steps": [{"op": "do", "kind": "repayment", "args": {"repayment_id": "repayment_id-1", "member": "member-2", "amount": 5}}]}]);
+    let v1 = case_of(&root().join("tests/books/credit.book"), one.clone());
+    let v2_dir = work.path().join("v2-book");
+    std::fs::create_dir_all(&v2_dir).unwrap();
+    let src = std::fs::read_to_string(root().join("tests/books/credit.book")).unwrap();
+    let changed = src.replace("at most 10000 refused as over_prepayment", "at most 20000 refused as over_prepayment");
+    assert_ne!(src, changed, "tests/books/credit.book no longer has the bound the test changes");
+    std::fs::write(v2_dir.join("credit.book"), changed).unwrap();
+    let v2 = case_of(&v2_dir.join("credit.book"), one);
+    let stock_reservation = case_of(&root().join("tests/books/stock_reservation.book"), json!([]));
+    let (go1, go2) = match go() {
+        Ok(()) => (
+            Some(build_go(&[stock_reservation, case_of(&root().join("tests/books/credit.book"), json!([]))], &work.path().join("go1")).unwrap_or_else(|e| panic!("{e}"))),
+            Some(build_go(std::slice::from_ref(&v2), &work.path().join("go2")).unwrap_or_else(|e| panic!("{e}"))),
+        ),
+        Err(why) => {
+            skip(&format!("{why}; the Go client is not tried"));
+            (None, None)
+        }
+    };
+    for lang in ["typescript", "python", "go"] {
+        let w = work.path().join(lang);
+        std::fs::create_dir_all(w.join("v2")).unwrap();
+        post_before_hold_in_english(&tb, lang, &w, go1.as_ref());
+        bounds_changed(&tb, lang, &w, &v1, &v2, (go1.as_ref(), go2.as_ref()));
+    }
+}

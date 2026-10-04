@@ -1,0 +1,3365 @@
+[
+  {
+    "scenario": "bound: move_stock.do takes warehouse(from_place, sku) to 1, one above `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "99955a861b5c5a5cf3a2d112de6977e4",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-5, sku-3)",
+              "id": "1f141f35445702e69089f3b3efac929d",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9445895f98b298860dfee393b39d5dc8",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "1f141f35445702e69089f3b3efac929d",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7b730b696fbc8938db3c8e717ef9d6ed",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: move_stock.do takes warehouse(from_place, sku) to exactly 0, its `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "99955a861b5c5a5cf3a2d112de6977e4",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-5, sku-3)",
+              "id": "1f141f35445702e69089f3b3efac929d",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9445895f98b298860dfee393b39d5dc8",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "1f141f35445702e69089f3b3efac929d",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a48d8bad7e572579a3623574ef5205b8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: move_stock.do would take warehouse(from_place, sku) to -1, below `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "99955a861b5c5a5cf3a2d112de6977e4",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-5, sku-3)",
+              "id": "1f141f35445702e69089f3b3efac929d",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9445895f98b298860dfee393b39d5dc8",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "1f141f35445702e69089f3b3efac929d",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "4a3b27ba3792253c5fb1e271262a9931",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: to_main.do takes warehouse(from_place, sku) to 1, one above `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "99955a861b5c5a5cf3a2d112de6977e4",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "fe4799d9eebbfa219fdfdc000a10ef53",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "d3f35db99567269d11e4f2d01189bd27",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: to_main.do takes warehouse(from_place, sku) to exactly 0, its `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "99955a861b5c5a5cf3a2d112de6977e4",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "fe4799d9eebbfa219fdfdc000a10ef53",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "90dd108330fd7f2c37510b35eb7726d8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: to_main.do would take warehouse(from_place, sku) to -1, below `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "99955a861b5c5a5cf3a2d112de6977e4",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "fe4799d9eebbfa219fdfdc000a10ef53",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "aadbf5b1747279f9393f14772314cf6c",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: stock_out.do takes warehouse(place, sku) to 1, one above `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8b94fab02003bb82977d95552364dd8b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "bb4f8f26294352f8901b6eb053c6443f",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "63566d60b866e8fc97ec4aa3078a5a18",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: stock_out.do takes warehouse(place, sku) to exactly 0, its `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8b94fab02003bb82977d95552364dd8b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "bb4f8f26294352f8901b6eb053c6443f",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "0bd390d88682ecfd753e533dc6a537ed",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "bound: stock_out.do would take warehouse(place, sku) to -1, below `at least 0`",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8b94fab02003bb82977d95552364dd8b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "bb4f8f26294352f8901b6eb053c6443f",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "3",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "cd98e3b25e3773a55b80bb725a6663bf",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "key: stock_in.do twice with the same arguments",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "86f6f6e88c4eedcc22e66e221a54cca8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "86f6f6e88c4eedcc22e66e221a54cca8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "key: stock_in.do again with another qty",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "86f6f6e88c4eedcc22e66e221a54cca8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "8b94fab02003bb82977d95552364dd8b",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "scenario": "key: move_stock.do twice with the same arguments",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "1009d8d08fdcc1e11d922e27cf0f5e7d",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-5, sku-3)",
+              "id": "1f141f35445702e69089f3b3efac929d",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9445895f98b298860dfee393b39d5dc8",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "1f141f35445702e69089f3b3efac929d",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7b730b696fbc8938db3c8e717ef9d6ed",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-5, sku-3)",
+              "id": "1f141f35445702e69089f3b3efac929d",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9445895f98b298860dfee393b39d5dc8",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "1f141f35445702e69089f3b3efac929d",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7b730b696fbc8938db3c8e717ef9d6ed",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: move_stock.do again with another qty",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "1009d8d08fdcc1e11d922e27cf0f5e7d",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-5, sku-3)",
+              "id": "1f141f35445702e69089f3b3efac929d",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9445895f98b298860dfee393b39d5dc8",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "1f141f35445702e69089f3b3efac929d",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7b730b696fbc8938db3c8e717ef9d6ed",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-5, sku-3)",
+              "id": "1f141f35445702e69089f3b3efac929d",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9445895f98b298860dfee393b39d5dc8",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "1f141f35445702e69089f3b3efac929d",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "a48d8bad7e572579a3623574ef5205b8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: move_stock.do refused with insufficient_stock, then again, and again once warehouse(from_place, sku) has enough",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-4)",
+              "id": "bbd860f459993d75f984eb8b49d10a60",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-3, sku-4)",
+              "id": "906cc8ae517e47d707422edc631c1d5e",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "4984f5c8b4285caf12d7a149c164bc0a",
+              "debit_account_id": "bbd860f459993d75f984eb8b49d10a60",
+              "credit_account_id": "906cc8ae517e47d707422edc631c1d5e",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "41fcd0eb2227234a0a3b9e34247c953e",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-4)",
+              "id": "bbd860f459993d75f984eb8b49d10a60",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-3, sku-4)",
+              "id": "906cc8ae517e47d707422edc631c1d5e",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "4984f5c8b4285caf12d7a149c164bc0a",
+              "debit_account_id": "bbd860f459993d75f984eb8b49d10a60",
+              "credit_account_id": "906cc8ae517e47d707422edc631c1d5e",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "41fcd0eb2227234a0a3b9e34247c953e",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-4)",
+              "id": "bbd860f459993d75f984eb8b49d10a60",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "0e2aef26a2da8483c9c9e4f936ab6c87",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "bbd860f459993d75f984eb8b49d10a60",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "db49619566daecc0eb7b6424a91a3968",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-4)",
+              "id": "bbd860f459993d75f984eb8b49d10a60",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-3, sku-4)",
+              "id": "906cc8ae517e47d707422edc631c1d5e",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "4984f5c8b4285caf12d7a149c164bc0a",
+              "debit_account_id": "bbd860f459993d75f984eb8b49d10a60",
+              "credit_account_id": "906cc8ae517e47d707422edc631c1d5e",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "41fcd0eb2227234a0a3b9e34247c953e",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 4
+      }
+    ]
+  },
+  {
+    "scenario": "key: to_main.do twice with the same arguments",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "1009d8d08fdcc1e11d922e27cf0f5e7d",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "fe4799d9eebbfa219fdfdc000a10ef53",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "d3f35db99567269d11e4f2d01189bd27",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "fe4799d9eebbfa219fdfdc000a10ef53",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "d3f35db99567269d11e4f2d01189bd27",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: to_main.do again with another qty",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "1009d8d08fdcc1e11d922e27cf0f5e7d",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "fe4799d9eebbfa219fdfdc000a10ef53",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "d3f35db99567269d11e4f2d01189bd27",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "fe4799d9eebbfa219fdfdc000a10ef53",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "90dd108330fd7f2c37510b35eb7726d8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: to_main.do refused with insufficient_stock, then again, and again once warehouse(from_place, sku) has enough",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "660e5303d82e87cf8d862ed29190c87b",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6bf8adcc0ef40ab1d829a825b475f06a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "660e5303d82e87cf8d862ed29190c87b",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6bf8adcc0ef40ab1d829a825b475f06a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "3425d587317380d05b9b2acdae24b56a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "31b807c447575a02664c580e7fa16689",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "660e5303d82e87cf8d862ed29190c87b",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "6bf8adcc0ef40ab1d829a825b475f06a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 4
+      }
+    ]
+  },
+  {
+    "scenario": "key: stock_out.do twice with the same arguments",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "86f6f6e88c4eedcc22e66e221a54cca8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "bb4f8f26294352f8901b6eb053c6443f",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "63566d60b866e8fc97ec4aa3078a5a18",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "bb4f8f26294352f8901b6eb053c6443f",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "63566d60b866e8fc97ec4aa3078a5a18",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: stock_out.do again with another qty",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "86f6f6e88c4eedcc22e66e221a54cca8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "bb4f8f26294352f8901b6eb053c6443f",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "63566d60b866e8fc97ec4aa3078a5a18",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "bb4f8f26294352f8901b6eb053c6443f",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "2",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "0bd390d88682ecfd753e533dc6a537ed",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "scenario": "key: stock_out.do refused with insufficient_stock, then again, and again once warehouse(place, sku) has enough",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "98ede67faea48ad4ccfad43b2aacb429",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "fe61a336ba30bec7cff26642e4e8d343",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "98ede67faea48ad4ccfad43b2aacb429",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "fe61a336ba30bec7cff26642e4e8d343",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2
+      },
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "3425d587317380d05b9b2acdae24b56a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "cdb1eb4ecc5f118c5c5ecf2343cce168",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 3
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "98ede67faea48ad4ccfad43b2aacb429",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "fe61a336ba30bec7cff26642e4e8d343",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 4
+      }
+    ]
+  },
+  {
+    "scenario": "together: two callers take the last 1 of warehouse(from_place, sku) with move_stock.do",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "1009d8d08fdcc1e11d922e27cf0f5e7d",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-5, sku-3)",
+              "id": "1f141f35445702e69089f3b3efac929d",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "9445895f98b298860dfee393b39d5dc8",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "1f141f35445702e69089f3b3efac929d",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "7b730b696fbc8938db3c8e717ef9d6ed",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 1
+      },
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(to_place-7, sku-3)",
+              "id": "c9930342f81c579e7159971ad03739fb",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "ac28abb99f9a075f7879d7c345ceb244",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c9930342f81c579e7159971ad03739fb",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "41d16c193e642ee1423441ee791d0fa0",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 24522,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 2
+      }
+    ]
+  },
+  {
+    "scenario": "together: two callers take the last 1 of warehouse(from_place, sku) with to_main.do",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "1009d8d08fdcc1e11d922e27cf0f5e7d",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "fe4799d9eebbfa219fdfdc000a10ef53",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "d3f35db99567269d11e4f2d01189bd27",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 1
+      },
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(from_place-2, sku-3)",
+              "id": "9893a6d5ed060e25d6259490cec05fa9",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(main, sku-3)",
+              "id": "c58fa618c1885976149d162a3fcce67f",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "f078afe83ebd8e1a49549d49fbc855ff",
+              "debit_account_id": "9893a6d5ed060e25d6259490cec05fa9",
+              "credit_account_id": "c58fa618c1885976149d162a3fcce67f",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "b9efe305d6f16b83331394fde65ed39a",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 36736,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 2
+      }
+    ]
+  },
+  {
+    "scenario": "together: two callers take the last 1 of warehouse(place, sku) with stock_out.do",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "stock_in",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "suppliers",
+              "id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "ledger": 1458849121,
+              "code": 45702,
+              "flags": [],
+              "user_data_128": "f016479679bf6c690949f9a122680ec3",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "b5147d3257ae97954abc2274e8aaca0a",
+              "debit_account_id": "2e23b6d2cc3349e0c4068dfe4980e398",
+              "credit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "86f6f6e88c4eedcc22e66e221a54cca8",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 49626,
+              "flags": []
+            }
+          ]
+        },
+        "step": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "bb4f8f26294352f8901b6eb053c6443f",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "63566d60b866e8fc97ec4aa3078a5a18",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 1
+      },
+      {
+        "op": "do",
+        "kind": "stock_out",
+        "sent": {
+          "accounts": [
+            {
+              "role": "account",
+              "of": "warehouse(place-2, sku-3)",
+              "id": "5a4f9172aab82489ade985a813bbfb4a",
+              "ledger": 1458849121,
+              "code": 43434,
+              "flags": [
+                "debits_must_not_exceed_credits"
+              ],
+              "user_data_128": "086b09a077ac854d1ceea678e6967a22",
+              "user_data_64": 0,
+              "user_data_32": 0
+            },
+            {
+              "role": "account",
+              "of": "customers",
+              "id": "89a6ae9793103fce2e05074164e6c886",
+              "ledger": 1458849121,
+              "code": 59591,
+              "flags": [],
+              "user_data_128": "3d53b7ec1aae2727e5d8c04bb79e9f6d",
+              "user_data_64": 0,
+              "user_data_32": 0
+            }
+          ],
+          "openings": [],
+          "transfers": [
+            {
+              "role": "main",
+              "move": 1,
+              "id": "8bf11732d1f0eba3f79de29f424fd1b4",
+              "debit_account_id": "5a4f9172aab82489ade985a813bbfb4a",
+              "credit_account_id": "89a6ae9793103fce2e05074164e6c886",
+              "amount": "1",
+              "pending_id": "00000000000000000000000000000000",
+              "user_data_128": "16998c7bd1f95cf5d278713b8b23ad94",
+              "user_data_64": 0,
+              "user_data_32": 1,
+              "timeout": 0,
+              "ledger": 1458849121,
+              "code": 42415,
+              "flags": []
+            }
+          ]
+        },
+        "step": 2,
+        "caller": 2
+      }
+    ]
+  },
+  {
+    "scenario": "same_account: move_stock.do moves warehouse(from_place, sku) to warehouse(to_place, sku), the same account",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "move_stock",
+        "sent": null,
+        "step": 1
+      }
+    ]
+  },
+  {
+    "scenario": "same_account: to_main.do moves warehouse(from_place, sku) to warehouse(\"main\", sku), the same account",
+    "operations": [
+      {
+        "op": "do",
+        "kind": "to_main",
+        "sent": null,
+        "step": 1
+      }
+    ]
+  }
+]

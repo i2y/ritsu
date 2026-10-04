@@ -1,0 +1,20 @@
+# credit: a lower bound below 0, and an upper bound (TigerBeetle needs both an account for the room and one for the slack)
+book credit v1
+description "A pay-later line for each member. It can be used down to minus 50000 yen, and prepaid up to 10000 yen"
+
+unit JPY
+
+account credit(member: string) : JPY
+  at least -50000 refused as over_the_credit_line
+  at most 10000 refused as over_prepayment
+account shop : JPY outside
+account bank : JPY outside
+
+transfer pay_later(order: string, member: string, amount: JPY)
+  key order
+  pending expires after 1 day
+  move amount from credit(member) to shop
+
+transfer repayment(repayment_id: string, member: string, amount: JPY)
+  key repayment_id
+  move amount from bank to credit(member)

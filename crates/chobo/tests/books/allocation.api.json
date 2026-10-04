@@ -1,0 +1,1332 @@
+{
+  "v": 1,
+  "book": "allocation",
+  "version": 1,
+  "source_sha256": "321f3f1b46e87dbf684ecbaa7fce0818ca422230b9c2237906a8227eed42b7ab",
+  "units": [
+    {
+      "name": "JPY",
+      "scale": 0,
+      "ledger": 4003245802
+    },
+    {
+      "name": "USD",
+      "scale": 2,
+      "ledger": 1838891465
+    }
+  ],
+  "accounts": [
+    {
+      "name": "buyers",
+      "params": [],
+      "unit": "JPY",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 23781
+    },
+    {
+      "name": "fee_income",
+      "params": [],
+      "unit": "JPY",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 60433
+    },
+    {
+      "name": "shipping",
+      "params": [],
+      "unit": "JPY",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 30627
+    },
+    {
+      "name": "shop_sales",
+      "params": [
+        "shop"
+      ],
+      "unit": "JPY",
+      "outside": false,
+      "lower": {
+        "value": 0,
+        "refused_as": "insufficient_sales"
+      },
+      "upper": null,
+      "description": null,
+      "code": 58108
+    },
+    {
+      "name": "jpy_exchange",
+      "params": [],
+      "unit": "JPY",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 3071
+    },
+    {
+      "name": "usd_exchange",
+      "params": [],
+      "unit": "USD",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 5681
+    },
+    {
+      "name": "usd_account",
+      "params": [
+        "shop"
+      ],
+      "unit": "USD",
+      "outside": false,
+      "lower": {
+        "value": 0,
+        "refused_as": "insufficient_usd"
+      },
+      "upper": null,
+      "description": null,
+      "code": 47738
+    },
+    {
+      "name": "overseas_bank",
+      "params": [],
+      "unit": "USD",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 29251
+    },
+    {
+      "name": "remittance_fee",
+      "params": [],
+      "unit": "USD",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 33745
+    }
+  ],
+  "transfers": [
+    {
+      "name": "sale",
+      "description": null,
+      "params": [
+        {
+          "name": "order",
+          "type": "string"
+        },
+        {
+          "name": "shop",
+          "type": "string"
+        },
+        {
+          "name": "price",
+          "type": "amount",
+          "unit": "JPY"
+        },
+        {
+          "name": "fee",
+          "type": "amount",
+          "unit": "JPY"
+        }
+      ],
+      "key": [
+        "order"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "price"
+          },
+          "from": {
+            "account": "buyers",
+            "args": []
+          },
+          "to": {
+            "account": "shop_sales",
+            "args": [
+              {
+                "param": "shop"
+              }
+            ]
+          }
+        },
+        {
+          "amount": {
+            "param": "fee"
+          },
+          "from": {
+            "account": "shop_sales",
+            "args": [
+              {
+                "param": "shop"
+              }
+            ]
+          },
+          "to": {
+            "account": "fee_income",
+            "args": []
+          }
+        },
+        {
+          "amount": {
+            "literal": 100
+          },
+          "from": {
+            "account": "shop_sales",
+            "args": [
+              {
+                "param": "shop"
+              }
+            ]
+          },
+          "to": {
+            "account": "shipping",
+            "args": []
+          }
+        }
+      ],
+      "code": 64293,
+      "definition": "47268bba94e2aa4f274d8faa63d6412b",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "insufficient_sales",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "sale",
+                  "args": {
+                    "order": "order-1",
+                    "shop": "shop-2",
+                    "price": 1,
+                    "fee": 2
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_sales"
+                }
+              ],
+              "account": "shop_sales",
+              "as_written": "shop_sales(shop)",
+              "bound": "at least 0",
+              "move": 2
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "sale",
+                  "args": {
+                    "order": "order-1",
+                    "shop": "shop-2",
+                    "price": 1000,
+                    "fee": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "sale",
+                  "args": {
+                    "order": "order-1",
+                    "shop": "shop-2",
+                    "price": 3,
+                    "fee": 1
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "sale",
+                  "args": {
+                    "order": "order-1",
+                    "shop": "shop-2",
+                    "price": 1,
+                    "fee": 2
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_sales"
+                },
+                {
+                  "op": "do",
+                  "kind": "sale",
+                  "args": {
+                    "order": "order-1",
+                    "shop": "shop-2",
+                    "price": 1,
+                    "fee": 2
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "order"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "shop",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 1000,
+                      "fee": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-3",
+                      "price": 1000,
+                      "fee": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "price",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 1000,
+                      "fee": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 3,
+                      "fee": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "fee",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 1000,
+                      "fee": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 1000,
+                      "fee": 3
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "usd_payout",
+      "description": "the caller sets the rate of the exchange, and gives both the yen and the dollar amounts",
+      "params": [
+        {
+          "name": "payout_id",
+          "type": "string"
+        },
+        {
+          "name": "shop",
+          "type": "string"
+        },
+        {
+          "name": "jpy_amount",
+          "type": "amount",
+          "unit": "JPY"
+        },
+        {
+          "name": "usd_amount",
+          "type": "amount",
+          "unit": "USD"
+        }
+      ],
+      "key": [
+        "payout_id"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "jpy_amount"
+          },
+          "from": {
+            "account": "shop_sales",
+            "args": [
+              {
+                "param": "shop"
+              }
+            ]
+          },
+          "to": {
+            "account": "jpy_exchange",
+            "args": []
+          }
+        },
+        {
+          "amount": {
+            "param": "usd_amount"
+          },
+          "from": {
+            "account": "usd_exchange",
+            "args": []
+          },
+          "to": {
+            "account": "usd_account",
+            "args": [
+              {
+                "param": "shop"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 34869,
+      "definition": "5a3f16a8cd96d0f4435c5d2e106df424",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "insufficient_sales",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "usd_payout",
+                  "args": {
+                    "payout_id": "payout_id-1",
+                    "shop": "shop-2",
+                    "jpy_amount": 1,
+                    "usd_amount": 2
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_sales"
+                }
+              ],
+              "account": "shop_sales",
+              "as_written": "shop_sales(shop)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "sale",
+                  "args": {
+                    "order": "order-1",
+                    "shop": "shop-2",
+                    "price": 104,
+                    "fee": 3
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "usd_payout",
+                  "args": {
+                    "payout_id": "payout_id-3",
+                    "shop": "shop-2",
+                    "jpy_amount": 1,
+                    "usd_amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "usd_payout",
+                  "args": {
+                    "payout_id": "payout_id-3",
+                    "shop": "shop-2",
+                    "jpy_amount": 4,
+                    "usd_amount": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "usd_payout",
+                  "args": {
+                    "payout_id": "payout_id-1",
+                    "shop": "shop-2",
+                    "jpy_amount": 1,
+                    "usd_amount": 2
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_sales"
+                },
+                {
+                  "op": "do",
+                  "kind": "usd_payout",
+                  "args": {
+                    "payout_id": "payout_id-1",
+                    "shop": "shop-2",
+                    "jpy_amount": 1,
+                    "usd_amount": 2
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "payout_id"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "shop",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 104,
+                      "fee": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "args": {
+                      "payout_id": "payout_id-3",
+                      "shop": "shop-2",
+                      "jpy_amount": 1,
+                      "usd_amount": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "args": {
+                      "payout_id": "payout_id-3",
+                      "shop": "shop-4",
+                      "jpy_amount": 1,
+                      "usd_amount": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "jpy_amount",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 104,
+                      "fee": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "args": {
+                      "payout_id": "payout_id-3",
+                      "shop": "shop-2",
+                      "jpy_amount": 1,
+                      "usd_amount": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "args": {
+                      "payout_id": "payout_id-3",
+                      "shop": "shop-2",
+                      "jpy_amount": 4,
+                      "usd_amount": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "usd_amount",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 104,
+                      "fee": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "args": {
+                      "payout_id": "payout_id-3",
+                      "shop": "shop-2",
+                      "jpy_amount": 1,
+                      "usd_amount": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "args": {
+                      "payout_id": "payout_id-3",
+                      "shop": "shop-2",
+                      "jpy_amount": 1,
+                      "usd_amount": 4
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "usd_transfer",
+      "description": null,
+      "params": [
+        {
+          "name": "transfer_id",
+          "type": "string"
+        },
+        {
+          "name": "shop",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "amount",
+          "unit": "USD"
+        }
+      ],
+      "key": [
+        "transfer_id"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "amount"
+          },
+          "from": {
+            "account": "usd_account",
+            "args": [
+              {
+                "param": "shop"
+              }
+            ]
+          },
+          "to": {
+            "account": "overseas_bank",
+            "args": []
+          }
+        },
+        {
+          "amount": {
+            "literal": 150
+          },
+          "from": {
+            "account": "usd_account",
+            "args": [
+              {
+                "param": "shop"
+              }
+            ]
+          },
+          "to": {
+            "account": "remittance_fee",
+            "args": []
+          }
+        }
+      ],
+      "code": 20180,
+      "definition": "da43c5ebe422b87e5e9ebe33ef74b288",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "insufficient_usd",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "usd_transfer",
+                  "args": {
+                    "transfer_id": "transfer_id-1",
+                    "shop": "shop-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_usd"
+                }
+              ],
+              "account": "usd_account",
+              "as_written": "usd_account(shop)",
+              "bound": "at least 0.00",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "sale",
+                  "args": {
+                    "order": "order-1",
+                    "shop": "shop-2",
+                    "price": 105,
+                    "fee": 3
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "usd_payout",
+                  "args": {
+                    "payout_id": "payout_id-3",
+                    "shop": "shop-2",
+                    "jpy_amount": 2,
+                    "usd_amount": 151
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "usd_transfer",
+                  "args": {
+                    "transfer_id": "transfer_id-4",
+                    "shop": "shop-2",
+                    "amount": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "usd_transfer",
+                  "args": {
+                    "transfer_id": "transfer_id-4",
+                    "shop": "shop-2",
+                    "amount": 4
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "usd_transfer",
+                  "args": {
+                    "transfer_id": "transfer_id-1",
+                    "shop": "shop-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_usd"
+                },
+                {
+                  "op": "do",
+                  "kind": "usd_transfer",
+                  "args": {
+                    "transfer_id": "transfer_id-1",
+                    "shop": "shop-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "transfer_id"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "shop",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 105,
+                      "fee": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "args": {
+                      "payout_id": "payout_id-3",
+                      "shop": "shop-2",
+                      "jpy_amount": 2,
+                      "usd_amount": 151
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_transfer",
+                    "args": {
+                      "transfer_id": "transfer_id-4",
+                      "shop": "shop-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_transfer",
+                    "args": {
+                      "transfer_id": "transfer_id-4",
+                      "shop": "shop-5",
+                      "amount": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "amount",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "sale",
+                    "args": {
+                      "order": "order-1",
+                      "shop": "shop-2",
+                      "price": 105,
+                      "fee": 3
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_payout",
+                    "args": {
+                      "payout_id": "payout_id-3",
+                      "shop": "shop-2",
+                      "jpy_amount": 2,
+                      "usd_amount": 151
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_transfer",
+                    "args": {
+                      "transfer_id": "transfer_id-4",
+                      "shop": "shop-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "usd_transfer",
+                    "args": {
+                      "transfer_id": "transfer_id-4",
+                      "shop": "shop-2",
+                      "amount": 4
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "allocation",
+      "functions": [
+        {
+          "kind": "sale",
+          "op": "do",
+          "name": "sale_do",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_shop",
+            "p_price",
+            "p_fee"
+          ]
+        },
+        {
+          "kind": "usd_payout",
+          "op": "do",
+          "name": "usd_payout_do",
+          "params": [
+            "p_tenant",
+            "p_payout_id",
+            "p_shop",
+            "p_jpy_amount",
+            "p_usd_amount"
+          ]
+        },
+        {
+          "kind": "usd_transfer",
+          "op": "do",
+          "name": "usd_transfer_do",
+          "params": [
+            "p_tenant",
+            "p_transfer_id",
+            "p_shop",
+            "p_amount"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "buyers",
+          "name": "balance_buyers",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "fee_income",
+          "name": "balance_fee_income",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "shipping",
+          "name": "balance_shipping",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "shop_sales",
+          "name": "balance_shop_sales",
+          "params": [
+            "p_tenant",
+            "p_shop"
+          ]
+        },
+        {
+          "account": "jpy_exchange",
+          "name": "balance_jpy_exchange",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "usd_exchange",
+          "name": "balance_usd_exchange",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "usd_account",
+          "name": "balance_usd_account",
+          "params": [
+            "p_tenant",
+            "p_shop"
+          ]
+        },
+        {
+          "account": "overseas_bank",
+          "name": "balance_overseas_bank",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "remittance_fee",
+          "name": "balance_remittance_fee",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "allocation.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "sale",
+          "member": "sale",
+          "args": "saleArgs"
+        },
+        {
+          "kind": "usd_payout",
+          "member": "usd_payout",
+          "args": "usd_payoutArgs"
+        },
+        {
+          "kind": "usd_transfer",
+          "member": "usd_transfer",
+          "args": "usd_transferArgs"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "allocation",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "sale",
+          "member": "sale",
+          "params": {
+            "order": "order",
+            "shop": "shop",
+            "price": "price",
+            "fee": "fee"
+          }
+        },
+        {
+          "kind": "usd_payout",
+          "member": "usd_payout",
+          "params": {
+            "payout_id": "payout_id",
+            "shop": "shop",
+            "jpy_amount": "jpy_amount",
+            "usd_amount": "usd_amount"
+          }
+        },
+        {
+          "kind": "usd_transfer",
+          "member": "usd_transfer",
+          "params": {
+            "transfer_id": "transfer_id",
+            "shop": "shop",
+            "amount": "amount"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "allocation",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "sale",
+          "member": "Sale",
+          "args": "SaleArgs",
+          "fields": {
+            "order": "Order",
+            "shop": "Shop",
+            "price": "Price",
+            "fee": "Fee"
+          }
+        },
+        {
+          "kind": "usd_payout",
+          "member": "Usd_payout",
+          "args": "Usd_payoutArgs",
+          "fields": {
+            "payout_id": "Payout_id",
+            "shop": "Shop",
+            "jpy_amount": "Jpy_amount",
+            "usd_amount": "Usd_amount"
+          }
+        },
+        {
+          "kind": "usd_transfer",
+          "member": "Usd_transfer",
+          "args": "Usd_transferArgs",
+          "fields": {
+            "transfer_id": "Transfer_id",
+            "shop": "Shop",
+            "amount": "Amount"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "buyers",
+          "method": "Buyers"
+        },
+        {
+          "account": "fee_income",
+          "method": "Fee_income"
+        },
+        {
+          "account": "shipping",
+          "method": "Shipping"
+        },
+        {
+          "account": "shop_sales",
+          "method": "Shop_sales",
+          "args": "Shop_salesAccount",
+          "fields": {
+            "shop": "Shop"
+          }
+        },
+        {
+          "account": "jpy_exchange",
+          "method": "Jpy_exchange"
+        },
+        {
+          "account": "usd_exchange",
+          "method": "Usd_exchange"
+        },
+        {
+          "account": "usd_account",
+          "method": "Usd_account",
+          "args": "Usd_accountAccount",
+          "fields": {
+            "shop": "Shop"
+          }
+        },
+        {
+          "account": "overseas_bank",
+          "method": "Overseas_bank"
+        },
+        {
+          "account": "remittance_fee",
+          "method": "Remittance_fee"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "sale",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 2,
+              "role": "main"
+            },
+            {
+              "move": 3,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "usd_payout",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 2,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "usd_transfer",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 2,
+              "role": "main"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

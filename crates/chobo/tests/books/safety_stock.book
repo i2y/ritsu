@@ -1,0 +1,18 @@
+# safety stock: a lower bound above 0. An account starts at 0, so at first it is below the bound
+book safety_stock v1
+description "Three pieces stay on the shelf, and nothing below that is shipped"
+
+unit pcs
+
+account shelf(sku: string) : pcs
+  at least 3 refused as below_safety_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer replenish(slip: string, sku: string, qty: pcs)
+  key slip, sku
+  move qty from suppliers to shelf(sku)
+
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from shelf(sku) to customers

@@ -276,3 +276,155 @@ fn a_book_with_errors_is_refused_in_english() {
     assert_eq!((out.status.code(), out.stdout.is_empty()), (Some(1), true), "{err}");
     assert!(err.contains("error[E020]"), "{err}");
 }
+
+// ── The English twins: the same commands on the English books of tests/books ──
+
+#[test]
+fn a_flag_it_does_not_take_stops_it_in_english() {
+    let book = root().join("tests/books/stock_reservation.book");
+    let b = book.to_str().unwrap();
+    for args in [
+        vec!["check", b, "--bogus"],
+        vec!["check", b, "--format", "yaml"],
+        vec!["check", b, "--format"],
+        vec!["check", b, "--format", "json", "--format", "json"],
+        vec!["check", b, "--scenario", "x.json"],
+        vec!["run", b, "--out", "x"],
+        vec!["frobnicate", b],
+        vec!["check", b, "--lang"],
+    ] {
+        let (code, _, err) = run(&args);
+        assert_eq!(code, 2, "{args:?}: {err}");
+        assert!(!err.is_empty(), "{args:?}");
+    }
+}
+
+#[test]
+fn each_command_runs_in_english() {
+    let tmp = TempDir::new("cli-en");
+    let book = root().join("tests/books/stock_reservation.book");
+    let b = book.to_str().unwrap();
+
+    let (code, out, _) = run(&["check", b]);
+    assert_eq!(code, 0);
+    assert!(out.contains(": ok"));
+    let (code, out, _) = run(&["check", b, "--format", "json"]);
+    assert_eq!(code, 0);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["v"], 2);
+    assert!(v["files"][0]["report"].as_array().unwrap().iter().any(|r| r["kind"] == "reserve" && r["op"] == "hold"));
+
+    let dir = tmp.path().join("sc");
+    let (code, _, err) = run(&["scenarios", b, "--out", dir.to_str().unwrap()]);
+    assert_eq!(code, 0, "{err}");
+    let first = dir.join("001.json");
+    assert!(first.exists());
+    let (code, out, _) = run(&["run", b, "--scenario", first.to_str().unwrap()]);
+    assert_eq!(code, 0);
+    assert!(out.contains("1  receive.do(") && out.contains("accounts:"), "{out}");
+    let (code, out, _) = run(&["run", b, "--scenario", first.to_str().unwrap(), "--format", "json", "--lang", "ja"]);
+    assert_eq!(code, 0);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert!(v["steps"].is_array() && v["accounts"].is_array());
+
+    let (code, list, _) = run(&["scenarios", b]);
+    assert_eq!(code, 0);
+    let all = tmp.path().join("all.json");
+    std::fs::write(&all, list).unwrap();
+    let (code, out, _) = run(&["run", b, "--scenario", all.to_str().unwrap(), "--format", "json"]);
+    assert_eq!(code, 0);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert!(v.as_array().unwrap().len() > 10);
+
+    let (code, out, _) = run(&["api", b]);
+    assert_eq!(code, 0);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["v"], 1);
+    assert_eq!(v["book"], "stock_reservation");
+
+    // a book with errors: check says so with 1, and the others do nothing with it
+    let bad = root().join("tests/fixtures/bounds.book");
+    let bad = bad.to_str().unwrap();
+    assert_eq!(run(&["check", bad]).0, 1);
+    for cmd in [vec!["scenarios", bad], vec!["api", bad], vec!["run", bad, "--scenario", first.to_str().unwrap()]] {
+        let (code, out, err) = run(&cmd);
+        assert_eq!(code, 1, "{cmd:?}");
+        assert!(out.is_empty() && err.contains("E020"), "{cmd:?}");
+    }
+    // a scenario that does not fit the book is a mistake in the call
+    let wrong = tmp.path().join("wrong.json");
+    std::fs::write(&wrong, r#"{"name": "", "steps": [{"op": "do", "kind": "nothing", "args": {}}]}"#).unwrap();
+    assert_eq!(run(&["run", b, "--scenario", wrong.to_str().unwrap()]).0, 2);
+    assert_eq!(run(&["check", "no-such-file.book"]).0, 2);
+}
+
+#[test]
+fn the_language_comes_from_the_flag_then_the_environment_in_english() {
+    let book = root().join("tests/books/stock_reservation.book");
+    let b = book.to_str().unwrap();
+    let out = chobo().args(["check", b]).env("CHOBO_LANG", "ja").output().unwrap();
+    assert!(String::from_utf8_lossy(&out.stdout).contains("断られうる理由"));
+    let out = chobo().args(["check", b, "--lang", "en"]).env("CHOBO_LANG", "ja").output().unwrap();
+    assert!(String::from_utf8_lossy(&out.stdout).contains("may be refused"));
+}
+
+#[test]
+fn build_writes_each_target_in_english() {
+    let tmp = TempDir::new("cli-build-en");
+    let book = root().join("tests/books/stock_reservation.book");
+    let b = book.to_str().unwrap();
+    // an ASCII book's Go package is named after it; a Japanese book's is `book`
+    let wants: &[(&str, &[&str])] = &[
+        ("postgres", &["stock_reservation.sql"]),
+        ("postgres-typescript", &["stock_reservation.ts"]),
+        ("postgres-python", &["stock_reservation.py"]),
+        ("postgres-go", &["stock_reservation/book.go", "stock_reservation/runtime.go"]),
+        ("tigerbeetle-typescript", &["stock_reservation.ts"]),
+        ("tigerbeetle-python", &["stock_reservation.py"]),
+        ("tigerbeetle-go", &["stock_reservation/book.go", "stock_reservation/runtime.go"]),
+    ];
+    for (target, files) in wants {
+        let out = tmp.path().join(target);
+        let (code, _, err) = run(&["build", b, "--target", target, "--out", out.to_str().unwrap()]);
+        assert_eq!(code, 0, "{target}: {err}");
+        for f in *files {
+            assert!(out.join(f).is_file(), "{target}: no {f}");
+            assert!(err.contains(f), "{target}: {err}");
+        }
+    }
+    assert_eq!(run(&["build", b]).0, 2);
+    assert_eq!(run(&["build", b, "--target", "sqlite"]).0, 2);
+    let bad = root().join("tests/fixtures/bounds.book");
+    let (code, _, err) = run(&["build", bad.to_str().unwrap(), "--target", "postgres", "--out", tmp.path().join("bad").to_str().unwrap()]);
+    assert_eq!(code, 1);
+    assert!(err.contains("E020") && !tmp.path().join("bad").exists());
+}
+
+#[test]
+fn run_shows_what_a_client_sends_in_english() {
+    let tmp = TempDir::new("cli-show-en");
+    let book = root().join("tests/books/credit.book");
+    let b = book.to_str().unwrap();
+    let (_, checked) = check::check_file(&book).unwrap();
+    let model = checked.book.unwrap();
+    for (i, s) in chobo::scenarios::generate(&model).iter().enumerate() {
+        let file = tmp.path().join(format!("{i}.json"));
+        std::fs::write(&file, serde_json::to_string(&chobo::scenario::to_json(&model, s)).unwrap()).unwrap();
+        let f = file.to_str().unwrap();
+        let (code, out, err) = run(&["run", b, "--scenario", f, "--show", "tigerbeetle", "--format", "json"]);
+        assert_eq!(code, 0, "{err}");
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let chains = chobo::ids::scenario_chains(&model, "", s);
+        for (shown, chained) in v["operations"].as_array().unwrap().iter().zip(chains.as_array().unwrap()) {
+            if matches!(shown["op"].as_str(), Some("do" | "hold")) {
+                assert_eq!(shown["sent"], chained["sent"], "{}", s.name);
+            }
+        }
+        let (code, out, _) = run(&["run", b, "--scenario", f, "--show", "postgres"]);
+        assert_eq!(code, 0);
+        assert!(out.contains("select * from \"credit\"."), "{out}");
+        let (code, out, _) = run(&["run", b, "--scenario", f, "--show", "tigerbeetle", "--lang", "ja"]);
+        assert_eq!(code, 0);
+        assert!(out.contains("TigerBeetle に送るもの"), "{out}");
+    }
+}

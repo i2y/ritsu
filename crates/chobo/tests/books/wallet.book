@@ -1,0 +1,25 @@
+# wallet: a lower bound of 0 and an upper bound, a hold that never expires, a transfer back to an outside account
+book wallet v1
+description "A wallet for each member. A deposit from the bank adds to it, a payment holds the amount while it goes through, and a refund returns it to the bank"
+
+unit JPY
+
+account wallet(member: string) : JPY
+  at least 0 refused as insufficient_balance
+  at most 100000 refused as over_the_limit
+account bank : JPY outside
+account shop : JPY outside
+
+transfer deposit(deposit_id: string, member: string, amount: JPY)
+  key deposit_id
+  move amount from bank to wallet(member)
+
+transfer payment(order: string, member: string, amount: JPY)
+  description "posted when the order ships, voided when it is cancelled; only the caller ends the hold"
+  key order
+  pending never expires
+  move amount from wallet(member) to shop
+
+transfer refund(refund_id: string, member: string, amount: JPY)
+  key refund_id
+  move amount from wallet(member) to bank

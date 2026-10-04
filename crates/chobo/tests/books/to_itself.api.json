@@ -1,0 +1,1526 @@
+{
+  "v": 1,
+  "book": "to_itself",
+  "version": 1,
+  "source_sha256": "2c2fe17d925d4e163306b9aea6194fa4b155b197611face231d97feef807b891",
+  "units": [
+    {
+      "name": "pcs",
+      "scale": 0,
+      "ledger": 1458849121
+    }
+  ],
+  "accounts": [
+    {
+      "name": "warehouse",
+      "params": [
+        "place",
+        "sku"
+      ],
+      "unit": "pcs",
+      "outside": false,
+      "lower": {
+        "value": 0,
+        "refused_as": "insufficient_stock"
+      },
+      "upper": null,
+      "description": null,
+      "code": 43434
+    },
+    {
+      "name": "suppliers",
+      "params": [],
+      "unit": "pcs",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 45702
+    },
+    {
+      "name": "customers",
+      "params": [],
+      "unit": "pcs",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 59591
+    }
+  ],
+  "transfers": [
+    {
+      "name": "stock_in",
+      "description": null,
+      "params": [
+        {
+          "name": "slip",
+          "type": "string"
+        },
+        {
+          "name": "place",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "qty",
+          "type": "amount",
+          "unit": "pcs"
+        }
+      ],
+      "key": [
+        "slip"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "qty"
+          },
+          "from": {
+            "account": "suppliers",
+            "args": []
+          },
+          "to": {
+            "account": "warehouse",
+            "args": [
+              {
+                "param": "place"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 49626,
+      "definition": "d5286742d29bf3ac822532d653c235e9",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "stock_in",
+                  "args": {
+                    "slip": "slip-1",
+                    "place": "place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "stock_in",
+                  "args": {
+                    "slip": "slip-1",
+                    "place": "place-2",
+                    "sku": "sku-3",
+                    "qty": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "slip"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "place",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "place-4",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "sku",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "place-2",
+                      "sku": "sku-4",
+                      "qty": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "qty",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "move_stock",
+      "description": null,
+      "params": [
+        {
+          "name": "slip",
+          "type": "string"
+        },
+        {
+          "name": "from_place",
+          "type": "string"
+        },
+        {
+          "name": "to_place",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "qty",
+          "type": "amount",
+          "unit": "pcs"
+        }
+      ],
+      "key": [
+        "slip"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "qty"
+          },
+          "from": {
+            "account": "warehouse",
+            "args": [
+              {
+                "param": "from_place"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          },
+          "to": {
+            "account": "warehouse",
+            "args": [
+              {
+                "param": "to_place"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 24522,
+      "definition": "77a5a15146617fd69148a7ac4ac5733a",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "insufficient_stock",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "move_stock",
+                  "args": {
+                    "slip": "slip-1",
+                    "from_place": "from_place-2",
+                    "to_place": "to_place-3",
+                    "sku": "sku-4",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_stock"
+                }
+              ],
+              "account": "warehouse",
+              "as_written": "warehouse(from_place, sku)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "stock_in",
+                  "args": {
+                    "slip": "slip-1",
+                    "place": "from_place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "move_stock",
+                  "args": {
+                    "slip": "slip-4",
+                    "from_place": "from_place-2",
+                    "to_place": "to_place-5",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "move_stock",
+                  "args": {
+                    "slip": "slip-4",
+                    "from_place": "from_place-2",
+                    "to_place": "to_place-5",
+                    "sku": "sku-3",
+                    "qty": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "move_stock",
+                  "args": {
+                    "slip": "slip-1",
+                    "from_place": "from_place-2",
+                    "to_place": "to_place-3",
+                    "sku": "sku-4",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_stock"
+                },
+                {
+                  "op": "do",
+                  "kind": "move_stock",
+                  "args": {
+                    "slip": "slip-1",
+                    "from_place": "from_place-2",
+                    "to_place": "to_place-3",
+                    "sku": "sku-4",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            },
+            {
+              "name": "same_account",
+              "because": "account",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "move_stock",
+                  "args": {
+                    "slip": "slip-1",
+                    "from_place": "from_place-2",
+                    "to_place": "from_place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "same_account"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "slip"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "from_place",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "to_place": "to_place-5",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-6",
+                      "to_place": "to_place-5",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "to_place",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "to_place": "to_place-5",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "to_place": "to_place-6",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "sku",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "to_place": "to_place-5",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "to_place": "to_place-5",
+                      "sku": "sku-6",
+                      "qty": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "qty",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "to_place": "to_place-5",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "to_place": "to_place-5",
+                      "sku": "sku-3",
+                      "qty": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "to_main",
+      "description": null,
+      "params": [
+        {
+          "name": "slip",
+          "type": "string"
+        },
+        {
+          "name": "from_place",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "qty",
+          "type": "amount",
+          "unit": "pcs"
+        }
+      ],
+      "key": [
+        "slip"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "qty"
+          },
+          "from": {
+            "account": "warehouse",
+            "args": [
+              {
+                "param": "from_place"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          },
+          "to": {
+            "account": "warehouse",
+            "args": [
+              {
+                "literal": "main"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 36736,
+      "definition": "58547925b87859d585ac4e20aa8e9795",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "insufficient_stock",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "to_main",
+                  "args": {
+                    "slip": "slip-1",
+                    "from_place": "from_place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_stock"
+                }
+              ],
+              "account": "warehouse",
+              "as_written": "warehouse(from_place, sku)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "stock_in",
+                  "args": {
+                    "slip": "slip-1",
+                    "place": "from_place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "to_main",
+                  "args": {
+                    "slip": "slip-4",
+                    "from_place": "from_place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "to_main",
+                  "args": {
+                    "slip": "slip-4",
+                    "from_place": "from_place-2",
+                    "sku": "sku-3",
+                    "qty": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "to_main",
+                  "args": {
+                    "slip": "slip-1",
+                    "from_place": "from_place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_stock"
+                },
+                {
+                  "op": "do",
+                  "kind": "to_main",
+                  "args": {
+                    "slip": "slip-1",
+                    "from_place": "from_place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            },
+            {
+              "name": "same_account",
+              "because": "account",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "to_main",
+                  "args": {
+                    "slip": "slip-1",
+                    "from_place": "main",
+                    "sku": "sku-2",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "same_account"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "slip"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "from_place",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-5",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "sku",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "sku": "sku-5",
+                      "qty": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "qty",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "args": {
+                      "slip": "slip-4",
+                      "from_place": "from_place-2",
+                      "sku": "sku-3",
+                      "qty": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "stock_out",
+      "description": null,
+      "params": [
+        {
+          "name": "slip",
+          "type": "string"
+        },
+        {
+          "name": "place",
+          "type": "string"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        },
+        {
+          "name": "qty",
+          "type": "amount",
+          "unit": "pcs"
+        }
+      ],
+      "key": [
+        "slip"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "qty"
+          },
+          "from": {
+            "account": "warehouse",
+            "args": [
+              {
+                "param": "place"
+              },
+              {
+                "param": "sku"
+              }
+            ]
+          },
+          "to": {
+            "account": "customers",
+            "args": []
+          }
+        }
+      ],
+      "code": 42415,
+      "definition": "176a96cc92bb90885ee9318b6112b72c",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "insufficient_stock",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "stock_out",
+                  "args": {
+                    "slip": "slip-1",
+                    "place": "place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_stock"
+                }
+              ],
+              "account": "warehouse",
+              "as_written": "warehouse(place, sku)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "stock_in",
+                  "args": {
+                    "slip": "slip-1",
+                    "place": "place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "stock_out",
+                  "args": {
+                    "slip": "slip-4",
+                    "place": "place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "stock_out",
+                  "args": {
+                    "slip": "slip-4",
+                    "place": "place-2",
+                    "sku": "sku-3",
+                    "qty": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "stock_out",
+                  "args": {
+                    "slip": "slip-1",
+                    "place": "place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_stock"
+                },
+                {
+                  "op": "do",
+                  "kind": "stock_out",
+                  "args": {
+                    "slip": "slip-1",
+                    "place": "place-2",
+                    "sku": "sku-3",
+                    "qty": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "slip"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "place",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "args": {
+                      "slip": "slip-4",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "args": {
+                      "slip": "slip-4",
+                      "place": "place-5",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "sku",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "args": {
+                      "slip": "slip-4",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "args": {
+                      "slip": "slip-4",
+                      "place": "place-2",
+                      "sku": "sku-5",
+                      "qty": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "qty",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "stock_in",
+                    "args": {
+                      "slip": "slip-1",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "args": {
+                      "slip": "slip-4",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "args": {
+                      "slip": "slip-4",
+                      "place": "place-2",
+                      "sku": "sku-3",
+                      "qty": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "to_itself",
+      "functions": [
+        {
+          "kind": "stock_in",
+          "op": "do",
+          "name": "stock_in_do",
+          "params": [
+            "p_tenant",
+            "p_slip",
+            "p_place",
+            "p_sku",
+            "p_qty"
+          ]
+        },
+        {
+          "kind": "move_stock",
+          "op": "do",
+          "name": "move_stock_do",
+          "params": [
+            "p_tenant",
+            "p_slip",
+            "p_from_place",
+            "p_to_place",
+            "p_sku",
+            "p_qty"
+          ]
+        },
+        {
+          "kind": "to_main",
+          "op": "do",
+          "name": "to_main_do",
+          "params": [
+            "p_tenant",
+            "p_slip",
+            "p_from_place",
+            "p_sku",
+            "p_qty"
+          ]
+        },
+        {
+          "kind": "stock_out",
+          "op": "do",
+          "name": "stock_out_do",
+          "params": [
+            "p_tenant",
+            "p_slip",
+            "p_place",
+            "p_sku",
+            "p_qty"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "warehouse",
+          "name": "balance_warehouse",
+          "params": [
+            "p_tenant",
+            "p_place",
+            "p_sku"
+          ]
+        },
+        {
+          "account": "suppliers",
+          "name": "balance_suppliers",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "customers",
+          "name": "balance_customers",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "to_itself.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "stock_in",
+          "member": "stock_in",
+          "args": "stock_inArgs"
+        },
+        {
+          "kind": "move_stock",
+          "member": "move_stock",
+          "args": "move_stockArgs"
+        },
+        {
+          "kind": "to_main",
+          "member": "to_main",
+          "args": "to_mainArgs"
+        },
+        {
+          "kind": "stock_out",
+          "member": "stock_out",
+          "args": "stock_outArgs"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "to_itself",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "stock_in",
+          "member": "stock_in",
+          "params": {
+            "slip": "slip",
+            "place": "place",
+            "sku": "sku",
+            "qty": "qty"
+          }
+        },
+        {
+          "kind": "move_stock",
+          "member": "move_stock",
+          "params": {
+            "slip": "slip",
+            "from_place": "from_place",
+            "to_place": "to_place",
+            "sku": "sku",
+            "qty": "qty"
+          }
+        },
+        {
+          "kind": "to_main",
+          "member": "to_main",
+          "params": {
+            "slip": "slip",
+            "from_place": "from_place",
+            "sku": "sku",
+            "qty": "qty"
+          }
+        },
+        {
+          "kind": "stock_out",
+          "member": "stock_out",
+          "params": {
+            "slip": "slip",
+            "place": "place",
+            "sku": "sku",
+            "qty": "qty"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "to_itself",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "stock_in",
+          "member": "Stock_in",
+          "args": "Stock_inArgs",
+          "fields": {
+            "slip": "Slip",
+            "place": "Place",
+            "sku": "Sku",
+            "qty": "Qty"
+          }
+        },
+        {
+          "kind": "move_stock",
+          "member": "Move_stock",
+          "args": "Move_stockArgs",
+          "fields": {
+            "slip": "Slip",
+            "from_place": "From_place",
+            "to_place": "To_place",
+            "sku": "Sku",
+            "qty": "Qty"
+          }
+        },
+        {
+          "kind": "to_main",
+          "member": "To_main",
+          "args": "To_mainArgs",
+          "fields": {
+            "slip": "Slip",
+            "from_place": "From_place",
+            "sku": "Sku",
+            "qty": "Qty"
+          }
+        },
+        {
+          "kind": "stock_out",
+          "member": "Stock_out",
+          "args": "Stock_outArgs",
+          "fields": {
+            "slip": "Slip",
+            "place": "Place",
+            "sku": "Sku",
+            "qty": "Qty"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "warehouse",
+          "method": "Warehouse",
+          "args": "WarehouseAccount",
+          "fields": {
+            "place": "Place",
+            "sku": "Sku"
+          }
+        },
+        {
+          "account": "suppliers",
+          "method": "Suppliers"
+        },
+        {
+          "account": "customers",
+          "method": "Customers"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "stock_in",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "move_stock",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "to_main",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        },
+        {
+          "kind": "stock_out",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

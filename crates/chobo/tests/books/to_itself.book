@@ -1,0 +1,26 @@
+# to itself: a move between accounts of one kind. When the source and the target are the same, same_account refuses it
+book to_itself v1
+description "Moving stock between warehouses"
+
+unit pcs
+
+account warehouse(place: string, sku: string) : pcs
+  at least 0 refused as insufficient_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer stock_in(slip: string, place: string, sku: string, qty: pcs)
+  key slip
+  move qty from suppliers to warehouse(place, sku)
+
+transfer move_stock(slip: string, from_place: string, to_place: string, sku: string, qty: pcs)
+  key slip
+  move qty from warehouse(from_place, sku) to warehouse(to_place, sku)
+
+transfer to_main(slip: string, from_place: string, sku: string, qty: pcs)
+  key slip
+  move qty from warehouse(from_place, sku) to warehouse("main", sku)
+
+transfer stock_out(slip: string, place: string, sku: string, qty: pcs)
+  key slip
+  move qty from warehouse(place, sku) to customers

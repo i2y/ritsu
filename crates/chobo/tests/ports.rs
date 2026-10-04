@@ -197,3 +197,21 @@ fn a_books_items_are_defined_as_yuen_hashes_them() {
         }
     }
 }
+
+/// What `a_ledger_runs_every_scenario_as_the_interpreter_does` ends with, on the English book (the
+/// loop above it runs the English books of `tests/books` too): a call that does not fit the book
+/// is said so, not refused.
+#[test]
+fn a_call_that_does_not_fit_the_english_book_is_said_so() {
+    let mut l = Engine.open(&root().join("tests/books/stock_reservation.book")).unwrap();
+    assert!(l.apply(&BookCall { transfer: "nothing".into(), op: "do".into(), args: vec![], amounts: None }).is_err());
+    let f = Engine.facts(&root().join("tests/books/stock_reservation.book")).unwrap();
+    let t = &f.transfers[0];
+    // the refusals with every amount held to a range (ritsu's DESIGN 7.6), as for the Japanese book
+    match Engine.refusals(&root().join("tests/books/stock_reservation.book"), &t.name, (1, 10)).unwrap() {
+        ritsu_ports::Found::Value(ops) => assert_eq!(ops, t.refusals, "{}", t.name),
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(Engine.refusals(&root().join("tests/books/stock_reservation.book"), &t.name, (-10, 0)).unwrap(), ritsu_ports::Found::Undecided(_)));
+    assert!(Engine.refusals(&root().join("tests/books/stock_reservation.book"), "nothing", (1, 10)).is_err());
+}

@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="chobo 0.1.0">
+<title>credit v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; --lit: #fff8c5; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; --lit: #3b2e00; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; --lit: #3b2e00; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+header, main { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+header { padding-top: 12px; }
+h1 { font-size: 1.6em; margin: 0.4em 0 0.2em; }
+h2 { font-size: 1.3em; margin: 1.6em 0 0.5em; padding-bottom: 0.2em; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.12em; margin: 1.4em 0 0.4em; }
+h4 { font-size: 1em; margin: 1em 0 0.3em; }
+p, li { overflow-wrap: break-word; }
+nav a { color: var(--accent); }
+.muted { color: var(--dim); }
+code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 0 0.25em; border-radius: 4px; }
+pre { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 8px 12px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+.scroll { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; margin: 0.4em 0 0.8em; }
+th, td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; vertical-align: top; min-width: 4.5em; }
+.states td:first-child { white-space: nowrap; }
+th { background: var(--soft); }
+td { overflow-wrap: break-word; }
+td code { white-space: nowrap; }
+figure { margin: 0.6em 0; overflow-x: auto; max-width: 100%; }
+svg { display: block; max-width: none; height: auto; }
+svg text { fill: var(--fg); font-size: 13px; }
+svg .name { font-weight: 600; font-size: 14px; }
+svg .sub { fill: var(--dim); }
+.node rect { fill: var(--soft); stroke: var(--fg); stroke-width: 1.2; }
+.node.outside rect { stroke: var(--dim); stroke-dasharray: 5 3; }
+.edge path { fill: none; stroke: var(--dim); stroke-width: 1.5; }
+.edge.pending path { stroke-dasharray: 6 4; }
+.head { fill: var(--dim); }
+.head.ok { fill: var(--ok); }
+.head.no { fill: var(--bad); }
+.label rect { fill: var(--bg); opacity: 0.92; }
+.label text { font-size: 12px; }
+.edge.lit path { stroke: var(--ok); stroke-width: 3; }
+.edge.no path { stroke: var(--bad); stroke-width: 3; }
+.label.lit text { fill: var(--ok); font-weight: 600; }
+.label.no text { fill: var(--bad); font-weight: 600; }
+.life .state rect { fill: var(--soft); stroke: var(--fg); stroke-width: 1.2; }
+.life .state rect.inner { fill: none; stroke-width: 0.8; }
+.life .arrow { fill: none; stroke: var(--dim); stroke-width: 1.5; }
+.life .arrow.external { stroke-dasharray: 5 3; }
+.life .start { fill: var(--fg); }
+.life .lbl { font-size: 12px; }
+.life .lblbg { fill: var(--bg); opacity: 0.9; }
+.life .note { font-size: 11px; fill: var(--dim); }
+details { margin: 0.5em 0; }
+summary { cursor: pointer; color: var(--accent); }
+.player { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0.8em 0; }
+.player select { max-width: 100%; font: inherit; padding: 2px 4px; }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.outs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.outs button, .ctl button { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); color: var(--fg); cursor: pointer; }
+.outs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cols { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 8px; }
+.cols > * { flex: 1 1 320px; min-width: 0; }
+#steps { margin: 0; padding-left: 1.8em; }
+#steps li { padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+#steps li.now { background: var(--lit); }
+#steps li.later { color: var(--dim); }
+#steps .call { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+#steps .res { display: block; font-size: 0.92em; }
+#steps .res.ok { color: var(--ok); }
+#steps .res.no { color: var(--bad); }
+#steps .why { display: block; font-size: 0.85em; color: var(--dim); }
+.ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+#bal td.changed { background: var(--lit); font-weight: 600; }
+#bal td.num { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+<h1>credit v1</h1>
+<p>A pay-later line for each member. It can be used down to minus 50000 yen, and prepaid up to 10000 yen</p>
+<p class="muted"><code>chobo doc</code> が <code>tests/books/credit.book</code> から作ったページ。勘定ごとに残高を持ち、残高は入った量から出た量を引いたもの。どの振替も勘定の下限と上限を守り、守れない振替は、その境界に付けた名前で断られて、どの移動も行われない。振替には、すぐに動かすもの（<code>do</code>）と、動かす量をまず押さえるもの（<code>hold</code>）がある。押さえた分は、あとで確定される（<code>post</code>。全部か一部）か、取り消される（<code>void</code>）か、有効期限で切れる。</p>
+<nav><a href="#accounts">勘定</a> · <a href="#flow">流れ</a> · <a href="#transfers">振替</a> · <a href="#scenarios">シナリオ</a></nav>
+</header>
+<main>
+<section id="accounts">
+<h2>勘定</h2>
+<div class="scroll"><table><thead><tr><th>勘定</th><th>分け方</th><th>単位</th><th>境界</th><th>説明</th></tr></thead><tbody>
+<tr><td><code>credit</code></td><td><code>member</code> ごと</td><td>JPY</td><td>-50000 以上。下回る振替は <code>over_the_credit_line</code> で断る<br>10000 以下。超える振替は <code>over_prepayment</code> で断る</td><td></td></tr>
+<tr><td><code>shop</code></td><td>一つだけ</td><td>JPY</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+<tr><td><code>bank</code></td><td>一つだけ</td><td>JPY</td><td>外の勘定。境界は無く、マイナスにもなる</td><td></td></tr>
+</tbody></table></div>
+</section>
+<section id="flow">
+<h2>勘定のあいだの流れ</h2>
+<figure><svg class="flow" viewBox="0 0 825 130" width="825" role="img" aria-labelledby="flow-t"><title id="flow-t">credit の勘定のあいだの流れ</title>
+<defs><marker id="flow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge pending" data-k="0"><path d="M559 67 C624 67, 624 67, 689 67" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge" data-k="1"><path d="M136 67 C201 67, 201 67, 266 67" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="label" data-k="0"><rect x="586" y="58" width="77" height="16" rx="3"/><text x="624" y="70" text-anchor="middle">pay_later</text></g>
+<g class="label" data-k="1"><rect x="163" y="58" width="77" height="16" rx="3"/><text x="201" y="70" text-anchor="middle">repayment</text></g>
+<g class="node" data-a="0"><rect x="266" y="24" width="293" height="86" rx="4"/><text x="413" y="44" text-anchor="middle" class="name">credit(member)</text><text x="413" y="62" text-anchor="middle" class="sub">JPY</text><text x="413" y="80" text-anchor="middle" class="sub">-50000 以上（over_the_credit_line）</text><text x="413" y="98" text-anchor="middle" class="sub">10000 以下（over_prepayment）</text></g>
+<g class="node outside" data-a="1"><rect x="689" y="42" width="116" height="50" rx="16"/><text x="747" y="62" text-anchor="middle" class="name">shop</text><text x="747" y="80" text-anchor="middle" class="sub">JPY・外の勘定</text></g>
+<g class="node outside" data-a="2"><rect x="20" y="42" width="116" height="50" rx="16"/><text x="78" y="62" text-anchor="middle" class="name">bank</text><text x="78" y="80" text-anchor="middle" class="sub">JPY・外の勘定</text></g>
+</svg></figure>
+<p class="muted">四角は勘定で、矢印は振替の移動。角の丸い破線の四角は外の勘定で、境界を持たない。破線の矢印は仮押さえの振替で、まず押さえ、確定したときに動く。</p>
+</section>
+<section id="transfers">
+<h2>振替</h2>
+<article id="t0">
+<h3>pay_later</h3>
+<ul>
+<li>移動: <code>credit(member)</code> から <code>shop</code> へ <code>amount</code>。</li>
+<li>キー: <code>order</code> ごとに一回。同じ呼び出しの二度目は何もせず、<code>done_before</code> を返す。<code>member</code> か <code>amount</code> だけが違う二度目は <code>key_conflict</code> で断られる。押さえが終わったあとに同じキーで押さえ直すと <code>done_before</code> になり、何も押さえない。</li>
+<li>仮押さえ: まず押さえる。確定と取消は呼ぶ側がする。押さえてから 1 日で期限が切れ、押さえた量は元に戻る。</li>
+</ul>
+<figure><svg class="life" viewBox="0 0 632 240" width="632" role="img" aria-label="pay_later の仮押さえのライフサイクル">
+<defs><marker id="life-pay_later" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<circle class="start" cx="16" cy="122" r="6"/>
+<path class="arrow" d="M22 122 L160 122" marker-end="url(#life-pay_later)"/><text class="lbl" x="92" y="115" text-anchor="middle">pay_later.hold</text>
+<g class="state" data-state="held"><rect x="162" y="105" width="96" height="34" rx="8"/><text x="210" y="127" text-anchor="middle">押さえ中</text></g>
+<path class="arrow" d="M258 114 C333 114, 333 31, 405 31" marker-end="url(#life-pay_later)"/><rect class="lblbg" x="314" y="13" width="87" height="15" rx="3"/><text class="lbl" x="397" y="24" text-anchor="end">確定（post）</text>
+<g class="state end" data-state="posted"><rect x="407" y="14" width="96" height="34" rx="8"/><rect class="inner" x="410" y="17" width="90" height="28" rx="6"/><text x="455" y="36" text-anchor="middle">確定</text></g>
+<text class="note" x="409" y="62">取消は already_posted で断る</text>
+<text class="note" x="409" y="76">違う額の確定は key_conflict で断る</text>
+<path class="arrow" d="M258 122 C333 122, 333 105, 405 105" marker-end="url(#life-pay_later)"/><rect class="lblbg" x="314" y="87" width="87" height="15" rx="3"/><text class="lbl" x="397" y="98" text-anchor="end">取消（void）</text>
+<g class="state end" data-state="voided"><rect x="407" y="88" width="96" height="34" rx="8"/><rect class="inner" x="410" y="91" width="90" height="28" rx="6"/><text x="455" y="110" text-anchor="middle">取消</text></g>
+<text class="note" x="409" y="136">確定は already_voided で断る</text>
+<path class="arrow external" d="M258 131 C333 131, 333 179, 405 179" marker-end="url(#life-pay_later)"/><rect class="lblbg" x="345" y="184" width="56" height="15" rx="3"/><text class="lbl" x="397" y="195" text-anchor="end">1 日たつ</text>
+<g class="state end" data-state="expired"><rect x="407" y="162" width="96" height="34" rx="8"/><rect class="inner" x="410" y="165" width="90" height="28" rx="6"/><text x="455" y="184" text-anchor="middle">期限切れ</text></g>
+<text class="note" x="409" y="210">確定も取消も expired で断る</text>
+</svg></figure>
+<div class="scroll"><table class="states"><thead><tr><th>仮押さえの状態</th><th>post（確定）</th><th>void（取消）</th></tr></thead><tbody>
+<tr><td>押さえ中</td><td>確定する。額を渡せばその額、渡さなければ全額で、残りは元に戻る。押さえた額を超えれば <code>over_hold</code> で断る。押さえてから 1 日たっていれば <code>expired</code> で断る</td><td>取り消す。押さえた量は元に戻る。押さえてから 1 日たっていれば <code>expired</code> で断る</td></tr>
+<tr><td>確定</td><td>同じ額なら <code>done_before</code>、違う額なら <code>key_conflict</code> で断る</td><td><code>already_posted</code> で断る</td></tr>
+<tr><td>取消</td><td><code>already_voided</code> で断る</td><td><code>done_before</code></td></tr>
+<tr><td>期限切れ</td><td><code>expired</code> で断る</td><td><code>expired</code> で断る</td></tr>
+<tr><td>仮押さえが無い</td><td><code>no_such_hold</code> で断る</td><td><code>no_such_hold</code> で断る</td></tr>
+</tbody></table></div>
+<div class="scroll"><table><thead><tr><th>操作</th><th>断られうる理由</th><th>いつ</th></tr></thead><tbody>
+<tr><td><code>pay_later.hold</code></td><td><code>over_the_credit_line</code></td><td><code>credit(member)</code> が -50000 を下回る</td></tr>
+<tr><td><code>pay_later.hold</code></td><td><code>key_conflict</code></td><td><code>order</code> が同じで、ほかの引数が違う呼び出しが、前に済んでいる</td></tr>
+<tr><td><code>pay_later.hold</code></td><td><code>already_refused</code></td><td><code>order</code> が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない</td></tr>
+<tr><td><code>pay_later.post</code></td><td><code>key_conflict</code></td><td>仮押さえは、違う額で確定済み</td></tr>
+<tr><td><code>pay_later.post</code></td><td><code>already_voided</code></td><td>仮押さえはもう取り消されている</td></tr>
+<tr><td><code>pay_later.post</code></td><td><code>expired</code></td><td>仮押さえの期限が切れている</td></tr>
+<tr><td><code>pay_later.post</code></td><td><code>over_hold</code></td><td>押さえた額より多く確定しようとした</td></tr>
+<tr><td><code>pay_later.post</code></td><td><code>no_such_hold</code></td><td>その <code>order</code> の仮押さえが無い</td></tr>
+<tr><td><code>pay_later.void</code></td><td><code>already_posted</code></td><td>仮押さえはもう確定している</td></tr>
+<tr><td><code>pay_later.void</code></td><td><code>expired</code></td><td>仮押さえの期限が切れている</td></tr>
+<tr><td><code>pay_later.void</code></td><td><code>no_such_hold</code></td><td>その <code>order</code> の仮押さえが無い</td></tr>
+</tbody></table></div>
+<details><summary>断られる例</summary>
+<h4>pay_later.hold: over_the_credit_line</h4>
+<pre> 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で断られる（1 つ目の移動が credit(member-2) から 50001 を取る。確定 0、出ていく仮押さえ 0）</pre>
+<h4>pay_later.hold: key_conflict</h4>
+<pre> 1  pay_later.hold(order: order-1, member: member-2, amount: 1)  通る
+ 2  pay_later.hold(order: order-1, member: member-2, amount: 2)  key_conflict で断られる</pre>
+<h4>pay_later.hold: already_refused</h4>
+<pre> 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で断られる（1 つ目の移動が credit(member-2) から 50001 を取る。確定 0、出ていく仮押さえ 0）
+ 2  pay_later.hold(order: order-1, member: member-2, amount: 50001)  already_refused で断られる</pre>
+<h4>pay_later.post: key_conflict</h4>
+<pre> 1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
+ 2  pay_later.post(order: order-1)                               通る
+ 3  pay_later.post(order: order-1, amount: 1)                    key_conflict で断られる</pre>
+<h4>pay_later.post: already_voided</h4>
+<pre> 1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
+ 2  pay_later.void(order: order-1)                               通る
+ 3  pay_later.post(order: order-1)                               already_voided で断られる</pre>
+<h4>pay_later.post: expired</h4>
+<pre> 1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
+ 2  pass 1 日                                                    pay_later(order-1) が期限切れ
+ 3  pay_later.post(order: order-1)                               expired で断られる</pre>
+<h4>pay_later.post: over_hold</h4>
+<pre> 1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
+ 2  pay_later.post(order: order-1, amount: 3)                    over_hold で断られる</pre>
+<h4>pay_later.post: no_such_hold</h4>
+<pre> 1  pay_later.post(order: order-1)  no_such_hold で断られる</pre>
+<h4>pay_later.void: already_posted</h4>
+<pre> 1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
+ 2  pay_later.post(order: order-1)                               通る
+ 3  pay_later.void(order: order-1)                               already_posted で断られる</pre>
+<h4>pay_later.void: expired</h4>
+<pre> 1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
+ 2  pass 1 日                                                    pay_later(order-1) が期限切れ
+ 3  pay_later.void(order: order-1)                               expired で断られる</pre>
+<h4>pay_later.void: no_such_hold</h4>
+<pre> 1  pay_later.void(order: order-1)  no_such_hold で断られる</pre>
+</details>
+</article>
+<article id="t1">
+<h3>repayment</h3>
+<ul>
+<li>移動: <code>bank</code> から <code>credit(member)</code> へ <code>amount</code>。</li>
+<li>キー: <code>repayment_id</code> ごとに一回。同じ呼び出しの二度目は何もせず、<code>done_before</code> を返す。<code>member</code> か <code>amount</code> だけが違う二度目は <code>key_conflict</code> で断られる。</li>
+<li>すぐに動かす（<code>do</code>）。</li>
+</ul>
+<div class="scroll"><table><thead><tr><th>操作</th><th>断られうる理由</th><th>いつ</th></tr></thead><tbody>
+<tr><td><code>repayment.do</code></td><td><code>over_prepayment</code></td><td><code>credit(member)</code> が 10000 を超える</td></tr>
+<tr><td><code>repayment.do</code></td><td><code>key_conflict</code></td><td><code>repayment_id</code> が同じで、ほかの引数が違う呼び出しが、前に済んでいる</td></tr>
+<tr><td><code>repayment.do</code></td><td><code>already_refused</code></td><td><code>repayment_id</code> が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない</td></tr>
+</tbody></table></div>
+<details><summary>断られる例</summary>
+<h4>repayment.do: over_prepayment</h4>
+<pre> 1  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000)  通る
+ 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で断られる（1 つ目の移動が credit(member-2) へ 1 を入れる。確定 10000、入ってくる仮押さえ 0）</pre>
+<h4>repayment.do: key_conflict</h4>
+<pre> 1  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 1)  通る
+ 2  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2)  key_conflict で断られる</pre>
+<h4>repayment.do: already_refused</h4>
+<pre> 1  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000)  通る
+ 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で断られる（1 つ目の移動が credit(member-2) へ 1 を入れる。確定 10000、入ってくる仮押さえ 0）
+ 3  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      already_refused で断られる</pre>
+</details>
+</article>
+</section>
+<section id="scenarios">
+<h2>シナリオ</h2>
+<p><code>chobo scenarios</code> が帳簿から作ったシナリオ 24 本。一つ選び、ステップを一つずつ進めると、そのあとの残高と仮押さえが見られる。図では、そのステップで呼んだ振替の矢印に色が付く（断られたものは赤）。</p>
+<div class="player" id="player">
+<div class="pick"><label for="sc">シナリオ</label><select id="sc">
+<option value="0">1. 境界: pay_later.hold が credit(member) を -49999 まで減らす。at least -50000 の 1 つ手前</option>
+<option value="1">2. 境界: pay_later.hold が credit(member) をちょうど -50000 まで減らす。at least -50000 ちょうど</option>
+<option value="2">3. 境界: pay_later.hold は credit(member) を -50001 まで減らすので断られる。at least -50000 を割る</option>
+<option value="3">4. 境界: repayment.do が credit(member) を 9999 まで増やす。at most 10000 の 1 つ手前</option>
+<option value="4">5. 境界: repayment.do が credit(member) をちょうど 10000 まで増やす。at most 10000 ちょうど</option>
+<option value="5">6. 境界: repayment.do は credit(member) を 10001 まで増やすので断られる。at most 10000 を超える</option>
+<option value="6">7. キー: pay_later.hold を同じ引数で二度呼ぶ</option>
+<option value="7">8. キー: pay_later.hold を amount だけ変えてもう一度呼ぶ</option>
+<option value="8">9. キー: pay_later.hold が over_the_credit_line で断られ、同じ引数でもう一度、credit(member) が足りるようになってからもう一度呼ぶ</option>
+<option value="9">10. キー: repayment.do を同じ引数で二度呼ぶ</option>
+<option value="10">11. キー: repayment.do を amount だけ変えてもう一度呼ぶ</option>
+<option value="11">12. キー: repayment.do が over_prepayment で断られ、同じ引数でもう一度呼ぶ</option>
+<option value="12">13. 仮押さえ: pay_later を全額で確定する</option>
+<option value="13">14. 仮押さえ: pay_later を一部だけ確定する</option>
+<option value="14">15. 仮押さえ: pay_later を取り消す</option>
+<option value="15">16. 仮押さえ: pay_later を確定してから取り消そうとする</option>
+<option value="16">17. 仮押さえ: pay_later を取り消してから確定しようとする</option>
+<option value="17">18. 仮押さえ: pay_later を押さえた額より多く確定しようとし、押さえた額で確定する</option>
+<option value="18">19. 仮押さえ: pay_later を押さえる前に確定しようとし、押さえてから確定する</option>
+<option value="19">20. 仮押さえ: pay_later を二度確定する。同じ額で、そして違う額で</option>
+<option value="20">21. 期限切れ: pay_later が期限切れになってから、確定と取消を試す</option>
+<option value="21">22. 期限切れ: pay_later が期限切れになってから、同じキーで押さえ直す</option>
+<option value="22">23. 同時: 二つの呼び出し元が pay_later.hold で credit(member) の最後の 50000 を取り合う</option>
+<option value="23">24. 同時: 二つの呼び出し元が repayment.do で credit(member) の最後の空き 1 を取り合う</option>
+</select></div>
+<div class="outs" id="outs"></div>
+<div class="cols">
+<ol id="steps"></ol>
+<div>
+<div class="ctl"><button id="prev" type="button" aria-label="前へ">◀</button><span id="pos"></span><button id="next" type="button" aria-label="次へ">▶</button></div>
+<div class="scroll"><table id="bal"><thead><tr><th>勘定</th><th>確定</th><th>出ていく仮押さえ</th><th>入ってくる仮押さえ</th></tr></thead><tbody id="bal-body"></tbody></table></div>
+<div class="scroll"><table id="holds"><thead><tr><th>仮押さえ</th><th>状態</th></tr></thead><tbody id="holds-body"></tbody></table></div>
+</div>
+</div>
+<figure id="mini"><svg class="flow" viewBox="0 0 825 130" width="825" role="img" aria-labelledby="mini-t"><title id="mini-t">credit の勘定のあいだの流れ</title>
+<defs><marker id="mini-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="mini-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge pending" data-k="0"><path d="M559 67 C624 67, 624 67, 689 67" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="edge" data-k="1"><path d="M136 67 C201 67, 201 67, 266 67" marker-end="url(#mini-a)" data-a="url(#mini-a)" data-ok="url(#mini-ok)" data-no="url(#mini-no)"/></g>
+<g class="label" data-k="0"><rect x="586" y="58" width="77" height="16" rx="3"/><text x="624" y="70" text-anchor="middle">pay_later</text></g>
+<g class="label" data-k="1"><rect x="163" y="58" width="77" height="16" rx="3"/><text x="201" y="70" text-anchor="middle">repayment</text></g>
+<g class="node" data-a="0"><rect x="266" y="24" width="293" height="86" rx="4"/><text x="413" y="44" text-anchor="middle" class="name">credit(member)</text><text x="413" y="62" text-anchor="middle" class="sub">JPY</text><text x="413" y="80" text-anchor="middle" class="sub">-50000 以上（over_the_credit_line）</text><text x="413" y="98" text-anchor="middle" class="sub">10000 以下（over_prepayment）</text></g>
+<g class="node outside" data-a="1"><rect x="689" y="42" width="116" height="50" rx="16"/><text x="747" y="62" text-anchor="middle" class="name">shop</text><text x="747" y="80" text-anchor="middle" class="sub">JPY・外の勘定</text></g>
+<g class="node outside" data-a="2"><rect x="20" y="42" width="116" height="50" rx="16"/><text x="78" y="62" text-anchor="middle" class="name">bank</text><text x="78" y="80" text-anchor="middle" class="sub">JPY・外の勘定</text></g>
+</svg></figure>
+</div>
+</section>
+</main>
+<script type="application/json" id="chobo-data">{"lang":"ja","scenarios":[{"title":"境界: pay_later.hold が credit(member) を -49999 まで減らす。`at least -50000` の 1 つ手前","accounts":["credit(member-2)","shop","bank"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["0","0","0"],["-2","0","0"]],"holds":[]},{"label":"pay_later.hold(order: order-3, member: member-2, amount: 50001)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","50001","0"],["0","0","50001"],["-2","0","0"]],"holds":[["pay_later(order-3)","押さえ中"]]}]]},{"title":"境界: pay_later.hold が credit(member) をちょうど -50000 まで減らす。`at least -50000` ちょうど","accounts":["credit(member-2)","shop","bank"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["0","0","0"],["-2","0","0"]],"holds":[]},{"label":"pay_later.hold(order: order-3, member: member-2, amount: 50002)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["2","50002","0"],["0","0","50002"],["-2","0","0"]],"holds":[["pay_later(order-3)","押さえ中"]]}]]},{"title":"境界: pay_later.hold は credit(member) を -50001 まで減らすので断られる。`at least -50000` を割る","accounts":["credit(member-2)","shop","bank"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["2","0","0"],["0","0","0"],["-2","0","0"]],"holds":[]},{"label":"pay_later.hold(order: order-3, member: member-2, amount: 50003)","result":"over_the_credit_line で断られる","detail":"1 つ目の移動が credit(member-2) から 50003 を取る。確定 2、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[0,false]],"balances":[["2","0","0"],["0","0","0"],["-2","0","0"]],"holds":[]}]]},{"title":"境界: repayment.do が credit(member) を 9999 まで増やす。`at most 10000` の 1 つ手前","accounts":["credit(member-2)","bank"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 9998)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["9998","0","0"],["-9998","0","0"]],"holds":[]},{"label":"repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["9999","0","0"],["-9999","0","0"]],"holds":[]}]]},{"title":"境界: repayment.do が credit(member) をちょうど 10000 まで増やす。`at most 10000` ちょうど","accounts":["credit(member-2)","bank"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 9998)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["9998","0","0"],["-9998","0","0"]],"holds":[]},{"label":"repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["10000","0","0"],["-10000","0","0"]],"holds":[]}]]},{"title":"境界: repayment.do は credit(member) を 10001 まで増やすので断られる。`at most 10000` を超える","accounts":["credit(member-2)","bank"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 9998)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["9998","0","0"],["-9998","0","0"]],"holds":[]},{"label":"repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 3)","result":"over_prepayment で断られる","detail":"1 つ目の移動が credit(member-2) へ 3 を入れる。確定 9998、入ってくる仮押さえ 0","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["9998","0","0"],["-9998","0","0"]],"holds":[]}]]},{"title":"キー: pay_later.hold を同じ引数で二度呼ぶ","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","1","0"],["0","0","1"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.hold(order: order-1, member: member-2, amount: 1)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","1","0"],["0","0","1"]],"holds":[["pay_later(order-1)","押さえ中"]]}]]},{"title":"キー: pay_later.hold を amount だけ変えてもう一度呼ぶ","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","1","0"],["0","0","1"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"key_conflict で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","1","0"],["0","0","1"]],"holds":[["pay_later(order-1)","押さえ中"]]}]]},{"title":"キー: pay_later.hold が over_the_credit_line で断られ、同じ引数でもう一度、credit(member) が足りるようになってからもう一度呼ぶ","accounts":["credit(member-2)","shop","bank"],"zero":[["0","0","0"],["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 50001)","result":"over_the_credit_line で断られる","detail":"1 つ目の移動が credit(member-2) から 50001 を取る。確定 0、出ていく仮押さえ 0","refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"pay_later.hold(order: order-1, member: member-2, amount: 50001)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"],["0","0","0"]],"holds":[]},{"label":"repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","0","0"],["0","0","0"],["-1","0","0"]],"holds":[]},{"label":"pay_later.hold(order: order-1, member: member-2, amount: 50001)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["1","0","0"],["0","0","0"],["-1","0","0"]],"holds":[]}]]},{"title":"キー: repayment.do を同じ引数で二度呼ぶ","accounts":["credit(member-2)","bank"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]},{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 1)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]}]]},{"title":"キー: repayment.do を amount だけ変えてもう一度呼ぶ","accounts":["credit(member-2)","bank"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]},{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2)","result":"key_conflict で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["1","0","0"],["-1","0","0"]],"holds":[]}]]},{"title":"キー: repayment.do が over_prepayment で断られ、同じ引数でもう一度呼ぶ","accounts":["credit(member-2)","bank"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["10000","0","0"],["-10000","0","0"]],"holds":[]},{"label":"repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)","result":"over_prepayment で断られる","detail":"1 つ目の移動が credit(member-2) へ 1 を入れる。確定 10000、入ってくる仮押さえ 0","refused":true,"callers":[],"kinds":[[1,false]],"balances":[["10000","0","0"],["-10000","0","0"]],"holds":[]},{"label":"repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)","result":"already_refused で断られる","detail":null,"refused":true,"callers":[],"kinds":[[1,false]],"balances":[["10000","0","0"],["-10000","0","0"]],"holds":[]}]]},{"title":"仮押さえ: pay_later を全額で確定する","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.post(order: order-1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-2","0","0"],["2","0","0"]],"holds":[["pay_later(order-1)","確定"]]}]]},{"title":"仮押さえ: pay_later を一部だけ確定する","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.post(order: order-1, amount: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-1","0","0"],["1","0","0"]],"holds":[["pay_later(order-1)","確定"]]}]]},{"title":"仮押さえ: pay_later を取り消す","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.void(order: order-1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","0","0"],["0","0","0"]],"holds":[["pay_later(order-1)","取消"]]}]]},{"title":"仮押さえ: pay_later を確定してから取り消そうとする","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.post(order: order-1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-2","0","0"],["2","0","0"]],"holds":[["pay_later(order-1)","確定"]]},{"label":"pay_later.void(order: order-1)","result":"already_posted で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["-2","0","0"],["2","0","0"]],"holds":[["pay_later(order-1)","確定"]]}]]},{"title":"仮押さえ: pay_later を取り消してから確定しようとする","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.void(order: order-1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","0","0"],["0","0","0"]],"holds":[["pay_later(order-1)","取消"]]},{"label":"pay_later.post(order: order-1)","result":"already_voided で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"]],"holds":[["pay_later(order-1)","取消"]]}]]},{"title":"仮押さえ: pay_later を押さえた額より多く確定しようとし、押さえた額で確定する","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.post(order: order-1, amount: 3)","result":"over_hold で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.post(order: order-1, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-2","0","0"],["2","0","0"]],"holds":[["pay_later(order-1)","確定"]]}]]},{"title":"仮押さえ: pay_later を押さえる前に確定しようとし、押さえてから確定する","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.post(order: order-1)","result":"no_such_hold で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"]],"holds":[]},{"label":"pay_later.hold(order: order-1, member: member-2, amount: 1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","1","0"],["0","0","1"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.post(order: order-1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-1","0","0"],["1","0","0"]],"holds":[["pay_later(order-1)","確定"]]}]]},{"title":"仮押さえ: pay_later を二度確定する。同じ額で、そして違う額で","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pay_later.post(order: order-1)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-2","0","0"],["2","0","0"]],"holds":[["pay_later(order-1)","確定"]]},{"label":"pay_later.post(order: order-1)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-2","0","0"],["2","0","0"]],"holds":[["pay_later(order-1)","確定"]]},{"label":"pay_later.post(order: order-1, amount: 2)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["-2","0","0"],["2","0","0"]],"holds":[["pay_later(order-1)","確定"]]},{"label":"pay_later.post(order: order-1, amount: 1)","result":"key_conflict で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["-2","0","0"],["2","0","0"]],"holds":[["pay_later(order-1)","確定"]]}]]},{"title":"期限切れ: pay_later が期限切れになってから、確定と取消を試す","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pass 1441 分","result":"pay_later(order-1) が期限切れ","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","0","0"],["0","0","0"]],"holds":[["pay_later(order-1)","期限切れ"]]},{"label":"pay_later.post(order: order-1)","result":"expired で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"]],"holds":[["pay_later(order-1)","期限切れ"]]},{"label":"pay_later.void(order: order-1)","result":"expired で断られる","detail":null,"refused":true,"callers":[],"kinds":[[0,false]],"balances":[["0","0","0"],["0","0","0"]],"holds":[["pay_later(order-1)","期限切れ"]]}]]},{"title":"期限切れ: pay_later が期限切れになってから、同じキーで押さえ直す","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","2","0"],["0","0","2"]],"holds":[["pay_later(order-1)","押さえ中"]]},{"label":"pass 1441 分","result":"pay_later(order-1) が期限切れ","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","0","0"],["0","0","0"]],"holds":[["pay_later(order-1)","期限切れ"]]},{"label":"pay_later.hold(order: order-1, member: member-2, amount: 2)","result":"done_before（前に済んでいる）","detail":null,"refused":false,"callers":[],"kinds":[[0,true]],"balances":[["0","0","0"],["0","0","0"]],"holds":[["pay_later(order-1)","期限切れ"]]}]]},{"title":"同時: 二つの呼び出し元が pay_later.hold で credit(member) の最後の 50000 を取り合う","accounts":["credit(member-2)","shop"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"pay_later.hold(order: order-1, member: member-2, amount: 50000)","result":"通る","detail":null,"refused":false}],[{"call":"pay_later.hold(order: order-3, member: member-2, amount: 50000)","result":"over_the_credit_line で断られる","detail":"1 つ目の移動が credit(member-2) から 50000 を取る。確定 0、出ていく仮押さえ 50000","refused":true}]],"kinds":[[0,true],[0,false]],"balances":[["0","50000","0"],["0","0","50000"]],"holds":[["pay_later(order-1)","押さえ中"]]}],[{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"pay_later.hold(order: order-1, member: member-2, amount: 50000)","result":"over_the_credit_line で断られる","detail":"1 つ目の移動が credit(member-2) から 50000 を取る。確定 0、出ていく仮押さえ 50000","refused":true}],[{"call":"pay_later.hold(order: order-3, member: member-2, amount: 50000)","result":"通る","detail":null,"refused":false}]],"kinds":[[0,false],[0,true]],"balances":[["0","50000","0"],["0","0","50000"]],"holds":[["pay_later(order-3)","押さえ中"]]}]]},{"title":"同時: 二つの呼び出し元が repayment.do で credit(member) の最後の空き 1 を取り合う","accounts":["credit(member-2)","bank"],"zero":[["0","0","0"],["0","0","0"]],"outcomes":[[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 9999)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["9999","0","0"],["-9999","0","0"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)","result":"通る","detail":null,"refused":false}],[{"call":"repayment.do(repayment_id: repayment_id-4, member: member-2, amount: 1)","result":"over_prepayment で断られる","detail":"1 つ目の移動が credit(member-2) へ 1 を入れる。確定 10000、入ってくる仮押さえ 0","refused":true}]],"kinds":[[1,true],[1,false]],"balances":[["10000","0","0"],["-10000","0","0"]],"holds":[]}],[{"label":"repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 9999)","result":"通る","detail":null,"refused":false,"callers":[],"kinds":[[1,true]],"balances":[["9999","0","0"],["-9999","0","0"]],"holds":[]},{"label":"together","result":"","detail":null,"refused":false,"callers":[[{"call":"repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)","result":"over_prepayment で断られる","detail":"1 つ目の移動が credit(member-2) へ 1 を入れる。確定 10000、入ってくる仮押さえ 0","refused":true}],[{"call":"repayment.do(repayment_id: repayment_id-4, member: member-2, amount: 1)","result":"通る","detail":null,"refused":false}]],"kinds":[[1,false],[1,true]],"balances":[["10000","0","0"],["-10000","0","0"]],"holds":[]}]]}],"words":{"ways":"同時の操作の順序によって、結果は {n} 通り:","outcome":"結果 {n}","caller":"呼び出し元 {n}","before":"最初のステップの前。どの残高も 0","pos":"{n} ステップのうち {i} つ目のあと","noholds":"仮押さえは無い"}}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('chobo-data').textContent);
+  var w = data.words;
+  var sel = document.getElementById('sc');
+  var at = { sc: 0, out: 0, step: 0 };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function steps() { return data.scenarios[at.sc].outcomes[at.out]; }
+  function after(j) { var sc = data.scenarios[at.sc]; return j === 0 ? { balances: sc.zero, holds: [] } : steps()[j - 1]; }
+  function readHash() {
+    var h = {}; location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p.length === 2) h[p[0]] = parseInt(p[1], 10); });
+    if (h.scenario >= 1 && h.scenario <= data.scenarios.length) at.sc = h.scenario - 1;
+    var outs = data.scenarios[at.sc].outcomes.length;
+    at.out = h.outcome >= 1 && h.outcome <= outs ? h.outcome - 1 : 0;
+    var n = steps().length;
+    at.step = h.step >= 0 && h.step <= n ? h.step : n;
+  }
+  function writeHash() {
+    var s = '#scenario=' + (at.sc + 1) + '&step=' + at.step + (data.scenarios[at.sc].outcomes.length > 1 ? '&outcome=' + (at.out + 1) : '');
+    if (location.hash !== s) history.replaceState(null, '', s);
+  }
+  function render() {
+    var sc = data.scenarios[at.sc];
+    sel.value = String(at.sc);
+    var outs = document.getElementById('outs');
+    outs.textContent = '';
+    if (sc.outcomes.length > 1) {
+      outs.appendChild(el('span', 'muted', w.ways.replace('{n}', sc.outcomes.length)));
+      sc.outcomes.forEach(function (_, k) {
+        var b = el('button', null, w.outcome.replace('{n}', k + 1));
+        b.setAttribute('aria-pressed', k === at.out ? 'true' : 'false');
+        b.onclick = function () { at.out = k; at.step = Math.min(at.step, steps().length); go(); };
+        outs.appendChild(b);
+      });
+    }
+    var list = document.getElementById('steps');
+    list.textContent = '';
+    steps().forEach(function (s, j) {
+      var li = el('li', j + 1 === at.step ? 'now' : (j + 1 > at.step ? 'later' : ''));
+      li.setAttribute('data-step', j + 1);
+      if (s.callers.length) {
+        li.appendChild(el('span', 'call', 'together'));
+        s.callers.forEach(function (cs, c) {
+          cs.forEach(function (x) {
+            li.appendChild(el('span', 'call res', w.caller.replace('{n}', c + 1) + ': ' + x.call));
+            li.appendChild(el('span', 'res ' + (x.refused ? 'no' : 'ok'), x.result));
+            if (x.detail) li.appendChild(el('span', 'why', x.detail));
+          });
+        });
+      } else {
+        li.appendChild(el('span', 'call', s.label));
+        if (s.result) li.appendChild(el('span', 'res ' + (s.refused ? 'no' : 'ok'), s.result));
+        if (s.detail) li.appendChild(el('span', 'why', s.detail));
+      }
+      li.onclick = function () { at.step = j + 1; go(); };
+      list.appendChild(li);
+    });
+    var n = steps().length;
+    document.getElementById('pos').textContent = at.step === 0 ? w.before : w.pos.replace('{i}', at.step).replace('{n}', n);
+    document.getElementById('prev').disabled = at.step === 0;
+    document.getElementById('next').disabled = at.step === n;
+    var now = after(at.step), was = at.step > 0 ? after(at.step - 1) : null;
+    var body = document.getElementById('bal-body');
+    body.textContent = '';
+    sc.accounts.forEach(function (name, a) {
+      var tr = el('tr');
+      tr.appendChild(el('td', null, name));
+      for (var q = 0; q < 3; q++) {
+        var changed = was && was.balances[a][q] !== now.balances[a][q];
+        tr.appendChild(el('td', 'num' + (changed ? ' changed' : ''), now.balances[a][q]));
+      }
+      body.appendChild(tr);
+    });
+    var hb = document.getElementById('holds-body');
+    hb.textContent = '';
+    if (!now.holds.length) {
+      var tr = el('tr'); var td = el('td', 'muted', w.noholds); td.colSpan = 2; tr.appendChild(td); hb.appendChild(tr);
+    }
+    now.holds.forEach(function (h) { var tr = el('tr'); tr.appendChild(el('td', null, h[0])); tr.appendChild(el('td', null, h[1])); hb.appendChild(tr); });
+    var lit = {};
+    if (at.step > 0) steps()[at.step - 1].kinds.forEach(function (k) { lit[k[0]] = lit[k[0]] === 'lit' || k[1] ? 'lit' : 'no'; });
+    document.querySelectorAll('#mini [data-k]').forEach(function (g) {
+      var how = lit[g.getAttribute('data-k')];
+      g.classList.remove('lit', 'no');
+      if (how) g.classList.add(how);
+      var p = g.querySelector('path');
+      if (p) p.setAttribute('marker-end', p.getAttribute(how === 'lit' ? 'data-ok' : how === 'no' ? 'data-no' : 'data-a'));
+    });
+  }
+  function go() { writeHash(); render(); }
+  sel.onchange = function () { at.sc = parseInt(sel.value, 10); at.out = 0; at.step = 0; go(); };
+  document.getElementById('prev').onclick = function () { if (at.step > 0) { at.step--; go(); } };
+  document.getElementById('next').onclick = function () { if (at.step < steps().length) { at.step++; go(); } };
+  document.getElementById('player').addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowRight' && at.step < steps().length) { at.step++; go(); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' && at.step > 0) { at.step--; go(); e.preventDefault(); }
+  });
+  window.addEventListener('hashchange', function () { readHash(); render(); });
+  readHash();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1573 @@
+{
+  "v": 1,
+  "book": "wallet",
+  "version": 1,
+  "source_sha256": "f04a532f97ac643f3fbbd66afa2a939a08b1114bbc39b36af5249867c02f567a",
+  "units": [
+    {
+      "name": "JPY",
+      "scale": 0,
+      "ledger": 4003245802
+    }
+  ],
+  "accounts": [
+    {
+      "name": "wallet",
+      "params": [
+        "member"
+      ],
+      "unit": "JPY",
+      "outside": false,
+      "lower": {
+        "value": 0,
+        "refused_as": "insufficient_balance"
+      },
+      "upper": {
+        "value": 100000,
+        "refused_as": "over_the_limit"
+      },
+      "description": null,
+      "code": 28357
+    },
+    {
+      "name": "bank",
+      "params": [],
+      "unit": "JPY",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 32594
+    },
+    {
+      "name": "shop",
+      "params": [],
+      "unit": "JPY",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 5258
+    }
+  ],
+  "transfers": [
+    {
+      "name": "deposit",
+      "description": null,
+      "params": [
+        {
+          "name": "deposit_id",
+          "type": "string"
+        },
+        {
+          "name": "member",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "amount",
+          "unit": "JPY"
+        }
+      ],
+      "key": [
+        "deposit_id"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "amount"
+          },
+          "from": {
+            "account": "bank",
+            "args": []
+          },
+          "to": {
+            "account": "wallet",
+            "args": [
+              {
+                "param": "member"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 20513,
+      "definition": "6e0a46ff3543ad70b2403fdd8ba82ab0",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "over_the_limit",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 100000
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-3",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "over_the_limit"
+                }
+              ],
+              "account": "wallet",
+              "as_written": "wallet(member)",
+              "bound": "at most 100000",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 100000
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-3",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "over_the_limit"
+                },
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-3",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "deposit_id"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "member",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "args": {
+                      "deposit_id": "deposit_id-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "args": {
+                      "deposit_id": "deposit_id-1",
+                      "member": "member-3",
+                      "amount": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "amount",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "args": {
+                      "deposit_id": "deposit_id-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "args": {
+                      "deposit_id": "deposit_id-1",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "payment",
+      "description": "posted when the order ships, voided when it is cancelled; only the caller ends the hold",
+      "params": [
+        {
+          "name": "order",
+          "type": "string"
+        },
+        {
+          "name": "member",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "amount",
+          "unit": "JPY"
+        }
+      ],
+      "key": [
+        "order"
+      ],
+      "pending": {
+        "never_expires": true
+      },
+      "moves": [
+        {
+          "amount": {
+            "param": "amount"
+          },
+          "from": {
+            "account": "wallet",
+            "args": [
+              {
+                "param": "member"
+              }
+            ]
+          },
+          "to": {
+            "account": "shop",
+            "args": []
+          }
+        }
+      ],
+      "code": 32708,
+      "definition": "c1be3ec0c7d722e7c8d839973a3734fb",
+      "operations": {
+        "hold": {
+          "refusals": [
+            {
+              "name": "insufficient_balance",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_balance"
+                }
+              ],
+              "account": "wallet",
+              "as_written": "wallet(member)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_balance"
+                },
+                {
+                  "op": "hold",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "order"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "member",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "args": {
+                      "deposit_id": "deposit_id-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "args": {
+                      "order": "order-3",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "args": {
+                      "order": "order-3",
+                      "member": "member-4",
+                      "amount": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "amount",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "args": {
+                      "deposit_id": "deposit_id-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "args": {
+                      "order": "order-3",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "args": {
+                      "order": "order-3",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "done_before",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "args": {
+                      "deposit_id": "deposit_id-1",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "args": {
+                      "order": "order-3",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "void",
+                    "kind": "payment",
+                    "args": {
+                      "order": "order-3"
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "args": {
+                      "order": "order-3",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "done_before"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "post": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3"
+                  },
+                  "amounts": {
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_voided",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3"
+                  },
+                  "result": "refused",
+                  "reason": "already_voided"
+                }
+              ]
+            },
+            {
+              "name": "over_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3"
+                  },
+                  "amounts": {
+                    "amount": 3
+                  },
+                  "result": "refused",
+                  "reason": "over_hold"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "post",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        },
+        "void": {
+          "refusals": [
+            {
+              "name": "already_posted",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-3"
+                  },
+                  "result": "refused",
+                  "reason": "already_posted"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "void",
+                  "kind": "payment",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "refund",
+      "description": null,
+      "params": [
+        {
+          "name": "refund_id",
+          "type": "string"
+        },
+        {
+          "name": "member",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "amount",
+          "unit": "JPY"
+        }
+      ],
+      "key": [
+        "refund_id"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "amount"
+          },
+          "from": {
+            "account": "wallet",
+            "args": [
+              {
+                "param": "member"
+              }
+            ]
+          },
+          "to": {
+            "account": "bank",
+            "args": []
+          }
+        }
+      ],
+      "code": 38965,
+      "definition": "ce67dd37c7d7cc9fcea8e99f0a891463",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "insufficient_balance",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "refund",
+                  "args": {
+                    "refund_id": "refund_id-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_balance"
+                }
+              ],
+              "account": "wallet",
+              "as_written": "wallet(member)",
+              "bound": "at least 0",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "deposit",
+                  "args": {
+                    "deposit_id": "deposit_id-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "refund",
+                  "args": {
+                    "refund_id": "refund_id-3",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "refund",
+                  "args": {
+                    "refund_id": "refund_id-3",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "refund",
+                  "args": {
+                    "refund_id": "refund_id-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "insufficient_balance"
+                },
+                {
+                  "op": "do",
+                  "kind": "refund",
+                  "args": {
+                    "refund_id": "refund_id-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "refund_id"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "member",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "args": {
+                      "deposit_id": "deposit_id-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "refund",
+                    "args": {
+                      "refund_id": "refund_id-3",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "refund",
+                    "args": {
+                      "refund_id": "refund_id-3",
+                      "member": "member-4",
+                      "amount": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "amount",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "args": {
+                      "deposit_id": "deposit_id-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "refund",
+                    "args": {
+                      "refund_id": "refund_id-3",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "refund",
+                    "args": {
+                      "refund_id": "refund_id-3",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [
+    {
+      "name": "payment",
+      "over": "payment",
+      "carry": {
+        "input": "state",
+        "output": "next_state",
+        "enum": "state"
+      },
+      "held": [],
+      "never": [],
+      "once": [],
+      "states": [
+        "held",
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "initial": "held",
+      "final": [
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "events": [
+        "post",
+        "void"
+      ],
+      "external": [],
+      "certificate": {
+        "enums": {
+          "state": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "event": [
+            "post",
+            "void"
+          ],
+          "reason": [
+            "none",
+            "already_posted",
+            "already_voided",
+            "expired"
+          ]
+        },
+        "types": {
+          "state": "state",
+          "event": "event",
+          "next_state": "state",
+          "refused": "bool",
+          "reason": "reason"
+        },
+        "machine": {
+          "table": "payment",
+          "carry": {
+            "input": "state",
+            "output": "next_state"
+          },
+          "axis": 1,
+          "states": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "initial": 0,
+          "finals": [
+            1,
+            2,
+            3
+          ],
+          "rows": [
+            {
+              "row": 1,
+              "to": 1
+            },
+            {
+              "row": 2,
+              "to": 2
+            },
+            {
+              "row": 3,
+              "stay": true
+            },
+            {
+              "row": 4,
+              "stay": true
+            },
+            {
+              "row": 5,
+              "stay": true
+            },
+            {
+              "row": 6,
+              "stay": true
+            },
+            {
+              "row": 7,
+              "stay": true
+            }
+          ]
+        },
+        "tables": [
+          {
+            "table": "payment",
+            "policy": "first",
+            "axes": [
+              {
+                "column": "event",
+                "coords": [
+                  "post",
+                  "void"
+                ]
+              },
+              {
+                "column": "state",
+                "coords": [
+                  "held",
+                  "posted",
+                  "voided",
+                  "expired"
+                ]
+              }
+            ],
+            "decides": [
+              "next_state",
+              "refused",
+              "reason"
+            ],
+            "rows": [
+              {
+                "row": 1,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "posted",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 2,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "voided",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 3,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 4,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_posted"
+                ]
+              },
+              {
+                "row": 5,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_voided"
+                ]
+              },
+              {
+                "row": 6,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 7,
+                "accepts": [
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    3
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "expired"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "wallet",
+      "functions": [
+        {
+          "kind": "deposit",
+          "op": "do",
+          "name": "deposit_do",
+          "params": [
+            "p_tenant",
+            "p_deposit_id",
+            "p_member",
+            "p_amount"
+          ]
+        },
+        {
+          "kind": "payment",
+          "op": "hold",
+          "name": "payment_hold",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_member",
+            "p_amount"
+          ]
+        },
+        {
+          "kind": "payment",
+          "op": "post",
+          "name": "payment_post",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_amount"
+          ],
+          "default_null": [
+            "p_amount"
+          ]
+        },
+        {
+          "kind": "payment",
+          "op": "void",
+          "name": "payment_void",
+          "params": [
+            "p_tenant",
+            "p_order"
+          ]
+        },
+        {
+          "kind": "payment",
+          "op": "status",
+          "name": "payment_status",
+          "params": [
+            "p_tenant",
+            "p_order"
+          ]
+        },
+        {
+          "kind": "refund",
+          "op": "do",
+          "name": "refund_do",
+          "params": [
+            "p_tenant",
+            "p_refund_id",
+            "p_member",
+            "p_amount"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "wallet",
+          "name": "balance_wallet",
+          "params": [
+            "p_tenant",
+            "p_member"
+          ]
+        },
+        {
+          "account": "bank",
+          "name": "balance_bank",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "shop",
+          "name": "balance_shop",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "wallet.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "deposit",
+          "member": "deposit",
+          "args": "depositArgs"
+        },
+        {
+          "kind": "payment",
+          "member": "payment",
+          "args": "paymentArgs",
+          "key": "paymentKey",
+          "amounts": "paymentAmounts"
+        },
+        {
+          "kind": "refund",
+          "member": "refund",
+          "args": "refundArgs"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "wallet",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "deposit",
+          "member": "deposit",
+          "params": {
+            "deposit_id": "deposit_id",
+            "member": "member",
+            "amount": "amount"
+          }
+        },
+        {
+          "kind": "payment",
+          "member": "payment",
+          "params": {
+            "order": "order",
+            "member": "member",
+            "amount": "amount"
+          }
+        },
+        {
+          "kind": "refund",
+          "member": "refund",
+          "params": {
+            "refund_id": "refund_id",
+            "member": "member",
+            "amount": "amount"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "wallet",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "deposit",
+          "member": "Deposit",
+          "args": "DepositArgs",
+          "fields": {
+            "deposit_id": "Deposit_id",
+            "member": "Member",
+            "amount": "Amount"
+          }
+        },
+        {
+          "kind": "payment",
+          "member": "Payment",
+          "args": "PaymentArgs",
+          "fields": {
+            "order": "Order",
+            "member": "Member",
+            "amount": "Amount"
+          },
+          "key": "PaymentKey",
+          "amounts": "PaymentAmounts"
+        },
+        {
+          "kind": "refund",
+          "member": "Refund",
+          "args": "RefundArgs",
+          "fields": {
+            "refund_id": "Refund_id",
+            "member": "Member",
+            "amount": "Amount"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "wallet",
+          "method": "Wallet",
+          "args": "WalletAccount",
+          "fields": {
+            "member": "Member"
+          }
+        },
+        {
+          "account": "bank",
+          "method": "Bank"
+        },
+        {
+          "account": "shop",
+          "method": "Shop"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "deposit",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "room_in"
+            }
+          ]
+        },
+        {
+          "kind": "payment",
+          "op": "hold",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        },
+        {
+          "kind": "payment",
+          "op": "post",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        },
+        {
+          "kind": "payment",
+          "op": "void",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        },
+        {
+          "kind": "refund",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,736 @@
+[
+  {
+    "scenario": {
+      "name": "bound: ship.do takes shelf(sku) to 4, one above `at least 3`",
+      "book": "safety_stock",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 5
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: ship.do takes shelf(sku) to exactly 3, its `at least 3`",
+      "book": "safety_stock",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 5
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: ship.do would take shelf(sku) to 2, below `at least 3`",
+      "book": "safety_stock",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 5
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "refused",
+          "reason": "below_safety_stock"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -5,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: replenish.do twice with the same arguments",
+      "book": "safety_stock",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: replenish.do again with another qty",
+      "book": "safety_stock",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: ship.do twice with the same arguments",
+      "book": "safety_stock",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 4
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: ship.do again with another qty",
+      "book": "safety_stock",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 4
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-3",
+            "sku": "sku-2",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: ship.do refused with below_safety_stock, then again, and again once shelf(sku) has enough",
+      "book": "safety_stock",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-1",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-1",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-3",
+            "sku": "sku-2",
+            "qty": 4
+          }
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "args": {
+            "order": "order-1",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "refused",
+          "reason": "below_safety_stock"
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "replenish",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "ship",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "sku-2"
+          ],
+          "posted": 4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -4,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of shelf(sku) with ship.do",
+      "book": "safety_stock",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "replenish",
+          "args": {
+            "slip": "slip-1",
+            "sku": "sku-2",
+            "qty": 4
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "ship",
+                "args": {
+                  "order": "order-3",
+                  "sku": "sku-2",
+                  "qty": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "ship",
+                "args": {
+                  "order": "order-4",
+                  "sku": "sku-2",
+                  "qty": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "replenish",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "ship",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "ship",
+                    "result": "refused",
+                    "reason": "below_safety_stock"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "shelf",
+              "args": [
+                "sku-2"
+              ],
+              "posted": 3,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "suppliers",
+              "args": [],
+              "posted": -4,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "customers",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "replenish",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "ship",
+                    "result": "refused",
+                    "reason": "below_safety_stock"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "ship",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "shelf",
+              "args": [
+                "sku-2"
+              ],
+              "posted": 3,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "suppliers",
+              "args": [],
+              "posted": -4,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "customers",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  }
+]

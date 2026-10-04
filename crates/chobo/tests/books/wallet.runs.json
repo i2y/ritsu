@@ -1,0 +1,2532 @@
+[
+  {
+    "scenario": {
+      "name": "bound: deposit.do fills wallet(member) to 99999, one below `at most 100000`",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 99998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 99999,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -99999,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: deposit.do fills wallet(member) to exactly 100000, its `at most 100000`",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 99998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 100000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -100000,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: deposit.do would fill wallet(member) to 100001, past `at most 100000`",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 99998
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-3",
+            "member": "member-2",
+            "amount": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "refused",
+          "reason": "over_the_limit"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 99998,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -99998,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: payment.hold takes wallet(member) to 1, one above `at least 0`",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: payment.hold takes wallet(member) to exactly 0, its `at least 0`",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 2
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 2,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: payment.hold would take wallet(member) to -1, below `at least 0`",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "insufficient_balance"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: refund.do takes wallet(member) to 1, one above `at least 0`",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: refund.do takes wallet(member) to exactly 0, its `at least 0`",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: refund.do would take wallet(member) to -1, below `at least 0`",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-3",
+            "member": "member-2",
+            "amount": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "refused",
+          "reason": "insufficient_balance"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: deposit.do twice with the same arguments",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: deposit.do again with another amount",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: deposit.do refused with over_the_limit, then again",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 100000
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "refused",
+          "reason": "over_the_limit"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 100000,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -100000,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: payment.hold twice with the same arguments",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: payment.hold again with another amount",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 1
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 1,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "held"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: payment.hold refused with insufficient_balance, then again, and again once wallet(member) has enough",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "insufficient_balance"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: refund.do twice with the same arguments",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: refund.do again with another amount",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: refund.do refused with insufficient_balance, then again, and again once wallet(member) has enough",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-3",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "args": {
+            "refund_id": "refund_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "refused",
+          "reason": "insufficient_balance"
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "refund",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: payment posted in full",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: payment posted in part",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          },
+          "amounts": {
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: payment voided",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "payment",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: payment posted, then voided",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          }
+        },
+        {
+          "op": "void",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "already_posted"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: payment voided, then posted",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "void",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "void",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "already_voided"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: payment posted for more than it holds, then for what it holds",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          },
+          "amounts": {
+            "amount": 3
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          },
+          "amounts": {
+            "amount": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "over_hold"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: payment posted before it is held, then held and posted",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-1"
+          }
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-1"
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "no_such_hold"
+        },
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-1"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "hold: payment posted twice, with the same amounts and with others",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "args": {
+            "order": "order-3",
+            "member": "member-2",
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          },
+          "amounts": {
+            "amount": 2
+          }
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "args": {
+            "order": "order-3"
+          },
+          "amounts": {
+            "amount": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "result": "done"
+        },
+        {
+          "op": "hold",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "done"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "done_before"
+        },
+        {
+          "op": "post",
+          "kind": "payment",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "wallet",
+          "args": [
+            "member-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "bank",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "shop",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "payment",
+          "key": [
+            "order-3"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers fill the last 1 of room in wallet(member) with deposit.do",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 99999
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "deposit",
+                "args": {
+                  "deposit_id": "deposit_id-3",
+                  "member": "member-2",
+                  "amount": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "deposit",
+                "args": {
+                  "deposit_id": "deposit_id-4",
+                  "member": "member-2",
+                  "amount": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "deposit",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "result": "refused",
+                    "reason": "over_the_limit"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "wallet",
+              "args": [
+                "member-2"
+              ],
+              "posted": 100000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "bank",
+              "args": [],
+              "posted": -100000,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "deposit",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "result": "refused",
+                    "reason": "over_the_limit"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "deposit",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "wallet",
+              "args": [
+                "member-2"
+              ],
+              "posted": 100000,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "bank",
+              "args": [],
+              "posted": -100000,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of wallet(member) with payment.hold",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "hold",
+                "kind": "payment",
+                "args": {
+                  "order": "order-3",
+                  "member": "member-2",
+                  "amount": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "hold",
+                "kind": "payment",
+                "args": {
+                  "order": "order-4",
+                  "member": "member-2",
+                  "amount": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "deposit",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "result": "refused",
+                    "reason": "insufficient_balance"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "wallet",
+              "args": [
+                "member-2"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 1
+            },
+            {
+              "account": "bank",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "shop",
+              "args": [],
+              "posted": 0,
+              "held_in": 1,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "payment",
+              "key": [
+                "order-3"
+              ],
+              "state": "held"
+            }
+          ]
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "deposit",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "result": "refused",
+                    "reason": "insufficient_balance"
+                  }
+                ],
+                [
+                  {
+                    "op": "hold",
+                    "kind": "payment",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "wallet",
+              "args": [
+                "member-2"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 1
+            },
+            {
+              "account": "bank",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "shop",
+              "args": [],
+              "posted": 0,
+              "held_in": 1,
+              "held_out": 0
+            }
+          ],
+          "holds": [
+            {
+              "kind": "payment",
+              "key": [
+                "order-4"
+              ],
+              "state": "held"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of wallet(member) with refund.do",
+      "book": "wallet",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "deposit",
+          "args": {
+            "deposit_id": "deposit_id-1",
+            "member": "member-2",
+            "amount": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "refund",
+                "args": {
+                  "refund_id": "refund_id-3",
+                  "member": "member-2",
+                  "amount": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "refund",
+                "args": {
+                  "refund_id": "refund_id-4",
+                  "member": "member-2",
+                  "amount": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "deposit",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "refund",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "refund",
+                    "result": "refused",
+                    "reason": "insufficient_balance"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "wallet",
+              "args": [
+                "member-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "bank",
+              "args": [],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "deposit",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "refund",
+                    "result": "refused",
+                    "reason": "insufficient_balance"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "refund",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "wallet",
+              "args": [
+                "member-2"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "bank",
+              "args": [],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  }
+]

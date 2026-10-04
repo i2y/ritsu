@@ -1,0 +1,2216 @@
+[
+  {
+    "scenario": {
+      "name": "bound: move_stock.do takes warehouse(from_place, sku) to 1, one above `at least 0`",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "to_place": "to_place-5",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "to_place-5",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: move_stock.do takes warehouse(from_place, sku) to exactly 0, its `at least 0`",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "to_place": "to_place-5",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "to_place-5",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: move_stock.do would take warehouse(from_place, sku) to -1, below `at least 0`",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "to_place": "to_place-5",
+            "sku": "sku-3",
+            "qty": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "refused",
+          "reason": "insufficient_stock"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "to_place-5",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: to_main.do takes warehouse(from_place, sku) to 1, one above `at least 0`",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "main",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: to_main.do takes warehouse(from_place, sku) to exactly 0, its `at least 0`",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "main",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: to_main.do would take warehouse(from_place, sku) to -1, below `at least 0`",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "refused",
+          "reason": "insufficient_stock"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "main",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: stock_out.do takes warehouse(place, sku) to 1, one above `at least 0`",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-4",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "place-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: stock_out.do takes warehouse(place, sku) to exactly 0, its `at least 0`",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-4",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "bound: stock_out.do would take warehouse(place, sku) to -1, below `at least 0`",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-4",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 3
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "refused",
+          "reason": "insufficient_stock"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "place-2",
+            "sku-3"
+          ],
+          "posted": 2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -2,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: stock_in.do twice with the same arguments",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "place-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: stock_in.do again with another qty",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "place-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: move_stock.do twice with the same arguments",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "to_place": "to_place-5",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "to_place": "to_place-5",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "to_place-5",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: move_stock.do again with another qty",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "to_place": "to_place-5",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "to_place": "to_place-5",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "to_place-5",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: move_stock.do refused with insufficient_stock, then again, and again once warehouse(from_place, sku) has enough",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-1",
+            "from_place": "from_place-2",
+            "to_place": "to_place-3",
+            "sku": "sku-4",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-1",
+            "from_place": "from_place-2",
+            "to_place": "to_place-3",
+            "sku": "sku-4",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-5",
+            "place": "from_place-2",
+            "sku": "sku-4",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-1",
+            "from_place": "from_place-2",
+            "to_place": "to_place-3",
+            "sku": "sku-4",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "refused",
+          "reason": "insufficient_stock"
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-4"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "to_place-3",
+            "sku-4"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: to_main.do twice with the same arguments",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "main",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: to_main.do again with another qty",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-4",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "main",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: to_main.do refused with insufficient_stock, then again, and again once warehouse(from_place, sku) has enough",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-1",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-1",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-4",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-1",
+            "from_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "refused",
+          "reason": "insufficient_stock"
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "warehouse",
+          "args": [
+            "main",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: stock_out.do twice with the same arguments",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-4",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-4",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "done_before"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: stock_out.do again with another qty",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-4",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-4",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 2
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "refused",
+          "reason": "key_conflict"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "key: stock_out.do refused with insufficient_stock, then again, and again once warehouse(place, sku) has enough",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-4",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "refused",
+          "reason": "insufficient_stock"
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "refused",
+          "reason": "already_refused"
+        },
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "result": "done"
+        },
+        {
+          "op": "do",
+          "kind": "stock_out",
+          "result": "refused",
+          "reason": "already_refused"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "place-2",
+            "sku-3"
+          ],
+          "posted": 1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -1,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of warehouse(from_place, sku) with move_stock.do",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "move_stock",
+                "args": {
+                  "slip": "slip-4",
+                  "from_place": "from_place-2",
+                  "to_place": "to_place-5",
+                  "sku": "sku-3",
+                  "qty": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "move_stock",
+                "args": {
+                  "slip": "slip-6",
+                  "from_place": "from_place-2",
+                  "to_place": "to_place-7",
+                  "sku": "sku-3",
+                  "qty": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "stock_in",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "result": "refused",
+                    "reason": "insufficient_stock"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "warehouse",
+              "args": [
+                "from_place-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "warehouse",
+              "args": [
+                "to_place-5",
+                "sku-3"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "warehouse",
+              "args": [
+                "to_place-7",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "suppliers",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "stock_in",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "result": "refused",
+                    "reason": "insufficient_stock"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "move_stock",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "warehouse",
+              "args": [
+                "from_place-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "warehouse",
+              "args": [
+                "to_place-5",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "warehouse",
+              "args": [
+                "to_place-7",
+                "sku-3"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "suppliers",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of warehouse(from_place, sku) with to_main.do",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "to_main",
+                "args": {
+                  "slip": "slip-4",
+                  "from_place": "from_place-2",
+                  "sku": "sku-3",
+                  "qty": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "to_main",
+                "args": {
+                  "slip": "slip-5",
+                  "from_place": "from_place-2",
+                  "sku": "sku-3",
+                  "qty": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "stock_in",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "result": "refused",
+                    "reason": "insufficient_stock"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "warehouse",
+              "args": [
+                "from_place-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "warehouse",
+              "args": [
+                "main",
+                "sku-3"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "suppliers",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "stock_in",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "result": "refused",
+                    "reason": "insufficient_stock"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "to_main",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "warehouse",
+              "args": [
+                "from_place-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "warehouse",
+              "args": [
+                "main",
+                "sku-3"
+              ],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "suppliers",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "together: two callers take the last 1 of warehouse(place, sku) with stock_out.do",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "stock_in",
+          "args": {
+            "slip": "slip-1",
+            "place": "place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        },
+        {
+          "op": "together",
+          "callers": [
+            [
+              {
+                "op": "do",
+                "kind": "stock_out",
+                "args": {
+                  "slip": "slip-4",
+                  "place": "place-2",
+                  "sku": "sku-3",
+                  "qty": 1
+                }
+              }
+            ],
+            [
+              {
+                "op": "do",
+                "kind": "stock_out",
+                "args": {
+                  "slip": "slip-5",
+                  "place": "place-2",
+                  "sku": "sku-3",
+                  "qty": 1
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    "result": {
+      "outcomes": [
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "stock_in",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "result": "done"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "result": "refused",
+                    "reason": "insufficient_stock"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "warehouse",
+              "args": [
+                "place-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "suppliers",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "customers",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        },
+        {
+          "steps": [
+            {
+              "op": "do",
+              "kind": "stock_in",
+              "result": "done"
+            },
+            {
+              "op": "together",
+              "callers": [
+                [
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "result": "refused",
+                    "reason": "insufficient_stock"
+                  }
+                ],
+                [
+                  {
+                    "op": "do",
+                    "kind": "stock_out",
+                    "result": "done"
+                  }
+                ]
+              ]
+            }
+          ],
+          "accounts": [
+            {
+              "account": "warehouse",
+              "args": [
+                "place-2",
+                "sku-3"
+              ],
+              "posted": 0,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "suppliers",
+              "args": [],
+              "posted": -1,
+              "held_in": 0,
+              "held_out": 0
+            },
+            {
+              "account": "customers",
+              "args": [],
+              "posted": 1,
+              "held_in": 0,
+              "held_out": 0
+            }
+          ],
+          "holds": []
+        }
+      ]
+    }
+  },
+  {
+    "scenario": {
+      "name": "same_account: move_stock.do moves warehouse(from_place, sku) to warehouse(to_place, sku), the same account",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "args": {
+            "slip": "slip-1",
+            "from_place": "from_place-2",
+            "to_place": "from_place-2",
+            "sku": "sku-3",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "move_stock",
+          "result": "refused",
+          "reason": "same_account"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "from_place-2",
+            "sku-3"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  },
+  {
+    "scenario": {
+      "name": "same_account: to_main.do moves warehouse(from_place, sku) to warehouse(\"main\", sku), the same account",
+      "book": "to_itself",
+      "steps": [
+        {
+          "op": "do",
+          "kind": "to_main",
+          "args": {
+            "slip": "slip-1",
+            "from_place": "main",
+            "sku": "sku-2",
+            "qty": 1
+          }
+        }
+      ]
+    },
+    "result": {
+      "steps": [
+        {
+          "op": "do",
+          "kind": "to_main",
+          "result": "refused",
+          "reason": "same_account"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "warehouse",
+          "args": [
+            "main",
+            "sku-2"
+          ],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  }
+]

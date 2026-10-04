@@ -1,0 +1,35 @@
+# allocation: a transfer of three moves (put in the same account, then take out of it, in order), a literal amount, two moves in different units (an exchange), a unit of scale 2
+book allocation v1
+description "A marketplace splits a sale between the shop, the fee and the shipping, and pays out the shop's sales in dollars"
+
+unit JPY
+unit USD scale 2
+
+account buyers : JPY outside
+account fee_income : JPY outside
+account shipping : JPY outside
+account shop_sales(shop: string) : JPY
+  at least 0 refused as insufficient_sales
+account jpy_exchange : JPY outside
+account usd_exchange : USD outside
+account usd_account(shop: string) : USD
+  at least 0 refused as insufficient_usd
+account overseas_bank : USD outside
+account remittance_fee : USD outside
+
+transfer sale(order: string, shop: string, price: JPY, fee: JPY)
+  key order
+  move price from buyers to shop_sales(shop)
+  move fee from shop_sales(shop) to fee_income
+  move 100 from shop_sales(shop) to shipping
+
+transfer usd_payout(payout_id: string, shop: string, jpy_amount: JPY, usd_amount: USD)
+  description "the caller sets the rate of the exchange, and gives both the yen and the dollar amounts"
+  key payout_id
+  move jpy_amount from shop_sales(shop) to jpy_exchange
+  move usd_amount from usd_exchange to usd_account(shop)
+
+transfer usd_transfer(transfer_id: string, shop: string, amount: USD)
+  key transfer_id
+  move amount from usd_account(shop) to overseas_bank
+  move 1.50 from usd_account(shop) to remittance_fee

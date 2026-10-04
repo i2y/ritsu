@@ -380,11 +380,17 @@ fn too_long() {
     eprintln!("E061: a name too long for PostgreSQL stops the build");
 }
 
+/// The tests that stress a cluster (this one and its English twin) do not run at the same time: a
+/// client under REPEATABLE READ tries a serialization failure again only so many times, which is
+/// meant for the load of one run.
+static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn what_only_postgres_has() {
     if !need(Need::Postgres) {
         return;
     }
+    let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     too_long();
     let pg = match Postgres::start() {
         Ok(pg) => pg,
@@ -416,4 +422,332 @@ fn a_name_too_long_for_postgres_in_english() {
     assert_eq!(out.status.code(), Some(1), "{err}");
     assert!(err.contains("error[E061]") && err.contains("is 67 bytes long"), "{err}");
     assert_eq!(std::fs::read_dir(work.path()).unwrap().count(), 0, "nothing is written");
+}
+
+// ── The English twins: the same steps with the English books, whose names in SQL are ASCII ──
+
+/// move_stock between two warehouses, both ways at once, a hundred times each way in each of four
+/// sessions: the rows are locked in the order of their IDs, so no two calls wait on each other in
+/// a circle.
+fn no_deadlock_in_english(pg: &Postgres) {
+    let t = "'deadlock'";
+    pg.exec(&format!("select * from \"to_itself\".\"stock_in_do\"({t}, 'in-a', 'east', 's', 1000); select * from \"to_itself\".\"stock_in_do\"({t}, 'in-b', 'west', 's', 1000);"));
+    let scripts: Vec<String> = (0..4)
+        .map(|w| {
+            (0..100)
+                .map(|i| {
+                    let (from, to) = if w % 2 == 0 { ("east", "west") } else { ("west", "east") };
+                    format!("select result from \"to_itself\".\"move_stock_do\"({t}, 'w{w}-{i}', '{from}', '{to}', 's', 1);")
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .collect();
+    let started = Instant::now();
+    for (out, err) in at_once(pg, &scripts) {
+        assert!(err.is_empty(), "a session failed:\n{err}");
+        assert_eq!(out.lines().filter(|l| *l == "done").count(), 100, "{out}");
+    }
+    let east = pg.exec(&format!("select posted from \"to_itself\".\"balance_warehouse\"({t}, 'east', 's')"));
+    let west = pg.exec(&format!("select posted from \"to_itself\".\"balance_warehouse\"({t}, 'west', 's')"));
+    assert_eq!((east.trim(), west.trim()), ("1000", "1000"));
+    eprintln!("no deadlock: 400 moves between two accounts both ways at once, in {:.1} s", started.elapsed().as_secs_f64());
+}
+
+/// A write that does not go through the functions is stopped by the rows' checks.
+fn checks_stop_writes_in_english(pg: &Postgres) {
+    let t = "'check'";
+    pg.exec(&format!("select * from \"stock_reservation\".\"receive_do\"({t}, 'n-1', 'A', 3)"));
+    let out = pg.db().args(["-c", &format!("update \"stock_reservation\".accounts set held_out = posted + 1 where tenant = {t} and kind = 'stock'")]).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success() && err.contains("within_lower"), "{err}");
+    pg.exec("select * from \"wallet\".\"deposit_do\"('check', 'p-1', 'm', 5)");
+    let out = pg.db().args(["-c", "update \"wallet\".accounts set posted = 100001 where tenant = 'check' and kind = 'wallet'"]).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success() && err.contains("within_upper"), "{err}");
+    eprintln!("checks: a write past a bound that does not go through the functions is stopped");
+}
+
+/// A row made under other bounds is an error (CB001), not a refusal: the book changed under it.
+fn other_bounds_in_english(pg: &Postgres) {
+    let t = "'bounds'";
+    pg.exec(&format!("select * from \"stock_reservation\".\"receive_do\"({t}, 'n-1', 'A', 3)"));
+    pg.exec(&format!("update \"stock_reservation\".accounts set lower_bound = 2 where tenant = {t} and kind = 'stock'"));
+    let out = pg.db().args(["-v", "VERBOSITY=verbose", "-c", &format!("select * from \"stock_reservation\".\"reserve_hold\"({t}, 'o-1', 'A', 1)")]).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success() && err.contains("CB001"), "{err}");
+    eprintln!("bounds: a row made under other bounds stops the call with CB001");
+}
+
+/// expire() gives back what the holds past their expiry hold, says how many it ended, and the
+/// entries still add up to the balances.
+fn expire_in_english(pg: &Postgres) {
+    let t = "'expire'";
+    pg.exec(&format!(
+        "select * from \"stock_reservation\".\"receive_do\"({t}, 'n-1', 'A', 5); select * from \"stock_reservation\".\"reserve_hold\"({t}, 'o-1', 'A', 2); select * from \"stock_reservation\".\"reserve_hold\"({t}, 'o-2', 'A', 1); select * from \"stock_reservation\".\"reserve_hold\"({t}, 'o-3', 'A', 1); select * from \"stock_reservation\".\"reserve_void\"({t}, 'o-3', 'A');"
+    ));
+    let before = pg.exec(&format!("select held_out from \"stock_reservation\".\"balance_stock\"({t}, 'A')"));
+    assert_eq!(before.trim(), "3");
+    std::thread::sleep(Duration::from_secs(EXPIRY) + Duration::from_millis(300));
+    let status = pg.exec(&format!("select \"stock_reservation\".\"reserve_status\"({t}, 'o-1', 'A')"));
+    assert_eq!(status.trim(), "expired", "past its expiry, a hold is expired before expire() gives it back");
+    let still = pg.exec(&format!("select held_out from \"stock_reservation\".\"balance_stock\"({t}, 'A')"));
+    assert_eq!(still.trim(), "3", "PostgreSQL has no clock of its own: the hold is still counted");
+    let n: i64 = pg.exec("select \"stock_reservation\".expire()").trim().parse().unwrap();
+    assert!(n >= 2, "expire() ended {n} holds");
+    let after = pg.exec(&format!("select posted, held_in, held_out from \"stock_reservation\".\"balance_stock\"({t}, 'A')"));
+    assert_eq!(after.trim(), "5|0|0");
+    let states = pg.exec(&format!("select state from \"stock_reservation\".holds where tenant = {t} order by key->>0"));
+    assert_eq!(states.split_whitespace().collect::<Vec<_>>(), ["expired", "expired", "voided"]);
+    assert_eq!(pg.exec("select \"stock_reservation\".expire()").trim(), "0");
+    let off = pg.exec(&format!(
+        "select count(*) from \"stock_reservation\".accounts a, lateral (select coalesce(sum(d_posted), 0) p, coalesce(sum(d_held_in), 0) i, coalesce(sum(d_held_out), 0) o from \"stock_reservation\".entries e where e.tenant = a.tenant and e.account = a.id) x where a.tenant = {t} and (a.posted, a.held_in, a.held_out) is distinct from (x.p, x.i, x.o)"
+    ));
+    assert_eq!(off.trim(), "0");
+    eprintln!("expire(): {n} holds given back, the balances and the entries agree");
+}
+
+/// A client under REPEATABLE READ: four callers at once, fifty calls each, on the same two rows.
+/// PostgreSQL answers some with a serialization failure; the client tries them again, and every
+/// call ends done, as under READ COMMITTED.
+fn repeatable_read_in_english(pg: &Postgres, work: &Path) {
+    const WORKERS: usize = 4;
+    const CALLS: usize = 50;
+    let check = |tenant: &str, out: &str| {
+        let v: serde_json::Value = serde_json::from_str(out.trim()).unwrap_or_else(|e| panic!("{tenant}: {e}: {out}"));
+        let results = v["results"].as_array().unwrap();
+        assert_eq!(results.len(), WORKERS * CALLS, "{tenant}");
+        assert!(results.iter().all(|r| r == "done"), "{tenant}: {results:?}");
+        let conflicts = v["conflicts"].as_u64().unwrap();
+        let posted = pg.exec(&format!("select posted from \"stock_reservation\".\"balance_stock\"('{tenant}', 'A')"));
+        assert_eq!(posted.trim(), (WORKERS * CALLS).to_string(), "{tenant}");
+        eprintln!("repeatable read: {tenant}: {} calls done, {conflicts} serialization failure(s) tried again", WORKERS * CALLS);
+        conflicts
+    };
+    let conn = pg.connection();
+    let (host, port, user) = (conn["host"].as_str().unwrap().to_string(), conn["port"].to_string(), conn["user"].as_str().unwrap().to_string());
+    let mut conflicts = 0;
+
+    match node() {
+        Ok(()) => {
+            let dir = ts_dir(work).join("rr");
+            build_all(&cases_of(&["stock_reservation"]), Target::PostgresTypeScript, &dir);
+            let script = dir.join("rr.ts");
+            std::fs::write(
+                &script,
+                format!(
+                    r#"import pg from "pg";
+import {{ postgres }} from "./stock_reservation.ts";
+const pool = new pg.Pool({{ host: {host:?}, port: {port}, user: {user:?}, database: "postgres", max: {WORKERS} }});
+pool.on("connect", (c) => {{ c.query("set default_transaction_isolation = 'repeatable read'"); }});
+let conflicts = 0;
+const db = {{ query: async (text: string, values?: unknown[]) => {{ try {{ return await pool.query(text, values); }} catch (e) {{ if ((e as {{ code?: string }}).code === "40001") conflicts++; throw e; }} }} }};
+const book = postgres(db, {{ tenant: "rr-typescript" }});
+const results = await Promise.all(Array.from({{ length: {WORKERS} }}, async (_, w) => {{
+  const out: string[] = [];
+  for (let i = 0; i < {CALLS}; i++) out.push((await book.receive.do({{ delivery: `w${{w}}-${{i}}`, sku: "A", qty: 1n }})).result);
+  return out;
+}}));
+console.log(JSON.stringify({{ results: results.flat(), conflicts }}));
+await pool.end();
+"#
+                ),
+            )
+            .unwrap();
+            let out = Command::new("node").arg("--no-warnings").arg(&script).output().unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            conflicts += check("rr-typescript", &String::from_utf8_lossy(&out.stdout));
+        }
+        Err(why) => skip(&format!("{why}; the TypeScript client is not tried under REPEATABLE READ")),
+    }
+    match python() {
+        Ok(py) => {
+            let dir = work.join("rr-py");
+            let file = build_all(&cases_of(&["stock_reservation"]), Target::PostgresPython, &dir).remove(0);
+            let script = dir.join("rr.py");
+            std::fs::write(
+                &script,
+                format!(
+                    r#"import importlib.util, json, sys, threading
+import psycopg
+spec = importlib.util.spec_from_file_location("book", {file:?})
+mod = importlib.util.module_from_spec(spec)
+sys.modules["book"] = mod
+spec.loader.exec_module(mod)
+conflicts = 0
+lock = threading.Lock()
+
+class Counting:
+    def __init__(self, conn):
+        self.conn = conn
+    def cursor(self):
+        return CountingCursor(self.conn.cursor())
+
+class CountingCursor:
+    def __init__(self, cur):
+        self.cur = cur
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        self.cur.close()
+    def execute(self, sql, params):
+        global conflicts
+        try:
+            self.cur.execute(sql, params)
+        except psycopg.errors.SerializationFailure:
+            with lock:
+                conflicts += 1
+            raise
+    def fetchone(self):
+        return self.cur.fetchone()
+
+results = []
+def work(w):
+    conn = psycopg.connect(host={host:?}, port={port}, user={user:?}, dbname="postgres", autocommit=True, options="-c default_transaction_isolation=repeatable\\ read")
+    book = mod.postgres(Counting(conn), tenant="rr-python")
+    out = [book.receive.do(delivery=f"w{{w}}-{{i}}", sku="A", qty=1).result for i in range({CALLS})]
+    with lock:
+        results.extend(out)
+    conn.close()
+
+threads = [threading.Thread(target=work, args=(w,)) for w in range({WORKERS})]
+for t in threads: t.start()
+for t in threads: t.join()
+print(json.dumps({{"results": results, "conflicts": conflicts}}))
+"#,
+                    file = file.display().to_string()
+                ),
+            )
+            .unwrap();
+            let out = Command::new(py).arg(&script).output().unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            conflicts += check("rr-python", &String::from_utf8_lossy(&out.stdout));
+        }
+        Err(why) => skip(&format!("{why}; the Python client is not tried under REPEATABLE READ")),
+    }
+    match go() {
+        Ok(()) => {
+            let module = work.join("rr-go");
+            for f in ["go.mod", "go.sum"] {
+                std::fs::create_dir_all(&module).unwrap();
+                std::fs::copy(runner_dir().join("go").join(f), module.join(f)).unwrap();
+            }
+            let c = &cases_of(&["stock_reservation"])[0];
+            for (rel, text) in chobo::target::build(&c.copy, &c.stem, Target::PostgresGo).unwrap() {
+                let p = module.join("book").join(Path::new(&rel).file_name().unwrap());
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(p, text).unwrap();
+            }
+            std::fs::write(
+                module.join("main.go"),
+                format!(
+                    r#"package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sync"
+	"sync/atomic"
+
+	book "chobo-runner/book"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+var conflicts atomic.Int64
+
+type counting struct{{ p *pgxpool.Pool }}
+
+type row struct{{ r pgx.Row }}
+
+func (c counting) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {{
+	return row{{c.p.QueryRow(ctx, sql, args...)}}
+}}
+
+func (r row) Scan(dest ...any) error {{
+	err := r.r.Scan(dest...)
+	var e *pgconn.PgError
+	if errors.As(err, &e) && e.Code == "40001" {{
+		conflicts.Add(1)
+	}}
+	return err
+}}
+
+func main() {{
+	ctx := context.Background()
+	cfg, err := pgxpool.ParseConfig("host={host} port={port} user={user} dbname=postgres pool_max_conns={WORKERS}")
+	if err != nil {{
+		panic(err)
+	}}
+	cfg.ConnConfig.RuntimeParams["default_transaction_isolation"] = "repeatable read"
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {{
+		panic(err)
+	}}
+	defer pool.Close()
+	b := book.Postgres(counting{{pool}}, "rr-go")
+	var mu sync.Mutex
+	results := []string{{}}
+	var wg sync.WaitGroup
+	for w := range {WORKERS} {{
+		wg.Add(1)
+		go func() {{
+			defer wg.Done()
+			for i := range {CALLS} {{
+				r, err := b.Receive.Do(ctx, book.ReceiveArgs{{Delivery: fmt.Sprintf("w%d-%d", w, i), Sku: "A", Qty: 1}})
+				if err != nil {{
+					panic(err)
+				}}
+				mu.Lock()
+				results = append(results, r.Outcome)
+				mu.Unlock()
+			}}
+		}}()
+	}}
+	wg.Wait()
+	out, _ := json.Marshal(map[string]any{{"results": results, "conflicts": conflicts.Load()}})
+	fmt.Println(string(out))
+}}
+"#
+                ),
+            )
+            .unwrap();
+            let out = go_in(&module).args(["run", "-mod=readonly", "."]).output().unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            conflicts += check("rr-go", &String::from_utf8_lossy(&out.stdout));
+        }
+        Err(why) => skip(&format!("{why}; the Go client is not tried under REPEATABLE READ")),
+    }
+    if node().is_ok() || python().is_ok() || go().is_ok() {
+        assert!(conflicts > 0, "no call met a serialization failure: the clients' tries again were not tried");
+    }
+}
+
+/// The twin of `what_only_postgres_has`: the steps with the English books (the IDs of `ids` and the
+/// name too long are checked in English by `a_name_too_long_for_postgres_in_english` and by the
+/// IDs written in English in `ids`).
+#[test]
+fn what_only_postgres_has_in_english() {
+    if !need(Need::Postgres) {
+        return;
+    }
+    let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+    let pg = match Postgres::start() {
+        Ok(pg) => pg,
+        Err(why) => {
+            skip(&format!("{why}; what only PostgreSQL has is not tried"));
+            return;
+        }
+    };
+    let work = TempDir::new("postgres-only-en");
+    load_books(&pg, work.path());
+    no_deadlock_in_english(&pg);
+    checks_stop_writes_in_english(&pg);
+    other_bounds_in_english(&pg);
+    expire_in_english(&pg);
+    repeatable_read_in_english(&pg, work.path());
 }

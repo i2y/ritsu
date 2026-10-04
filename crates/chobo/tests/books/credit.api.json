@@ -1,0 +1,1343 @@
+{
+  "v": 1,
+  "book": "credit",
+  "version": 1,
+  "source_sha256": "6d51aa3f8fa5df5321bc46c44295c3b0c70054f68aa73341a7351f6d6b83be5d",
+  "units": [
+    {
+      "name": "JPY",
+      "scale": 0,
+      "ledger": 4003245802
+    }
+  ],
+  "accounts": [
+    {
+      "name": "credit",
+      "params": [
+        "member"
+      ],
+      "unit": "JPY",
+      "outside": false,
+      "lower": {
+        "value": -50000,
+        "refused_as": "over_the_credit_line"
+      },
+      "upper": {
+        "value": 10000,
+        "refused_as": "over_prepayment"
+      },
+      "description": null,
+      "code": 3161
+    },
+    {
+      "name": "shop",
+      "params": [],
+      "unit": "JPY",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 25326
+    },
+    {
+      "name": "bank",
+      "params": [],
+      "unit": "JPY",
+      "outside": true,
+      "lower": null,
+      "upper": null,
+      "description": null,
+      "code": 10393
+    }
+  ],
+  "transfers": [
+    {
+      "name": "pay_later",
+      "description": null,
+      "params": [
+        {
+          "name": "order",
+          "type": "string"
+        },
+        {
+          "name": "member",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "amount",
+          "unit": "JPY"
+        }
+      ],
+      "key": [
+        "order"
+      ],
+      "pending": {
+        "expires_after_seconds": 86400
+      },
+      "moves": [
+        {
+          "amount": {
+            "param": "amount"
+          },
+          "from": {
+            "account": "credit",
+            "args": [
+              {
+                "param": "member"
+              }
+            ]
+          },
+          "to": {
+            "account": "shop",
+            "args": []
+          }
+        }
+      ],
+      "code": 38514,
+      "definition": "27e695708122fc58fdb69a52b4151588",
+      "operations": {
+        "hold": {
+          "refusals": [
+            {
+              "name": "over_the_credit_line",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 50001
+                  },
+                  "result": "refused",
+                  "reason": "over_the_credit_line"
+                }
+              ],
+              "account": "credit",
+              "as_written": "credit(member)",
+              "bound": "at least -50000",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 50001
+                  },
+                  "result": "refused",
+                  "reason": "over_the_credit_line"
+                },
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 50001
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "order"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "member",
+                "operations": [
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "args": {
+                      "order": "order-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "args": {
+                      "order": "order-1",
+                      "member": "member-3",
+                      "amount": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "amount",
+                "operations": [
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "args": {
+                      "order": "order-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "args": {
+                      "order": "order-1",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "done_before",
+                "operations": [
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "args": {
+                      "order": "order-1",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "pass",
+                    "duration": "1 day"
+                  },
+                  {
+                    "op": "hold",
+                    "kind": "pay_later",
+                    "args": {
+                      "order": "order-1",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "done_before"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "post": {
+          "refusals": [
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "amounts": {
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_voided",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "refused",
+                  "reason": "already_voided"
+                }
+              ]
+            },
+            {
+              "name": "expired",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "pass",
+                  "duration": "1 day"
+                },
+                {
+                  "op": "post",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "refused",
+                  "reason": "expired"
+                }
+              ]
+            },
+            {
+              "name": "over_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "amounts": {
+                    "amount": 3
+                  },
+                  "result": "refused",
+                  "reason": "over_hold"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "post",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        },
+        "void": {
+          "refusals": [
+            {
+              "name": "already_posted",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "post",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "void",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "refused",
+                  "reason": "already_posted"
+                }
+              ]
+            },
+            {
+              "name": "expired",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "hold",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "pass",
+                  "duration": "1 day"
+                },
+                {
+                  "op": "void",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "refused",
+                  "reason": "expired"
+                }
+              ]
+            },
+            {
+              "name": "no_such_hold",
+              "because": "hold",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "void",
+                  "kind": "pay_later",
+                  "args": {
+                    "order": "order-1"
+                  },
+                  "result": "refused",
+                  "reason": "no_such_hold"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "repayment",
+      "description": null,
+      "params": [
+        {
+          "name": "repayment_id",
+          "type": "string"
+        },
+        {
+          "name": "member",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "amount",
+          "unit": "JPY"
+        }
+      ],
+      "key": [
+        "repayment_id"
+      ],
+      "pending": null,
+      "moves": [
+        {
+          "amount": {
+            "param": "amount"
+          },
+          "from": {
+            "account": "bank",
+            "args": []
+          },
+          "to": {
+            "account": "credit",
+            "args": [
+              {
+                "param": "member"
+              }
+            ]
+          }
+        }
+      ],
+      "code": 24627,
+      "definition": "0a33169731c463c2e3f7212fe1a437c2",
+      "operations": {
+        "do": {
+          "refusals": [
+            {
+              "name": "over_prepayment",
+              "because": "bound",
+              "spends_key": true,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "repayment",
+                  "args": {
+                    "repayment_id": "repayment_id-1",
+                    "member": "member-2",
+                    "amount": 10000
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "repayment",
+                  "args": {
+                    "repayment_id": "repayment_id-3",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "over_prepayment"
+                }
+              ],
+              "account": "credit",
+              "as_written": "credit(member)",
+              "bound": "at most 10000",
+              "move": 1
+            },
+            {
+              "name": "key_conflict",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "repayment",
+                  "args": {
+                    "repayment_id": "repayment_id-1",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "repayment",
+                  "args": {
+                    "repayment_id": "repayment_id-1",
+                    "member": "member-2",
+                    "amount": 2
+                  },
+                  "result": "refused",
+                  "reason": "key_conflict"
+                }
+              ]
+            },
+            {
+              "name": "already_refused",
+              "because": "key",
+              "spends_key": false,
+              "example": [
+                {
+                  "op": "do",
+                  "kind": "repayment",
+                  "args": {
+                    "repayment_id": "repayment_id-1",
+                    "member": "member-2",
+                    "amount": 10000
+                  },
+                  "result": "done"
+                },
+                {
+                  "op": "do",
+                  "kind": "repayment",
+                  "args": {
+                    "repayment_id": "repayment_id-3",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "over_prepayment"
+                },
+                {
+                  "op": "do",
+                  "kind": "repayment",
+                  "args": {
+                    "repayment_id": "repayment_id-3",
+                    "member": "member-2",
+                    "amount": 1
+                  },
+                  "result": "refused",
+                  "reason": "already_refused"
+                }
+              ]
+            }
+          ],
+          "key": {
+            "params": [
+              "repayment_id"
+            ],
+            "examples": [
+              {
+                "about": "key_conflict",
+                "param": "member",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "repayment",
+                    "args": {
+                      "repayment_id": "repayment_id-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "repayment",
+                    "args": {
+                      "repayment_id": "repayment_id-1",
+                      "member": "member-3",
+                      "amount": 1
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              },
+              {
+                "about": "key_conflict",
+                "param": "amount",
+                "operations": [
+                  {
+                    "op": "do",
+                    "kind": "repayment",
+                    "args": {
+                      "repayment_id": "repayment_id-1",
+                      "member": "member-2",
+                      "amount": 1
+                    },
+                    "result": "done"
+                  },
+                  {
+                    "op": "do",
+                    "kind": "repayment",
+                    "args": {
+                      "repayment_id": "repayment_id-1",
+                      "member": "member-2",
+                      "amount": 2
+                    },
+                    "result": "refused",
+                    "reason": "key_conflict"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "machines": [
+    {
+      "name": "pay_later",
+      "over": "pay_later",
+      "carry": {
+        "input": "state",
+        "output": "next_state",
+        "enum": "state"
+      },
+      "held": [],
+      "never": [],
+      "once": [],
+      "states": [
+        "held",
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "initial": "held",
+      "final": [
+        "posted",
+        "voided",
+        "expired"
+      ],
+      "events": [
+        "post",
+        "void",
+        "expire"
+      ],
+      "external": [
+        "expire"
+      ],
+      "certificate": {
+        "enums": {
+          "state": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "event": [
+            "post",
+            "void",
+            "expire"
+          ],
+          "reason": [
+            "none",
+            "already_posted",
+            "already_voided",
+            "expired"
+          ]
+        },
+        "types": {
+          "state": "state",
+          "event": "event",
+          "next_state": "state",
+          "refused": "bool",
+          "reason": "reason"
+        },
+        "machine": {
+          "table": "pay_later",
+          "carry": {
+            "input": "state",
+            "output": "next_state"
+          },
+          "axis": 1,
+          "states": [
+            "held",
+            "posted",
+            "voided",
+            "expired"
+          ],
+          "initial": 0,
+          "finals": [
+            1,
+            2,
+            3
+          ],
+          "rows": [
+            {
+              "row": 1,
+              "to": 1
+            },
+            {
+              "row": 2,
+              "to": 2
+            },
+            {
+              "row": 3,
+              "to": 3
+            },
+            {
+              "row": 4,
+              "stay": true
+            },
+            {
+              "row": 5,
+              "stay": true
+            },
+            {
+              "row": 6,
+              "stay": true
+            },
+            {
+              "row": 7,
+              "stay": true
+            },
+            {
+              "row": 8,
+              "stay": true
+            },
+            {
+              "row": 9,
+              "stay": true
+            }
+          ]
+        },
+        "tables": [
+          {
+            "table": "pay_later",
+            "policy": "first",
+            "axes": [
+              {
+                "column": "event",
+                "coords": [
+                  "post",
+                  "void",
+                  "expire"
+                ]
+              },
+              {
+                "column": "state",
+                "coords": [
+                  "held",
+                  "posted",
+                  "voided",
+                  "expired"
+                ]
+              }
+            ],
+            "decides": [
+              "next_state",
+              "refused",
+              "reason"
+            ],
+            "rows": [
+              {
+                "row": 1,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "posted",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 2,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "voided",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 3,
+                "accepts": [
+                  [
+                    2
+                  ],
+                  [
+                    0
+                  ]
+                ],
+                "produces": [
+                  "expired",
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 4,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 5,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    1
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_posted"
+                ]
+              },
+              {
+                "row": 6,
+                "accepts": [
+                  [
+                    0
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "already_voided"
+                ]
+              },
+              {
+                "row": 7,
+                "accepts": [
+                  [
+                    1
+                  ],
+                  [
+                    2
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              },
+              {
+                "row": 8,
+                "accepts": [
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    3
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "true",
+                  "expired"
+                ]
+              },
+              {
+                "row": 9,
+                "accepts": [
+                  [
+                    2
+                  ],
+                  [
+                    1,
+                    2,
+                    3
+                  ]
+                ],
+                "produces": [
+                  null,
+                  "false",
+                  "none"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "ids": {
+    "hash": "sha256",
+    "parts": "each part as the 32-bit big-endian length of its UTF-8, then the UTF-8; the first part is \"chobo/1\"",
+    "id": "the first 16 bytes of the hash, as a big-endian 128-bit integer; 0 becomes 1 and 2^128 - 1 becomes 2^128 - 2",
+    "ledger": "the first 4 bytes, big-endian; 0 becomes 1",
+    "code": "the first 2 bytes, big-endian; 0 becomes 1",
+    "roles": {
+      "account": [
+        "book",
+        "tenant",
+        "account kind",
+        "the argument values, in the order of the parameters"
+      ],
+      "floor": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "room": [
+        "the account's id, as 32 lowercase hex digits"
+      ],
+      "sink": [
+        "book",
+        "tenant",
+        "unit"
+      ],
+      "opening": [
+        "the floor or room account's id, as 32 lowercase hex digits"
+      ],
+      "kind": [
+        "book",
+        "tenant",
+        "account kind"
+      ],
+      "transfer": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "the key values, in the order of the key",
+        "the place in the chain, from 0, in decimal"
+      ],
+      "content": [
+        "book",
+        "tenant",
+        "transfer kind",
+        "operation",
+        "definition",
+        "the content as JSON without spaces"
+      ],
+      "definition": [
+        "the transfer kind written the one way",
+        "each account kind its moves touch, written the one way"
+      ],
+      "ledger": [
+        "unit",
+        "scale, in decimal"
+      ],
+      "code": [
+        "book",
+        "account, transfer or sink",
+        "the kind's name, or the unit's for a sink"
+      ]
+    }
+  },
+  "targets": {
+    "postgres": {
+      "schema": "credit",
+      "functions": [
+        {
+          "kind": "pay_later",
+          "op": "hold",
+          "name": "pay_later_hold",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_member",
+            "p_amount"
+          ]
+        },
+        {
+          "kind": "pay_later",
+          "op": "post",
+          "name": "pay_later_post",
+          "params": [
+            "p_tenant",
+            "p_order",
+            "p_amount"
+          ],
+          "default_null": [
+            "p_amount"
+          ]
+        },
+        {
+          "kind": "pay_later",
+          "op": "void",
+          "name": "pay_later_void",
+          "params": [
+            "p_tenant",
+            "p_order"
+          ]
+        },
+        {
+          "kind": "pay_later",
+          "op": "status",
+          "name": "pay_later_status",
+          "params": [
+            "p_tenant",
+            "p_order"
+          ]
+        },
+        {
+          "kind": "repayment",
+          "op": "do",
+          "name": "repayment_do",
+          "params": [
+            "p_tenant",
+            "p_repayment_id",
+            "p_member",
+            "p_amount"
+          ]
+        }
+      ],
+      "balances": [
+        {
+          "account": "credit",
+          "name": "balance_credit",
+          "params": [
+            "p_tenant",
+            "p_member"
+          ]
+        },
+        {
+          "account": "shop",
+          "name": "balance_shop",
+          "params": [
+            "p_tenant"
+          ]
+        },
+        {
+          "account": "bank",
+          "name": "balance_bank",
+          "params": [
+            "p_tenant"
+          ]
+        }
+      ],
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "credit.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "pay_later",
+          "member": "pay_later",
+          "args": "pay_laterArgs",
+          "key": "pay_laterKey",
+          "amounts": "pay_laterAmounts"
+        },
+        {
+          "kind": "repayment",
+          "member": "repayment",
+          "args": "repaymentArgs"
+        }
+      ],
+      "balance": "balance"
+    },
+    "python": {
+      "module": "credit",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle"
+      },
+      "transfers": [
+        {
+          "kind": "pay_later",
+          "member": "pay_later",
+          "params": {
+            "order": "order",
+            "member": "member",
+            "amount": "amount"
+          }
+        },
+        {
+          "kind": "repayment",
+          "member": "repayment",
+          "params": {
+            "repayment_id": "repayment_id",
+            "member": "member",
+            "amount": "amount"
+          }
+        }
+      ],
+      "balance": "balance"
+    },
+    "go": {
+      "package": "credit",
+      "factories": {
+        "postgres": "Postgres",
+        "tigerbeetle": "TigerBeetle"
+      },
+      "transfers": [
+        {
+          "kind": "pay_later",
+          "member": "Pay_later",
+          "args": "Pay_laterArgs",
+          "fields": {
+            "order": "Order",
+            "member": "Member",
+            "amount": "Amount"
+          },
+          "key": "Pay_laterKey",
+          "amounts": "Pay_laterAmounts"
+        },
+        {
+          "kind": "repayment",
+          "member": "Repayment",
+          "args": "RepaymentArgs",
+          "fields": {
+            "repayment_id": "Repayment_id",
+            "member": "Member",
+            "amount": "Amount"
+          }
+        }
+      ],
+      "balances": [
+        {
+          "account": "credit",
+          "method": "Credit",
+          "args": "CreditAccount",
+          "fields": {
+            "member": "Member"
+          }
+        },
+        {
+          "account": "shop",
+          "method": "Shop"
+        },
+        {
+          "account": "bank",
+          "method": "Bank"
+        }
+      ]
+    },
+    "tigerbeetle": {
+      "request_max": 253,
+      "chains": [
+        {
+          "kind": "pay_later",
+          "op": "hold",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "floor_out"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        },
+        {
+          "kind": "pay_later",
+          "op": "post",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "floor_out"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        },
+        {
+          "kind": "pay_later",
+          "op": "void",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "floor_out"
+            },
+            {
+              "move": 1,
+              "role": "room_back"
+            }
+          ]
+        },
+        {
+          "kind": "repayment",
+          "op": "do",
+          "transfers": [
+            {
+              "move": 1,
+              "role": "main"
+            },
+            {
+              "move": 1,
+              "role": "room_in"
+            },
+            {
+              "move": 1,
+              "role": "floor_back"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
