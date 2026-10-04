@@ -192,14 +192,22 @@ fn entry(tool: &str, f: &Finding) -> Json {
     Json::Obj(o)
 }
 
-fn refuse(msg: Text, lang: Lang) -> u8 {
+fn refuse(msg: Text, lang: Lang, err: &mut dyn Write) -> u8 {
     let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    eprintln!("{head}: {}", msg.get(lang));
+    let _ = writeln!(err, "{head}: {}", msg.get(lang));
     2
 }
 
 /// `ritsu check [<path>...] [--root <dir>] [--format json]`: the exit code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
+    let code = run(args, lang, &mut std::io::stdout(), &mut std::io::stderr());
+    let _ = std::io::stdout().flush();
+    code
+}
+
+/// [`command`], writing what it prints to `out` and `err`: what the binary runs, and the page in
+/// the browser on the files it holds in memory (ritsu-wasm).
+pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let table = cli::table();
     let cmd = table.command("check").expect("check is in the table");
     // `--lang` anywhere on the line is ritsu's, decided before anything is said
@@ -207,15 +215,15 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     let lang = if asked.is_some() { Lang::pick(asked.as_deref(), "RITSU_LANG") } else { lang };
     let a = match table.parse(cmd, args) {
         Ok(a) => a,
-        Err(e) => return refuse(e, lang),
+        Err(e) => return refuse(e, lang, err),
     };
     if a.has("--help") {
-        print!("{}", table.help_cmd(cmd, lang));
+        let _ = write!(out, "{}", table.help_cmd(cmd, lang));
         return 0;
     }
     let project = match Project::load(&a.pos, a.get("--root")) {
         Ok(p) => p,
-        Err(e) => return refuse(e, lang),
+        Err(e) => return refuse(e, lang, err),
     };
     // a spec's claims start process groups; a signal stops them before ritsu goes
     if project.files.iter().any(|f| f.tool == Tool::Geas) {
@@ -225,12 +233,10 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     let units = project.check(&joined, lang);
     let crossed = ritsu_cross::check(&project, &joined, lang);
     let report = Report { project: &project, units, ours: crossed.findings, borders: crossed.borders };
-    let mut out = std::io::stdout();
     if a.get("--format") == Some("json") {
         let _ = writeln!(out, "{}", report.json().pretty());
     } else {
         let _ = write!(out, "{}", report.text(lang));
     }
-    let _ = out.flush();
     report.code()
 }

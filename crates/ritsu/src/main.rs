@@ -6,10 +6,7 @@
 //! (DESIGN 2.3). Called by a language's name (a link named `rulec`), ritsu is that command
 //! (DESIGN 2.3, 8.2). `ritsu run` and `ritsu gen` come later in stage E, `ritsu lsp` in F.
 
-mod check;
-mod cli;
-mod explain;
-
+use ritsu::{check, cli, explain};
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
 use ritsu_project::Joined;
