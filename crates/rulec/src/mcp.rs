@@ -278,6 +278,14 @@ fn tools_call(cmds: &[Cmd], params: Option<&Json>, limit: std::time::Duration) -
     }
     let exe = std::env::current_exe().map_err(|e| (-32603, format!("cannot find rulec itself: {e}")))?;
     let mut cmd = std::process::Command::new(exe);
+    // Run as `rulec` whatever the file is: ritsu's one binary is rulec when it is called by that
+    // name (ritsu's DESIGN 2.3), and the file `current_exe` names is the binary under its own
+    // name, not the link it was started through.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.arg0("rulec");
+    }
     cmd.args(&argv);
     let ran = run_limited(cmd, limit).map_err(|e| (-32603, format!("cannot run rulec: {e}")))?;
     let mut body = String::from_utf8_lossy(&ran.stdout).into_owned();
