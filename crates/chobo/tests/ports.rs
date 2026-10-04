@@ -215,3 +215,22 @@ fn a_call_that_does_not_fit_the_english_book_is_said_so() {
     assert!(matches!(Engine.refusals(&root().join("tests/books/stock_reservation.book"), &t.name, (-10, 0)).unwrap(), ritsu_ports::Found::Undecided(_)));
     assert!(Engine.refusals(&root().join("tests/books/stock_reservation.book"), "nothing", (1, 10)).is_err());
 }
+
+/// The refusals of a transfer that holds, with every amount held to a range that ends below what a
+/// hold needs to be partly posted (2): the witness gives up on that hold rather than look for an
+/// amount the range never reaches, and the answer comes at once (a hold of exactly 1 used to keep
+/// `ritsu check` from ending).
+#[test]
+fn refusals_with_amounts_held_below_a_partial_post_come_at_once() {
+    let book = root().join("tests/books/stock_reservation.book");
+    let f = Engine.facts(&book).unwrap();
+    let t = f.transfers.iter().find(|t| t.name == "reserve").expect("stock_reservation.book holds with reserve").clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(Engine.refusals(&book, &t.name, (1, 1)).map(|f| matches!(f, ritsu_ports::Found::Value(_))));
+    });
+    match rx.recv_timeout(std::time::Duration::from_secs(60)) {
+        Ok(answer) => assert_eq!(answer.ok(), Some(true), "the refusals of reserve with every amount 1"),
+        Err(_) => panic!("the refusals of reserve with every amount 1 did not come within 60 seconds"),
+    }
+}

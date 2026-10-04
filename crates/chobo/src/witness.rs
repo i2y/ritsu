@@ -248,6 +248,10 @@ impl<'b> Builder<'b> {
     pub fn passing_call(&mut self, k: usize, fixed: &BTreeMap<usize, Val>, min: i128) -> Option<Call> {
         let t = &self.book.transfers[k];
         let free: Vec<usize> = t.amount_params().into_iter().filter(|p| !fixed.contains_key(p)).collect();
+        // amounts held to a range that ends below `min` give no such call: no fresh amount reaches it
+        if !free.is_empty() && held_to().is_some_and(|(_, hi)| hi < min) {
+            return None;
+        }
         let mut fixed1 = fixed.clone();
         for p in &free {
             let mut v = self.fresh_amount();
