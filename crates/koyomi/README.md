@@ -150,14 +150,23 @@ error gets none.
 
 ## Install
 
+koyomi is one of the languages of [ritsu](https://github.com/i2y/ritsu), and is built from its
+repository with a recent stable Rust. To have all seven, and `ritsu check` for a project that
+holds the files of more than one:
+
 ```console
-$ git clone https://github.com/i2y/koyomi
-$ cd koyomi
-$ cargo install --path .
+$ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 ```
 
-koyomi builds with a recent stable Rust, and its one dependency is serde_json. `koyomi source
-fetch` and `koyomi source outdated` call `curl`.
+`ritsu koyomi <command>` is then every command below, and a link to `ritsu` named `koyomi` does the
+same. To have koyomi alone, which reads no other language:
+
+```console
+$ cargo install --git https://github.com/i2y/ritsu --locked koyomi
+```
+
+koyomi's one dependency is serde_json. `koyomi source fetch` and `koyomi source outdated` call
+`curl`.
 
 ## Commands
 

@@ -1,7 +1,7 @@
 ---
 name: chobo
 description: Write, check and build chobo books (`.book` files), a small language for the things counted and moved between accounts (stock, money, points, seats), whose only conditions are the lower and upper bounds of accounts, each kept in one write on PostgreSQL or TigerBeetle. Use when stock has to be reserved without selling more than there is, a wallet or points kept from going below 0, refunds kept within the sale, a payment split between parties all or none, or a hold that must be posted or voided; when a chobo diagnostic (E001-E061, W101-W107) has to be fixed; when a book has to be shown to the people who keep the accounts; or when a book has to be built for PostgreSQL or TigerBeetle and its client (TypeScript, Python or Go) called.
-compatibility: Requires the `chobo` binary on PATH (`cargo install --path .` in a clone of https://github.com/i2y/chobo). The code it builds needs PostgreSQL, or TigerBeetle with its official client 0.17.9, in the program that calls it.
+compatibility: Requires the `chobo` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked chobo`, or `ritsu` in its place for all seven languages, where it is run as `ritsu chobo …`). The code it builds needs PostgreSQL, or TigerBeetle with its official client 0.17.9, in the program that calls it.
 license: MIT OR Apache-2.0
 ---
 

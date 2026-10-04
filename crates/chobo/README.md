@@ -164,13 +164,22 @@ book), and the fix for each diagnostic. Copy it into `~/.claude/skills/`, or int
 
 ## Install
 
+chobo is one of the languages of [ritsu](https://github.com/i2y/ritsu), and is built from its
+repository with a recent stable Rust. To have all seven, and `ritsu check` for a project that
+holds the files of more than one:
+
 ```console
-$ git clone https://github.com/i2y/chobo
-$ cd chobo
-$ cargo install --path .
+$ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 ```
 
-chobo builds with a recent stable Rust, and its one dependency is serde_json.
+`ritsu chobo <command>` is then every command below, and a link to `ritsu` named `chobo` does the
+same. To have chobo alone, which reads no other language:
+
+```console
+$ cargo install --git https://github.com/i2y/ritsu --locked chobo
+```
+
+chobo's one dependency is serde_json.
 
 ## Commands
 

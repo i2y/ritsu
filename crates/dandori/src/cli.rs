@@ -37,7 +37,7 @@ fn exits(done: ritsu_base::text::Text) -> Vec<(u8, ritsu_base::text::Text)> {
     vec![
         (0, done),
         (1, tr!("エラーがある", "errors found")),
-        (2, tr!("引数が正しくないか、ファイルが読めない。規則を使うフローを、規則を読めないこの dandori で走らせた（E018）", "bad arguments, or a file that cannot be read; a flow that uses rules, run with this dandori, which reads none (E018)")),
+        (2, tr!("引数が正しくないか、ファイルが読めない。規則、日付のファイル、帳簿を使うフローを、それらを読めないこの dandori で走らせた（E018）", "bad arguments, or a file that cannot be read; a flow that uses rules, dates files or books, run with this dandori, which reads none of them (E018)")),
     ]
 }
 
@@ -159,12 +159,12 @@ pub fn table() -> Table {
                 "Every command takes --lang ja|en (default en; the DANDORI_LANG or RITSU_LANG environment variable works too)."
             ),
             tr!(
-                "規則を使うワークフローは `ritsu dandori` で走らせます。規則を同じプロセスの中で読みます。",
-                "A workflow that uses rules runs as `ritsu dandori`, which reads the rules in the same process."
+                "規則、日付のファイル、帳簿（`use rule`、`use dates`、`use book`）を使うワークフローは `ritsu dandori` で走らせます。それらを同じプロセスの中で読みます。",
+                "A workflow that uses rules, dates files or books (`use rule`, `use dates`, `use book`) runs as `ritsu dandori`, which reads them in the same process."
             ),
             tr!(
-                "exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル、規則を読めないこの dandori で規則を使うフロー（E018）",
-                "Exit codes: 0 notes only / 1 errors found / 2 bad arguments or an unreadable file, or a flow that uses rules run with this dandori, which reads none (E018)"
+                "exit code: 0 エラーなし / 1 エラーあり / 2 引数の誤りか、読めないファイル、規則、日付のファイル、帳簿を読めないこの dandori で、それらを使うフロー（E018）",
+                "Exit codes: 0 notes only / 1 errors found / 2 bad arguments or an unreadable file, or a flow that uses rules, dates files or books run with this dandori, which reads none of them (E018)"
             ),
         ],
         reading: Reading::default(),

@@ -1,7 +1,7 @@
 ---
 name: koyomi
 description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust and PostgreSQL. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W101-W202) has to be fixed; when such a rule has to be shown to the person who approves it; or when its generated code has to be called.
-compatibility: Requires the `koyomi` binary on PATH (`cargo install --path .` in a clone of https://github.com/i2y/koyomi). `koyomi source fetch` and `koyomi source outdated` also need `curl`.
+compatibility: Requires the `koyomi` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked koyomi`, or `ritsu` in its place for all seven languages, where it is run as `ritsu koyomi …`). `koyomi source fetch` and `koyomi source outdated` also need `curl`.
 license: MIT OR Apache-2.0
 ---
 

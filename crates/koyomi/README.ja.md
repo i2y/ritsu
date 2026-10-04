@@ -135,13 +135,19 @@ koyomi は、[rulec](https://github.com/i2y/rulec)（業務ルールのための
 
 ## インストール
 
+koyomi は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。七つの言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです。
+
 ```console
-$ git clone https://github.com/i2y/koyomi
-$ cd koyomi
-$ cargo install --path .
+$ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 ```
 
-最近の stable の Rust でビルドでき、依存は serde_json だけです。`koyomi source fetch` と `koyomi source outdated` は `curl` を呼びます。
+これで `ritsu koyomi <コマンド>` が、下のコマンドのどれにもなります（`koyomi` という名前で `ritsu` を指すリンクでも同じです）。ほかの言語を読まない koyomi だけを入れるなら、次のとおりです。
+
+```console
+$ cargo install --git https://github.com/i2y/ritsu --locked koyomi
+```
+
+依存は serde_json だけです。`koyomi source fetch` と `koyomi source outdated` は `curl` を呼びます。
 
 ## コマンド
 

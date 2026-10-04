@@ -56,14 +56,16 @@ impl Flag {
 /// `--lang ja|en`, whose help names the variables read without it, in the order
 /// [`crate::text::Lang::pick`] reads them: the tool's own (`KOYOMI_LANG`), then `RITSU_LANG`.
 pub fn lang_flag(var: &str) -> Flag {
-    flag(
-        "--lang",
-        Some("ja|en"),
+    // ritsu's own command reads RITSU_LANG alone, and says it once
+    let what = if var == "RITSU_LANG" {
+        tr!("文面の言語。無ければ環境変数 RITSU_LANG、それも無ければ en", "the language of the text; else the RITSU_LANG environment variable, else en")
+    } else {
         tr!(
             "文面の言語。無ければ環境変数 {var}、次に RITSU_LANG、どちらも無ければ en",
             "the language of the text; else the {var} environment variable, then RITSU_LANG, else en"
-        ),
-    )
+        )
+    };
+    flag("--lang", Some("ja|en"), what)
     .choices(&["ja", "en"])
     .default("en")
 }

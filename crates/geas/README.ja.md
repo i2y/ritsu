@@ -294,13 +294,19 @@ geas のスキルを .claude/skills/geas に書きました（ファイル 7 個
 
 ## インストール
 
+geas は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。七つの言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです（`.geas` のファイルの主張は、`geas check` と同じように実行されます）。
+
 ```console
-$ git clone https://github.com/i2y/geas
-$ cd geas
-$ cargo install --path .
+$ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 ```
 
-最近の stable の Rust でビルドでき、依存はありません。geas が起動するのは、主張に要るもの、つまりプロジェクト自身のプログラムと、ページなら Chrome か Chromium、`geas map` なら上の表にある各言語のツールだけです。
+これで `ritsu geas <コマンド>` が、下のコマンドのどれにもなります（`geas` という名前で `ritsu` を指すリンクでも同じです）。ほかの言語を読まない geas だけを入れるなら、次のとおりです。
+
+```console
+$ cargo install --git https://github.com/i2y/ritsu --locked geas
+```
+
+依存はありません。geas が起動するのは、主張に要るもの、つまりプロジェクト自身のプログラムと、ページなら Chrome か Chromium、`geas map` なら上の表にある各言語のツールだけです。
 
 ## コマンド
 

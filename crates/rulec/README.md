@@ -201,9 +201,21 @@ $ rulec --version
 rulec 0.22.1
 ```
 
-Or from source, with a recent stable Rust: `cargo install --path .` fetches nothing, because
-there are no dependencies. In CI, `uses: i2y/rulec@v0.22.1` does the download and the check
-([In CI](#in-ci)).
+Homebrew, the `.deb` and `.rpm`, the release archives and the action below are still rulec's own
+releases. rulec is now one of the languages of [ritsu](https://github.com/i2y/ritsu), whose first
+release continues rulec's numbering (0.23.0) and will take over what is handed out here.
+
+Or from source, with a recent stable Rust, from ritsu's repository:
+
+```console
+$ cargo install --git https://github.com/i2y/ritsu --locked rulec
+```
+
+That builds rulec alone, which needs no other language and fetches nothing, because there are no
+dependencies. With the package `ritsu` in its place, you have `ritsu` and every language of it, and
+`ritsu rulec <command>` is every command below; a rule over the days of a koyomi date
+(`range from koyomi`) is checked by `ritsu rulec check`. In CI, `uses: i2y/rulec@v0.22.1` does the
+download and the check ([In CI](#in-ci)).
 
 ## Using it
 

@@ -1,7 +1,7 @@
 ---
 name: dandori
 description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents, TypeSafe's Jev, koyomi's dates, chobo's books and code of your own, checked before they run and built for Temporal (TypeScript, Python or Go), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W032, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
-compatibility: Requires the `dandori` binary on PATH (`cargo install --path .` in a clone of https://github.com/i2y/dandori). A workflow that uses rules (`use rule`) also needs `rulec` (`brew install i2y/tap/rulec`); one that uses dates (`use dates`) or books (`use book`) runs as `ritsu dandori`, which reads them with koyomi and chobo.
+compatibility: Requires the `dandori` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked dandori`). A workflow that uses rules (`use rule`), dates (`use dates`) or books (`use book`) runs as `ritsu dandori`, which reads them with rulec, koyomi and chobo in the same process (the package `ritsu` in the command above installs it).
 license: MIT OR Apache-2.0
 ---
 
@@ -400,8 +400,9 @@ checker looks at.
 - `--lang ja`, or `DANDORI_LANG=ja`, gives the messages in Japanese.
 - `dandori explain --all --format json` prints every code as `[{"code", "severity", "title",
   "when", "fix", "repro", "related"}]`, where `repro` holds the files of the smallest example.
-- A workflow that uses rules runs as `ritsu dandori <command>`, which reads the rules in the same
-  process; the `dandori` binary alone reads no rule.
+- A workflow that uses rules, dates files or books (`use rule`, `use dates`, `use book`) runs as
+  `ritsu dandori <command>`, which reads them in the same process; the `dandori` binary alone reads
+  none of them.
 
 ## 6. Platforms
 

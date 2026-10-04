@@ -38,14 +38,14 @@ fn ritsu_dandori_reads_the_rules_of_a_flow() {
     assert_eq!(code, 0, "{err}");
 }
 
-/// The words after `dandori` are dandori's, and its help says that a workflow that uses rules runs
-/// here.
+/// The words after `dandori` are dandori's, and its help says that a workflow that uses rules, dates
+/// files or books runs here.
 #[test]
 fn the_words_after_dandori_are_dandori_s() {
     let (code, out, _) = ritsu(&["dandori", "--version"]);
     assert!(code == 0 && out.starts_with("dandori ") && out.lines().count() == 1, "{out}");
     let (code, out, _) = ritsu(&["dandori", "--help"]);
-    assert!(code == 0 && out.contains("A workflow that uses rules runs as `ritsu dandori`"), "{out}");
+    assert!(code == 0 && out.contains("A workflow that uses rules, dates files or books (`use rule`, `use dates`, `use book`) runs as `ritsu dandori`"), "{out}");
 }
 
 /// A flow that reads a dates file of koyomi's and a book of chobo's (dandori's `examples/invoice`,

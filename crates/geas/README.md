@@ -356,13 +356,22 @@ The same folder is [skills/geas](skills/geas); [skills/README.md](skills/README.
 
 ## Install
 
+geas is one of the languages of [ritsu](https://github.com/i2y/ritsu), and is built from its
+repository with a recent stable Rust. To have all seven, and `ritsu check` for a project that
+holds the files of more than one (it runs the claims of a `.geas` file as `geas check` does):
+
 ```console
-$ git clone https://github.com/i2y/geas
-$ cd geas
-$ cargo install --path .
+$ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 ```
 
-geas builds with a recent stable Rust and has no dependencies. What it starts is what the claims
+`ritsu geas <command>` is then every command below, and a link to `ritsu` named `geas` does the
+same. To have geas alone, which reads no other language:
+
+```console
+$ cargo install --git https://github.com/i2y/ritsu --locked geas
+```
+
+geas has no dependencies. What it starts is what the claims
 need: the project's own programs, Chrome or Chromium for pages, and, for `geas map`, the toolchains
 of the table above.
 

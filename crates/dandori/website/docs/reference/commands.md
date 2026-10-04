@@ -11,8 +11,9 @@ dandori <command> --help
 dandori --version
 ```
 
-A workflow that uses rules runs as `ritsu dandori <command>`, which reads the rules in the same
-process ([Install](../install.md)); the `dandori` command alone checks and builds a workflow without rules.
+A workflow that uses rules, dates files or books (`use rule`, `use dates`, `use book`) runs as
+`ritsu dandori <command>`, which reads them in the same process ([Install](../install.md)); the
+`dandori` command alone checks and builds a workflow that uses none of them.
 
 | Command | What it does |
 |---|---|

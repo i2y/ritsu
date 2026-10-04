@@ -93,23 +93,22 @@ it. Every loop has a bound, so a run's history has one too.
 
 ## Install
 
-dandori is one of the languages of [ritsu](https://github.com/i2y/ritsu), and is built in its
-workspace:
+dandori is one of the languages of [ritsu](https://github.com/i2y/ritsu), and is built from its
+repository with a recent stable Rust:
 
 ```console
-$ git clone https://github.com/i2y/ritsu
-$ cd ritsu
-$ cargo install --path crates/ritsu
+$ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 ```
 
 `ritsu dandori <command>` runs dandori with the rules a workflow uses (`use rule`) read by rulec, and
-its dates files and books (`use dates`, `use book`) read by koyomi and chobo, in the same process. `rulec gen` writes the code of each rule, and a Connect service for it that a
-workflow can call instead; install rulec from the same workspace with `cargo install --path
-crates/rulec`. `cargo install --path crates/dandori` installs the `dandori` command alone: it checks
-and builds a workflow without rules as `ritsu dandori` does, and tells you to run one that uses rules
-with `ritsu dandori`. dandori builds with a recent stable Rust, and its one outside dependency is
-serde_json. A workflow without rules has no cases, since a case follows a rule's state machine, and
-its branches can only match what its tasks answer.
+its dates files and books (`use dates`, `use book`) read by koyomi and chobo, in the same process.
+`rulec gen` writes the code of each rule, and a Connect service for it that a workflow can call
+instead; the package `rulec` in place of `ritsu` installs rulec alone, and the package `dandori`
+installs the `dandori` command alone: it checks and builds a workflow that uses no rules, dates
+files or books as `ritsu dandori` does, and tells you to run one that uses them with
+`ritsu dandori`. dandori's one outside dependency is serde_json. A workflow without rules has no
+cases, since a case follows a rule's state machine, and its branches can only match what its tasks
+answer.
 
 ## For AI agents
 
@@ -131,10 +130,10 @@ dandori <command> --help
 dandori --version
 ```
 
-For a workflow that uses rules, run each as `ritsu dandori <command>`; then `build`, `run`,
-`scenarios` and `doc` also check, when the workflow runs, a rule's precondition that `ritsu check`
-cannot decide where the flow calls the rule (its W201): as soon as the values are made, a run whose
-values break it fails with `Dandori.BrokenPrecondition`. `dandori <command> --help`
+For a workflow that uses rules, dates files or books, run each as `ritsu dandori <command>`; then
+`build`, `run`, `scenarios` and `doc` also check, when the workflow runs, a rule's precondition that
+`ritsu check` cannot decide where the flow calls the rule (its W201): as soon as the values are
+made, a run whose values break it fails with `Dandori.BrokenPrecondition`. `dandori <command> --help`
 prints what one command takes, and what its exit codes mean; `dandori explain E014` says when a
 diagnostic comes, how to fix it, and the smallest `.flow` that gets it. `--lang ja`
 prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`). `build` refuses what its platform cannot do (E050),
