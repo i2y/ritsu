@@ -132,14 +132,14 @@ fn the_binary_of_this_crate_reads_no_other_language() {
     assert_eq!(r.code, 2);
     assert_eq!(
         r.stdout,
-        "error[E206]: ./t.req:8:16: this yuen cannot read koyomi artifacts: koyomi \"a.cal\" date 翌日\n     8 |   satisfied by koyomi \"a.cal\" date 翌日\n  = The binary of yuen's own crate holds no other language; run it with every language joined, through ritsu: `ritsu yuen check . --root .`.\n.: 1 error\n"
+        "error[E206]: t.req:8:16: this yuen cannot read koyomi artifacts: koyomi \"a.cal\" date 翌日\n     8 |   satisfied by koyomi \"a.cal\" date 翌日\n  = The binary of yuen's own crate holds no other language; run it with every language joined, through ritsu: `ritsu yuen check . --root .`.\n.: 1 error\n"
     );
     let ja = common::yuen(t.path(), &["check", ".", "--root", ".", "--lang", "ja"]);
     assert!(ja.stdout.contains("すべての言語をつないだ ritsu で、`ritsu yuen check . --root . --lang ja`"), "{}", ja.stdout);
     // the commands built on the check say the same, on standard error, with exit 2
     let api = common::yuen(t.path(), &["api", ".", "--root", "."]);
     assert_eq!(api.code, 2);
-    assert!(api.stderr.starts_with("error[E206]: ./t.req:8:16: "), "{}", api.stderr);
+    assert!(api.stderr.starts_with("error[E206]: t.req:8:16: "), "{}", api.stderr);
     let path = t.path().to_string_lossy().to_string();
     let joined = common::run(&["check", &path, "--root", &path]);
     assert_eq!(joined.code, 1, "{}{}", joined.stdout, joined.stderr);

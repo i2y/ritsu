@@ -287,7 +287,7 @@ fn a_requirement_read_from_another_is_traced_back_in_english() {
     assert_eq!(r.code, 0);
     let out = &r.stdout;
     let at = |s: &str| out.find(s).unwrap_or_else(|| panic!("{s} not in\n{out}"));
-    assert!(at("comes from the requirement policy") < at("policy (./a.req:4)"));
+    assert!(at("comes from the requirement policy") < at("policy (a.req:4)"));
     assert!(at("2026-09-01 accounting: decided earlier") < at("2026-10-01 accounting: decided for the example"));
 }
 

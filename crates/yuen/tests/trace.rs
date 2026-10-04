@@ -70,7 +70,7 @@ fn a_requirement_read_from_another_is_traced_back() {
     assert_eq!(r.code, 0);
     let out = &r.stdout;
     let at = |s: &str| out.find(s).unwrap_or_else(|| panic!("{s} not in\n{out}"));
-    assert!(at("comes from the requirement 方針") < at("方針 (./a.req:4)"));
+    assert!(at("comes from the requirement 方針") < at("方針 (a.req:4)"));
     // The decisions in the order of their dates.
     assert!(at("2026-09-01 経理: 前に決めたこと") < at("2026-10-01 経理: 例として決めた"));
 }

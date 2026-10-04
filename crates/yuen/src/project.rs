@@ -115,6 +115,8 @@ pub fn expand(arg: &str) -> Vec<String> {
                 }
                 walk(&e, out);
             } else if e.extension().is_some_and(|x| x == "req") {
+                // under `.`, a file is written from where yuen runs, without a leading `./`
+                let e = e.strip_prefix(".").unwrap_or(&e);
                 out.push(e.to_string_lossy().to_string());
             }
         }
@@ -183,7 +185,13 @@ pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::
     if !ok {
         return Ok((None, diags));
     }
-    let label = args.join(", ");
+    // the line that says what was checked names the paths given, except `.`, which says nothing:
+    // that line names the files found under it
+    let label = if args.iter().all(|a| a == ".") && !files.is_empty() {
+        files.iter().map(|f| f.display.clone()).collect::<Vec<_>>().join(", ")
+    } else {
+        args.join(", ")
+    };
     Ok((Some(Project { root, root_shown, cwd, label, args: args.to_vec(), root_flag: root_flag.map(|r| r.to_string()), files, reqs: vec![], by_name: BTreeMap::new(), aliases: BTreeMap::new(), names: Names::default(), suite }), diags))
 }
 
