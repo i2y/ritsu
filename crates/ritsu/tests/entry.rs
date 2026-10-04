@@ -76,3 +76,19 @@ fn ritsu_called_by_a_language_s_name() {
     let (code, out, _) = run_in(&t.path().join("rulec"), &crates(), &["check", "ritsu/tests/projects/通販/billing/rules/決済手数料.rule"]);
     assert!(code == 0 && out.starts_with("ok "), "{out}");
 }
+
+/// The twin of what `ritsu_is_every_language` and `ritsu_called_by_a_language_s_name` run on the
+/// project with Japanese names, on the project with English names.
+#[test]
+fn ritsu_is_every_language_on_the_english_project() {
+    let rule = "ritsu/tests/projects/shop/delivery/rules/urgency.rule";
+    assert_eq!(ritsu(&["rulec", "check", rule]), (0, format!("ok {rule}\n"), String::new()));
+    let cal = "ritsu/tests/projects/shop/delivery/ship_date.cal";
+    let (code, out, _) = ritsu(&["koyomi", "check", cal, "--lang", "ja"]);
+    assert!(code == 0 && out.starts_with(&format!("{cal}: ok — ")), "{out}");
+    let t = TempDir::new("links-en");
+    let link = t.path().join("rulec");
+    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_ritsu"), &link).unwrap();
+    let (code, out, _) = run_in(&link, &crates(), &["check", "ritsu/tests/projects/shop/billing/rules/payment_fee.rule"]);
+    assert!(code == 0 && out.starts_with("ok "), "{out}");
+}

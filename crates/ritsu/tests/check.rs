@@ -99,7 +99,10 @@ fn golden(path: &str, got: &str, failures: &mut Vec<String>) {
     }
 }
 
+/// The test project with Japanese names (sakai's Japanese example), and its twin with English names.
+/// The golden files are named by the project's directory.
 const SHOP: &str = "tests/projects/通販";
+const SHOP_EN: &str = "tests/projects/shop";
 
 /// The test project (sakai's example): every language's check passes, and the text, the Japanese
 /// and the JSON are held to their golden files.
@@ -109,11 +112,11 @@ fn the_shop_project() {
     for lang in ["en", "ja"] {
         let (code, out, err) = ritsu_in(&here(), &["check", SHOP, "--root", SHOP, "--lang", lang]);
         assert_eq!(code, 0, "{out}{err}");
-        golden(&format!("tests/golden/check/shop.{lang}.txt"), &out, &mut failures);
+        golden(&format!("tests/golden/check/通販.{lang}.txt"), &out, &mut failures);
     }
     let (code, out, _) = ritsu_in(&here(), &["check", SHOP, "--root", SHOP, "--format", "json"]);
     assert_eq!(code, 0);
-    golden("tests/golden/check/shop.json", &out, &mut failures);
+    golden("tests/golden/check/通販.json", &out, &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -132,11 +135,11 @@ fn a_project_with_errors() {
         let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--lang", lang]);
         assert_eq!(code, 1, "{out}{err}");
         assert!(out.contains("error[rulec E032]: ") && out.contains("[sakai E105]: billing/rules/請求の要否.rule:5:1: "), "{out}");
-        golden(&format!("tests/golden/check/shop-returned.{lang}.txt"), &out, &mut failures);
+        golden(&format!("tests/golden/check/通販-returned.{lang}.txt"), &out, &mut failures);
     }
     let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
     assert_eq!(code, 1);
-    golden("tests/golden/check/shop-returned.json", &out, &mut failures);
+    golden("tests/golden/check/通販-returned.json", &out, &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     // each diagnostic is its language's own object, with the tool first and the file from the root
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
@@ -197,4 +200,73 @@ fn what_stops_ritsu_check() {
     assert_eq!(code, 2, "{out}");
     assert!(out.starts_with("error: cannot read `bad.rule`\n"), "{out}");
     assert!(out.contains("1 not checked"), "{out}");
+}
+
+// ── The English twins: the same project with its names in English ──
+
+/// The test project with English names: every language's check passes, and the text, the Japanese
+/// and the JSON are held to their golden files.
+#[test]
+fn the_shop_project_in_english() {
+    let mut failures = Vec::new();
+    for lang in ["en", "ja"] {
+        let (code, out, err) = ritsu_in(&here(), &["check", SHOP_EN, "--root", SHOP_EN, "--lang", lang]);
+        assert_eq!(code, 0, "{out}{err}");
+        golden(&format!("tests/golden/check/shop.{lang}.txt"), &out, &mut failures);
+    }
+    let (code, out, _) = ritsu_in(&here(), &["check", SHOP_EN, "--root", SHOP_EN, "--format", "json"]);
+    assert_eq!(code, 0);
+    golden("tests/golden/check/shop.json", &out, &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    // the two projects are the same project: the same files in the same languages
+    let count = |dir: &str| {
+        let (_, out, _) = ritsu_in(&here(), &["check", dir, "--root", dir]);
+        out.lines().last().unwrap_or("").to_string()
+    };
+    assert_eq!(count(SHOP), count(SHOP_EN));
+}
+
+/// The twin of `a_project_with_errors`: ordering adds a value to the order status that billing's
+/// rule takes in; rulec and sakai say so, each headline with its tool, and the exit is 1.
+#[test]
+fn a_project_with_errors_in_english() {
+    let t = TempDir::new("returned-en");
+    ritsu_testkit::tmp::copy_dir(&here().join(SHOP_EN), t.path());
+    let order = t.path().join("proto/shop/ordering/v1/order.proto");
+    let s = std::fs::read_to_string(&order).unwrap();
+    std::fs::write(&order, s.replacen("  ORDER_STATUS_CANCELLED = 4;\n", "  ORDER_STATUS_CANCELLED = 4;\n  ORDER_STATUS_RETURNED = 5;\n", 1)).unwrap();
+    let mut failures = Vec::new();
+    for lang in ["en", "ja"] {
+        let (code, out, err) = ritsu_in(t.path(), &["check", ".", "--lang", lang]);
+        assert_eq!(code, 1, "{out}{err}");
+        assert!(out.contains("error[rulec E032]: ") && out.contains("[sakai E105]: billing/rules/billing_need.rule:5:1: "), "{out}");
+        golden(&format!("tests/golden/check/shop-returned.{lang}.txt"), &out, &mut failures);
+    }
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--format", "json"]);
+    assert_eq!(code, 1);
+    golden("tests/golden/check/shop-returned.json", &out, &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let d = &v["diagnostics"];
+    assert_eq!(d.as_array().unwrap().len(), 2, "{d}");
+    assert_eq!(d[0].as_object().unwrap().keys().take(3).collect::<Vec<_>>(), ["tool", "v", "severity"]);
+    assert_eq!((d[0]["tool"].as_str(), d[0]["code"].as_str(), d[0]["file"].as_str()), (Some("rulec"), Some("E032"), Some("billing/rules/billing_need.rule")));
+    assert_eq!((d[1]["tool"].as_str(), d[1]["code"].as_str(), d[1]["file"].as_str()), (Some("sakai"), Some("E105"), Some("billing/rules/billing_need.rule")));
+    assert_eq!(v["ok"], false);
+    let bad: Vec<&str> = v["files"].as_array().unwrap().iter().filter(|f| f["ok"] == false).map(|f| f["file"].as_str().unwrap()).collect();
+    assert_eq!(bad, ["billing/rules/billing_need.rule"]);
+}
+
+/// The twin of `each_file_as_its_language_says_it`, on the English project and its copy with errors.
+#[test]
+fn each_file_as_its_language_says_it_in_english() {
+    holds_to_the_languages(&here(), SHOP_EN, "en");
+    holds_to_the_languages(&here(), SHOP_EN, "ja");
+    let t = TempDir::new("returned-en");
+    ritsu_testkit::tmp::copy_dir(&here().join(SHOP_EN), t.path());
+    let order = t.path().join("proto/shop/ordering/v1/order.proto");
+    let s = std::fs::read_to_string(&order).unwrap();
+    std::fs::write(&order, s.replacen("  ORDER_STATUS_CANCELLED = 4;\n", "  ORDER_STATUS_CANCELLED = 4;\n  ORDER_STATUS_RETURNED = 5;\n", 1)).unwrap();
+    holds_to_the_languages(t.path(), ".", "en");
+    holds_to_the_languages(t.path(), ".", "ja");
 }

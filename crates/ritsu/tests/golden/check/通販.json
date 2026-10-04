@@ -1,0 +1,118 @@
+{
+  "ritsu": "0.1.0",
+  "root": "tests/projects/通販",
+  "ok": true,
+  "files": [
+    {
+      "tool": "rulec",
+      "file": "billing/rules/出荷の送料.rule",
+      "ok": true
+    },
+    {
+      "tool": "rulec",
+      "file": "billing/rules/決済手数料.rule",
+      "ok": true
+    },
+    {
+      "tool": "rulec",
+      "file": "billing/rules/請求の要否.rule",
+      "ok": true
+    },
+    {
+      "tool": "rulec",
+      "file": "delivery/rules/出荷の急ぎ.rule",
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "billing/支払条件.cal",
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "calendars/東京の営業日.cal",
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "delivery/出荷日.cal",
+      "ok": true
+    },
+    {
+      "tool": "chobo",
+      "file": "inventory/在庫の引当.book",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/dandori/v1/options.proto",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/shop/delivery/v1/shipment.proto",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/shop/ordering/v1/fulfillment.proto",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/shop/ordering/v1/order.proto",
+      "ok": true
+    },
+    {
+      "tool": "proto",
+      "file": "proto/warehouse/v1/stock.proto",
+      "ok": true
+    },
+    {
+      "tool": "dandori",
+      "file": "delivery/配送の手配.flow",
+      "ok": true
+    },
+    {
+      "tool": "dandori",
+      "file": "ordering/受注.flow",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/レビュー.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/受注.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/在庫.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/請求.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "contexts/配送.ctx",
+      "ok": true
+    },
+    {
+      "tool": "sakai",
+      "file": "通販.ctx",
+      "ok": true
+    }
+  ],
+  "diagnostics": [],
+  "borders": {
+    "held": 0,
+    "failed": 0,
+    "undecided": 0
+  }
+}

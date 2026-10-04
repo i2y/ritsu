@@ -1,0 +1,58 @@
+# Copied from rulec's tests/corpus/出荷の送料.rule, with the names in English and the target of shape changed to this example's published language of delivery (shop.delivery.v1)
+rule shipment_fee v1
+description "The shipping charge, from a shipment request (a .proto). An example where Protovalidate's annotations and the declarations of the inputs are made to agree (§15.132, §15.133)"
+
+# The caller is a Connect service, and the shape of the request is set by the .proto. Borrow it, and say where
+# in the request each input comes from. The generated shipment_fee_from reads the request as it arrives in protojson.
+shape shipment = proto "../../proto/shop/delivery/v1/shipment.proto" shop.delivery.v1.CreateShipmentRequest
+
+enum region = honshu | hokkaido | okinawa
+enum window = morning | evening
+
+inputs
+  destination : region  from shipment.destination.region
+  fragile     : bool  from any shipment.parcels where handling = HANDLING_FRAGILE
+  parcels     : number  range >=1 <=20  from count shipment.parcels
+  declared    : money[JPY]  range >=0JPY <=1000000JPY  from shipment.declared_value_jpy
+  window      : window?  from shipment.delivery_window
+
+outputs
+  fee : money[JPY]  round up(10JPY)
+
+# The fare of one parcel times the number of parcels, plus the surcharges for fragile goods, for insurance and for a time window.
+table by_region
+policy unique
+| destination | -> per_parcel : money[JPY] |
+| honshu      | 800JPY                     |
+| hokkaido    | 1200JPY                    |
+| okinawa     | 1500JPY                    |
+
+table fragile_extra
+policy unique
+| fragile | -> fragile_fee : money[JPY] |
+| true    | 300JPY                      |
+| false   | 0JPY                        |
+
+table insurance
+policy unique
+| declared                    | -> insurance_fee : money[JPY] |
+| <=30000JPY                  | 0JPY                          |
+| >30000JPY <=100000JPY       | 200JPY                        |
+| >100000JPY                  | 500JPY                        |
+
+table window_extra
+policy unique
+| window           | -> window_fee : money[JPY] |
+| none             | 0JPY                       |
+| morning, evening | 100JPY                     |
+
+define total : money[JPY] = per_parcel × parcels + fragile_fee + insurance_fee + window_fee
+
+result fee = total
+
+examples
+| destination | fragile | parcels | declared   | window  | -> fee   |
+| honshu      | false   | 1       | 0JPY       | none    | 800JPY   |
+| hokkaido    | true    | 2       | 50000JPY   | none    | 2900JPY  |
+| okinawa     | false   | 3       | 200000JPY  | evening | 5100JPY  |
+| honshu      | true    | 20      | 1000000JPY | morning | 16900JPY |

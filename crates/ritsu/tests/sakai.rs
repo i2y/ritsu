@@ -28,21 +28,21 @@ fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
 /// E104 for each language; sakai's `tests/examples.rs`).
 #[test]
 fn ritsu_sakai_checks_the_example_with_every_language() {
-    let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/通販/通販.ctx"]);
+    let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/shop.ja/通販.ctx"]);
     assert_eq!(code, 0, "{out}{err}");
-    assert_eq!(out, "examples/通販/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
-    let (code, out, _) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/通販/通販.ctx", "--lang", "ja"]);
+    assert_eq!(out, "examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
+    let (code, out, _) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/shop.ja/通販.ctx", "--lang", "ja"]);
     assert_eq!(code, 0);
     assert!(out.ends_with("境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）\n"), "{out}");
     // the api names how each crossing refers, in the words of the file's language
-    let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "api", "examples/通販/通販.ctx", "--root", "examples/通販"]);
+    let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "api", "examples/shop.ja/通販.ctx", "--root", "examples/shop.ja"]);
     assert_eq!(code, 0, "{err}");
     let api: serde_json::Value = serde_json::from_str(&out).unwrap();
     let via: Vec<&str> = api["crossings"].as_array().unwrap().iter().map(|c| c["via"].as_str().unwrap()).collect();
     assert_eq!(via, ["proto import", "shape", "import proto", "use calendar", "use rule … connect", "use proto", "connect", "connect", "flow"]);
     // the settings the example keeps are what the map writes, read with every language joined
     for t in ["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"] {
-        let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "build", "examples/通販/通販.ctx", "--target", t, "--check", "--lang", "ja"]);
+        let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "build", "examples/shop.ja/通販.ctx", "--target", t, "--check", "--lang", "ja"]);
         assert_eq!(code, 0, "{t}: {out}{err}");
         assert!(out.contains("いまの地図から書くものと同じ"), "{t}: {out}");
     }
@@ -57,7 +57,7 @@ fn ritsu_sakai_checks_the_example_with_every_language() {
 #[test]
 fn ritsu_sakai_catches_what_crosses_through_another_language() {
     let t = TempDir::new("sakai-example");
-    ritsu_testkit::tmp::copy_dir(&sakai_dir().join("examples/通販"), t.path());
+    ritsu_testkit::tmp::copy_dir(&sakai_dir().join("examples/shop.ja"), t.path());
     let edit = |file: &str, old: &str, new: &str| {
         let p = t.path().join(file);
         let s = std::fs::read_to_string(&p).unwrap();
@@ -74,4 +74,53 @@ fn ritsu_sakai_catches_what_crosses_through_another_language() {
     assert_eq!(code, 1);
     assert!(out.contains("エラー[E105]: billing/rules/請求の要否.rule:5:1: billing/rules/請求の要否.rule が rulec の検査を通らないか、読めません\n"), "{out}");
     assert!(out.contains("  = rulec の診断: [E032] billing/rules/請求の要否.rule:5: "), "{out}");
+}
+
+// ── The English twins: the same on the English example ──
+
+#[test]
+fn ritsu_sakai_checks_the_english_example_with_every_language() {
+    let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/shop/shop.ctx"]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert_eq!(out, "examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
+    let (code, out, _) = ritsu_in(&sakai_dir(), &["sakai", "check", "examples/shop/shop.ctx", "--lang", "ja"]);
+    assert_eq!(code, 0);
+    assert!(out.ends_with("境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）\n"), "{out}");
+    let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "api", "examples/shop/shop.ctx", "--root", "examples/shop"]);
+    assert_eq!(code, 0, "{err}");
+    let api: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let mut via: Vec<&str> = api["crossings"].as_array().unwrap().iter().map(|c| c["via"].as_str().unwrap()).collect();
+    // the Japanese example's order, which differs by its two rules' names only
+    via.sort();
+    let mut want = vec!["proto import", "shape", "import proto", "use calendar", "use rule … connect", "use proto", "connect", "connect", "flow"];
+    want.sort();
+    assert_eq!(via, want);
+    for t in ["import-linter", "dependency-cruiser", "archunit", "go-arch-lint"] {
+        let (code, out, err) = ritsu_in(&sakai_dir(), &["sakai", "build", "examples/shop/shop.ctx", "--target", t, "--check"]);
+        assert_eq!(code, 0, "{t}: {out}{err}");
+        assert!(out.contains("Up to date"), "{t}: {out}");
+    }
+}
+
+/// The twin of `ritsu_sakai_catches_what_crosses_through_another_language`.
+#[test]
+fn ritsu_sakai_catches_what_crosses_through_another_language_in_english() {
+    let t = TempDir::new("sakai-example-en");
+    ritsu_testkit::tmp::copy_dir(&sakai_dir().join("examples/shop"), t.path());
+    let edit = |file: &str, old: &str, new: &str| {
+        let p = t.path().join(file);
+        let s = std::fs::read_to_string(&p).unwrap();
+        assert!(s.contains(old), "{file} has no {old:?}");
+        std::fs::write(&p, s.replacen(old, new, 1)).unwrap();
+    };
+    edit("contexts/ordering.ctx", "partnership with Delivery\n", "upstream Delivery customer\n  through rulec.urgency.v1\n");
+    edit("contexts/delivery.ctx", "partnership with Ordering\n", "downstream Ordering supplier\n");
+    let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", "shop.ctx"]);
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.starts_with("error[E209]: ordering/fulfillment.flow:59:1: The workflow ordering/fulfillment.flow of Ordering runs Delivery's workflow delivery/arrange_delivery.flow as its child\n"), "{out}");
+    edit("proto/shop/ordering/v1/order.proto", "  ORDER_STATUS_CANCELLED = 4;\n", "  ORDER_STATUS_CANCELLED = 4;\n  ORDER_STATUS_RETURNED = 5;\n");
+    let (code, out, _) = ritsu_in(t.path(), &["sakai", "check", "shop.ctx", "--lang", "ja"]);
+    assert_eq!(code, 1);
+    assert!(out.contains("エラー[E105]: billing/rules/billing_need.rule:5:1: billing/rules/billing_need.rule が rulec の検査を通らないか、読めません\n"), "{out}");
+    assert!(out.contains("  = rulec の診断: [E032] billing/rules/billing_need.rule:5: "), "{out}");
 }

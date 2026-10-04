@@ -1,0 +1,20 @@
+ok tests/projects/通販/billing/rules/出荷の送料.rule
+ok tests/projects/通販/billing/rules/決済手数料.rule
+ok tests/projects/通販/billing/rules/請求の要否.rule
+ok tests/projects/通販/delivery/rules/出荷の急ぎ.rule
+tests/projects/通販/billing/支払条件.cal: ok — 3 claims hold on all 689 days of 受領日 (2026-01-01..2027-11-20); 2 examples match
+tests/projects/通販/calendars/東京の営業日.cal: ok — calendar 東京の営業日: table 祝日 1,067 rows, data range 1955-01-01..2027-12-31
+tests/projects/通販/delivery/出荷日.cal: ok — 2 claims hold on all 719 days of 受注日 (2026-01-01..2027-12-20)
+tests/projects/通販/inventory/在庫の引当.book: ok
+  入荷.do    may be refused: key_conflict
+  引当.hold  may be refused: 在庫切れ (在庫(sku) at least 0), key_conflict, already_refused
+  引当.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
+  引当.void  may be refused: already_posted, expired, no_such_hold
+  返品.do    may be refused: key_conflict
+  key: 入荷 once per 納品書, sku; a second call that differs only in 数 is refused with key_conflict
+  key: 引当 once per 注文, sku; a second call that differs only in 数 is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+  key: 返品 once per 返品番号, sku; a second call that differs only in 数 is refused with key_conflict
+tests/projects/通販/delivery/配送の手配.flow: ok
+tests/projects/通販/ordering/受注.flow: ok
+tests/projects/通販/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)
+ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): all pass; borders between the languages: 0 checked, 0 undecided

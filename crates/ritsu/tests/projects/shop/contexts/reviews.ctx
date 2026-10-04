@@ -1,0 +1,8 @@
+context Reviews(reviews) v1
+description "Collects what buyers think and shows it. It has nothing to do with billing"
+owner "Ordering team"
+
+owns
+  dir "../py/reviews", "../ts/reviews", "../java/src/main/java/reviews", "../go/reviews"
+
+separate ways from Billing

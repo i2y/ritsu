@@ -1,0 +1,17 @@
+map Shop(shop) v1
+description "A small online shop that takes orders, holds stock, delivers and bills"
+
+use context "contexts/ordering.ctx"
+use context "contexts/inventory.ctx"
+use context "contexts/delivery.ctx"
+use context "contexts/billing.ctx"
+use context "contexts/reviews.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"
+code typescript "ts"
+code java "java/src/main/java"
+  test "java/src/test/java"
+code go "go"

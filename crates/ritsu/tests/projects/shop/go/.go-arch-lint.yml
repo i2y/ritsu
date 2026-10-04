@@ -1,0 +1,104 @@
+# Written by `sakai build --target go-arch-lint` from ../shop.ctx.
+# Edit the .ctx files and write it again; `sakai build --check` says whether it is up to date.
+
+version: 3
+workdir: .
+
+allow:
+  depOnAnyVendor: true
+
+components:
+  # The inside of Ordering (ordering)
+  sakai-ordering:
+    in: "ordering/**"
+  # The code made from Ordering's published language shop.ordering.v1
+  sakai-ordering-pl-shop.ordering.v1:
+    in: "shop/ordering/v1/**"
+  # The inside of Inventory (inventory)
+  sakai-inventory:
+    in: "inventory/**"
+  # The code made from Inventory's published language warehouse.v1
+  sakai-inventory-pl-warehouse.v1:
+    in: "warehouse/v1/**"
+  # The inside of Delivery (delivery)
+  sakai-delivery:
+    in: "delivery/**"
+  # The code made from Delivery's published language shop.delivery.v1
+  sakai-delivery-pl-shop.delivery.v1:
+    in: "shop/delivery/v1/**"
+  # Delivery's anticorruption layer toward Inventory
+  sakai-delivery-layer-inventory:
+    in: "delivery/acl/inventory/**"
+  # The inside of Billing (billing)
+  sakai-billing:
+    in: "billing/**"
+  # Billing's anticorruption layer toward Ordering
+  sakai-billing-layer-ordering:
+    in: "billing/acl/ordering/**"
+  # The shared kernel of Billing and Delivery
+  sakai-billing-kernel-delivery:
+    in: "calendars/**"
+  # The inside of Reviews (reviews)
+  sakai-reviews:
+    in: "reviews/**"
+
+deps:
+  sakai-ordering:
+    mayDependOn:
+      - sakai-ordering
+      - sakai-ordering-pl-shop.ordering.v1
+      - sakai-inventory-pl-warehouse.v1
+      - sakai-delivery-pl-shop.delivery.v1
+  sakai-ordering-pl-shop.ordering.v1:
+    mayDependOn:
+      - sakai-ordering
+      - sakai-ordering-pl-shop.ordering.v1
+      - sakai-inventory-pl-warehouse.v1
+  sakai-inventory:
+    mayDependOn:
+      - sakai-inventory
+      - sakai-inventory-pl-warehouse.v1
+  sakai-inventory-pl-warehouse.v1:
+    mayDependOn:
+      - sakai-inventory
+      - sakai-inventory-pl-warehouse.v1
+  sakai-delivery:
+    mayDependOn:
+      - sakai-ordering-pl-shop.ordering.v1
+      - sakai-delivery
+      - sakai-delivery-pl-shop.delivery.v1
+      - sakai-delivery-layer-inventory
+      - sakai-billing-kernel-delivery
+  sakai-delivery-pl-shop.delivery.v1:
+    mayDependOn:
+      - sakai-delivery
+      - sakai-delivery-pl-shop.delivery.v1
+      - sakai-delivery-layer-inventory
+      - sakai-billing-kernel-delivery
+  sakai-delivery-layer-inventory:
+    mayDependOn:
+      - sakai-ordering-pl-shop.ordering.v1
+      - sakai-inventory-pl-warehouse.v1
+      - sakai-delivery
+      - sakai-delivery-pl-shop.delivery.v1
+      - sakai-delivery-layer-inventory
+      - sakai-billing-kernel-delivery
+  sakai-billing:
+    mayDependOn:
+      - sakai-delivery-pl-shop.delivery.v1
+      - sakai-billing
+      - sakai-billing-layer-ordering
+      - sakai-billing-kernel-delivery
+  sakai-billing-layer-ordering:
+    mayDependOn:
+      - sakai-ordering-pl-shop.ordering.v1
+      - sakai-delivery-pl-shop.delivery.v1
+      - sakai-billing
+      - sakai-billing-layer-ordering
+      - sakai-billing-kernel-delivery
+  sakai-billing-kernel-delivery:
+    mayDependOn:
+      - sakai-billing-kernel-delivery
+  sakai-reviews:
+    mayDependOn:
+      - sakai-reviews

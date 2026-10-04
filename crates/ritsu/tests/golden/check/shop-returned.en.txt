@@ -1,32 +1,32 @@
-ok billing/rules/出荷の送料.rule
-ok billing/rules/決済手数料.rule
-error[rulec E032]: Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
-  --> billing/rules/請求の要否.rule:5
+error[rulec E032]: Enum order_status does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
+  --> billing/rules/billing_need.rule:5
   |
-5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
-  |      ^^^^^^^^^^
+5 | enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)
+  |      ^^^^^^^^^^^^
   |
  In ../../proto/shop/ordering/v1/order.proto but not in this enum: returned
  The form to add: `<name>(returned)`. The name is yours to decide — the file carries no Japanese.
  A value appeared through the contract, not through this rule. What the new value costs is a decision nobody has made yet (§15.59).
 
-ok delivery/rules/出荷の急ぎ.rule
-billing/支払条件.cal: ok — 3 claims hold on all 689 days of 受領日 (2026-01-01..2027-11-20); 2 examples match
-calendars/東京の営業日.cal: ok — calendar 東京の営業日: table 祝日 1,067 rows, data range 1955-01-01..2027-12-31
-delivery/出荷日.cal: ok — 2 claims hold on all 719 days of 受注日 (2026-01-01..2027-12-20)
-inventory/在庫の引当.book: ok
-  入荷.do    may be refused: key_conflict
-  引当.hold  may be refused: 在庫切れ (在庫(sku) at least 0), key_conflict, already_refused
-  引当.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
-  引当.void  may be refused: already_posted, expired, no_such_hold
-  返品.do    may be refused: key_conflict
-  key: 入荷 once per 納品書, sku; a second call that differs only in 数 is refused with key_conflict
-  key: 引当 once per 注文, sku; a second call that differs only in 数 is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
-  key: 返品 once per 返品番号, sku; a second call that differs only in 数 is refused with key_conflict
-delivery/配送の手配.flow: ok
-ordering/受注.flow: ok
-error[sakai E105]: billing/rules/請求の要否.rule:5:1: The file billing/rules/請求の要否.rule does not pass rulec's check, or cannot be read
-     5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
-  = What rulec says: [E032] billing/rules/請求の要否.rule:5: Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
+ok billing/rules/payment_fee.rule
+ok billing/rules/shipment_fee.rule
+ok delivery/rules/urgency.rule
+billing/payment_terms.cal: ok — 3 claims hold on all 689 days of received (2026-01-01..2027-11-20); 2 examples match
+calendars/tokyo_business_days.cal: ok — calendar tokyo_business_days: table national_holidays 1,067 rows, data range 1955-01-01..2027-12-31
+delivery/ship_date.cal: ok — 2 claims hold on all 719 days of ordered (2026-01-01..2027-12-20)
+inventory/inventory.book: ok
+  receive.do    may be refused: key_conflict
+  reserve.hold  may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  reserve.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
+  reserve.void  may be refused: already_posted, expired, no_such_hold
+  take_back.do  may be refused: key_conflict
+  key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
+  key: reserve once per order, sku; a second call that differs only in qty is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+  key: take_back once per return_id, sku; a second call that differs only in qty is refused with key_conflict
+delivery/arrange_delivery.flow: ok
+ordering/fulfillment.flow: ok
+error[sakai E105]: billing/rules/billing_need.rule:5:1: The file billing/rules/billing_need.rule does not pass rulec's check, or cannot be read
+     5 | enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)
+  = What rulec says: [E032] billing/rules/billing_need.rule:5: Enum order_status does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
   = Make the file pass rulec's check; the references of a file that cannot be read cannot be checked.
 ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): 1 fail (2 errors); borders between the languages: 0 checked, 0 undecided

@@ -1,0 +1,27 @@
+# Copied from chobo's examples/inventory/inventory.book (unchanged)
+# Stock held for an order: within 30 minutes it ships or is cancelled.
+book inventory v1
+description "Stock per SKU. A delivery adds to it, an order holds what it takes for 30 minutes, shipping posts the hold, cancelling voids it, and a return puts the goods back on the shelves"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  description "what is on the shelves"
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer reserve(order: string, sku: string, qty: pcs)
+  description "posted when the order ships, voided when it is cancelled"
+  key order, sku
+  pending expires after 30 minutes
+  move qty from stock(sku) to customers
+
+transfer take_back(return_id: string, sku: string, qty: pcs)
+  description "what a customer sent back, on the shelves again"
+  key return_id, sku
+  move qty from customers to stock(sku)

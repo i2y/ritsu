@@ -1,0 +1,13 @@
+dates ship_date v1
+description "Ships on the business day after the day the order was received"
+use calendar "../calendars/tokyo_business_days.cal"
+
+inputs
+  ordered : date  range >=2026-01-01 <=2027-12-20
+
+date ship = ordered
+  + 1 business day
+
+claims
+  ship_on_a_business_day     : ship is open
+  later_order_later_shipment : ship is monotonic

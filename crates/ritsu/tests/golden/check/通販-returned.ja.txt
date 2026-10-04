@@ -1,0 +1,32 @@
+ok billing/rules/出荷の送料.rule
+ok billing/rules/決済手数料.rule
+error[rulec E032]: 列挙 注文の状態 が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
+  --> billing/rules/請求の要否.rule:5
+  |
+5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
+  |      ^^^^^^^^^^
+  |
+ ../../proto/shop/ordering/v1/order.proto にあって、この列挙に無い値: returned
+ 足す形: `<名前>(returned)`。名前は自分で決めます — 日本語はそのファイルに入っていません。
+ 値が増えたのは、この規則ではなく契約の側の変更です。増えた値にいくら付けるかは、まだ誰も決めていません（§15.59）。
+
+ok delivery/rules/出荷の急ぎ.rule
+billing/支払条件.cal: ok — 3 つの条件が、受領日 2026-01-01〜2027-11-20 の 689 日のすべてで成り立ちます。例 2 行も合っています
+calendars/東京の営業日.cal: ok — カレンダー 東京の営業日。表 祝日 1,067 行、データの範囲 1955-01-01〜2027-12-31
+delivery/出荷日.cal: ok — 2 つの条件が、受注日 2026-01-01〜2027-12-20 の 719 日のすべてで成り立ちます
+inventory/在庫の引当.book: ok
+  入荷.do    断られうる理由: key_conflict
+  引当.hold  断られうる理由: 在庫切れ（在庫(sku) at least 0）、key_conflict、already_refused
+  引当.post  断られうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
+  引当.void  断られうる理由: already_posted、expired、no_such_hold
+  返品.do    断られうる理由: key_conflict
+  キー: 入荷 は 納品書, sku ごとに一回。数 だけが違う二度目は key_conflict で断られる
+  キー: 引当 は 注文, sku ごとに一回。数 だけが違う二度目は key_conflict で断られる。押さえが終わったあとに同じキーで押さえ直すと done_before になり、何も押さえない
+  キー: 返品 は 返品番号, sku ごとに一回。数 だけが違う二度目は key_conflict で断られる
+delivery/配送の手配.flow: 検査を通りました
+ordering/受注.flow: 検査を通りました
+エラー[sakai E105]: billing/rules/請求の要否.rule:5:1: billing/rules/請求の要否.rule が rulec の検査を通らないか、読めません
+     5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
+  = rulec の診断: [E032] billing/rules/請求の要否.rule:5: 列挙 注文の状態 が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
+  = そのファイルが rulec の検査を通るように直します。読めないファイルの参照は、確かめられません。
+ritsu check: ファイル 21 個（rulec 4、koyomi 3、chobo 1、proto 5、dandori 2、sakai 6）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所

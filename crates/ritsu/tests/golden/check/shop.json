@@ -1,46 +1,46 @@
 {
   "ritsu": "0.1.0",
-  "root": "tests/projects/通販",
+  "root": "tests/projects/shop",
   "ok": true,
   "files": [
     {
       "tool": "rulec",
-      "file": "billing/rules/出荷の送料.rule",
+      "file": "billing/rules/billing_need.rule",
       "ok": true
     },
     {
       "tool": "rulec",
-      "file": "billing/rules/決済手数料.rule",
+      "file": "billing/rules/payment_fee.rule",
       "ok": true
     },
     {
       "tool": "rulec",
-      "file": "billing/rules/請求の要否.rule",
+      "file": "billing/rules/shipment_fee.rule",
       "ok": true
     },
     {
       "tool": "rulec",
-      "file": "delivery/rules/出荷の急ぎ.rule",
+      "file": "delivery/rules/urgency.rule",
       "ok": true
     },
     {
       "tool": "koyomi",
-      "file": "billing/支払条件.cal",
+      "file": "billing/payment_terms.cal",
       "ok": true
     },
     {
       "tool": "koyomi",
-      "file": "calendars/東京の営業日.cal",
+      "file": "calendars/tokyo_business_days.cal",
       "ok": true
     },
     {
       "tool": "koyomi",
-      "file": "delivery/出荷日.cal",
+      "file": "delivery/ship_date.cal",
       "ok": true
     },
     {
       "tool": "chobo",
-      "file": "inventory/在庫の引当.book",
+      "file": "inventory/inventory.book",
       "ok": true
     },
     {
@@ -70,42 +70,42 @@
     },
     {
       "tool": "dandori",
-      "file": "delivery/配送の手配.flow",
+      "file": "delivery/arrange_delivery.flow",
       "ok": true
     },
     {
       "tool": "dandori",
-      "file": "ordering/受注.flow",
+      "file": "ordering/fulfillment.flow",
       "ok": true
     },
     {
       "tool": "sakai",
-      "file": "contexts/レビュー.ctx",
+      "file": "contexts/billing.ctx",
       "ok": true
     },
     {
       "tool": "sakai",
-      "file": "contexts/受注.ctx",
+      "file": "contexts/delivery.ctx",
       "ok": true
     },
     {
       "tool": "sakai",
-      "file": "contexts/在庫.ctx",
+      "file": "contexts/inventory.ctx",
       "ok": true
     },
     {
       "tool": "sakai",
-      "file": "contexts/請求.ctx",
+      "file": "contexts/ordering.ctx",
       "ok": true
     },
     {
       "tool": "sakai",
-      "file": "contexts/配送.ctx",
+      "file": "contexts/reviews.ctx",
       "ok": true
     },
     {
       "tool": "sakai",
-      "file": "通販.ctx",
+      "file": "shop.ctx",
       "ok": true
     }
   ],
