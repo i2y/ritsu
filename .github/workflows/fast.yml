@@ -32,6 +32,9 @@ jobs:
 
       - name: Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # the page in the browser runs ritsu compiled for it (ritsu-wasm, DESIGN 8.7)
+          targets: wasm32-unknown-unknown
 
       - uses: actions/cache@v6
         with:
@@ -51,6 +54,12 @@ jobs:
 
       - name: Build
         run: cargo build --workspace --locked
+
+      # The page in the browser runs every language compiled to wasm32-unknown-unknown (DESIGN
+      # 8.7). A language that reaches for what only Unix has (a process group, a signal) without
+      # saying what to do elsewhere no longer builds there.
+      - name: ritsu builds for the browser
+        run: cargo check --locked -p ritsu-wasm --target wasm32-unknown-unknown
 
       # The layers of DESIGN 3.1: what each crate may depend on (DESIGN 3.4).
       - name: The dependencies keep to the layers

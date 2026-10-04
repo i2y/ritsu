@@ -1,0 +1,30 @@
+[package]
+name = "ritsu-wasm"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "ritsu in a page in the browser: ritsu check on the files of a small project the reader edits, and each language's gen and doc on one of them, compiled to wasm32 with no bindgen and no JavaScript toolchain"
+publish = false
+
+[lib]
+# The page's module is a cdylib for wasm32-unknown-unknown, which website/tools/make_wasm.sh makes
+# with `cargo rustc --crate-type cdylib`; the tests link this crate natively, as an rlib.
+crate-type = ["rlib"]
+
+# An entry may depend on every layer (DESIGN 3.1). The module runs what the binary runs: ritsu's
+# own `check`, and the languages joined once by ritsu-project.
+[dependencies]
+ritsu = { path = "../ritsu" }
+ritsu-base = { path = "../ritsu-base" }
+ritsu-project = { path = "../ritsu-project" }
+chobo = { path = "../chobo" }
+dandori = { path = "../dandori" }
+koyomi = { path = "../koyomi" }
+rulec = { path = "../rulec" }
+sakai = { path = "../sakai" }
+yuen = { path = "../yuen" }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }

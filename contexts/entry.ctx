@@ -1,8 +1,8 @@
 context Entry(entry) v1
-description "The one command, ritsu, and each language's own command after its name (ritsu)"
+description "The one command, ritsu, and each language's own command after its name (ritsu); the same in a page in the browser (ritsu-wasm)"
 
 owns
-  dir "../crates/ritsu"
+  dir "../crates/ritsu", "../crates/ritsu-wasm"
 
 upstream Base conformist
   through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports

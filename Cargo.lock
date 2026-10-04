@@ -208,6 +208,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ritsu-wasm"
+version = "0.1.0"
+dependencies = [
+ "chobo",
+ "dandori",
+ "koyomi",
+ "ritsu",
+ "ritsu-base",
+ "ritsu-project",
+ "ritsu-testkit",
+ "rulec",
+ "sakai",
+ "serde_json",
+ "yuen",
+]
+
+[[package]]
 name = "rulec"
 version = "0.22.1"
 dependencies = [
