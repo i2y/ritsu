@@ -65,6 +65,17 @@ pub struct DateCalendar {
     pub offset: Option<i32>,
 }
 
+/// The fewest and the most days from the date input to a date over the whole range of the
+/// inputs (`Dates::span`), each with the date input's day that first comes to it, when the answer
+/// says one.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DaySpan {
+    pub fewest: i64,
+    pub most: i64,
+    pub fewest_at: Option<Day>,
+    pub most_at: Option<Day>,
+}
+
 /// What a date comes to for one input.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DateValue {
@@ -87,6 +98,25 @@ pub trait Dates {
     /// (DESIGN 7.7).
     fn days(&self, file: &Path, date: &str) -> Result<Found<(i64, i64)>, Vec<Said>>;
 
+    /// The fewest and the most days from the date input to `date`, as `days` answers, with the date
+    /// input's day that first comes to each (DESIGN 7.7, X5: the example of a hold that has always
+    /// expired). The default has no days to give with them.
+    fn span(&self, file: &Path, date: &str) -> Result<Found<DaySpan>, Vec<Said>> {
+        Ok(match self.days(file, date)? {
+            Found::Value((fewest, most)) => Found::Value(DaySpan { fewest, most, fewest_at: None, most_at: None }),
+            Found::Undecided(why) => Found::Undecided(why),
+        })
+    }
+
+    /// The first input of the walk over the whole range at which `date` comes to `day` (each input
+    /// by name: a date as its day count, an integer as itself), to show where a day of the date
+    /// comes from (DESIGN 7.1: an example names koyomi's input). None when no input does; the
+    /// default walks nothing and says none.
+    fn input_for(&self, file: &Path, date: &str, day: Day) -> Result<Option<Vec<(String, i64)>>, Vec<Said>> {
+        let _ = (file, date, day);
+        Ok(None)
+    }
+
     /// Every date for one input (each input by name: a date as its day count, an integer as
     /// itself), in the order written.
     fn eval(&self, file: &Path, inputs: &[(String, i64)]) -> Result<Vec<(String, DateValue)>, Vec<Said>>;
@@ -97,4 +127,19 @@ pub trait Dates {
     fn joined(&self) -> bool {
         true
     }
+}
+
+/// A day number as a date, `YYYY-MM-DD` (days since 1970-01-01, as rulec and koyomi count them).
+pub fn day_text(d: Day) -> String {
+    // Howard Hinnant's civil_from_days
+    let z = d + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let dd = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    format!("{:04}-{m:02}-{dd:02}", if m <= 2 { y + 1 } else { y })
 }

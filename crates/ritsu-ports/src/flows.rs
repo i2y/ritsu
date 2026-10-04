@@ -1,13 +1,47 @@
-//! The port of flows (DESIGN 7.4, X2): the calls a workflow makes to rules, each with what
-//! dandori knows of the values it gives. dandori gathers the range of every value from every place
-//! it is put (dandori's DESIGN 1.3), and holds the rule's ranges to them itself (its E014); what it
-//! does not check is a rule's precondition across two inputs, which ritsu-cross asks rulec about
-//! with these ranges.
+//! The port of flows (DESIGN 7.4–7.8): what a workflow calls in the other languages, each call
+//! with what dandori knows of the values it gives. dandori gathers what a value can be from every
+//! place it is put (dandori's DESIGN 1.3), and holds the ranges of rules, tasks and koyomi's
+//! integer inputs to them itself (its E014); what it does not check is what only the other
+//! language can say — a rule's precondition across two inputs (X2), the days a koyomi date comes
+//! to against a rule's range (X3 (a)), a rule's output as an amount chobo takes and the refusals
+//! that amount can meet (X4), how long a hold is held against its expiry (X5), the day given to a
+//! koyomi date against its range (X6) — which ritsu-cross asks the other language about with
+//! these facts.
 
-use crate::{Rules, Said};
+use crate::{Books, Dates, Rules, Said};
 use ritsu_base::text::Text;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+
+/// The ports a flow is read with: the rules, the dates files and the books it calls, as `ritsu
+/// check` joins them once.
+#[derive(Clone)]
+pub struct Ports {
+    pub rules: Rc<dyn Rules>,
+    pub dates: Rc<dyn Dates>,
+    pub books: Rc<dyn Books>,
+}
+
+/// Where a value a flow gives can come from, as far as the languages it crosses into are
+/// concerned: one for each kind of place it is put in anywhere in the flow, joined as dandori
+/// joins ranges (a variable given `due.day` in one arm and an input in another can be either).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Origin {
+    /// The day of a koyomi date the flow calls (`due.day`): the dates file, as dandori reaches it
+    /// (what `Dates` is asked with), and the date.
+    Day { file: PathBuf, date: String },
+    /// A numeric output of a rule the flow calls (`fee.amount`): the rule's file, as dandori reaches
+    /// it (what `Rules` is asked with), and the output.
+    Output { rule: PathBuf, output: String },
+    /// `now`, given where a day is taken: the moment the statement runs, which can be any day.
+    Now,
+    /// A number dandori knows the range of: a literal, or an input, a field or a task's answer with
+    /// a `range` (both ends included; None at an open end), as it goes on the wire.
+    Range(Option<i128>, Option<i128>),
+    /// A place that says nothing of what the value can be (an input or a task's answer without a
+    /// `range`, a date that comes in), named in both languages.
+    Unknown(Text),
+}
 
 /// One call of a rule in a flow.
 #[derive(Clone, Debug, PartialEq)]
@@ -34,6 +68,87 @@ pub struct CallArg {
     pub range: Option<(Option<i128>, Option<i128>)>,
     /// A place it can come from that has no range, in both languages, when there is one.
     pub unknown: Option<Text>,
+    /// Every kind of place it can come from (for a day: the koyomi dates whose days it can be).
+    pub from: Vec<Origin>,
+}
+
+/// One call of a koyomi date in a flow (X6): the day given to the date's one date input. The
+/// date's integer inputs are dandori's to hold to their ranges (its E014), as a rule's are.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DateCall {
+    /// The line of the call, from 1.
+    pub line: usize,
+    /// The dates file, as dandori reaches it (what `Dates` is asked with).
+    pub file: PathBuf,
+    /// The name the flow uses the file by (`use dates <name> from …`), and the date called.
+    pub name: String,
+    pub date: String,
+    /// The date's input that takes a day, the value given to it as the flow writes it (`now`,
+    /// `order.received`), and every kind of place that value can come from.
+    pub input: String,
+    pub shown: String,
+    pub from: Vec<Origin>,
+}
+
+/// One call of an operation of a chobo transfer in a flow (X4): a task that runs it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransferCall {
+    /// The line of the call, from 1.
+    pub line: usize,
+    /// The book, as dandori reaches it (what `Books` is asked with), and the transfer.
+    pub book: PathBuf,
+    pub transfer: String,
+    /// `do`, `hold`, `post` or `void`.
+    pub op: String,
+    /// The task that runs it, and the errors it declares: the reasons it handles.
+    pub task: String,
+    pub handles: Vec<String>,
+    /// Each amount the call gives, in the transfer's order.
+    pub amounts: Vec<Amount>,
+}
+
+/// One amount a call gives a transfer: the transfer's parameter, the value as the flow writes it,
+/// and every kind of place it can come from.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Amount {
+    pub param: String,
+    pub shown: String,
+    pub from: Vec<Origin>,
+}
+
+/// How long it can be from a hold being made to a call that the hold's expiry can refuse (X5): a
+/// `post` or a `void` of a case that follows a book's transfer, on every way the flow can reach
+/// the call. The hold is made somewhere inside the call that makes it, and the call on it acts
+/// somewhere inside its own run, so the fewest seconds run from the end of the one to the start
+/// of the other, and the most from the start of the one to the end of the other.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HoldSpan {
+    /// The case, the book (as dandori reaches it) and the transfer it follows.
+    pub case: String,
+    pub book: PathBuf,
+    pub transfer: String,
+    /// The line of the call that makes the hold (the first, when more than one can).
+    pub made: usize,
+    /// The line of the call on it, its task, and the operation (`post`, `void`).
+    pub line: usize,
+    pub task: String,
+    pub op: String,
+    /// The fewest seconds from the hold to the call, and what makes them up, a statement at a
+    /// time, in both languages (empty when nothing does: the call can come at once).
+    pub least: u64,
+    pub least_why: Vec<Text>,
+    /// The most seconds, when something bounds them; else the first thing that does not, in both
+    /// languages (a task with no `timeout`, a wait until a time nothing bounds).
+    pub most: Result<u64, Text>,
+}
+
+/// Everything a flow that passes dandori's check calls in the other languages.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Crossings {
+    pub rules: Vec<RuleCall>,
+    pub dates: Vec<DateCall>,
+    pub transfers: Vec<TransferCall>,
+    pub holds: Vec<HoldSpan>,
 }
 
 /// What dandori answers for a flow.
@@ -41,4 +156,29 @@ pub trait Flows {
     /// The calls the flow at `file` makes to rules, read with the rules through `rules`, when the
     /// flow passes dandori's check; else what the check says.
     fn rule_calls(&self, file: &Path, rules: Rc<dyn Rules>) -> Result<Vec<RuleCall>, Vec<Said>>;
+
+    /// Every call the flow at `file` makes to rules, koyomi dates and chobo transfers, and every
+    /// span from a hold to a call its expiry can refuse, read with the other languages through
+    /// `ports`, when the flow passes dandori's check; else what the check says.
+    fn crossings(&self, file: &Path, ports: &Ports) -> Result<Crossings, Vec<Said>>;
+}
+
+/// A length of time as a message says it, in its largest units: `17 days 9 hours`, `17 日 9 時間`.
+pub fn seconds_text(secs: u64) -> Text {
+    let parts: Vec<(u64, &str, &str, &str)> = [(86_400, "日", "day", "days"), (3_600, "時間", "hour", "hours"), (60, "分", "minute", "minutes"), (1, "秒", "second", "seconds")]
+        .into_iter()
+        .scan(secs, |left, (per, ja, one, many)| {
+            let n = *left / per;
+            *left %= per;
+            Some((n, ja, one, many))
+        })
+        .filter(|(n, ..)| *n > 0)
+        .collect();
+    if parts.is_empty() {
+        return Text { ja: "0 秒".into(), en: "0 seconds".into() };
+    }
+    Text {
+        ja: parts.iter().map(|(n, ja, ..)| format!("{n} {ja}")).collect::<Vec<_>>().join(" "),
+        en: parts.iter().map(|(n, _, one, many)| format!("{n} {}", if *n == 1 { one } else { many })).collect::<Vec<_>>().join(" "),
+    }
 }

@@ -65,6 +65,12 @@ impl Joined {
         self.rulec.clone()
     }
 
+    /// The ports of rules, dates and books, as dandori reads a flow's rules, dates files and books
+    /// with them (`ritsu check`, and the checks across the borders a flow crosses).
+    pub fn ports(&self) -> ritsu_ports::Ports {
+        ritsu_ports::Ports { rules: self.rulec.clone(), dates: self.koyomi.clone(), books: self.chobo.clone() }
+    }
+
     /// Every language yuen reads (yuen's DESIGN 3.1): what a file holds, through the index; the
     /// sources a rule or a calendar pins (`Sources`); the aliases of a rule's and a dates file's
     /// names (`Rules`, `Dates`); and the claims of a spec with their records (`Claims`).

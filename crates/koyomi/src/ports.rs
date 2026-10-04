@@ -12,7 +12,7 @@ use crate::interp;
 use crate::resolve::Model;
 use ritsu_base::naming::{Name as Naming, Tool};
 use ritsu_base::text::Text;
-use ritsu_ports::{DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, DaySet, Found, Item, Reference, Said};
+use ritsu_ports::{DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, DaySet, DaySpan, Found, Item, Reference, Said};
 use std::path::Path;
 
 /// koyomi, as the ports reach it.
@@ -169,6 +169,52 @@ impl ritsu_ports::Dates for Engine {
             (None, Some(s)) => Found::Value(s),
             (None, None) => Found::Undecided(ritsu_base::tr!("入力の範囲が空です", "the range of the inputs is empty")),
         })
+    }
+
+    fn span(&self, file: &Path, date: &str) -> Result<Found<DaySpan>, Vec<Said>> {
+        let m = model(file)?;
+        let k = date_index(&m, date, file)?;
+        if let Some(t) = over_budget(&m) {
+            return Ok(Found::Undecided(t));
+        }
+        let di = m.date_input;
+        // the first input of the walk that comes to the fewest days, and the first that comes to the most
+        let mut span: Option<DaySpan> = None;
+        let r = walk(&m, |vals, out| {
+            let d = out[k].0 as i64 - vals[di];
+            let at = Some(vals[di]);
+            match &mut span {
+                None => span = Some(DaySpan { fewest: d, most: d, fewest_at: at, most_at: at }),
+                Some(s) => {
+                    if d < s.fewest {
+                        (s.fewest, s.fewest_at) = (d, at);
+                    }
+                    if d > s.most {
+                        (s.most, s.most_at) = (d, at);
+                    }
+                }
+            }
+        });
+        Ok(match (undecided(&m, r), span) {
+            (Some(t), _) => Found::Undecided(t),
+            (None, Some(s)) => Found::Value(s),
+            (None, None) => Found::Undecided(ritsu_base::tr!("入力の範囲が空です", "the range of the inputs is empty")),
+        })
+    }
+
+    fn input_for(&self, file: &Path, date: &str, day: ritsu_ports::Day) -> Result<Option<Vec<(String, i64)>>, Vec<Said>> {
+        let m = model(file)?;
+        let k = date_index(&m, date, file)?;
+        if over_budget(&m).is_some() {
+            return Ok(None);
+        }
+        let mut first: Option<Vec<i64>> = None;
+        let _ = walk(&m, |vals, out| {
+            if first.is_none() && out[k].0 as i64 == day {
+                first = Some(vals.to_vec());
+            }
+        });
+        Ok(first.map(|vals| m.inputs.iter().zip(vals).map(|(i, v)| (i.name.clone(), v)).collect()))
     }
 
     fn eval(&self, file: &Path, inputs: &[(String, i64)]) -> Result<Vec<(String, DateValue)>, Vec<Said>> {

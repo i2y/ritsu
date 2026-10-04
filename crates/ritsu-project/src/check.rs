@@ -13,8 +13,9 @@ use ritsu_ports::Checked;
 impl Project {
     /// What each language's `check` says of the project's files, in the order the languages are
     /// checked: rulec, koyomi, chobo and geas a file at a time; dandori a file at a time, with the
-    /// rules it reads through rulec; yuen the project's `.req` files as one; sakai each map. The
-    /// `.proto` files have no language of their own to check them (ritsu-cross reads them).
+    /// rules, dates files and books it reads through rulec, koyomi and chobo; yuen the project's
+    /// `.req` files as one; sakai each map. The `.proto` files have no language of their own to
+    /// check them (ritsu-cross reads them).
     ///
     /// rulec, koyomi, chobo, geas and dandori are given the project's files, as the person would
     /// write them; yuen and sakai, which find their files themselves, the paths given that hold
@@ -32,7 +33,7 @@ impl Project {
                 Tool::Koyomi => joined.koyomi.checked(&self.root, &files, lang),
                 Tool::Chobo => joined.chobo.checked(&self.root, &files, lang),
                 Tool::Geas => joined.geas.checked(&self.root, &files, lang),
-                Tool::Dandori => joined.dandori.checked(&self.root, &files, joined.rules(), lang),
+                Tool::Dandori => joined.dandori.checked_with(&self.root, &files, &joined.ports(), lang),
                 Tool::Yuen => yuen::ports::Engine::with(joined.yuen()).checked(&self.given_for(Tool::Yuen), Some(&root_arg), lang),
                 Tool::Sakai => sakai::run::checked(&self.given_for(Tool::Sakai), Some(&root_arg), &joined.sakai(), lang),
                 Tool::Proto | Tool::File => continue,

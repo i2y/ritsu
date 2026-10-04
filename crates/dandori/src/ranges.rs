@@ -13,11 +13,11 @@ use std::collections::BTreeMap;
 
 /// What is known of the numbers a value can be.
 #[derive(Clone, Debug, Default, PartialEq)]
-struct Est {
+pub(crate) struct Est {
     /// the numbers that come from places with a range; None when none does (`none`, `[]`)
-    known: Option<Range>,
+    pub(crate) known: Option<Range>,
     /// a place without a range the value can come from, named in Japanese and in English
-    unknown: Option<Text>,
+    pub(crate) unknown: Option<Text>,
 }
 
 impl Est {
@@ -168,7 +168,7 @@ fn spaced(text: String) -> String {
 }
 
 /// What each variable can be: every value put in it, joined, until nothing more changes.
-fn variables(m: &Model) -> BTreeMap<String, Est> {
+pub(crate) fn variables(m: &Model) -> BTreeMap<String, Est> {
     let mut vars: BTreeMap<String, Est> = BTreeMap::new();
     for (n, _) in &m.inputs {
         vars.insert(n.clone(), Est::or(m.input_ranges.get(n).copied(), tr!("入力 `{n}`", "the input `{n}`")));
@@ -212,7 +212,7 @@ fn variables(m: &Model) -> BTreeMap<String, Est> {
 }
 
 /// What numbers `e` can be, or the numbers inside it when it is a `?` or a list.
-fn estimate(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr) -> Est {
+pub(crate) fn estimate(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr) -> Est {
     match e {
         TExpr::Int(n) => Est::range(Range::exactly(*n)),
         TExpr::List { items, .. } => items.iter().fold(Est::default(), |a, x| a.join(&estimate(m, vars, x))),

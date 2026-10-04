@@ -90,6 +90,13 @@ pub fn dates(path: &Path) -> Result<DateFacts, Vec<Said>> {
     current().dates().facts(path)
 }
 
+/// The fewest and the most days from a dates file's date input to one of its dates, over the
+/// whole range, as koyomi counts them (ritsu's DESIGN 7.7: how long a wait until the date's time
+/// lasts, for the span of a hold, `crossings`).
+pub fn date_span(path: &Path, date: &str) -> Result<Found<ritsu_ports::DaySpan>, Vec<Said>> {
+    current().dates().span(path, date)
+}
+
 /// What chobo knows of a book, or what is said instead.
 pub fn book(path: &Path) -> Result<BookFacts, Vec<Said>> {
     current().books().facts(path)

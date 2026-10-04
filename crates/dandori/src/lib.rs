@@ -18,6 +18,7 @@ pub mod codes;
 pub mod cli;
 pub mod commands;
 pub mod contract;
+pub mod crossings;
 pub mod diag;
 pub mod doc;
 pub mod draw;

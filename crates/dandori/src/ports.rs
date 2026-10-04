@@ -79,8 +79,15 @@ impl Engine {
     /// `--format json` prints it, then the line that says a file passes. `files` are as the person
     /// gave them, from where the program runs; `root` is the project's.
     pub fn checked(&self, root: &Path, files: &[String], rules: std::rc::Rc<dyn ritsu_ports::Rules>, lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
+        let ports = ritsu_ports::Ports { rules, dates: std::rc::Rc::new(crate::sources::NoDates), books: std::rc::Rc::new(crate::sources::NoBooks) };
+        self.checked_with(root, files, &ports, lang)
+    }
+
+    /// `dandori check` of each file, as [`Engine::checked`] gives it, with the dates files and the
+    /// books the flows use read through the ports of dates and books too (what `ritsu check` joins).
+    pub fn checked_with(&self, root: &Path, files: &[String], ports: &ritsu_ports::Ports, lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
         use ritsu_ports::{Checked as Unit, Finding, Part, Verdict};
-        crate::sources::with_rules(rules, || {
+        crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || {
             files
                 .iter()
                 .map(|f| match crate::check::check_file(Path::new(f)) {
@@ -141,11 +148,31 @@ impl ritsu_ports::Flows for Engine {
                             shown,
                             range: range.map(|r| (r.lo.map(i128::from), r.hi.map(i128::from))),
                             unknown: unknown.map(|t| Text { ja: t.ja, en: t.en }),
+                            // where a value comes from is `crossings`'s, which reads the dates files and books too
+                            from: Vec::new(),
                         })
                         .collect(),
                 })
                 .collect())
         })
+    }
+
+    /// Every call of a rule, a koyomi date and a chobo transfer in a flow that passes `dandori
+    /// check`, with the places each value given can come from, and the span of each hold before a
+    /// call its expiry can refuse (`crossings`); the flow read with the rules, the dates files and
+    /// the books through `ports`.
+    fn crossings(&self, file: &Path, ports: &ritsu_ports::Ports) -> Result<ritsu_ports::Crossings, Vec<Said>> {
+        crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(file).map(|m| crate::crossings::of(&m)))
+    }
+}
+
+impl Engine {
+    /// The model of a flow that passes `dandori check`, read with the other languages through
+    /// `ports`; else the errors of the check.
+    fn model_with(file: &Path) -> Result<crate::model::Model, Vec<Said>> {
+        let path = file.to_string_lossy().to_string();
+        let (_, c) = crate::check::check_file(file).map_err(|e| vec![Said::unreadable(&path, &e)])?;
+        c.model.ok_or_else(|| c.diags.iter().filter(|d| d.severity == crate::diag::Severity::Error).map(|d| Said { code: d.code.to_string(), file: path.clone(), line: Some(d.line), message: Text { ja: d.ja.clone(), en: d.en.clone() } }).collect())
     }
 }
 

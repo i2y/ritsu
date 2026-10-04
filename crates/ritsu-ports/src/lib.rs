@@ -19,8 +19,9 @@
 //!   that a naming is looked up in one place.
 //! - [`Sources`]: the sources a rule or a calendar copies and pins, which yuen borrows and holds
 //!   its own copies to.
-//! - [`Flows`]: the calls a workflow makes to rules, with what dandori knows of each value it
-//!   gives (its range), for the checks across the border to hold the rule's preconditions to.
+//! - [`Flows`]: the calls a workflow makes to rules, koyomi dates and chobo transfers, with what
+//!   dandori knows of each value it gives (its range, the places it can come from), and how long
+//!   each hold can be held before a call its expiry can refuse, for the checks across the borders.
 //! - [`Checked`]: what a language's own `check` prints for a unit it checks, a diagnostic at a
 //!   time, the text and the JSON, as `ritsu check` prints it again (DESIGN 8.3).
 //!
@@ -41,9 +42,9 @@ pub use books::{Account, Balance, BookCall, BookClient, BookFacts, BookOutcome, 
 pub use check::{Checked, Finding, Part, Verdict};
 pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, RecordRan, Touched, TouchedLines, Untouched};
 pub use sources::{Source, SourceKind, Sources};
-pub use dates::{DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet};
+pub use dates::{day_text, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet, DaySpan};
 pub use index::{Index, Item, Items, Lookup, Reference, References};
-pub use flows::{CallArg, Flows, RuleCall};
+pub use flows::{seconds_text, Amount, CallArg, Crossings, DateCall, Flows, HoldSpan, Origin, Ports, RuleCall, TransferCall};
 pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
 
 use ritsu_base::text::Text;

@@ -153,3 +153,53 @@ fn a_flow_that_does_not_parse_says_why() {
     let missing = Engine.items(dir.path(), "missing.flow").unwrap_err();
     assert_eq!(missing[0].code, "", "a file that cannot be read has no code");
 }
+
+/// What a flow crosses into, for ritsu's checks across the borders (`Flows::crossings`, ritsu's
+/// DESIGN 7.4–7.8): where each value given to a rule, a koyomi date or a chobo transfer can come
+/// from, and how long each hold can be held before a call its expiry can refuse, the fewest and the
+/// most seconds along every way through the flow.
+#[test]
+fn a_flow_says_what_it_crosses_into() {
+    use ritsu_ports::{Flows, Origin, Ports};
+    use std::rc::Rc;
+    let t = ritsu_testkit::TempDir::new("crossings");
+    let write = |name: &str, body: &str| std::fs::write(t.path().join(name), body).unwrap();
+    write("weekdays.cal", "calendar weekdays v1\ndescription \"Open Monday to Friday, in UTC\"\noffset +00:00\n\nclosed weekly sat, sun\n");
+    write("terms.cal", "dates terms v1\ndescription \"Pays on the 10th of the month after a closing on the 20th, at 09:00\"\nuse calendar \"weekdays.cal\"\n\ninputs\n  received : date  range >=2026-01-01 <=2026-12-20\n\ndate closing = received\n  close day 20\n\ndate payment = closing\n  day 10 of month +1\n  roll preceding\n  at 09:00\n");
+    write("stock.book", "book stock v1\ndescription \"Stock, held for 14 days at most\"\n\nunit pcs\n\naccount shelf(sku: string) : pcs\n  at least 0 refused as out_of_stock\naccount suppliers : pcs outside\naccount customers : pcs outside\n\ntransfer receive(delivery: string, sku: string, qty: pcs)\n  key delivery, sku\n  move qty from suppliers to shelf(sku)\n\ntransfer reserve(order: string, sku: string, qty: pcs)\n  key order, sku\n  pending expires after 14 days\n  move qty from shelf(sku) to customers\n");
+    let flow = |body: &str| {
+        format!(
+            "workflow spans v1\ndescription \"Holds goods, then ships or puts them back\"\n\nuse dates terms from \"terms.cal\"\nuse book stock from \"stock.book\"\n\ninputs\n  order : string\n  sku   : string\n  qty   : int  range >=1 <=100\n  fast  : bool\n\ntask reserve(order: string, sku: string, qty: int) -> stock.reserve\n  book stock.reserve.hold\n  starts stock.reserve\n  errors out_of_stock\n  timeout 10 seconds\n\ntask ship(order: string, sku: string) -> stock.reserve\n  book stock.reserve.post\n  sends post\n  errors expired, already_voided\n  timeout 10 seconds\n\ntask put_back(order: string, sku: string) -> stock.reserve\n  book stock.reserve.void\n  sends void\n  errors expired\n\ntask pack(order: string)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:pack\"\n  timeout 5 seconds\n  retry 1 times every 2 seconds\n  idempotent\n\ncase goods : stock.reserve follows stock.reserve\n\nflow\n  goods <- reserve(order: order, sku: sku, qty: qty)\n    on out_of_stock => fail OutOfStock \"nothing left\"\n{body}"
+        )
+    };
+    let ports = Ports { rules: Rc::new(rulec::ports::Engine::new()), dates: Rc::new(koyomi::ports::Engine), books: Rc::new(chobo::ports::Engine) };
+    let spans = |body: &str| {
+        write("spans.flow", &flow(body));
+        let c = dandori::ports::Engine.crossings(&t.path().join("spans.flow"), &ports).unwrap_or_else(|e| panic!("{e:?}\n{}", flow(body)));
+        c.holds.iter().map(|h| (h.line, h.op.clone(), h.least, h.most.clone().ok())).collect::<Vec<_>>()
+    };
+    let (day, hour) = (86_400, 3_600);
+    // a wait, a match whose arms wait differently, a loop of a task with a retry: the fewest takes
+    // the shorter arm and no round, the most the longer arm and every round of every attempt
+    let body = "  wait 1 day\n  match fast\n    true => pass\n    false => wait 2 days\n  repeat at most 3 times\n    pack(order: order)\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
+    assert_eq!(spans(body), vec![(47, "post".to_string(), day, Some(10 + 3 * day + 3 * (2 * 5 + 2) + 10))]);
+    // a void with no timeout leaves nothing bounding the most; `on failure` starts at 0 seconds, and
+    // a failure can come as late as the void with no timeout runs on
+    let body = "  wait 1 day\n  goods <- put_back(order: order, sku: sku)\n    on expired => pass\n\non failure\n  match goods.state\n    none => pass\n    held =>\n      goods <- ship(order: order, sku: sku)\n        on expired => pass\n        on already_voided => pass\n";
+    assert_eq!(spans(body), vec![(42, "void".to_string(), day, None), (49, "post".to_string(), 0, None)]);
+    // a wait until a koyomi date's time, its date input given `now` after the hold: from the
+    // fewest days koyomi counts (18), less the day `now` can fall late in, to the 09:00
+    let body = "  let due = terms.payment(received: now)\n  wait until due.at\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
+    assert_eq!(spans(body), vec![(43, "post".to_string(), 17 * day + 9 * hour, None)]);
+    // `now` read before the hold says nothing of how long after the hold the time comes
+    let body = "  wait until due.at\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
+    let early = flow(body).replace("flow\n  goods <- reserve", "flow\n  let due = terms.payment(received: now)\n  goods <- reserve");
+    write("spans.flow", &early);
+    let c = dandori::ports::Engine.crossings(&t.path().join("spans.flow"), &ports).unwrap();
+    assert_eq!((c.holds[0].least, c.holds[0].most.is_err()), (0, true));
+    // where values come from: the day of a koyomi date, `now`
+    assert_eq!(c.dates.len(), 1);
+    assert_eq!((c.dates[0].date.as_str(), c.dates[0].input.as_str(), c.dates[0].from.clone()), ("payment", "received", vec![Origin::Now]));
+    // the hold's amount comes from the workflow's input, whose range dandori knows
+    assert_eq!(c.transfers[0].amounts[0].from, vec![Origin::Range(Some(1), Some(100))]);
+}
