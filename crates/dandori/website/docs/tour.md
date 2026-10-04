@@ -177,13 +177,19 @@ line of its body collects a list.
 ```flow
 on failure
   match pi.status
-    none, succeeded, canceled => pass
+    none => pass
     requires_payment_method, requires_confirmation, requires_action, requires_capture =>
       pi <- cancel_intent(intent: pi.id)
-        on unexpected_state => pass
+        on unexpected_state => fail CleanupFailed "Stripe refused to release the hold; the capture may have gone through. Handing it over to staff" leaving pi
         on failure => fail CleanupFailed "Releasing the hold failed; handing it over to staff" leaving pi
     processing => fail SettlementUnclear "Failed in the middle of the capture; handing it over to staff" leaving pi
 ```
+
+When Stripe refuses to cancel, the capture that seemed to fail may have gone through after all:
+the record of `pi` still says `requires_capture`, while on Stripe's side the PaymentIntent may be
+`processing`. The checker keeps both, what the workflow last heard of a case and where the case may
+really be, so with `on unexpected_state => pass` here it says the workflow can fail with `pi` in
+`processing` (E020). The refusal hands the payment over to staff instead (`leaving pi`).
 
 `on failure` runs when a task fails and nothing handled it, to settle the cases; the run then fails
 with that error. `on cancel` is the same for a cancellation: on Temporal a workflow can be asked to

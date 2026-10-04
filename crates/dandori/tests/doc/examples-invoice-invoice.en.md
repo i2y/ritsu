@@ -48,18 +48,18 @@ flowchart TD
     onf(["on failure"])
     s13{{"match hold.state"}}
     s15["hold ← put_back(…)<br>book stock.reserve.void<br>sends void"]
-    s17(["fail NotPutBack<br>#quot;the goods held for the order could not be put …<br>leaving hold"])
+    s18(["fail NotPutBack<br>#quot;the goods held for the order could not be put …<br>leaving hold"])
     onfEnd(["fails with the same error"])
     onf --> s13
     s13 -->|"held"| s15
-    s15 -.->|"on failure"| s17
+    s15 -.->|"on failure"| s18
     s13 -->|"none"| onfEnd
     s15 --> onfEnd
     s15 -.->|"on expired"| onfEnd
-    s13 -->|"posted, voided, expired"| onfEnd
+    s15 -.->|"on already_posted"| onfEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s17 bad
+    class s18 bad
 ```
 
 ## Calls
@@ -70,8 +70,8 @@ flowchart TD
 | 58 | `due = terms.payment(…)` | the date `payment` of `payment_terms.cal` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → `on failure` | — |
 | 60 | `payment = check_payment(…)` | `GET https://payments.example.com/orders/{order}/payment`, `idempotent` | 2 times every 10 seconds (failure, timeout) | — | `timeout`, `failure` → `on failure` | — |
 | 63 | `hold ← ship(…)` | `book stock.reserve.post`, `sends post` | — | — | `expired` → line 64<br>`timeout`, `failure` → `on failure` | `hold`: `posted` |
-| 67 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → line 68<br>`timeout`, `failure` → `on failure` | `hold`: `voided` |
-| 75 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → line 76<br>`timeout`, `failure` → line 77 | `hold`: `voided` |
+| 67 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → line 68<br>`already_posted`, `timeout`, `failure` → `on failure` | `hold`: `voided` |
+| 75 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → line 76<br>`already_posted` → line 77<br>`timeout`, `failure` → line 78 | `hold`: `voided` |
 
 ## Ends
 
@@ -83,6 +83,6 @@ Every way the workflow can end, and what each case can be then, the events on th
 | 64 | `succeed outcome = not_paid, due = due.day` | `expired` |
 | 65 | `succeed outcome = shipped, due = due.day` | `posted` |
 | 69 | `succeed outcome = not_paid, due = due.day` | `voided`, `expired` |
-| 77 | `fail NotPutBack` "the goods held for the order could not be put back" `leaving hold` | handed over as it is: `held`, `voided`, `expired` |
+| 78 | `fail NotPutBack` "the goods held for the order could not be put back" `leaving hold` | handed over as it is: `held`, `posted`, `voided`, `expired` |
 | 78 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `posted`, `voided`, `expired` |
 

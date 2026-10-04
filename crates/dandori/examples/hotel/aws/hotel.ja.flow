@@ -114,10 +114,10 @@ flow
 
 on failure
   match 決済.status
-    none, succeeded, canceled => pass
+    none => pass
     requires_payment_method, requires_confirmation, requires_action, requires_capture =>
       決済 <- 与信を取り消す(intent: 決済.id)
-        on 状態の不一致 => pass
+        on 状態の不一致 => fail 取消の失敗 "Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡します" leaving 決済
         on failure => fail 取消の失敗 "与信を取り消せませんでした。担当者に引き渡します" leaving 決済
     processing => fail 確定の結果不明 "売上の確定の途中で失敗しました。担当者に引き渡します" leaving 決済
 

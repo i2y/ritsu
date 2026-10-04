@@ -84,19 +84,20 @@ flowchart TD
     onf(["on failure"])
     s30{{"match 決済.status"}}
     s32["決済 ← 与信を取り消す(…)<br>POST stripe /v1/payment_intents/{intent}/cancel<br>sends cancel"]
+    s33(["fail 取消の失敗<br>#quot;Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡しま…<br>leaving 決済"])
     s34(["fail 取消の失敗<br>#quot;与信を取り消せませんでした。担当者に引き渡します#quot;<br>leaving 決済"])
     s35(["fail 確定の結果不明<br>#quot;売上の確定の途中で失敗しました。担当者に引き渡します#quot;<br>leaving 決済"])
     onfEnd(["fails with the same error"])
     onf --> s30
     s30 -->|"requires_payment_method, requires_confirmation, requires_action, requires_capture"| s32
+    s32 -.->|"on 状態の不一致"| s33
     s32 -.->|"on failure"| s34
     s30 -->|"processing"| s35
-    s30 -->|"succeeded, canceled, none"| onfEnd
+    s30 -->|"none"| onfEnd
     s32 --> onfEnd
-    s32 -.->|"on 状態の不一致"| onfEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s34,s35 bad
+    class s33,s34,s35 bad
 ```
 
 ## on cancel
@@ -108,19 +109,20 @@ flowchart TD
     onc(["on cancel"])
     s36{{"match 決済.status"}}
     s38["決済 ← 与信を取り消す(…)<br>POST stripe /v1/payment_intents/{intent}/cancel<br>sends cancel"]
+    s39(["fail 取消の失敗<br>#quot;Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡しま…<br>leaving 決済"])
     s40(["fail 取消の失敗<br>#quot;与信を取り消せませんでした。担当者に引き渡します#quot;<br>leaving 決済"])
     s41(["fail 確定の結果不明<br>#quot;売上の確定の途中でキャンセルされました。担当者に引き渡します#quot;<br>leaving 決済"])
     oncEnd(["ends cancelled"])
     onc --> s36
     s36 -->|"requires_payment_method, requires_confirmation, requires_action, requires_capture"| s38
+    s38 -.->|"on 状態の不一致"| s39
     s38 -.->|"on failure"| s40
     s36 -->|"processing"| s41
-    s36 -->|"succeeded, canceled, none"| oncEnd
+    s36 -->|"none"| oncEnd
     s38 --> oncEnd
-    s38 -.->|"on 状態の不一致"| oncEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s40,s41 bad
+    class s39,s40,s41 bad
 ```
 
 ## Calls
@@ -152,12 +154,14 @@ Every way the workflow can end, and what each case can be then, the events on th
 | 96 | `succeed 結果 = 宿泊済` | `succeeded` |
 | 105 | `succeed 結果 = 宿泊済` | `succeeded` |
 | 106 | `fail 確定の結果不明` "売上の確定の結果が分かりません。担当者に引き渡します" `leaving 決済` | handed over as it is: `requires_payment_method`, `processing`, `succeeded` |
-| 114 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | handed over as it is: `requires_payment_method`, `requires_confirmation`, `requires_action`, `requires_capture`, `canceled` |
+| 113 | `fail 取消の失敗` "Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | handed over as it is: `requires_payment_method`, `processing`, `succeeded`, `canceled` |
+| 114 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | handed over as it is: `requires_payment_method`, `requires_confirmation`, `requires_action`, `processing`, `requires_capture`, `succeeded`, `canceled` |
 | 115 | `fail 確定の結果不明` "売上の確定の途中で失敗しました。担当者に引き渡します" `leaving 決済` | handed over as it is: `requires_payment_method`, `processing`, `succeeded` |
-| 115 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `succeeded`, `canceled` |
-| 124 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | handed over as it is: `requires_payment_method`, `requires_confirmation`, `requires_action`, `requires_capture`, `canceled` |
+| 115 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `canceled` |
+| 123 | `fail 取消の失敗` "Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | handed over as it is: `requires_payment_method`, `processing`, `succeeded`, `canceled` |
+| 124 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | handed over as it is: `requires_payment_method`, `requires_confirmation`, `requires_action`, `processing`, `requires_capture`, `succeeded`, `canceled` |
 | 125 | `fail 確定の結果不明` "売上の確定の途中でキャンセルされました。担当者に引き渡します" `leaving 決済` | handed over as it is: `requires_payment_method`, `processing`, `succeeded` |
-| 125 | `on cancel` runs to its end, and the workflow ends cancelled | not started, or `succeeded`, `canceled` |
+| 125 | `on cancel` runs to its end, and the workflow ends cancelled | not started, or `canceled` |
 
 ## Rules
 

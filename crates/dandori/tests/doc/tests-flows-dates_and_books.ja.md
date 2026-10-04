@@ -45,18 +45,19 @@ flowchart TD
     onf(["on failure"])
     s11{{"match 押さえ.state"}}
     s13["押さえ ← 戻す(…)<br>book 倉庫.引当.void<br>sends void"]
-    s15(["fail 戻せない<br>#quot;押さえた品を戻せませんでした#quot;<br>leaving 押さえ"])
+    s16(["fail 戻せない<br>#quot;押さえた品を戻せませんでした#quot;<br>leaving 押さえ"])
     onfEnd(["同じエラーで失敗する"])
     onf --> s11
     s11 -->|"held"| s13
-    s13 -.->|"on failure"| s15
+    s13 -.->|"on failure"| s16
     s11 -->|"none"| onfEnd
     s13 --> onfEnd
     s13 -.->|"on expired"| onfEnd
-    s11 -->|"posted, expired"| onfEnd
+    s13 -.->|"on already_posted"| onfEnd
+    s11 -->|"posted"| onfEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s15 bad
+    class s16 bad
 ```
 
 ## 呼び出し
@@ -70,7 +71,7 @@ flowchart TD
 | 64 | `締め = 期限.締め日(…)` | `出荷の期限.cal` の日付 `締め日`（Temporal ではローカルアクティビティ） | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → `on failure` | — |
 | 65 | `押さえ ← 一部を出す(…)` | `book 倉庫.引当.post`, `sends post` | — | — | `expired` → 66 行目<br>`timeout`, `failure` → `on failure` | `押さえ`: `posted` |
 | 67 | `知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → `on failure` | — |
-| 74 | `押さえ ← 戻す(…)` | `book 倉庫.引当.void`, `sends void` | — | — | `expired` → 75 行目<br>`timeout`, `failure` → 76 行目 | `押さえ`: `voided` |
+| 74 | `押さえ ← 戻す(…)` | `book 倉庫.引当.void`, `sends void` | — | — | `expired` → 75 行目<br>`already_posted` → 76 行目<br>`timeout`, `failure` → 77 行目 | `押さえ`: `voided` |
 
 ## 終わり方
 
@@ -81,6 +82,6 @@ flowchart TD
 | 61 | `succeed 出した数 = 0, 出荷日 = none, 締め日 = none` | 始まっていない |
 | 66 | `succeed 出した数 = 0, 出荷日 = none, 締め日 = 締め.day` | `expired` |
 | 68 | `succeed 出した数 = 受注.出す数, 出荷日 = 出荷.day, 締め日 = 締め.day` | `posted` |
-| 76 | `fail 戻せない` "押さえた品を戻せませんでした" `leaving 押さえ` | そのまま引き渡す: `held`, `voided`, `expired` |
-| 77 | `on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する | 始まっていないか、`posted`, `voided`, `expired` |
+| 77 | `fail 戻せない` "押さえた品を戻せませんでした" `leaving 押さえ` | そのまま引き渡す: `held`, `posted`, `voided`, `expired` |
+| 78 | `on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する | 始まっていないか、`posted`, `voided`, `expired` |
 

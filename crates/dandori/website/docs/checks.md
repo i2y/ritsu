@@ -48,7 +48,11 @@ and the calls on a case go only where they mean something (E009).
 event the state machine refuses in every state is an error (E021), and one it can refuse must be
 handled (E022). When the workflow ends, every case it started is in a final state, unless the flow
 hands it over with `fail … leaving` (E020). An error nothing handles can leave a case unfinished too
-(W101), which `on failure` settles.
+(W101), which `on failure` settles. A `match` on a case's state reads its record, which says what
+the workflow last heard of the case. After a call that failed, the event may have happened on the
+other side all the same, and the case be further on than its record says: the checker keeps both,
+so a `match` narrows the record, never where the case may be, and an arm for a state the record
+cannot say there is dead (E011).
 
 **Dates and books.** A date is given what its inputs take: a day, or a time when its calendar says
 its UTC offset (E003). A task that runs an operation of a book takes what the operation takes,

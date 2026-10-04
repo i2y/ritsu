@@ -136,7 +136,7 @@ pub fn ledger() -> Ledger {
         e(
             "E011",
             tr!("通ることのない分岐があります", "An arm that can never be taken"),
-            tr!("`match` の分岐が、そこで値がとりえない値だけを受けるとき。前の分岐がもう受けた値、その場所では来ない案件の状態など。", "An arm of a `match` that takes only values that cannot be there: values an arm before it takes, a state the case cannot be in at that point."),
+            tr!("`match` の分岐が、そこで値がとりえない値だけを受けるとき。前の分岐がもう受けた値、その場所で案件のレコードが言うことのない状態など（案件の状態で分かれる `match` が読むのは、ワークフローが最後に聞いた状態です）。", "An arm of a `match` that takes only values that cannot be there: values an arm before it takes, a state the case's record cannot say at that point (a `match` on a case's state reads what the workflow last heard of it)."),
             tr!("その分岐を消すか、値を受ける分岐に直します。", "Take the arm out, or make it take a value that can come."),
             "workflow w v1\n\nenum color = red | green\n\ninputs\n  c : color\n\nflow\n  match c\n    red => pass\n    green => pass\n    red => pass\n",
             &["E010"],

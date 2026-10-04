@@ -1,0 +1,25 @@
+警告[W103]: tests/fixtures/capture_timeout_handed_over.flow:35:1: 外部のサービスで案件ができたあとに `open_payment` が失敗すると、ワークフローはその案件を見失います。リトライしたときに同じ案件が返るよう、タスクに `key` を付けてください
+    35 |   p <- open_payment()
+警告[W101]: tests/fixtures/capture_timeout_handed_over.flow:36:1: `capture_payment` が失敗すると、案件 `p` が pending, processing のままワークフローが失敗します。そうなる呼び出しは 3 か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください
+    36 |   p <- capture_payment(id: p.id)
+  そうなる例:
+      35  open_payment: p が pending で始まる
+      36  capture_payment が失敗する（failure）
+build --target asl:
+エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:10:1: `open_payment` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
+    10 | task open_payment() -> Payment
+エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:13:1: `capture_payment` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
+    13 | task capture_payment(id: string) -> Payment
+エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:19:1: `void_payment` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
+    19 | task void_payment(id: string) -> Payment
+エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:25:1: `settle_payment` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります
+    25 | task settle_payment(id: string) -> Payment
+build --target argo:
+エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:10:1: `open_payment` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります
+    10 | task open_payment() -> Payment
+エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:13:1: `capture_payment` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります
+    13 | task capture_payment(id: string) -> Payment
+エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:19:1: `void_payment` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります
+    19 | task void_payment(id: string) -> Payment
+エラー[E050]: tests/fixtures/capture_timeout_handed_over.flow:25:1: `settle_payment` を Argo Workflows で動かすには `image`・`lambda`・`http`・`aws`・`agent`・`jev`・`workflow template` のどれかが要ります
+    25 | task settle_payment(id: string) -> Payment

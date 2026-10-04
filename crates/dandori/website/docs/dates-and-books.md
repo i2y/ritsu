@@ -174,6 +174,12 @@ error[E022]: tests/fixtures/book_refusals.flow:41:1: the book may refuse `post` 
 A workflow that can end with the goods still held is E020, as with any case; the invoice puts them
 back in `on failure`.
 
+The hold's record says what the last operation answered (`held`, `posted` or `voided`), never
+`expired`: an expiry shows as a refusal with `expired`, and an arm for `expired` in a `match` on the
+hold's state is one that is never taken (E011). After a post that failed, the book may have posted
+the hold all the same, so a void there can be refused with `already_posted`; the invoice's
+`on failure` takes that refusal too when it puts the goods back.
+
 ## On each platform
 
 | | Step Functions | Temporal | Lambda durable functions | Argo Workflows | pydantic-graph |

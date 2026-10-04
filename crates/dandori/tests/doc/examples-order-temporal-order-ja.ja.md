@@ -90,19 +90,20 @@ flowchart TD
     onc(["on cancel"])
     s28{{"match 受注.状態"}}
     s30["受注 ← 取消を頼む(…)<br>POST https://warehouse.example.com/v1/orders/{id}/cancellations<br>sends 取消依頼"]
+    s31(["fail 出荷後の取消<br>#quot;倉庫が注文 {受注.id} の取消を断りました。出荷されたのかもしれません#quot;<br>leaving 受注"])
     s32(["fail 取消の失敗<br>#quot;倉庫で注文 {受注.id} を取り消せませんでした#quot;<br>leaving 受注"])
     s33(["fail 出荷後の取消<br>#quot;注文 {受注.id} はもう出荷されています#quot;<br>leaving 受注"])
     oncEnd(["キャンセルで終わる"])
     onc --> s28
     s28 -->|"受付, 入金済"| s30
+    s30 -.->|"on 断られた"| s31
     s30 -.->|"on failure"| s32
     s28 -->|"出荷済"| s33
-    s28 -->|"取消, none"| oncEnd
+    s28 -->|"none"| oncEnd
     s30 --> oncEnd
-    s30 -.->|"on 断られた"| oncEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s32,s33 bad
+    class s31,s32,s33 bad
 ```
 
 ## 呼び出し
@@ -134,7 +135,8 @@ flowchart TD
 | 86 | `succeed 便 = 判定.便` | `配達済` |
 | 87 | `fail 配達の遅れ` "配達の知らせのあとも出荷済のままです" `leaving 受注` | そのまま引き渡す: `出荷済`, `配達済` |
 | 90 | `fail 中断` "途中で止まりました。注文は倉庫のシステムにそのまま残ります" `leaving 受注` | そのまま引き渡す: 始まっていないか、`受付`, `入金済`, `出荷済`, `配達済`, `取消` |
-| 99 | `fail 取消の失敗` "倉庫で注文 {受注.id} を取り消せませんでした" `leaving 受注` | そのまま引き渡す: `受付`, `入金済`, `取消` |
+| 98 | `fail 出荷後の取消` "倉庫が注文 {受注.id} の取消を断りました。出荷されたのかもしれません" `leaving 受注` | そのまま引き渡す: `出荷済`, `配達済`, `取消` |
+| 99 | `fail 取消の失敗` "倉庫で注文 {受注.id} を取り消せませんでした" `leaving 受注` | そのまま引き渡す: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
 | 100 | `fail 出荷後の取消` "注文 {受注.id} はもう出荷されています" `leaving 受注` | そのまま引き渡す: `出荷済`, `配達済` |
 | 100 | `on cancel` が最後まで走り、ワークフローはキャンセルで終わる | 始まっていないか、`取消` |
 

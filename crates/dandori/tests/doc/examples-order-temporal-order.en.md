@@ -90,19 +90,20 @@ flowchart TD
     onc(["on cancel"])
     s28{{"match order.state"}}
     s30["order ← request_cancel(…)<br>POST https://warehouse.example.com/v1/orders/{id}/cancellations<br>sends cancel"]
+    s31(["fail ShippedAlready<br>#quot;The warehouse refused to cancel order {order.i…<br>leaving order"])
     s32(["fail CancelFailed<br>#quot;Could not cancel order {order.id} at the wareh…<br>leaving order"])
     s33(["fail ShippedAlready<br>#quot;Order {order.id} has shipped already#quot;<br>leaving order"])
     oncEnd(["ends cancelled"])
     onc --> s28
     s28 -->|"received, paid"| s30
+    s30 -.->|"on conflict"| s31
     s30 -.->|"on failure"| s32
     s28 -->|"shipped"| s33
-    s28 -->|"cancelled, none"| oncEnd
+    s28 -->|"none"| oncEnd
     s30 --> oncEnd
-    s30 -.->|"on conflict"| oncEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s32,s33 bad
+    class s31,s32,s33 bad
 ```
 
 ## Calls
@@ -134,7 +135,8 @@ Every way the workflow can end, and what each case can be then, the events on th
 | 87 | `succeed carrier = decision.carrier` | `delivered` |
 | 88 | `fail DeliveryLate` "Still shipped after word of the delivery" `leaving order` | handed over as it is: `shipped`, `delivered` |
 | 91 | `fail Stopped` "Stopped on the way; the order stays in the warehouse's system as it is" `leaving order` | handed over as it is: not started, or `received`, `paid`, `shipped`, `delivered`, `cancelled` |
-| 101 | `fail CancelFailed` "Could not cancel order {order.id} at the warehouse" `leaving order` | handed over as it is: `received`, `paid`, `cancelled` |
+| 100 | `fail ShippedAlready` "The warehouse refused to cancel order {order.id}; it may have shipped" `leaving order` | handed over as it is: `shipped`, `delivered`, `cancelled` |
+| 101 | `fail CancelFailed` "Could not cancel order {order.id} at the warehouse" `leaving order` | handed over as it is: `received`, `paid`, `shipped`, `delivered`, `cancelled` |
 | 102 | `fail ShippedAlready` "Order {order.id} has shipped already" `leaving order` | handed over as it is: `shipped`, `delivered` |
 | 102 | `on cancel` runs to its end, and the workflow ends cancelled | not started, or `cancelled` |
 

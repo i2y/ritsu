@@ -1,0 +1,25 @@
+warning[W103]: tests/fixtures/capture_timeout_handed_over.flow:35:1: if `open_payment` fails after the other side made the case, the workflow has no hold on it; give the task `key`, so that a retry finds the same one
+    35 |   p <- open_payment()
+warning[W101]: tests/fixtures/capture_timeout_handed_over.flow:36:1: if `capture_payment` fails, the workflow fails with the case `p` in pending, processing; 3 call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case
+    36 |   p <- capture_payment(id: p.id)
+  the run that gets there:
+      35  open_payment: p starts in pending
+      36  capture_payment fails (failure)
+build --target asl:
+error[E050]: tests/fixtures/capture_timeout_handed_over.flow:10:1: `open_payment` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
+    10 | task open_payment() -> Payment
+error[E050]: tests/fixtures/capture_timeout_handed_over.flow:13:1: `capture_payment` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
+    13 | task capture_payment(id: string) -> Payment
+error[E050]: tests/fixtures/capture_timeout_handed_over.flow:19:1: `void_payment` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
+    19 | task void_payment(id: string) -> Payment
+error[E050]: tests/fixtures/capture_timeout_handed_over.flow:25:1: `settle_payment` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions
+    25 | task settle_payment(id: string) -> Payment
+build --target argo:
+error[E050]: tests/fixtures/capture_timeout_handed_over.flow:10:1: `open_payment` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows
+    10 | task open_payment() -> Payment
+error[E050]: tests/fixtures/capture_timeout_handed_over.flow:13:1: `capture_payment` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows
+    13 | task capture_payment(id: string) -> Payment
+error[E050]: tests/fixtures/capture_timeout_handed_over.flow:19:1: `void_payment` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows
+    19 | task void_payment(id: string) -> Payment
+error[E050]: tests/fixtures/capture_timeout_handed_over.flow:25:1: `settle_payment` needs `image`, `lambda`, `http`, `aws`, `agent`, `jev` or `workflow template` to run on Argo Workflows
+    25 | task settle_payment(id: string) -> Payment

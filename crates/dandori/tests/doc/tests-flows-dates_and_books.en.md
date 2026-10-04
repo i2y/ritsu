@@ -45,18 +45,19 @@ flowchart TD
     onf(["on failure"])
     s11{{"match 押さえ.state"}}
     s13["押さえ ← 戻す(…)<br>book 倉庫.引当.void<br>sends void"]
-    s15(["fail 戻せない<br>#quot;押さえた品を戻せませんでした#quot;<br>leaving 押さえ"])
+    s16(["fail 戻せない<br>#quot;押さえた品を戻せませんでした#quot;<br>leaving 押さえ"])
     onfEnd(["fails with the same error"])
     onf --> s11
     s11 -->|"held"| s13
-    s13 -.->|"on failure"| s15
+    s13 -.->|"on failure"| s16
     s11 -->|"none"| onfEnd
     s13 --> onfEnd
     s13 -.->|"on expired"| onfEnd
-    s11 -->|"posted, expired"| onfEnd
+    s13 -.->|"on already_posted"| onfEnd
+    s11 -->|"posted"| onfEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s15 bad
+    class s16 bad
 ```
 
 ## Calls
@@ -70,7 +71,7 @@ flowchart TD
 | 64 | `締め = 期限.締め日(…)` | the date `締め日` of `出荷の期限.cal`, a local activity on Temporal | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → `on failure` | — |
 | 65 | `押さえ ← 一部を出す(…)` | `book 倉庫.引当.post`, `sends post` | — | — | `expired` → line 66<br>`timeout`, `failure` → `on failure` | `押さえ`: `posted` |
 | 67 | `知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → `on failure` | — |
-| 74 | `押さえ ← 戻す(…)` | `book 倉庫.引当.void`, `sends void` | — | — | `expired` → line 75<br>`timeout`, `failure` → line 76 | `押さえ`: `voided` |
+| 74 | `押さえ ← 戻す(…)` | `book 倉庫.引当.void`, `sends void` | — | — | `expired` → line 75<br>`already_posted` → line 76<br>`timeout`, `failure` → line 77 | `押さえ`: `voided` |
 
 ## Ends
 
@@ -81,6 +82,6 @@ Every way the workflow can end, and what each case can be then, the events on th
 | 61 | `succeed 出した数 = 0, 出荷日 = none, 締め日 = none` | not started |
 | 66 | `succeed 出した数 = 0, 出荷日 = none, 締め日 = 締め.day` | `expired` |
 | 68 | `succeed 出した数 = 受注.出す数, 出荷日 = 出荷.day, 締め日 = 締め.day` | `posted` |
-| 76 | `fail 戻せない` "押さえた品を戻せませんでした" `leaving 押さえ` | handed over as it is: `held`, `voided`, `expired` |
-| 77 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `posted`, `voided`, `expired` |
+| 77 | `fail 戻せない` "押さえた品を戻せませんでした" `leaving 押さえ` | handed over as it is: `held`, `posted`, `voided`, `expired` |
+| 78 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `posted`, `voided`, `expired` |
 

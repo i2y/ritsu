@@ -135,13 +135,15 @@ flow
 ```flow
 on failure
   match pi.status
-    none, succeeded, canceled => pass
+    none => pass
     requires_payment_method, requires_confirmation, requires_action, requires_capture =>
       pi <- cancel_intent(intent: pi.id)
-        on unexpected_state => pass
+        on unexpected_state => fail CleanupFailed "Stripe refused to release the hold; the capture may have gone through. Handing it over to staff" leaving pi
         on failure => fail CleanupFailed "Releasing the hold failed; handing it over to staff" leaving pi
     processing => fail SettlementUnclear "Failed in the middle of the capture; handing it over to staff" leaving pi
 ```
+
+Stripe が取消を断ったときは、失敗したように見えた売上の確定が、実は通っているかもしれません。`pi` のレコードは `requires_capture` のままでも、Stripe の側では `processing` になっていることがあります。検査は、ワークフローが最後に聞いた案件の状態と、案件が実際にいるかもしれない状態の両方を持っています。そのため、ここを `on unexpected_state => pass` にすると、`pi` が `processing` のまま失敗しうると言います（E020）。そこで、断られたら担当者に引き渡します（`leaving pi`）。
 
 タスクが失敗し、そのエラーをどこでも処理しなかったときは、`on failure` が走って案件を片付けます。そのあと実行は同じエラーで失敗します。
 

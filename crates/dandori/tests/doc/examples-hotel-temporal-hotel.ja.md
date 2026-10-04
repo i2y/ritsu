@@ -84,19 +84,20 @@ flowchart TD
     onf(["on failure"])
     s30{{"match pi.status"}}
     s32["pi ← cancel_intent(…)<br>POST stripe /v1/payment_intents/{intent}/cancel<br>sends cancel"]
+    s33(["fail CleanupFailed<br>#quot;Stripe refused to release the hold; the captur…<br>leaving pi"])
     s34(["fail CleanupFailed<br>#quot;Releasing the hold failed; handing it over to …<br>leaving pi"])
     s35(["fail SettlementUnclear<br>#quot;Failed in the middle of the capture; handing i…<br>leaving pi"])
     onfEnd(["同じエラーで失敗する"])
     onf --> s30
     s30 -->|"requires_payment_method, requires_confirmation, requires_action, requires_capture"| s32
+    s32 -.->|"on unexpected_state"| s33
     s32 -.->|"on failure"| s34
     s30 -->|"processing"| s35
-    s30 -->|"succeeded, canceled, none"| onfEnd
+    s30 -->|"none"| onfEnd
     s32 --> onfEnd
-    s32 -.->|"on unexpected_state"| onfEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s34,s35 bad
+    class s33,s34,s35 bad
 ```
 
 ## on cancel
@@ -108,19 +109,20 @@ flowchart TD
     onc(["on cancel"])
     s36{{"match pi.status"}}
     s38["pi ← cancel_intent(…)<br>POST stripe /v1/payment_intents/{intent}/cancel<br>sends cancel"]
+    s39(["fail CleanupFailed<br>#quot;Stripe refused to release the hold; the captur…<br>leaving pi"])
     s40(["fail CleanupFailed<br>#quot;Releasing the hold failed; handing it over to …<br>leaving pi"])
     s41(["fail SettlementUnclear<br>#quot;Cancelled in the middle of the capture; handin…<br>leaving pi"])
     oncEnd(["キャンセルで終わる"])
     onc --> s36
     s36 -->|"requires_payment_method, requires_confirmation, requires_action, requires_capture"| s38
+    s38 -.->|"on unexpected_state"| s39
     s38 -.->|"on failure"| s40
     s36 -->|"processing"| s41
-    s36 -->|"succeeded, canceled, none"| oncEnd
+    s36 -->|"none"| oncEnd
     s38 --> oncEnd
-    s38 -.->|"on unexpected_state"| oncEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s40,s41 bad
+    class s39,s40,s41 bad
 ```
 
 ## 呼び出し
@@ -152,12 +154,14 @@ flowchart TD
 | 96 | `succeed outcome = stayed` | `succeeded` |
 | 105 | `succeed outcome = stayed` | `succeeded` |
 | 106 | `fail SettlementUnclear` "The capture has no clear outcome; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded` |
-| 114 | `fail CleanupFailed` "Releasing the hold failed; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `requires_confirmation`, `requires_action`, `requires_capture`, `canceled` |
+| 113 | `fail CleanupFailed` "Stripe refused to release the hold; the capture may have gone through. Handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded`, `canceled` |
+| 114 | `fail CleanupFailed` "Releasing the hold failed; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `requires_confirmation`, `requires_action`, `processing`, `requires_capture`, `succeeded`, `canceled` |
 | 115 | `fail SettlementUnclear` "Failed in the middle of the capture; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded` |
-| 115 | `on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する | 始まっていないか、`succeeded`, `canceled` |
-| 124 | `fail CleanupFailed` "Releasing the hold failed; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `requires_confirmation`, `requires_action`, `requires_capture`, `canceled` |
+| 115 | `on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する | 始まっていないか、`canceled` |
+| 123 | `fail CleanupFailed` "Stripe refused to release the hold; the capture may have gone through. Handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded`, `canceled` |
+| 124 | `fail CleanupFailed` "Releasing the hold failed; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `requires_confirmation`, `requires_action`, `processing`, `requires_capture`, `succeeded`, `canceled` |
 | 125 | `fail SettlementUnclear` "Cancelled in the middle of the capture; handing it over to staff" `leaving pi` | そのまま引き渡す: `requires_payment_method`, `processing`, `succeeded` |
-| 125 | `on cancel` が最後まで走り、ワークフローはキャンセルで終わる | 始まっていないか、`succeeded`, `canceled` |
+| 125 | `on cancel` が最後まで走り、ワークフローはキャンセルで終わる | 始まっていないか、`canceled` |
 
 ## 規則
 

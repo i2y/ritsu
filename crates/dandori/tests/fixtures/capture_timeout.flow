@@ -1,0 +1,43 @@
+workflow capture_timeout v1
+description "A capture that times out may still have happened; the flow then voids what it last heard was pending"
+
+use rule capture from "rules/capture.rule"
+
+record Payment
+  id     : string
+  status : capture.status
+
+task open_payment() -> Payment
+  starts capture.payment
+
+task capture_payment(id: string) -> Payment
+  sends capture
+  errors unexpected_state
+  refused as unexpected_state
+  key
+
+task void_payment(id: string) -> Payment
+  sends void
+  errors unexpected_state
+  refused as unexpected_state
+  key
+
+task settle_payment(id: string) -> Payment
+  sends settle
+  errors unexpected_state
+  refused as unexpected_state
+  key
+
+case p : Payment follows capture.payment
+  refused when refused = true
+
+flow
+  p <- open_payment()
+  p <- capture_payment(id: p.id)
+    on timeout => pass
+  match p.status
+    pending =>
+      p <- void_payment(id: p.id)
+        on unexpected_state => succeed
+    processing =>
+      p <- settle_payment(id: p.id)

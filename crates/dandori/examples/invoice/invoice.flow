@@ -41,7 +41,7 @@ task ship(order: string, sku: string) -> stock.reserve
 task put_back(order: string, sku: string) -> stock.reserve
   book stock.reserve.void
   sends void
-  errors expired
+  errors expired, already_posted
 
 task check_payment(order: string, due: date) -> Payment
   http GET "https://payments.example.com/orders/{order}/payment"
@@ -74,5 +74,5 @@ on failure
     held =>
       hold <- put_back(order: order.id, sku: order.sku)
         on expired => pass
+        on already_posted => pass
         on failure => fail NotPutBack "the goods held for the order could not be put back" leaving hold
-    posted, voided, expired => pass

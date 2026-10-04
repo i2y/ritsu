@@ -107,9 +107,9 @@ flow
 
 on failure
   match pi.status
-    none, succeeded, canceled => pass
+    none => pass
     requires_payment_method, requires_confirmation, requires_action, requires_capture =>
       pi <- cancel_intent(intent: pi.id)
-        on unexpected_state => pass
+        on unexpected_state => fail CleanupFailed "Stripe refused to release the hold; the capture may have gone through. Handing it over to staff" leaving pi
         on failure => fail CleanupFailed "Releasing the hold failed; handing it over to staff" leaving pi
     processing => fail SettlementUnclear "Failed in the middle of the capture; handing it over to staff" leaving pi

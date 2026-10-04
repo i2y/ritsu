@@ -1,0 +1,29 @@
+rule capture v1
+description "A payment captured, then settled; a void works only before the capture"
+
+enum status = pending | processing | done | voided
+enum event = capture | settle | void
+
+inputs
+  status : status
+  event  : event
+
+outputs
+  next_status : status
+  refused     : bool
+
+table transition
+policy unique
+| status     | event         | -> next_status | refused |
+| pending    | capture       | processing     | false   |
+| pending    | void          | voided         | false   |
+| pending    | settle        | status         | true    |
+| processing | settle        | done           | false   |
+| processing | capture, void | status         | true    |
+| done       | -             | status         | true    |
+| voided     | -             | status         | true    |
+
+machine payment over transition
+  carry   status -> next_status
+  initial pending
+  final   done, voided

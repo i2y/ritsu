@@ -22,3 +22,19 @@
       38  引き当てる: 押さえ が held で始まる
       40  match 受注.急ぎ: true
       41  出荷する: 押さえ が held → posted
+エラー[E022]: tests/fixtures/book_refusals.flow:51:1: ここでは帳簿が `void` を `already_posted` で断ることがあります（`押さえ` が posted のとき）。`戻す` の `errors` に `already_posted` を書き、`on already_posted =>` で処理してください
+    51 |       押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+  そうなる例:
+      38  引き当てる: 押さえ が held で始まる
+      40  match 受注.急ぎ: true
+      41  出荷する: 押さえ が held → posted
+      41  出荷する が失敗する（timeout・failure）
+      48  on failure
+      50  match 押さえ.state: held
+エラー[E011]: tests/fixtures/book_refusals.flow:54:1: 分岐 `expired` は通りません。ここで `押さえ.state` は held・none・posted のどれかです
+    54 |     posted, expired => pass
+  そうなる例:
+      38  引き当てる: 押さえ が held で始まる
+      40  match 受注.急ぎ: true
+      41  出荷する が失敗する（timeout・failure）
+      48  on failure

@@ -128,6 +128,8 @@ task 一部を出す(注文: string, sku: string, 数: int) -> 倉庫.引当
 
 押さえたままの品を残して終わりうるワークフローは、ほかの案件と同じく E020 です。請求の例は、`on failure` で棚に戻します。
 
+仮押さえのレコードの状態は、最後の操作が返したもの（`held`、`posted`、`voided`）で、`expired` になることはありません。期限切れは `expired` での断りとして分かります。仮押さえの状態で分かれる `match` に `expired` の分岐を書くと、通ることのない分岐になります（E011）。また、確定が失敗しても、帳簿では確定していることがあります。そのあとの取消は `already_posted` で断られうるので、請求の例の `on failure` は、品を棚に戻すときにこの断りも受けます。
+
 ## プラットフォームごと
 
 | | Step Functions | Temporal | Lambda durable functions | Argo Workflows | pydantic-graph |

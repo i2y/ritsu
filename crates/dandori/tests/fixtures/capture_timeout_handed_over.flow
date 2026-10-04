@@ -1,0 +1,43 @@
+workflow capture_timeout_handed_over v1
+description "As capture_timeout, but a refused void hands the payment over as it is: the capture that timed out may have happened after all"
+
+use rule capture from "rules/capture.rule"
+
+record Payment
+  id     : string
+  status : capture.status
+
+task open_payment() -> Payment
+  starts capture.payment
+
+task capture_payment(id: string) -> Payment
+  sends capture
+  errors unexpected_state
+  refused as unexpected_state
+  key
+
+task void_payment(id: string) -> Payment
+  sends void
+  errors unexpected_state
+  refused as unexpected_state
+  key
+
+task settle_payment(id: string) -> Payment
+  sends settle
+  errors unexpected_state
+  refused as unexpected_state
+  key
+
+case p : Payment follows capture.payment
+  refused when refused = true
+
+flow
+  p <- open_payment()
+  p <- capture_payment(id: p.id)
+    on timeout => pass
+  match p.status
+    pending =>
+      p <- void_payment(id: p.id)
+        on unexpected_state => fail Stuck "The void was refused: the capture may have gone through" leaving p
+    processing =>
+      p <- settle_payment(id: p.id)

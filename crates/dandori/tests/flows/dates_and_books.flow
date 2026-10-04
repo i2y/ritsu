@@ -43,7 +43,7 @@ task 一部を出す(注文: string, sku: string, 数: int) -> 倉庫.引当
 task 戻す(注文: string, sku: string) -> 倉庫.引当
   book 倉庫.引当.void
   sends void
-  errors expired
+  errors expired, already_posted
 
 task 予定を聞く(注文: string, 受付: string) -> 予定
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:schedule"
@@ -73,5 +73,6 @@ on failure
     held =>
       押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
         on expired => pass
+        on already_posted => pass
         on failure => fail 戻せない "押さえた品を戻せませんでした" leaving 押さえ
-    posted, expired => pass
+    posted => pass

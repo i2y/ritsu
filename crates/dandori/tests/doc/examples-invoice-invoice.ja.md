@@ -48,18 +48,18 @@ flowchart TD
     onf(["on failure"])
     s13{{"match hold.state"}}
     s15["hold ← put_back(…)<br>book stock.reserve.void<br>sends void"]
-    s17(["fail NotPutBack<br>#quot;the goods held for the order could not be put …<br>leaving hold"])
+    s18(["fail NotPutBack<br>#quot;the goods held for the order could not be put …<br>leaving hold"])
     onfEnd(["同じエラーで失敗する"])
     onf --> s13
     s13 -->|"held"| s15
-    s15 -.->|"on failure"| s17
+    s15 -.->|"on failure"| s18
     s13 -->|"none"| onfEnd
     s15 --> onfEnd
     s15 -.->|"on expired"| onfEnd
-    s13 -->|"posted, voided, expired"| onfEnd
+    s15 -.->|"on already_posted"| onfEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s17 bad
+    class s18 bad
 ```
 
 ## 呼び出し
@@ -70,8 +70,8 @@ flowchart TD
 | 58 | `due = terms.payment(…)` | `payment_terms.cal` の日付 `payment` | 2 回（1 秒後と 2 秒後、failure） | — | `timeout`, `failure` → `on failure` | — |
 | 60 | `payment = check_payment(…)` | `GET https://payments.example.com/orders/{order}/payment`, `idempotent` | 10 秒おきに 2 回（failure, timeout） | — | `timeout`, `failure` → `on failure` | — |
 | 63 | `hold ← ship(…)` | `book stock.reserve.post`, `sends post` | — | — | `expired` → 64 行目<br>`timeout`, `failure` → `on failure` | `hold`: `posted` |
-| 67 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → 68 行目<br>`timeout`, `failure` → `on failure` | `hold`: `voided` |
-| 75 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → 76 行目<br>`timeout`, `failure` → 77 行目 | `hold`: `voided` |
+| 67 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → 68 行目<br>`already_posted`, `timeout`, `failure` → `on failure` | `hold`: `voided` |
+| 75 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → 76 行目<br>`already_posted` → 77 行目<br>`timeout`, `failure` → 78 行目 | `hold`: `voided` |
 
 ## 終わり方
 
@@ -83,6 +83,6 @@ flowchart TD
 | 64 | `succeed outcome = not_paid, due = due.day` | `expired` |
 | 65 | `succeed outcome = shipped, due = due.day` | `posted` |
 | 69 | `succeed outcome = not_paid, due = due.day` | `voided`, `expired` |
-| 77 | `fail NotPutBack` "the goods held for the order could not be put back" `leaving hold` | そのまま引き渡す: `held`, `voided`, `expired` |
+| 78 | `fail NotPutBack` "the goods held for the order could not be put back" `leaving hold` | そのまま引き渡す: `held`, `posted`, `voided`, `expired` |
 | 78 | `on failure` が最後まで走り、ワークフローは始まりのエラーで失敗する | 始まっていないか、`posted`, `voided`, `expired` |
 

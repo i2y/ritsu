@@ -1,0 +1,16 @@
+warning[W103]: tests/fixtures/capture_timeout.flow:35:1: if `open_payment` fails after the other side made the case, the workflow has no hold on it; give the task `key`, so that a retry finds the same one
+    35 |   p <- open_payment()
+warning[W101]: tests/fixtures/capture_timeout.flow:36:1: if `capture_payment` fails, the workflow fails with the case `p` in pending, processing; 3 call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case
+    36 |   p <- capture_payment(id: p.id)
+  the run that gets there:
+      35  open_payment: p starts in pending
+      36  capture_payment fails (failure)
+error[E020]: tests/fixtures/capture_timeout.flow:41:1: the workflow can end here with the case `p` in processing, which is not final (done, voided are)
+    41 |         on unexpected_state => succeed
+  the run that gets there:
+      35  open_payment: p starts in pending
+      36  capture_payment: p pending → processing
+      37  capture_payment fails: on timeout
+      39  match p.status: pending
+      40  void_payment: void is refused (unexpected_state)
+      41  succeed

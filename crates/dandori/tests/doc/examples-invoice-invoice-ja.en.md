@@ -48,18 +48,18 @@ flowchart TD
     onf(["on failure"])
     s13{{"match 押さえ.state"}}
     s15["押さえ ← 戻す(…)<br>book 在庫.引当.void<br>sends void"]
-    s17(["fail 戻せない<br>#quot;注文のために押さえた品を戻せませんでした#quot;<br>leaving 押さえ"])
+    s18(["fail 戻せない<br>#quot;注文のために押さえた品を戻せませんでした#quot;<br>leaving 押さえ"])
     onfEnd(["fails with the same error"])
     onf --> s13
     s13 -->|"held"| s15
-    s15 -.->|"on failure"| s17
+    s15 -.->|"on failure"| s18
     s13 -->|"none"| onfEnd
     s15 --> onfEnd
     s15 -.->|"on expired"| onfEnd
-    s13 -->|"posted, voided, expired"| onfEnd
+    s15 -.->|"on already_posted"| onfEnd
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s17 bad
+    class s18 bad
 ```
 
 ## Calls
@@ -70,8 +70,8 @@ flowchart TD
 | 58 | `期限 = 支払条件.支払日(…)` | the date `支払日` of `支払条件.cal` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → `on failure` | — |
 | 60 | `入金 = 支払を確かめる(…)` | `GET https://payments.example.com/orders/{注文}/payment`, `idempotent` | 2 times every 10 seconds (failure, timeout) | — | `timeout`, `failure` → `on failure` | — |
 | 63 | `押さえ ← 出荷する(…)` | `book 在庫.引当.post`, `sends post` | — | — | `expired` → line 64<br>`timeout`, `failure` → `on failure` | `押さえ`: `posted` |
-| 67 | `押さえ ← 戻す(…)` | `book 在庫.引当.void`, `sends void` | — | — | `expired` → line 68<br>`timeout`, `failure` → `on failure` | `押さえ`: `voided` |
-| 75 | `押さえ ← 戻す(…)` | `book 在庫.引当.void`, `sends void` | — | — | `expired` → line 76<br>`timeout`, `failure` → line 77 | `押さえ`: `voided` |
+| 67 | `押さえ ← 戻す(…)` | `book 在庫.引当.void`, `sends void` | — | — | `expired` → line 68<br>`already_posted`, `timeout`, `failure` → `on failure` | `押さえ`: `voided` |
+| 75 | `押さえ ← 戻す(…)` | `book 在庫.引当.void`, `sends void` | — | — | `expired` → line 76<br>`already_posted` → line 77<br>`timeout`, `failure` → line 78 | `押さえ`: `voided` |
 
 ## Ends
 
@@ -83,6 +83,6 @@ Every way the workflow can end, and what each case can be then, the events on th
 | 64 | `succeed 結果 = 未払い, 期日 = 期限.day` | `expired` |
 | 65 | `succeed 結果 = 出荷済, 期日 = 期限.day` | `posted` |
 | 69 | `succeed 結果 = 未払い, 期日 = 期限.day` | `voided`, `expired` |
-| 77 | `fail 戻せない` "注文のために押さえた品を戻せませんでした" `leaving 押さえ` | handed over as it is: `held`, `voided`, `expired` |
+| 78 | `fail 戻せない` "注文のために押さえた品を戻せませんでした" `leaving 押さえ` | handed over as it is: `held`, `posted`, `voided`, `expired` |
 | 78 | `on failure` runs to its end, and the workflow fails with the error that started it | not started, or `posted`, `voided`, `expired` |
 

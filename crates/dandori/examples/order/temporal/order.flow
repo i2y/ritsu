@@ -94,9 +94,9 @@ on failure
 # cancel the order too, unless it has gone out.
 on cancel
   match order.state
-    none, cancelled => pass
+    none => pass
     received, paid =>
       order <- request_cancel(id: order.id)
-        on conflict => pass
+        on conflict => fail ShippedAlready "The warehouse refused to cancel order {order.id}; it may have shipped" leaving order
         on failure => fail CancelFailed "Could not cancel order {order.id} at the warehouse" leaving order
     shipped => fail ShippedAlready "Order {order.id} has shipped already" leaving order

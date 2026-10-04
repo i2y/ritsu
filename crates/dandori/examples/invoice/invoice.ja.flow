@@ -41,7 +41,7 @@ task 出荷する(注文: string, sku: string) -> 在庫.引当
 task 戻す(注文: string, sku: string) -> 在庫.引当
   book 在庫.引当.void
   sends void
-  errors expired
+  errors expired, already_posted
 
 task 支払を確かめる(注文: string, 期日: date) -> 支払
   http GET "https://payments.example.com/orders/{注文}/payment"
@@ -74,5 +74,5 @@ on failure
     held =>
       押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
         on expired => pass
+        on already_posted => pass
         on failure => fail 戻せない "注文のために押さえた品を戻せませんでした" leaving 押さえ
-    posted, voided, expired => pass

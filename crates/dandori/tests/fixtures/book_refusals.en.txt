@@ -22,3 +22,19 @@ error[E022]: tests/fixtures/book_refusals.flow:44:1: the book may refuse `void` 
       38  引き当てる: 押さえ starts in held
       40  match 受注.急ぎ: true
       41  出荷する: 押さえ held → posted
+error[E022]: tests/fixtures/book_refusals.flow:51:1: the book may refuse `void` here with `already_posted` (when `押さえ` is in posted); declare `already_posted` in the `errors` of `戻す`, and handle it with `on already_posted =>`
+    51 |       押さえ <- 戻す(注文: 受注.id, sku: 受注.sku)
+  the run that gets there:
+      38  引き当てる: 押さえ starts in held
+      40  match 受注.急ぎ: true
+      41  出荷する: 押さえ held → posted
+      41  出荷する fails (timeout, failure)
+      48  on failure
+      50  match 押さえ.state: held
+error[E011]: tests/fixtures/book_refusals.flow:54:1: the arm `expired` can never be taken: `押さえ.state` is one of held, none, posted here
+    54 |     posted, expired => pass
+  the run that gets there:
+      38  引き当てる: 押さえ starts in held
+      40  match 受注.急ぎ: true
+      41  出荷する fails (timeout, failure)
+      48  on failure

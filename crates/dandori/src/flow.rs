@@ -1,6 +1,7 @@
 //! The second pass: walk the flow as it can run, keeping for every point what is known —
-//! which variables are surely set, and for every case whether it has been started and
-//! which states it can be in, each with the shortest run that shows it. From that come
+//! which variables are surely set, and for every case what its record can say together with
+//! where it can really be on the other side (`CaseAbs`), each with the shortest run that shows
+//! it. From that come
 //! the checks that depend on the run: a match that misses a value or has an arm that can
 //! never be taken, a variable read before it is set, an event sent where the machine
 //! refuses it, and a case left in a state that is not final when the workflow ends.
@@ -100,12 +101,72 @@ fn shorter(a: &Path, b: &Path) -> Path {
     }
 }
 
+/// What a run can bring a case to at a point: pairs of what the flow last heard of the case and a
+/// state the case was in then or since, each with the shortest run that shows it. The first half is
+/// the state the case's record says (None before the flow has started the case); the second is where
+/// the case is on the other side, before the events there move it on (None while it is not started).
+/// The two part when a call that sends an event fails: the event may have happened on the other side
+/// though the record still says the state before it. A match on the case's state reads the record,
+/// so it narrows the first half and never the second, which is what the end of the workflow is
+/// checked on (E020). ritsu's `proofs/DandoriCore/Check.lean` keeps the same pairs; its check, which
+/// refuses more in two places (dandori's DESIGN 7), is proved to settle what E020 says.
 #[derive(Clone, Debug)]
 struct CaseAbs {
-    started: Tri,
-    /// a run on which the case has not been started, when `started` is not `Yes`
-    unstarted: Option<Path>,
-    states: BTreeMap<usize, Path>,
+    pairs: BTreeMap<(Option<usize>, Option<usize>), Path>,
+}
+
+impl CaseAbs {
+    /// Not started, on the run so far.
+    fn unstarted_only(p: Path) -> CaseAbs {
+        CaseAbs { pairs: BTreeMap::from([((None, None), p)]) }
+    }
+
+    /// A case the flow has just heard of, in each of the states, with a run for each.
+    fn heard_in(states: BTreeMap<usize, Path>) -> CaseAbs {
+        CaseAbs { pairs: states.into_iter().map(|(s, p)| ((Some(s), Some(s)), p)).collect() }
+    }
+
+    /// Keep the pair, with the shorter of its runs.
+    fn add(&mut self, k: (Option<usize>, Option<usize>), p: Path) {
+        match self.pairs.get(&k) {
+            Some(q) if q.len() <= p.len() => {}
+            _ => {
+                self.pairs.insert(k, p);
+            }
+        }
+    }
+
+    /// Whether the flow has started the case: whether its record says a state.
+    fn started(&self) -> Tri {
+        let (yes, no) = (self.pairs.keys().any(|k| k.0.is_some()), self.pairs.keys().any(|k| k.0.is_none()));
+        match (yes, no) {
+            (_, false) => Tri::Yes,
+            (false, true) => Tri::No,
+            (true, true) => Tri::Maybe,
+        }
+    }
+
+    /// A run on which the case has not been started.
+    fn unstarted(&self) -> Option<Path> {
+        self.pairs.iter().filter(|(k, _)| k.0.is_none()).map(|(_, p)| p).min_by_key(|p| p.len()).cloned()
+    }
+
+    /// The states the case can be in on the other side, before the events there move it on, each
+    /// with a run: the second halves.
+    fn states(&self) -> BTreeMap<usize, Path> {
+        let mut out: BTreeMap<usize, Path> = BTreeMap::new();
+        for ((_, b), p) in &self.pairs {
+            if let Some(b) = b {
+                match out.get(b) {
+                    Some(q) if q.len() <= p.len() => {}
+                    _ => {
+                        out.insert(*b, p.clone());
+                    }
+                }
+            }
+        }
+        out
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -127,10 +188,7 @@ impl Abs {
     /// Record a step of the run, on the run to this point and on every witness it carries.
     fn step(mut self, s: Step) -> Abs {
         for c in &mut self.cases {
-            for p in c.states.values_mut() {
-                p.push(s.clone());
-            }
-            if let Some(p) = &mut c.unstarted {
+            for p in c.pairs.values_mut() {
                 p.push(s.clone());
             }
         }
@@ -152,7 +210,7 @@ impl Abs {
         self.live == o.live
             && self.set.iter().map(|(k, v)| (k, v.0)).eq(o.set.iter().map(|(k, v)| (k, v.0)))
             && self.cases.len() == o.cases.len()
-            && self.cases.iter().zip(&o.cases).all(|(a, b)| a.started == b.started && a.states.keys().eq(b.states.keys()))
+            && self.cases.iter().zip(&o.cases).all(|(a, b)| a.pairs.keys().eq(b.pairs.keys()))
             && self.narrow.len() == o.narrow.len()
             && self.narrow.iter().zip(&o.narrow).all(|((ka, va), (kb, vb))| ka == kb && va.keys().eq(vb.keys()))
     }
@@ -182,22 +240,11 @@ fn join(a: &Abs, b: &Abs) -> Abs {
         .iter()
         .zip(&b.cases)
         .map(|(x, y)| {
-            let mut states = x.states.clone();
-            for (s, p) in &y.states {
-                match states.get(s) {
-                    Some(q) if q.len() <= p.len() => {}
-                    _ => {
-                        states.insert(*s, p.clone());
-                    }
-                }
+            let mut u = x.clone();
+            for (k, p) in &y.pairs {
+                u.add(*k, p.clone());
             }
-            let started = tri(x.started, y.started);
-            let unstarted = match (&x.unstarted, &y.unstarted) {
-                (Some(p), Some(q)) => Some(shorter(p, q)),
-                (Some(p), None) | (None, Some(p)) => Some(p.clone()),
-                (None, None) => None,
-            };
-            CaseAbs { started, unstarted: if started == Tri::Yes { None } else { unstarted }, states }
+            u
         })
         .collect();
     let mut narrow = BTreeMap::new();
@@ -249,7 +296,7 @@ pub fn analyze(m: &Model) -> FlowResult {
         start.set.insert(v.clone(), if is_input { (Tri::Yes, None) } else { (Tri::No, Some(vec![])) });
     }
     for _ in &m.cases {
-        start.cases.push(CaseAbs { started: Tri::No, unstarted: Some(vec![]), states: BTreeMap::new() });
+        start.cases.push(CaseAbs::unstarted_only(vec![]));
     }
     let end = f.stmts(&m.flow, start);
     if end.live {
@@ -472,9 +519,10 @@ impl<'a> Flow<'a> {
         if let TExpr::Var { name, .. } = e {
             if let Some(ci) = self.m.case_index(name) {
                 let cabs = &a.cases[ci];
-                if cabs.started != Tri::Yes {
-                    let p = cabs.unstarted.clone().unwrap_or_default();
-                    let message = if cabs.started == Tri::No {
+                let started = cabs.started();
+                if started != Tri::Yes {
+                    let p = cabs.unstarted().unwrap_or_default();
+                    let message = if started == Tri::No {
                         tr!("ここでは案件 `{name}` はまだ始まっていません", "the case `{name}` has not been started here")
                     } else {
                         tr!("ここでは、案件 `{name}` が始まっていないことがあります", "the case `{name}` may not have been started here")
@@ -514,7 +562,7 @@ impl<'a> Flow<'a> {
 
     /// Keep what each case can be as the statement starts, joined with the other times the walk got here.
     fn note(&mut self, site: usize, a: &Abs) {
-        let now: Seen = a.cases.iter().map(|c| (c.started, c.states.keys().cloned().collect(), false)).collect();
+        let now: Seen = a.cases.iter().map(|c| (c.started(), c.states().keys().cloned().collect(), false)).collect();
         merge_seen(&mut self.seen, site, now);
     }
 
@@ -657,16 +705,17 @@ impl<'a> Flow<'a> {
         let now: Seen = (0..self.m.cases.len())
             .map(|c| {
                 let cabs = &a.cases[c];
-                let states = if cabs.started == Tri::No { BTreeSet::new() } else { self.closure(c, &cabs.states).keys().cloned().collect() };
-                (cabs.started, states, leaving.contains(&c))
+                let states = if cabs.started() == Tri::No { BTreeSet::new() } else { self.closure(c, &cabs.states()).keys().cloned().collect() };
+                (cabs.started(), states, leaving.contains(&c))
             })
             .collect();
         merge_seen(&mut self.ends, ending, now);
         for c in 0..self.m.cases.len() {
-            if leaving.contains(&c) || a.cases[c].started == Tri::No {
+            if leaving.contains(&c) || a.cases[c].started() == Tri::No {
                 continue;
             }
-            let cl = self.closure(c, &a.cases[c].states);
+            // where the case can be on the other side, whatever its record says
+            let cl = self.closure(c, &a.cases[c].states());
             let mc = self.m.machine(c);
             let bad: Vec<(usize, Path)> = cl.iter().filter(|(s, _)| !mc.is_final(**s)).map(|(s, p)| (*s, p.clone())).collect();
             if bad.is_empty() {
@@ -699,10 +748,10 @@ impl<'a> Flow<'a> {
             let mut first: Option<(usize, String, Path, Vec<String>)> = None;
             let mut count = 0;
             for (a, line, callee) in points {
-                if a.cases[c].started == Tri::No {
+                if a.cases[c].started() == Tri::No {
                     continue;
                 }
-                let cl = self.closure(c, &a.cases[c].states);
+                let cl = self.closure(c, &a.cases[c].states());
                 let mc = self.m.machine(c);
                 let bad: Vec<usize> = cl.keys().filter(|s| !mc.is_final(**s)).cloned().collect();
                 if bad.is_empty() {
@@ -760,7 +809,7 @@ impl<'a> Flow<'a> {
                 let cn = self.case_name(c).to_string();
                 match t.machine.clone() {
                     Some(TaskMachine::Starts { then, .. }) => {
-                        match a.cases[c].started {
+                        match a.cases[c].started() {
                             Tri::Yes => self.push(Diag::error("E013", s.line, 1, tr!("案件 `{cn}` はもう始まっています", "the case `{cn}` has been started already")).with_path(a.path.clone())),
                             Tri::Maybe => self.push(Diag::error("E013", s.line, 1, tr!("案件 `{cn}` がもう始まっていることがあります", "the case `{cn}` may have been started already")).with_path(a.path.clone())),
                             Tri::No => {}
@@ -795,7 +844,7 @@ impl<'a> Flow<'a> {
                             st2.insert(st, np);
                         }
                         self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(st2.keys().cloned());
-                        ok.cases[c] = CaseAbs { started: Tri::Yes, unstarted: None, states: st2 };
+                        ok.cases[c] = CaseAbs::heard_in(st2);
                         ok.path.push(Step::new(s.line, tr!("{}: {cn} が始まる", "{}: {cn} starts", t.name)).at(At::Stmt(s.site)));
                         Flow::assign(&mut ok, &cn);
                         // a book's operation is done once for the key the book gives it
@@ -816,19 +865,20 @@ impl<'a> Flow<'a> {
                             Some(x) => x,
                             None => return Abs::dead(),
                         };
-                        let now = self.closure(c, &a.cases[c].states);
+                        // every state the case can be in by now on the other side, whatever its record says
+                        let now = self.closure(c, &a.cases[c].states());
                         let mut fixed = self.m.cases[c].held.clone();
                         fixed.push((axis, coord));
                         let mut next: BTreeMap<usize, Path> = BTreeMap::new();
                         // a book's hold says why it refuses, row by row (chobo's `reason`); a rule's machine is refused as the task says
                         let hold = matches!(self.m.rules[self.m.cases[c].rule].kind, RuleKind::Hold { .. });
                         let reason_ix = self.m.machine(c).decides.iter().position(|d| d == "reason");
+                        let refusal = |o: &crate::rulec::Outcome| if hold { reason_ix.and_then(|i| o.produces.get(i).cloned().flatten()) } else { t.refused_as.clone() };
                         let mut refusing: BTreeMap<Option<String>, BTreeMap<usize, Path>> = BTreeMap::new();
                         for (st, p) in &now {
                             for o in self.m.machine(c).outcomes(*st, &fixed) {
                                 if self.is_refused(c, &o) {
-                                    let err = if hold { reason_ix.and_then(|i| o.produces.get(i).cloned().flatten()) } else { t.refused_as.clone() };
-                                    refusing.entry(err).or_default().entry(*st).or_insert_with(|| p.clone());
+                                    refusing.entry(refusal(&o)).or_default().entry(*st).or_insert_with(|| p.clone());
                                     continue;
                                 }
                                 let mut np = p.clone();
@@ -847,6 +897,36 @@ impl<'a> Flow<'a> {
                                 }
                             }
                         }
+                        // pair by pair: the record keeps what the flow last heard, and the case is in a state
+                        // the events on the other side lead to from the pair's. A refusal leaves it in a state
+                        // that refuses; any other error, where it was or where the event took it.
+                        let mut refused_pairs: BTreeMap<Option<String>, CaseAbs> = BTreeMap::new();
+                        let mut unsure = CaseAbs { pairs: BTreeMap::new() };
+                        // a case that may not have been started (E013 above) stays as it is on those runs
+                        let unstarted: Vec<((Option<usize>, Option<usize>), Path)> = a.cases[c].pairs.iter().filter(|(k, _)| k.1.is_none()).map(|(k, p)| (*k, p.clone())).collect();
+                        for ((heard, b), p) in &a.cases[c].pairs {
+                            let Some(b) = b else { continue };
+                            for (st, sp) in self.closure(c, &BTreeMap::from([(*b, p.clone())])) {
+                                unsure.add((*heard, Some(st)), sp.clone());
+                                for o in self.m.machine(c).outcomes(st, &fixed) {
+                                    if self.is_refused(c, &o) {
+                                        refused_pairs.entry(refusal(&o)).or_insert_with(|| CaseAbs { pairs: BTreeMap::new() }).add((*heard, Some(st)), sp.clone());
+                                        continue;
+                                    }
+                                    let mut np = sp.clone();
+                                    np.push(
+                                        Step::new(s.line, tr!("{}: {cn} が {} → {}", "{}: {cn} {} → {}", t.name, self.state_name(c, st), self.state_name(c, o.next))).at(At::Stmt(s.site)),
+                                    );
+                                    unsure.add((*heard, Some(o.next)), np);
+                                }
+                            }
+                        }
+                        for (k, p) in &unstarted {
+                            unsure.add(*k, p.clone());
+                            for r in refused_pairs.values_mut() {
+                                r.add(*k, p.clone());
+                            }
+                        }
                         if next.is_empty() {
                             let names = self.names(c, now.keys().cloned()).join(", ");
                             let p = now.values().next().cloned().unwrap_or_default();
@@ -859,7 +939,11 @@ impl<'a> Flow<'a> {
                             ok = Abs::dead();
                         } else {
                             self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(next.keys().cloned());
-                            ok.cases[c].states = next.clone();
+                            // answered: the flow hears the state the event took the case to
+                            ok.cases[c] = CaseAbs::heard_in(next.clone());
+                            for (k, p) in &unstarted {
+                                ok.cases[c].add(*k, p.clone());
+                            }
                             ok.path.push(Step::new(s.line, tr!("{}: {event}", "{}: {event}", t.name)).at(At::Stmt(s.site)));
                             Flow::assign(&mut ok, &cn);
                         }
@@ -895,7 +979,7 @@ impl<'a> Flow<'a> {
                                         self.push(Diag::error("E022", s.line, 1, msg).with_path(p));
                                     }
                                     let mut r = a.clone();
-                                    r.cases[c].states = refusing.clone();
+                                    r.cases[c] = refused_pairs.get(refused_err).cloned().unwrap_or(CaseAbs { pairs: BTreeMap::new() });
                                     // the refusal goes to the handler that names it alone, else to one that takes it
                                     let named = HErr::Declared(err.clone());
                                     let at = handlers
@@ -915,19 +999,17 @@ impl<'a> Flow<'a> {
                                 self.push(Diag::warning("W102", s.line, 1, tr!("ここでは `on {err}` は動きません。`{cn}` は {names} のどれかで、そこでは `{event}` は拒否されません", "`on {err}` never runs here: `{cn}` is in {names}, where `{event}` is never refused")));
                             }
                         }
-                        // any other error: the event may or may not have happened on the other side
-                        let mut both = now.clone();
-                        for (st, p) in &next {
-                            both.entry(*st).or_insert_with(|| p.clone());
-                        }
-                        other_err.cases[c].states = both;
+                        // any other error: the event may or may not have happened on the other side, and the
+                        // record still says what the flow heard before
+                        other_err.cases[c] = unsure;
                     }
                     Some(TaskMachine::Observes) => {
                         // looking at a case that this run has not started reads one that already
                         // exists: it can be in any state the machine reaches from its start
-                        let mut now = if a.cases[c].started != Tri::No { self.closure(c, &a.cases[c].states) } else { BTreeMap::new() };
-                        if a.cases[c].started != Tri::Yes {
-                            let base = a.cases[c].unstarted.clone().unwrap_or_default();
+                        let started = a.cases[c].started();
+                        let mut now = if started != Tri::No { self.closure(c, &a.cases[c].states()) } else { BTreeMap::new() };
+                        if started != Tri::Yes {
+                            let base = a.cases[c].unstarted().unwrap_or_default();
                             for (st, p) in self.reachable(c, base) {
                                 now.entry(st).or_insert(p);
                             }
@@ -939,9 +1021,8 @@ impl<'a> Flow<'a> {
                             seen.insert(*st, np);
                         }
                         self.monitors.entry(s.site).or_insert((c, BTreeSet::new())).1.extend(seen.keys().cloned());
-                        ok.cases[c].states = seen;
-                        ok.cases[c].started = Tri::Yes;
-                        ok.cases[c].unstarted = None;
+                        // answered: the flow hears the state the case is in
+                        ok.cases[c] = CaseAbs::heard_in(seen);
                         ok.path.push(Step::new(s.line, tr!("{}: {cn} を見る", "{}: look at {cn}", t.name)).at(At::Stmt(s.site)));
                         Flow::assign(&mut ok, &cn);
                     }
@@ -1029,17 +1110,18 @@ impl<'a> Flow<'a> {
 
     fn need_started(&mut self, c: usize, a: &Abs, line: usize) -> bool {
         let cabs = &a.cases[c];
-        if cabs.started == Tri::Yes {
+        let started = cabs.started();
+        if started == Tri::Yes {
             return true;
         }
         let cn = self.case_name(c).to_string();
-        let message = if cabs.started == Tri::No {
+        let message = if started == Tri::No {
             tr!("ここでは案件 `{cn}` はまだ始まっていません", "the case `{cn}` has not been started here")
         } else {
             tr!("ここでは、案件 `{cn}` が始まっていないことがあります", "the case `{cn}` may not have been started here")
         };
-        self.push(Diag::error("E013", line, 1, message).with_path(cabs.unstarted.clone().unwrap_or_default()));
-        cabs.started == Tri::Maybe
+        self.push(Diag::error("E013", line, 1, message).with_path(cabs.unstarted().unwrap_or_default()));
+        started == Tri::Maybe
     }
 
     fn matching(&mut self, s: &TStmt, expr: &TExpr, arms: &[TArm], a: Abs) -> Abs {
@@ -1073,13 +1155,18 @@ impl<'a> Flow<'a> {
         let narrowed;
         match case_state {
             Some(c) => {
-                let cabs = &a.cases[c];
-                if cabs.started != Tri::Yes {
-                    possible.insert("none".into(), cabs.unstarted.clone().unwrap_or_default());
-                }
-                if cabs.started != Tri::No {
-                    for (st, p) in &cabs.states {
-                        possible.insert(self.state_name(c, *st).to_string(), p.clone());
+                // what the case's record can say here, which is what the flow last heard of it: after a
+                // call that failed, the case may be further on than its record says
+                for ((heard, _), p) in &a.cases[c].pairs {
+                    let v = match heard {
+                        None => "none".to_string(),
+                        Some(st) => self.state_name(c, *st).to_string(),
+                    };
+                    match possible.get(&v) {
+                        Some(q) if q.len() <= p.len() => {}
+                        _ => {
+                            possible.insert(v, p.clone());
+                        }
                     }
                 }
                 narrowed = true;
@@ -1136,16 +1223,14 @@ impl<'a> Flow<'a> {
             }
             match case_state {
                 Some(c) => {
+                    // the arm narrows what the record says, and never where the case is on the other side
                     let keep: BTreeSet<usize> = here.iter().filter(|v| *v != "none").filter_map(|v| self.m.machine(c).state_index(v)).collect();
-                    inner.cases[c].states.retain(|st, _| keep.contains(st));
                     let with_none = here.iter().any(|v| v == "none");
-                    inner.cases[c].started = match (with_none, keep.is_empty()) {
-                        (true, true) => Tri::No,
-                        (true, false) => Tri::Maybe,
-                        (false, _) => Tri::Yes,
-                    };
-                    if inner.cases[c].started == Tri::Yes {
-                        inner.cases[c].unstarted = None;
+                    inner.cases[c].pairs.retain(|(heard, _), _| match heard {
+                        None => with_none,
+                        Some(st) => keep.contains(st),
+                    });
+                    if inner.cases[c].started() == Tri::Yes {
                         let cn = self.case_name(c).to_string();
                         inner.set.insert(cn, (Tri::Yes, None));
                     }
