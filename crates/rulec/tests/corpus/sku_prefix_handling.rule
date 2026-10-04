@@ -1,0 +1,29 @@
+rule sku_prefix_handling v1
+description "Decides how a shipment is handled from the prefix of the part number and the number of boxes. An example of matching the start of a string"
+
+enum handling_kind = frozen | chilled | ambient | ambient_mixed
+
+inputs
+  sku   : string
+  boxes : number  range >=1 <=200
+
+outputs
+  handling : handling_kind
+
+# A string cannot be counted, so the only thing a cell can cut on is a prefix. The set of prefixes is finite,
+# so completeness and overlap stop exactly as they do for a column of enum values
+table handling_of
+policy first
+| sku                      | boxes | -> handling : handling_kind |
+| starts_with "FZ-"        | -     | frozen                      |
+| starts_with "CH-", "CL-" | -     | chilled                     |
+| -                        | >=20  | ambient                     |
+| -                        | <20   | ambient_mixed               |
+
+examples
+| sku       | boxes | -> handling   |
+| "FZ-1001" | 1     | frozen        |
+| "CH-2002" | 5     | chilled       |
+| "CL-0003" | 5     | chilled       |
+| "AB-0004" | 30    | ambient       |
+| "AB-0004" | 3     | ambient_mixed |

@@ -1,0 +1,45 @@
+rule nationwide_freight v1
+description "Looks at the fare rows the caller passes, one by one, and folds them into a single fare. An example of a rule that walks a sequence"
+
+enum pick = skip | halt | take | hold
+enum zone = kinki | remote
+
+# The fields of one row. The caller passes as many elements with these fields as it has
+elements freight_rows
+  row_zone  : zone
+  threshold : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  row_fee   : money[JPY, incl_tax]  range >=0JPY <=100_000JPY
+
+outputs
+  fee : money[JPY, incl_tax]  round up(1JPY)
+
+# The decision for one element. The checks of the table work as ever (these four rows cover verdict entirely)
+table row_of
+policy unique
+| row_zone | threshold | -> verdict : pick |
+| kinki    | <=1000JPY | take              |
+| kinki    | >1000JPY  | hold              |
+| remote   | <=1000JPY | skip              |
+| remote   | >1000JPY  | halt              |
+
+# Where each decision leads. Every decision needs a destination (E024)
+fold verdict over freight_rows
+  skip      -> next
+  halt      -> stop with 0JPY
+  take      -> take_unique row_fee
+  hold      -> keep_max row_fee by threshold
+  empty     -> 0JPY
+  exhausted -> held
+
+sequence near
+| row_zone | threshold | row_fee |
+| kinki    | 500JPY    | 800JPY  |
+| kinki    | 2000JPY   | 1500JPY |
+
+sequence no_rows
+| row_zone | threshold | row_fee |
+
+examples
+| freight_rows | -> fee |
+| near         | 800JPY |
+| no_rows      | 0JPY   |

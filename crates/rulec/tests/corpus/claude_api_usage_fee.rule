@@ -1,0 +1,79 @@
+rule claude_api_usage_fee v1
+description "The usage fee of the Claude API for a period. The price per million tokens depends on the model and the kind of token; the multipliers for batch and for US-only inference are applied, and the number of tokens multiplies it to give the amount. Source: platform.claude.com/docs/en/about-claude/pricing (transcribed on 2026-09-19)"
+
+# The models are a closed set. Adding a model stops with E033 unless the price table has a row for it.
+enum claude_model = Fable5_1 | Fable5 | Opus5 | Opus4_8 | Opus4_7 | Opus4_6 | Opus4_5 | Sonnet5 | Sonnet4_6 | Sonnet4_5 | Haiku4_5
+enum token_kind   = input | output | cache_write_5m | cache_write_1h | cache_read
+
+group opus_tier  = Opus5, Opus4_8, Opus4_7, Opus4_6, Opus4_5
+group sonnet_old = Sonnet4_6, Sonnet4_5
+
+inputs
+  model  : claude_model
+  kind   : token_kind
+  batch  : bool
+  us_geo : bool
+  tokens : number  range >=0 <=10_000_000_000
+
+outputs
+  fee : money[USDc, excl_tax]  round half_up(1USDc)
+
+# Prices are per million tokens. Copied from the table on the page as it is.
+table unit_price
+policy unique
+| model      | kind           | -> price : money[USDc, excl_tax] |
+| Fable5_1   | input          | 10USD                            |
+| Fable5_1   | output         | 50USD                            |
+| Fable5_1   | cache_write_5m | 1250USDc                         |
+| Fable5_1   | cache_write_1h | 20USD                            |
+| Fable5_1   | cache_read     | 25USDc                           |
+| Fable5     | input          | 10USD                            |
+| Fable5     | output         | 50USD                            |
+| Fable5     | cache_write_5m | 1250USDc                         |
+| Fable5     | cache_write_1h | 20USD                            |
+| Fable5     | cache_read     | 1USD                             |
+| opus_tier  | input          | 5USD                             |
+| opus_tier  | output         | 25USD                            |
+| opus_tier  | cache_write_5m | 625USDc                          |
+| opus_tier  | cache_write_1h | 10USD                            |
+| opus_tier  | cache_read     | 50USDc                           |
+| Sonnet5    | input          | 2USD                             |
+| Sonnet5    | output         | 10USD                            |
+| Sonnet5    | cache_write_5m | 250USDc                          |
+| Sonnet5    | cache_write_1h | 4USD                             |
+| Sonnet5    | cache_read     | 20USDc                           |
+| sonnet_old | input          | 3USD                             |
+| sonnet_old | output         | 15USD                            |
+| sonnet_old | cache_write_5m | 375USDc                          |
+| sonnet_old | cache_write_1h | 6USD                             |
+| sonnet_old | cache_read     | 30USDc                           |
+| Haiku4_5   | input          | 1USD                             |
+| Haiku4_5   | output         | 5USD                             |
+| Haiku4_5   | cache_write_5m | 125USDc                          |
+| Haiku4_5   | cache_write_1h | 2USD                             |
+| Haiku4_5   | cache_read     | 10USDc                           |
+
+# The batch discount is half off for input, output and caching alike (the page's "multipliers stack").
+table batch_discount
+policy unique
+| batch | -> batch_rate : rate[step 10%] |
+| true  | 50%                            |
+| false | 100%                           |
+
+# With inference_geo set to us, every category costs 1.1 times for the models from 4.6 on.
+table geo_multiplier
+policy unique
+| us_geo | -> geo_rate : rate[step 10%] |
+| true   | 110%                         |
+| false  | 100%                         |
+
+define applied : money[USDc, excl_tax] = price * batch_rate * geo_rate
+define fee : money[USDc, excl_tax] = tokens * applied / 1_000_000
+
+examples
+| model    | kind       | batch | us_geo | tokens    | -> fee |
+| Opus5    | input      | false | false  | 1_000_000 | 5USD   |
+| Sonnet5  | output     | true  | false  | 1_000_000 | 5USD   |
+| Fable5_1 | cache_read | false | true   | 1_000_000 | 28USDc |
+| Haiku4_5 | input      | false | false  | 3700      | 0USDc  |
+| Opus5    | output     | true  | true   | 15000     | 21USDc |

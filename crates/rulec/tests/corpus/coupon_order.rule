@@ -1,0 +1,34 @@
+rule coupon_order v1
+description "Which of two coupons is applied first (§5.4). The loop and the sorting are the caller's; only the comparison is a rule"
+# Rakuten's terms: rate coupons first, then amount coupons, and among amount coupons the one whose expiry is nearer first
+
+enum kind  = percent | fixed
+enum order = first | second
+
+inputs
+  a_kind : kind
+  b_kind : kind
+  a_due  : date
+  b_due  : date
+
+outputs
+  a_order : order
+
+# A comparison of two dates. A date cannot be a derive, so this is the second kind of atom, comparing two names directly (§5.3).
+define a_earlier : bool = a_due <= b_due
+
+table decide
+policy first
+| a_kind  | b_kind  | a_earlier | -> a_order : order |
+| percent | fixed   | -         | first              |
+| fixed   | percent | -         | second             |
+| -       | -       | true      | first              |
+| -       | -       | -         | second             |
+
+examples
+| a_kind  | b_kind  | a_due      | b_due      | -> a_order |
+| percent | fixed   | 2026-12-31 | 2026-01-01 | first      |
+| fixed   | percent | 2026-01-01 | 2026-12-31 | second     |
+| fixed   | fixed   | 2026-04-01 | 2026-05-01 | first      |
+| fixed   | fixed   | 2026-05-01 | 2026-04-01 | second     |
+| percent | percent | 2026-04-01 | 2026-04-01 | first      |

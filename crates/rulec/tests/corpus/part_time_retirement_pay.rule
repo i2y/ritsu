@@ -1,0 +1,24 @@
+rule part_time_retirement_pay v1
+description "The retirement allowance of part-time staff. It applies the retirement allowance rule with its terms read as the period in office and how the term ended, and does not apply the reduction (the sketch of DESIGN.md §15.69)"
+
+enum end_kind = term_end | resignation
+
+inputs
+  tenure      : number  range >=1 <=3
+  end_reason  : end_kind
+  monthly_pay : money[JPY]  range >=100_000JPY <=500_000JPY
+
+outputs
+  part_time_allowance : money[JPY]  round down(1JPY)
+
+apply retirement = "retirement_pay.rule" sha256:b3c4704669a8f8ad  # Source: Article 31 (sketch)
+  years = tenure
+  reason = end_reason with term_end -> retirement_age, resignation -> voluntary
+  base_pay = monthly_pay
+  except reduction
+  allowance -> part_time_allowance
+
+examples
+| tenure | end_reason  | monthly_pay | -> part_time_allowance |
+| 3      | term_end    | 300_000JPY  | 1_500_000JPY           |
+| 3      | resignation | 300_000JPY  | 1_500_000JPY           |

@@ -1,0 +1,42 @@
+rule compensation_certificate v1
+description "The amount of a certificate that can be issued for a complaint. Only silver or gold members, insured passengers and business-class passengers qualify; a complaint about a cancelled flight gets 100 dollars per passenger, and a complaint about a delay gets 50 dollars per passenger if the passenger wants a change or a cancellation. Source: the Refunds and Compensation section of the τ²-bench airline policy (Sierra Research, MIT)"
+
+enum membership_level = regular default | silver | gold
+enum cabin_class      = basic_economy default | economy default | business
+enum complaint_kind   = cancelled | delayed | other default
+
+inputs
+  membership   : membership_level
+  cabin        : cabin_class
+  insured      : bool
+  complaint    : complaint_kind
+  wants_change : bool
+  passengers   : number  range >=1 <=5
+
+outputs
+  amount : money[USD, excl_tax]  round half_up(1USD)
+
+table eligible
+policy first
+| membership   | insured | cabin    | -> eligible : bool |
+| silver, gold | -       | -        | true               |
+| -            | true    | -        | true               |
+| -            | -       | business | true               |
+| -            | -       | -        | false              |
+
+table per_head
+policy first
+| eligible | complaint | wants_change | -> each : money[USD, excl_tax] |
+| false    | -         | -            | 0USD                           |
+| true     | cancelled | -            | 100USD                         |
+| true     | delayed   | true         | 50USD                          |
+| -        | -         | -            | 0USD                           |
+
+define amount : money[USD, excl_tax] = each * passengers
+
+examples
+| membership | cabin         | insured | complaint | wants_change | passengers | -> amount |
+| regular    | economy       | false   | cancelled | false        | 2          | 0USD      |
+| gold       | basic_economy | false   | cancelled | false        | 3          | 300USD    |
+| regular    | business      | false   | delayed   | true         | 1          | 50USD     |
+| regular    | economy       | true    | delayed   | false        | 4          | 0USD      |

@@ -1,0 +1,52 @@
+rule two_bands_from_weight v1
+description "Two bands come out of the same input, and what is downstream is decided by the pair. A subject for the correlation between upstream values (§6.2, §15.114)"
+
+enum ship_band_kind = small default | large
+enum handling_kind  = normal default | heavy
+
+inputs
+  weight : mass[kg]  range >=0kg <=30kg
+
+outputs
+  fee    : money[JPY, incl_tax]  round up(1JPY)
+  charge : money[JPY, incl_tax]  round up(1JPY)
+
+table band
+policy first
+| weight | -> ship_band : ship_band_kind |
+| <=2kg  | small                         |
+| -      | large                         |
+
+table handle
+policy first
+| weight | -> handling : handling_kind |
+| <=10kg | normal                      |
+| -      | heavy                       |
+
+# small is 2 kg or less, heavy is over 10 kg. No weight is both.
+# Here rows 1 and 2 overlap on the grid, but only for that pair,
+# so the check reads the two tables above and reports no overlap.
+table fee_table
+policy unique
+| ship_band | handling | -> fee : money[JPY, incl_tax] |
+| small     | -        | 500JPY                        |
+| -         | heavy    | 1800JPY                       |
+| large     | normal   | 900JPY                        |
+
+# This one places no row for the pairs that cannot happen. So the proof of completeness rests on the tables above for exactly those.
+# This is the only place where the certificate says "stated" and not "proved" (§15.115).
+table charge_table
+policy unique
+| ship_band | handling | -> charge : money[JPY, incl_tax] |
+| small     | normal   | 0JPY                             |
+| large     | normal   | 200JPY                           |
+| large     | heavy    | 400JPY                           |
+
+examples
+| weight | -> fee  | charge |
+| 0kg    | 500JPY  | 0JPY   |
+| 2kg    | 500JPY  | 0JPY   |
+| 3kg    | 900JPY  | 200JPY |
+| 10kg   | 900JPY  | 200JPY |
+| 11kg   | 1800JPY | 400JPY |
+| 30kg   | 1800JPY | 400JPY |

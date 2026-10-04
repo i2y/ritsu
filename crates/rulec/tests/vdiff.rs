@@ -156,7 +156,8 @@ fn 領域と記録の二つの答えが食い違わない() {
     // `クーポン割引` was here too: two derived columns share an input, the blind spot of
     // the sieve (§6.2), and the elimination that sees through it gave up on the whole
     // question because a rate column sat beside the money ones (§15.139).
-    let 決められない: &[&str] = &["預け荷物料金"];
+    // The twin (tests/corpus/twins.tsv) is the same rule, so it says no more about the outside than the original does.
+    let 決められない: &[&str] = &["預け荷物料金", "checked_bag_fee"];
     let (mut checked, mut withheld) = (0, Vec::new());
     for p in corpus() {
         let name = p.file_stem().unwrap().to_string_lossy().to_string();
@@ -376,17 +377,35 @@ fn bump_each_amount(src: &str) -> Vec<String> {
 /// language**: an English page showing Japanese output is its own kind of stale.
 #[test]
 fn 文書に載せた実演は_いまの出力と一致する() {
-    let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
     let tmp = TempDir::new("vdiff-demo");
     let dir = tmp.path().to_path_buf();
-    let (a, b) = (dir.join("v3.rule"), dir.join("v4.rule"));
-    std::fs::write(&a, src.replace("rule 送料(shipping_fee) v4", "rule 送料(shipping_fee) v3")).unwrap();
-    std::fs::write(&b, src.replace("| 遠隔地      | >2000g  | 1800円", "| 遠隔地      | >2000g  | 2000円")).unwrap();
 
-    for (lang, pages) in [
-        ("ja", ["website/docs-ja/compare.md", "website/docs-ja/scenarios.md"]),
-        ("en", ["website/docs/compare.md", "website/docs/scenarios.md"]),
+    // Each language's pages show the rule they are written in: the original on the Japanese
+    // pages, its English twin (tests/corpus/twins.tsv) on the English ones.
+    for (lang, pages, rule, old_name, new_name, old_cell, new_cell) in [
+        (
+            "ja",
+            ["website/docs-ja/compare.md", "website/docs-ja/scenarios.md"],
+            "tests/corpus/送料.rule",
+            ("rule 送料(shipping_fee) v4", "rule 送料(shipping_fee) v3"),
+            ("rule 送料(shipping_fee) v4", "rule 送料(shipping_fee) v4"),
+            "| 遠隔地      | >2000g  | 1800円",
+            "| 遠隔地      | >2000g  | 2000円",
+        ),
+        (
+            "en",
+            ["website/docs/compare.md", "website/docs/scenarios.md"],
+            "tests/corpus/member_shipping_fee.rule",
+            ("rule member_shipping_fee v4", "rule member_shipping_fee v3"),
+            ("rule member_shipping_fee v4", "rule member_shipping_fee v4"),
+            "| remote      | >2000g  | 1800JPY",
+            "| remote      | >2000g  | 2000JPY",
+        ),
     ] {
+        let src = std::fs::read_to_string(root().join(rule)).unwrap();
+        let (a, b) = (dir.join(format!("{lang}-v3.rule")), dir.join(format!("{lang}-v4.rule")));
+        std::fs::write(&a, src.replace(old_name.0, old_name.1)).unwrap();
+        std::fs::write(&b, src.replace(new_name.0, new_name.1).replace(old_cell, new_cell)).unwrap();
         let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
             .current_dir(root())
             .env("RULEC_LANG", lang)

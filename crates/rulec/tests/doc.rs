@@ -78,6 +78,44 @@ const CORPUS: &[&str] = &[
 "tests/corpus/paypal_fee.rule",
 "tests/corpus/注文の状態.rule",
 "tests/corpus/payment_intent.rule",
+// The twins (tests/corpus/twins.tsv): every cell they show has to be in their own source too.
+"tests/corpus/sku_prefix_handling.rule",
+"tests/corpus/cart_shipping_fee.rule",
+"tests/corpus/pro_rata_allocation.rule",
+"tests/corpus/yupack_base_fee.rule",
+"tests/corpus/coupon_discount_amount.rule",
+"tests/corpus/coupon_stacking.rule",
+"tests/corpus/member_shipping_fee.rule",
+"tests/corpus/order_period.rule",
+"tests/corpus/coupon_order.rule",
+"tests/corpus/single_coupon.rule",
+"tests/corpus/payment_processing_fee.rule",
+"tests/corpus/order_shipping_fee.rule",
+"tests/corpus/shipment_delivery_fee.rule",
+"tests/corpus/express_delivery_quote.rule",
+"tests/corpus/points_earned.rule",
+"tests/corpus/rating_grade.rule",
+"tests/corpus/discount_allocation.rule",
+"tests/corpus/member_benefits.rule",
+"tests/corpus/health_insurance_premium.rule",
+"tests/corpus/pension_insurance_premium.rule",
+"tests/corpus/japan_income_tax.rule",
+"tests/corpus/receipt_stamp_duty.rule",
+"tests/corpus/japan_stamp_duty.rule",
+"tests/corpus/japan_stamp_duty_split.rule",
+"tests/corpus/shipping_fee_proviso.rule",
+"tests/corpus/retirement_pay.rule",
+"tests/corpus/part_time_retirement_pay.rule",
+"tests/corpus/nationwide_freight.rule",
+"tests/corpus/supplier_matching.rule",
+"tests/corpus/food_storage_standard.rule",
+"tests/corpus/office_hygiene_standard.rule",
+"tests/corpus/claude_api_usage_fee.rule",
+"tests/corpus/checked_bag_fee.rule",
+"tests/corpus/cancellation_verdict.rule",
+"tests/corpus/compensation_certificate.rule",
+"tests/corpus/two_bands_from_weight.rule",
+"tests/corpus/order_lifecycle.rule",
 ];
 
 /// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row
@@ -380,13 +418,18 @@ fn out_で書き出せる() {
 
 /// The rendering excerpt pasted into the documentation must not diverge from the real
 /// thing. Hand-copied text rots (the same reasoning as for the generated-code excerpts).
-/// Both language pages carry the same excerpt, so both are held to the output.
+/// Both language pages carry an excerpt, each of the rule and the language it is written in:
+/// the English page shows the English twin in English, the Japanese page the original in
+/// Japanese.
 #[test]
 fn 資料の抜粋は実物と一致する() {
-    let (_, real, _) = run(&["doc", "tests/corpus/ゆうパック運賃.rule"]);
-    for page in ["website/docs/checks.md", "website/docs-ja/checks.md"] {
+    for (page, rule, lang, heading) in [
+        ("website/docs/checks.md", "tests/corpus/yupack_base_fee.rule", "en", "## Groups\n"),
+        ("website/docs-ja/checks.md", "tests/corpus/ゆうパック運賃.rule", "ja", "## グループ\n"),
+    ] {
+        let (_, real, _) = run(&["doc", rule, "--lang", lang]);
         let md = std::fs::read_to_string(root().join(page)).unwrap();
-        let i = md.find("## グループ\n").unwrap_or_else(|| panic!("{page} に doc の抜粋が無い"));
+        let i = md.find(heading).unwrap_or_else(|| panic!("{page} に doc の抜粋が無い"));
         let j = md[i..].find("```").expect("抜粋が閉じていない") + i;
         for l in md[i..j].lines() {
             if l.trim().is_empty() || l.trim() == "…" {

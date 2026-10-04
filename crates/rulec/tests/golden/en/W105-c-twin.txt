@@ -1,0 +1,12 @@
+warning[W105]: Overlapping rows: the same input matches row 2 and row 3
+  --> tests/corpus/coupon_order.rule:25 table decide
+   |
+24 | | fixed   | percent | -         | second             |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
+25 | | -       | -       | true      | first              |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3
+   |
+ Both rows match: a_kind = fixed, b_kind = percent, a_earlier = true
+ An input producing this example: a_due = 2026-01-01, a_kind = fixed, b_due = 2026-01-01, b_kind = percent
+ Because of `policy first`, row 2 wins. Is this intended?
+ If this is intended, leave it as is. In CI, check --diff-base reports only newly introduced instances.

@@ -1,0 +1,47 @@
+rule order_shipping_fee v1
+description "Decides the shipping fee from an order object. An example of taking inputs out of the caller's contract (§15.125)"
+
+# The caller has already fixed the shape of an order with a JSON Schema. Borrow it, and write where each input comes from in that shape:
+# the code that flattens it is generated, and every check holds each path against the contract.
+shape order = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+enum shipping_zone = honshu | hokkaido | okinawa
+
+inputs
+  zone  : shipping_zone  from order.shipping.zone
+  cold  : bool  from any order.lines where chilled = true
+  lines : number  range >=1 <=50  from count order.lines
+
+outputs
+  fee : money[JPY]  round up(10JPY)
+
+# Cold goods cost 500 yen more in any zone, and more than 10 lines cost 200 yen more.
+table by_zone
+policy unique
+| zone     | -> zone_fee : money[JPY] |
+| honshu   | 800JPY                   |
+| hokkaido | 1200JPY                  |
+| okinawa  | 1500JPY                  |
+
+table cold_extra
+policy unique
+| cold  | -> cold_fee : money[JPY] |
+| true  | 500JPY                   |
+| false | 0JPY                     |
+
+table bulk_extra
+policy unique
+| lines | -> bulk_fee : money[JPY] |
+| >10   | 200JPY                   |
+| <=10  | 0JPY                     |
+
+define total : money[JPY] = zone_fee + cold_fee + bulk_fee
+
+result fee = total
+
+examples
+| zone     | cold  | lines | -> fee  |
+| honshu   | false | 1     | 800JPY  |
+| honshu   | true  | 1     | 1300JPY |
+| okinawa  | true  | 11    | 2200JPY |
+| hokkaido | false | 10    | 1200JPY |

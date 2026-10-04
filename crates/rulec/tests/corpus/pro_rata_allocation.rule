@@ -1,0 +1,38 @@
+rule pro_rata_allocation v1
+description "Spreads a lump-sum discount over the lines in proportion to their list prices. One line is one decision, and the caller keeps the running totals. The remainder falls on the last line, so what is handed out always adds up to the total discount"
+
+inputs
+  total_off : money[JPY]  range >=0JPY <=1_000_000JPY
+  before    : money[JPY]  range >=0JPY <=10_000_000JPY
+  upto      : money[JPY]  range >=0JPY <=10_000_000JPY
+  base      : money[JPY]  range >=1JPY <=10_000_000JPY
+  eligible  : bool
+
+constraint before <= upto
+constraint upto <= base
+
+outputs
+  share : money[JPY]  round down(1JPY)
+
+derive to_before : money[JPY] = allocate(total_off, before, base)  range >=0JPY <=1_000_000JPY
+derive to_upto   : money[JPY] = allocate(total_off, upto, base)    range >=0JPY <=1_000_000JPY
+
+define gap : money[JPY] = to_upto - to_before
+
+table applies
+policy unique
+| eligible | -> allocated : money[JPY] |
+| true     | gap                       |
+| false    | 0JPY                      |
+
+result share = allocated
+
+examples
+| total_off | before  | upto      | base      | eligible | -> share |
+| 1000JPY   | 0JPY    | 3000JPY   | 10_000JPY | true     | 300JPY   |
+| 1000JPY   | 3000JPY | 10_000JPY | 10_000JPY | true     | 700JPY   |
+| 100JPY    | 0JPY    | 333JPY    | 1000JPY   | true     | 33JPY    |
+| 100JPY    | 333JPY  | 666JPY    | 1000JPY   | true     | 33JPY    |
+| 100JPY    | 666JPY  | 1000JPY   | 1000JPY   | true     | 34JPY    |
+| 0JPY      | 0JPY    | 500JPY    | 1000JPY   | true     | 0JPY     |
+| 1000JPY   | 0JPY    | 3000JPY   | 10_000JPY | false    | 0JPY     |

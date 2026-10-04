@@ -1,0 +1,29 @@
+rule payment_processing_fee v1
+description "The fee on one transaction, from a fee rate fixed per contract. An example where the rate comes in steps finer than 1%"
+
+inputs
+  amount : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  rate   : rate[step 0.1%]  range >=0% <=10%
+  small  : bool
+
+outputs
+  fee : money[JPY, incl_tax]  round up(1JPY)
+
+# A contractual floor: nothing is charged at 0.5% or below (this row can be written because the rate steps by 0.1%)
+define rate_fee : money[JPY, incl_tax] = amount * rate
+
+table fee_table
+policy unique
+| rate   | small | -> fee : money[JPY, incl_tax] |
+| <=0.5% | -     | 0JPY                          |
+| >0.5%  | true  | 50JPY                         |
+| >0.5%  | false | rate_fee                      |
+
+result fee = fee
+
+examples
+| amount    | rate | small | -> fee |
+| 10_000JPY | 0.5% | false | 0JPY   |
+| 10_000JPY | 0.6% | false | 60JPY  |
+| 10_000JPY | 3.6% | false | 360JPY |
+| 10_000JPY | 3.6% | true  | 50JPY  |

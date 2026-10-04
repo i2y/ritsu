@@ -1,0 +1,38 @@
+rule retirement_pay v1
+description "The main rule of the retirement allowance. The years of service decide the number of months paid, and the reduction for resigning for one's own reasons takes precedence over the main rule (the sketch of DESIGN.md §15.69)"
+
+enum reason_kind = retirement_age | voluntary | death
+
+inputs
+  years    : number  range >=1 <=40
+  reason   : reason_kind
+  base_pay : money[JPY]  range >=100_000JPY <=1_000_000JPY
+
+outputs
+  allowance : money[JPY]  round down(1JPY)
+
+table schedule  # Source: Article 20, paragraph 1 (sketch)
+policy unique
+      | years    | reason                    | -> months : number |
+short | <10      | retirement_age, voluntary | 5                  |
+mid   | >=10 <25 | retirement_age, voluntary | 20                 |
+long  | >=25     | retirement_age, voluntary | 40                 |
+death | -        | death                     | 40                 |
+
+define full : money[JPY] = base_pay * months
+define reduced : money[JPY] = full * 80%
+
+clause main -> allowance  # Source: Article 20, paragraph 1 (sketch)
+  when always
+  then full
+
+clause reduction -> allowance  # Source: Article 20, paragraph 2 (sketch)
+  when reason voluntary
+  then reduced
+  overrides main
+
+examples
+| years | reason         | base_pay   | -> allowance  |
+| 3     | retirement_age | 300_000JPY | 1_500_000JPY  |
+| 3     | voluntary      | 300_000JPY | 1_200_000JPY  |
+| 30    | death          | 300_000JPY | 12_000_000JPY |

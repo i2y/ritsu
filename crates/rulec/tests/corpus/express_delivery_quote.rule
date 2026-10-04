@@ -1,0 +1,45 @@
+rule express_delivery_quote v1
+description "Decides a fare from a quote request (.proto). An example of holding the conditions a contract places across its fields against the rule's constraint and rows (§15.140)"
+
+# The caller's contract promises, in CEL, that an express parcel is at most 5 kg and that the declared value does not exceed the cover.
+# The rule writes that promise as a constraint, and the cover table relies on it: it has no row where the declared value exceeds the cover.
+shape quote = proto "contracts/quote.proto" shop.v1.QuoteRequest
+
+inputs
+  weight   : mass[g]  range >=1g <=30kg  from quote.weight_g
+  express  : bool  from quote.express
+  declared : money[JPY]  range >=0JPY <=300_000JPY  from quote.declared_jpy
+  cover    : money[JPY]  range >=0JPY <=300_000JPY  from quote.cover_jpy
+
+constraint declared <= cover
+
+outputs
+  fee : money[JPY]  round up(10JPY)
+
+# Express has two steps, split at 2 kg. The contract lets no express parcel over 5 kg through, so no row is written beyond that.
+table by_weight
+policy unique
+| express | weight      | -> base : money[JPY] |
+| false   | <=2kg       | 700JPY               |
+| false   | >2kg <=10kg | 1100JPY              |
+| false   | >10kg       | 1600JPY              |
+| true    | <=2kg       | 1200JPY              |
+| true    | >2kg        | 1800JPY              |
+
+table insurance
+policy unique
+| declared    | cover       | -> cover_charge : money[JPY] |
+| <=50_000JPY | <=50_000JPY | 0JPY                         |
+| <=50_000JPY | >50_000JPY  | 300JPY                       |
+| >50_000JPY  | >50_000JPY  | 600JPY                       |
+
+define total : money[JPY] = base + cover_charge
+
+result fee = total
+
+examples
+| weight | express | declared  | cover      | -> fee  |
+| 1kg    | false   | 0JPY      | 0JPY       | 700JPY  |
+| 3kg    | true    | 20_000JPY | 100_000JPY | 2100JPY |
+| 12kg   | false   | 80_000JPY | 100_000JPY | 2200JPY |
+| 2kg    | true    | 50_000JPY | 50_000JPY  | 1200JPY |

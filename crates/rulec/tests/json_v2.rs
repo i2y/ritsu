@@ -123,6 +123,7 @@ const CASES: &[(&str, &str, &str)] = &[
     ("E111", "tests/mutants/m_e111.rule", "E111"),
     ("E112", "tests/mutants/m_e112.rule", "E112"),
     ("W105", "tests/corpus/送料.rule", "W105"),
+    ("W105-twin", "tests/corpus/member_shipping_fee.rule", "W105"),
     ("W111", "tests/mutants/m_w111.rule", "W111"),
     ("W114", "tests/mutants/m_w114.rule", "W114"),
 ];

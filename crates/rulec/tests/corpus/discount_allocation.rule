@@ -1,0 +1,26 @@
+rule discount_allocation v1
+description "Allocates a lump-sum discount to lines. One line is one decision, and the loop and the order are the caller's"
+
+inputs
+  list      : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  remaining : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  eligible  : bool
+
+outputs
+  applied : money[JPY, incl_tax]  round down(1JPY)
+
+define cap : money[JPY, incl_tax] = min(list, remaining)
+
+table applies
+policy unique
+| eligible | -> allocated : money[JPY, incl_tax] |
+| true     | cap                                 |
+| false    | 0JPY                                |
+
+result applied = allocated
+
+examples
+| list    | remaining | eligible | -> applied |
+| 3000JPY | 1000JPY   | true     | 1000JPY    |
+| 500JPY  | 1000JPY   | true     | 500JPY     |
+| 3000JPY | 1000JPY   | false    | 0JPY       |

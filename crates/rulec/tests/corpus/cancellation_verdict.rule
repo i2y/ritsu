@@ -1,0 +1,34 @@
+rule cancellation_verdict v1
+description "Whether a booking can be cancelled, is refused, or goes to a human agent. Source: the Cancel flight section of the τ²-bench airline policy (Sierra Research, MIT). The policy says to ask the passenger for the reason out of three (change of plan, cancellation by the airline, other), and says in another section that insurance applies only for health or weather reasons. To make a table the reason column needs health and weather, and whether the airline cancelled is taken from the state of the flight and not from what the passenger says. Those two are what the transcription decided"
+
+enum cabin_class   = basic_economy default | economy default | business
+enum cancel_reason = change_of_plan default | health | weather | other default
+enum decision      = allowed | refused | transfer
+
+inputs
+  flown          : bool
+  within_24h     : bool
+  airline_cancel : bool
+  cabin          : cabin_class
+  insured        : bool
+  reason         : cancel_reason
+
+outputs
+  verdict : decision
+
+table decide
+policy first
+| flown | within_24h | airline_cancel | cabin    | insured | reason          | -> verdict : decision |
+| true  | -          | -              | -        | -       | -               | transfer              |
+| -     | true       | -              | -        | -       | -               | allowed               |
+| -     | -          | true           | -        | -       | -               | allowed               |
+| -     | -          | -              | business | -       | -               | allowed               |
+| -     | -          | -              | -        | true    | health, weather | allowed               |
+| -     | -          | -              | -        | -       | -               | refused               |
+
+examples
+| flown | within_24h | airline_cancel | cabin         | insured | reason         | -> verdict |
+| false | false      | false          | economy       | true    | change_of_plan | refused    |
+| false | false      | false          | economy       | true    | weather        | allowed    |
+| true  | true       | true           | business      | true    | health         | transfer   |
+| false | false      | false          | basic_economy | false   | other          | refused    |

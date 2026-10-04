@@ -1,0 +1,12 @@
+warning[W105]: Overlapping rows: the same input matches row 1 and row 2
+  --> tests/corpus/member_shipping_fee.rule:33 table payer
+   |
+32 | | true | -        | 0%                 |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
+33 | | -    | platinum | 50%                |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
+   |
+ Both rows match: bulk = true, member = platinum
+ An input producing this example: dest = 北海道, member = platinum, total = 30000, weight = 1
+ Because of `policy first`, row 1 wins. Is this intended?
+ If this is intended, leave it as is. In CI, check --diff-base reports only newly introduced instances.

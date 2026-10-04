@@ -1,0 +1,423 @@
+Obj(
+    {
+        "code": Str(
+            "W105",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/corpus/member_shipping_fee.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "key": Str(
+            "true|-\u{1}-|platinum",
+        ),
+        "line": Int(
+            32,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "両方に当てはまる例: bulk = true, member = platinum",
+                ),
+                Str(
+                    "この例を作る入力: dest = 北海道, member = platinum, total = 30000, weight = 1",
+                ),
+                Str(
+                    "`policy first` のため 行1 が勝ちます。意図通りですか。",
+                ),
+                Str(
+                    "意図通りならこのままで構いません。CI の check --diff-base は新たに生じた分だけを報告します。",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            1,
+                        ),
+                        "table": Str(
+                            "payer",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            2,
+                        ),
+                        "table": Str(
+                            "payer",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "行1",
+                        ),
+                        "length": Int(
+                            40,
+                        ),
+                        "line": Int(
+                            32,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "行2",
+                        ),
+                        "length": Int(
+                            40,
+                        ),
+                        "line": Int(
+                            33,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "行の重なり: 同じ入力が 行1 と 行2 の両方に当てはまります",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/corpus/member_shipping_fee.rule",
+                ),
+                "line": Int(
+                    32,
+                ),
+                "table": Str(
+                    "payer",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "bulk": Bool(
+                            true,
+                        ),
+                        "member": Str(
+                            "platinum",
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)
+Obj(
+    {
+        "code": Str(
+            "W105",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/corpus/member_shipping_fee.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "key": Str(
+            "true|-\u{1}-|-",
+        ),
+        "line": Int(
+            32,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "両方に当てはまる例: bulk = true, member = basic",
+                ),
+                Str(
+                    "この例を作る入力: dest = 北海道, member = basic, total = 30000, weight = 1",
+                ),
+                Str(
+                    "`policy first` のため 行1 が勝ちます。意図通りですか。",
+                ),
+                Str(
+                    "この行の範囲が、後の行にまるごと含まれています（階段としてよくある形です）。",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            1,
+                        ),
+                        "table": Str(
+                            "payer",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            3,
+                        ),
+                        "table": Str(
+                            "payer",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "行1",
+                        ),
+                        "length": Int(
+                            40,
+                        ),
+                        "line": Int(
+                            32,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "行3",
+                        ),
+                        "length": Int(
+                            40,
+                        ),
+                        "line": Int(
+                            34,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "行の重なり: 同じ入力が 行1 と 行3 の両方に当てはまります",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/corpus/member_shipping_fee.rule",
+                ),
+                "line": Int(
+                    32,
+                ),
+                "table": Str(
+                    "payer",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "bulk": Bool(
+                            true,
+                        ),
+                        "member": Str(
+                            "basic",
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)
+Obj(
+    {
+        "code": Str(
+            "W105",
+        ),
+        "column": Int(
+            1,
+        ),
+        "file": Str(
+            "tests/corpus/member_shipping_fee.rule",
+        ),
+        "fix": Obj(
+            {
+                "kind": Str(
+                    "none",
+                ),
+            },
+        ),
+        "key": Str(
+            "-|platinum\u{1}-|-",
+        ),
+        "line": Int(
+            33,
+        ),
+        "notes": Arr(
+            [
+                Str(
+                    "両方に当てはまる例: bulk = true, member = platinum",
+                ),
+                Str(
+                    "この例を作る入力: dest = 北海道, member = platinum, total = 0, weight = 1",
+                ),
+                Str(
+                    "`policy first` のため 行2 が勝ちます。意図通りですか。",
+                ),
+                Str(
+                    "この行の範囲が、後の行にまるごと含まれています（階段としてよくある形です）。",
+                ),
+            ],
+        ),
+        "rows": Arr(
+            [
+                Obj(
+                    {
+                        "row": Int(
+                            2,
+                        ),
+                        "table": Str(
+                            "payer",
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "row": Int(
+                            3,
+                        ),
+                        "table": Str(
+                            "payer",
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "severity": Str(
+            "warning",
+        ),
+        "spans": Arr(
+            [
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "行2",
+                        ),
+                        "length": Int(
+                            40,
+                        ),
+                        "line": Int(
+                            33,
+                        ),
+                    },
+                ),
+                Obj(
+                    {
+                        "column": Int(
+                            1,
+                        ),
+                        "label": Str(
+                            "行3",
+                        ),
+                        "length": Int(
+                            40,
+                        ),
+                        "line": Int(
+                            34,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        "title": Str(
+            "行の重なり: 同じ入力が 行2 と 行3 の両方に当てはまります",
+        ),
+        "v": Int(
+            2,
+        ),
+        "where": Obj(
+            {
+                "column": Int(
+                    1,
+                ),
+                "file": Str(
+                    "tests/corpus/member_shipping_fee.rule",
+                ),
+                "line": Int(
+                    33,
+                ),
+                "table": Str(
+                    "payer",
+                ),
+            },
+        ),
+        "witness": Obj(
+            {
+                "inputs": Obj(
+                    {
+                        "bulk": Bool(
+                            true,
+                        ),
+                        "member": Str(
+                            "platinum",
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)

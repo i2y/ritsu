@@ -1,0 +1,52 @@
+rule cart_shipping_fee v1
+description "Decides the shipping fee from the sum of the amounts on the lines. An example of summing a sequence"
+
+enum member_tier = regular | premium
+
+inputs
+  tier : member_tier
+
+# One line of the order. The caller passes as many as it has
+elements lines
+  amount : money[JPY]  range >=0JPY <=100_000JPY
+
+# All that is left after the walk is the total. The range is the universe of the completeness check, and it is also the line
+# at which the entry refuses a call, as soon as the running total goes beyond it
+sum total over lines of amount  range >=0JPY <=1_000_000JPY
+
+outputs
+  fee : money[JPY]  round up(1JPY)
+
+table fee_table
+policy unique
+| total              | tier    | -> fee : money[JPY] |
+| >=5000JPY          | -       | 0JPY                |
+| >=3000JPY <5000JPY | premium | 0JPY                |
+| >=3000JPY <5000JPY | regular | 250JPY              |
+| <3000JPY           | -       | 500JPY              |
+
+examples
+| lines    | tier    | -> fee |
+| two      | regular | 0JPY   |
+| two      | premium | 0JPY   |
+| small    | regular | 500JPY |
+| middle   | regular | 250JPY |
+| middle   | premium | 0JPY   |
+| no_lines | regular | 500JPY |
+
+sequence two
+| amount  |
+| 3000JPY |
+| 2500JPY |
+
+sequence small
+| amount  |
+| 1200JPY |
+
+sequence middle
+| amount  |
+| 2000JPY |
+| 1500JPY |
+
+sequence no_lines
+| amount |

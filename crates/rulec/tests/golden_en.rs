@@ -122,6 +122,9 @@ golden!(w111_unused, "W111", "tests/mutants/m_w111.rule", "W111");
 golden!(w105_needs_review, "W105", "tests/mutants/m_w105.rule", "W105");
 golden!(w105_shipping, "W105-b", "tests/corpus/送料.rule", "W105");
 golden!(w105_order, "W105-c", "tests/corpus/適用順序.rule", "W105");
+// The same two over their twins (tests/corpus/twins.tsv): English throughout, the source lines too.
+golden!(w105_shipping_twin, "W105-b-twin", "tests/corpus/member_shipping_fee.rule", "W105");
+golden!(w105_order_twin, "W105-c-twin", "tests/corpus/coupon_order.rule", "W105");
 golden!(e010_range_notation, "E010", "tests/mutants/m_e010.rule", "E010");
 golden!(e011_alias, "E011", "tests/mutants/m_e011.rule", "E011");
 

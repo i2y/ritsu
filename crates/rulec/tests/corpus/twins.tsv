@@ -1,0 +1,42 @@
+# A rule of the corpus written with Japanese names, and its twin written with English names
+# (JPY for 円, the multipliers written out). Both are files of this directory, one pair per line:
+# the Japanese file, a tab, the English file. tests/twins.rs holds the pair to the same findings,
+# the same coverage, the same answers and the same claims; make_examples.py takes the English
+# page from the English file.
+品番の扱い.rule	sku_prefix_handling.rule
+買物かごの送料.rule	cart_shipping_fee.rule
+比例配分.rule	pro_rata_allocation.rule
+ゆうパック運賃.rule	yupack_base_fee.rule
+クーポン割引.rule	coupon_discount_amount.rule
+クーポン併用.rule	coupon_stacking.rule
+送料.rule	member_shipping_fee.rule
+期間区分.rule	order_period.rule
+適用順序.rule	coupon_order.rule
+クーポン一枚.rule	single_coupon.rule
+決済手数料.rule	payment_processing_fee.rule
+注文の送料.rule	order_shipping_fee.rule
+出荷の送料.rule	shipment_delivery_fee.rule
+速達の見積.rule	express_delivery_quote.rule
+ポイント付与.rule	points_earned.rule
+評価ランク.rule	rating_grade.rule
+値引の充当.rule	discount_allocation.rule
+会員特典.rule	member_benefits.rule
+健康保険料.rule	health_insurance_premium.rule
+厚生年金保険料.rule	pension_insurance_premium.rule
+所得税.rule	japan_income_tax.rule
+領収書の印紙税.rule	receipt_stamp_duty.rule
+印紙税.rule	japan_stamp_duty.rule
+印紙税の本則と軽減.rule	japan_stamp_duty_split.rule
+送料のただし書.rule	shipping_fee_proviso.rule
+退職手当.rule	retirement_pay.rule
+非常勤退職手当.rule	part_time_retirement_pay.rule
+全国運賃.rule	nationwide_freight.rule
+納入先照合.rule	supplier_matching.rule
+保存基準.rule	food_storage_standard.rule
+事務所の衛生基準.rule	office_hygiene_standard.rule
+Claude利用料.rule	claude_api_usage_fee.rule
+預け荷物料金.rule	checked_bag_fee.rule
+予約取消可否.rule	cancellation_verdict.rule
+補償証明書.rule	compensation_certificate.rule
+二つの区分.rule	two_bands_from_weight.rule
+注文の状態.rule	order_lifecycle.rule

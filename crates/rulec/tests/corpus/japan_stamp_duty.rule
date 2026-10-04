@@ -1,0 +1,48 @@
+rule japan_stamp_duty v1
+description "The stamp duty on a contract for the transfer of real estate (a Class 1 document). It depends on the contract amount stated and the date it was made, and a contract made by 31 March 2027 has the reduced rate"
+
+inputs
+  amount : money[JPY]  range >=0JPY <=1_000_000_000_000JPY
+  stated : bool
+  made   : date  range >=2014-04-01 <=2030-12-31  # From the start of the reduced rate (1 April 2014)
+
+outputs
+  tax : money[JPY]  round down(1JPY)
+
+define reduced : bool = made <= 2027-03-31  # Source: No. 7108. Contracts made from 1 April 2014 to 31 March 2027. The start is the lower end of the input's range
+
+# The reduced rate applies only to a contract amount over 100,000 yen (No. 7108). At 100,000 yen or less the main rate applies whatever the period, and 200 yen where no amount is stated.
+table tax_table  # Source: National Tax Agency, Tax Answer No. 7140, List of stamp duty amounts (part 1), Class 1 documents, and No. 7108, Reduced stamp duty on contracts for the transfer of real estate (laws and regulations as of 1 April 2026)
+policy unique
+| stated | reduced | amount                               | -> tax : money[JPY] |
+| false  | -       | -                                    | 200JPY              |  # No contract amount stated
+| true   | -       | <10_000JPY                           | 0JPY                |  # Exempt
+| true   | -       | >=10_000JPY <=100_000JPY             | 200JPY              |
+| true   | true    | >100_000JPY <=500_000JPY             | 200JPY              |  # From here, the amounts after the reduction (No. 7108)
+| true   | true    | >500_000JPY <=1_000_000JPY           | 500JPY              |
+| true   | true    | >1_000_000JPY <=5_000_000JPY         | 1000JPY             |
+| true   | true    | >5_000_000JPY <=10_000_000JPY        | 5000JPY             |
+| true   | true    | >10_000_000JPY <=50_000_000JPY       | 10_000JPY           |
+| true   | true    | >50_000_000JPY <=100_000_000JPY      | 30_000JPY           |
+| true   | true    | >100_000_000JPY <=500_000_000JPY     | 60_000JPY           |
+| true   | true    | >500_000_000JPY <=1_000_000_000JPY   | 160_000JPY          |
+| true   | true    | >1_000_000_000JPY <=5_000_000_000JPY | 320_000JPY          |
+| true   | true    | >5_000_000_000JPY                    | 480_000JPY          |
+| true   | false   | >100_000JPY <=500_000JPY             | 400JPY              |  # From here, the amounts of the main rate (No. 7140)
+| true   | false   | >500_000JPY <=1_000_000JPY           | 1000JPY             |
+| true   | false   | >1_000_000JPY <=5_000_000JPY         | 2000JPY             |
+| true   | false   | >5_000_000JPY <=10_000_000JPY        | 10_000JPY           |
+| true   | false   | >10_000_000JPY <=50_000_000JPY       | 20_000JPY           |
+| true   | false   | >50_000_000JPY <=100_000_000JPY      | 60_000JPY           |
+| true   | false   | >100_000_000JPY <=500_000_000JPY     | 100_000JPY          |
+| true   | false   | >500_000_000JPY <=1_000_000_000JPY   | 200_000JPY          |
+| true   | false   | >1_000_000_000JPY <=5_000_000_000JPY | 400_000JPY          |
+| true   | false   | >5_000_000_000JPY                    | 600_000JPY          |
+
+examples
+| amount        | stated | made       | -> tax    |
+| 30_000_000JPY | true   | 2026-09-16 | 10_000JPY |  # A sales contract of 30,000,000 yen. It is in the reduced period, so 10,000 yen (the main rate would be 20,000 yen)
+| 30_000_000JPY | true   | 2027-04-01 | 20_000JPY |  # The day after the reduced period ends
+| 100_000JPY    | true   | 2026-09-16 | 200JPY    |  # Exactly 100,000 yen is outside the reduction, and the main rate is 200 yen too
+| 5000JPY       | true   | 2026-09-16 | 0JPY      |  # Under 10,000 yen is exempt
+| 0JPY          | false  | 2026-09-16 | 200JPY    |  # No contract amount stated

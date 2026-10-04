@@ -1,0 +1,27 @@
+rule order_period v1
+description "Decides the period in force from the order date. An example of date ranges, both ends included, laid side by side with no gap between them"
+# Were dates not held as day numbers, a gap of integers that does not exist would open between the end of a month and the start of the next, and a false E101 would appear (§2.1)
+
+enum period = before | spring | normal | year_end
+
+inputs
+  order_date : date  range >=2026-01-01 <=2026-12-31
+
+outputs
+  kind : period
+
+table pick
+policy unique
+| order_date                | -> kind : period |
+| <=2026-03-31              | before           |
+| >=2026-04-01 <=2026-06-30 | spring           |
+| >=2026-07-01 <=2026-11-30 | normal           |
+| >=2026-12-01              | year_end         |
+
+examples
+| order_date | -> kind  |
+| 2026-03-31 | before   |
+| 2026-04-01 | spring   |
+| 2026-06-30 | spring   |
+| 2026-07-01 | normal   |
+| 2026-12-01 | year_end |

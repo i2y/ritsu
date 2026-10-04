@@ -112,9 +112,10 @@ fn agentsの実演はいまの出力と一致する() {
     let body = read("AGENTS.md");
     let want = body
         .lines()
-        .find(|l| l.starts_with("{\"table\":\"運賃表\""))
+        .find(|l| l.starts_with("{\"table\":\"base_rate\""))
         .expect("実演の出力行が無い");
-    let (_, out) = run(&["check", "tests/mutants/m_e101.rule", "--format", "json", "--lang", "en"]);
+    // The worked example is the English rule the README shows, with one row dropped.
+    let (_, out) = run(&["check", "tests/mutants/m_e101en.rule", "--format", "json", "--lang", "en"]);
     let line = out.lines().find(|l| l.contains("\"code\":\"E101\"")).expect("E101 が無い");
     let j = rulec::json::parse(line).unwrap();
     let got = format!(

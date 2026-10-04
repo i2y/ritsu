@@ -225,18 +225,29 @@ fn 例のページの規則はコーパスと一字一句同じ() {
 }
 
 /// Both languages show the same rules in the same order. The language switcher only swaps a
-/// path prefix, so a reader who switches mid-page should land on the same example.
+/// path prefix, so a reader who switches mid-page should land on the same example. The English
+/// page shows a rule written with Japanese names as its English twin (tests/corpus/twins.tsv),
+/// so the names are compared through the pairs.
 #[test]
 fn 例のページは両言語で同じ規則を同じ順に並べる() {
+    let twin_of_japanese: std::collections::HashMap<String, String> = read("tests/corpus/twins.tsv")
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .filter_map(|l| l.split_once('\t'))
+        .map(|(ja, en)| (en.trim_end_matches(".rule").to_string(), ja.trim_end_matches(".rule").to_string()))
+        .collect();
     let names = |lang: &str| -> Vec<String> {
+        // Every source on the page opens with the ```rule fence, and its first line is the rule's.
         read(&format!("website/{lang}/examples.md"))
-            .split("\n```\n")
+            .split("\n```rule\n")
             .skip(1)
-            .step_by(2)
-            .filter_map(|b| b.lines().next()?.strip_prefix("rule ")?.split('(').next().map(String::from))
+            .filter_map(|b| b.lines().next()?.strip_prefix("rule ")?.split(['(', ' ']).next().map(String::from))
             .collect()
     };
-    assert_eq!(names("docs"), names("docs-ja"), "例の並びが言語で違う");
+    // The English page, with every twin put back to the Japanese rule it is the twin of.
+    let english: Vec<String> = names("docs").into_iter().map(|n| twin_of_japanese.get(&n).cloned().unwrap_or(n)).collect();
+    assert_eq!(english, names("docs-ja"), "例の並びが言語で違う");
+    assert!(names("docs").iter().filter(|n| twin_of_japanese.contains_key(*n)).count() >= 30, "英語のページが双子を見せていない");
 }
 
 /// The opening diagram draws generated code, a table and a diagnostic witness. All three are
@@ -852,7 +863,7 @@ fn トップと道案内が言う規則の本数は実物と合っている() {
     let n = corpus_rules();
     // The ones written rather than transcribed, as tests/readme.rs counts them. The English
     // page said nine for a while after the tenth went in.
-    const WRITTEN: usize = 28;
+    const WRITTEN: usize = 53;
     for (page, want) in [
         ("website/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
         ("website/docs/assurance.md", format!("**{n} rules** — {} transcribed from a published source, {WRITTEN} written", n - WRITTEN)),

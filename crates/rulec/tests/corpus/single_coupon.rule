@@ -1,0 +1,44 @@
+rule single_coupon v1
+description "Whether one coupon applies, and its raw discount (the sketch of §5.4 of the design document). The order of stacking and the loop are the caller's. It has several outputs, and the names of output cells appear in it"
+
+enum coupon_kind = percent | fixed | free_ship
+
+inputs
+  subtotal : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  applied  : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  kind     : coupon_kind
+  rate     : rate[step 1%]  range >=0% <=100%
+  face     : money[JPY, incl_tax]  range >=0JPY <=100_000JPY
+  dup      : bool
+
+outputs
+  ok  : bool
+  raw : money[JPY, incl_tax]  round down(1JPY)
+
+# The public terms say nothing about rounding, so round down is a placeholder (§7.1)
+derive margin : money[JPY, incl_tax] = subtotal - applied - face  range >=-1_100_000JPY <=1_000_000JPY
+
+define rate_off : money[JPY, incl_tax] = subtotal * rate
+
+table applicable
+policy first
+| kind  | margin | dup  | -> ok : bool |
+| -     | -      | true | false        |
+| fixed | <=0JPY | -    | false        |
+| -     | -      | -    | true         |
+
+table raw_discount
+policy unique
+| ok    | kind      | -> raw : money[JPY, incl_tax] |
+| false | -         | 0JPY                          |
+| true  | percent   | rate_off                      |
+| true  | fixed     | face                          |
+| true  | free_ship | 0JPY                          |
+
+examples
+| subtotal  | applied | kind      | rate | face   | dup   | -> ok | raw     |
+| 10_000JPY | 0JPY    | percent   | 10%  | 0JPY   | false | true  | 1000JPY |
+| 10_000JPY | 0JPY    | fixed     | 0%   | 500JPY | false | true  | 500JPY  |
+| 400JPY    | 0JPY    | fixed     | 0%   | 500JPY | false | false | 0JPY    |
+| 10_000JPY | 0JPY    | percent   | 10%  | 0JPY   | true  | false | 0JPY    |
+| 10_000JPY | 0JPY    | free_ship | 0%   | 0JPY   | false | true  | 0JPY    |

@@ -1,0 +1,53 @@
+rule coupon_discount_amount v1
+description "Whether one coupon applies, and how much it takes off. The order and the loop are the caller's. Source: reconstructed from the public help pages of Rakuten and Yahoo"
+# Note: an output cell may carry a name (adopted in §3.2). An expression cannot be written there, so a rate discount goes through a define
+
+enum coupon_kind  = percent | fixed | free_ship
+enum coupon_scope = shop default | item
+
+inputs
+  list         : money[JPY,incl_tax]  range >=0JPY <=10_000_000JPY  # the basis of a rate coupon
+  running      : money[JPY,incl_tax]  range >=0JPY <=10_000_000JPY  # the basis of an amount coupon (after the rate coupon has applied)
+  kind         : coupon_kind
+  scope        : coupon_scope
+  rate         : rate[step 1%]
+  face         : money[JPY,incl_tax]  range >=0JPY <=1_000_000JPY
+  cap          : money[JPY,incl_tax]  range >=0JPY <=1_000_000JPY
+  min_purchase : money[JPY,incl_tax]  range >=0JPY <=1_000_000JPY
+  used         : bool
+  alive        : bool
+
+outputs
+  discount : money[JPY,incl_tax]  round down(1JPY)
+
+# [derive] the shape the real table asked for. Both are linear combinations of the form "input - input"
+derive min_gap : money[JPY,incl_tax] = running - min_purchase  range >=-1_000_000JPY <=10_000_000JPY
+derive pay_gap : money[JPY,incl_tax] = running - face          range >=-1_000_000JPY <=10_000_000JPY
+
+table applicable
+policy first
+| alive | used | scope | kind  | min_gap | pay_gap | -> ok : bool |
+| false | -    | -     | -     | -       | -       | false        |
+| -     | true | item  | -     | -       | -       | false        |
+| -     | -    | -     | -     | <0JPY   | -       | false        |
+| -     | -    | -     | fixed | -       | <=0JPY  | false        |
+| -     | -    | -     | -     | -       | -       | true         |
+
+# A rate coupon is based on the list price, an amount coupon on what is left after the discount (the running balance), as Rakuten's text has it
+define rate_off : money[JPY,incl_tax] = list * rate
+
+table raw_discount
+policy unique
+| ok    | kind      | -> raw : money[JPY,incl_tax] |
+| false | -         | 0JPY                         |
+| true  | percent   | rate_off                     |
+| true  | fixed     | face                         |
+| true  | free_ship | 0JPY                         |
+
+result discount = down(min(raw, cap), 1JPY)
+
+examples
+| list      | running   | kind    | scope | rate | face   | cap     | min_purchase | used  | alive | -> discount |
+| 10_000JPY | 10_000JPY | percent | shop  | 10%  | 0JPY   | 1000JPY | 5000JPY      | false | true  | 1000JPY     |
+| 10_000JPY | 9000JPY   | fixed   | shop  | 0%   | 500JPY | 500JPY  | 5000JPY      | false | true  | 500JPY      |
+| 10_000JPY | 400JPY    | fixed   | shop  | 0%   | 500JPY | 500JPY  | 0JPY         | false | true  | 0JPY        |

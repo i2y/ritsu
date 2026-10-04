@@ -1,0 +1,42 @@
+rule member_shipping_fee v4
+description "The sketch of §1.2 of the design document, written as a rule. It shows the normal case of a boolean definition used as a column, a rate output, the default mark, and one pair of rows that policy first leaves for review"
+
+import std/都道府県
+
+enum member_kind = basic default | gold default | platinum
+group remote = 北海道, 沖縄県
+
+inputs
+  dest   : 都道府県
+  weight : mass[g]  range >=1g <=40kg
+  total  : money[JPY, incl_tax]  range >=0JPY <=10_000_000JPY
+  member : member_kind
+
+outputs
+  fee : money[JPY, incl_tax]  round up(10JPY)
+
+# A boolean definition. The condition reads one input only, so expanded it is a sum of regions (§5.3, §6.2)
+define bulk : bool = total >= 30_000JPY
+
+table base
+policy unique
+| dest        | weight  | -> base : money[JPY, incl_tax] |
+| remote      | <=2000g | 1200JPY                        |
+| remote      | >2000g  | 1800JPY                        |
+| not: remote | <=2000g | 800JPY                         |
+| not: remote | >2000g  | 1100JPY                        |
+
+table payer
+policy first
+| bulk | member   | -> pay_rate : rate |
+| true | -        | 0%                 |
+| -    | platinum | 50%                |
+| -    | -        | 100%               |
+
+result fee = base * pay_rate
+
+examples
+| dest   | weight | total     | member   | -> fee  |
+| 沖縄県 | 2500g  | 40_000JPY | basic    | 0JPY    |
+| 東京都 | 1999g  | 12_000JPY | platinum | 400JPY  |
+| 北海道 | 500g   | 5000JPY   | basic    | 1200JPY |

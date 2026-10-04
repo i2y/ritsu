@@ -1,0 +1,37 @@
+rule checked_bag_fee v1
+description "The excess fee for checked bags on a flight booking. The booker's membership level and the cabin decide the number of free bags per passenger, and each bag beyond the free total costs 50 dollars. Source: the Checked bag allowance section of the τ²-bench airline policy (Sierra Research, MIT)"
+
+enum membership_level = regular | silver | gold
+enum cabin_class      = basic_economy | economy | business
+
+inputs
+  membership : membership_level
+  cabin      : cabin_class
+  passengers : number  range >=1 <=5
+  bags       : number  range >=0 <=50
+
+outputs
+  fee : money[USD, excl_tax]  round half_up(1USD)
+
+table free_bags
+policy unique
+| membership | cabin         | -> free_each : number |
+| regular    | basic_economy | 0                     |
+| regular    | economy       | 1                     |
+| regular    | business      | 2                     |
+| silver     | basic_economy | 1                     |
+| silver     | economy       | 2                     |
+| silver     | business      | 3                     |
+| gold       | basic_economy | 2                     |
+| gold       | economy       | 3                     |
+| gold       | business      | 4                     |
+
+define free_total : number = free_each * passengers
+define extra : number = max(bags - free_total, 0)
+define fee : money[USD, excl_tax] = extra * 50USD
+
+examples
+| membership | cabin         | passengers | bags | -> fee |
+| regular    | basic_economy | 1          | 1    | 50USD  |
+| gold       | business      | 2          | 8    | 0USD   |
+| silver     | economy       | 3          | 7    | 50USD  |

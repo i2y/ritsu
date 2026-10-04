@@ -1,0 +1,55 @@
+rule supplier_matching v1
+description "Matches the addressee of an invoice against the supplier ledger one entry at a time, and decides the next step from the number of matches. An example of counting a sequence"
+
+enum match_kind  = same | diff
+enum action_kind = register | auto | review
+
+inputs
+  auto_ok : bool
+
+# The candidates from the ledger. The fields of one candidate; the caller passes as many as it has
+elements candidates
+  name_match : bool
+  addr_match : bool
+
+outputs
+  action : action_kind
+
+# The decision for one candidate. The checks of the table work as ever
+table row_of
+policy unique
+| name_match | addr_match | -> kind : match_kind |
+| true       | true       | same                 |
+| true       | false      | diff                 |
+| false      | -          | diff                 |
+
+# All that is left after the walk is the count. The range is the universe of the completeness check, and also the upper bound of the length of the sequence
+count hits over candidates where kind = same  range >=0 <=50
+
+table action_of
+policy unique
+| hits | auto_ok | -> action : action_kind |
+| 0    | -       | register                |
+| 1    | true    | auto                    |
+| 1    | false   | review                  |
+| >=2  | -       | review                  |
+
+sequence one
+| name_match | addr_match |
+| true       | true       |
+| true       | false      |
+
+sequence two
+| name_match | addr_match |
+| true       | true       |
+| true       | true       |
+
+sequence no_candidates
+| name_match | addr_match |
+
+examples
+| auto_ok | candidates    | -> action |
+| true    | one           | auto      |
+| false   | one           | review    |
+| true    | two           | review    |
+| true    | no_candidates | register  |

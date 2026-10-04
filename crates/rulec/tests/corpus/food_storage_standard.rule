@@ -1,0 +1,50 @@
+rule food_storage_standard v1
+description "Decides the label to put on and the measure to take from the storage temperature and the volume of a food (a sketch of the standards under the Food Sanitation Act)"
+
+enum kind   = frozen | chilled | ambient
+enum action = ok | cool | discard
+
+inputs
+  temp    : temperature[℃]  range >=-30℃ <=40℃
+  volume  : volume[mL]  range >=0mL <=5000mL
+  label   : kind
+  recheck : kind?
+
+outputs
+  verdict : action
+  text    : string
+
+table temp_of
+policy unique
+| label   | temp         | -> in_range : bool |
+| frozen  | <=-15℃      | true               |
+| frozen  | >-15℃       | false              |
+| chilled | >=0℃ <=10℃ | true               |
+| chilled | <0℃         | false              |
+| chilled | >10℃        | false              |
+| ambient | -            | true               |
+
+table recheck_of
+policy unique
+| recheck | volume   | -> small : bool |
+| none    | -        | false           |
+| frozen  | -        | true            |
+| chilled | <=1000mL | true            |
+| chilled | >1000mL  | false           |
+| ambient | -        | false           |
+
+table action_of
+policy first
+| in_range | small | temp  | -> verdict : action | text : string                      |
+| true     | -     | -     | ok                  | "conforming"                       |
+| false    | true  | -     | cool                | "needs cooling, in small portions" |
+| false    | -     | >25℃ | discard             | "discard"                          |
+| false    | -     | -     | cool                | "needs cooling"                    |
+
+examples
+| temp  | volume | label   | recheck | -> verdict | text                               |
+| -20℃ | 500mL  | frozen  | none    | ok         | "conforming"                       |
+| -10℃ | 500mL  | frozen  | frozen  | cool       | "needs cooling, in small portions" |
+| 5℃   | 1000mL | chilled | none    | ok         | "conforming"                       |
+| 30℃  | 2000mL | chilled | chilled | discard    | "discard"                          |
+| 15℃  | 500mL  | chilled | none    | cool       | "needs cooling"                    |

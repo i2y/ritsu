@@ -1,0 +1,60 @@
+rule japan_stamp_duty_split v1
+description "The stamp duty on a contract for the transfer of real estate (a Class 1 document). The table of the reduced rate, in force until 31 March 2027, takes precedence over the table of the main rule"
+
+source stamp_act = law "342AC0000000023" asof 2026-04-01
+  別表第一 sha256:0ba69792e960021e
+source measures_act = law "332AC0000000026" asof 2026-04-01
+  第91条 sha256:85faf53f6f6e8196
+
+inputs
+  amount : money[JPY]  range >=0JPY <=1_000_000_000_000JPY
+  stated : bool
+  made   : date  range >=2014-04-01 <=2030-12-31
+
+outputs
+  tax : money[JPY]  round down(1JPY)
+
+define reduced : bool = made <= 2027-03-31  @measures_act 第91条
+
+table base  @stamp_act 別表第一  # The Class 1 documents column
+policy unique
+         | stated | amount                               | -> tax : money[JPY] |
+unstated | false  | -                                    | 200JPY              |
+r3       | true   | >=10_000JPY <=100_000JPY             | 200JPY              |
+r4       | true   | >100_000JPY <=500_000JPY             | 400JPY              |
+r5       | true   | >500_000JPY <=1_000_000JPY           | 1000JPY             |
+r6       | true   | >1_000_000JPY <=5_000_000JPY         | 2000JPY             |
+r7       | true   | >5_000_000JPY <=10_000_000JPY        | 10_000JPY           |
+r8       | true   | >10_000_000JPY <=50_000_000JPY       | 20_000JPY           |
+r9       | true   | >50_000_000JPY <=100_000_000JPY      | 60_000JPY           |
+r10      | true   | >100_000_000JPY <=500_000_000JPY     | 100_000JPY          |
+r11      | true   | >500_000_000JPY <=1_000_000_000JPY   | 200_000JPY          |
+r12      | true   | >1_000_000_000JPY <=5_000_000_000JPY | 400_000JPY          |
+r13      | true   | >5_000_000_000JPY                    | 600_000JPY          |
+
+clause exempt -> tax  @stamp_act 別表第一  # The column of exempt items for Class 1 documents (those whose stated contract amount is under 10,000 yen)
+  when stated true and amount <10_000JPY
+  then 0JPY
+
+table reduced_rate  @measures_act 第91条
+policy unique
+overrides base
+| reduced | stated | amount                               | -> tax     |
+| true    | true   | >100_000JPY <=500_000JPY             | 200JPY     |
+| true    | true   | >500_000JPY <=1_000_000JPY           | 500JPY     |
+| true    | true   | >1_000_000JPY <=5_000_000JPY         | 1000JPY    |
+| true    | true   | >5_000_000JPY <=10_000_000JPY        | 5000JPY    |
+| true    | true   | >10_000_000JPY <=50_000_000JPY       | 10_000JPY  |
+| true    | true   | >50_000_000JPY <=100_000_000JPY      | 30_000JPY  |
+| true    | true   | >100_000_000JPY <=500_000_000JPY     | 60_000JPY  |
+| true    | true   | >500_000_000JPY <=1_000_000_000JPY   | 160_000JPY |
+| true    | true   | >1_000_000_000JPY <=5_000_000_000JPY | 320_000JPY |
+| true    | true   | >5_000_000_000JPY                    | 480_000JPY |
+
+examples
+| amount        | stated | made       | -> tax    |
+| 30_000_000JPY | true   | 2026-09-16 | 10_000JPY |
+| 30_000_000JPY | true   | 2027-04-01 | 20_000JPY |
+| 100_000JPY    | true   | 2026-09-16 | 200JPY    |
+| 5000JPY       | true   | 2026-09-16 | 0JPY      |
+| 0JPY          | false  | 2026-09-16 | 200JPY    |

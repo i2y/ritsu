@@ -29,6 +29,30 @@ fn have(cmd: &str) -> bool {
 }
 
 const RULE: &str = "tests/corpus/ゆうパック運賃.rule";
+/// The English twin of that rule (tests/corpus/twins.tsv), which the English page shows.
+const RULE_EN: &str = "tests/corpus/yupack_base_fee.rule";
+
+/// The same fake legacy implementation, for the twin: its names are English.
+const ADAPTER_EN: &str = r#"# Pretends to be the legacy implementation. It is the generated Python inside, so it matches exactly unless made not to.
+import json, sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "python"))
+import yupack_base_fee as legacy
+
+sys.stdin.readline()
+print(json.dumps({"ok": True, "impl": "legacy@fake-1"}), flush=True)
+
+BUG = os.environ.get("BUG", "0")
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    req = json.loads(line)
+    d = req["in"]
+    got = legacy.yupack_base_fee(legacy.Prefecture(d["dest"]), int(d["girth"]), int(d["weight"]))
+    if BUG == "1" and d["dest"] == "沖縄県":
+        got += 10
+    print(json.dumps({"id": req["id"], "out": {"fee": got}}, ensure_ascii=False), flush=True)
+"#;
 
 const ADAPTER: &str = r#"# 旧実装のふりをする。中身は生成 Python なので、素なら完全に一致する。
 import json, sys, os
@@ -65,6 +89,10 @@ for line in sys.stdin:
 /// `verify` exited 2 ("cannot read") instead of 1. It stayed green on a laptop for as long as
 /// the timing held, and failed the first time CI ran the suite (DESIGN §15.94).
 fn setup(tag: &str) -> Option<(TempDir, PathBuf)> {
+    setup_for(tag, RULE, ADAPTER)
+}
+
+fn setup_for(tag: &str, rule: &str, adapter: &str) -> Option<(TempDir, PathBuf)> {
     if !ready(Need::Python, || have("python3"), "python3 が無いので等価検証を飛ばした") {
         return None;
     }
@@ -74,11 +102,11 @@ fn setup(tag: &str) -> Option<(TempDir, PathBuf)> {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())
-        .args(["gen", RULE, "--out", &out])
+        .args(["gen", rule, "--out", &out])
         .output()
         .unwrap();
     assert!(o.status.success());
-    std::fs::write(dir.join("adapter.py"), ADAPTER).unwrap();
+    std::fs::write(dir.join("adapter.py"), adapter).unwrap();
     Some((tmp, dir))
 }
 
@@ -251,10 +279,14 @@ for line in sys.stdin:
 /// `diff` example the same way.
 #[test]
 fn 文書に載せた実演は_いまの出力と一致する() {
-    let Some((_tmp, dir)) = setup("文書に載せた実演は_いまの出力と一致する") else { return };
+    // Each page shows the rule it is written in: the Japanese page the original, the English
+    // page its twin, with the fake legacy implementation written in the same names.
+    let Some((_tmp, ja_dir)) = setup("文書に載せた実演は_いまの出力と一致する") else { return };
+    let Some((_tmp_en, en_dir)) = setup_for("文書に載せた実演は_いまの出力と一致する_en", RULE_EN, ADAPTER_EN) else { return };
     let run = |lang: &str, json: bool| -> String {
+        let (rule, dir) = if lang == "en" { (RULE_EN, &en_dir) } else { (RULE, &ja_dir) };
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_rulec"));
-        cmd.current_dir(root()).args(["verify", RULE, "--lang", lang]);
+        cmd.current_dir(root()).args(["verify", rule, "--lang", lang]);
         if json {
             cmd.args(["--format", "json"]);
         }

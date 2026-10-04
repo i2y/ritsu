@@ -74,6 +74,10 @@ golden!(w111_未使用, "W111", "tests/mutants/m_w111.rule", "W111");
 golden!(w105_要確認, "W105", "tests/mutants/m_w105.rule", "W105");
 golden!(w105_負担判定, "W105-b", "tests/corpus/送料.rule", "W105");
 golden!(w105_適用順序, "W105-c", "tests/corpus/適用順序.rule", "W105");
+// The same two over their twins (tests/corpus/twins.tsv): the same findings, worded the same way,
+// with English names in the source lines the frames quote.
+golden!(w105_負担判定_twin, "W105-b-twin", "tests/corpus/member_shipping_fee.rule", "W105");
+golden!(w105_適用順序_twin, "W105-c-twin", "tests/corpus/coupon_order.rule", "W105");
 golden!(e010_範囲記法, "E010", "tests/mutants/m_e010.rule", "E010");
 golden!(e011_別名, "E011", "tests/mutants/m_e011.rule", "E011");
 

@@ -1,0 +1,34 @@
+rule rating_grade v1
+description "Adds up four rating items with weights and decides the grade from the share of the full score they reach. An example with no money in it"
+
+enum rank = S | A | B | C
+
+inputs
+  quality  : number  range >=0 <=10
+  delivery : number  range >=0 <=10
+  price    : number  range >=0 <=10
+  support  : number  range >=0 <=10
+
+outputs
+  grade : rank
+
+# The weights are 2:1:1:1, and the full score is 50
+derive total : number = quality * 2 + delivery + price + support  range >=0 <=50
+define ratio : rate = total / 50
+
+table grade_table
+policy first
+| ratio | -> grade : rank |
+| >=90% | S               |
+| >=80% | A               |
+| >=60% | B               |
+| -     | C               |
+
+result grade = grade
+
+examples
+| quality | delivery | price | support | -> grade |
+| 10      | 10       | 10    | 10      | S        |
+| 9       | 8        | 8     | 7       | A        |
+| 6       | 6        | 6     | 6       | B        |
+| 3       | 3        | 3     | 3       | C        |

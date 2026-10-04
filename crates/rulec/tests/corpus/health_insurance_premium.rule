@@ -1,0 +1,86 @@
+rule health_insurance_premium v1
+description "The health insurance premium of Kyokai Kenpo (the Japan Health Insurance Association). From the monthly pay it takes the standard monthly remuneration, multiplies by the rate and halves it, and gives the amount deducted from salary and the amount paid in cash"
+
+inputs
+  monthly   : money[JPY]  range >=0JPY <=10_000_000JPY
+  rate      : rate[step 0.01%]  range >=0% <=20%  # Changes with the prefecture and the fiscal year, so it is an input
+  care_rate : rate[step 0.01%]  range >=0% <=5%   # The part added for Category 2 insured persons of long-term care insurance (aged 40 to 64)
+  care      : bool
+
+outputs
+  std    : money[JPY]  round down(1JPY)
+  deduct : money[JPY]  round half_down(1JPY)  # Source: note (1) of the premium table. Deducted from salary, 50 sen or less is rounded down and more than 50 sen up
+  cash   : money[JPY]  round half_up(1JPY)    # Source: note (2) of the premium table. Paid in cash, less than 50 sen is rounded down and 50 sen or more up
+
+derive both : rate[step 0.01%] = rate + care_rate  range >=0% <=25%
+
+table grade  # Source: Japan Health Insurance Association, premium table of health insurance and employees' pension insurance from March 2026 (paid in April), Tokyo branch
+policy unique
+| monthly                      | -> std : money[JPY] |
+| <63_000JPY                   | 58_000JPY           |
+| >=63_000JPY <73_000JPY       | 68_000JPY           |
+| >=73_000JPY <83_000JPY       | 78_000JPY           |
+| >=83_000JPY <93_000JPY       | 88_000JPY           |
+| >=93_000JPY <101_000JPY      | 98_000JPY           |
+| >=101_000JPY <107_000JPY     | 104_000JPY          |
+| >=107_000JPY <114_000JPY     | 110_000JPY          |
+| >=114_000JPY <122_000JPY     | 118_000JPY          |
+| >=122_000JPY <130_000JPY     | 126_000JPY          |
+| >=130_000JPY <138_000JPY     | 134_000JPY          |
+| >=138_000JPY <146_000JPY     | 142_000JPY          |
+| >=146_000JPY <155_000JPY     | 150_000JPY          |
+| >=155_000JPY <165_000JPY     | 160_000JPY          |
+| >=165_000JPY <175_000JPY     | 170_000JPY          |
+| >=175_000JPY <185_000JPY     | 180_000JPY          |
+| >=185_000JPY <195_000JPY     | 190_000JPY          |
+| >=195_000JPY <210_000JPY     | 200_000JPY          |
+| >=210_000JPY <230_000JPY     | 220_000JPY          |
+| >=230_000JPY <250_000JPY     | 240_000JPY          |
+| >=250_000JPY <270_000JPY     | 260_000JPY          |
+| >=270_000JPY <290_000JPY     | 280_000JPY          |
+| >=290_000JPY <310_000JPY     | 300_000JPY          |
+| >=310_000JPY <330_000JPY     | 320_000JPY          |
+| >=330_000JPY <350_000JPY     | 340_000JPY          |
+| >=350_000JPY <370_000JPY     | 360_000JPY          |
+| >=370_000JPY <395_000JPY     | 380_000JPY          |
+| >=395_000JPY <425_000JPY     | 410_000JPY          |
+| >=425_000JPY <455_000JPY     | 440_000JPY          |
+| >=455_000JPY <485_000JPY     | 470_000JPY          |
+| >=485_000JPY <515_000JPY     | 500_000JPY          |
+| >=515_000JPY <545_000JPY     | 530_000JPY          |
+| >=545_000JPY <575_000JPY     | 560_000JPY          |
+| >=575_000JPY <605_000JPY     | 590_000JPY          |
+| >=605_000JPY <635_000JPY     | 620_000JPY          |
+| >=635_000JPY <665_000JPY     | 650_000JPY          |
+| >=665_000JPY <695_000JPY     | 680_000JPY          |
+| >=695_000JPY <730_000JPY     | 710_000JPY          |
+| >=730_000JPY <770_000JPY     | 750_000JPY          |
+| >=770_000JPY <810_000JPY     | 790_000JPY          |
+| >=810_000JPY <855_000JPY     | 830_000JPY          |
+| >=855_000JPY <905_000JPY     | 880_000JPY          |
+| >=905_000JPY <955_000JPY     | 930_000JPY          |
+| >=955_000JPY <1_005_000JPY   | 980_000JPY          |
+| >=1_005_000JPY <1_055_000JPY | 1_030_000JPY        |
+| >=1_055_000JPY <1_115_000JPY | 1_090_000JPY        |
+| >=1_115_000JPY <1_175_000JPY | 1_150_000JPY        |
+| >=1_175_000JPY <1_235_000JPY | 1_210_000JPY        |
+| >=1_235_000JPY <1_295_000JPY | 1_270_000JPY        |
+| >=1_295_000JPY <1_355_000JPY | 1_330_000JPY        |
+| >=1_355_000JPY               | 1_390_000JPY        |
+
+table applied  # For Category 2 insured persons of long-term care insurance, the rate is the health insurance rate plus the care insurance rate
+policy unique
+| care  | -> applied_rate : rate[step 0.01%] |
+| true  | both                               |
+| false | rate                               |
+
+define half : money[JPY] = std * applied_rate / 2  # Half of the full amount. The fraction below one yen is settled by the rounding of the two outputs above
+define deduct : money[JPY] = half
+define cash : money[JPY] = half
+
+examples
+| monthly    | rate  | care_rate | care  | -> std     | deduct    | cash      |
+| 60_000JPY  | 9.85% | 1.62%     | false | 58_000JPY  | 2856JPY   | 2857JPY   |  # Half is 2,856.5 yen. Deducted from salary it is rounded down, paid in cash it is rounded up
+| 134_000JPY | 9.85% | 1.62%     | false | 134_000JPY | 6599JPY   | 6600JPY   |  # Half is 6,599.5 yen
+| 134_000JPY | 9.85% | 1.62%     | true  | 134_000JPY | 7685JPY   | 7685JPY   |  # Half is 7,684.9 yen. Both round up
+| 300_000JPY | 9.85% | 1.62%     | true  | 300_000JPY | 17_205JPY | 17_205JPY |  # Half is 17,205.0 yen

@@ -1,0 +1,60 @@
+rule member_benefits v1
+description "Gives the amount billed and the points at once from the member class and the weight. Two outputs, one result, and a rate that comes from a column of a table"
+
+enum member_class = basic | premium
+enum weight_class = light | mid | heavy
+enum tier_class   = bronze | silver | gold
+
+inputs
+  member : member_class
+  weight : mass[g]  range >=1g <=20kg
+  gross  : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  off    : money[JPY, incl_tax]  range >=0JPY <=100_000JPY
+
+# The declaration order (billed, then points) and the alphabetical order (points, then billed) are reversed on purpose.
+# Whether the generated code returns the outputs in the same order in every language shows only with this order.
+outputs
+  total : money[JPY, incl_tax]  round half_up(10JPY)
+  pts   : number  round down(1)
+
+derive net : money[JPY, incl_tax] = gross - off  range >=-100_000JPY <=1_000_000JPY
+
+# Dividing an amount by an amount constant drops the unit and leaves a number (§2.3)
+define base : number = gross / 100JPY
+
+table weight_of
+policy first
+| weight | -> weight_band : weight_class |
+| <=2kg  | light                         |
+| <=10kg | mid                           |
+| -      | heavy                         |
+
+table tier_of
+policy unique
+| weight_band | member  | -> tier : tier_class |
+| light       | basic   | bronze               |
+| light       | premium | silver               |
+| mid         | basic   | silver               |
+| mid         | premium | gold                 |
+| heavy       | -       | gold                 |
+
+# One table gives two columns, and the define below uses the rate column.
+# If the rate step (10%) did not fit the scale the column is kept at, the points would come out ten times too large.
+table ship
+policy unique
+| tier   | net       | -> shipping : money[JPY, incl_tax] | multiplier : rate[step 10%] |
+| bronze | <3000JPY  | 800JPY                             | 100%                        |
+| bronze | >=3000JPY | 400JPY                             | 100%                        |
+| silver | -         | 300JPY                             | 120%                        |
+| gold   | -         | 0JPY                               | 150%                        |
+
+# The second output is taken from the define with the same name as the output (result applies to the first output only)
+define pts : number = base * multiplier
+
+result total = max(net, 0JPY) + shipping
+
+examples
+| member  | weight | gross     | off     | -> total  | pts |
+| basic   | 1kg    | 2000JPY   | 500JPY  | 2300JPY   | 20  |
+| premium | 5kg    | 20_000JPY | 2000JPY | 18_000JPY | 300 |
+| basic   | 15kg   | 5000JPY   | 0JPY    | 5000JPY   | 75  |

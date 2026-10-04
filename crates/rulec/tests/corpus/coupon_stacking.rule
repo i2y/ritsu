@@ -1,0 +1,32 @@
+rule coupon_stacking v1
+description "A unique table whose two derives share inputs. It looks overlapping to the sieve that reads one column at a time, and is the subject for deciding that no elimination runs (§6.2, §15.126)"
+
+enum stack_verdict = no default | yes
+
+inputs
+  total  : money[JPY,incl_tax]  range >=0JPY <=1_000_000JPY
+  disc_a : money[JPY,incl_tax]  range >=0JPY <=100_000JPY
+  disc_b : money[JPY,incl_tax]  range >=0JPY <=100_000JPY
+
+outputs
+  verdict : stack_verdict
+
+# disc_b is at least 0 yen, so by its definition rest_b is never above rest_a.
+# So when rest_a <= 1000 yen, rest_b cannot reach 3980 yen.
+# The check reads the derives one at a time, so it cannot see this link. Rows 1 and 2 below
+# look overlapping there, and Fourier-Motzkin elimination is decided not to run (§15.126).
+derive rest_a : money[JPY,incl_tax] = total - disc_a           range >=-100_000JPY <=1_000_000JPY
+derive rest_b : money[JPY,incl_tax] = total - disc_a - disc_b  range >=-200_000JPY <=1_000_000JPY
+
+table decide
+policy unique
+| rest_a    | rest_b    | -> verdict : stack_verdict |
+| <=1000JPY | -         | no                         |
+| -         | >=3980JPY | yes                        |
+| >1000JPY  | <3980JPY  | no                         |
+
+examples
+| total     | disc_a  | disc_b  | -> verdict |
+| 500JPY    | 0JPY    | 0JPY    | no         |
+| 10_000JPY | 1000JPY | 1000JPY | yes        |
+| 5000JPY   | 2000JPY | 2000JPY | no         |

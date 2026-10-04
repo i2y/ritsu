@@ -1,0 +1,46 @@
+rule office_hygiene_standard v1
+description "Decides the measure the employer takes and the cost it bears from the floor area and the ceiling height (giving the air volume) together with the noise and the overtime hours (a sketch of the Office Health Standards Regulation and of the prevention of noise injury)"
+
+enum action = ok | improve | stop
+
+inputs
+  people   : number  range >=1 <=200
+  floor    : area[m2]  range >=1m2 <=2000m2
+  used     : area[m2]  range >=1m2 <=2000m2
+  noise    : sound[dB]  range >=0dB <=130dB
+  overtime : duration[h]  range >=0h <=200h
+
+# The occupied area never exceeds the floor area. The check asks for no row outside that
+constraint used <= floor
+
+outputs
+  verdict : action
+  cost    : money[JPY, incl_tax]  round half_even(100JPY)
+
+derive spare : area[m2] = floor - used  range >=-1999m2 <=1999m2
+
+table space_of
+policy first
+| spare | -> tight : bool |
+| <10m2 | true            |
+| -     | false           |
+
+table action_of
+policy first
+| noise  | overtime | tight | people | -> verdict : action | rate : rate[step 10%] |
+| >=90dB | -        | -     | -      | stop                | 100%                  |
+| >=85dB | -        | -     | -      | improve             | 50%                   |
+| -      | >45h     | -     | -      | improve             | 50%                   |
+| -      | -        | true  | >=50   | stop                | 100%                  |
+| -      | -        | true  | -      | improve             | 30%                   |
+| -      | -        | -     | -      | ok                  | 0%                    |
+
+define cost : money[JPY, incl_tax] = 10_000JPY * rate
+
+examples
+| people | floor | used | noise | overtime | -> verdict | cost      |
+| 10     | 100m2 | 50m2 | 60dB  | 10h      | ok         | 0JPY      |
+| 10     | 100m2 | 95m2 | 60dB  | 10h      | improve    | 3000JPY   |
+| 10     | 100m2 | 50m2 | 86dB  | 10h      | improve    | 5000JPY   |
+| 10     | 100m2 | 50m2 | 95dB  | 10h      | stop       | 10_000JPY |
+| 10     | 100m2 | 50m2 | 60dB  | 60h      | improve    | 5000JPY   |

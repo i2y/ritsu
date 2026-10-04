@@ -1,0 +1,32 @@
+rule points_earned v1
+description "The points earned by one purchase. One point per 100 yen, doubled by the member class and by the campaign. An example using a number with no unit"
+
+enum member_kind = basic | gold
+
+inputs
+  paid     : money[JPY, incl_tax]  range >=0JPY <=1_000_000JPY
+  kind     : member_kind
+  campaign : bool
+
+outputs
+  pts : number  round down(1)
+
+# One point per 100 yen. The fraction is dropped once, at the end (§7.2)
+define base  : number = paid / 100JPY
+define boost : number = base * 2
+
+table pts_table
+policy unique
+| kind  | campaign | -> pts : number |
+| gold  | -        | boost           |
+| basic | true     | boost           |
+| basic | false    | base            |
+
+result pts = pts
+
+examples
+| paid    | kind  | campaign | -> pts |
+| 1050JPY | basic | false    | 10     |
+| 1050JPY | gold  | false    | 21     |
+| 1050JPY | basic | true     | 21     |
+| 99JPY   | basic | false    | 0      |

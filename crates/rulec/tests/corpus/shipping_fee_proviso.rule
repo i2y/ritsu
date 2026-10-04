@@ -1,0 +1,39 @@
+rule shipping_fee_proviso v1
+description "The shipping fee of a regular delivery. A fare table decides the base fare, and a proviso that makes an order of 3,900 yen or more by a member free takes precedence over the main rule (the sketch of DESIGN.md §15.67)"
+
+import std/都道府県
+
+enum size_class = S60 | S80
+group remote = 北海道, 沖縄県
+
+inputs
+  dest   : 都道府県
+  size   : size_class
+  member : bool
+  total  : money[JPY]  range >=0JPY <=10_000_000JPY
+
+outputs
+  fee : money[JPY]  round up(10JPY)
+
+table fee_table  # Source: base fare table (sketch), Appendix Table 1
+policy unique
+| dest        | size | -> base : money[JPY] |
+| remote      | S60  | 1150JPY              |
+| remote      | S80  | 1400JPY              |
+| not: remote | S60  | 820JPY               |
+| not: remote | S80  | 1050JPY              |
+
+clause regular -> fee  # Source: Article 3, paragraph 1 (main text)
+  when always
+  then base
+
+clause free -> fee  # Source: Article 3, paragraph 2, proviso
+  when total >=3900JPY and member true
+  then 0JPY
+  overrides regular
+
+examples
+| dest   | size | member | total     | -> fee  |
+| 北海道 | S60  | true   | 3900JPY   | 0JPY    |
+| 北海道 | S60  | true   | 3899JPY   | 1150JPY |
+| 東京都 | S80  | false  | 10_000JPY | 1050JPY |

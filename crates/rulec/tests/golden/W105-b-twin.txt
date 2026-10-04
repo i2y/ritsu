@@ -1,0 +1,12 @@
+warning[W105]: 行の重なり: 同じ入力が 行1 と 行2 の両方に当てはまります
+  --> tests/corpus/member_shipping_fee.rule:33 表 payer
+   |
+32 | | true | -        | 0%                 |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行1
+33 | | -    | platinum | 50%                |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行2
+   |
+ 両方に当てはまる例: bulk = true, member = platinum
+ この例を作る入力: dest = 北海道, member = platinum, total = 30000, weight = 1
+ `policy first` のため 行1 が勝ちます。意図通りですか。
+ 意図通りならこのままで構いません。CI の check --diff-base は新たに生じた分だけを報告します。
