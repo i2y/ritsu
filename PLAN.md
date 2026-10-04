@@ -789,7 +789,7 @@ DESIGN 3.4、7.13。sakai が Rust のクレートの依存を確かめられる
 - sakai と yuen の例とテストの材料も、英語を先にした（各言語の DESIGN の 12.4 と 16.2、根の DESIGN 10.11）。ritsu の README とスキルで sakai の例を見せるときは、英語の `examples/shop/` を先に見せ、日本語の `examples/shop.ja/` を並べる。
 - rulec のコーパスと例は、英語を先にした（rulec の DESIGN §15.177、根の DESIGN 10.10）。ritsu の README とスキルで rulec の例を見せるときは、英語の双子（`member_shipping_fee.rule`、`japan_stamp_duty_split.rule`、`order_lifecycle.rule` など）を先に見せ、日本語の版を並べる。
 
-済んだもの：根の README.md と README.ja.md とその確かめ（`crates/ritsu/tests/readme.rs`）、`skills/ritsu`（`crates/ritsu/tests/skill.rs`）、各言語の README の入れ方、dandori の `--help`。残り：DESIGN の 1.2（行数）と 10.1（テストの件数と時間）の数は、E と F のあとに測り直していない。
+済んだもの：根の README.md と README.ja.md とその確かめ（`crates/ritsu/tests/readme.rs`）、`skills/ritsu`（`crates/ritsu/tests/skill.rs`）、各言語の README の入れ方、dandori の `--help`。DESIGN の 1.2（行数）と 10.1（テストの件数と時間）も、全部を取り込んだ main で測り直した（指示する側）。
 
 **したこと**（F.3 の担当。DESIGN の 8.2、10.12、13.2 に足した文）：
 
@@ -999,7 +999,7 @@ DESIGN 11 章。済んだ。
 
 ### 7.10 E から F へ（E の終わりと F の担当の記録を、取り込むときにまとめた）
 
-- 済んだもの：段階 E の全部（E.1〜E.9。ただし E.9 の 1 の、全部を取り込んだ木での全体の回しと dandori の platforms の段は、まだ）。F のうち、F.1 と F.2（yuen と sakai の段階 D）、F.3（DESIGN の数の測り直しを除く）、F.5（ブラウザで試すページ）、F.6（Lean の層）、F.7 のうち配るものの準備とバージョンを 0.23.0 にそろえること（サイトの移動と切り替えを除く）。英語を先にすること（koyomi、chobo、sakai、yuen、rulec のコーパス、ritsu のテストのプロジェクト。DESIGN 10.10、10.11）。F.4（LSP）は作らない。
+- 済んだもの：段階 E の全部（E.1〜E.9。E.9 の 1 の、全部を取り込んだ木での全体の回しと dandori の platforms の段も、F の終わりに main で回して通った。DESIGN 10.1）。F のうち、F.1 と F.2（yuen と sakai の段階 D）、F.3、F.5（ブラウザで試すページ）、F.6（Lean の層）、F.7 のうち配るものの準備とバージョンを 0.23.0 にそろえること（サイトの移動と切り替えを除く）。英語を先にすること（koyomi、chobo、sakai、yuen、rulec のコーパス、ritsu のテストのプロジェクト。DESIGN 10.10、10.11）。F.4（LSP）は作らない。
 - 取り込むときに指示する側が直したこと（それぞれ DESIGN の節に書いた）：
   - dandori の口の API を `checked_with(root, files, &ritsu_ports::Ports, lang)` 一つにした（`ritsu run` の担当の `checked_with_ports` は入れていない。DESIGN 6.1）。`ritsu dandori` は `run_with_undecided` にまとめた（DESIGN 8.1）。
   - 決められない前提の `UndecidedCalls` は、`ritsu check` と同じく `Flows::crossings` でフローを読み、`decide` に日付の口も渡す。koyomi の日の前提で ritsu-cross が決められるものは、確かめる文にならない（DESIGN 7.4）。
@@ -1009,11 +1009,11 @@ DESIGN 11 章。済んだ。
   - chobo の探索（`witness.rs` の `passing_call`）が、額の範囲の上の端がその操作に要る最小の額に届かないときにすぐ答えるようにした。Lean の層の二つ目の担当が、額を 1 に限った在庫の例の `reserve` の探索が終わらず、`ritsu check` が終わらないことを見つけた（chobo の `tests/ports.rs` にテストを足した。DESIGN 7.6）。
   - `ritsu gen` の試しのプロジェクト `stockroom` のフローを、dandori の検査の直し（F.6 の E020）に合わせた（E.7）。
 - F の残り：
-  - F.1、F.2（yuen と sakai の段階 D）は済んだ。F.3 は、根の README とその確かめ、`skills/ritsu`、各言語の README の入れ方、dandori の `--help` が済み、DESIGN の 1.2 と 10.1 の数が残った（F.3）。F.7 のバージョンは 0.23.0 にそろえた（F.7）。
+  - F.1、F.2（yuen と sakai の段階 D）は済んだ。F.3 は、根の README とその確かめ、`skills/ritsu`、各言語の README の入れ方、dandori の `--help` が済み、DESIGN の 1.2 と 10.1 の数も測り直した（F.3）。F.7 のバージョンは 0.23.0 にそろえた（F.7）。
   - F.7 のバージョンを 0.23.0 にそろえることは済んだ（F.7。指示する側がした）。手順は DESIGN 13.1 で、リリースの準備の担当が書いたスクリプト（ルートの `[workspace.package]` に `version` を書き、十五のクレートを `version.workspace = true` にする。指示する側が持っていて、中身はここに写さない）を使った。
   - F.7 のサイトの移動（rulec と dandori のサイトの中身、そのビルドと文書のテスト）、formula の切り替え、タグ、公開。クレートの中の古いリリースのファイル（`crates/rulec/.github/workflows/release.yml`、`ci.yml` の `packages` のジョブ、`crates/rulec/packaging/`、`crates/rulec/action.yml`）は、リリースを移すときに消す。rulec の `[package.metadata.binstall]` の `pkg-url` は ritsu のアーカイブと合わない（crates.io に出さないので困らない）。Intel の macOS のビルド、CI での実行（リモートが無い）、`brew audit --online` は、手元では確かめていない。
 - 残したこと：
-  - ★ E.9 の 1：全部を取り込んだ木で、根から全体を一度回し、dandori の platforms の段を一度通す。dandori の検査の担当が例のホテルの予約・請求・注文の Temporal 版と `tests/flows/dates_and_books.flow` を直して生成物が変わり、`ritsu gen` の担当が生成物の頭を変えたので、dandori の重い十二（少なくとも Ollama のほかの十一）を回す必要がある。記録した履歴のうち、ホテルの予約（run-52）と注文（run-45 の三つ）は、直したところ（`on failure` と `on cancel`）を通らない実行なので、再生は変わらない見込みである。`ritsu gen` の担当は、生成物の変わった五つを回して通した。決められない前提の担当は、自分の木で重い十二を一件ずつ回して通した。
+  - E.9 の 1（済んだ。DESIGN 10.1）：全部を取り込んだ木で、根から全体を一度回し、dandori の platforms の段を一度通す。dandori の検査の担当が例のホテルの予約・請求・注文の Temporal 版と `tests/flows/dates_and_books.flow` を直して生成物が変わり、`ritsu gen` の担当が生成物の頭を変えたので、dandori の重い十二（少なくとも Ollama のほかの十一）を回す必要がある。記録した履歴のうち、ホテルの予約（run-52）と注文（run-45 の三つ）は、直したところ（`on failure` と `on cancel`）を通らない実行なので、再生は変わらない見込みである。`ritsu gen` の担当は、生成物の変わった五つを回して通した。決められない前提の担当は、自分の木で重い十二を一件ずつ回して通した。
   - X3 の (a)、X4、X6 が決められないと言うものを、X2 と同じく口で dandori に渡して生成コードで確かめること（`TK::Check` の `PreTest` に種類を足し、`prechecks::insert` で置き、七つの生成器と参照インタプリタとシナリオに一つずつ足す）。確かめる文をブロックをまたいで前へ寄せること（`match` のどの分岐も規則を呼ぶとき）。Lean の `DandoriCore` は確かめる文を知らない（入れるなら、置き場所の決め方が規則を呼ぶ実行を変えないことが定理になる）。
   - dandori の日付の範囲（書き方と、七つのプラットフォームの確かめ）。それまで、ワークフローの入力と `now` から来る日は W205 になる。X5 の長さで、プラットフォームがタスクに付ける既定のタイムアウト（コールバックの一日など）は数えていない。
   - `ritsu run` を、一つの生成パッケージとの突き合わせの基準にすること。`ritsu run --target temporal --format json` の `trace` が計算した結果で流したときの呼び出しの並びで、パッケージを流すランナーを作るなら、帳簿の操作を本物の帳簿（chobo のクライアント）に送り、規則と日付をパッケージの中のコードで計算させ、`trace` と比べればよい。
