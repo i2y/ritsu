@@ -147,15 +147,15 @@ pub fn expire_sql(book: &Book) -> String {
 // ── the SQL ───────────────────────────────────────────────────────────────
 
 /// The SQL of the book, or the names PostgreSQL would cut short.
-pub fn build(book: &Book) -> Result<String, Vec<Diag>> {
+pub fn build(book: &Book, origin: &crate::target::Origin) -> Result<String, Vec<Diag>> {
     let d = check_names(book);
     if !d.is_empty() {
         return Err(d);
     }
     let s = ident(&book.name);
-    let mut o = String::new();
+    let mut o = crate::client::head(book, origin, crate::client::Comment::Dashes);
     o.push_str(&format!(
-        "-- {} v{}: written by `chobo build --target postgres`. Do not edit; build it again.\n\
+        "-- The schema and the functions of the book {} v{} on PostgreSQL.\n\
          -- It can run any number of times: it makes what is missing and replaces the functions.\n\
          -- Each function does one call in one transaction; READ COMMITTED is enough (DESIGN 4.1).\n\n",
         book.name, book.version

@@ -112,6 +112,10 @@ impl Names {
     fn new(m: &Model) -> Names {
         let (enums, recs) = crate::temporal::used_types(m);
         let mut taken: BTreeSet<String> = GO_EXPORTED.iter().map(|s| s.to_string()).collect();
+        // a flow of a package declares Books too (io_books.go)
+        if m.package.is_some() {
+            taken.insert("Books".to_string());
+        }
         let mut types = BTreeMap::new();
         let unique = |base: String, taken: &mut BTreeSet<String>| {
             let mut n = base;
@@ -2357,38 +2361,59 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
     for r in called.iter().filter(|r| m.rules[**r].is_rule()) {
         packages.insert(m.rules[*r].info.go.module.clone());
     }
-    if !packages.is_empty() {
-        t.push_str(if dated.is_empty() { "// The rules the workflow calls, as activities around the Go rulec generates. `rulec gen <rule>\n" } else { "// The rules and the dates the workflow calls, as activities around the Go rulec and koyomi generate.\n// `rulec gen <rule>\n" });
-        t.push_str("// --out <this package's directory>/rulec` writes each package these imports read, as a module of its\n");
-        t.push_str("// own (rulec/go/<package>), which your go.mod requires and replaces with that directory:\n//\n");
-        for p in &packages {
-            t.push_str(&format!("//\trequire {p} v0.0.0\n//\treplace {p} => ./<this package's directory>/rulec/go/{p}\n"));
-        }
-    }
-    if !dated.is_empty() {
-        if packages.is_empty() {
-            t.push_str("// The dates the workflow calls, as activities around the Go koyomi generates.\n");
-        } else {
-            t.push_str("//\n");
-        }
-        t.push_str("// `koyomi gen <file.cal> --out <this package's directory>/koyomi` writes the package of each dates file,\n");
-        t.push_str("// koyomi/go/<package>: give its directory a go.mod (`module koyomi/go/<package>`), which your go.mod\n// requires and replaces with that directory:\n//\n");
-        for p in &dated {
-            t.push_str(&format!("//\trequire koyomi/go/{p} v0.0.0\n//\treplace koyomi/go/{p} => ./<this package's directory>/koyomi/go/{p}\n"));
-        }
-    }
     // a rule's day goes to rulec's code as the number of days since 1970-01-01
     let days = called.iter().any(|r| m.rules[*r].is_rule() && m.rules[*r].info.inputs.iter().chain(&m.rules[*r].info.outputs).any(|c| c.ty == crate::rulec::RType::Date));
-    t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n"));
-    if !dated.is_empty() || days {
-        t.push_str("\t\"time\"\n");
-    }
-    t.push('\n');
-    for p in &packages {
-        t.push_str(&format!("\t{}\n", q(p)));
-    }
-    for p in &dated {
-        t.push_str(&format!("\t{}\n", q(&format!("koyomi/go/{p}"))));
+    if let Some(p) = &m.package {
+        // a flow of a package: the rules and the dates are the package's own (ritsu's DESIGN 9.3)
+        t.push_str(match (packages.is_empty(), dated.is_empty()) {
+            (false, true) => "// The rules the workflow calls, as activities around the Go rulec generates.\n",
+            (true, _) => "// The dates the workflow calls, as activities around the Go koyomi generates.\n",
+            (false, false) => "// The rules and the dates the workflow calls, as activities around the Go rulec and koyomi generate.\n",
+        });
+        t.push_str("// The packages these imports read are the package's own, which `ritsu gen` writes beside the flows.\n");
+        t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n"));
+        if !dated.is_empty() || days {
+            t.push_str("\t\"time\"\n");
+        }
+        t.push('\n');
+        let mut paths: Vec<String> = packages.iter().map(|r| format!("{}/rules/{r}", p.go_module)).collect();
+        paths.extend(dated.iter().map(|d| format!("{}/dates/{d}", p.go_module)));
+        paths.sort();
+        for path in paths {
+            t.push_str(&format!("\t{}\n", q(&path)));
+        }
+    } else {
+        if !packages.is_empty() {
+            t.push_str(if dated.is_empty() { "// The rules the workflow calls, as activities around the Go rulec generates. `rulec gen <rule>\n" } else { "// The rules and the dates the workflow calls, as activities around the Go rulec and koyomi generate.\n// `rulec gen <rule>\n" });
+            t.push_str("// --out <this package's directory>/rulec` writes each package these imports read, as a module of its\n");
+            t.push_str("// own (rulec/go/<package>), which your go.mod requires and replaces with that directory:\n//\n");
+            for p in &packages {
+                t.push_str(&format!("//\trequire {p} v0.0.0\n//\treplace {p} => ./<this package's directory>/rulec/go/{p}\n"));
+            }
+        }
+        if !dated.is_empty() {
+            if packages.is_empty() {
+                t.push_str("// The dates the workflow calls, as activities around the Go koyomi generates.\n");
+            } else {
+                t.push_str("//\n");
+            }
+            t.push_str("// `koyomi gen <file.cal> --out <this package's directory>/koyomi` writes the package of each dates file,\n");
+            t.push_str("// koyomi/go/<package>: give its directory a go.mod (`module koyomi/go/<package>`), which your go.mod\n// requires and replaces with that directory:\n//\n");
+            for p in &dated {
+                t.push_str(&format!("//\trequire koyomi/go/{p} v0.0.0\n//\treplace koyomi/go/{p} => ./<this package's directory>/koyomi/go/{p}\n"));
+            }
+        }
+        t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n"));
+        if !dated.is_empty() || days {
+            t.push_str("\t\"time\"\n");
+        }
+        t.push('\n');
+        for p in &packages {
+            t.push_str(&format!("\t{}\n", q(p)));
+        }
+        for p in &dated {
+            t.push_str(&format!("\t{}\n", q(&format!("koyomi/go/{p}"))));
+        }
     }
     t.push_str(")\n\n// ddRules are the rules whose code goes with the workflow, by the names the workflow calls them by.\nvar ddRules = map[string]any{\n");
     for r in called {
@@ -2524,7 +2549,18 @@ fn date_rule_go(ru: &RuleUse, d: &DateCall) -> String {
 fn io_books_file(m: &Model, pkg: &str, header: &str) -> String {
     let mut t = header.to_string();
     t.push_str("// How the tasks that say `book` run an operation of a book of chobo's: through the Transport, which\n// the default one does on the Go client chobo writes for the book (TransportOptions.Books).\n");
-    t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\t\"reflect\"\n)\n"));
+    let books = crate::asl::used_books(m);
+    match &m.package {
+        None => t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\t\"reflect\"\n)\n")),
+        Some(p) => {
+            // a flow of a package: the clients of the package's books/, by their types (ritsu's DESIGN 9.3)
+            t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\t\"reflect\"\n\n"));
+            for (i, b) in books.iter().enumerate() {
+                t.push_str(&format!("\tddBook{i} {}\n", q(&format!("{}/books/{}", p.go_module, m.books[*b].facts.go.module))));
+            }
+            t.push_str(")\n");
+        }
+    }
     t.push_str(BOOKS_GO);
     t.push_str("\n// ddBooks are how chobo's Go client names each transfer of a book and its parameters, by the book's name.\nvar ddBooks = map[string]map[string]ddBookNames{\n");
     for b in crate::asl::used_books(m) {
@@ -2537,6 +2573,19 @@ fn io_books_file(m: &Model, pkg: &str, header: &str) -> String {
         t.push_str("\t},\n");
     }
     t.push_str("}\n");
+    if m.package.is_some() {
+        let fields: Vec<(String, String, String)> = books.iter().enumerate().map(|(i, b)| (exported(&m.books[*b].facts.name), format!("*ddBook{i}.Book"), m.books[*b].facts.name.clone())).collect();
+        let width = fields.iter().map(|(f, _, _)| f.chars().count()).max().unwrap_or(0);
+        t.push_str("\n// Books are the books the tasks run operations on: the clients of the package's books/, which Map\n// gives to TransportOptions.Books by the book's name.\ntype Books struct {\n");
+        for (f, ty, _) in &fields {
+            t.push_str(&format!("\t{f}{} {ty}\n", " ".repeat(width - f.chars().count())));
+        }
+        t.push_str("}\n\n// Map is the books that are set, by the book's name, as TransportOptions.Books takes them.\nfunc (b Books) Map() map[string]any {\n\tm := map[string]any{}\n");
+        for (f, _, name) in &fields {
+            t.push_str(&format!("\tif b.{f} != nil {{\n\t\tm[{}] = b.{f}\n\t}}\n", q(name)));
+        }
+        t.push_str("\treturn m\n}\n");
+    }
     t
 }
 
@@ -2810,7 +2859,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         return Err(vec![d]);
     }
     let pkg = package(m);
-    let header = format!("// Code generated by dandori from {}. DO NOT EDIT.\n\n", m.source_file);
+    let header = format!("{}\n", m.head("//"));
     let names = Names::new(m);
     let nd = needs(m);
     // the rules whose code goes with the workflow are in rules.go; the others are called at their services, from activities.go

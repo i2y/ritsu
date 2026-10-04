@@ -271,7 +271,7 @@ print(json.dumps({{"results": results, "conflicts": conflicts}}))
                 std::fs::copy(runner_dir().join("go").join(f), module.join(f)).unwrap();
             }
             let c = &cases_of(&["在庫"])[0];
-            for (rel, text) in chobo::target::build(&c.copy, &c.stem, Target::PostgresGo).unwrap() {
+            for (rel, text) in chobo::target::build(&c.copy, &c.stem, Target::PostgresGo, &c.origin).unwrap() {
                 let p = module.join("book").join(Path::new(&rel).file_name().unwrap());
                 std::fs::create_dir_all(p.parent().unwrap()).unwrap();
                 std::fs::write(p, text).unwrap();
@@ -633,7 +633,7 @@ print(json.dumps({{"results": results, "conflicts": conflicts}}))
                 std::fs::copy(runner_dir().join("go").join(f), module.join(f)).unwrap();
             }
             let c = &cases_of(&["stock_reservation"])[0];
-            for (rel, text) in chobo::target::build(&c.copy, &c.stem, Target::PostgresGo).unwrap() {
+            for (rel, text) in chobo::target::build(&c.copy, &c.stem, Target::PostgresGo, &c.origin).unwrap() {
                 let p = module.join("book").join(Path::new(&rel).file_name().unwrap());
                 std::fs::create_dir_all(p.parent().unwrap()).unwrap();
                 std::fs::write(p, text).unwrap();

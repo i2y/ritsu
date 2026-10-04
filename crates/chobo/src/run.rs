@@ -554,7 +554,8 @@ fn cmd_build(a: &Args) -> u8 {
     };
     let stem = path.file_name().map(|f| f.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
     let file = path.display().to_string();
-    let files = match crate::target::build(&book, &stem, target) {
+    let origin = crate::target::Origin::named(&file, src.as_bytes());
+    let files = match crate::target::build(&book, &stem, target, &origin) {
         Ok(f) => f,
         Err(diags) => {
             for d in &diags {

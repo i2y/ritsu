@@ -133,8 +133,8 @@ fn split(runtime: &str) -> (&str, &str) {
     runtime.split_once("#@@BOOK@@\n").expect("the runtime has its #@@BOOK@@ line")
 }
 
-fn header(book: &Book, target: &str, what: &str) -> String {
-    format!("\"\"\"{}.\n\n{what}\n\"\"\"\n\n", banner(book, target))
+fn header(book: &Book, origin: &Origin, what: &str) -> String {
+    format!("{}\"\"\"The client of the book {} (v{}).\n\n{what}\n\"\"\"\n\n", super::head(book, origin, Comment::Hash), book.name, book.version)
 }
 
 fn balances(book: &Book, call: impl Fn(&AccountKind, String) -> String) -> String {
@@ -148,9 +148,9 @@ fn balances(book: &Book, call: impl Fn(&AccountKind, String) -> String) -> Strin
     o
 }
 
-pub fn tigerbeetle(book: &Book) -> String {
+pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
     let (head, tail) = split(TB_RUNTIME);
-    let mut o = header(book, "tigerbeetle-python", "It calls the book on TigerBeetle through the tigerbeetle package 0.17.9 (DESIGN 4.2, 4.3).");
+    let mut o = header(book, origin, "It calls the book on TigerBeetle through the tigerbeetle package 0.17.9 (DESIGN 4.2, 4.3).");
     o.push_str(head.trim_end());
     o.push('\n');
     for t in &book.transfers {
@@ -182,14 +182,15 @@ pub fn tigerbeetle(book: &Book) -> String {
     o.push_str(&plan_literal(book));
     o.push_str("\n\n");
     o.push_str(tail);
-    o
+    // what the calls run on, by its type, so that what they answer is typed too
+    o.replace("(self, r: Any) -> None:", "(self, r: _TigerBeetle) -> None:")
 }
 
-pub fn postgres(book: &Book) -> String {
+pub fn postgres(book: &Book, origin: &Origin) -> String {
     let (head, tail) = split(PG_RUNTIME);
     let mut o = header(
         book,
-        "postgres-python",
+        origin,
         &format!("It calls the SQL functions of `chobo build --target postgres` (schema {}) through a DB-API connection (DESIGN 4.1, 4.3).", postgres::ident(&book.name)),
     );
     o.push_str(head.trim_end());
@@ -247,5 +248,6 @@ pub fn postgres(book: &Book) -> String {
         "\n\ndef postgres(conn: Any, tenant: str = \"\") -> Book:\n    \"\"\"The book on PostgreSQL, through a DB-API connection. A tenant is a set of balances of its\n    own (DESIGN 4.3). The client neither commits nor rolls back: with autocommit on, each call\n    is a transaction of its own; with it off, the call is part of the caller's transaction.\"\"\"\n    return Book(_Postgres(conn, tenant))\n\n\n",
     );
     o.push_str(tail);
-    o
+    // what the calls run on, by its type, so that what they answer is typed too
+    o.replace("(self, r: Any) -> None:", "(self, r: _Postgres) -> None:")
 }

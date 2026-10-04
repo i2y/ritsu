@@ -1853,7 +1853,8 @@ fn books_run_on_postgres_and_tigerbeetle() {
     let client = |name: &str, target: chobo::target::Target, dir: &Path| -> PathBuf {
         let (p, book) = &books[name];
         let stem = p.file_stem().unwrap().to_string_lossy().to_string();
-        let files = chobo::target::build(book, &stem, target).unwrap_or_else(|d| panic!("{name}: {target:?}: {}", d[0].message.en));
+        let origin = chobo::target::Origin::named(&p.display().to_string(), &std::fs::read(p).unwrap());
+        let files = chobo::target::build(book, &stem, target, &origin).unwrap_or_else(|d| panic!("{name}: {target:?}: {}", d[0].message.en));
         let mut first = None;
         for (r, text) in &files {
             let at = dir.join(Path::new(r).file_name().unwrap());

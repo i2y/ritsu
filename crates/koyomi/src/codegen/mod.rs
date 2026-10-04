@@ -342,9 +342,6 @@ fn cite_text(c: &crate::ast::Cite) -> String {
     format!("@{} {}", c.source, frs.join(", "))
 }
 
-/// The header lines (DESIGN 6.1): koyomi's version, the `.cal`, each calendar file, and each
-/// source, with the digests the file was generated from. Paths are from the `.cal`'s
-/// directory; no path of the machine that ran `gen` is written.
 /// The `.cal` a file is generated from, as the header names it.
 struct Head<'a> {
     kind: Kind,
@@ -354,14 +351,24 @@ struct Head<'a> {
     sha: &'a str,
 }
 
-fn header(lang: Lang, h0: &Head, cal: Option<&Calendar>, laws: &[Law]) -> Vec<String> {
+/// The header lines (DESIGN 6.1; ritsu's DESIGN 9.2): ritsu's version, the `.cal`, each calendar
+/// file, and each source, with the digests the file was generated from. Paths are from the `.cal`'s
+/// directory, its own the file's name, so that no path of the machine that ran `gen` is written;
+/// given where the `.cal` is from a project's root (`ritsu gen`), every path is from that root.
+fn header(lang: Lang, h0: &Head, cal: Option<&Calendar>, laws: &[Law], shown: Option<&str>) -> Vec<String> {
     let Head { kind, path, name, version, sha } = *h0;
     let base = crate::calendar::clean(path.parent().unwrap_or(Path::new("")));
     let file = path.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
+    // a path from the `.cal`'s directory, as the header writes it: from the root when `shown` is
+    let place = |p: String| match shown {
+        Some(s) => ritsu_base::paths::join(&ritsu_base::paths::parent(s), &p).unwrap_or(p),
+        None => p,
+    };
     let word = if kind == Kind::Dates { crate::kw::DATES } else { crate::kw::CALENDAR };
-    let mut h = vec![ritsu_emit::header::generated(&format!("by koyomi {VERSION}"))];
+    let mut h = vec![ritsu_emit::header::generated("koyomi")];
+    let source = ritsu_emit::header::Source { path: shown.unwrap_or(&file), kind: word, name, version, sha256: sha };
+    h.push(source.line().get(lang).to_string());
     let short = |s: &str| s[..16.min(s.len())].to_string();
-    h.push(Text::new(format!("もと: {file}（{word} {name} v{version}、sha256:{}）", short(sha)), format!("Source: {file} ({word} {name} v{version}, sha256:{})", short(sha))).get(lang).to_string());
     if let Some(c) = cal {
         let mut infos: Vec<&Info> = Vec::new();
         if kind == Kind::Dates {
@@ -369,7 +376,7 @@ fn header(lang: Lang, h0: &Head, cal: Option<&Calendar>, laws: &[Law]) -> Vec<St
         }
         infos.extend(c.used.iter());
         for i in infos {
-            let p = relative(&base, &i.path);
+            let p = place(relative(&base, &i.path));
             h.push(
                 Text::new(
                     format!("カレンダー: {p}（calendar {} v{}、sha256:{}）", i.name, i.version, short(&i.sha256)),
@@ -380,7 +387,7 @@ fn header(lang: Lang, h0: &Head, cal: Option<&Calendar>, laws: &[Law]) -> Vec<St
             );
         }
         for t in &c.tables {
-            h.push(table_cite(lang, t, &base));
+            h.push(table_cite(lang, t, &base, &place));
         }
         for l in &c.laws {
             h.push(law_cite(lang, l));
@@ -392,8 +399,8 @@ fn header(lang: Lang, h0: &Head, cal: Option<&Calendar>, laws: &[Law]) -> Vec<St
     h
 }
 
-fn table_cite(lang: Lang, t: &Table, base: &Path) -> String {
-    let p = relative(base, &crate::calendar::clean(&t.path));
+fn table_cite(lang: Lang, t: &Table, base: &Path, place: &dyn Fn(String) -> String) -> String {
+    let p = place(relative(base, &crate::calendar::clean(&t.path)));
     let url = t.url.as_ref().map(|u| format!(" ({u})")).unwrap_or_default();
     let url_ja = t.url.as_ref().map(|u| format!("（{u}）")).unwrap_or_default();
     let covers = if t.listed_years {
@@ -433,10 +440,10 @@ fn close(mut needed: BTreeSet<H>, cal: Option<&CalData>) -> BTreeSet<H> {
 }
 
 /// What a dates file generates.
-pub fn dates_unit(m: &Model, lang: Lang) -> Unit {
+pub fn dates_unit(m: &Model, lang: Lang, shown: Option<&str>) -> Unit {
     let cal = m.cal.as_ref().map(CalData::of);
     let head = Head { kind: Kind::Dates, path: &m.path, name: &m.file.name.text, version: &m.file.version, sha: &m.sha256 };
-    let header = header(lang, &head, m.cal.as_ref(), &m.laws);
+    let header = header(lang, &head, m.cal.as_ref(), &m.laws, shown);
     let inputs: Vec<InputG> = m.inputs.iter().map(|i| InputG { name: i.name.clone(), alias: i.alias.clone(), ty: i.ty, lo: i.lo, hi: i.hi }).collect();
     let mut helpers = BTreeSet::new();
     let timed = cal.as_ref().and_then(|c| c.offset).is_some();
@@ -495,10 +502,10 @@ pub fn dates_unit(m: &Model, lang: Lang) -> Unit {
 }
 
 /// What a calendar file generates: `is_open`.
-pub fn calendar_unit(c: &Calendar, lang: Lang) -> Unit {
+pub fn calendar_unit(c: &Calendar, lang: Lang, shown: Option<&str>) -> Unit {
     let data = CalData::of(c);
     let head = Head { kind: Kind::Calendar, path: &c.info.path, name: &c.info.name, version: &c.info.version, sha: &c.info.sha256 };
-    let header = header(lang, &head, Some(c), &[]);
+    let header = header(lang, &head, Some(c), &[], shown);
     let mut helpers = BTreeSet::new();
     helpers.insert(H::IsOpen);
     let helpers = close(helpers, Some(&data));
@@ -702,9 +709,15 @@ pub fn aligned(lines: &[(String, String)], indent: &str, marker: &str) -> String
 
 /// What a checked file generates, by target.
 pub fn unit_of(checked: &crate::check::Checked, lang: Lang) -> Unit {
+    unit_shown(checked, lang, None)
+}
+
+/// What a checked file generates, its header naming the `.cal` at `shown` (a path from a project's
+/// root, as `ritsu gen` writes it; ritsu's DESIGN 9.2) when given, else by its name.
+pub fn unit_shown(checked: &crate::check::Checked, lang: Lang, shown: Option<&str>) -> Unit {
     match checked {
-        crate::check::Checked::Dates(m, _) => dates_unit(m, lang),
-        crate::check::Checked::Calendar(c) => calendar_unit(c, lang),
+        crate::check::Checked::Dates(m, _) => dates_unit(m, lang, shown),
+        crate::check::Checked::Calendar(c) => calendar_unit(c, lang, shown),
     }
 }
 

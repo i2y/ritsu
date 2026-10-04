@@ -3,7 +3,6 @@
 
 use super::*;
 use crate::postgres;
-use ritsu_emit::header::{Comment, generated};
 
 const TB_RUNTIME: &str = include_str!("runtime/tigerbeetle.go");
 const PG_RUNTIME: &str = include_str!("runtime/postgres.go");
@@ -159,8 +158,8 @@ fn plan_literal(book: &Book) -> String {
     o
 }
 
-fn runtime(text: &str, pkg: &str, target: &str) -> String {
-    format!("{}\n{}", Comment::Slashes.line(&generated(&format!("by `chobo build --target {target}`"))), text.replace("{{PKG}}", pkg))
+fn runtime(text: &str, pkg: &str) -> String {
+    format!("{}\n{}", Comment::Slashes.line(&generated("chobo")), text.replace("{{PKG}}", pkg))
 }
 
 /// The methods of a transfer kind's calls, with the body each one has.
@@ -188,14 +187,14 @@ fn book_struct(book: &Book, backend: &str, pg: bool) -> String {
     format!("// Book is the book {} (v{}), called on {backend}.\ntype Book struct {{\n{}}}\n\n", book.name, book.version, struct_fields(&rows))
 }
 
-fn header(book: &Book, target: &str, what: &str, pkg: &str) -> String {
-    let line = Comment::Slashes.line(&generated(&format!("by `chobo build --target {target}` from the book {} v{}", book.name, book.version)));
+fn header(book: &Book, origin: &Origin, what: &str, pkg: &str) -> String {
+    let line = super::head(book, origin, Comment::Slashes);
     format!("{line}\n// Package {pkg} calls the book {} (v{}) {what}\npackage {pkg}\n\nimport \"context\"\n\n", book.name, book.version)
 }
 
-pub fn tigerbeetle(book: &Book, stem: &str) -> Vec<(String, String)> {
+pub fn tigerbeetle(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> {
     let pkg = package(book, stem);
-    let mut o = header(book, "tigerbeetle-go", "on TigerBeetle, through tigerbeetle-go v0.17.9 (DESIGN 4.2, 4.3).", &pkg);
+    let mut o = header(book, origin, "on TigerBeetle, through tigerbeetle-go v0.17.9 (DESIGN 4.2, 4.3).", &pkg);
     o.push_str(&arg_types(book));
     o.push_str(&book_struct(book, "TigerBeetle", false));
     let names = members(book);
@@ -271,7 +270,7 @@ pub fn tigerbeetle(book: &Book, stem: &str) -> Vec<(String, String)> {
         }
     }
     o.push_str(&plan_literal(book));
-    vec![(format!("{pkg}/book.go"), o), (format!("{pkg}/runtime.go"), runtime(TB_RUNTIME, &pkg, "tigerbeetle-go"))]
+    vec![(format!("{pkg}/book.go"), o), (format!("{pkg}/runtime.go"), runtime(TB_RUNTIME, &pkg))]
 }
 
 /// A Go raw string: the SQL never has a backquote.
@@ -279,11 +278,11 @@ fn raw(s: &str) -> String {
     format!("`{s}`")
 }
 
-pub fn postgres(book: &Book, stem: &str) -> Vec<(String, String)> {
+pub fn postgres(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> {
     let pkg = package(book, stem);
     let mut o = header(
         book,
-        "postgres-go",
+        origin,
         &format!("on PostgreSQL, through the SQL functions of `chobo build --target postgres` (schema {}) and pgx v5 (DESIGN 4.1, 4.3).", postgres::ident(&book.name)),
         &pkg,
     );
@@ -375,5 +374,5 @@ pub fn postgres(book: &Book, stem: &str) -> Vec<(String, String)> {
     while o.ends_with("\n\n") {
         o.pop();
     }
-    vec![(format!("{pkg}/book.go"), o), (format!("{pkg}/runtime.go"), runtime(PG_RUNTIME, &pkg, "postgres-go"))]
+    vec![(format!("{pkg}/book.go"), o), (format!("{pkg}/runtime.go"), runtime(PG_RUNTIME, &pkg))]
 }

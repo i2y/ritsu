@@ -55,7 +55,7 @@ def _amt(name: str, v: Any) -> int:
     return v
 
 
-def _amounts(names: Sequence[str], values: Sequence[Any]) -> list:
+def _amounts(names: Sequence[str], values: Sequence[Any]) -> list[Any]:
     """The amounts of a post: every one, or none (all of it)."""
     if all(v is None for v in values):
         return [None] * len(values)
@@ -74,7 +74,7 @@ class _Postgres:
         self._conn = conn
         self.tenant = _str("the tenant", tenant)
 
-    def _row(self, sql: str, params: Sequence[Any]) -> tuple:
+    def _row(self, sql: str, params: Sequence[Any]) -> tuple[Any, ...]:
         """One row of `sql`. A serialization failure (40001) or a deadlock (40P01) is tried again with
         the same arguments: the key keeps the call from moving twice. Inside a transaction of the
         caller's, the second try finds the transaction aborted (25P02), and the first error is raised."""
@@ -85,7 +85,8 @@ class _Postgres:
             try:
                 with self._conn.cursor() as cur:
                     cur.execute(sql, list(params))
-                    return cur.fetchone()
+                    row: tuple[Any, ...] = cur.fetchone()
+                    return row
             except Exception as e:
                 code = _sqlstate(e)
                 if first is not None and code == "25P02":
@@ -106,7 +107,8 @@ class _Postgres:
         raise RuntimeError(f"chobo: the function answered {result!r}, {reason!r}")
 
     def status(self, sql: str, params: Sequence[Any]) -> Optional[str]:
-        return self._row(sql, params)[0]
+        state: Optional[str] = self._row(sql, params)[0]
+        return state
 
     def balance(self, sql: str, params: Sequence[Any]) -> Balance:
         posted, held_in, held_out = self._row(sql, params)

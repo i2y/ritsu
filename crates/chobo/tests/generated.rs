@@ -85,7 +85,7 @@ fn go_is_formatted_and_vets() {
     }
     for (i, c) in cases.iter().enumerate() {
         for (key, target) in [(format!("pg{i}"), Target::PostgresGo), (format!("tb{i}"), Target::TigerBeetleGo)] {
-            for (rel, text) in chobo::target::build(&c.copy, &c.stem, target).unwrap() {
+            for (rel, text) in chobo::target::build(&c.copy, &c.stem, target, &c.origin).unwrap() {
                 let p = module.join("books").join(&key).join(std::path::Path::new(&rel).file_name().unwrap());
                 std::fs::create_dir_all(p.parent().unwrap()).unwrap();
                 std::fs::write(p, text).unwrap();

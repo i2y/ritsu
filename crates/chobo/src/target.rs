@@ -84,19 +84,22 @@ pub fn check(book: &Book, target: Target) -> Vec<Diag> {
 }
 
 /// The files a target writes, by their path under `--out`, or the diagnostics that stop it.
-/// `stem` is the book's file name without `.book` (the Go package falls back on it).
-pub fn build(book: &Book, stem: &str, target: Target) -> Result<Vec<(String, String)>, Vec<Diag>> {
+/// `stem` is the book's file name without `.book` (the Go package falls back on it); `origin` is
+/// the `.book` as the head of each file names it (ritsu's DESIGN 9.2).
+pub fn build(book: &Book, stem: &str, target: Target, origin: &Origin) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let d = check(book, target);
     if !d.is_empty() {
         return Err(d);
     }
     Ok(match target {
-        Target::Postgres => vec![(format!("{}.sql", book.name), postgres::build(book)?)],
-        Target::PostgresTypeScript => vec![(format!("{}.ts", book.name), client::typescript::postgres(book))],
-        Target::TigerBeetleTypeScript => vec![(format!("{}.ts", book.name), client::typescript::tigerbeetle(book))],
-        Target::PostgresPython => vec![(format!("{}.py", book.name), client::python::postgres(book))],
-        Target::TigerBeetlePython => vec![(format!("{}.py", book.name), client::python::tigerbeetle(book))],
-        Target::PostgresGo => client::go::postgres(book, stem),
-        Target::TigerBeetleGo => client::go::tigerbeetle(book, stem),
+        Target::Postgres => vec![(format!("{}.sql", book.name), postgres::build(book, origin)?)],
+        Target::PostgresTypeScript => vec![(format!("{}.ts", book.name), client::typescript::postgres(book, origin))],
+        Target::TigerBeetleTypeScript => vec![(format!("{}.ts", book.name), client::typescript::tigerbeetle(book, origin))],
+        Target::PostgresPython => vec![(format!("{}.py", book.name), client::python::postgres(book, origin))],
+        Target::TigerBeetlePython => vec![(format!("{}.py", book.name), client::python::tigerbeetle(book, origin))],
+        Target::PostgresGo => client::go::postgres(book, stem, origin),
+        Target::TigerBeetleGo => client::go::tigerbeetle(book, stem, origin),
     })
 }
+
+pub use ritsu_emit::header::Origin;

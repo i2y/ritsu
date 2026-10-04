@@ -28,6 +28,8 @@ pub struct Case {
     pub scenarios: Vec<Scenario>,
     /// what the reference interpreter answers for each scenario (PLAN 0.3)
     pub reference: Vec<Value>,
+    /// the copy's file as the head of what is built from it names it
+    pub origin: chobo::target::Origin,
 }
 
 /// The book with every `pending expires after …` line at EXPIRY seconds.
@@ -74,7 +76,8 @@ pub fn case(path: &Path) -> Case {
         assert_eq!(scenario::run_json(&copy, &sc).unwrap(), r, "{}: {}: the test copy answers otherwise", path.display(), s.name);
         reference.push(r);
     }
-    Case { stem: stem(path), book, copy, scenarios, reference }
+    let origin = chobo::target::Origin::named(&path.display().to_string(), copy_src.as_bytes());
+    Case { stem: stem(path), book, copy, scenarios, reference, origin }
 }
 
 /// The books the backends run: those of tests/books, and the examples when there are some.
@@ -147,7 +150,7 @@ pub fn build_all(cases: &[Case], target: Target, dir: &Path) -> Vec<PathBuf> {
     cases
         .iter()
         .map(|c| {
-            let files = target::build(&c.copy, &c.stem, target).unwrap_or_else(|d| panic!("{}: {target:?}: {}", c.stem, d[0].message.en));
+            let files = target::build(&c.copy, &c.stem, target, &c.origin).unwrap_or_else(|d| panic!("{}: {target:?}: {}", c.stem, d[0].message.en));
             let mut first = None;
             for (rel, text) in &files {
                 let p = dir.join(rel);
@@ -262,7 +265,7 @@ pub fn build_go(cases: &[Case], work: &Path) -> Result<GoRunner, String> {
     for (i, c) in cases.iter().enumerate() {
         for (backend, target, pg) in [("postgres", Target::PostgresGo, true), ("tigerbeetle", Target::TigerBeetleGo, false)] {
             let key = format!("{}{i}", if pg { "pg" } else { "tb" });
-            let files = target::build(&c.copy, &c.stem, target).map_err(|d| d[0].message.en.clone())?;
+            let files = target::build(&c.copy, &c.stem, target, &c.origin).map_err(|d| d[0].message.en.clone())?;
             for (rel, text) in &files {
                 let name = Path::new(rel).file_name().unwrap();
                 write(&module.join("books").join(&key).join(name), text);

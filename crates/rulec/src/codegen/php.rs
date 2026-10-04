@@ -1143,7 +1143,7 @@ impl<'a> Gen<'a> {
              echo \\{ns}\\{fname}_record(...{a}), \"\\n\";\n\
              {tail}\
              }}\n",
-            env!("CARGO_PKG_VERSION"),
+            ritsu_emit::header::VERSION,
             args.join(", "),
             ord = if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text), Ty::Date))
                 || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text), Ty::Date))
@@ -1181,7 +1181,7 @@ pub fn round_tests_php() -> String {
          // {}\n\n\
          declare(strict_types=1);\n\n\
          ini_set('display_errors', 'stderr');\n",
-        env!("CARGO_PKG_VERSION"),
+        ritsu_emit::header::VERSION,
         tr!(
             "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
             "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."

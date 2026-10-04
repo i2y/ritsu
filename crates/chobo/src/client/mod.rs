@@ -229,9 +229,16 @@ pub fn plan(book: &Book) -> Plan {
 }
 
 /// The first line of every file chobo writes for a book.
-pub fn banner(book: &Book, target: &str) -> String {
-    format!("Written by `chobo build --target {target}` from the book {} v{}. Do not edit; build it again", book.name, book.version)
+/// The head every file chobo writes from a book begins with (ritsu's DESIGN 9.2): ritsu's version,
+/// and the `.book` with the digest of its bytes, as `origin` names it (the file's name, or its path
+/// from a project's root under `ritsu gen`), each line a comment of `c`.
+pub fn head(book: &Book, origin: &Origin, c: Comment) -> String {
+    let version = book.version.to_string();
+    let source = origin.source("book", &book.name, &version);
+    format!("{}{}", c.line(&generated("chobo")), c.line(source.line().get(ritsu_base::text::Lang::En)))
 }
+
+pub use ritsu_emit::header::{Comment, Origin, generated};
 
 /// Names made unique: the second of two that come out the same gets `_2`, the third `_3`.
 pub use ritsu_emit::ident::unique;

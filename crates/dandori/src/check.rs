@@ -123,6 +123,7 @@ fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<
             return (None, Default::default(), diags);
         }
     };
+    model.source_sha256 = ritsu_base::sha256::hex(src.as_bytes());
     let fr = crate::flow::analyze(&model);
     diags.extend(fr.diags);
     model.monitors = fr.monitors;

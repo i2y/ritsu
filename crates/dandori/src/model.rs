@@ -882,6 +882,14 @@ impl TK {
     }
 }
 
+/// Where a flow of a package of ritsu's (ritsu's DESIGN 9.3) finds what it reads beside its own code:
+/// a flow is at flows/<name>/, beside the package's rules/, dates/ and books/.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct InPackage {
+    /// The Go module the package is (its go.mod): a rule's package is `<module>/rules/<package>`.
+    pub go_module: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct Model {
     pub name: String,
@@ -889,6 +897,15 @@ pub struct Model {
     pub description: String,
     pub kind: Kind,
     pub source_file: String,
+    /// The `.flow` as the head of every generated file names it (ritsu's DESIGN 9.2): its name, or
+    /// under `ritsu gen` its path from the project's root.
+    pub source_path: String,
+    /// The SHA-256 of the `.flow`'s bytes, in hex.
+    pub source_sha256: String,
+    /// Built as a flow of a package of ritsu's (`ritsu gen`, ritsu's DESIGN 9.3): the workflow reads
+    /// the rules, the dates and the books from the package's rules/, dates/ and books/; None for a
+    /// build of its own, which reads them from code put beside it.
+    pub package: Option<InPackage>,
     pub rules: Vec<RuleUse>,
     /// the books of chobo's the tasks call
     pub books: Vec<BookUse>,
@@ -917,6 +934,14 @@ pub struct Model {
 }
 
 impl Model {
+    /// The head every file the builds write begins with (ritsu's DESIGN 9.2): ritsu's version, and
+    /// the `.flow` with the digest of its bytes, each line a comment that starts with `mark`.
+    pub fn head(&self, mark: &str) -> String {
+        let version = self.version.to_string();
+        let source = ritsu_emit::header::Source { path: &self.source_path, kind: "workflow", name: &self.name, version: &version, sha256: &self.source_sha256 };
+        format!("{mark} {}\n{mark} {}\n", ritsu_emit::header::generated("dandori"), source.line().get(ritsu_base::text::Lang::En))
+    }
+
     /// Whether a statement of the workflow reads `now`.
     pub fn uses_now(&self) -> bool {
         self.all_stmts().iter().any(|s| s.kind.reads_now())

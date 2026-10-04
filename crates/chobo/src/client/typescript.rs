@@ -167,9 +167,9 @@ fn split(runtime: &str) -> (&str, &str) {
     runtime.split_once("//@@BOOK@@\n").expect("the runtime has its //@@BOOK@@ line")
 }
 
-pub fn tigerbeetle(book: &Book) -> String {
+pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
     let (head, tail) = split(TB_RUNTIME);
-    let mut o = format!("// {}.\n", banner(book, "tigerbeetle-typescript"));
+    let mut o = super::head(book, origin, Comment::Slashes);
     o.push_str("// It calls the book on TigerBeetle through tigerbeetle-node 0.17.9 (DESIGN 4.2, 4.3).\n\n");
     o.push_str(head);
     o.push('\n');
@@ -208,9 +208,9 @@ pub fn tigerbeetle(book: &Book) -> String {
     o
 }
 
-pub fn postgres(book: &Book) -> String {
+pub fn postgres(book: &Book, origin: &Origin) -> String {
     let (head, tail) = split(PG_RUNTIME);
-    let mut o = format!("// {}.\n", banner(book, "postgres-typescript"));
+    let mut o = super::head(book, origin, Comment::Slashes);
     o.push_str(&format!(
         "// It calls the SQL functions of `chobo build --target postgres` (schema {}) through a connection such as pg's (DESIGN 4.1, 4.3).\n\n",
         postgres::ident(&book.name)

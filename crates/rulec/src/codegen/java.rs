@@ -1332,7 +1332,7 @@ impl<'a> Gen<'a> {
              {tail}            \
              }}\n        }}\n    }}\n\n\
              {helpers}}}\n",
-            env!("CARGO_PKG_VERSION"),
+            ritsu_emit::header::VERSION,
             args = args.join(", "),
             helpers = JAVA_JSON_HELPERS,
         )
@@ -1373,7 +1373,7 @@ pub fn round_tests_java() -> String {
          case \"half_down\":\n                return roundHalfDown(x, g);\n            \
          default:\n                return roundBankers(x, g);\n        }}\n    }}\n\n    \
          public static void main(String[] args) {{\n        Case[] cases = {{\n",
-        env!("CARGO_PKG_VERSION"),
+        ritsu_emit::header::VERSION,
         tr!(
             "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
             "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."

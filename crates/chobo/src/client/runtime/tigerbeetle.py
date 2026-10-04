@@ -105,7 +105,7 @@ def _amt(name: str, v: Any) -> int:
     return v
 
 
-def _amounts(names: Sequence[str], values: Sequence[Any]) -> Optional[list]:
+def _amounts(names: Sequence[str], values: Sequence[Any]) -> Optional[list[Any]]:
     """The amounts of a post: every one, or none (all of it)."""
     if all(v is None for v in values):
         return None
@@ -118,7 +118,7 @@ def _refused(reason: str) -> Result:
     return Result("refused", reason)
 
 
-def _content(t: dict, v: Sequence[Any]) -> str:
+def _content(t: dict[str, Any], v: Sequence[Any]) -> str:
     """What a do or hold is called with, as the IDs hash it: the arguments in the order of the parameters."""
     return "{" + ",".join(_json_string(p["name"]) + ":" + (str(v[i]) if p["amount"] else _json_string(v[i])) for i, p in enumerate(t["params"])) + "}"
 
@@ -134,22 +134,22 @@ def _account(id: int, ledger: int, code: int, flagged: bool, user_data_128: int,
     )
 
 
-def _link(chain: list) -> None:
+def _link(chain: list[Any]) -> None:
     """Every transfer of the chain but the last is linked to the next."""
     for x in chain[:-1]:
         x[0].flags |= tb.TransferFlags.LINKED
 
 
 class _TigerBeetle:
-    def __init__(self, book: dict, client: Any, tenant: str) -> None:
+    def __init__(self, book: dict[str, Any], client: Any, tenant: str) -> None:
         self._book = book
         self._client = client
         self.tenant = _str("the tenant", tenant)
         # the accounts and openings this value has made sure of: TigerBeetle never removes them
-        self._made: set = set()
+        self._made: set[Any] = set()
         self._lock = threading.Lock()
 
-    def _place(self, r: dict, v: Sequence[Any]) -> tuple:
+    def _place(self, r: dict[str, Any], v: Sequence[Any]) -> tuple[Any, ...]:
         args = [str(v[a["param"]]) if "param" in a else a["literal"] for a in r["args"]]
         return (_id("account", self._book["name"], self.tenant, r["kind"], *args), r["kind"], self._book["accounts"][r["kind"]])
 
@@ -168,9 +168,9 @@ class _TigerBeetle:
             return _refused("same_account")
         key = [v[i] for i in t["key"]]
         content = _id("content", book["name"], self.tenant, kind, op, t["definition"], _content(t, v))
-        accounts: list = []
-        openings: list = []
-        chain: list = []
+        accounts: list[Any] = []
+        openings: list[Any] = []
+        chain: list[Any] = []
 
         def add(a: tb.Account) -> None:
             if not any(x.id == a.id for x in accounts):
@@ -229,7 +229,7 @@ class _TigerBeetle:
         results = self._client.create_transfers([x[0] for x in chain])
         return self._read(kind, op, chain, results)
 
-    def _ensure(self, accounts: list, openings: list) -> None:
+    def _ensure(self, accounts: list[Any], openings: list[Any]) -> None:
         """Make sure the accounts and the openings are there before a chain needs them: TigerBeetle
         refuses a transfer to an account it does not have, and never takes its ID again."""
         with self._lock:
@@ -253,7 +253,7 @@ class _TigerBeetle:
             with self._lock:
                 self._made.update(x.id for x in batch)
 
-    def _read(self, kind: str, op: str, chain: list, results: list) -> Result:
+    def _read(self, kind: str, op: str, chain: list[Any], results: list[Any]) -> Result:
         """What a chain's results answer: the first that is neither created nor linked_event_failed decides (DESIGN 4.2)."""
         t = self._book["transfers"][kind]
         for i, r in enumerate(results):
@@ -288,15 +288,15 @@ class _TigerBeetle:
             raise RuntimeError(f"chobo: TigerBeetle answered {s.name.lower()} for transfer {i} ({chain[i][1]}) of {kind}.{op}")
         return Result("done")
 
-    def _held(self, kind: str, key: Sequence[str]) -> list:
+    def _held(self, kind: str, key: Sequence[str]) -> list[Any]:
         """The transfers of the chain that held for `key`: their roles, moves and IDs."""
-        out: list = []
+        out: list[Any] = []
         for i, m in enumerate(self._book["transfers"][kind]["moves"]):
             for role in m["roles"]:
                 out.append((role, i, self._transfer_id(kind, "hold", key, len(out))))
         return out
 
-    def end(self, kind: str, op: str, key: Sequence[str], amounts: Optional[list]) -> Result:
+    def end(self, kind: str, op: str, key: Sequence[str], amounts: Optional[list[Any]]) -> Result:
         """post and void: `key` in the order of the key; `amounts` in the order of the amounts, or None for all of it."""
         book, t = self._book, self._book["transfers"][kind]
         held = self._held(kind, key)
@@ -308,7 +308,7 @@ class _TigerBeetle:
         if len(found) != len(mains):
             raise RuntimeError(f"chobo: TigerBeetle has only part of the hold {kind}({', '.join(key)})")
         holding = [found[h[2]] for h in mains]
-        posted: list = []
+        posted: list[Any] = []
         if op == "post":
             amount_params = [i for i, p in enumerate(t["params"]) if p["amount"]]
             if amounts is None:
@@ -318,9 +318,10 @@ class _TigerBeetle:
             # TigerBeetle checks the amount before it checks whether the hold has ended: ask where the hold is instead
             if any(p > h for p, h in zip(posted, holding)):
                 state = self._state(mains[0][2])
-                return {"held": _refused("over_hold"), "posted": _refused("key_conflict"), "voided": _refused("already_voided"), "expired": _refused("expired")}.get(state, _refused("no_such_hold"))
+                answers = {"held": _refused("over_hold"), "posted": _refused("key_conflict"), "voided": _refused("already_voided"), "expired": _refused("expired")}
+                return answers.get(state, _refused("no_such_hold")) if state is not None else _refused("no_such_hold")
         content = _id("content", book["name"], self.tenant, kind, op, t["definition"], "[" + ",".join(str(p) for p in posted) + "]" if op == "post" else "null")
-        chain: list = []
+        chain: list[Any] = []
         for role, move, pid in held:
             if role in ("probe", "probe_void"):
                 continue
