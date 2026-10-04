@@ -6,7 +6,7 @@
 #   $ website/rulec/tools/social.sh
 #
 # It is the site's own hero, drawn once at 1280×640 (GitHub's size) and photographed by the
-# same headless Chrome that takes the screenshots of the approver's page: the same ink, the
+# same headless Chrome that takes the screenshots of the page for people: the same ink, the
 # same mark, the same ruling of a table behind it, and the same faces: Inter for the text and
 # the site's code face, M PLUS 1 Code, for the wordmark (§15.134). Kept as one HTML document
 # rather than an SVG because the ruling and the gradient are the stylesheet's, and a second

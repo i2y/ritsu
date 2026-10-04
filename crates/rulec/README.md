@@ -229,7 +229,7 @@ $ rulec vectors | coverage | test                  # the test cases, their cover
 $ rulec adapter | schema | verify                  # against a legacy implementation
 $ rulec fixtures lint | replay | diff              # against past records
 $ rulec diff rules/parcel.rule@HEAD rules/parcel.rule  # …and with no records: which inputs move
-$ rulec doc rules/parcel.rule --lang ja            # for whoever approves the table; --format html
+$ rulec doc rules/parcel.rule --lang ja            # the page for people; --format html
 $ rulec certificate rules/parcel.rule              # the evidence, for another program to re-check
 $ rulec graph rules/parcel.rule                    # what decides each value, and what reads it
 $ rulec source fetch | pin | outdated              # the copies of the documents a rule cites
@@ -258,8 +258,8 @@ once, in `src/codes.rs`, and [`docs/codes.md`](docs/codes.md) is literally the
 ```
 
 Those logs are read by machines and developers, so they stay in the default English. What goes
-to a person — `rulec diff` on a pull request, `rulec doc` for an approver — is built in the
-same job with `RULEC_LANG` set to their language. The job that puts the diff on the pull
+to a person — `rulec diff` on a pull request, `rulec doc` for the people who read it — is built
+in the same job with `RULEC_LANG` set to their language. The job that puts the diff on the pull
 request is on the [install page](https://i2y.github.io/rulec/install/#in-ci).
 
 ## What is in this repository

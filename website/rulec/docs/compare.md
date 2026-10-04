@@ -166,7 +166,7 @@ information here and not a failure, so the step goes on after 1:
 ```yaml
 - run: rulec diff rules/shipping_fee.rule@origin/main rules/shipping_fee.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
   env:
-    RULEC_LANG: ja        # the people approving this one read Japanese
+    RULEC_LANG: ja        # the people who read this one read Japanese
 - run: gh pr comment "$PR" --body-file diff.md
 ```
 

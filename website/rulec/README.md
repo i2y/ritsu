@@ -131,7 +131,7 @@ $ python3 tools/make_overview.py --verify ../../target/release/rulec
 
 `docs/playground.md` (and its Japanese twin) is the checker itself, compiled to
 wasm32 and running in the page: `check`, everything `gen` writes, and the
-approver's page, with nothing sent anywhere. Three files sit beside it in
+page for people, with nothing sent anywhere. Three files sit beside it in
 `docs/playground/`, and `sync.sh` copies them into `docs-ja/playground/` the way
 it copies the images:
 

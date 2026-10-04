@@ -784,7 +784,7 @@ fn unused_pins(d: &SourceDecl, cited: &[(String, Vec<&str>)], name: &str, rule_p
     }
 }
 
-/// A fragment's copy as the approver's page quotes it: an article as its text, the XML with
+/// A fragment's copy as the page for people quotes it: an article as its text, the XML with
 /// its tags removed and one line per paragraph, item or table row; a document's table as a
 /// Markdown table (§15.82).
 pub fn fragment_text(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<String> {
@@ -813,7 +813,7 @@ pub fn fragment_grid(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<Vec<
 }
 
 /// How many of a table's own boundaries the copy it cites really words, for the line the
-/// approver's page adds (§15.124). A document that writes its bands as `18 to 20`, or with
+/// page for people adds (§15.124). A document that writes its bands as `18 to 20`, or with
 /// `円以上` over a column of its own, words none of them — and a page that claimed the
 /// boundaries had been held would be claiming nothing.
 pub fn boundaries_held(rule_path: &str, d: &SourceDecl, frags: &[&str], t: &crate::ast::Table) -> usize {

@@ -395,8 +395,8 @@ fn provenance(rep: &Report) -> Vec<String> {
     let mut o = Vec::new();
     if rep.errored > 0 {
         o.push(tr!(
-            "相手が答えられなかった {} 件は、一致率の分母から外しています（§10.3）",
-            "The counterpart could not answer {} of the records; those are excluded from the match-rate denominator (§10.3)",
+            "相手が答えられなかった {} 件は、一致率の分母から外しています",
+            "The counterpart could not answer {} of the records; those are excluded from the match-rate denominator",
             rep.errored
         ));
     }

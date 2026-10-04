@@ -8,7 +8,7 @@
 <path d="M244,20 V32 H256 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
 <text x="29" y="42" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">Table</text>
 <text x="247" y="42" font-size="9.5" font-weight="400" text-anchor="end" fill="#98a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">.rule</text>
-<text x="29" y="60" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">a domain expert reads and approves it</text>
+<text x="29" y="60" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">a domain expert reads and checks it</text>
 <text x="29" y="82" font-size="11" font-weight="400" text-anchor="start" fill="#98a1b8">Destination</text>
 <text x="101" y="82" font-size="11" font-weight="400" text-anchor="start" fill="#98a1b8">Weight</text>
 <text x="247" y="82" font-size="11" font-weight="400" text-anchor="end" fill="#98a1b8">→ Fee</text>

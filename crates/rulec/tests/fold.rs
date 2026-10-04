@@ -317,7 +317,7 @@ if (btns.length > 1) {
 }
 "##;
 
-/// The page an approver reads is generated for a walk too, and a page that cannot run is
+/// The page for people is generated for a walk too, and a page that cannot run is
 /// worse than no page: the panel has to build an editor for the sequence and pass it as the
 /// argument the module takes (§15.52, §15.56).
 #[test]

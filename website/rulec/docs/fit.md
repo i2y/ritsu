@@ -73,7 +73,7 @@ to another case sits on top of it. Each of those has its own way of being writte
 
 The checks judge completeness and overlaps over the main rule and its exceptions together,
 and for an applied rule they prove that what this rule passes stays inside the applied
-rule's ranges. The approver's page quotes the cited text. How to write them is in
+rule's ranges. The page for people quotes the cited text. How to write them is in
 [Write a rule](tour.md#a-main-rule-and-its-exceptions-as-two-tables), and working examples
 are in [Examples](examples.md#a-main-rule-and-a-reduced-rate-as-two-tables-held-to-their-sources).
 
@@ -169,12 +169,12 @@ them.
 | **The right answer is written down elsewhere** | a tariff, a set of terms, a contract. The work is not designing something from nothing, it is **transcribing** — which is why the first thing the tool is worth is the gap showing up as you copy it across |
 | **Conditions interlock** | destination × size × weight, kind × period × tier. It does not fit in one `if`, and no one can confirm by eye that the combinations are covered |
 | **It is revised on a date** | a tariff revision, a campaign window, a change of terms. So you can point at two versions and get, before you deploy, how many records change and by how much |
-| **The writer is not the decider** | the amount, the rounding direction and where a class begins are all business decisions. So there is a rendering for the person who approves, and a checker that turns what it cannot decide into a question with a real case in it |
+| **The writer is not the decider** | the amount, the rounding direction and where a class begins are all business decisions. So there is a page for people, and a checker that turns what it cannot decide into a question with a real case in it |
 
 ## What the language is trying to be
 
 **One file doing three jobs.** The same `.rule` is the **specification** a person
-approves, the **subject** the checker proves things about, and the **source** the
+reads and checks, the **subject** the checker proves things about, and the **source** the
 generated code comes from. The moment those become three files, one of them rots — and
 it is almost always the specification.
 

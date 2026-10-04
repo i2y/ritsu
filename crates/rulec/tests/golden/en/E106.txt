@@ -6,7 +6,7 @@ error[E106]: `1451円` is not on the rounding grid
    |
  The rounding of output 運賃 is up(10円).
  Hint: write 1460円 instead, or fix the rounding declaration.
- Nothing is snapped silently. Which one is right is a business decision (§2.4).
+ Nothing is snapped silently. Which one is right is a business decision.
 
 error[E106]: `1451円` is not on the rounding grid
   --> tests/mutants/m_e106.rule:72 table 運賃表
@@ -16,4 +16,4 @@ error[E106]: `1451円` is not on the rounding grid
    |
  The rounding of output 運賃 is up(10円).
  Hint: write 1460円 instead, or fix the rounding declaration.
- Nothing is snapped silently. Which one is right is a business decision (§2.4).
+ Nothing is snapped silently. Which one is right is a business decision.

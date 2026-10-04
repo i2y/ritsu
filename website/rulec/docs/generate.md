@@ -353,7 +353,7 @@ front. `rulec test` drives both transports over every vector, so an
 answer that changed with the carrying would be a disagreement.
 
 Where the host renders **MCP Apps**, the same server hands over one
-thing more: the approver's page, as the tool's view. `gen` writes it
+thing more: the page for people, as the tool's view. `gen` writes it
 beside the server (`member_shipping_fee_page.html`, the page
 `rulec doc --format html` renders), and the host shows it opened on the
 case that was just asked — the fields filled in, the answer, and the

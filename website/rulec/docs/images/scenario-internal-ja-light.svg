@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1124 458" width="1124" height="458" role="img" aria-label="社内の規程や自社サービスの規約、Excel、動いているコードといった手元のものを、エージェントが表（.rule）に写す。Excel からは rulec import で下書きを起こし、文書は @ で表ごとに引用し、写しのハッシュに固定する。rulec が抜けと重なりを証明し、いま動いている実装や過去の記録と突き合わせて、食い違いをどの行で何件いくらかで返す。承認する人は rulec doc の資料で文書と表を見比べる。通った表から12 言語に生成する。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1124 458" width="1124" height="458" role="img" aria-label="社内の規程や自社サービスの規約、Excel、動いているコードといった手元のものを、エージェントが表（.rule）に写す。Excel からは rulec import で下書きを起こし、文書は @ で表ごとに引用し、写しのハッシュに固定する。rulec が抜けと重なりを証明し、いま動いている実装や過去の記録と突き合わせて、食い違いをどの行で何件いくらかで返す。読む人は rulec doc の資料で文書と表を見比べる。通った表から12 言語に生成する。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
 <defs>
 <marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
 <marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
@@ -57,10 +57,10 @@
 <clipPath id="clip-person"><rect x="698.0" y="290" width="170" height="148" rx="10"/></clipPath>
 <rect x="698.0" y="290" width="170" height="148" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
 <rect x="698.0" y="290" width="170" height="5" fill="#9c6508" clip-path="url(#clip-person)"/>
-<text x="783.0" y="333" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">承認する人</text>
+<text x="783.0" y="333" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">読む人</text>
 <text x="783.0" y="362" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">文書と表を</text>
-<text x="783.0" y="381" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">見比べる</text>
-<text x="783.0" y="400" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">承認する</text>
+<text x="783.0" y="381" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">見比べて</text>
+<text x="783.0" y="400" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">確かめる</text>
 <line x1="783.0" y1="216" x2="783.0" y2="290" stroke="#9c6508" stroke-width="1.8" marker-end="url(#head-human)"/>
 <text x="791.0" y="257.0" font-size="10.5" font-weight="400" text-anchor="start" fill="#9c6508" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec doc</text>
 </svg>

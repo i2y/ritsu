@@ -2,7 +2,7 @@
 
 # rulec diagnostics
 
-Every code rulec can print, what makes it appear, and how to fix it. The code and the JSON shape are a stable API; only the prose improves (DESIGN §11 principle 5). For one of them: `rulec explain E101`.
+Every code rulec can print, what makes it appear, and how to fix it. The code and the JSON shape are a stable API; only the prose improves. For one of them: `rulec explain E101`.
 
 | Code | Severity | Title |
 |---|---|---|
@@ -194,7 +194,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 `error` — **A word that cannot appear at this position**
 
-**When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each (§1.1).
+**When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each.
 
 **Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario`. Business words belong in names and cells, not at the head of a line.
 
@@ -230,7 +230,7 @@ Related codes: [E005](#e005)
 
 `error` — **No such policy**
 
-**When.** The word after `policy` is not unique or first. DMN's Any, Priority and Collect are not adopted (§4).
+**When.** The word after `policy` is not unique or first. DMN's Any, Priority and Collect are not adopted.
 
 **Fix.** Write either `policy unique` (every overlap is an error) or `policy first` (the earlier row wins).
 
@@ -257,7 +257,7 @@ Related codes: [W110](#w110), [E105](#e105), [W105](#w105)
 
 `error` — **Empty cell**
 
-**When.** A cell of a table holds only whitespace. **A blank is indistinguishable from a forgotten entry**, so it is a syntax error (§3).
+**When.** A cell of a table holds only whitespace. **A blank is indistinguishable from a forgotten entry**, so it is a syntax error.
 
 **Fix.** If any value is meant, write `-`. If a value was forgotten, write the value.
 
@@ -284,7 +284,7 @@ Related codes: [E101](#e101)
 
 `error` — **A declared name collides with a reserved word**
 
-**When.** A declared name (or alias) is the same as a word of the vocabulary. Otherwise the line-oriented parser reads the line as the start of a section and drops the declaration silently. An enum value never starts a line, so for a value it is only the eleven words its own position reads as something else (`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`) (§15.150).
+**When.** A declared name (or alias) is the same as a word of the vocabulary. Otherwise the line-oriented parser reads the line as the start of a section and drops the declaration silently. An enum value never starts a line, so for a value it is only the eleven words its own position reads as something else (`not` `none` `true` `false` `starts_with` `default` `after` `empty` `exhausted` `by` `with`).
 
 **Fix.** Rename it (`enum range(kind)` becomes `enum range_band(range_kind)`). The reserved words are fixed by the one table in `src/kw.rs`.
 
@@ -302,7 +302,7 @@ Related codes: [E005](#e005), [E011](#e011)
 
 `error` — **The `..` range notation is not allowed**
 
-**When.** A cell contains `..`, as in `0g..1000g`. Whether "up to 1000g" includes the endpoint cannot be read off the text (§3.1).
+**When.** A cell contains `..`, as in `0g..1000g`. Whether "up to 1000g" includes the endpoint cannot be read off the text.
 
 **Fix.** Rewrite it with comparison operators: `0g..1000g` is either `<=1000g` or `<1000g`. To fix both ends, write `>=0g <=1000g`.
 
@@ -402,7 +402,7 @@ Related codes: [E012](#e012), [E032](#e032)
 
 `error` — **An output cell cannot hold an expression**
 
-**When.** A cell to the right of `->` holds two or more words. Only one value or one name may be written there (§3.2). Taking just the first word and skipping the rest would emit generated code with the multiplication silently dropped.
+**When.** A cell to the right of `->` holds two or more words. Only one value or one name may be written there. Taking just the first word and skipping the rest would emit generated code with the multiplication silently dropped.
 
 **Fix.** Give the calculation a name on a `define` line and leave only that name in the table (`| - | rate_discount |`). A table holds the branching and nothing else.
 
@@ -431,7 +431,7 @@ Related codes: [E008](#e008), [E012](#e012)
 
 `error` — **`result` can only assemble the first output**
 
-**When.** A `result` names an output other than the first. `result` is sugar for the first output, and both the evaluator and the generated code apply it only there (§1.2). The name used to be ignored, so a `number` could land in a `money` slot without an E103.
+**When.** A `result` names an output other than the first. `result` is sugar for the first output, and both the evaluator and the generated code apply it only there. The name used to be ignored, so a `number` could land in a `money` slot without an E103.
 
 **Fix.** Write a `define` of the same name as that output (`define points(pts) : number = base_points * multiplier`); outputs are taken, in declaration order, from the binding of their own name. To assemble it with `result` instead, move that output to the top of `outputs`.
 
@@ -584,7 +584,7 @@ Related codes: [E017](#e017), [E018](#e018), [E101](#e101)
 
 `error` — **The `elements` declaration is not right**
 
-**When.** An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there (§15.56).
+**When.** An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there.
 
 **Fix.** Write `elements fee_rows(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules.
 
@@ -619,7 +619,7 @@ Related codes: [E021](#e021)
 
 **When.** The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum.
 
-**Fix.** Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose (§15.56).
+**Fix.** Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose.
 
 **Smallest reproduction**:
 
@@ -720,7 +720,7 @@ Related codes: [E022](#e022), [E024](#e024)
 
 `error` — **Some verdict has no arm**
 
-**When.** A verdict the table can produce has no arm in the `fold`: when an element lands on it, the walk has no move. It is the table's own completeness check, applied to the fold (§15.56).
+**When.** A verdict the table can produce has no arm in the `fold`: when an element lands on it, the walk has no move. It is the table's own completeness check, applied to the fold.
 
 **Fix.** Add the arm, or stop the table producing that value. The other direction — an arm for a verdict nothing can reach — is W115.
 
@@ -755,7 +755,7 @@ Related codes: [E022](#e022), [E023](#e023), [W115](#w115)
 
 `error` — **The examples have no column for the sequence**
 
-**When.** A rule that walks a sequence has `examples`, but the header has no column named after its `elements`. An example that does not say which sequence it walks is an example with no answer (§15.56).
+**When.** A rule that walks a sequence has `examples`, but the header has no column named after its `elements`. An example that does not say which sequence it walks is an example with no answer.
 
 **Fix.** Write the list with `sequence <name>`, add a column for the sequence to the examples header, and name it in the cell. A `sequence` with no rows is the example for a sequence with nothing in it.
 
@@ -875,7 +875,7 @@ Related codes: [E025](#e025), [E026](#e026)
 
 `error` — **The `count` is not written correctly**
 
-**When.** The line is not `count <name>(<alias>) over <sequence> where <column> = <value>`: no `over`, no `where`, a sequence that `elements` does not declare, or an `=` with nothing on its right (§15.58).
+**When.** The line is not `count <name>(<alias>) over <sequence> where <column> = <value>`: no `over`, no `where`, a sequence that `elements` does not declare, or an `=` with nothing on its right.
 
 **Fix.** Write it in that shape. The `= <value>` may be left out only for a bool column.
 
@@ -907,7 +907,7 @@ Related codes: [E029](#e029), [E030](#e030), [E020](#e020)
 
 `error` — **This column cannot be counted**
 
-**When.** The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum's; or an enum column was given no `= <value>` (§15.58).
+**When.** The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum's; or an enum column was given no `= <value>`.
 
 **Fix.** Name a field of an element, or a column a per-element table produces. Writing the classification as a table is what puts the classification itself under the completeness check.
 
@@ -940,7 +940,7 @@ Related codes: [E028](#e028), [E012](#e012)
 
 `error` — **A `count` needs a range**
 
-**When.** The `count` line has no `range >=0 <=<max>`, or no upper bound, or a negative lower one. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence** (§15.58).
+**When.** The `count` line has no `range >=0 <=<max>`, or no upper bound, or a negative lower one. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence**.
 
 **Fix.** Write it as `range >=0 <=100`. The generated code refuses a longer sequence at the door, the way it refuses a number outside its range.
 
@@ -972,7 +972,7 @@ Related codes: [E028](#e028), [E112](#e112)
 
 `error` — **A rule cannot have both a `fold` and a `count`**
 
-**When.** One rule has both. They are two endings for the same walk, and a `fold` can stop partway: what a count means on a walk that stopped is not decided (§15.58).
+**When.** One rule has both. They are two endings for the same walk, and a `fold` can stop partway: what a count means on a walk that stopped is not decided.
 
 **Fix.** To count, drop the `fold` and let a table judge the count. To fold, drop the `count`.
 
@@ -1010,9 +1010,9 @@ Related codes: [E021](#e021), [E029](#e029)
 
 `error` — **The declared enum and the imported one disagree**
 
-**When.** The values of the enum named by `import proto` or `import jsonschema` and the ASCII aliases of the rule's `enum` are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule** (§15.59).
+**When.** The values of the enum named by `import proto` or `import jsonschema` and the values of the rule's `enum` (their ASCII aliases, where they have them) are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule**.
 
-**Fix.** Add the new value to the rule's `enum`. The proto has no Japanese in it, so the name is yours to decide. A value the contract dropped goes from the rule too. Once it is added, the table asks whether it needs a row (E033).
+**Fix.** Add the new value to the rule's `enum`; where the enum gives its values names with aliases, the name is yours to choose. A value the contract dropped goes from the rule too. Once it is added, the table asks whether it needs a row (E033).
 
 **Smallest reproduction**:
 
@@ -1052,9 +1052,9 @@ Related codes: [E013](#e013), [E033](#e033), [E101](#e101)
 
 `error` — **A value of an imported enum has neither a row nor `default`**
 
-**When.** A value of an imported enum appears in no row and is not marked `default`. For a value you wrote yourself that is a forgotten line (W111); for a value that came through the contract it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default amount (§15.59).
+**When.** A value of an imported enum appears in no row and is not marked `default`. For a value you wrote yourself that is a forgotten line (W111); for a value that came through the contract it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default row's answer.
 
-**Fix.** Add a row for it, or mark the value `default` in the declaration. `default` is a signature saying that falling through to the default row is what is meant — that someone decided the amount.
+**Fix.** Add a row for it, or mark the value `default` in the declaration. `default` is a signature saying that falling through to the default row is what is meant — that someone decided how it is treated.
 
 **Smallest reproduction**:
 
@@ -1182,7 +1182,7 @@ Related codes: [E035](#e035), [E045](#e045)
 
 `error` — **A cited fragment is not pinned**
 
-**When.** A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@source` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@postal`). A document's fragments are its tables, so `table3` (the third table in document order; `表3` is its Japanese spelling) is the only name read (§15.82). A fragment the language cannot read as one word is quoted (`@osha "§1910.157"`). Without a pin, a revised copy passes check in silence (§15.68).
+**When.** A fragment cited with `@source fragment` has no `  fragment sha256:…` pin line under its `source` line; for a `file` source, the line carries no `sha256:…`. A law cited with no article (`@source` alone), and a fragment name, a citation or a `source` line whose shape cannot be read, are reported the same way (a file beside the rule may be cited whole, `@postal`). A document's fragments are its tables, so `table3` (the third table in document order; `表3` is its Japanese spelling) is the only name read. A fragment the language cannot read as one word is quoted (`@osha "§1910.157"`). Without a pin, a revised copy passes check in silence.
 
 **Fix.** Once the transcribed rows are checked against the document, paste the `fix.text` line or run `rulec source pin <file.rule>` to pin the copy's digest.
 
@@ -1279,7 +1279,7 @@ Related codes: [E037](#e037), [E038](#e038)
 
 `error` — **The callee differs from its pinned digest**
 
-**When.** The `apply` heading carries no `sha256:…`, or the digest it carries differs from the digest of the callee file beside the rule. When the callee is amended, the answers of the rule that applies it change too; without a pin, that change passes with nobody approving it (§15.69).
+**When.** The `apply` heading carries no `sha256:…`, or the digest it carries differs from the digest of the callee file beside the rule. When the callee is amended, the answers of the rule that applies it change too; without a pin, that change passes with nobody approving it.
 
 **Fix.** See with `rulec diff <old> <new>` how many answers of this rule move and by how much; once the movement is approved, rewrite the heading as `fix.text` says or run `rulec source pin <file.rule>` to pin the callee again.
 
@@ -1323,7 +1323,7 @@ Related codes: [E037](#e037), [E038](#e038), [E044](#e044)
 
 `error` — **The bindings of an apply do not match the callee**
 
-**When.** A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten (§15.69).
+**When.** A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten.
 
 **Fix.** Bind each callee input with one `<callee input> = <value>` line, and rename an output with `<callee output> -> <name>`. The callee's input and output names are listed in the message.
 
@@ -1415,7 +1415,7 @@ Related codes: [E041](#e041), [E043](#e043)
 
 `error` — **A value passed leaves the callee's range or constraint**
 
-**When.** The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval (§15.69).
+**When.** The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval.
 
 **Fix.** Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For a constraint, declare the same relation with `constraint`.
 
@@ -1644,7 +1644,7 @@ Related codes: [E103](#e103), [E112](#e112), [E115](#e115)
 
 `error` — **The `machine` section is not shaped right**
 
-**When.** The `machine` heading lacks a name or `over <table>`; the `carry` or `initial` line is missing or written twice; a line under `machine` is not `carry`, `initial`, `final`, `never` or `once`; or the rule has two `machine` sections (§15.148).
+**When.** The `machine` heading lacks a name or `over <table>`; the `carry` or `initial` line is missing or written twice; a line under `machine` is not `carry`, `initial`, `final`, `never` or `once`; or the rule has two `machine` sections.
 
 **Fix.** The shape is `machine <name>(<ascii>) over <table>`, then `carry <input> -> <output>` and `initial <state>` (both required), and `final <state>, …`, `never <state>, … after <state>, …` and `once <output> <cell>` (all optional). To carry two states together, make the pair one enum.
 
@@ -2141,7 +2141,7 @@ Related codes: [E063](#e063), [E008](#e008), [E111](#e111)
 
 `error` — **`range from koyomi` is misshapen or misplaced**
 
-**When.** What follows `range from` is not `koyomi "<file>" date <name of a date>`, or it is written on an input that is not a date, or on an output, a derive or a field of an element. The days a koyomi date comes to can only be the range of a date the caller passes (§15.174).
+**When.** What follows `range from` is not `koyomi "<file>" date <name of a date>`, or it is written on an input that is not a date, or on an output, a derive or a field of an element. The days a koyomi date comes to can only be the range of a date the caller passes.
 
 **Fix.** Write `range from koyomi "<file>" date <name of a date>` on a date input. The file is a path from the rule's directory.
 
@@ -2168,7 +2168,7 @@ Related codes: [E129](#e129), [E130](#e130)
 
 `error` — **Completeness gap: some input matches no row**
 
-**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required (§4). A concrete input that matches no row is always attached.
+**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached.
 
 **Fix.** Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration.
 
@@ -2226,7 +2226,7 @@ Related codes: [E101](#e101), [W105](#w105), [W110](#w110)
 
 `error` — **Unit mismatch: values of different types are being mixed**
 
-**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too (§2.3). It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums (§15.150).
+**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums.
 
 **Fix.** Move one side into a table. "A surcharge that depends on weight" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without.
 
@@ -2258,7 +2258,7 @@ Related codes: [E108](#e108), [E112](#e112)
 
 **When.** A quantity, money or rate output has no `round`. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer.
 
-**Fix.** Add rounding to the output declaration, e.g. `round up(10JPY)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well (§7.3).
+**Fix.** Add rounding to the output declaration, e.g. `round up(10JPY)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well.
 
 **Smallest reproduction**:
 
@@ -2316,7 +2316,7 @@ Related codes: [W105](#w105), [W114](#w114), [E102](#e102)
 
 `error` — **An output literal is not on the rounding grid**
 
-**When.** A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451JPY` in a table rounded `up(10JPY)` — is stopped (§7.2).
+**When.** A literal in an output cell is not a multiple of the declared rounding grid. This is where a mistyped digit — `1451JPY` in a table rounded `up(10JPY)` — is stopped.
 
 **Fix.** Put the literal on the grid (`1451JPY` becomes `1450JPY` or `1460JPY`). If the amount really is right, change the grid instead.
 
@@ -2378,7 +2378,7 @@ Related codes: [E111](#e111), [E105](#e105)
 
 **When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value.
 
-**Fix.** Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it (§7.1).
+**Fix.** Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it.
 
 **Smallest reproduction**:
 
@@ -2408,7 +2408,7 @@ Related codes: [E112](#e112), [E103](#e103)
 
 **When.** The region check visited more nodes than `--budget` allows. Failing to prove something is never green here, so this is an error and not a warning.
 
-**Fix.** Split the table to reduce the number of columns, or raise `--budget`. The cost is the product of the columns, so chaining tables in a linear pipeline is cheaper than piling columns into one table (§5.1).
+**Fix.** Split the table to reduce the number of columns, or raise `--budget`. The cost is the product of the columns, so chaining tables in a linear pipeline is cheaper than piling columns into one table.
 
 **Smallest reproduction** (with `--budget 1`):
 
@@ -2437,7 +2437,7 @@ Related codes: [E101](#e101), [W114](#w114)
 
 `error` — **A column has a type the check cannot handle**
 
-**When.** The column's type cannot be lowered into the region IR. **Seeing this is a bug in rulec itself.** It is the internal breakwater that stops a table from being skipped silently, put in after the same accident happened twice, with dates and with optional (§6.3).
+**When.** The column's type cannot be lowered into the region IR. **Seeing this is a bug in rulec itself.** It is the internal breakwater that stops a table from being skipped silently, put in after the same accident happened twice, with dates and with optional.
 
 **Fix.** Change the column to a type the check handles today (bool, enum, quantity, money, rate, date, optional). Then report it: this check exists because stopping is better than passing silently.
 
@@ -2528,7 +2528,7 @@ Related codes: [E108](#e108), [E101](#e101)
 
 `error` — **The condition of a boolean definition is neither of the two allowed forms**
 
-**When.** The condition of `define … : bool` is neither one input or derived value compared with a constant, nor a comparison of two values whose difference cannot be subtracted (two dates, say). Comparing two numbers directly is the usual case (§5.3).
+**When.** The condition of `define … : bool` is neither one input or derived value compared with a constant, nor a comparison of two values whose difference cannot be subtracted (two dates, say). Comparing two numbers directly is the usual case.
 
 **Fix.** Declare the difference as a derived value and compare that against a constant. `define bigger : bool = a >= b` becomes `derive gap(gap) : money[JPY, incl_tax] = a - b  range …` and the cell `>=0JPY`. The analysis is exact that way.
 
@@ -2559,7 +2559,7 @@ Related codes: [E112](#e112), [E103](#e103)
 
 `error` — **A value does not sit on the declared step**
 
-**When.** A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step (§2.1), so this one has no representation. The same holds for the rounding grid of a rate output that is not a whole number of the step the output declares (`rate[step 1%]` with `round down(0.5%)`): every answer sits on the grid and is handed over as a whole number of the step, so some answers could not be written (§15.144).
+**When.** A value that is not a whole number of the declared step is written in the column, such as `0.5%` where the type says `rate[step 1%]`. At runtime the value is one integer count of that step, so this one has no representation. The same holds for the rounding grid of a rate output that is not a whole number of the step the output declares (`rate[step 1%]` with `round down(0.5%)`): every answer sits on the grid and is handed over as a whole number of the step, so some answers could not be written.
 
 **Fix.** Write a value on the step, or declare a finer step (`rate[step 0.1%]`). Quietly moving it to the nearest step would make the boundary on the page differ from the boundary in the generated code. For a rounding grid, declare the step the rounding needs, or round to a whole number of the step.
 
@@ -2587,9 +2587,9 @@ Related codes: [E103](#e103), [E106](#e106)
 
 `error` — **The divisor is not a positive constant**
 
-**When.** The right of `÷` is neither a positive whole constant nor a positive constant amount or quantity in the same unit: a variable, zero, a negative number or a fraction (§2.3).
+**When.** The right of `÷` is neither a positive whole constant nor a positive constant amount or quantity in the same unit: a variable, zero, a negative number or a fraction.
 
-**Fix.** If the divisor is business data, take it as a rate input or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree (§7.1).
+**Fix.** If the divisor is business data, take it as a rate input or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree.
 
 **Smallest reproduction**:
 
@@ -2617,9 +2617,9 @@ Related codes: [E103](#e103), [E108](#e108)
 
 `error` — **A row's amount is not in the copy it cites, or is under another heading there**
 
-**When.** The output value of a row is nowhere in the copy the row or its table cites with `@source table1` (§15.82). Where the copy has a heading that says exactly a word of the row's cells (`Kanto`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up (§15.143). Only amounts are compared: a threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) and an amount is not. A copy's `5/1,000` (or, in Japanese, `1,000分の5`) reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself.
+**When.** The output value of a row is nowhere in the copy the row or its table cites with `@source table1`. Where the copy has a heading that says exactly a word of the row's cells (`Kanto`), only the row and the column under that heading are searched: the amount of the next row is somewhere in the copy too, and a search of the whole table would let the two be mixed up. Only amounts are compared: a threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) and an amount is not. A copy's `5/1,000` (or, in Japanese, `1,000分の5`) reads as 0.5%. The copy is what `rulec source fetch` took out of the document; check does not read the document itself.
 
-**Fix.** Reread the copy and correct the amount. When it is said to be under another heading, the rows were mixed up. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows to the approver.
+**Fix.** Reread the copy and correct the amount. When it is said to be under another heading, the rows were mixed up. For a mistyped digit W120 usually comes with it, naming the value left unused. If the value came from somewhere else — a later notice, a correction, an answer from a person — take the citation off this row and write where it came from in a comment at the end of it, which `rulec doc` shows on the page for people.
 
 **Smallest reproduction**:
 
@@ -2667,9 +2667,9 @@ Related codes: [W120](#w120), [E038](#e038), [E107](#e107)
 
 `error` — **A share without what a share needs**
 
-**When.** The three of `allocate(<amount>, <running total>, <whole>)` are not the shape a share needs. All three are names with declared ranges, the amount and the running total cannot be negative, the whole is positive, and a `constraint` says the running total never passes the whole (§15.102).
+**When.** The three of `allocate(<amount>, <running total>, <whole>)` are not the shape a share needs. All three are names with declared ranges, the amount and the running total cannot be negative, the whole is positive, and a `constraint` says the running total never passes the whole.
 
-**Fix.** Write what is missing. Without `constraint <running total> <= <whole>` a share can exceed the amount being handed out and the lines no longer add up to the total. Below zero the targets disagree about which way to round (§7.1).
+**Fix.** Write what is missing. Without `constraint <running total> <= <whole>` a share can exceed the amount being handed out and the lines no longer add up to the total. Below zero the targets disagree about which way to round.
 
 **Smallest reproduction**:
 
@@ -2695,9 +2695,9 @@ Related codes: [E115](#e115), [E108](#e108)
 
 `error` — **The call is not written correctly**
 
-**When.** A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1JPY)` and the rest) (§2.3).
+**When.** A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1JPY)` and the rest).
 
-**Fix.** Check the spelling and the count. A spare argument is dropped on the floor and a missing one leaves no answer — both passed unnoticed until §15.102, and only the generator ran out of cases.
+**Fix.** Check the spelling and the count. A spare argument is dropped on the floor and a missing one leaves no answer — both used to pass unnoticed, and only the generator ran out of cases.
 
 **Smallest reproduction**:
 
@@ -2722,7 +2722,7 @@ Related codes: [E103](#e103), [E115](#e115)
 
 `error` — **A `from` does not fit the input's type**
 
-**When.** What a `from` yields does not fit the input that takes it (§15.125). `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares.
+**When.** What a `from` yields does not fit the input that takes it. `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares.
 
 **Fix.** Correct the type or the `from`. A count is taken by a `number` input with a range, whether the elements passed by a `bool`, and the value itself by `from <shape>.<field>`. A `where` value carries no unit: a contract has none, and comparing a scaled number with a raw one is the thing this must not do quietly.
 
@@ -2757,7 +2757,7 @@ Related codes: [E121](#e121), [W122](#w122), [E103](#e103)
 
 `error` — **The contract has no such path**
 
-**When.** A `from` path is not in the contract of the `shape` it starts at (§15.125). Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin.
+**When.** A `from` path is not in the contract of the `shape` it starts at. Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin.
 
 **Fix.** Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here.
 
@@ -2792,7 +2792,7 @@ Related codes: [E120](#e120), [W122](#w122), [E032](#e032)
 
 `error` — **A row's boundary falls on the other side from the copy it cites**
 
-**When.** A threshold of a row that cites puts its boundary value on the other side from the copy (§15.124). A threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `up to 60cm` and `over 60cm` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60-80`), with the word in another column (a Japanese insurance premium table puts `円以上`, "yen or more", in the heading over its own column), or with words on both sides, is left alone.
+**When.** A threshold of a row that cites puts its boundary value on the other side from the copy. A threshold is rewritten as it is transcribed (`up to 1,949,000JPY` becomes `<=1949000JPY`) so the text cannot be compared; what is compared is **which of the two bands the boundary value falls in**. The copy's `up to 60cm` and `over 60cm` both put 60cm in the band below, and so do `<=60cm` and `>60cm`. A number the copy bounds with no word (`18 to 20`, `60-80`), with the word in another column (a Japanese insurance premium table puts `円以上`, "yen or more", in the heading over its own column), or with words on both sides, is left alone.
 
 **Fix.** Reread the copy and correct it. `fix.text` is this cell with that one boundary's side swapped and nothing else: the direction is the table's geometry, not the copy's to decide, so only `<` and `<=` are exchanged. One boundary mistranscribed is reported on both of the rows that share it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from.
 
@@ -2842,7 +2842,7 @@ Related codes: [E116](#e116), [W120](#w120), [E105](#e105)
 
 `warning` — **No input is projected from that shape**
 
-**When.** A `shape` is declared and no input says `from <that name>.…` (§15.125). The contract is read and holds nothing.
+**When.** A `shape` is declared and no input says `from <that name>.…`. The contract is read and holds nothing.
 
 **Fix.** Use it or delete it. A contract that is only read makes the next reader believe this rule is held to it; what is held to it is the inputs that say `from`.
 
@@ -2877,7 +2877,7 @@ Related codes: [E121](#e121), [W111](#w111)
 
 `error` — **The contract lets through a value the rule refuses**
 
-**When.** A value read with `from` can pass the contract's validation and still be refused by the input's declaration (§15.132). What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, "", no elements) with no rule applied; a date read from a `.proto` string is held to whether "" passes (§15.133). A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field (§15.140), and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken.
+**When.** A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, "", no elements) with no rule applied; a date read from a `.proto` string is held to whether "" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken.
 
 **Fix.** Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none.
 
@@ -2912,7 +2912,7 @@ Related codes: [W123](#w123), [E123](#e123), [E121](#e121), [E032](#e032)
 
 `warning` — **A row is reached only by values the contract does not let through**
 
-**When.** A cell of a row tests an input read with `from`, and nothing the cell accepts passes the contract's validation (§15.132). Only what passed the contract arrives, so no request or message reaches the row. Only a column of the input itself is compared; a column derived from it is not.
+**When.** A cell of a row tests an input read with `from`, and nothing the cell accepts passes the contract's validation. Only what passed the contract arrives, so no request or message reaches the row. Only a column of the input itself is compared; a column derived from it is not.
 
 **Fix.** If the contract will not widen, delete the row and bring the input's range in line with the contract. If the row is kept for a widening that is planned, leave it: `check --diff-base` in CI reports only the ones that are new.
 
@@ -2948,7 +2948,7 @@ Related codes: [E122](#e122), [W124](#w124), [E102](#e102), [W111](#w111)
 
 `error` — **The contract lets through a combination the rule's `constraint` refuses**
 
-**When.** Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken (§15.140). The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed.
+**When.** Both sides of a `constraint` are inputs read with `from` from the same `shape`, and some request passes the contract's validation with both values inside the inputs' ranges and the `constraint` broken. The conditions the contract places across its fields — CEL on a `.proto` message, a `oneof`, JSON Schema's combinators — are read, and what is asked is whether a breaking combination survives them. When one does, its values are the example. A rule that cannot be read is read as not there, so nothing is missed.
 
 **Fix.** Which side to change is a person's decision. If the combination cannot occur, promise it in the contract: for a `.proto`, `fix.text` is the `(buf.validate.message).cel` to write on the message (`narrow_contract`). JSON Schema has no way to compare the values of two fields, so there `fix.kind` is `none`. If it can occur, take the `constraint` off and decide in the tables what the rule answers for it.
 
@@ -2995,7 +2995,7 @@ Related codes: [E122](#e122), [W124](#w124), [E018](#e018)
 
 `warning` — **A row is reached only by a combination the contract does not let through**
 
-**When.** A row's cells test two or more inputs read with `from` from the same `shape`, each cell alone asks for values the contract lets through, and under the conditions the contract places across its fields no combination of them passes (§15.140): a row asking for a minimum above 20kg and a maximum of at most 10kg under the CEL `this.min <= this.max`, or a row asking for two members of one `oneof` to be both non-zero. The cells on other columns are left out, so this may call a row reachable that is not, never the other way round.
+**When.** A row's cells test two or more inputs read with `from` from the same `shape`, each cell alone asks for values the contract lets through, and under the conditions the contract places across its fields no combination of them passes: a row asking for a minimum above 20kg and a maximum of at most 10kg under the CEL `this.min <= this.max`, or a row asking for two members of one `oneof` to be both non-zero. The cells on other columns are left out, so this may call a row reachable that is not, never the other way round.
 
 **Fix.** If the contract will not change, delete the row. If the row is kept for a change that is planned, leave it: `check --diff-base` in CI reports only the ones that are new.
 
@@ -3042,7 +3042,7 @@ Related codes: [W123](#w123), [E123](#e123), [E102](#e102)
 
 `error` — **A final state has a way out**
 
-**When.** A call moves a case out of a state the `final` line names (§15.148): a case that had ended is set going again. The shortest sequence of calls to that state, and the call that leaves it, come with it as `witness.trace`.
+**When.** A call moves a case out of a state the `final` line names: a case that had ended is set going again. The shortest sequence of calls to that state, and the call that leaves it, come with it as `witness.trace`.
 
 **Fix.** Keep the state where it is on that row, or take it off the `final` line. Which of the two is right is the business's to say.
 
@@ -3208,7 +3208,7 @@ Related codes: [E053](#e053), [E126](#e126)
 
 **When.** The inputs cut into more cells than the budget allows (`--budget` divided by 50), or the rule's answer does not cut into finitely many columns. A claim that was not proven is never green, so this is an error and not a warning.
 
-**Fix.** Raise `--budget`, or give the table that decides the transitions fewer columns. The cost is the product of the columns, so a chain of tables is cheaper than one wide one (§5.1).
+**Fix.** Raise `--budget`, or give the table that decides the transitions fewer columns. The cost is the product of the columns, so a chain of tables is cheaper than one wide one.
 
 **Smallest reproduction** (with `--budget 100`):
 
@@ -3246,7 +3246,7 @@ Related codes: [E109](#e109), [W127](#w127)
 
 `error` — **This rulec reads no koyomi file**
 
-**When.** A rule that takes a range from a koyomi date (`range from koyomi`) is checked by a rulec with no koyomi joined: the binary of rulec's own crate, or the page in the browser. The check does not fall back to every day of the range; the file counts as not checked, and the run exits 2 (§15.174).
+**When.** A rule that takes a range from a koyomi date (`range from koyomi`) is checked by a rulec with no koyomi joined: the binary of rulec's own crate, or the page in the browser. The check does not fall back to every day of the range; the file counts as not checked, and the run exits 2.
 
 **Fix.** Run `ritsu rulec check <file>` or `ritsu check <dir>`; both hand the set of days over through koyomi's port.
 
@@ -3288,7 +3288,7 @@ Related codes: [E065](#e065), [E130](#e130)
 
 `error` — **The days of the koyomi date cannot be read**
 
-**When.** koyomi does not answer for the days of the date `range from koyomi` names: the file is not there, does not pass koyomi's check, or has no date of that name; the inputs come to more combinations than koyomi checks; the computation stops at some input; or the date comes to no day at all. What koyomi says is in the notes. The check does not fall back to every day of the range (§15.174).
+**When.** koyomi does not answer for the days of the date `range from koyomi` names: the file is not there, does not pass koyomi's check, or has no date of that name; the inputs come to more combinations than koyomi checks; the computation stops at some input; or the date comes to no day at all. What koyomi says is in the notes. The check does not fall back to every day of the range.
 
 **Fix.** Make the koyomi file pass `ritsu koyomi check`, and name a date it has.
 
@@ -3452,7 +3452,7 @@ Related codes: [W114](#w114), [E128](#e128)
 
 `warning` — **Shadowing that needs review: an earlier row hides part of a later one**
 
-**When.** In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed (§4).
+**When.** In a `policy first` table, two rows partially intersect and disagree on the output. Structural shadowing (the staircase) and equivalent shadowing are folded into a count line; only the pairs that need review are listed.
 
 **Fix.** If it is intended, leave it: `check --diff-base` in CI reports only newly created pairs. To let the later row win, move it above the earlier one. `--show-shadow` lists every pair.
 
@@ -3543,7 +3543,7 @@ Related codes: [E101](#e101), [E012](#e012)
 
 `warning` — **No example uses this sequence**
 
-**When.** A `sequence` is written and no example names it. A sequence runs only when an example names it, so this one never runs (§15.56).
+**When.** A `sequence` is written and no example names it. A sequence runs only when an example names it, so this one never runs.
 
 **Fix.** Add the example that walks it, or drop the sequence. Written and unused is usually the trace of an example left unwritten.
 
@@ -3619,7 +3619,7 @@ Related codes: [E037](#e037)
 
 `warning` — **The copy states a value no row uses**
 
-**When.** A cell of the copy a table cites whole with `@source table1` is nothing but a number, and no row uses that value (§15.82). A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `revised 1 April 2026` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them.
+**When.** A cell of the copy a table cites whole with `@source table1` is nothing but a number, and no row uses that value. A dropped row does not show up in the completeness check: its inputs fall into one of the rows that remain. Only cells that are nothing but a number are asked about, so `revised 1 April 2026` is not counted as an amount, and a row that merges what the copy lists — `<=3kg` over its `1kg`, `2kg` and `3kg` — accounts for all of them.
 
 **Fix.** Compare the table with the copy and check that no row was left out; if a revision added a row, transcribe it. If the table transcribes only part of the fragment — one origin of a tariff sheet that lists several — move the citation from the `table` line onto the end of each row that came from it. A row's citation says only where that row came from, so the rest goes unasked while the amounts are still held to the copy (E116).
 
@@ -3668,7 +3668,7 @@ Related codes: [E116](#e116), [W119](#w119)
 
 `warning` — **No row of an applied table is reached in this apply**
 
-**When.** **Every** row of an applied table or clause is unreachable in this rule: what is bound never reaches its conditions, or other definitions of this rule (a clause with `overrides apply:table`, say) take precedence over all of it. Rows unreachable one by one draw no word: a callee's table is usually written for a wider range than this rule's, and `doc` lists those rows as unused by this apply (§15.69).
+**When.** **Every** row of an applied table or clause is unreachable in this rule: what is bound never reaches its conditions, or other definitions of this rule (a clause with `overrides apply:table`, say) take precedence over all of it. Rows unreachable one by one draw no word: a callee's table is usually written for a wider range than this rule's, and `doc` lists those rows as unused by this apply.
 
 **Fix.** If this apply does not need the table, leave it out with `except <table>`. If it should be used, look at the bindings and the `with` mapping.
 
@@ -3749,7 +3749,7 @@ Related codes: [E035](#e035), [E105](#e105)
 
 `warning` — **An alias collides with a word in a target language**
 
-**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses (§15.103). An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there (§15.149).
+**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there.
 
 **Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it.
 
@@ -3777,7 +3777,7 @@ Related codes: [E009](#e009), [E011](#e011)
 
 `warning` — **No element can land on this verdict**
 
-**When.** A `fold` has an arm for a verdict no row produces. It is the other side of E024: not a hole but an arm nothing reaches, and more often the trace of a table that changed than of an arm written by mistake (§15.56).
+**When.** A `fold` has an arm for a verdict no row produces. It is the other side of E024: not a hole but an arm nothing reaches, and more often the trace of a table that changed than of an arm written by mistake.
 
 **Fix.** Look again at the table's rows, or drop the arm. Which of the two is right is decided by reading the table, not this message.
 
@@ -3812,7 +3812,7 @@ Related codes: [E024](#e024)
 
 `warning` — **Unconfirmed overlap: an input may match both rows**
 
-**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input (§15.126) and the thresholds inside a boolean `define` (§15.127) no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `twice` above is always even and never exactly `5JPY`, but `2.5JPY` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible.
+**When.** Two rows of a `policy unique` table may overlap, but no input producing that was constructed and infeasibility was not proven either. Derived values sharing an input and the thresholds inside a boolean `define` no longer fall here: the elimination decides them. What is left is what it cannot decide because it works over the rationals — `twice` above is always even and never exactly `5JPY`, but `2.5JPY` is a rational. A system past the cap of 400 inequalities and one that spans two units are the same: not proven, which is not the same as possible.
 
 **Fix.** If an order satisfying both conditions can exist, fix the rows: the outputs differ, so a match is a contradiction. If none can exist, leave it — the generated code carries a guard that returns an error rather than silently picking the earlier row.
 

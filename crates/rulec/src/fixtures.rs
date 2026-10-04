@@ -295,7 +295,7 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
                     kind: "not_json",
                     field: String::new(),
                     what: tr!("JSON として読めません: {e}", "Not readable as JSON: {e}"),
-                    hint: tr!("1 件 1 行の JSON Lines です（§10.2）。", "The format is JSON Lines, one record per line (§10.2)."),
+                    hint: tr!("1 件 1 行の JSON Lines です。", "The format is JSON Lines, one record per line."),
                 });
                 continue;
             }

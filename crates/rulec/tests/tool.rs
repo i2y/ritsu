@@ -276,7 +276,7 @@ fn nodeのサーバはhttpでも同じ約束を守る() {
     http_contract(&dir, "typescript", "node", &["--no-warnings", "pension_premium_mcp.ts"]);
 }
 
-/// The tool's view (SEP-1865, §15.52): the page an approver reads, served as a `ui://`
+/// The tool's view (SEP-1865, §15.52): the page for people, served as a `ui://`
 /// resource, and offered only to a host that said it can render one.
 fn ui_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
     let with_ui = r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2026-01-26","capabilities":{"extensions":{"io.modelcontextprotocol/ui":{"mimeTypes":["text/html;profile=mcp-app"]}}}}}"#;

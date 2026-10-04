@@ -34,7 +34,7 @@ FIGS = {}
 
 FIGS["existing"] = dict(
     ja=dict(
-        alt="法令や公開された規約を、エージェントが表（.rule）に写し、条文を @ で引用する。rulec が写しと照合し、抜けと重なりを証明して、12 言語に生成する。承認する人は rulec doc の資料で条文と表を見比べる。改正が出れば rulec source outdated が知らせ、表を読み直す。",
+        alt="法令や公開された規約を、エージェントが表（.rule）に写し、条文を @ で引用する。rulec が写しと照合し、抜けと重なりを証明して、12 言語に生成する。読む人は rulec doc の資料で条文と表を見比べる。改正が出れば rulec source outdated が知らせ、表を読み直す。",
         nodes=[
             ("sheet", ("法令・規約", ["e-Gov の条文", "規約の PDF", "料金表"]), 118),
             ("actor", ("エージェント", ["条文を読む", "表に写す", "出典を @ で引く"]), 150),
@@ -44,10 +44,10 @@ FIGS["existing"] = dict(
         ],
         labels=[("", "読む"), ("", "写す"), ("rulec check", "fetch と pin も"), ("rulec gen", "通ったら")],
         loop=(3, 1, ("改正", ["いつから何が", "変わるか"]), "rulec source outdated"),
-        detour=(3, ("承認する人", ["条文と表を", "見比べる", "承認する"]), "rulec doc"),
+        detour=(3, ("読む人", ["条文と表を", "見比べて", "確かめる"]), "rulec doc"),
     ),
     en=dict(
-        alt="An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates twelve languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread.",
+        alt="An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates twelve languages. A person compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread.",
         nodes=[
             ("sheet", ("Statute, policy", ["an article on e-Gov", "a policy PDF", "a tariff sheet"]), 130),
             ("actor", ("Agent", ["reads the article", "writes the table", "cites it with @"]), 150),
@@ -57,13 +57,13 @@ FIGS["existing"] = dict(
         ],
         labels=[("", "reads"), ("", "writes"), ("rulec check", "fetch, pin too"), ("rulec gen", "once it passes")],
         loop=(3, 1, ("Amendment", ["what changes,", "from when"]), "rulec source outdated"),
-        detour=(3, ("Approver", ["compares the article", "with the table", "and signs off"]), "rulec doc"),
+        detour=(3, ("Reader", ["compares the article", "with the table", "and checks it"]), "rulec doc"),
     ),
 )
 
 FIGS["internal"] = dict(
     ja=dict(
-        alt="社内の規程や自社サービスの規約、Excel、動いているコードといった手元のものを、エージェントが表（.rule）に写す。Excel からは rulec import で下書きを起こし、文書は @ で表ごとに引用し、写しのハッシュに固定する。rulec が抜けと重なりを証明し、いま動いている実装や過去の記録と突き合わせて、食い違いをどの行で何件いくらかで返す。承認する人は rulec doc の資料で文書と表を見比べる。通った表から12 言語に生成する。",
+        alt="社内の規程や自社サービスの規約、Excel、動いているコードといった手元のものを、エージェントが表（.rule）に写す。Excel からは rulec import で下書きを起こし、文書は @ で表ごとに引用し、写しのハッシュに固定する。rulec が抜けと重なりを証明し、いま動いている実装や過去の記録と突き合わせて、食い違いをどの行で何件いくらかで返す。読む人は rulec doc の資料で文書と表を見比べる。通った表から12 言語に生成する。",
         nodes=[
             ("sheet", ("手元のもの", ["社内の規程、規約", "Excel、料金表", "動いているコード"]), 130),
             ("actor", ("エージェント", ["読んで表に写す", "Excel は import で", "出典を @ で引く"]), 150),
@@ -73,10 +73,10 @@ FIGS["internal"] = dict(
         ],
         labels=[("", "読む"), ("", "写す"), ("rulec check", "pin も"), ("rulec gen", "通ったら")],
         loop=(3, 1, ("食い違い", ["どの行で何件", "いくら違うか"]), "rulec verify / replay"),
-        detour=(3, ("承認する人", ["文書と表を", "見比べる", "承認する"]), "rulec doc"),
+        detour=(3, ("読む人", ["文書と表を", "見比べて", "確かめる"]), "rulec doc"),
     ),
     en=dict(
-        alt="An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages.",
+        alt="An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. A person compares the document and the table on the page rulec doc renders. From a passed table come twelve languages.",
         nodes=[
             ("sheet", ("What you have", ["an internal policy", "a spreadsheet, a tariff", "code that runs today"]), 140),
             ("actor", ("Agent", ["reads and transcribes", "imports the spreadsheet", "cites the file with @"]), 160),
@@ -86,32 +86,32 @@ FIGS["internal"] = dict(
         ],
         labels=[("", "reads"), ("", "writes"), ("rulec check", "pin too"), ("rulec gen", "once it passes")],
         loop=(3, 1, ("Mismatches", ["which rows, how many,", "by how much"]), "rulec verify / replay"),
-        detour=(3, ("Approver", ["compares the document", "with the table", "and signs off"]), "rulec doc"),
+        detour=(3, ("Reader", ["compares the document", "with the table", "and checks it"]), "rulec doc"),
     ),
 )
 
 FIGS["designing"] = dict(
     ja=dict(
-        alt="決めたいこと（送料、クーポン、返品の可否、社内の判定基準）を、検討する人が表（.rule）に書く。rulec check が抜けと重なりを、それを起こす入力つきで返し、通るまで直す。通った表からは承認者向けの資料、お客向けの案内、改定の影響が出る。",
+        alt="決めたいこと（送料、クーポン、返品の可否、社内の判定基準）を、検討する人が表（.rule）に書く。rulec check が抜けと重なりを、それを起こす入力つきで返し、通るまで直す。通った表からは人が読む資料、お客向けの案内、改定の影響が出る。",
         nodes=[
             ("sheet", ("決めたいこと", ["送料、クーポン", "返品の可否", "社内の判定基準"]), 130),
             ("person", ("検討する人", ["条件を表に書く", "Excel からでも", "金額は自分で決める"]), 150),
             ("sheet", ("表", ["1 規則 = 1 表", "例も書く"], ".rule"), 120),
             ("actor", ("rulec", ["抜けと重なりを", "それを起こす", "入力つきで返す"]), 150),
-            ("sheet", ("資料", ["承認する人向け", "お客向けの案内", "改定の影響"]), 150),
+            ("sheet", ("資料", ["人が読む資料", "お客向けの案内", "改定の影響"]), 150),
         ],
         labels=[("", "整理する"), ("", "書く"), ("rulec check", "通るまで"), ("rulec doc", "rulec diff")],
         loop=(3, 1, ("診断", ["どこが", "それを起こす入力", "足す行の形"]), "通るまで繰り返す"),
         detour=None,
     ),
     en=dict(
-        alt="Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the approver's page, the customer article and the impact of a revision.",
+        alt="Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the page for people, the customer article and the impact of a revision.",
         nodes=[
             ("sheet", ("What to decide", ["shipping, coupons", "returns", "an internal criterion"]), 140),
             ("person", ("Designer", ["writes the conditions", "as a table, or from", "Excel; decides amounts"]), 160),
             ("sheet", ("Table", ["1 rule = 1 table", "with worked examples"], ".rule"), 140),
             ("actor", ("rulec", ["returns every gap", "and overlap with an", "input that shows it"]), 150),
-            ("sheet", ("Pages", ["the approver's page", "the customer article", "the impact of a change"]), 160),
+            ("sheet", ("Pages", ["the page for people", "the customer article", "the impact of a change"]), 160),
         ],
         labels=[("", "sorts out"), ("", "writes"), ("rulec check", "until it passes"), ("rulec doc", "rulec diff")],
         loop=(3, 1, ("Diagnosis", ["where", "an input that shows it", "the row to add"]), "until it passes"),

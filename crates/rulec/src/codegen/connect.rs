@@ -914,7 +914,7 @@ impl<'a> Gen<'a> {
             .replace("@D_SYNC@", &tr!("WSGI の側。", "The WSGI side."))
             .replace("@D_CALL@", &tr!("一回の呼び出しが一回の判断で、二つの間に残るものは無い。", "One call is one decision, and nothing is kept between two of them."))
             .replace("@D_DECIDE@", &tr!("受け取った件に規則を当て、決めた値と決めた行を返す。", "Apply the rule to the case that arrived, and answer with what it decided and the rows that decided it."))
-            .replace("@D_INVALID@", &tr!("宣言した入力の外は、呼び出し側の契約違反である（§8.1）。", "Outside the declared input domain is a contract violation by the caller (§8.1)."))
+            .replace("@D_INVALID@", &tr!("宣言した入力の外は、呼び出し側の契約違反である。", "Outside the declared input domain is a contract violation by the caller."))
             .replace("@D_INTERNAL@", &tr!("静的に証明できなかった重なりに、実際に当たった（W114）。どちらの行を採るかは表が決めることで、\n        # 呼び出し側には直せない。だから 500 で、気づかれるべきものとして返す。", "An overlap the checker could not settle statically was actually hit (W114). Which row wins is\n        # the table's to decide and the caller cannot fix it, so it answers 500: something to notice."))
             .replace("@D_APP@", &tr!("ASGI アプリとしてのサービス。uvicorn・hypercorn・daphne のどれでも動く。", "The service as an ASGI application, for uvicorn, hypercorn or daphne."))
             .replace("@D_WSGI@", &tr!("同じサービスの WSGI 版。gunicorn・uWSGI のような同期のサーバ向け。", "The same service as a WSGI application, for a synchronous server such as gunicorn or uWSGI."))

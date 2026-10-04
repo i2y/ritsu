@@ -77,7 +77,7 @@ fn 抽出器を通して写しを取る() {
         std::fs::read_to_string(d.join("料金表.pdf.fragments/表1.tsv")).unwrap(),
         "あて先\tS60\n近畿\t990円\n関東\t880円\n"
     );
-    // Who read the document stays beside the copy, and the approver's page says it.
+    // Who read the document stays beside the copy, and the page for people says it.
     assert_eq!(std::fs::read_to_string(d.join("料金表.pdf.fragments/extractor.txt")).unwrap(), "fake-extractor 0.1\n");
 
     let (c, out) = rulec(&d, &["source", "pin", "a.rule"]);

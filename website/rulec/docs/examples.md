@@ -2220,7 +2220,7 @@ examples
 
 - **One table produces a rate and an amount at once.** The rate column is `rate[step 1%]`, the deduction column `money[JPY]`, and a `define` multiplies and subtracts. The page's own worked example (7,000,000 × 0.23 − 636,000 = 974,000 yen) is an `examples` row as it stands.
 - **Bracket edges are written as "below the start of the next bracket".** The page says "from 1,000 to 1,949,000 yen" and "from 1,950,000 yen"; since taxable income is in units of 1,000 yen those are the same thing, and completeness over all the integers needs the form with no gap.
-- **What the page does not say is marked as a placeholder.** How a fraction of a yen in the surtax is settled is not on this page. The rule says `round down` and keeps, in the comment beside the declaration, that the source is silent — which is what `rulec doc` shows the approver.
+- **What the page does not say is marked as a placeholder.** How a fraction of a yen in the surtax is settled is not on this page. The rule says `round down` and keeps, in the comment beside the declaration, that the source is silent — which is what `rulec doc` shows the people who read the rule.
 
 ## Stamp duty on a contract, with a reduced rate that expires
 
@@ -2579,7 +2579,7 @@ examples
 **What this one shows**
 
 - **A `clause` is a one-row table.** The condition under `when`, the value under `then`; checked, generated and traced like a table, firing as `{"table":"free","row":1}`.
-- **`overrides regular` makes the proviso take precedence over the main text.** The approver's page says "clause free takes precedence over clause regular. in all 1 pairs that meet, the rows of clause free lie inside the other's (an exception)".
+- **`overrides regular` makes the proviso take precedence over the main text.** The page for people says "clause free takes precedence over clause regular. in all 1 pairs that meet, the rows of clause free lie inside the other's (an exception)".
 - **A group without an alias** (`group remote = Hokkaido, Okinawa`) is allowed; the generated identifiers number it.
 
 ## The rule the next one applies
@@ -2667,7 +2667,7 @@ examples
 
 - **A substitution is `<input of the applied rule> = <value of this rule>`.** Two enums are matched value by value: `with term_end -> retirement_age, resignation -> voluntary`.
 - **The check proves that what is passed stays inside the applied rule's ranges (E043).** The period in office is 1 to 3 years, inside the 1 to 40 of years of service; declared from 0, the check stops with that value as the example.
-- **The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{"table":"retirement:schedule","row":1,"label":"short"}`. The rows for ten years of service and more are never reached here; they are not errors, and the approver's page lists them as unused by this apply.
+- **The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{"table":"retirement:schedule","row":1,"label":"short"}`. The rows for ten years of service and more are never reached here; they are not errors, and the page for people lists them as unused by this apply.
 - **When the applied rule changes, E040 stops the check.** `rulec diff` shows how many answers move and by how much; once accepted, `rulec source pin` writes the new digest.
 
 ## A temperature and a volume decide the label

@@ -27,7 +27,7 @@
 <text x="460.0" y="275" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">Person</text>
 <text x="460.0" y="304" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">decides amounts</text>
 <text x="460.0" y="323" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">and which way to round</text>
-<text x="460.0" y="342" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">approves the rule</text>
+<text x="460.0" y="342" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">checks the rule</text>
 <text x="460.0" y="361" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">never writes code</text>
 <path d="M20,20 H124 L136,32 V120 H20 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
 <path d="M124,20 V32 H136 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>

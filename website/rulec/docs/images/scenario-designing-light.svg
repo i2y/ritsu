@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1174 236" width="1174" height="236" role="img" aria-label="Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the approver's page, the customer article and the impact of a revision." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1174 236" width="1174" height="236" role="img" aria-label="Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the page for people, the customer article and the impact of a revision." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
 <defs>
 <marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
 <marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
@@ -33,7 +33,7 @@
 <path d="M994,20.0 H1142 L1154,32.0 V120.0 H994 Z" fill="#f5f6fa" stroke="#cdd3e2" stroke-linejoin="round"/>
 <path d="M1142,20.0 V32.0 H1154 Z" fill="#e3e7f1" stroke="#cdd3e2" stroke-linejoin="round"/>
 <text x="1003" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#10131a">Pages</text>
-<text x="1003" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">the approver's page</text>
+<text x="1003" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">the page for people</text>
 <text x="1003" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">the customer article</text>
 <text x="1003" y="90.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#5b6478">the impact of a change</text>
 <line x1="160" y1="70" x2="256" y2="70" stroke="#8b94ab" stroke-width="1.8" marker-end="url(#head-neutral)"/>

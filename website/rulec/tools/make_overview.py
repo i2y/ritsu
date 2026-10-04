@@ -72,7 +72,7 @@ JA = dict(
         "計算で証明する。抜けがあれば、それを起こす入力（あて先 = 遠隔地, 重量 = 2001g）が"
         "返ってきて、行を足してもう一度。運賃がいくらかだけは人が決める。証明できた表からだけ、"
         "依存ゼロの Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy が出る。",
-    table=("表", "業務の人が読んで、承認する", ".rule"),
+    table=("表", "業務の人が読んで、確かめる", ".rule"),
     head=("あて先", "重量", "→ 運賃"),
     rows=[("近畿圏", "<=2kg", "800円"),
           ("近畿圏", ">2kg <=5kg", "1000円"),
@@ -106,7 +106,7 @@ EN = dict(
         "back comes the input that falls through it (Destination = Overseas, Weight = 2001g): "
         "add the row and run again - only what the fee is takes a person. Only a proved "
         "table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy.",
-    table=("Table", "a domain expert reads and approves it", ".rule"),
+    table=("Table", "a domain expert reads and checks it", ".rule"),
     head=("Destination", "Weight", "→ Fee"),
     rows=[("Domestic", "<=2kg", "8USD"),
           ("Domestic", ">2kg <=5kg", "10USD"),

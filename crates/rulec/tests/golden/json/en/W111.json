@@ -28,7 +28,7 @@ Obj(
                     "A column that should use it may have been left out.",
                 ),
                 Str(
-                    "If it is meant only as an entry check on its range, add `contract_only` to the declaration (§11 W111).",
+                    "If it is meant only as an entry check on its range, add `contract_only` to the declaration (W111).",
                 ),
             ],
         ),

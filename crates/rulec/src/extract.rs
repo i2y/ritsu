@@ -196,7 +196,7 @@ pub fn from_tsv(src: &str) -> Vec<Vec<String>> {
     src.lines().map(|l| l.split('\t').map(|c| c.to_string()).collect()).collect()
 }
 
-/// A grid as a Markdown table, for the rendering the approver reads (`rulec doc`).
+/// A grid as a Markdown table, for the rendering the reader reads (`rulec doc`).
 pub fn markdown(grid: &[Vec<String>]) -> String {
     let w = grid.iter().map(|r| r.len()).max().unwrap_or(0);
     if w == 0 {

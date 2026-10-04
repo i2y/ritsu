@@ -158,7 +158,7 @@ fn グループのカバーは事実のとおりに言う() {
     assert!(!d.contains("過不足なく分割"), "重なっているのに分割だと言っている:\n{d}");
     assert!(d.contains("すべて覆いますが、緑 が二つ以上のグループに入っています"), "{d}");
 
-    // Does not cover everything. Name the gap so the approver can ask "what happens to 緑?".
+    // Does not cover everything. Name the gap so the reader can ask "what happens to 緑?".
     let d = doc_of(&groups_rule("赤", "青"), "gap");
     assert!(!d.contains("過不足なく分割"), "覆えていないのに分割だと言っている:\n{d}");
     assert!(d.contains("覆うのは 色 の 3 値のうち 2 値で、緑 はどのグループにも入っていません"), "{d}");
@@ -275,7 +275,7 @@ fn 書き出す資料は決定的である() {
     }
 }
 
-/// Nothing an approver needs to know is dropped (the list in §1.6).
+/// Nothing a reader needs to know is dropped (the list in §1.6).
 #[test]
 fn 承認者が知るべきことが載る() {
     // W114 and the presence of the guard. The corpus rule that used to show it is decided
@@ -334,7 +334,7 @@ fn お客向けの二つの境界は下限から上限へ読む() {
 
 /// Where a table came from is written as a comment at the end of the `table` line, and a row
 /// taken from somewhere else carries its own (§15.32). Both are source text, so the rendering
-/// may show them — and the approver is who they are for.
+/// may show them — and the reader is who they are for.
 #[test]
 fn 出典のコメントが承認者に届く() {
     let src = "rule t(t) v1\n\nenum 色(color) = 赤(r) | 青(b)\n\ninputs\n  c(c) : 色\n\n\
@@ -357,7 +357,7 @@ fn 出典のコメントが承認者に届く() {
     assert!(!d.contains("| 注記 |\n|---|---|---|---|---|"), "コメントの無い表に注記の列が出ている:\n{d}");
 }
 
-/// The page the approver can try a case on (§15.37): the same document, with every table row
+/// The page a reader can try a case on (§15.37): the same document, with every table row
 /// carrying its table's name and number so the script can light it up, the generated
 /// JavaScript module inside it, and a description of the inputs for the form. The module is
 /// the one `rulec gen` writes, so node has to accept it as it stands.
@@ -511,7 +511,7 @@ fn 畳んだ見出しは宣言由来のトークンだけでできている() {
 
 /// §1.6 condition (b): `not: <group>` is not expanded, but the count is attached.
 /// A list of 41 prefectures does not survive visual inspection, so not expanding is right, but
-/// "it is the complement" alone cannot answer the approver's first question (is the scale
+/// "it is the complement" alone cannot answer a reader's first question (is the scale
 /// plausible?).
 #[test]
 fn 以外のグループには件数を添える() {

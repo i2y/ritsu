@@ -17,8 +17,8 @@ const TEXT = {
     generated: (n, ms) => `${n} files · ${ms} ms`,
     broken: "the checker stopped on this input and was reloaded; please report the table that did it",
     file: "file",
-    board: "The approver's page is a board that wants the whole window, so it opens in a tab of its own. Edit the table and the link below is the new one.",
-    open: "open the approver's page →",
+    board: "The page for people is a board that wants the whole window, so it opens in a tab of its own. Edit the table and the link below is the new one.",
+    open: "open the page for people →",
   },
   ja: {
     booting: "検査器を読み込んでいます…",
@@ -28,8 +28,8 @@ const TEXT = {
     generated: (n, ms) => `${n} ファイル ・ ${ms} ms`,
     broken: "この入力で検査器が止まったので読み直しました。その表を報告してください",
     file: "ファイル",
-    board: "承認者向けのページはウィンドウいっぱいを使うので、別のタブで開きます。表を直すと、下のリンクはその新しいほうになります。",
-    open: "承認者向けのページを開く →",
+    board: "人が読むページはウィンドウいっぱいを使うので、別のタブで開きます。表を直すと、下のリンクはその新しいほうになります。",
+    open: "人が読むページを開く →",
   },
 };
 
@@ -517,7 +517,7 @@ function start(root) {
     return el;
   };
 
-  // The address of the approver's page as it stands. A link, not `window.open`: a scripted
+  // The address of the page for people as it stands. A link, not `window.open`: a scripted
   // pop-up is blocked often enough to be unreliable, and a link the reader clicks is a
   // plain navigation — which also means a middle click or a cmd click does what it should.
   //
@@ -561,7 +561,7 @@ function start(root) {
       return;
     }
     if (view === "doc") {
-      // The approver's page is a board laid out for a window, and this pane is a box inside
+      // The page for people is a board laid out for a window, and this pane is a box inside
       // a documentation page — so it is not shown here. It is held, and opened full-screen
       // in a tab of its own when the reader asks for it. Rendering still happens on every
       // edit, so the tab that opens is always the current table's.

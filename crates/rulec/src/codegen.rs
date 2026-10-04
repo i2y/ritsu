@@ -100,7 +100,7 @@ fn pascal(s: &str) -> String {
 
 /// The public surface uses the ASCII alias; internals keep the Japanese name (§8.1).
 /// The public spelling of a declared name, for the callers outside this module that have
-/// to say the same thing (the approver's page names the inputs by their aliases).
+/// to say the same thing (the page for people names the inputs by their aliases).
 pub fn pub_name_of(n: &Name) -> String {
     pub_name(n)
 }
@@ -140,7 +140,7 @@ pub struct Gen<'a> {
     /// since two enums may both have `automatic` (§15.150).
     value_names: BTreeMap<(String, String), (String, String)>,
     src_hash: String,
-    /// The source itself and where it was read from, for the approver's page the MCP server
+    /// The source itself and where it was read from, for the page for people the MCP server
     /// serves (§15.52). The page is rendered from the rule, not from the generated code.
     src: String,
     /// The files the rule cites are found from this one's directory (§15.160).
@@ -425,7 +425,7 @@ impl<'a> Gen<'a> {
         self
     }
 
-    /// The page an approver reads, as `rulec doc --format html` renders it: the same
+    /// The page for people, as `rulec doc --format html` renders it: the same
     /// renderer, running the same generated JavaScript (§15.37, §15.52).
     pub fn page(&self) -> String {
         crate::doc::render_html(self.f, self.c, &self.src, &self.path, &self.javascript())
@@ -2099,7 +2099,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!(
                 "// Initial {}\nconst Initial = {}\n\n// Final {}\nvar Final = []{cls}{{{}}}\n\n\
                  // IsFinal {}\nfunc IsFinal(s {cls}) bool {{\n\tfor _, f := range Final {{\n\t\tif f == s {{\n\t\t\treturn true\n\t\t}}\n\t}}\n\treturn false\n}}\n\n",
-                tr!("は案件が始まる状態（§15.148）。", "is the state a case starts in (§15.148)."),
+                tr!("は案件が始まる状態。", "is the state a case starts in."),
                 self.go_value(&init, &Ty::Enum(en.clone())),
                 tr!("は案件が終わる状態。", "is the set of states a case ends in."),
                 fins.iter().map(|v| self.go_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
@@ -2391,8 +2391,8 @@ impl<'a> Gen<'a> {
         o.push_str(&format!(
             "// {}\ntype Input struct {{\n",
             tr!(
-                "Input は入力をまとめて受ける。同型の int が並ぶのを避けるため（§8.3）。",
-                "Input bundles the inputs, so that a parameter list of same-typed ints is avoided (§8.3)."
+                "Input は入力をまとめて受ける。同型の int が並ぶのを避けるため。",
+                "Input bundles the inputs, so that a parameter list of same-typed ints is avoided."
             )
         ));
         for i in &self.f.inputs {
@@ -2724,16 +2724,16 @@ fn go_i64(v: &str) -> String {
 
 fn round_go() -> String {
     tr!(
-        "// §7.3 の五モード。負の向きと半分ちょうどまで仕様どおりに固定する。\n\
+        "// 丸めの五つのモード。負の向きと半分ちょうどまで仕様どおりに固定する。\n\
          // 言語の素の除算に任せない（Python の // は −∞ 方向、Go は 0 方向）。\n",
-        "// The five modes of §7.3. Negative values and exact halves are pinned to the spec as well;\n\
+        "// The five rounding modes. Negative values and exact halves are pinned to the spec as well;\n\
          // nothing is left to the language's native division (Python's // goes toward −∞, Go's toward 0).\n"
     ) + ROUND_GO_BODY
 }
 
 const ROUND_GO_BODY: &str = r#"
 // RuleInputError is a contract violation by the caller: outside the declared input domain.
-// The sentence and the value travel apart (§15.95), so a caller can react to which input
+// The sentence and the value travel apart, so a caller can react to which input
 // was refused without parsing the text back.
 type RuleInputError struct {
 	What     string
@@ -4485,7 +4485,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!(
                 "/// {}\npub const INITIAL: {cls} = {};\n/// {}\npub const FINAL: &[{cls}] = &[{}];\n\n\
                  /// {}\npub fn is_final(state: {cls}) -> bool {{\n    FINAL.contains(&state)\n}}\n\n",
-                tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
+                tr!("案件が始まる状態。", "The state a case starts in."),
                 self.rs_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
                 fins.iter().map(|v| self.rs_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
@@ -5008,16 +5008,16 @@ impl<'a> Gen<'a> {
                 "the W114 guards — that `RuleError::Contradiction` is never returned. A pair the checker could not close either closes here, or a counterexample comes back."
             ),
             tr!(
-                "int64（§7.4）— あふれ。Kani は算術のあふれを既定で検査する。",
-                "int64 (§7.4) — overflow. Kani checks arithmetic overflow by default."
+                "int64— あふれ。Kani は算術のあふれを既定で検査する。",
+                "int64 — overflow. Kani checks arithmetic overflow by default."
             ),
             tr!(
                 "重なり（E105）— `rows_*` が、当たる行を数える。`unique` はちょうど一つ、`first` は一つ以上。",
                 "overlap (E105) and completeness from the rows' side — `rows_*` counts the rows that match: exactly one for `unique`, at least one for `first`."
             ),
             tr!(
-                "証明の対象はこの Rust であって、表でも検査器でもない（§15.47）。",
-                "What is proved is this Rust, not the table and not the checker (§15.47)."
+                "証明の対象はこの Rust であって、表でも検査器でもない。",
+                "What is proved is this Rust, not the table and not the checker."
             ),
         ));
         o.push_str("#![allow(non_snake_case, uncommon_codepoints, unused_parens, unused_mut, unused_variables)]\n\n");
@@ -5159,8 +5159,8 @@ impl<'a> Gen<'a> {
         });
         if in_items || self.f.result.as_ref().is_some_and(|r| shares(&r.expr)) {
             return Some(tr!(
-                "この規則は `allocate` で配分を出している。変数で割る式が二つ入るとモデル検査器が返ってこないので、ハーネスは出していない（§15.102）。",
-                "This rule works out a share with `allocate`. Two divisions by a value rather than by a constant do not come back from the model checker, so no harness is written (§15.102)."
+                "この規則は `allocate` で配分を出している。変数で割る式が二つ入るとモデル検査器が返ってこないので、ハーネスは出していない。",
+                "This rule works out a share with `allocate`. Two divisions by a value rather than by a constant do not come back from the model checker, so no harness is written."
             ));
         }
         // Anything the harness cannot make symbolic — a string, in an input or in a field of
@@ -5805,7 +5805,7 @@ fn balanced(b: &[char], i: usize) -> (String, usize) {
     (b[i..j].iter().collect(), j)
 }
 
-/// An array of flat objects, as the pairs of each (§15.56).
+/// An array of flat objects, as the pairs of each.
 fn rows(v: &str) -> Vec<Vec<(String, String)>> {
     let b: Vec<char> = v.chars().collect();
     let (mut i, mut out) = (0usize, Vec::new());
@@ -6018,7 +6018,7 @@ function call(text) {
   return out;
 }
 
-// A machine's constants, and which input the answer carries back as which (§15.148).
+// A machine's constants, and which input the answer carries back as which.
 const MACHINE = @MACHINE@;
 const CARRY = @CARRY@;
 let state = null;
@@ -6055,8 +6055,8 @@ pub fn round_wasm_rust() -> String {
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(dead_code, unused_parens)]\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     o.push_str(round_rs().trim_start_matches('\n'));
@@ -6071,8 +6071,8 @@ pub fn round_tests_wasm_js() -> String {
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\nimport {{ readFileSync }} from \"node:fs\";\nimport {{ dirname, join }} from \"node:path\";\nimport {{ fileURLToPath }} from \"node:url\";\n\nconst here = dirname(fileURLToPath(import.meta.url));\nconst {{ instance }} = await WebAssembly.instantiate(readFileSync(join(here, \"_round.wasm\")), {{}});\nconst ex = instance.exports;\n\nconst CASES = [\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     for (m, x, g, want) in round_cases() {
@@ -6091,8 +6091,8 @@ pub fn round_tests_rust() -> String {
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(unused_parens)]\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     o.push_str(round_rs().trim_start_matches('\n'));
@@ -6140,8 +6140,8 @@ pub fn round_tests_python() -> String {
          import sys\n\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     o.push_str(round_py().trim_start_matches('\n'));
@@ -6166,8 +6166,8 @@ pub fn round_tests_typescript() -> String {
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     o.push_str(round_ts().trim_start_matches('\n'));
@@ -6199,8 +6199,8 @@ pub fn round_tests_go(pkg: &str) -> String {
          cases := []struct {{\n\t\tmode{CELL}string\n\t\tx, g, want{CELL}int64\n\t}}{{\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     for (m, x, g, want) in round_cases() {
@@ -7407,7 +7407,7 @@ impl<'a> Gen<'a> {
         if let Some((en, init, fins)) = self.machine_consts() {
             o.push_str(&format!(
                 "  # {}\n  INITIAL = {}\n  # {}\n  FINAL = [{}].freeze\n\n  # {}\n  def self.final?(state)\n    FINAL.include?(state)\n  end\n\n",
-                tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
+                tr!("案件が始まる状態。", "The state a case starts in."),
                 self.rb_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
                 fins.iter().map(|v| self.rb_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
@@ -7425,7 +7425,7 @@ impl<'a> Gen<'a> {
              \x20     super(value.equal?(NO_VALUE) ? what : \"#{{what}}: #{{value.inspect}}\")\n\
              \x20   end\n  end\n\n",
             tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
-            tr!("文と値は別々に持つ（§15.95）。", "The sentence and the value travel apart (§15.95).")
+            tr!("文と値は別々に持つ。", "The sentence and the value travel apart.")
         ));
         o.push_str(&format!(
             "  # {}\n  class RuleContradictionError < RuntimeError\n\
@@ -7951,8 +7951,8 @@ pub fn round_tests_ruby() -> String {
          module R\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     o.push_str(round_rb().trim_start_matches('\n'));
@@ -8554,7 +8554,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!(
                 "/// {}\npublic let initialState: {cls} = {}\n/// {}\npublic let finalStates: Set<{cls}> = [{}]\n\n\
                  /// {}\npublic func isFinal(_ state: {cls}) -> Bool {{\n    finalStates.contains(state)\n}}\n\n",
-                tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
+                tr!("案件が始まる状態。", "The state a case starts in."),
                 self.sw_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
                 fins.iter().map(|v| self.sw_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
@@ -9272,8 +9272,8 @@ pub fn round_tests_swift() -> String {
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\nimport Foundation\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     o.push_str(round_sw().trim_start_matches('\n'));
@@ -10087,8 +10087,8 @@ impl<'a> Gen<'a> {
     /// five say the same thing.
     pub(crate) fn proj_doc(&self) -> String {
         tr!(
-            "呼び出し側のオブジェクトから入力を取り出して、この規則を呼びます。パスは宣言した契約に照らして検査済みです（§15.125）。",
-            "Reads the inputs out of the caller's object and calls this rule. The paths were held to the declared contract before this was written (§15.125)."
+            "呼び出し側のオブジェクトから入力を取り出して、この規則を呼びます。パスは宣言した契約に照らして検査済みです。",
+            "Reads the inputs out of the caller's object and calls this rule. The paths were held to the declared contract before this was written."
         )
     }
 }
@@ -10754,8 +10754,8 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
                     let _ = writeln!(out,
                         "{}",
                         tr!(
-                            "{}: この言語には並びをたどる規則を生成しません（DESIGN §15.56）",
-                            "{}: a rule that walks a sequence is not generated for this target (DESIGN §15.56)",
+                            "{}: この言語には並びをたどる規則を生成しません",
+                            "{}: a rule that walks a sequence is not generated for this target",
                             b.name
                         )
                     );
@@ -10775,8 +10775,8 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
                     let _ = writeln!(out,
                         "{}",
                         tr!(
-                            "{}: この言語には文字列の列を持つ表を生成しません（DESIGN §15.101）",
-                            "{}: a table with a column of strings is not generated for this target (DESIGN §15.101)",
+                            "{}: この言語には文字列の列を持つ表を生成しません",
+                            "{}: a table with a column of strings is not generated for this target",
                             b.name
                         )
                     );

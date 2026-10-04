@@ -51,7 +51,7 @@ fn env_selects_english() {
     assert!(t.starts_with("error[E101]:") && !has_japanese(&t), "{out}");
 }
 
-/// Japanese is one setting away — the single knob the approver's side needs.
+/// Japanese is one setting away — the single knob the readers' side needs.
 #[test]
 fn env_selects_japanese() {
     let (c, out, _) = run(&["check", MUTANT], &[("RULEC_LANG", "ja")]);
@@ -151,7 +151,7 @@ fn generated_code_prose_follows_the_switch() {
     assert_eq!(c, 1, "a Japanese --check against English output must report a difference");
 }
 
-/// The approver's page of one rule, drawn on four threads at once — the Markdown and the HTML,
+/// The page for people of one rule, drawn on four threads at once — the Markdown and the HTML,
 /// each in English and in Japanese — with `i18n::with` (ritsu's DESIGN 4.1). Each comes out as
 /// `rulec doc` prints it in that language, whatever the other threads are drawing, and leaves
 /// its thread in the language it was in before.

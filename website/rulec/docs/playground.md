@@ -19,7 +19,7 @@ form is safe to paste here.
   <div class="pg-tabs">
     <button data-view="check" class="on" type="button">check</button>
     <button data-view="gen" type="button">generated code</button>
-    <button data-view="doc" type="button">the approver's page</button>
+    <button data-view="doc" type="button">the page for people</button>
   </div>
   <div class="pg-out"></div>
 </div>
@@ -42,17 +42,18 @@ input falls through, and gives the shape of the row that closes it.
 3. **Open *generated code*.** Everything `rulec gen` writes for this table: Python,
    TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy, each with its runner, the rule as
    an MCP server, and the test vectors built from the table's own boundaries.
-4. **Open *the approver's page*.** What `rulec doc --format html` renders for whoever signs
-   the table off. It is a board laid out for a whole window, so it opens in a tab of its
-   own rather than in a box on this page — and it is not a picture of the answer: the page
-   runs the generated JavaScript, so a case typed into it is decided by the same code.
+4. **Open *the page for people*.** What `rulec doc --format html` renders for the people who
+   read the table to understand and check it. It is a board laid out for a whole window, so
+   it opens in a tab of its own rather than in a box on this page — and it is not a picture
+   of the answer: the page runs the generated JavaScript, so a case typed into it is decided
+   by the same code.
 5. **Break something on purpose.** Change `<=2kg` to `<=6kg` and watch the overlap come
    back with the input that matches both rows; take the `round up(1USD)` off the output and
    read what the rounding diagnostic asks.
 6. **Open one of the other samples.** Three rules that do not end at one table.
    ***tables in stages*** has a table read what an earlier one decided, with a `define` and
    a `result` along the way. ***a bigger rule*** has two lines out of the same inputs meet
-   again further down — open the approver's page on it and that shape is the page.
+   again further down — open the page for people on it and that shape is the page.
    ***walking a list*** takes a sequence whose length the caller decides, with `elements`
    and `sum`, so the form grows an *add a row* button. All three are
    [corpus rules](examples.md), run in every language on every commit.

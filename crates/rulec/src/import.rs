@@ -3,7 +3,7 @@
 //!
 //! The draft is a **starting point, not a rule**: every column's type, every range and every
 //! rounding here is a guess from the values seen, and each guess carries a `# 推定` comment
-//! so that `rulec doc` shows it to the approver and `rulec check` names what is missing. The
+//! so that `rulec doc` shows it to its readers and `rulec check` names what is missing. The
 //! importer never decides an amount, a rounding or a threshold; it lays the values out in the
 //! shape the language wants and stops.
 

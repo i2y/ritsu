@@ -367,8 +367,8 @@ impl P {
                                     .at(self.at(d.span.line))
                                     .mark(d.span.clone(), tr!("二本目です", "this is a second one"))
                                     .note(tr!(
-                                        "並びを畳むのは一度だけです。二段に畳むと、要素の並びに対する振る舞いが小さなオートマトンでなくなります（§15.56）。",
-                                        "A sequence is folded once. A second fold would take the walk out of the small automaton that makes it checkable (§15.56)."
+                                        "並びを畳むのは一度だけです。二段に畳むと、要素の並びに対する振る舞いが小さなオートマトンでなくなります。",
+                                        "A sequence is folded once. A second fold would take the walk out of the small automaton that makes it checkable."
                                     )),
                             ),
                         }
@@ -1054,8 +1054,8 @@ impl P {
                                     .at(at)
                                     .mark(span_of(&ts[start..end]), "")
                                     .note(tr!(
-                                        "形は `range from koyomi \"<ファイル>\" date <日付の名前>` です。koyomi のファイルの日付がとりうる日を、この入力の範囲にします（§15.174）。",
-                                        "The shape is `range from koyomi \"<file>\" date <name of a date>`: the days a date of a koyomi file comes to become this input's range (§15.174)."
+                                        "形は `range from koyomi \"<ファイル>\" date <日付の名前>` です。koyomi のファイルの日付がとりうる日を、この入力の範囲にします。",
+                                        "The shape is `range from koyomi \"<file>\" date <name of a date>`: the days a date of a koyomi file comes to become this input's range."
                                     )),
                             );
                             None
@@ -2026,7 +2026,7 @@ impl P {
                             Diag::error("E007", tr!("`{}` という方式はありません", "There is no policy `{}`", other.unwrap_or("")))
                                 .fix(crate::diag::FixKind::ChangePolicy, format!("{} {}", crate::kw::POLICY, crate::kw::UNIQUE))
                                 .mark(span_of(&l), "")
-                                .note(tr!("書けるのは {} です（§4）", "The policy must be {} (§4)", crate::kw::policies())),
+                                .note(tr!("書けるのは {} です", "The policy must be {}", crate::kw::policies())),
                         ),
                     }
                     self.i += 1;
@@ -2414,7 +2414,7 @@ impl P {
                         Diag::error("E008", tr!("空のセルがあります", "Empty cell"))
                             .at(at)
                             .mark(cspan.clone(), col)
-                            .note(tr!("任意の値に当てるなら `-` と書いてください（空欄は書き忘れと区別がつきません。§3）", "Write `-` to match any value (an empty cell cannot be told apart from an omission; §3)")),
+                            .note(tr!("任意の値に当てるなら `-` と書いてください（空欄は書き忘れと区別がつきません）", "Write `-` to match any value (an empty cell cannot be told apart from an omission)")),
                     );
                     // The place is kept, so that the cells after it stay under their own
                     // headings; the error has already stopped the rule.
@@ -2469,7 +2469,7 @@ impl P {
                 Diag::error("E010", tr!("`..` は書けません", "`..` is not allowed"))
                     .at(at)
                     .mark(t.span.clone(), "")
-                    .note(tr!("`<=2000g` と `>2000g` のどちらの意味かが読めないためです（§3.1）。比較演算子で書いてください", "It is unclear whether `<=2000g` or `>2000g` is meant (§3.1). Use a comparison operator instead")),
+                    .note(tr!("`<=2000g` と `>2000g` のどちらの意味かが読めないためです。比較演算子で書いてください", "It is unclear whether `<=2000g` or `>2000g` is meant. Use a comparison operator instead")),
             );
             return None;
         }
@@ -2556,8 +2556,8 @@ impl P {
                 .at(at)
                 .mark(span_of(junk), tr!("ここはセルとして読めません", "this is not read as part of the cell"))
                 .note(tr!(
-                    "セルに書けるのは、値一つ、`-`、`none`、比較（`<=2000g`、`>=1 <10`）、コンマで区切った値の集合、`not:` と集合、`starts_with` と文字列です（§3）。",
-                    "A cell holds one value, `-`, `none`, a comparison (`<=2000g`, `>=1 <10`), a set of values separated by commas, `not:` with a set, or `starts_with` with a string (§3)."
+                    "セルに書けるのは、値一つ、`-`、`none`、比較（`<=2000g`、`>=1 <10`）、コンマで区切った値の集合、`not:` と集合、`starts_with` と文字列です。",
+                    "A cell holds one value, `-`, `none`, a comparison (`<=2000g`, `>=1 <10`), a set of values separated by commas, `not:` with a set, or `starts_with` with a string."
                 )),
         );
         None
@@ -2600,8 +2600,8 @@ impl P {
                     .at(at)
                     .mark(span, tr!("ここは語が二つ以上あります", "two or more words here"))
                     .note(tr!(
-                        "出力のセルに書けるのは、値一つか名前一つだけです（§3.2）。かけ算や足し算は書けません。",
-                        "An output cell holds one value or one name (§3.2). Arithmetic cannot be written there."
+                        "出力のセルに書けるのは、値一つか名前一つだけです。かけ算や足し算は書けません。",
+                        "An output cell holds one value or one name. Arithmetic cannot be written there."
                     ))
                     .note(tr!(
                         "計算には名前を付けて、`define` の行に出してください。表には名前だけが残ります。",

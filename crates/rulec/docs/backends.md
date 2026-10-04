@@ -339,7 +339,7 @@ That is why the boundary belongs in your code and this page holds the recipe.
 
 What the tool does generate is a **door**, and a door has to meet three conditions: it speaks
 the wire the tool already speaks (JSON), it needs no SDK, and `rulec test` can drive it over
-the vectors. The MCP server, the approver's page and the canonical-ABI Wasm module are the
+the vectors. The MCP server, the page for people and the canonical-ABI Wasm module are the
 doors that met all three. Anything that does not is a recipe — the two below are the worked
 ones — plus `verify`, which holds whatever you build to the rule just the same.
 

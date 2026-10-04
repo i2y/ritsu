@@ -643,14 +643,14 @@ EXAMPLES = [
         [
             "**一つの表が率と金額を同時に出します。** 税率の列は `rate[step 1%]`、控除額の列は `money[円]` で、`define` がその二つを掛けて引きます。ページの計算例（7,000,000円 × 0.23 − 636,000円 = 974,000円）が、そのまま `examples` の行です。",
             "**段の境目は「次の段の始まり未満」で書いています。** ページは「1,000円 から 1,949,000円まで」「1,950,000円 から」と書きますが、課税所得は 1,000円 単位なので同じことです。整数の全体で完全性を証明するには、隙間の無い書き方のほうが要ります。",
-            "**書いていないことは仮置きと明記します。** 復興特別所得税に 1 円未満の端数が出たときの扱いは、このページにはありません。`round down` に仮置きして、宣言の横のコメントに出典が無いことを残しています。承認する人は `rulec doc` でそれを読みます。",
+            "**書いていないことは仮置きと明記します。** 復興特別所得税に 1 円未満の端数が出たときの扱いは、このページにはありません。`round down` に仮置きして、宣言の横のコメントに出典が無いことを残しています。読む人は `rulec doc` でそれを読みます。",
         ],
         "The income-tax bracket table",
         "The quick-calculation table of NTA tax answer No.2260. Each bracket of taxable income carries a rate and a deduction, and `taxable × rate − deduction` is the tax; the reconstruction surtax is 2.1% of it.",
         [
             "**One table produces a rate and an amount at once.** The rate column is `rate[step 1%]`, the deduction column `money[JPY]`, and a `define` multiplies and subtracts. The page's own worked example (7,000,000 × 0.23 − 636,000 = 974,000 yen) is an `examples` row as it stands.",
             "**Bracket edges are written as \"below the start of the next bracket\".** The page says \"from 1,000 to 1,949,000 yen\" and \"from 1,950,000 yen\"; since taxable income is in units of 1,000 yen those are the same thing, and completeness over all the integers needs the form with no gap.",
-            "**What the page does not say is marked as a placeholder.** How a fraction of a yen in the surtax is settled is not on this page. The rule says `round down` and keeps, in the comment beside the declaration, that the source is silent — which is what `rulec doc` shows the approver.",
+            "**What the page does not say is marked as a placeholder.** How a fraction of a yen in the surtax is settled is not on this page. The rule says `round down` and keeps, in the comment beside the declaration, that the source is silent — which is what `rulec doc` shows the people who read the rule.",
         ],
     ),
     (
@@ -731,14 +731,14 @@ EXAMPLES = [
         "運賃表が基本運賃を決め、送料は二つの節で決まります。本文の「通常」と、会員の 3,900 円以上の注文を無料にするただし書です。ただし書は条件が列に並ばないので、表ではなく `clause` で書いています。",
         [
             "**`clause` は一行の表です。** `when` に条件、`then` に値。検査も生成も記録も表と同じで、記録には `{\"table\":\"無料\",\"row\":1}` と出ます。",
-            "**`overrides 通常` で、ただし書が本文に優先します。** 承認用の資料は「節 無料 は 節 通常 に優先する。交わる 1 対のすべてで、無料の行は通常の行に収まる（例外）」と書きます。",
+            "**`overrides 通常` で、ただし書が本文に優先します。** 人が読む資料は「節 無料 は 節 通常 に優先する。交わる 1 対のすべてで、無料の行は通常の行に収まる（例外）」と書きます。",
             "**別名の無い群**（`group 遠隔地 = 北海道, 沖縄県`）も書けます。生成コードでは `g1` のような番号つきの名前になります。",
         ],
         "A proviso written as a sentence",
         "A tariff table decides the base fee, and two clauses decide the shipping fee: the main text (\"regular\") and the proviso that makes a member's order of 3,900 yen or more free. The proviso's conditions do not line up as columns, so it is a `clause`, not a table.",
         [
             "**A `clause` is a one-row table.** The condition under `when`, the value under `then`; checked, generated and traced like a table, firing as `{\"table\":\"free\",\"row\":1}`.",
-            "**`overrides regular` makes the proviso take precedence over the main text.** The approver's page says \"clause free takes precedence over clause regular. in all 1 pairs that meet, the rows of clause free lie inside the other's (an exception)\".",
+            "**`overrides regular` makes the proviso take precedence over the main text.** The page for people says \"clause free takes precedence over clause regular. in all 1 pairs that meet, the rows of clause free lie inside the other's (an exception)\".",
             "**A group without an alias** (`group remote = Hokkaido, Okinawa`) is allowed; the generated identifiers number it.",
         ],
     ),
@@ -764,7 +764,7 @@ EXAMPLES = [
         [
             "**読み替えは `<元の規則の入力> = <この規則の値>` です。** 列挙どうしは `with 任期満了 -> 定年, 辞職 -> 自己都合` で値を対応づけます。",
             "**渡す値が元の規則の範囲に収まることを check が確かめます（E043）。** 在職期間は 1〜3 年で、勤続年数の 1〜40 年に収まります。0 から書けば、その値を例に挙げて止まります。",
-            "**元の規則の表は、この規則の中に展開されて検査・生成されます。** 記録は `{\"table\":\"退職手当:支給表\",\"row\":1,\"label\":\"短期\"}` と、元の表の名前で返ります。勤続年数 10 年以上の行はこの規則では当たらないので、エラーにはせず、承認用の資料に「この準用では当たらない行」として挙がります。",
+            "**元の規則の表は、この規則の中に展開されて検査・生成されます。** 記録は `{\"table\":\"退職手当:支給表\",\"row\":1,\"label\":\"短期\"}` と、元の表の名前で返ります。勤続年数 10 年以上の行はこの規則では当たらないので、エラーにはせず、人が読む資料に「この準用では当たらない行」として挙がります。",
             "**元の規則が変われば E040 で止まります。** `rulec diff` で何件いくら動くかを見て、それでよければ `rulec source pin` でハッシュを書き直します。",
         ],
         "Applying another rule with its terms read differently",
@@ -772,7 +772,7 @@ EXAMPLES = [
         [
             "**A substitution is `<input of the applied rule> = <value of this rule>`.** Two enums are matched value by value: `with term_end -> retirement_age, resignation -> voluntary`.",
             "**The check proves that what is passed stays inside the applied rule's ranges (E043).** The period in office is 1 to 3 years, inside the 1 to 40 of years of service; declared from 0, the check stops with that value as the example.",
-            "**The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{\"table\":\"retirement:schedule\",\"row\":1,\"label\":\"short\"}`. The rows for ten years of service and more are never reached here; they are not errors, and the approver's page lists them as unused by this apply.",
+            "**The applied rule's tables are expanded into this rule, checked and generated with it.** The trace reports the original table's name: `{\"table\":\"retirement:schedule\",\"row\":1,\"label\":\"short\"}`. The rows for ten years of service and more are never reached here; they are not errors, and the page for people lists them as unused by this apply.",
             "**When the applied rule changes, E040 stops the check.** `rulec diff` shows how many answers move and by how much; once accepted, `rulec source pin` writes the new digest.",
         ],
     ),

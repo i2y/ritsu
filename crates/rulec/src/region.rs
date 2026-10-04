@@ -1593,7 +1593,7 @@ pub struct TableCheck {
     pub overlaps: Vec<(usize, usize)>,
     /// The pairs a declared precedence orders across two tables (0-based, the winning row
     /// first), with whether the winner lies inside the loser: an exception, or a rule that
-    /// reaches beyond what it takes precedence over. The approver's page tells them apart.
+    /// reaches beyond what it takes precedence over. The page for people tells them apart.
     pub edge_pairs: Vec<(usize, usize, bool)>,
     /// The rows that got E102 (0-based). They never match, so §9.2's row coverage leaves them
     /// out.
@@ -1986,7 +1986,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
             if !same && ordered {
                 // A declared precedence between two tables. The overlap is what the
                 // `overrides` line is for, so nothing is reported; the pair is kept for the
-                // coverage obligation and for the approver's page, which says whether the
+                // coverage obligation and for the page for people, which says whether the
                 // winner lies inside the loser (an exception) or reaches beyond it.
                 if feas != Feasible::Unknown {
                     overlaps.push((i, j));
@@ -2372,7 +2372,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 .table(anchor.clone())
                 .mark(head_span.clone(), "")
                 .note(tr!("支配的なのは {}。", "The dominant columns are {}.", reg.dominant_axes()))
-                .note(tr!("列をグループでまとめるか、表を分けてください（§6.3）。近似では通しません。", "Combine columns into groups or split the table (§6.3). No approximation is accepted in its place.")),
+                .note(tr!("列をグループでまとめるか、表を分けてください。近似では通しません。", "Combine columns into groups or split the table. No approximation is accepted in its place.")),
         );
     }
 

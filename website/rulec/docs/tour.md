@@ -11,12 +11,12 @@ language it was published in.
 
     Nothing stops you writing a `.rule` by hand, and this page is also how. But the shape
     this tool is built for is an agent transcribing from a published policy or a
-    spreadsheet, and a person reading the table it produced and approving it. So what this
+    spreadsheet, and a person reading the table it produced and checking it. So what this
     page is most worth for is learning to **read** one — writing follows from the same
     material.
 
     And you are not left alone with the file when you read it. `rulec doc` renders the
-    document for approval, and adds what reading the table cannot tell you: what a single
+    document for people, and adds what reading the table cannot tell you: what a single
     word in the table actually stands for, which rows are hidden by the rows above them,
     and which roundings are placeholders rather than decisions. The same document comes
     as one HTML page too (`--format html`), where typing a case lights up the rows that
@@ -244,9 +244,8 @@ enum member_tier = basic | gold | platinum default
 ```
 
 The `.proto` owns **which values exist**; the `.rule` owns **what they
-are called here and what each one costs**. A proto carries no Japanese,
-so the names are yours to decide. Every `rulec check` reads that file and
-holds the two together.
+are called here and how each one is treated**. Every `rulec check` reads
+that file and holds the two together.
 
 - A value on one side only is **E032**. It is usually the proto that
   gained one, and **on the wire that is a compatible change**.
@@ -556,8 +555,8 @@ Because a cell can only see its own column, **tables stack as deep as you like**
 table produces is written as a column of the next.
 
 <div class="rc-overview" markdown>
-![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack.svg?v=778336e2#only-dark)
-![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack-light.svg?v=778336e2#only-light)
+![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack.svg?v=cbbcdb93#only-dark)
+![What one table produces is a column of the next: band_of turns the distance and whether the flight is intra-EU into a band, and amount turns that band into the compensation. Not every table is in the chain — reduction reads the rule's inputs directly — and result puts the two together](images/stack-light.svg?v=cbbcdb93#only-light)
 </div>
 
 What to look at is **the word that appears twice**. `band` leaves the first table and arrives
@@ -621,7 +620,7 @@ meet none of the other's is W117.
 
 The generated code tries the later table first and takes the first row that applies. The trace
 names the table the row was written in and its position there, plus the label when it has one.
-The approver's page says, in one sentence, "table reduced_rate takes precedence over table base. in
+The page for people says, in one sentence, "table reduced_rate takes precedence over table base. in
 all 10 pairs that meet, the rows of table reduced_rate lie inside the other's (an exception)".
 
 ## A rule written as a sentence: clause
@@ -726,7 +725,7 @@ row uses, W120 (*The copy of table1 states values no row uses*), and W120 alone 
 that was never transcribed**. Only amounts are compared: a threshold is rewritten as it is
 transcribed (`Not over $11,925` becomes `<=1192500USDc`) and an amount is not.
 
-The approver's page quotes the cited text, or the cited table, from the copies.
+The page for people quotes the cited text, or the cited table, from the copies.
 
 ## Applying another rule: apply
 
@@ -762,7 +761,7 @@ the range or to define the excess in a clause of this rule is a business decisio
 When the applied rule is amended, the digest no longer matches and the check stops with E040.
 `rulec diff` shows which inputs of this rule move — with past records, how many of them and by how much; once that is accepted,
 `rulec source pin` writes the new digest. Rows of the applied rule's tables that this rule's
-ranges never reach are not errors: the approver's page lists them as unused by this apply, and
+ranges never reach are not errors: the page for people lists them as unused by this apply, and
 only a table none of whose rows is reached draws W118.
 
 The generated code carries the applied rule expanded, and the trace says

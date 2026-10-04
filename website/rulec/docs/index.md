@@ -45,8 +45,8 @@ person can decide comes back as a question.
 </div>
 
 <div class="rc-overview" markdown>
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy](images/overview.svg?v=778336e2#only-dark)
-![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy](images/overview-light.svg?v=778336e2#only-light)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy](images/overview.svg?v=cbbcdb93#only-dark)
+![Write the table. rulec turns each row into a box in the input space and proves by computation that the boxes leave no gap and no overlap. If there is a gap, back comes the input that falls through it (Destination = Overseas, Weight = 2001g): add the row and run again — only what the fee is takes a person. Only a proved table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy](images/overview-light.svg?v=cbbcdb93#only-light)
 </div>
 
 
@@ -73,7 +73,7 @@ policy unique
 
 ### Built on tables, so it can be proved
 
-Conditions are written in tables, and a cell tests the value in its own column and nothing else. So each row is one box in the space of inputs, and whether the boxes leave a gap or overlap can be computed exactly. The same table is the specification a person reads and approves, and in the generated code each row is one branch. This one is the table in the picture above, and **it is a row short**.
+Conditions are written in tables, and a cell tests the value in its own column and nothing else. So each row is one box in the space of inputs, and whether the boxes leave a gap or overlap can be computed exactly. The same table is the specification a person reads and checks, and in the generated code each row is one branch. This one is the table in the picture above, and **it is a row short**.
 
 </div>
 </div>
@@ -287,15 +287,15 @@ Declare the document a rule was transcribed from with `source`, and cite the tab
 <div class="rc-row" markdown>
 <div markdown>
 
-![The approver's page for the parcel tariff. Example 2 (5 lb, 40 in, canada, no signature) is in the form on the left and the answer reads fee = 13USD, with the line the generated code would log under it; to the right, row 2 of size_of (up to 60 in, small), row 2 of base_rate (north_america, small, up to 160 oz) and row 1 of fuel_rate (north_america, 5%) are lit](images/try-top-en-dark.png#only-dark)
-![The approver's page for the parcel tariff. Example 2 (5 lb, 40 in, canada, no signature) is in the form on the left and the answer reads fee = 13USD, with the line the generated code would log under it; to the right, row 2 of size_of (up to 60 in, small), row 2 of base_rate (north_america, small, up to 160 oz) and row 1 of fuel_rate (north_america, 5%) are lit](images/try-top-en.png#only-light)
+![The page for people of the parcel tariff. Example 2 (5 lb, 40 in, canada, no signature) is in the form on the left and the answer reads fee = 13USD, with the line the generated code would log under it; to the right, row 2 of size_of (up to 60 in, small), row 2 of base_rate (north_america, small, up to 160 oz) and row 1 of fuel_rate (north_america, 5%) are lit](images/try-top-en-dark.png#only-dark)
+![The page for people of the parcel tariff. Example 2 (5 lb, 40 in, canada, no signature) is in the form on the left and the answer reads fee = 13USD, with the line the generated code would log under it; to the right, row 2 of size_of (up to 60 in, small), row 2 of base_rate (north_america, small, up to 160 oz) and row 1 of fuel_rate (north_america, 5%) are lit](images/try-top-en.png#only-light)
 
 </div>
 <div markdown>
 
-### There is a page for the person who approves
+### There is a page for people
 
-`rulec doc --format html` renders the rule as one page an approver tries a case on: type a case, and the rows that matched light up and the answer appears. It is the generated JavaScript itself that runs, so the page says nothing the code does not. The document to approve, with the cited copy set beside the rule's own table, and the article a help centre publishes come from the same rule.
+`rulec doc --format html` renders the rule as one page a reader tries a case on: type a case, and the rows that matched light up and the answer appears. It is the generated JavaScript itself that runs, so the page says nothing the code does not. The document for people, with the cited copy set beside the rule's own table, and the article a help centre publishes come from the same rule.
 
 </div>
 </div>
@@ -344,16 +344,16 @@ Today a rule sits in a spreadsheet, a published policy, a wiki page or somebody'
 engineer rewrites it as a chain of `if`s. rulec hands that rewrite to an agent, and changes
 what the agent hands back: **a rule a person can read, instead of code**.
 
-![The agent writes the rule, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy functions generated from the proved rule, and the impact known before you deploy](images/flow.svg?v=778336e2#only-dark)
+![The agent writes the rule, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy functions generated from the proved rule, and the impact known before you deploy](images/flow.svg?v=cbbcdb93#only-dark)
 
-![The agent writes the rule, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy functions generated from the proved rule, and the impact known before you deploy](images/flow-light.svg?v=778336e2#only-light)
+![The agent writes the rule, rulec proves it and returns what to fix, and only what cannot be decided goes to a person. Out come Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy functions generated from the proved rule, and the impact known before you deploy](images/flow-light.svg?v=cbbcdb93#only-light)
 
 Indigo is the loop between the agent and rulec, and it runs without a person: the agent hands
 over the rule, rulec hands back what is wrong — where, how to fix it, and an input that shows
 it — and the agent fixes it and hands it over again. Amber is the detour through a person, who
 is asked only what cannot be derived from the source — *"what is the fee for a small parcel
 going overseas?"* — and answers with an amount or a rounding direction, never with code. What
-they approve is a document rendered from the rule, with a page to try a case on.
+they read and check is a document rendered from the rule, with a page to try a case on.
 
 The agent's procedure is [For agents](agents.md). The
 [agent skill](https://github.com/i2y/ritsu/tree/main/crates/rulec/skills) ships in the repository
@@ -366,8 +366,8 @@ shape **stay put while the wording improves**.
 ## What gets proved, and what does not
 
 <div class="rc-overview" markdown>
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=778336e2#only-dark)
-![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=778336e2#only-light)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks.svg?v=cbbcdb93#only-dark)
+![One computation decides three defects: a gap (E101) is a stretch no row covers, an overlap (E105) is a stretch two rows both cover, and an unreachable row (E102) is one whose whole stretch the earlier rows take first. Same table in all three; one thing changed](images/checks-light.svg?v=cbbcdb93#only-light)
 </div>
 
 Seven things are settled before anything is generated. **Five are proved statically** —

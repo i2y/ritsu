@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1190 458" width="1190" height="458" role="img" aria-label="An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1190 458" width="1190" height="458" role="img" aria-label="An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. A person compares the document and the table on the page rulec doc renders. From a passed table come twelve languages." font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
 <defs>
 <marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8b94ab"/></marker>
 <marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#4457d8"/></marker>
@@ -57,10 +57,10 @@
 <clipPath id="clip-person"><rect x="733.0" y="290" width="170" height="148" rx="10"/></clipPath>
 <rect x="733.0" y="290" width="170" height="148" rx="10" fill="#ffffff" stroke="#dfe3ee"/>
 <rect x="733.0" y="290" width="170" height="5" fill="#9c6508" clip-path="url(#clip-person)"/>
-<text x="818.0" y="333" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">Approver</text>
+<text x="818.0" y="333" font-size="17" font-weight="700" text-anchor="middle" fill="#10131a">Reader</text>
 <text x="818.0" y="362" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">compares the document</text>
 <text x="818.0" y="381" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">with the table</text>
-<text x="818.0" y="400" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">and signs off</text>
+<text x="818.0" y="400" font-size="12.5" font-weight="400" text-anchor="middle" fill="#5b6478">and checks it</text>
 <line x1="818.0" y1="216" x2="818.0" y2="290" stroke="#9c6508" stroke-width="1.8" marker-end="url(#head-human)"/>
 <text x="826.0" y="257.0" font-size="10.5" font-weight="400" text-anchor="start" fill="#9c6508" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">rulec doc</text>
 </svg>

@@ -5,4 +5,4 @@ warning[W111]: Input 重量 is not used by any table
    |   ^^^^ appears in no column
    |
  A column that should use it may have been left out.
- If it is meant only as an entry check on its range, add `contract_only` to the declaration (§11 W111).
+ If it is meant only as an entry check on its range, add `contract_only` to the declaration (W111).

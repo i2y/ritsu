@@ -342,14 +342,14 @@ fn commands() -> Vec<Cmd> {
             name: "doc",
             args: "<file.rule>...",
             purpose: tr!(
-                "承認する人に見せる資料。検査器が知っていて表には出てこない事実を添える",
-                "the rendering for the person who approves: the facts the checker knows that the text does not show"
+                "人が読む資料。検査器が知っていて表には出てこない事実を添える",
+                "the page for people: the facts the checker knows that the text does not show"
             ),
             params: vec![rule_files()],
             flags: vec![
                 out_flag(&tr!("資料", "rendering")),
-                flag("--format", Some("html"), tr!("承認する人が自分の件を試せる一枚の HTML。生成した JavaScript がその場で動く", "one HTML page the approver can try a case on; the generated JavaScript runs in it")).choices(&["html"]),
-                flag("--audience", Some("approver|customer"), tr!("誰に見せるか。customer はヘルプセンター向けの案内で、別名・範囲・診断コードを省き、境目の例を添える。既定は approver", "who reads it. customer renders the article a help centre publishes (no aliases, ranges or diagnostic codes, and the cases on either side of every threshold); the default is approver")).choices(&["approver", "customer"]),
+                flag("--format", Some("html"), tr!("読む人が自分の件を試せる一枚の HTML。生成した JavaScript がその場で動く", "one HTML page a reader can try a case on; the generated JavaScript runs in it")).choices(&["html"]),
+                flag("--audience", Some("approver|customer"), tr!("誰に見せるか。customer はヘルプセンター向けの案内で、別名・範囲・診断コードを省き、境目の例を添える。既定は approver で、人が読む資料になる", "who reads it. customer renders the article a help centre publishes (no aliases, ranges or diagnostic codes, and the cases on either side of every threshold); the default is approver, the page for people")).choices(&["approver", "customer"]),
             ],
             exits: vec![
                 (0, tr!("資料を書き出した", "rendered")),
@@ -1435,7 +1435,7 @@ fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool) -> 
                 print!("{}", render(d, &lines));
                 println!();
             }
-            eprintln!("{}", tr!("error: `{path}` は検査を通っていないので資料を書き出しません（§1.6）", "error: `{path}` does not pass check, so it is not rendered (§1.6)"));
+            eprintln!("{}", tr!("error: `{path}` は検査を通っていないので資料を書き出しません", "error: `{path}` does not pass check, so it is not rendered"));
             return ExitCode::from(1);
         }
         let Ok((f, c)) = crate::prepare(&src, path) else {

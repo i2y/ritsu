@@ -34,7 +34,7 @@ write  →  fmt  →  check  →  (fix, repeat)  →  examples  →  gen  →  t
                                                                     │
        legacy implementation? → verify   past records? → replay, diff   neither? → diff
                                                                     │
-                                              a person approves → doc
+                                       people read and check it → doc
 ```
 
 ### Write
@@ -159,7 +159,7 @@ One habit pays for itself at the first revision:
 - **Write down where each table came from.** A comment at the end of the `table` line names
   the source — the document, its edition or date, the page — and a row taken from somewhere
   else (a later notice, a correction, an answer from a person) carries its own comment at the
-  end of the row. `rulec doc` shows both to the approver, so a review becomes "compare this
+  end of the row. `rulec doc` shows both to its readers, so a review becomes "compare this
   row with that cell" rather than "read the whole table again", and when the source is
   revised, the rows to re-read are the ones that cite it. The `description` line stays a
   one-line summary of what the rule decides.
@@ -250,7 +250,7 @@ comes out of the generated code itself. A fourth file beside the module, `<alias
 the rule as one MCP tool for an agent that will *call* it: the arguments are the wire form, the
 answer is the record line, and `--record <file.jsonl>` keeps every call. It speaks stdio, and with
 `--http <port>` MCP's Streamable HTTP — put TLS and authentication in front of that one; where the
-host renders MCP Apps it also offers the approver's page (`<alias>_page.html`) as the tool's view.
+host renders MCP Apps it also offers the page for people (`<alias>_page.html`) as the tool's view.
 `proto/` and `<alias>_service.py` are the same rule as a Connect service, for the caller that is
 another team's code. The `wasm/` directory holds the rule as one module for any host, behind
 `call: func(input: string) -> string` in the canonical ABI, with a `.wit` that makes a component
@@ -328,14 +328,14 @@ A version is named by its file, its git tag (`parcel@v3` is `rules/parcel/v3`, e
 `v3`), or a path at a revision — on a PR, `rules/parcel.rule@origin/main`. `--format markdown` is
 what gets posted and `--terse` keeps record values out; [formats.md](docs/formats.md) has both shapes.
 
-### For the person who approves: `rulec doc`
+### For people: `rulec doc`
 
 `rulec doc <file> --lang ja` renders the rule as markdown with the facts the checker knows
 that the text does not show — that a group of six values and its complement of 41 really do
 cover all 47, which rows shadow which, where a rounding was assumed rather than sourced. It
 is rendered in CI and pasted into the PR, never committed: a stale rendering that still looks
 authoritative is the danger it is designed against. `--format html` renders the same document
-as one page with a form on it: the approver types a case, the rows that matched light up, the
+as one page with a form on it: a reader types a case, the rows that matched light up, the
 outputs appear, and the line the generated code would log is shown — it is the generated
 JavaScript itself that runs, so the page says nothing the code does not. Same rule: built in
 CI per change, never committed.
@@ -347,7 +347,7 @@ publishes, so that whatever answers customers — a person, a search, a model re
 pages — reads a page that is complete, carries the version, and spells out both sides of every
 threshold. Those come from the boundary-pair vectors: the article says "girth 60cm → fee 1410JPY; 61cm → fee
 1710JPY" where the table says `<=60cm`, and aliases, ranges and codes are left out. Regenerate it
-on every change; like the approver's page, it is a product of the file, never a source.
+on every change; like the page for people, it is a product of the file, never a source.
 
 ---
 
@@ -373,8 +373,8 @@ it in CI. Anything missing belongs in the `.rule` or on the calling side.
 **Do not decide a rounding yourself.** `round down(1JPY)` will make E104 go away, and
 `fix.text` will hand it to you, but *which direction and which grid* moves real money. If the
 source says, use what it says. If it does not, ask — and write the answer's provenance in a
-`#` comment next to the declaration, because that comment is the only place the approver will
-see that the rounding was assumed.
+`#` comment next to the declaration, because that comment is the only place the people who read
+the rule will see that the rounding was assumed.
 
 **Do not widen a range to make a check pass.** Widening a `derive` range to the interval E112
 names is correct: that interval is what the value can actually reach. Widening an *input*
@@ -448,7 +448,7 @@ Three things make such a question answerable: **a concrete case** (the witness),
 on the answer** (the amount that moves), and **what you assumed in the meantime**, so that
 silence does not read as agreement. Keep that assumption in the file — a `#` comment where
 the declaration is, or, for an amount taken from outside the table's own source, at the end
-of its row. `rulec doc` shows those comments to the approver, the one place a person who can
+of its row. `rulec doc` shows those comments to its readers, the one place a person who can
 overrule them will see them.
 
 ---

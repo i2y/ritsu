@@ -160,14 +160,31 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
             im.file,
             only_file.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" / ")
         ));
+        // The form follows how the enum is written. Where its values are named in ASCII, the
+        // contract's value can be added as it is; where they are named in another script (and so
+        // carry an ASCII alias), the alias is the contract's value and the name is the writer's.
+        let named_apart = target.values.iter().any(|v| !v.text.is_ascii());
+        d = if named_apart {
+            d.note(tr!(
+                "この列挙は値の名前に別名を付けて書いているので、`{}` の形で足します。名前は自分で決めます。",
+                "This enum gives its values names with aliases, so add it as `{}`, with a name of your choosing.",
+                only_file
+                    .iter()
+                    .map(|a| format!("{}({a})", tr!("<名前>", "<name>")))
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            ))
+        } else {
+            d.note(tr!(
+                "この列挙に `{}` を足します。",
+                "Add `{}` to this enum.",
+                only_file.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" | ")
+            ))
+        };
         d = d.note(tr!(
-            "足す形: `{}`。名前は自分で決めます — 日本語はそのファイルに入っていません。",
-            "The form to add: `{}`. The name is yours to decide — the file carries no Japanese.",
-            only_file
-                .iter()
-                .map(|a| format!("{}({a})", tr!("<名前>", "<name>")))
-                .collect::<Vec<_>>()
-                .join(" | ")
+            "契約（{}）に値が増えました。この規則がその値をどう扱うかは、まだ決まっていません。",
+            "The contract ({}) has gained a value. How this rule treats it has not been decided yet.",
+            im.file
         ));
     }
     if !only_rule.is_empty() {
@@ -182,10 +199,7 @@ fn compare(f: &RuleFile, c: &Checked, im: &EnumImport, want: &[String], rule_pat
             "A value the contract dropped goes from the rule too; a misspelling is corrected."
         ));
     }
-    vec![d.note(tr!(
-        "値が増えたのは、この規則ではなく契約の側の変更です。増えた値にいくら付けるかは、まだ誰も決めていません（§15.59）。",
-        "A value appeared through the contract, not through this rule. What the new value costs is a decision nobody has made yet (§15.59)."
-    ))]
+    vec![d]
 }
 
 /// The second gate (E033). The sets agree, so every value the contract has is written here —

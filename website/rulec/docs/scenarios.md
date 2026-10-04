@@ -6,7 +6,7 @@ One tool, but **what you have in hand and what you want out** decide the path th
 |---|---|---|---|
 | **implementing** a public rule (a statute, a published policy, a tariff) | the article, or the policy PDF | code that does what the article says, and that notices the amendment | [1. Implementing an existing public rule](#1-implementing-an-existing-public-rule) |
 | **implementing a rule of your own that already exists**: an internal policy, your service's terms or tariff, a spreadsheet, and perhaps an implementation that runs today | the policy document, the spreadsheet, the running code | code that does what the document says and answers like the current implementation | [2. Implementing an existing rule of your own](#2-implementing-an-existing-rule-of-your-own) |
-| **designing** a new rule (a new public rule, an internal rule, the terms of an online shop or a service) | the conditions, in prose or in your head | a table with no gap and no contradiction, and the pages that get it approved or published | [3. Designing a new rule](#3-designing-a-new-rule) |
+| **designing** a new rule (a new public rule, an internal rule, the terms of an online shop or a service) | the conditions, in prose or in your head | a table with no gap and no contradiction, and the pages that people read to check it or that get published | [3. Designing a new rule](#3-designing-a-new-rule) |
 | **implementing** from a finished rule | a `.rule` that passes check | code in your own language that answers exactly like the table | [4. Implementing from a new rule](#4-implementing-from-a-new-rule) |
 | holding an API's or a message's **contract** (a `.proto`, OpenAPI, a JSON Schema) and wanting it kept in line with the business rule | the contract's file and the rule's table | a CI run that says so whenever the contract and the rule move apart | [5. Holding an API contract to the rule](#5-holding-an-api-contract-to-the-rule) |
 
@@ -16,7 +16,7 @@ The middle step is the same on every path: **nothing comes out of a table that d
 $ rulec --help
 ```
 
-Every step below is one of three kinds: **something to hand to an agent, something rulec does, or something a person decides**. Transcribing an article or a policy into a table, drafting from a spreadsheet, the one line of an adapter around legacy code, wiring the generated code in: all of that an agent can do. Proving there is no gap and no overlap, pinning a source, holding the table to a legacy implementation or to past records, checking that twelve languages agree: rulec does that, mechanically. What stays with a person is deciding the conditions, approving, ruling on which side of a mismatch is wrong, and rereading a source after an amendment or a replacement. Under each heading below is who does that step.
+Every step below is one of three kinds: **something to hand to an agent, something rulec does, or something a person decides**. Transcribing an article or a policy into a table, drafting from a spreadsheet, the one line of an adapter around legacy code, wiring the generated code in: all of that an agent can do. Proving there is no gap and no overlap, pinning a source, holding the table to a legacy implementation or to past records, checking that twelve languages agree: rulec does that, mechanically. What stays with a person is deciding the conditions, checking the table, ruling on which side of a mismatch is wrong, and rereading a source after an amendment or a replacement. Under each heading below is who does that step.
 
 ---
 
@@ -24,8 +24,8 @@ Every step below is one of three kinds: **something to hand to an agent, somethi
 
 You have a statute or a published policy and want code that does exactly what it says. The lead role here is the **source**: which row came from which article, held to a copy of the text, so that an amendment is noticed.
 
-![An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates twelve languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread](images/scenario-existing.svg#only-dark)
-![An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates twelve languages. The approver compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread](images/scenario-existing-light.svg#only-light)
+![An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates twelve languages. A person compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread](images/scenario-existing.svg#only-dark)
+![An agent transcribes a statute or a published policy into a table (.rule), citing the article with @. rulec holds the table to the copy, proves it has no gap and no overlap, and generates twelve languages. A person compares the article and the table on the page rulec doc renders. When an amendment comes, rulec source outdated says so and the table is reread](images/scenario-existing-light.svg#only-light)
 
 ### 1-1. Transcribe, citing the article
 
@@ -88,9 +88,9 @@ error[E038]: Fragment `第91条` of source `measures_act` has changed
 
 A missing pin is E037, a missing copy E039; `rulec explain E038` explains any of them.
 
-### 1-4. Show it to the approver
+### 1-4. Show it to a person
 
-Who: a person, the approver. rulec renders the page
+Who: a person, who compares the article with the table. rulec renders the page
 
 Comparing the article with the table is a person's job. `rulec doc` renders the page, quoting the cited article from the copy.
 
@@ -107,7 +107,7 @@ Source: measures_act 第91条 (law 332AC0000000026, as of 2026-04-01; in force f
 > 平成二十六年四月一日から令和九年三月三十一日までの間に作成される…
 ```
 
-The approver compares the rows with that quotation and nothing else. How to read the page is in [Showing it to the person who approves](checks.md#showing-it-to-the-person-who-approves).
+The reader compares the rows with that quotation and nothing else. How to read the page is in [Showing it to people](checks.md#showing-it-to-people).
 
 ### 1-5. Generate and hold the code to the table
 
@@ -160,8 +160,8 @@ Putting it in CI is on the [install page](install.md#in-ci). `outdated` exits 1 
 
 An internal policy, the terms or the tariff of your own service, a spreadsheet someone keeps, code that already runs. The rule is not public, but it is decided and in force, and you want code that does the same. The lead role here is the **comparison**: unlike a statute, the document cannot be fetched again, so it is pinned whole by its digest; and where an implementation or past records exist, the table is held to them and every mismatch comes back by row.
 
-![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal.svg#only-dark)
-![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. The approver compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal-light.svg#only-light)
+![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. A person compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal.svg#only-dark)
+![An agent transcribes what is at hand - an internal policy, the terms of your own service, a spreadsheet, code that runs today - into a table (.rule): a spreadsheet becomes a draft through rulec import, a document's table is cited with @ and pinned by the digest of the copy. rulec proves no gap and no overlap, holds the table to the legacy implementation and to past records, and returns every mismatch by row, count and amount. A person compares the document and the table on the page rulec doc renders. From a passed table come twelve languages](images/scenario-internal-light.svg#only-light)
 
 ### 2-1. Start from what you have
 
@@ -255,7 +255,7 @@ warning[W120]: The copy of table1 states values no row uses
 
 The two name both halves of the same slip. W120 also catches **a row that was never transcribed** — the completeness check cannot, because the inputs of a dropped row fall into one of the rows that remain.
 
-The approver's page quotes the copy under the table's heading — "Source: terms table1 (shipping-terms.md, sha256:d1156fa90a72194c)", then the table itself — and adds one line to what was verified: *Every amount in this table is a value the copy it cites (terms table1) shows (E116)*. The source table above, the rule's table below, and that line between them.
+The page for people quotes the copy under the table's heading — "Source: terms table1 (shipping-terms.md, sha256:d1156fa90a72194c)", then the table itself — and adds one line to what was verified: *Every amount in this table is a value the copy it cites (terms table1) shows (E116)*. The source table above, the rule's table below, and that line between them.
 
 ### 2-3. Hold it to the code that runs today
 
@@ -320,11 +320,11 @@ Affected 3 (3.125%)  amount +6
 
 Both comparisons are described on [Compare and replay](compare.md).
 
-### 2-5. Approve and generate
+### 2-5. Check and generate
 
-Who: a person approves, the agent generates
+Who: a person checks, the agent generates
 
-The approver gets the page `rulec doc` renders, with the document quoted under each table's heading, as in [1-4](#1-4-show-it-to-the-approver). Generating and holding the twelve languages to the table is [4. Implementing from a new rule](#4-implementing-from-a-new-rule).
+The person who checks it gets the page `rulec doc` renders, with the document quoted under each table's heading, as in [1-4](#1-4-show-it-to-a-person). Generating and holding the twelve languages to the table is [4. Implementing from a new rule](#4-implementing-from-a-new-rule).
 
 ---
 
@@ -332,8 +332,8 @@ The approver gets the page `rulec doc` renders, with the document quoted under e
 
 Shipping fees, coupon conditions, whether a return is accepted, an internal criterion, a new public rule: something still being decided that you want to settle as a table. The lead role here is the **check**: every gap and every contradiction comes back with a concrete input that shows it, so what you forgot to decide is visible before you decide.
 
-![Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the approver's page, the customer article and the impact of a revision](images/scenario-designing.svg#only-dark)
-![Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the approver's page, the customer article and the impact of a revision](images/scenario-designing-light.svg#only-light)
+![Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the page for people, the customer article and the impact of a revision](images/scenario-designing.svg#only-dark)
+![Someone designing a rule (shipping, coupons, returns, an internal criterion) writes it as a table (.rule). rulec check returns every gap and overlap with an input that shows it, until the table passes. From a passed table come the page for people, the customer article and the impact of a revision](images/scenario-designing-light.svg#only-light)
 
 ### 3-1. Write the table first
 
@@ -417,11 +417,11 @@ examples
 | domestic | 9lb    | 8USD   |
 ```
 
-### 3-4. Render the pages for approval and publication
+### 3-4. Render the pages for people and for customers
 
-Who: rulec (rulec doc). The approver and the customer read
+Who: rulec (rulec doc). The people who check the rule and the customer read
 
-From the same table, one page per reader. For the approver, the facts the table does not show: what was verified, which row hides which, which rounding is provisional. For the customer, no aliases and no diagnostic codes, and instead the answer on both sides of every threshold.
+From the same table, one page per reader. For the people who check the rule, the facts the table does not show: what was verified, which row hides which, which rounding is provisional. For the customer, no aliases and no diagnostic codes, and instead the answer on both sides of every threshold.
 
 ```console
 $ rulec doc rules/shipping_fee.rule > shipping_fee.md

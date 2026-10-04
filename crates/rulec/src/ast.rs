@@ -199,7 +199,7 @@ impl ProjKind {
 }
 
 impl Projection {
-    /// The clause written back as it is read, for the inventory and for the approver's
+    /// The clause written back as it is read, for the inventory and for the reader's
     /// page. One spelling, so the two cannot disagree.
     pub fn text(&self) -> String {
         let path = std::iter::once(self.root.text.clone())

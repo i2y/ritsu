@@ -710,7 +710,7 @@ take every transition a case can make and every two that can follow one another,
 answered to the next call **as that language holds it** — an enum member, not the string it
 is written as on the wire — so what is compared is the hand-over a caller does, as well as the
 answers. The MCP tool, the Connect service and the PostgreSQL function are one call each, like
-the function, and are played the same way. On the approver's page the machine is drawn beside
+the function, and are played the same way. On the page for people the machine is drawn beside
 the form, and a button puts the state the call answered back into the form for the next event.
 
 ## A rule whose inputs are projected from the caller's object
@@ -818,7 +818,7 @@ calls it and drops the trace, so the branches exist once, in the traced one.
 | NumPy | `rule.traced(**{column: sequence})`, returning `(outputs, fired)` | one `(picked, rows)` pair per definition set: `picked[i]` indexes `rows`, and each entry is the `{"table":…,"row":…,"label"?:…}` the row was written in |
 
 The row numbers are the ones `rulec doc` prints in its `#` column and the ones a `verify` or
-`replay` report clusters by, so a trace taken from a log reads against the approved document
+`replay` report clusters by, so a trace taken from a log reads against the page for people
 directly. A row is numbered as it is written, whatever order the branches are tried in: when
 several tables define one output, the branches of the table that takes precedence come first
 and the row still reports the table it was written in and its position there. A `clause` is

@@ -204,7 +204,7 @@ fn 文書の表を引いて写しに固定する() {
     assert!(after.contains(&pin), "the fragment is pinned under the source line:\n{after}");
     assert!(rulec::check_source(&after, &p.to_string_lossy()).iter().all(|x| x.code.starts_with('W')), "{after}");
 
-    // The table under the rows, for the approver.
+    // The table under the rows, for its readers.
     let (c, out) = rulec(&d, &["doc", "a.rule", "--lang", "ja"]);
     assert_eq!(c, 0, "{out}");
     assert!(out.contains("出典: 料金表 表1（料金表.md"), "{out}");
@@ -647,7 +647,7 @@ fn pinは変わった写しの固定を書き換える() {
 
 /// A second statute database is a row of a registry, not a second way of doing things: the
 /// word after `law` picks it, and everything downstream — the copy's path, the pin line, the
-/// citation, the approver's page — is the same machinery. What differs is the shape of an id
+/// citation, the page for people — is the same machinery. What differs is the shape of an id
 /// and of a fragment, which is what this holds.
 #[test]
 fn ecfrの出典は引用からピンまで通る() {

@@ -11,7 +11,7 @@
 //!
 //! English is the default because the first reader of this tool is an agent
 //! (§11 principle 7). Japanese comes back with one setting, which is what the
-//! approver-facing side of a CI job sets.
+//! reader-facing side of a CI job sets.
 //!
 //! Every user-facing string is written twice, next to each other, with the
 //! `tr!` macro (see `lib.rs`). Message *codes* (E101, W105, …) are language

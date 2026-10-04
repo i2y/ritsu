@@ -1946,7 +1946,7 @@ fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize)
                             r,
                             tr!(
                                 "この組み合わせに当てはまる入力を作れませんでした。起こらないとも示せていません（導出どうしが入力を共有していると、ここが残ります）",
-                                "no input was built for these coordinates, and they were not shown to be impossible either (the blind spot of the sieve in §6.2)"
+                                "no input was built for these coordinates, and they were not shown to be impossible either (this is left where derivations share an input)"
                             ),
                         )
                     }))

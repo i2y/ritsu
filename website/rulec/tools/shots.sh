@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The screenshots of the page an approver can try a case on (`rulec doc --format html`),
+# The screenshots of the page a reader can try a case on (`rulec doc --format html`),
 # for the site. They are pictures of real output: the page is rendered from a corpus rule
 # by the rulec at hand, opened on one of its own examples (`?example=N`) and on one of its
 # own deciders (`#t-<table>`), and photographed by headless Chrome. Re-run after anything

@@ -178,7 +178,7 @@ impl<'a> Gen<'a> {
             .replace("@M_SEQ@", &tr!("f\"{{name}}: 配列で渡す。{{v!r}} は配列ではない\"", "f\"{{name}}: an array is expected, not {{v!r}}\""))
             .replace("@M_EL@", &tr!("f\"{{name}}: 要素はオブジェクトで渡す。{{v!r}} はオブジェクトではない\"", "f\"{{name}}: an element must be an object, not {{v!r}}\""))
             .replace("@D_MAIN@", &tr!("引数を読んで、stdio か HTTP のどちらかで待つ。", "Read the arguments and listen, on stdio or on HTTP."))
-            .replace("@D_PAGE@", &tr!("隣にある承認者向けのページ。無ければ None で、そのときツールは記録だけを返す。", "The approver's page from beside this file, or None — and then the tool answers with the record alone."))
+            .replace("@D_PAGE@", &tr!("隣にある、人が読むページ。無ければ None で、そのときツールは記録だけを返す。", "The page for people from beside this file, or None — and then the tool answers with the record alone."))
             .replace("@UI_DESC@", &py_str(&self.ui_description()))
     }
 
@@ -313,7 +313,7 @@ impl<'a> Gen<'a> {
             ("@M_SEQ@", tr!("`${{name}}: 配列で渡す。${{JSON.stringify(v)}} は配列ではない`", "`${{name}}: an array is expected, not ${{JSON.stringify(v)}}`")),
             ("@M_EL@", tr!("`${{name}}: 要素はオブジェクトで渡す。${{JSON.stringify(v)}} はオブジェクトではない`", "`${{name}}: an element must be an object, not ${{JSON.stringify(v)}}`")),
             ("@D_PORT@", tr!("0 を渡せば空いている番号が選ばれるので、どこで待っているかを一行出す。", "A port of 0 means any free one, so where it is listening is printed as one line.")),
-            ("@D_PAGE@", tr!("隣にある承認者向けのページ。無ければ null で、そのときツールは記録だけを返す。", "The approver's page from beside this file, or null — and then the tool answers with the record alone.")),
+            ("@D_PAGE@", tr!("隣にある、人が読むページ。無ければ null で、そのときツールは記録だけを返す。", "The page for people from beside this file, or null — and then the tool answers with the record alone.")),
             ("@UI_DESC@", quote(&self.ui_description())),
         ];
         (code, prose)
@@ -345,7 +345,7 @@ import @ALIAS@ as m
 
 TOOL: dict[str, object] = json.loads(r'''@TOOL@''')
 
-# MCP Apps (SEP-1865): the tool's view is the page an approver reads, written beside this
+# MCP Apps (SEP-1865): the tool's view is the page for people, written beside this
 # server by the same `rulec gen`. A host that renders one gets the table, the case it was
 # called with, and the rows that decided it; a host that does not gets the record alone.
 UI_URI = "ui://@ALIAS@/table"
@@ -658,7 +658,7 @@ const TOOL = @TOOL@;
 
 const INSTRUCTIONS = @INSTRUCTIONS@;
 
-// MCP Apps (SEP-1865): the tool's view is the page an approver reads, written beside this
+// MCP Apps (SEP-1865): the tool's view is the page for people, written beside this
 // server by the same `rulec gen`. A host that renders one gets the table, the case it was
 // called with, and the rows that decided it; a host that does not gets the record alone.
 const UI_URI = "ui://@ALIAS@/table";

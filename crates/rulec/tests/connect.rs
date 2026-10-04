@@ -403,7 +403,7 @@ fn rulec_connect_ready() -> Option<()> {
     .then_some(())
 }
 
-/// The approver's page `doc` renders is the page `gen` writes beside the module, wherever the
+/// The page for people `doc` renders is the page `gen` writes beside the module, wherever the
 /// command is run from. Both run the generated JavaScript, and a rule that reads its inputs
 /// out of a `.proto` has that contract found from the rule's directory (§15.160): looked for
 /// from the working directory instead, the page carried a reader that was not protojson's.

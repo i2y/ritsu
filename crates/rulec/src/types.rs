@@ -382,7 +382,7 @@ pub struct Checked {
     pub diags: Vec<Diag>,
     /// The definition sets: one per table, or one per output that several tables define
     /// (§15.66). Everything downstream — the region checks, the evaluator, the
-    /// generators, the vectors, the approver's page — works on these.
+    /// generators, the vectors, the page for people — works on these.
     pub sets: Vec<crate::defset::DefSet>,
     /// Table name → its set, and whether the set is evaluated at that table's position.
     pub set_of: HashMap<String, (usize, bool)>,
@@ -592,8 +592,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .mark(sp.clone(), "")
                     .maybe_note(crate::prelude::nearest_path(p).map(|q| tr!("`{q}` のことですか。", "Did you mean `{q}`?")))
                     .note(tr!(
-                        "組み込みの名前空間は、十三か国の一段目の区分です（§2.2）: {}。",
-                        "The built-in namespaces are the first-level divisions of thirteen countries (§2.2): {}.",
+                        "組み込みの名前空間は、十三か国の一段目の区分です: {}。",
+                        "The built-in namespaces are the first-level divisions of thirteen countries: {}.",
                         crate::prelude::paths().join(", ")
                     )),
             ),
@@ -675,8 +675,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .mark(i.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
                         .maybe_note(unit_note(&n))
                         .note(tr!(
-                            "範囲は完全性の証明が回る全体集合であり、生成コードの入口ガードでもあります（§2.2）。読めない境界を黙って落とすと、片側の無い範囲で「完全」と答えます。",
-                            "The range is the universe the completeness proof quantifies over, and the entry guard of the generated code (§2.2). Dropping a bound it cannot read would answer \"complete\" for a range with one side missing."
+                            "範囲は完全性の証明が回る全体集合であり、生成コードの入口ガードでもあります。読めない境界を黙って落とすと、片側の無い範囲で「完全」と答えます。",
+                            "The range is the universe the completeness proof quantifies over, and the entry guard of the generated code. Dropping a bound it cannot read would answer \"complete\" for a range with one side missing."
                         )),
                 );
             }
@@ -766,8 +766,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                             .mark(i.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
                             .maybe_note(unit_note(&n))
                             .note(tr!(
-                                "範囲は完全性の証明が回る全体集合であり、生成コードの入口ガードでもあります（§2.2）。読めない境界を黙って落とすと、片側の無い範囲で「完全」と答えます。",
-                                "The range is the universe the completeness proof quantifies over, and the entry guard of the generated code (§2.2). Dropping a bound it cannot read would answer \"complete\" for a range with one side missing."
+                                "範囲は完全性の証明が回る全体集合であり、生成コードの入口ガードでもあります。読めない境界を黙って落とすと、片側の無い範囲で「完全」と答えます。",
+                                "The range is the universe the completeness proof quantifies over, and the entry guard of the generated code. Dropping a bound it cannot read would answer \"complete\" for a range with one side missing."
                             )),
                     );
                 }
@@ -886,8 +886,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         .at(at(t.span.line))
                         .mark(t.span.clone(), tr!("この型が宣言している税区分です", "this is the tax the type declares"))
                         .note(tr!(
-                            "お金の型の二つ目には、税込なら `incl_tax`、税抜なら `excl_tax` を書きます（§2.3）。ほかの語では、その金額が税込か税抜かが決まりません。",
-                            "The second word of a money type is `incl_tax` for an amount with tax and `excl_tax` for one without (§2.3). Any other word leaves it unsaid which the amount is."
+                            "お金の型の二つ目には、税込なら `incl_tax`、税抜なら `excl_tax` を書きます。ほかの語では、その金額が税込か税抜かが決まりません。",
+                            "The second word of a money type is `incl_tax` for an amount with tax and `excl_tax` for one without. Any other word leaves it unsaid which the amount is."
                         )),
                 );
             }
@@ -1037,7 +1037,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 .fix_kind(crate::diag::FixKind::AddAlias)
                 .mark(f.name.span.clone(), "")
                 .note(tr!("不足: {}", "Missing: {}", missing.join(" / ")))
-                .note(tr!("Go の公開識別子は先頭が大文字である必要があり、漢字とかなは大文字を持ちません（§1.3）。名前がもとから ASCII なら別名は要りません。", "An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase (§1.3). A name that is already ASCII needs no alias."))
+                .note(tr!("Go の公開識別子は先頭が大文字である必要があり、漢字とかなは大文字を持ちません。名前がもとから ASCII なら別名は要りません。", "An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase. A name that is already ASCII needs no alias."))
                 .note(tr!("宣言の位置に丸括弧で書いてください。例: 届け先(dest)", "Write it in parentheses at the declaration, e.g. 届け先(dest)")),
         );
     }
@@ -1348,8 +1348,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .at(at_fold.clone())
                     .mark(fold.span.clone(), tr!("{} は {} です", "{} is {}", fold.verdict, sym.ty))
                     .note(tr!(
-                        "畳み込みが検査できるのは、判定が有限の値のどれかに落ちるからです（§15.56）。数や金額の列は畳めません。",
-                        "A fold is checkable because each element lands on one of finitely many verdicts (§15.56). A column of numbers or money is not one of them."
+                        "畳み込みが検査できるのは、判定が有限の値のどれかに落ちるからです。数や金額の列は畳めません。",
+                        "A fold is checkable because each element lands on one of finitely many verdicts. A column of numbers or money is not one of them."
                     )),
             ),
             None => c.diags.push(
@@ -1783,7 +1783,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     .fix(crate::diag::FixKind::MarkContractOnly, crate::kw::CONTRACT_ONLY)
                     .mark(i.name.span.clone(), tr!("どの列にも現れません", "appears in no column"))
                     .note(tr!("本来使うべき列の書き忘れかもしれません。", "A column that should use it may have been left out."))
-                    .note(tr!("範囲の入口検査としてだけ効かせるつもりなら、宣言に `{}` を付けてください（§11 W111）。", "If it is meant only as an entry check on its range, add `{}` to the declaration (§11 W111).", crate::kw::CONTRACT_ONLY)),
+                    .note(tr!("範囲の入口検査としてだけ効かせるつもりなら、宣言に `{}` を付けてください（W111）。", "If it is meant only as an entry check on its range, add `{}` to the declaration (W111).", crate::kw::CONTRACT_ONLY)),
             );
         }
     }
@@ -2013,7 +2013,7 @@ impl Checked {
                             Diag::error("E012", tr!("`{n}` という名前は宣言されていません", "The name `{n}` is not declared"))
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
-                                .note(tr!("上の行までに 入力 / 導出 / 定義 / 表の出力 として宣言されている必要があります（§5.1）。", "It must be declared on an earlier line as an input, a derived value, a definition, or a table output (§5.1).")),
+                                .note(tr!("上の行までに 入力 / 導出 / 定義 / 表の出力 として宣言されている必要があります。", "It must be declared on an earlier line as an input, a derived value, a definition, or a table output.")),
                         );
                         Ty::Unknown
                     }
@@ -2051,8 +2051,8 @@ impl Checked {
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
                                 .note(tr!(
-                                    "書けるのは `min` `max` `allocate` と丸めの五つ（`down` `up` `half_up` `half_down` `half_even`）だけです（§2.3）。",
-                                    "The calls are `min`, `max`, `allocate` and the five rounding modes (`down`, `up`, `half_up`, `half_down`, `half_even`) (§2.3)."
+                                    "書けるのは `min` `max` `allocate` と丸めの五つ（`down` `up` `half_up` `half_down` `half_even`）だけです。",
+                                    "The calls are `min`, `max`, `allocate` and the five rounding modes (`down`, `up`, `half_up`, `half_down`, `half_even`)."
                                 )),
                         );
                         return Ty::Unknown;
@@ -2151,8 +2151,8 @@ impl Checked {
                                             .at(format!("{path}:{}", sp.line))
                                             .mark(sp.clone(), tr!("{n} の範囲が負を含みます", "the range of {n} includes negative values"))
                                             .note(tr!(
-                                                "`range >=0円 …` のように書いてください。負が混じると、下に丸めるのか零へ丸めるのかで言語ごとに答えが割れます（§7.1）。",
-                                                "Declare it with `range >=0JPY …`. Below zero the targets disagree about which way to round (§7.1)."
+                                                "`range >=0円 …` のように書いてください。負が混じると、下に丸めるのか零へ丸めるのかで言語ごとに答えが割れます。",
+                                                "Declare it with `range >=0JPY …`. Below zero the targets disagree about which way to round."
                                             )),
                                     );
                                 }
@@ -2308,16 +2308,16 @@ impl Checked {
                                     .at(format!("{path}:{}", sp.line))
                                     .mark(sp.clone(), mark)
                                     .note(tr!(
-                                        "割る数は正の整数の定数か、同じ単位の金額・数量の定数だけです（§2.3）。",
-                                        "A divisor is a positive whole constant, or a constant amount or quantity in the same unit (§2.3)."
+                                        "割る数は正の整数の定数か、同じ単位の金額・数量の定数だけです。",
+                                        "A divisor is a positive whole constant, or a constant amount or quantity in the same unit."
                                     ))
                                     .note(tr!(
                                         "割る数が業務のデータなら、それは率か、定数を引く表として書けるはずです。割合そのものを渡したいなら `rate` の入力にしてください。",
                                         "If the divisor is business data, it can be written as a rate, or as a table that looks the constant up. To pass a ratio in, make it a `rate` input."
                                     ))
                                     .note(tr!(
-                                        "刻みが静的に決まらないと、生成コードは言語の除算に頼ることになり、Python は −∞ 方向、Go は 0 方向に丸めて答えが食い違います（§7.1）。",
-                                        "Without a statically known step the generated code would fall back on the language's own division, and Python rounding toward -inf and Go toward zero would give different answers (§7.1)."
+                                        "刻みが静的に決まらないと、生成コードは言語の除算に頼ることになり、Python は −∞ 方向、Go は 0 方向に丸めて答えが食い違います。",
+                                        "Without a statically known step the generated code would fall back on the language's own division, and Python rounding toward -inf and Go toward zero would give different answers."
                                     )),
                             );
                             return Ty::Unknown;
@@ -2357,8 +2357,8 @@ impl Checked {
                 .at(format!("{path}:{}", sp.line))
                 .mark(sp.clone(), "")
                 .note(tr!(
-                    "円×円 や g×cm のような合成単位は持っていません。次元解析はやらないので、書き方の誤りとして止めます（§2.1）。",
-                    "There is no compound dimension for JPY×JPY or g×cm. This tool does not do dimensional analysis, so it is stopped as a modeling error (§2.1)."
+                    "円×円 や g×cm のような合成単位は持っていません。次元解析はやらないので、書き方の誤りとして止めます。",
+                    "There is no compound dimension for JPY×JPY or g×cm. This tool does not do dimensional analysis, so it is stopped as a modeling error."
                 ))
                 .note(tr!(
                     "掛ける相手が業務のデータなら、それは率か個数（`rate`、`number`）のはずです。面積のように積そのものが答えなら、入力として受け取ってください。",
@@ -2375,8 +2375,8 @@ impl Checked {
                 .at(format!("{path}:{}", sp.line))
                 .mark(sp.clone(), "")
                 .note(tr!(
-                    "同じ次元でも、割る数は左辺と同じ単位で書いてください。割る数は書いてある単位のまま読まれるので、`mass[g]` の値を `2kg` で割ると 2000 ではなく 2 で割られます（§2.3）。",
-                    "Even within one dimension, write the divisor in the same unit as the left side. A divisor is read at the unit it is written in, so dividing a `mass[g]` by `2kg` divides by 2, not by 2000 (§2.3)."
+                    "同じ次元でも、割る数は左辺と同じ単位で書いてください。割る数は書いてある単位のまま読まれるので、`mass[g]` の値を `2kg` で割ると 2000 ではなく 2 で割られます。",
+                    "Even within one dimension, write the divisor in the same unit as the left side. A divisor is read at the unit it is written in, so dividing a `mass[g]` by `2kg` divides by 2, not by 2000."
                 )),
         );
     }
@@ -2385,12 +2385,12 @@ impl Checked {
     fn no_arithmetic(&mut self, t: &Ty, sp: &Span, path: &str) {
         let why = match t {
             Ty::Date => tr!(
-                "日付は暦日で、足し引きの結果を入れる型がありません。二つの日付のあいだの日数が要るなら、それは呼び出し側で数えて `number` か `duration` として渡してください（§2.1）。",
-                "A date is a calendar day, and there is no type to hold the result of adding or subtracting one. Where the days between two dates are needed, count them on the calling side and pass them in as a `number` or a `duration` (§2.1)."
+                "日付は暦日で、足し引きの結果を入れる型がありません。二つの日付のあいだの日数が要るなら、それは呼び出し側で数えて `number` か `duration` として渡してください。",
+                "A date is a calendar day, and there is no type to hold the result of adding or subtracting one. Where the days between two dates are needed, count them on the calling side and pass them in as a `number` or a `duration`."
             ),
             _ => tr!(
-                "温度と音量は、比べるためだけの目盛りです。℃ は 0 が「無い」を意味しないので `気温 × 2` に意味が無く、dB は対数なので、二つ足しても音が二つ分になるわけではありません（§15.84）。",
-                "A temperature and a sound level are scales to compare against, nothing more. A ℃ has a displaced zero, so `temp × 2` means nothing, and a decibel is a logarithm, so adding two of them is not two sounds' worth (§15.84)."
+                "温度と音量は、比べるためだけの目盛りです。℃ は 0 が「無い」を意味しないので `気温 × 2` に意味が無く、dB は対数なので、二つ足しても音が二つ分になるわけではありません。",
+                "A temperature and a sound level are scales to compare against, nothing more. A ℃ has a displaced zero, so `temp × 2` means nothing, and a decibel is a logarithm, so adding two of them is not two sounds' worth."
             ),
         };
         self.diags.push(
@@ -2409,7 +2409,7 @@ impl Checked {
     fn mix(&mut self, a: &Ty, b: &Ty, sp: &Span, path: &str) {
         let note = match (a, b) {
             (Ty::Money { tax: Some(x), .. }, Ty::Money { tax: Some(y), .. }) if x != y => {
-                tr!("税の変換は変換式ではなく表として書いてください（§2.1）。", "Write a tax conversion as a table, not as a conversion formula (§2.1).")
+                tr!("税の変換は変換式ではなく表として書いてください。", "Write a tax conversion as a table, not as a conversion formula.")
             }
             _ => tr!("単位の違う値は足せません。数量に応じた加算料金なら、それは表で書きます。", "Values of different dimensions cannot be added. A surcharge that depends on a quantity is written as a table."),
         };
@@ -2543,8 +2543,8 @@ impl Checked {
                 self,
                 tr!("{col} は {} です", "{col} is {}", sym.ty),
                 tr!(
-                    "数える条件は「その列がこの値であること」なので、値が有限の集合である列——真偽か列挙——にだけ書けます（§15.58）。",
-                    "The test is \"this column has this value\", so the column's values have to be a closed set: a bool or an enum (§15.58)."
+                    "数える条件は「その列がこの値であること」なので、値が有限の集合である列——真偽か列挙——にだけ書けます。",
+                    "The test is \"this column has this value\", so the column's values have to be a closed set: a bool or an enum."
                 ),
             ),
             Some(_) if summing => {}
@@ -2670,7 +2670,7 @@ impl Checked {
                             Diag::error("E012", tr!("列 `{name}` という名前は宣言されていません", "Column `{name}` is not a declared name"))
                                 .at(at(sp.line))
                                 .mark(sp.clone(), "")
-                                .note(tr!("列に書けるのは 入力・導出・真偽/列挙の中間値です（§5.3）。", "A column can only be an input, a derived value, or a boolean/enum intermediate value (§5.3).")),
+                                .note(tr!("列に書けるのは 入力・導出・真偽/列挙の中間値です。", "A column can only be an input, a derived value, or a boolean/enum intermediate value.")),
                         );
                         col_ty.push(Ty::Unknown);
                     }
@@ -2835,7 +2835,7 @@ impl Checked {
                                             .mark(osp.clone(), "")
                                             .note(tr!("出力 {ocol} の丸めは {}({}) です。", "The rounding of output {ocol} is {}({}).", m.name(), fmt_val(g, want)))
                                             .note(tr!("ヒント: {} と書くか、丸めの宣言のほうを直してください。", "Hint: write {} instead, or fix the rounding declaration.", fmt_val(near, want)))
-                                            .note(tr!("黙って寄せることはしません。どちらが正しいかは業務の判断です（§2.4）。", "Nothing is snapped silently. Which one is right is a business decision (§2.4).")),
+                                            .note(tr!("黙って寄せることはしません。どちらが正しいかは業務の判断です。", "Nothing is snapped silently. Which one is right is a business decision.")),
                                     );
                                 }
                             }
@@ -2861,7 +2861,7 @@ impl Checked {
                                     .at(at(row.span.line))
                                     .mark(osp.clone(), "")
                                     .maybe_note(crate::prelude::hint(w, &self.imported))
-                                    .note(tr!("出力セルに書けるのは リテラルか名前（入力・導出・定義）だけです（§3.2）。式は書けません。", "An output cell holds only a literal or a name (an input, derived value, or definition) (§3.2). Expressions are not allowed.")),
+                                    .note(tr!("出力セルに書けるのは リテラルか名前（入力・導出・定義）だけです。式は書けません。", "An output cell holds only a literal or a name (an input, derived value, or definition). Expressions are not allowed.")),
                             );
                         }
                     }
@@ -2925,7 +2925,7 @@ impl Checked {
                         Diag::error("E012", tr!("列 `{name}` という名前は宣言されていません", "Column `{name}` is not a declared name"))
                             .at(at(sp.line))
                             .mark(sp.clone(), "")
-                            .note(tr!("例の列は、入力・導出・表の出力のどれかの名前です（§5.3）。", "A column of the examples names an input, a derived value, or a table's output (§5.3).")),
+                            .note(tr!("例の列は、入力・導出・表の出力のどれかの名前です。", "A column of the examples names an input, a derived value, or a table's output.")),
                     );
                     col_ty.push(None);
                 }
@@ -3327,7 +3327,7 @@ impl Checked {
                             .at(at.to_string())
                             .mark(span.clone(), "")
                             .note(if n.unit.is_none() {
-                                tr!("単位が要ります。裸の数は書けません（§3）。", "A unit is required. A bare number cannot be written (§3).")
+                                tr!("単位が要ります。裸の数は書けません。", "A unit is required. A bare number cannot be written.")
                             } else {
                                 tr!("`{}` は {want} の単位ではありません。", "`{}` is not a unit of {want}.", n.raw)
                             }),
@@ -3348,8 +3348,8 @@ impl Checked {
                             .at(at.to_string())
                             .mark(span.clone(), tr!("刻みは {step} です", "the step is {step}"))
                             .note(tr!(
-                                "この列の型は刻みを {step} と宣言しているので、実行時の値はその整数倍だけです（§2.1）。",
-                                "The column's type declares a step of {step}, so at runtime the value is a whole number of them (§2.1)."
+                                "この列の型は刻みを {step} と宣言しているので、実行時の値はその整数倍だけです。",
+                                "The column's type declares a step of {step}, so at runtime the value is a whole number of them."
                             ))
                             .note(tr!(
                                 "`{near}` のように刻みに載る値に直すか、型の刻みを細かくしてください。黙って寄せると、読める境界と動く境界が食い違います。",
@@ -3461,8 +3461,8 @@ impl Checked {
                     .at(at.to_string())
                     .mark(span.clone(), tr!("前方一致ではありません", "not a prefix"))
                     .note(tr!(
-                        "`starts_with \"ABC\"` と書いてください。文字列を一つずつ数え上げることはできないので、等号や集合は書けません——値が数えられるものなら `enum` にしてください（§15.101）。",
-                        "Write `starts_with \"ABC\"`. Strings cannot be enumerated, so equality and sets are not available — make it an `enum` if the values can be listed (§15.101)."
+                        "`starts_with \"ABC\"` と書いてください。文字列を一つずつ数え上げることはできないので、等号や集合は書けません——値が数えられるものなら `enum` にしてください。",
+                        "Write `starts_with \"ABC\"`. Strings cannot be enumerated, so equality and sets are not available — make it an `enum` if the values can be listed."
                     )),
             ),
             _ => {}
@@ -3561,7 +3561,7 @@ pub fn lit_scale(n: &crate::lex::Num) -> Option<i128> {
     d.checked_mul(u)
 }
 
-/// The §1.6 rendering uses the same write-back. Showing an approver `1000000円` forces a
+/// The §1.6 rendering uses the same write-back. Showing a reader `1000000円` forces a
 /// mental conversion before it can be matched against the `100万円` in the rule source.
 pub fn fmt_big_pub(v: Rat) -> String {
     fmt_big(v, crate::i18n::ja())
@@ -4111,7 +4111,7 @@ impl Checked {
                         fmt_val(hi, ty)
                     ))
                     .note(tr!("ヒント: 入力の範囲を狭めるか、途中で丸めを一つ入れてください。", "Hint: narrow the input ranges, or insert one rounding step along the way."))
-                    .note(tr!("どこで丸めるかは円が動く業務の判断なので、ツールが勝手に決めません（§7.1）。", "Where to round is a business decision that moves yen, so the tool does not decide it on its own (§7.1).")),
+                    .note(tr!("どこで丸めるかは円が動く業務の判断なので、ツールが勝手に決めません。", "Where to round is a business decision that moves yen, so the tool does not decide it on its own.")),
             );
         }
     }
@@ -4156,7 +4156,7 @@ impl Checked {
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
                                 .note(tr!("数値どうしの比較は、差を `{}` として宣言してから定数と比べてください。そのほうが厳密に解析できます。", "To compare two numbers, declare their difference with `{}` and compare that with a constant. It can then be analyzed exactly.", crate::kw::DERIVE))
-                                .note(tr!("導出にできない型（日付、列挙）どうしなら、そのまま比べられます（§5.3）。", "Two values of a type that cannot be derived (a date, an enum) may be compared directly (§5.3).")),
+                                .note(tr!("導出にできない型（日付、列挙）どうしなら、そのまま比べられます。", "Two values of a type that cannot be derived (a date, an enum) may be compared directly.")),
                         );
                         return;
                     }
@@ -4171,7 +4171,7 @@ impl Checked {
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
                                 .note(hint.to_string())
-                                .note(tr!("この制限が、完全性と重なりの検査が有限で終わることの土台です（§5.3、§6.2）。", "This restriction is what makes the completeness and overlap checks finite (§5.3, §6.2).")),
+                                .note(tr!("この制限が、完全性と重なりの検査が有限で終わることの土台です。", "This restriction is what makes the completeness and overlap checks finite.")),
                         );
                     }
                     return;

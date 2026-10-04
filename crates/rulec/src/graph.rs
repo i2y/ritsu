@@ -638,7 +638,7 @@ pub const APP_JS: &str = r##"
       //
       // It is found through a row, not through a heading: a row carries `data-t` with the
       // name the trace uses, which is the same name whatever language the page is in and
-      // whatever an `apply` renamed it to (§15.69). A heading would be neither.
+      // whatever an `apply` renamed it to. A heading would be neither.
       for (const t of n.tables) {
         const tr = m.querySelector('tr[data-t="' + CSS.escape(t) + '"]');
         const tbl = tr && tr.closest("table");

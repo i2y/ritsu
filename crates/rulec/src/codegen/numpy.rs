@@ -553,8 +553,8 @@ pub fn round_tests_numpy() -> String {
          import sys\n\nimport numpy as np\nimport rulec_np\n\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     o.push_str("CASES = [\n");

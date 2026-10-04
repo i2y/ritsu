@@ -284,7 +284,7 @@ const JAVA_JSON_HELPERS: &str = r##"    /** 読んだ文字列と、閉じ引用
         return new Str(b.substring(i, j), j);
     }
 
-    /** 平たいオブジェクトの並び（§15.56）。 */
+    /** 平たいオブジェクトの並び。 */
     private static List<Map<String, String>> rows(String v) {
         List<Map<String, String>> out = new ArrayList<>();
         int i = 0;
@@ -543,7 +543,7 @@ impl<'a> Gen<'a> {
                 "    /** {} */\n    public static final {ety} INITIAL = {};\n\n    \
                  /** {} */\n    public static final List<{ety}> FINAL = List.of({});\n\n    \
                  /** {} */\n    public static boolean isFinal({ety} state) {{\n        return FINAL.contains(state);\n    }}\n\n",
-                tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
+                tr!("案件が始まる状態。", "The state a case starts in."),
                 self.java_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
                 fins.iter().map(|v| self.java_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
@@ -1375,8 +1375,8 @@ pub fn round_tests_java() -> String {
          public static void main(String[] args) {{\n        Case[] cases = {{\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         ),
         round_java("    "),
     );

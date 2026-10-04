@@ -187,7 +187,7 @@ no `--http`, and that is a decision rather than a gap.
 *writes* a rule; for the agent that *calls* one, `gen` writes the rule itself as a server
 beside the module, and that server speaks stdio **and MCP's Streamable HTTP**
 (`--http 8000`) for the hosts that only take a URL. Where the host renders **MCP Apps**, it
-also offers the approver's page as the tool's own view:
+also offers the page for people as the tool's own view:
 [the rule as a tool for an agent](generate.md#the-rule-as-a-tool-for-an-agent).
 
 ## Language
@@ -267,7 +267,7 @@ replay:
     # a step of your own puts the records at $FIXTURES: an artifact, or protected storage
     - run: rulec diff rules/shipping_fee.rule@origin/main rules/shipping_fee.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:
-        RULEC_LANG: ja                   # the people approving this one read Japanese
+        RULEC_LANG: ja                   # the people who read this one read Japanese
     - run: gh pr comment "$PR" --body-file diff.md
       env:
         GH_TOKEN: ${{ github.token }}

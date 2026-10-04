@@ -78,7 +78,7 @@ A blank line separates sections. `#` starts a comment that runs to the end of th
 comments may appear anywhere, including at the end of a table row and on a line of their own
 in the middle of a block — **a line that holds nothing but a comment does not end the
 section**, where a blank one does. A comment at the end of a declaration, of a `table` line or
-of a row is shown to the approver by `rulec doc`, which is where the source a table or a row
+of a row is shown on the page `rulec doc` renders, which is where the source a table or a row
 was transcribed from belongs.
 
 ## 2. Lexical structure
@@ -316,8 +316,9 @@ above says where it comes from, and `rulec check` reads that file on every run a
 two together. The path is followed from the directory of the `.rule`.
 
 The two sides carry different things, and neither can be derived from the other. The `.proto`
-owns **which values exist**; the `.rule` owns **what they are called here** and what each one
-costs — a proto has no Japanese in it. So what is checked is that they agree:
+owns **which values exist**; the `.rule` owns **what they are called here** and how each one is
+treated (a value named in Japanese takes its name from the rule; the proto has only the ASCII one).
+So what is checked is that they agree:
 
 - the value names are matched by the ASCII alias, with the enum's own name taken off the front
   (`MEMBER_TIER_GOLD` is `gold`), which is the prefix convention `buf lint` enforces. The prefix
@@ -419,7 +420,7 @@ document's is a `w:tbl`, and a merged cell leaves the column it took empty rathe
 filled in, because the copy is evidence. A PDF or a scan needs an extractor that is not this
 program: `rulec source fetch --via <cmd>` runs one as a child process and reads the tables it
 hands back ([formats.md](formats.md), the extraction protocol), and the name it gives itself is
-kept beside the copies and shown to the approver. A document with no extractor to hand is
+kept beside the copies and shown on the page for people. A document with no extractor to hand is
 cited whole.
 
 **The rows are then held to that copy**, which is the one thing a completeness proof cannot do:
@@ -471,7 +472,7 @@ the pin: the answer is then that the bytes differ, which for a PDF or a spreadsh
 anything can say — and a page that changes its footer says it too. A commit is to a file what
 `asof` is to a law, and pinning one is what makes this question worth asking. `GITHUB_TOKEN`
 or `GH_TOKEN` is passed on when it is set; without one the API allows sixty requests an hour. The
-approver's page quotes the fragment under the definition that cites it: an article as its text,
+page for people quotes the fragment under the definition that cites it: an article as its text,
 with the date that text came into force and the amending law; a document's table as the table
 itself, beside the rows transcribed from it. Every generated file names the sources in its header
 (`Cites: measures_act = law 332AC0000000026 asof 2026-04-01 (第91条 sha256:…)`), and `rulec api` lists
@@ -682,7 +683,7 @@ so (E129, exit 2). A set that cannot be had — the file is not there, does not 
 check, has no such date, or comes to no day — is E130, with what koyomi says. Only a `date`
 input takes `range from koyomi` (E065); an output, a `derive` or a field of an element cannot
 borrow its range from another file. The days are listed as a precondition in `rulec api`
-(`"kind": "days"`), and the approver's page lists them beside the input.
+(`"kind": "days"`), and the page for people lists them beside the input.
 
 ### `round` — required on every numeric output
 

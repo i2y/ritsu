@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1124 236" width="1124" height="236" role="img" aria-label="決めたいこと（送料、クーポン、返品の可否、社内の判定基準）を、検討する人が表（.rule）に書く。rulec check が抜けと重なりを、それを起こす入力つきで返し、通るまで直す。通った表からは承認者向けの資料、お客向けの案内、改定の影響が出る。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1124 236" width="1124" height="236" role="img" aria-label="決めたいこと（送料、クーポン、返品の可否、社内の判定基準）を、検討する人が表（.rule）に書く。rulec check が抜けと重なりを、それを起こす入力つきで返し、通るまで直す。通った表からは人が読む資料、お客向けの案内、改定の影響が出る。" font-family='-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, "Segoe UI", Roboto, sans-serif'>
 <defs>
 <marker id="head-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#6b7590"/></marker>
 <marker id="head-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8e9cff"/></marker>
@@ -33,7 +33,7 @@
 <path d="M954,20.0 H1092 L1104,32.0 V120.0 H954 Z" fill="#1e2331" stroke="#3a4257" stroke-linejoin="round"/>
 <path d="M1092,20.0 V32.0 H1104 Z" fill="#2b3242" stroke="#3a4257" stroke-linejoin="round"/>
 <text x="963" y="42.0" font-size="13" font-weight="600" text-anchor="start" fill="#e8ebf4">資料</text>
-<text x="963" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">承認する人向け</text>
+<text x="963" y="60.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">人が読む資料</text>
 <text x="963" y="75.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">お客向けの案内</text>
 <text x="963" y="90.0" font-size="11.5" font-weight="400" text-anchor="start" fill="#98a1b8">改定の影響</text>
 <line x1="150" y1="70" x2="246" y2="70" stroke="#6b7590" stroke-width="1.8" marker-end="url(#head-neutral)"/>

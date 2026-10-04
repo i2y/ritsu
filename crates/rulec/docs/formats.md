@@ -777,9 +777,10 @@ Already machine-readable and take no `--format`.
 
 ## `doc`
 
-`doc` has no `--format json`. It renders for the person who approves a change, and markdown
-is that shape; `--format html` is the same document as one page with a form on it, where the
-generated JavaScript runs the case the approver types in.
+`doc` has no `--format json`. It renders for people — those who read a change to understand
+and check what the code is to carry out — and markdown is that shape; `--format html` is the
+same document as one page with a form on it, where the generated JavaScript runs the case a
+reader types in.
 
 The HTML page is laid out as a board. The left pane holds the form, the inputs, the
 outputs and the types; the middle is a canvas that scrolls both ways, with one card per
@@ -799,9 +800,10 @@ not an order of events — everything is decided in one call — so nothing in t
 inputs in plain words, the tables with `-` as "any" and `not:` as "other than", the rounding
 as a sentence, and **the cases on either side of every threshold** — the boundary-pair
 vectors of `rulec vectors`, one line per pair. Aliases, declared ranges, diagnostic codes and
-the list of what `rulec check` verified are left out: they are for the approver. It is
-markdown only (`--format html` cannot be combined with it), and under `--out` it is written
-as `<alias>.customer.md`, beside the approver's `<alias>.md`.
+the list of what `rulec check` verified are left out: they belong on the page for people (the
+default, `--audience approver`). It is markdown only (`--format html` cannot be combined with
+it), and under `--out` it is written as `<alias>.customer.md`, beside the page for people,
+`<alias>.md`.
 
 ## `mcp`
 
@@ -837,7 +839,7 @@ result is one fixtures record (below), as text and as `structuredContent`; a cal
 cannot take comes back with `isError` and the argument named; and `--record <file.jsonl>`
 appends every answered call to that file as a record. **Unlike this one it is not stdio
 only**: `--http <port>` serves the same tool over MCP's Streamable HTTP, and where the host
-renders MCP Apps it offers the approver's page as the tool's view.
+renders MCP Apps it offers the page for people as the tool's view.
 [generated-code.md](generated-code.md#the-rule-as-an-mcp-tool) has it.
 
 ---
@@ -1063,9 +1065,9 @@ extractor ← {"done":true}
 
 1. rulec runs the command with the document's path appended to it.
 2. The first line names the protocol and **the extractor itself**. `impl` is required and is
-   written to `<document>.fragments/extractor.txt`, where `rulec doc` reads it and tells the
-   approver who read the document — a table a model read out of a scan is evidence of a
-   different kind from one that was already a grid.
+   written to `<document>.fragments/extractor.txt`, where `rulec doc` reads it and names on the
+   page for people what read the document — a table a model read out of a scan is evidence of
+   a different kind from one that was already a grid.
 3. Each `{"block":"table",…}` line carries a `grid` of rows of strings, in document order; the
    `n`th of them is the fragment `table<n>`. `page` is optional and appears in the report. Blocks of
    any other kind are read and let go, so an extractor that also reports headings needs no

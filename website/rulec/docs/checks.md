@@ -106,7 +106,7 @@ and so do `<=60cm` and `>60cm`, so a rule that writes a band from either end can
 to the copy. The word is read beside the number (`60cm以下`, `Under 18`, `Not over $11,925`) or
 in a heading over its column (`円以上`, `円未満` — the shape a Japanese premium table takes). A
 boundary the copy words neither way, `18 to 20` or `60〜80`, is left alone: naming the numbers
-that bound a band does not say which band holds them. The approver's page quotes the copy under
+that bound a band does not say which band holds them. The page for people quotes the copy under
 the table and adds two lines to what was verified: every amount in this table is a value the
 copy shows, and its boundaries fall on the side the copy puts them on.
 
@@ -124,7 +124,7 @@ that says `overrides` over it, a `clause` written as one line of prose among the
 first three checks over **those tables as one set**.
 Completeness is judged over their union. An overlap passes when a precedence is written and
 stops as E105 when none is. A row the rows taking precedence cover entirely is E102, and an
-`overrides` line whose rows meet none of its target's is W117. The approver's page says in one
+`overrides` line whose rows meet none of its target's is W117. The page for people says in one
 sentence which table is the exception to which.
 
 A rule that is one step of a state machine (`machine`) is checked for what **every sequence
@@ -330,7 +330,7 @@ file's SHA-256. The days are read through ritsu, with koyomi joined
 check the rule over every day instead, and says so (E129). See
 [the reference](reference.md#range-from-koyomi--the-days-a-koyomi-date-comes-to).
 
-## Showing it to the person who approves
+## Showing it to people
 
 ```console
 $ rulec doc rules/yupack_base_fee.rule > fees.md
@@ -370,10 +370,10 @@ Source: Japan Post, base fee table (Tokyo)
 ```
 
 Write `# Source: Japan Post, base fee table (Tokyo)` at the end of a row or of the `table` line, and
-those words appear in the document too. The approver's job turns from "read the whole table
+those words appear in the document too. The reader's job turns from "read the whole table
 again" into "compare this row with that cell".
 
-### A page the approver can try a case on
+### A page a reader can try a case on
 
 ```console
 $ rulec doc rules/parcel_rate.rule --format html > parcel_rate.html
@@ -381,7 +381,7 @@ $ rulec doc rules/parcel_rate.rule --format html > parcel_rate.html
 
 `--format html` renders the same document as one HTML page, laid out as a board. The form
 is on the left; the middle holds one card per **decider** — one table, one `derive`, one
-`define` — with that table itself inside the card. The approver types a case: the row that
+`define` — with that table itself inside the card. A reader types a case: the row that
 fired lights up inside the card it belongs to, the card says which row that was, the answer
 appears on the card that produced it, and the line the generated code would write to a log
 is shown as it is. The example buttons fill in the rule's own verified examples. The page is

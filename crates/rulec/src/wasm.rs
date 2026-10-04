@@ -8,7 +8,7 @@
 //!
 //! What runs here is what the binary runs: [`crate::report_with`] for the findings,
 //! [`crate::findings_text`] for the frame around them, [`crate::backend::ALL`] for the
-//! files `gen` writes, and [`crate::doc::render_html`] for the page an approver reads. A
+//! files `gen` writes, and [`crate::doc::render_html`] for the page for people. A
 //! second implementation of any of those would be a second set of answers to keep true
 //! (§15.38).
 //!
@@ -163,7 +163,7 @@ pub extern "C" fn rulec_gen(src: *const u8, ja: u32) -> *mut u8 {
     out(&Obj::new().bool("ok", true).raw("files", arr(&files)).finish())
 }
 
-/// `rulec doc --format html`: the page an approver reads, running the generated JavaScript,
+/// `rulec doc --format html`: the page for people, running the generated JavaScript,
 /// as one self-contained document the playground can put in an iframe.
 #[unsafe(no_mangle)]
 pub extern "C" fn rulec_doc(src: *const u8, ja: u32) -> *mut u8 {

@@ -176,7 +176,7 @@ fn 形と型が違えば断る() {
     assert!(out.contains("\"code\":\"E018\""), "{out}");
 }
 
-/// The approver is told what the checks were allowed to assume (§1.6).
+/// The reader is told what the checks were allowed to assume (§1.6).
 #[test]
 fn 資料は起きない組み合わせを載せる() {
     let (_tmp, d) = dir("doc");

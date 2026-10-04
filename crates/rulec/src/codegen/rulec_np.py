@@ -36,7 +36,7 @@ _NOVALUE = object()
 class RuleInputError(ValueError):
     """An input outside what the rule declares. The same refusal the generated code makes.
 
-    The sentence, the value and the row travel apart (§15.95), so a caller can react to
+    The sentence, the value and the row travel apart, so a caller can react to
     which row was refused without parsing the text back.
     """
 
@@ -62,7 +62,7 @@ def _ord(s: str) -> int:
     return (datetime.date(y, m, d) - _EPOCH).days
 
 
-# --- The five roundings (§7.3), one array at a time. Every one of them is the generated
+# --- The five roundings, one array at a time. Every one of them is the generated
 # helper of the same name with `np.where` where that has an `if`, so the direction on a
 # negative value is pinned the same way.
 
@@ -195,7 +195,7 @@ class Rule:
         self.sha256 = plan["sha256"]
         self.inputs = [i["name"] for i in plan["inputs"]]
         self.outputs = [o["name"] for o in plan["outputs"]]
-        # The machine this rule is one step of (§15.148), when it is one: the carried
+        # The machine this rule is one step of, when it is one: the carried
         # column, where a case starts, and the states it ends in.
         self.machine = plan.get("machine")
 

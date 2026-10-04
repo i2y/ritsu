@@ -378,7 +378,7 @@ impl<'a> Gen<'a> {
                 // `final` is a keyword in PHP whatever its case, so the set cannot be `FINAL`.
                 "/** {} */\nconst INITIAL = {};\n\n/** {} */\nconst FINAL_STATES = [{}];\n\n\
                  /** {} */\nfunction is_final({cls} $state): bool\n{{\n    return in_array($state, FINAL_STATES, true);\n}}\n\n",
-                tr!("案件が始まる状態（§15.148）。", "The state a case starts in (§15.148)."),
+                tr!("案件が始まる状態。", "The state a case starts in."),
                 self.php_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
                 fins.iter().map(|v| self.php_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
@@ -1183,8 +1183,8 @@ pub fn round_tests_php() -> String {
          ini_set('display_errors', 'stderr');\n",
         ritsu_emit::header::VERSION,
         tr!(
-            "§7.3 の五モード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
-            "The five modes of §7.3, checked against the Rust reference implementation down to negative values and exact halves."
+            "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
+            "The five rounding modes, checked against the Rust reference implementation down to negative values and exact halves."
         )
     );
     o.push_str(&round_php());

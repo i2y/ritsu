@@ -91,7 +91,7 @@
   border-radius: .15rem;
 }
 
-/* The approver's page is a whole document; it gets a frame its own size. */
+/* The page for people is a whole document; it gets a frame its own size. */
 .pg-board {
   padding: 1.2em 1.4em;
 }
