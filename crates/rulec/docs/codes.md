@@ -2499,7 +2499,7 @@ Related codes: [E107](#e107)
 
 **When.** The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers "complete" without ever looking at values that really occur.
 
-**Fix.** Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-110万円 <=100万円`). Widening past what is reachable costs nothing: the check sifts the infeasible part out.
+**Fix.** Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out.
 
 **Smallest reproduction**:
 

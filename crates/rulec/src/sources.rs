@@ -228,7 +228,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                             Diag::error("E037", tr!("引用箇所 `{frag}` の書き方が読めません", "The fragment `{frag}` cannot be read"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
-                                .note(tr!("文書から引けるのは表なので、引用箇所は `表3`（文書順に三つめの表）か `table3` と書きます。見出しで指す書き方はまだ受けません。", "A document's fragments are its tables: write `表3` (the third table in document order) or `table3`. Naming a heading is not read yet."))
+                                .note(tr!("文書から引けるのは表なので、引用箇所は `表3`（文書順に三つめの表）か `table3` と書きます。見出しで指す書き方はまだ受けません。", "A document's fragments are its tables: write `table3` (the third table in document order; `表3` is its Japanese spelling). Naming a heading is not read yet."))
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos))),
                         );
                         continue;
@@ -618,7 +618,7 @@ fn boundaries(
                     ))
                     .note(tr!(
                         "閾値は写すときに書き換わる（`60cmまで` は `<=60cm` になる）ので、比べているのは境界の値がどちらに入るかだけです。写し間違いなら向きを直してください。境界が別のところ（後の通知、本文の但し書き）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
-                        "A threshold is rewritten as it is transcribed (`60cmまで` becomes `<=60cm`), so the one thing held to the copy here is which side the boundary value falls on. If it was mistyped, correct it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from."
+                        "A threshold is rewritten as it is transcribed (`up to 60cm` becomes `<=60cm`), so the one thing held to the copy here is which side the boundary value falls on. If it was mistyped, correct it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from."
                     ))
                     .fix(crate::diag::FixKind::FlipBound, fixed),
             );
@@ -1051,7 +1051,7 @@ fn fragments(
         let Some(n) = crate::extract::fragment(&frag) else {
             lines.push(tr!(
                 "{name}: 引用箇所 `{frag}` の書き方が読めません（`表3` の形です）",
-                "{name}: the fragment `{frag}` cannot be read (the form is `表3`)"
+                "{name}: the fragment `{frag}` cannot be read (the form is `table3`)"
             ));
             continue;
         };

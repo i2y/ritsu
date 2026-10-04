@@ -133,7 +133,7 @@ fn range_text(c: &Checked, name: &str) -> String {
     };
     match (lo, hi) {
         (None, None) => String::new(),
-        _ => format!("{} 〜 {}", s(lo), s(hi)),
+        _ => tr!("{} 〜 {}", "{} to {}", s(lo), s(hi)),
     }
 }
 
@@ -2247,7 +2247,7 @@ fn customer_input(c: &Checked, name: &str) -> String {
             let s = |b: &Option<crate::num::Rat>| b.map(|v| qty_words(v, &unit)).unwrap_or_else(|| "…".into());
             match (lo, hi) {
                 (None, None) => String::new(),
-                _ => format!("{} 〜 {}", s(lo), s(hi)),
+                _ => tr!("{} 〜 {}", "{} to {}", s(lo), s(hi)),
             }
         }
         _ => range_text(c, name),

@@ -148,8 +148,8 @@ pub fn units() -> String {
          時間 ms s min h d w · 温度 ℃ ℉ · 音量 dB · 率 % · 金額 円 銭、\
          または ISO 4217 のコード（その 1/100 はコードに c を付ける。USD と USDc）",
         "mass mg g kg t oz lb · length mm cm m km in ft yd mi · \
-         area mm2 cm2 m2 a ha km2 坪 in2 ft2 yd2 mi2 ac · volume mm3 cm3 mL L m3 kL · \
-         duration ms s min h d w · temperature ℃ ℉ · sound dB · rate % · money 円 銭, \
+         area mm2 cm2 m2 a ha km2 坪 (tsubo) in2 ft2 yd2 mi2 ac · volume mm3 cm3 mL L m3 kL · \
+         duration ms s min h d w · temperature ℃ ℉ · sound dB · rate % · money 円 (yen, the same as JPY) 銭 (a hundredth of 円), \
          or an ISO 4217 code (its hundredth is the code plus c: USD and USDc)"
     )
 }
@@ -2064,7 +2064,7 @@ impl Checked {
                                     .mark(sp.clone(), tr!("二つめの引数が定数ではありません", "the second argument is not a constant"))
                                     .note(tr!(
                                         "`{name}(<値>, 10円)` のように、丸める刻みを数か金額で書いてください。値によって変わる刻みは、0 になった呼び出しで生成コードが 0 で割ります。",
-                                        "Write the grid as a number or an amount, as in `{name}(<value>, 10円)`. A grid that moves with the input makes the generated code divide by zero on the call where it is zero."
+                                        "Write the grid as a number or an amount, as in `{name}(<value>, 10JPY)`. A grid that moves with the input makes the generated code divide by zero on the call where it is zero."
                                     )),
                             ),
                         }
@@ -2126,7 +2126,7 @@ impl Checked {
                                             .mark(sp.clone(), tr!("{n} の範囲が負を含みます", "the range of {n} includes negative values"))
                                             .note(tr!(
                                                 "`range >=0円 …` のように書いてください。負が混じると、下に丸めるのか零へ丸めるのかで言語ごとに答えが割れます（§7.1）。",
-                                                "Declare it with `range >=0円 …`. Below zero the targets disagree about which way to round (§7.1)."
+                                                "Declare it with `range >=0JPY …`. Below zero the targets disagree about which way to round (§7.1)."
                                             )),
                                     );
                                 }
@@ -2144,7 +2144,7 @@ impl Checked {
                                         .mark(sp.clone(), tr!("{n} の範囲が 0 を含みます", "the range of {n} includes 0"))
                                         .note(tr!(
                                             "`range >=1円 …` のように、下限を正にしてください。0 で割る答えは決まっていないので、実行時に落ちるより先に断ります。",
-                                            "Declare it with a positive lower bound, as in `range >=1円 …`. Dividing by zero has no answer, so it is refused here rather than at run time."
+                                            "Declare it with a positive lower bound, as in `range >=1JPY …`. Dividing by zero has no answer, so it is refused here rather than at run time."
                                         )),
                                 );
                             }
@@ -2332,7 +2332,7 @@ impl Checked {
                 .mark(sp.clone(), "")
                 .note(tr!(
                     "円×円 や g×cm のような合成単位は持っていません。次元解析はやらないので、書き方の誤りとして止めます（§2.1）。",
-                    "There is no compound dimension for 円×円 or g×cm. This tool does not do dimensional analysis, so it is stopped as a modeling error (§2.1)."
+                    "There is no compound dimension for JPY×JPY or g×cm. This tool does not do dimensional analysis, so it is stopped as a modeling error (§2.1)."
                 ))
                 .note(tr!(
                     "掛ける相手が業務のデータなら、それは率か個数（`rate`、`number`）のはずです。面積のように積そのものが答えなら、入力として受け取ってください。",
@@ -2364,7 +2364,7 @@ impl Checked {
             ),
             _ => tr!(
                 "温度と音量は、比べるためだけの目盛りです。℃ は 0 が「無い」を意味しないので `気温 × 2` に意味が無く、dB は対数なので、二つ足しても音が二つ分になるわけではありません（§15.84）。",
-                "A temperature and a sound level are scales to compare against, nothing more. A ℃ has a displaced zero, so `気温 × 2` means nothing, and a decibel is a logarithm, so adding two of them is not two sounds' worth (§15.84)."
+                "A temperature and a sound level are scales to compare against, nothing more. A ℃ has a displaced zero, so `temp × 2` means nothing, and a decibel is a logarithm, so adding two of them is not two sounds' worth (§15.84)."
             ),
         };
         self.diags.push(
@@ -3194,7 +3194,7 @@ impl Checked {
             if matches!(on.cell, Cell::DontCare) {
                 self.diags.push(bad(
                     tr!("`-` はどの値も数えます", "`-` counts every value"),
-                    tr!("数える値をセルで書いてください（`>0円`、`true` など）。", "Write the values to count as a cell (`>0円`, `true`, …)."),
+                    tr!("数える値をセルで書いてください（`>0円`、`true` など）。", "Write the values to count as a cell (`>0JPY`, `true`, …)."),
                 ));
                 continue;
             }
@@ -3535,16 +3535,23 @@ pub fn lit_scale(n: &crate::lex::Num) -> Option<i128> {
 /// The §1.6 rendering uses the same write-back. Showing an approver `1000000円` forces a
 /// mental conversion before it can be matched against the `100万円` in the rule source.
 pub fn fmt_big_pub(v: Rat) -> String {
-    fmt_big(v)
+    fmt_big(v, crate::i18n::ja())
 }
 
 /// Large amounts are written back with 万 and 億. Answering `1000000円` to an author who
 /// wrote `100万円` forces a mental conversion before they can fix anything.
-fn fmt_big(v: Rat) -> String {
+///
+/// In English the same author writes `1_000_000JPY`, the way the language groups digits (a `,`
+/// is E049) and the way the corpus writes them, so that is what comes back: a whole number of
+/// five digits or more, in groups of three joined by `_`. Japanese is as it was.
+fn fmt_big(v: Rat, ja: bool) -> String {
     if !v.is_int() {
         return format!("{v}");
     }
     let n = v.num;
+    if !ja {
+        return group_digits(n);
+    }
     if n != 0 && n % 1_000_000_000_000 == 0 {
         return format!("{}兆", n / 1_000_000_000_000);
     }
@@ -3555,6 +3562,26 @@ fn fmt_big(v: Rat) -> String {
         return format!("{}万", n / 10_000);
     }
     format!("{n}")
+}
+
+/// `1000000` is `1_000_000`, and `-12345` is `-12_345`; four digits or fewer are left alone, as
+/// the corpus writes `5000JPY` and `10_000JPY`.
+fn group_digits(n: i128) -> String {
+    let digits = n.unsigned_abs().to_string();
+    if digits.len() < 5 {
+        return n.to_string();
+    }
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 1);
+    if n < 0 {
+        out.push('-');
+    }
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push('_');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// One unit of the type, as it is written: `1円`, `1g`, `1%`. It is the finest grid a
@@ -3571,10 +3598,21 @@ fn unit_one(ty: &Ty) -> String {
     }
 }
 
-/// A value the way the rule writes one of its type: `1000円`, `2kg`, `1%`.
+/// A value the way the rule writes one of its type: `1000円`, `2kg`, `1%`. Amounts of many digits
+/// are written back as the language of the output writes them (see `fmt_big`).
 pub fn fmt_val(v: Rat, ty: &Ty) -> String {
+    fmt_val_in(v, ty, crate::i18n::ja())
+}
+
+/// The same for what a fix writes into the rule (`fix.text`). A fix is data, the same in both
+/// languages (the JSON tests hold it), so its amounts are written back as they always were.
+pub fn fmt_val_fixed(v: Rat, ty: &Ty) -> String {
+    fmt_val_in(v, ty, true)
+}
+
+fn fmt_val_in(v: Rat, ty: &Ty, ja: bool) -> String {
     match ty {
-        Ty::Money { cur, .. } => format!("{}{cur}", fmt_big(v)),
+        Ty::Money { cur, .. } => format!("{}{cur}", fmt_big(v, ja)),
         Ty::Qty { unit, .. } => format!("{v}{unit}"),
         Ty::Rate => format!("{}%", v.mul(Rat::int(100))),
         _ => format!("{v}"),
@@ -3714,7 +3752,7 @@ impl Checked {
                     .at(tr!("{path}:{} 導出 {}", "{path}:{} derived value {}", rg.span.line, d.name.text))
                     .fix(
                         crate::diag::FixKind::WidenRange,
-                        format!("{} >={} <={}", crate::kw::RANGE, fmt_val(rl, ty), fmt_val(rh, ty)),
+                        format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(rl, ty), fmt_val_fixed(rh, ty)),
                     )
                     .mark(rg.span.clone(), tr!("実際に取りうる値は >={} <={} です", "the reachable interval is >={} <={}", fmt_val(rl, ty), fmt_val(rh, ty)))
                     .note(tr!("範囲が狭いと、完全性の検査が実際に起きる値を見ないまま「完全」と答えます。", "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur."))

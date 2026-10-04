@@ -28,7 +28,7 @@ Obj(
                     "With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur.",
                 ),
                 Str(
-                    "Hint: widen the range to >=-100万円 <=1000万円. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.",
+                    "Hint: widen the range to >=-1_000_000円 <=10_000_000円. Widening it past what is reachable does no harm; the checks sieve that part out as an infeasible region.",
                 ),
             ],
         ),
@@ -46,7 +46,7 @@ Obj(
                             85,
                         ),
                         "label": Str(
-                            "the reachable interval is >=-100万円 <=1000万円",
+                            "the reachable interval is >=-1_000_000円 <=10_000_000円",
                         ),
                         "length": Int(
                             25,

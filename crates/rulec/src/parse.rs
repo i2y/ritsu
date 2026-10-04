@@ -354,7 +354,7 @@ impl P {
                         None => self.err(
                             Diag::error("E020", tr!("`elements` に名前がありません", "The `elements` line has no name"))
                                 .at(self.at(span.line))
-                                .mark(span, tr!("`elements 運賃行(fee_rows)` の形です", "the shape is `elements 運賃行(fee_rows)`")),
+                                .mark(span, tr!("`elements 運賃行(fee_rows)` の形です", "the shape is `elements fee_rows(fee_rows)`")),
                         ),
                     }
                 }
@@ -578,7 +578,7 @@ impl P {
                             .mark(sp, "")
                             .note(tr!(
                                 "別名は英字か `_` で始まる ASCII の名前です。`サイズ60(size_60)` のように書きます。",
-                                "An alias is an ASCII name beginning with a letter or `_`, such as `サイズ60(size_60)`."
+                                "An alias is an ASCII name beginning with a letter or `_`, such as `sixty(size_60)`."
                             )),
                     );
                     // Past the `)` when there is one, so that what follows is read as before.
@@ -1644,7 +1644,7 @@ impl P {
                     .mark(span.clone(), "")
                     .note(tr!(
                         "形は `@<出典> <箇所>` で、箇所は `,` で区切って並べられます（`@法 第20条, 第21条`）。隣に置いたファイルは箇所無しで `@郵便` とも、表を指して `@郵便 表1` とも書けます。語にならない箇所は `\"` で囲みます（`@osha \"§1910.157\"`）。出典は `{}` で宣言した名前です。",
-                        "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@法 第20条, 第21条`); a file beside the rule may be cited whole, `@郵便`, or by one of its tables, `@郵便 表1`. A fragment that is not a word goes in quotes (`@osha \"§1910.157\"`). The source is a name a `{}` line declares.",
+                        "The shape is `@<source> <fragment>`, several fragments separated by `,` (`@act 第20条, 第21条`); a file beside the rule may be cited whole, `@postal`, or by one of its tables, `@postal table1`. A fragment that is not a word goes in quotes (`@osha \"§1910.157\"`). The source is a name a `{}` line declares.",
                         crate::kw::SOURCE
                     )),
             );

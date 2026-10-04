@@ -22,14 +22,31 @@ fn rendered(rel: &str, code: &str) -> (String, String) {
     (got, src)
 }
 
+/// Kana, ideographs, and the punctuation Japanese writes with them (`〜`, `「」`, the full-width
+/// parentheses): all of it is Japanese in an English rendering.
 fn is_cjk(c: char) -> bool {
-    ('\u{3040}'..='\u{30ff}').contains(&c) || ('\u{4e00}'..='\u{9fff}').contains(&c)
+    ('\u{3000}'..='\u{30ff}').contains(&c)
+        || ('\u{3400}'..='\u{4dbf}').contains(&c)
+        || ('\u{4e00}'..='\u{9fff}').contains(&c)
+        || ('\u{ff00}'..='\u{ffef}').contains(&c)
 }
+
+/// The Japanese an English rendering may say although the rule did not, and why. Everything else
+/// that is Japanese has to be the rule's own (below). A word is here only because the
+/// diagnostic's point is the Japanese itself.
+const KEPT: &[(&str, &str)] = &[
+    // E011 says a name that is not ASCII needs an alias, and shows one: kanji and kana are the
+    // names it is about (the entry in the ledger keeps `重量(weight)` for the same reason).
+    ("届け先", "the example name of E011's hint, `届け先(dest)`"),
+];
 
 /// An English rendering must not leak Japanese prose. Names, cell values and unit
 /// symbols quoted from the rule file are Japanese by design, so a run of Japanese
 /// characters is allowed exactly when it occurs in the rule source (comments and the
-/// description excluded) or is a built-in prefecture name.
+/// description excluded), in a rule it applies, or is a built-in prefecture name, or is one of
+/// the few words in [`KEPT`], each with its reason. The units and multipliers the tool writes
+/// back (`円`, `万`) are not among them: it writes them in the rule's own spelling, and an
+/// amount of many digits in groups (`1_000_000JPY`).
 fn assert_english(got: &str, src: &str) {
     let mut allowed: String = src
         .lines()
@@ -51,8 +68,10 @@ fn assert_english(got: &str, src: &str) {
             }
         }
     }
-    // Unit symbols, multipliers, and the fixed example name a hint uses (`届け先(dest)`).
-    allowed.push_str("\n円 銭 万 億 兆 万円 億円 兆円 届け先");
+    for (word, _) in KEPT {
+        allowed.push('\n');
+        allowed.push_str(word);
+    }
     let mut leaks: Vec<String> = Vec::new();
     for line in got.lines() {
         // Frame lines quote the source verbatim.
@@ -153,3 +172,67 @@ golden!(e126_never_broken, "E126", "tests/mutants/m_e126.rule", "E126");
 golden!(e127_once_broken, "E127", "tests/mutants/m_e127.rule", "E127");
 golden!(e107_scenario, "E107-scenario", "tests/mutants/m_e126.rule", "E107");
 golden!(w125_unreached_state, "W125", "tests/mutants/m_w125.rule", "W125");
+
+// ── The pages and the amounts an English reader sees ─────────────────────────────────────────
+
+/// What a command prints, in a language, as the person who typed it sees it.
+fn run(args: &[&str], lang: &str) -> String {
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", lang)
+        .current_dir(root())
+        .args(args)
+        .args(["--lang", lang])
+        .output()
+        .expect("cannot start rulec");
+    String::from_utf8_lossy(&o.stdout).into_owned()
+}
+
+/// Every `--help` page in English is written in English, but for the words of `KEPT`: the examples
+/// use the English names of the corpus (`rules/member_shipping_fee.rule`, as `tests/corpus/twins.tsv`
+/// pairs it with `送料.rule`) and the placeholders are English (`<field=value>`). The Japanese pages
+/// are as they were.
+#[test]
+fn english_help_pages_have_no_japanese_but_what_is_kept() {
+    let top = run(&["--help"], "en");
+    let mut pages = vec![("rulec".to_string(), top.clone())];
+    for l in top.lines() {
+        if let Some(cmd) = l.strip_prefix("  rulec ").and_then(|t| t.split_whitespace().next()) {
+            pages.push((cmd.to_string(), run(&[cmd, "--help"], "en")));
+        }
+    }
+    assert!(pages.len() > 20, "the commands of --help were not found: {}", pages.len());
+    let mut leaks: Vec<String> = Vec::new();
+    for (cmd, page) in &pages {
+        let mut run = String::new();
+        for c in page.chars().chain(std::iter::once(' ')) {
+            if is_cjk(c) {
+                run.push(c);
+            } else if !run.is_empty() {
+                if !KEPT.iter().any(|(w, _)| *w == run) {
+                    leaks.push(format!("{cmd}: {run}"));
+                }
+                run.clear();
+            }
+        }
+    }
+    assert!(leaks.is_empty(), "Japanese in an English --help page: {leaks:?}");
+    // And the Japanese pages still show the Japanese examples.
+    let ja = run(&["verify", "--help"], "ja");
+    assert!(ja.contains("rules/送料.rule"), "{ja}");
+    let en = run(&["verify", "--help"], "en");
+    assert!(en.contains("rules/member_shipping_fee.rule") && !en.contains("送料"), "{en}");
+}
+
+/// A range and a big amount are written in English as the rule's source writes them: `to` between
+/// the ends, and the digits in groups of three joined by `_` (`10_000_000JPY`), where Japanese
+/// writes `〜` and `1000万JPY`. The Japanese page is as it was.
+#[test]
+fn english_doc_writes_ranges_and_big_amounts_in_english() {
+    let file = "tests/corpus/member_shipping_fee.rule";
+    let en = run(&["doc", file], "en");
+    assert!(en.contains("| weight | mass[g] | 1g to 40_000g |"), "{en}");
+    assert!(en.contains("| total | money[JPY, incl_tax] | 0JPY to 10_000_000JPY |"), "{en}");
+    assert!(!en.contains('万') && !en.contains('億') && !en.contains('〜'), "{en}");
+    let ja = run(&["doc", file], "ja");
+    assert!(ja.contains("| weight | mass[g] | 1g 〜 4万g |") && ja.contains("0JPY 〜 1000万JPY"), "{ja}");
+}
