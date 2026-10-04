@@ -1,0 +1,84 @@
+name: docs
+
+# Build ritsu's site and deploy it to GitHub Pages as one artifact (DESIGN 13.2): ritsu's own pages
+# and the site of each language below them, each in English and Japanese.
+#
+#   website/docs/              -> https://i2y.github.io/ritsu/
+#   website/docs-ja/           -> https://i2y.github.io/ritsu/ja/
+#   website/dandori/docs/      -> https://i2y.github.io/ritsu/dandori/
+#   website/dandori/docs-ja/   -> https://i2y.github.io/ritsu/dandori/ja/
+#
+# It runs only by hand, from the Actions tab, for now: the sites people read are still the ones
+# rulec's and dandori's own repositories publish, and a push to main starts publishing ritsu's only
+# when the sites are switched over (then add `push: branches: [main]` with the paths `website/**`
+# and this file). Pages must be enabled with "GitHub Actions" as the source in the repository's
+# settings. crates/ritsu/tests/website.rs holds this file to running only by hand.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.13"
+
+      # build.sh builds ritsu's pages in both languages, then each language's site with its own
+      # build.sh, and copies it to build/<language>. Nothing but Zensical is needed: the pictures,
+      # the pages `dandori doc` writes for the examples and the playgrounds' modules and bundles are
+      # committed, and dandori's tools/flowlexer.py is plain Python. The tests of each language
+      # (dandori's tests/docs.rs, tests/doc.rs and tests/playground.rs) and ritsu's
+      # tests/website.rs hold the pages to the tools; the other workflows run them.
+      - name: Build the site
+        run: |
+          cd website
+          uv venv --python 3.13 .venv
+          uv pip install --python .venv/bin/python zensical
+          ./build.sh
+
+      - name: Check the tree is complete
+        run: |
+          test -f website/build/index.html
+          test -f website/build/ja/index.html
+          test -f website/build/playground/index.html
+          test -f website/build/playground/ritsu.wasm
+          test -f website/build/ja/playground/projects.json
+          test -f website/build/dandori/index.html
+          test -f website/build/dandori/ja/index.html
+          test -f website/build/dandori/reference/codes/index.html
+          test -f website/build/dandori/ja/reference/codes/index.html
+          test -f website/build/dandori/doc/hotel.html
+          test -f website/build/dandori/ja/doc/hotel.html
+          test -f website/build/dandori/playground/index.html
+          test -f website/build/dandori/playground/dandori.wasm
+          test -f website/build/dandori/ja/playground/presets.json
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
