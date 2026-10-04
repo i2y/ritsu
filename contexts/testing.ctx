@@ -1,5 +1,5 @@
 context Testing(testing) v1
-description "The kit the tests share, which a crate takes only as a dev-dependency, and the tasks of the repository (ritsu-testkit, xtask)"
+description "The kit the tests share, which a crate takes only as a dev-dependency, the comparison of Rust with the Lean models, and the tasks of the repository (ritsu-testkit, ritsu-model, xtask)"
 
 owns
-  dir "../crates/ritsu-testkit", "../crates/xtask"
+  dir "../crates/ritsu-testkit", "../crates/ritsu-model", "../crates/xtask"
