@@ -783,7 +783,7 @@ JSON は一つのオブジェクトにする。
 
 `rulec schema|certificate|api|graph|vectors`、`koyomi api|vectors`、`chobo api`、geas の `--json` と `map` の記録、`yuen api`、`sakai api` は、これまでどおり出す（P6）。ritsu の中ではこれらを読まない（口を通す）が、外のツールとエージェントが読む。プロジェクト全体の中のものと参照を一つの JSON で出すコマンド（`ritsu index`）は、外のツールが要るとわかってから足す（15 章）。
 
-### 8.6 段階 D の最小の入口（`ritsu dandori`）
+### 8.6 段階 D の最小の入口（`ritsu dandori`、`ritsu yuen`、`ritsu sakai`）
 
 D.3 で、dandori のクレートは rulec を読まなくなり、そのバイナリは規則を読めなくなった（2.3）。`ritsu` の入口は E で作る予定だったので、そのままでは、D の残りと E のあいだ、規則を使うワークフローを手で走らせる手段が無い。困るのは次のところである。
 
@@ -796,6 +796,8 @@ D.3 で、dandori のクレートは rulec を読まなくなり、そのバイ�
 **決定（★）**：入口の最小の形を D で先に作る。`crates/ritsu` のバイナリ `ritsu` が持つのは、`ritsu dandori <引数>…`（dandori のコマンドを、rulec の規則の口をつないで走らせる）と、`--help`、`--version` だけである。ほかの言語の名前（`ritsu rulec` など）には、まだ無いと言って 2 で終わる。それらの言語は、これまでどおり自分のクレートのバイナリで動く（rulec・koyomi・chobo・geas はほかの言語を読まない。yuen と sakai がほかの言語を子プロセスで呼ぶところは、D.7 と D.8 で口に替える）。`ritsu check`、`ritsu run`、`ritsu gen`、`ritsu explain`、すべての言語の `ritsu <言語>`、リンクの名前で呼ばれたときの振る舞い（2.3）は、E で作る。
 
 D の最後の部分で、`ritsu yuen <引数>…` を足した（PLAN の D.7）。yuen のコマンドを、yuen が読むすべての言語の口（rulec、koyomi、chobo、geas、dandori、sakai の `Items`、rulec と koyomi の `Sources`、rulec の `Rules`、koyomi の `Dates`、geas の `Claims`）をつないで走らせる。テストは `crates/ritsu/tests/yuen.rs`（ほかの言語のものを名指す yuen のテストの材料の全部が通ること、`affected`、借りた出典の `source outdated`）。
+
+同じ部分で、`ritsu sakai <引数>…` も足した（PLAN の D.8）。sakai のコマンドを、sakai が読むすべての言語の口（rulec の `Rules` と `References`、koyomi と dandori の `References`、chobo の `Books`）をつないで走らせる。テストは `crates/ritsu/tests/sakai.rs`（例の `check` と `api` と四つの `build --check`、ほかの言語を通してしか見えない変更の E209 と E105）。これで入口が持つ言語は、ほかの言語を読む dandori、yuen、sakai の三つになった。残りの四つ（rulec、koyomi、chobo、geas）はほかの言語を読まないので、自分のクレートのバイナリで同じに動く。
 
 待つ費用が大きく、作る費用が小さいからである。待てば、規則を使う例をコマンドで走らせる手段が E まで無く、README に書ける手順も無い。作るのは、dandori のコマンドを関数（`dandori::cli::run`）にしたので、引数を渡すだけで済む（`src/main.rs` は 90 行）。入口は何に依存してもよく（3.1）、`cargo xtask deps` も通る。テストは `crates/ritsu/tests/dandori.rs` に置いた（すべてをつないだバイナリを走らせるテストの置き場所。3.3）。規則を使うフローを `ritsu dandori check` と `doc` が読むこと（英語と日本語）と、`ritsu` が持たないコマンドに 2 で終わることを見る。
 

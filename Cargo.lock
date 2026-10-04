@@ -112,6 +112,7 @@ dependencies = [
  "ritsu-testkit",
  "rulec",
  "sakai",
+ "serde_json",
  "yuen",
 ]
 

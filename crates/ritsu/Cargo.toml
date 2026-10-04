@@ -22,3 +22,4 @@ yuen = { path = "../yuen" }
 
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
+serde_json = { version = "1", features = ["preserve_order"] }
