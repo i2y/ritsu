@@ -598,7 +598,8 @@ fn optionalの列も検査される() {
 fn 文書のキーワード表はパーサと一致する() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let md = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("website/docs-ja/tour.md"),
+        // rulec's site, which ritsu's site holds at website/rulec, two directories above this crate.
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../website/rulec/docs-ja/tour.md"),
     )
     .unwrap();
     let i = md.find("行頭に書けるのは次の語だけで").expect("キーワード表の前書きが無い");

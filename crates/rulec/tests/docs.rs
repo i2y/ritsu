@@ -4,12 +4,24 @@
 //! command that does not exist or a link that goes nowhere is a real failure, not a typo.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+/// The root of ritsu's workspace, two directories above this crate: rulec's site is there, at
+/// website/rulec.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
+}
+
+/// A path as the tests here name it: `website/…` from the root of the workspace (rulec's site,
+/// `website/rulec`), and anything else from this crate.
+fn locate(rel: &str) -> PathBuf {
+    if rel.starts_with("website/") { repo().join(rel) } else { root().join(rel) }
 }
 
 fn run(args: &[&str]) -> (i32, String) {
@@ -39,7 +51,7 @@ fn docs() -> Vec<(String, String)> {
 }
 
 fn read(rel: &str) -> String {
-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|_| panic!("読めない: {rel}"))
+    std::fs::read_to_string(locate(rel)).unwrap_or_else(|_| panic!("読めない: {rel}"))
 }
 
 fn subcommands() -> BTreeSet<String> {
@@ -161,7 +173,7 @@ fn w114の防壁の抜粋は実物と一致する() {
     // The guard sits inside a function: the page shows it with that indent taken off.
     let indent = lines[at].len() - lines[at].trim_start().len();
     let want: String = lines[at..at + 3].iter().map(|l| format!("{}\n", &l[indent..])).collect();
-    for page in ["docs/generated-code.md", "website/docs/generate.md"] {
+    for page in ["docs/generated-code.md", "website/rulec/docs/generate.md"] {
         assert!(read(page).contains(&want), "{page} の W114 の防壁が実物と違う。実物:\n{want}");
     }
 }
@@ -265,12 +277,12 @@ fn genが書く言語のディレクトリはレジストリと同じ() {
 /// part of the table.
 #[test]
 fn 文書のruleブロックの表はfmtのとおりにそろっている() {
-    // The copies `website/sync.sh` makes are the documents under docs/, already read.
+    // The copies `website/rulec/sync.sh` makes are the documents under docs/, already read.
     const COPIES: &[&str] = &["agents.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "codes.md"];
     let mut files = docs();
     files.push(("DESIGN.md".to_string(), read("DESIGN.md")));
-    for dir in ["website/docs", "website/docs-ja"] {
-        for e in std::fs::read_dir(root().join(dir)).unwrap().flatten() {
+    for dir in ["website/rulec/docs", "website/rulec/docs-ja"] {
+        for e in std::fs::read_dir(locate(dir)).unwrap().flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
             if name.ends_with(".md") && !COPIES.contains(&name.as_str()) {
                 files.push((format!("{dir}/{name}"), std::fs::read_to_string(e.path()).unwrap()));

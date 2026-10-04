@@ -1,7 +1,9 @@
 //! The documentation site must not promise what the tool does not do either.
 //!
-//! `website/docs/` and `website/docs-ja/` hold ten authored pages each; the rest
-//! are copied in from this repository by `website/sync.sh` and are not committed,
+//! rulec's site is ritsu's `website/rulec/`, at the root of the workspace (the tests name
+//! its paths from there, `website/rulec/…`, and every other path from this crate).
+//! `website/rulec/docs/` and `website/rulec/docs-ja/` hold ten authored pages each; the rest
+//! are copied in from this crate by `website/rulec/sync.sh` and are not committed,
 //! so they are checked where they live (`tests/docs.rs`, `tests/codes.rs`,
 //! `tests/formats.rs`, `tests/api.rs`). What is checked here is the site's own
 //! seams: that both languages carry the same pages, that every page the nav
@@ -9,7 +11,7 @@
 //! and link to pages that are really there.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready};
 
@@ -17,7 +19,18 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// The pages `website/sync.sh` copies in. They are gitignored, so a page may be
+/// The root of ritsu's workspace, two directories above this crate.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
+}
+
+/// A path as the tests here name it: `website/…` from the root of the workspace, where rulec's
+/// site is (`website/rulec`), and anything else from this crate.
+fn locate(rel: &str) -> PathBuf {
+    if rel.starts_with("website/") { repo().join(rel) } else { root().join(rel) }
+}
+
+/// The pages `website/rulec/sync.sh` copies in. They are gitignored, so a page may be
 /// linked or listed in the nav without being on disk in a fresh checkout.
 const SYNCED: &[&str] =
     &["agents.md", "reference.md", "formats.md", "generated-code.md", "backends.md", "codes.md", "compatibility.md"];
@@ -38,7 +51,7 @@ const AUTHORED: &[&str] = &[
 ];
 
 fn read(rel: &str) -> String {
-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|_| panic!("読めない: {rel}"))
+    std::fs::read_to_string(locate(rel)).unwrap_or_else(|_| panic!("読めない: {rel}"))
 }
 
 /// The `"page.md"` targets of a config's `nav`, in order.
@@ -63,8 +76,8 @@ fn nav_targets(config: &str) -> Vec<String> {
 
 #[test]
 fn 両言語が同じページを持つ() {
-    let en = nav_targets("website/zensical.toml");
-    let ja = nav_targets("website/zensical.ja.toml");
+    let en = nav_targets("website/rulec/zensical.toml");
+    let ja = nav_targets("website/rulec/zensical.ja.toml");
     // The language switcher rewrites only the prefix of the path, so a page that
     // exists in one language and not the other is a 404 waiting to happen.
     assert_eq!(en, ja, "英語と日本語の nav が指すページが違う");
@@ -74,14 +87,14 @@ fn 両言語が同じページを持つ() {
 #[test]
 fn navが指すページは同期後に存在する() {
     for (config, dir) in
-        [("website/zensical.toml", "website/docs"), ("website/zensical.ja.toml", "website/docs-ja")]
+        [("website/rulec/zensical.toml", "website/rulec/docs"), ("website/rulec/zensical.ja.toml", "website/rulec/docs-ja")]
     {
         for page in nav_targets(config) {
             if SYNCED.contains(&page.as_str()) {
                 continue; // copied in by sync.sh
             }
             assert!(
-                root().join(dir).join(&page).exists(),
+                locate(dir).join(&page).exists(),
                 "{config}: nav の {page} が {dir} に無い"
             );
         }
@@ -90,13 +103,13 @@ fn navが指すページは同期後に存在する() {
 
 #[test]
 fn 書き下ろしのページは両言語に揃っている() {
-    for dir in ["website/docs", "website/docs-ja"] {
+    for dir in ["website/rulec/docs", "website/rulec/docs-ja"] {
         for page in AUTHORED {
-            assert!(root().join(dir).join(page).exists(), "{dir}/{page} が無い");
+            assert!(locate(dir).join(page).exists(), "{dir}/{page} が無い");
         }
     }
     // And nothing authored is missing from the nav.
-    let en = nav_targets("website/zensical.toml");
+    let en = nav_targets("website/rulec/zensical.toml");
     for page in AUTHORED {
         assert!(en.contains(&page.to_string()), "{page} が nav に無い");
     }
@@ -107,12 +120,12 @@ fn 書き下ろしのページは両言語に揃っている() {
 /// unreachable, or linked and never built.
 #[test]
 fn 同期するページとnavが一致する() {
-    let sync = read("website/sync.sh");
+    let sync = read("website/rulec/sync.sh");
     let listed: BTreeSet<&str> = SYNCED.iter().copied().collect();
     for page in &listed {
         assert!(sync.contains(&format!("{page}")), "sync.sh が {page} を作らない");
     }
-    let nav: BTreeSet<String> = nav_targets("website/zensical.toml").into_iter().collect();
+    let nav: BTreeSet<String> = nav_targets("website/rulec/zensical.toml").into_iter().collect();
     let want: BTreeSet<String> =
         AUTHORED.iter().chain(SYNCED.iter()).map(|s| s.to_string()).collect();
     assert_eq!(nav, want, "nav と（書き下ろし + 同期）の集合が違う");
@@ -120,7 +133,7 @@ fn 同期するページとnavが一致する() {
 
 fn authored_pages() -> Vec<(String, String)> {
     let mut out = Vec::new();
-    for dir in ["website/docs", "website/docs-ja"] {
+    for dir in ["website/rulec/docs", "website/rulec/docs-ja"] {
         for page in AUTHORED {
             out.push((format!("{dir}/{page}"), read(&format!("{dir}/{page}"))));
         }
@@ -184,7 +197,7 @@ fn サイトの相対リンクは実在する() {
             if path.is_empty() || SYNCED.contains(&path) {
                 continue; // copied in by sync.sh
             }
-            assert!(root().join(&dir).join(path).exists(), "{name}: リンク先が無い: {target}");
+            assert!(locate(&dir).join(path).exists(), "{name}: リンク先が無い: {target}");
         }
     }
 }
@@ -196,7 +209,7 @@ fn サイトの相対リンクは実在する() {
 #[test]
 fn 例のページの規則はコーパスと一字一句同じ() {
     for lang in ["docs", "docs-ja"] {
-        let page = read(&format!("website/{lang}/examples.md"));
+        let page = read(&format!("website/rulec/{lang}/examples.md"));
         // Every source on the page opens with the ```rule fence that colours it.
         let blocks: Vec<&str> = page
             .split("\n```rule\n")
@@ -218,7 +231,7 @@ fn 例のページの規則はコーパスと一字一句同じ() {
             assert_eq!(
                 b.trim_end(),
                 want.trim_end(),
-                "{lang}: 例のページの {name} がコーパスと違う。`python3 website/tools/make_examples.py` で作り直してください"
+                "{lang}: 例のページの {name} がコーパスと違う。`python3 website/rulec/tools/make_examples.py` で作り直してください"
             );
         }
     }
@@ -238,7 +251,7 @@ fn 例のページは両言語で同じ規則を同じ順に並べる() {
         .collect();
     let names = |lang: &str| -> Vec<String> {
         // Every source on the page opens with the ```rule fence, and its first line is the rule's.
-        read(&format!("website/{lang}/examples.md"))
+        read(&format!("website/rulec/{lang}/examples.md"))
             .split("\n```rule\n")
             .skip(1)
             .filter_map(|b| b.lines().next()?.strip_prefix("rule ")?.split(['(', ' ']).next().map(String::from))
@@ -262,7 +275,7 @@ fn 図が見せている出力は本物と一致する() {
     for (script, prefix) in DIAGRAMS {
         // Regenerating writes the four SVGs, so their bytes are kept and put back: a test
         // has no business leaving the working tree different from how it found it.
-        let images = root().join("website/docs/images");
+        let images = locate("website/rulec/docs/images");
         let files: Vec<std::path::PathBuf> = std::fs::read_dir(&images)
             .unwrap()
             .filter_map(|e| e.ok().map(|e| e.path()))
@@ -272,7 +285,7 @@ fn 図が見せている出力は本物と一致する() {
             files.iter().map(|p| (p.clone(), std::fs::read(p).unwrap())).collect();
 
         let o = Command::new("python3")
-            .current_dir(root().join("website"))
+            .current_dir(locate("website/rulec"))
             .env("RULEC_LANG", "ja")
             .args([script, "--verify", env!("CARGO_BIN_EXE_rulec")])
             .output()
@@ -313,12 +326,12 @@ fn 例のページは作り直しても変わらない() {
     if !ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無いので飛ばした") {
         return;
     }
-    let pages = ["website/docs/examples.md", "website/docs-ja/examples.md"];
+    let pages = ["website/rulec/docs/examples.md", "website/rulec/docs-ja/examples.md"];
     let before: Vec<(std::path::PathBuf, Vec<u8>)> =
-        pages.iter().map(|r| root().join(r)).map(|p| (p.clone(), std::fs::read(&p).unwrap())).collect();
+        pages.iter().map(|r| locate(r)).map(|p| (p.clone(), std::fs::read(&p).unwrap())).collect();
 
     let o = Command::new("python3")
-        .current_dir(root().join("website"))
+        .current_dir(locate("website/rulec"))
         .arg("tools/make_examples.py")
         .output()
         .expect("python3 を起動できない");
@@ -383,7 +396,7 @@ fn 図のurlは中身のハッシュを持っている() {
     all.sort();
     assert_eq!(named, all, "STAMPED と FRONT/ELSEWHERE が食い違っている");
     for lang in ["docs", "docs-ja"] {
-        let page = read(&format!("website/{lang}/index.md"));
+        let page = read(&format!("website/rulec/{lang}/index.md"));
         let refs: Vec<&str> = FRONT
             .iter()
             .flat_map(|stem| {
@@ -406,7 +419,7 @@ fn 図のurlは中身のハッシュを持っている() {
             );
         }
         for (stem, page_name) in ELSEWHERE {
-            let other = read(&format!("website/{lang}/{page_name}"));
+            let other = read(&format!("website/rulec/{lang}/{page_name}"));
             let mark = format!("images/{stem}");
             let refs: Vec<&str> = other
                 .match_indices(&mark)
@@ -433,7 +446,7 @@ fn diagram_version() -> String {
     let mut bytes = Vec::new();
     for stem in STAMPED {
         for lang in ["-ja", ""] {
-            bytes.extend(read(&format!("website/docs/images/{stem}{lang}.svg")).into_bytes());
+            bytes.extend(read(&format!("website/rulec/docs/images/{stem}{lang}.svg")).into_bytes());
         }
     }
     // A small, dependency-free digest. It only has to change when the files do.
@@ -452,7 +465,7 @@ fn diagram_version() -> String {
 #[test]
 fn 色づけの語彙はkwと同じ() {
     use rulec::kw;
-    let py = read("website/tools/rulelexer.py");
+    let py = read("website/rulec/tools/rulelexer.py");
     let list = |name: &str| -> Vec<String> {
         let head = format!("\n{name} = (");
         let at = py.find(&head).unwrap_or_else(|| panic!("rulelexer.py に {name} が無い"));
@@ -528,8 +541,8 @@ fn 規則のコード片には札が付いている() {
     ];
     let mut bare: Vec<String> = Vec::new();
     let mut files: Vec<String> = vec!["README.md".into()];
-    for dir in ["docs", "website/docs", "website/docs-ja"] {
-        let mut here: Vec<String> = std::fs::read_dir(root().join(dir))
+    for dir in ["docs", "website/rulec/docs", "website/rulec/docs-ja"] {
+        let mut here: Vec<String> = std::fs::read_dir(locate(dir))
             .unwrap()
             .flatten()
             .map(|e| e.path())
@@ -586,7 +599,7 @@ fn サイトが丸ごと見せる規則は検査を通る() {
     let mut seen = 0usize;
     for lang in ["docs", "docs-ja"] {
         for page in AUTHORED {
-            let rel = format!("website/{lang}/{page}");
+            let rel = format!("website/rulec/{lang}/{page}");
             let src = read(&rel);
             let mut rest = src.as_str();
             let mut at = 1usize;
@@ -635,22 +648,22 @@ fn 確かめ方のページの件数は実物と合っている() {
         ("docs", vec![format!("**{mutants} deliberately broken rules**"), format!("**{rules} rules**"), format!("{codes} codes")]),
         ("docs-ja", vec![format!("わざと壊した規則 {mutants} 本**"), format!("規則 {rules} 本**"), format!("{codes} 件")]),
     ] {
-        let page = read(&format!("website/{lang}/assurance.md"));
+        let page = read(&format!("website/rulec/{lang}/assurance.md"));
         for w in want {
-            assert!(page.contains(&w), "website/{lang}/assurance.md に「{w}」がありません");
+            assert!(page.contains(&w), "website/rulec/{lang}/assurance.md に「{w}」がありません");
         }
     }
 }
 
 /// The playground opens on the table the front page's first picture is about
-/// (`website/tools/overview.rule`), so the two must be the same table. A page showing a
+/// (`website/rulec/tools/overview.rule`), so the two must be the same table. A page showing a
 /// different one would be a second source for the same example — the failure `examples.md`
 /// is held to, one page over.
 #[test]
 fn playgroundの表は絵の表と同じ() {
-    let js = read("website/docs/playground/playground.js");
+    let js = read("website/rulec/docs/playground/playground.js");
     for (key, rule) in
-        [("en", "website/tools/overview.rule"), ("ja", "website/tools/overview-ja.rule")]
+        [("en", "website/rulec/tools/overview.rule"), ("ja", "website/rulec/tools/overview-ja.rule")]
     {
         let open = format!("  {key}: `");
         let start = js.find(&open).unwrap_or_else(|| panic!("playground.js に {key} の表が無い"))
@@ -684,18 +697,18 @@ fn playgroundのサンプルはコーパスの規則と一字一句同じ() {
         ("en:walk", "tests/corpus/shipment_surcharge.rule"),
         ("ja:walk", "tests/corpus/買物かごの送料.rule"),
     ];
-    let js = read("website/docs/playground/playground.js");
+    let js = read("website/rulec/docs/playground/playground.js");
     for (key, rule) in SAMPLES {
         let open = format!("  \"{key}\": `");
         let start = js
             .find(&open)
-            .unwrap_or_else(|| panic!("playground.js に {key} が無い。website/tools/samples.py で作り直してください"))
+            .unwrap_or_else(|| panic!("playground.js に {key} が無い。website/rulec/tools/samples.py で作り直してください"))
             + open.len();
         let got = &js[start..start + js[start..].find("`,").expect("規則が閉じていない")];
-        assert_eq!(got, read(rule), "playground.js の {key} が {rule} と違う。website/tools/samples.py で作り直してください");
+        assert_eq!(got, read(rule), "playground.js の {key} が {rule} と違う。website/rulec/tools/samples.py で作り直してください");
     }
     // Both pages offer the same set, and offer nothing the script cannot serve.
-    for page in ["website/docs/playground.md", "website/docs-ja/playground.md"] {
+    for page in ["website/rulec/docs/playground.md", "website/rulec/docs-ja/playground.md"] {
         let md = read(page);
         let keys: Vec<&str> = md
             .match_indices("data-preset=\"")
@@ -838,8 +851,8 @@ fn kaniの件数はページと記録と実物で揃っている() {
 
     // ページが言う本数も同じか。
     for (page, want) in [
-        ("website/docs/generate.md", format!("{real} harnesses")),
-        ("website/docs-ja/generate.md", format!("{real} 本が")),
+        ("website/rulec/docs/generate.md", format!("{real} harnesses")),
+        ("website/rulec/docs-ja/generate.md", format!("{real} 本が")),
         ("docs/generated-code.md", format!("corpus of {} rules", corpus_rules())),
     ] {
         assert!(read(page).contains(&want), "{page} に「{want}」がありません");
@@ -865,11 +878,11 @@ fn トップと道案内が言う規則の本数は実物と合っている() {
     // page said nine for a while after the tenth went in.
     const WRITTEN: usize = 53;
     for (page, want) in [
-        ("website/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
-        ("website/docs/assurance.md", format!("**{n} rules** — {} transcribed from a published source, {WRITTEN} written", n - WRITTEN)),
-        ("website/docs-ja/assurance.md", format!("**規則 {n} 本**（{} 本は公開されている出典からの転記、{WRITTEN} 本は", n - WRITTEN)),
-        ("website/docs-ja/index.md", format!("規則 **{n} 本**")),
-        ("website/docs/generate.md", format!("On the corpus of {n} rules")),
+        ("website/rulec/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
+        ("website/rulec/docs/assurance.md", format!("**{n} rules** — {} transcribed from a published source, {WRITTEN} written", n - WRITTEN)),
+        ("website/rulec/docs-ja/assurance.md", format!("**規則 {n} 本**（{} 本は公開されている出典からの転記、{WRITTEN} 本は", n - WRITTEN)),
+        ("website/rulec/docs-ja/index.md", format!("規則 **{n} 本**")),
+        ("website/rulec/docs/generate.md", format!("On the corpus of {n} rules")),
     ] {
         assert!(read(page).contains(&want), "{page} に「{want}」がありません");
     }

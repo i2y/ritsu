@@ -4,12 +4,18 @@
 //! Complete agreement is the correct picture; when a defect is deliberately put in, rulec reports
 //! counts, clusters, and witnesses.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+/// The root of ritsu's workspace, two directories above this crate: rulec's site is there, at
+/// website/rulec.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
 }
 
 /// Pick the number out of `heading 123` in the output. Counts move with the generator's
@@ -29,14 +35,16 @@ fn have(cmd: &str) -> bool {
 }
 
 const RULE: &str = "tests/corpus/ゆうパック運賃.rule";
-/// The English twin of that rule (tests/corpus/twins.tsv), which the English page shows.
-const RULE_EN: &str = "tests/corpus/yupack_base_fee.rule";
+/// The rule the English page shows: a parcel tariff written in English, whose inputs name no
+/// prefecture (the English twin of the rule above still takes one of `std/都道府県`).
+const RULE_EN: &str = "tests/corpus/parcel_rate.rule";
 
-/// The same fake legacy implementation, for the twin: its names are English.
+/// The same kind of fake legacy implementation, for that rule: it charges a dollar more for every
+/// parcel going overseas.
 const ADAPTER_EN: &str = r#"# Pretends to be the legacy implementation. It is the generated Python inside, so it matches exactly unless made not to.
 import json, sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "python"))
-import yupack_base_fee as legacy
+import parcel_rate as legacy
 
 sys.stdin.readline()
 print(json.dumps({"ok": True, "impl": "legacy@fake-1"}), flush=True)
@@ -48,9 +56,9 @@ for line in sys.stdin:
         continue
     req = json.loads(line)
     d = req["in"]
-    got = legacy.yupack_base_fee(legacy.Prefecture(d["dest"]), int(d["girth"]), int(d["weight"]))
-    if BUG == "1" and d["dest"] == "沖縄県":
-        got += 10
+    got = legacy.parcel_rate(int(d["weight"]), int(d["girth"]), legacy.Zone(d["dest"]), bool(d["signature"]))
+    if BUG == "1" and d["dest"] == "overseas":
+        got += 1
     print(json.dumps({"id": req["id"], "out": {"fee": got}}, ensure_ascii=False), flush=True)
 "#;
 
@@ -279,8 +287,8 @@ for line in sys.stdin:
 /// `diff` example the same way.
 #[test]
 fn 文書に載せた実演は_いまの出力と一致する() {
-    // Each page shows the rule it is written in: the Japanese page the original, the English
-    // page its twin, with the fake legacy implementation written in the same names.
+    // Each page shows a rule written in its language: the Japanese page the parcel fee of Japan
+    // Post, the English page `parcel_rate`, each with a fake legacy implementation in its names.
     let Some((_tmp, ja_dir)) = setup("文書に載せた実演は_いまの出力と一致する") else { return };
     let Some((_tmp_en, en_dir)) = setup_for("文書に載せた実演は_いまの出力と一致する_en", RULE_EN, ADAPTER_EN) else { return };
     let run = |lang: &str, json: bool| -> String {
@@ -293,8 +301,8 @@ fn 文書に載せた実演は_いまの出力と一致する() {
         cmd.args(["--adapter", "python3"]).arg(dir.join("adapter.py")).env("BUG", "1");
         String::from_utf8_lossy(&cmd.output().expect("rulec を起動できない").stdout).into_owned()
     };
-    for (lang, page) in [("en", "website/docs/compare.md"), ("ja", "website/docs-ja/compare.md")] {
-        let page = std::fs::read_to_string(root().join(page)).unwrap();
+    for (lang, page) in [("en", "website/rulec/docs/compare.md"), ("ja", "website/rulec/docs-ja/compare.md")] {
+        let page = std::fs::read_to_string(repo().join(page)).unwrap();
         // The page shows the head of the report: the totals, the counterpart, the first cluster.
         let out = run(lang, false);
         for line in out.lines().take(6).filter(|l| !l.trim().is_empty()) {

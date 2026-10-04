@@ -19,14 +19,15 @@ website/
 ├── playground/         # the projects the playground opens, from which projects.json is written
 ├── tools/
 │   └── make_wasm.sh    # builds docs/playground/ritsu.wasm
+├── rulec/              # rulec's site: its own zensical.toml, build.sh and pages (its README)
 └── dandori/            # dandori's site: its own zensical.toml, build.sh and pages (its README)
 ```
 
 A language's site keeps its own configuration in its own directory, as it had in the language's
 own repository, and its own `build.sh` builds it into `<language>/build`. `build.sh` here builds
 ritsu's pages, then runs each language's `build.sh` (the list `sites` in it) and copies what it
-built to `build/<language>`, published at `/ritsu/<language>/` and `/ritsu/<language>/ja/`. rulec's
-site comes in the same way, as `website/rulec/`.
+built to `build/<language>`, published at `/ritsu/<language>/` and `/ritsu/<language>/ja/`. The two
+sites are rulec's (`rulec/`, from rulec's repository) and dandori's (`dandori/`, from dandori's).
 
 The Japanese pages are written for a Japanese reader, not translated sentence by sentence, so the
 two languages say the same things but not always in the same order. A change to one goes to the
@@ -37,7 +38,7 @@ other by hand.
 ```console
 $ cd website
 $ uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python zensical
-$ ./build.sh      # build/ and build/ja, then build/dandori and build/dandori/ja
+$ ./build.sh      # build/ and build/ja, then build/rulec, build/rulec/ja, build/dandori, build/dandori/ja
 $ ./serve.sh      # http://localhost:8003/ritsu/ (./serve.sh <port> for another port)
 ```
 
@@ -54,7 +55,7 @@ that is there; the code on the index is the lines of the files of the languages,
 prints what it shows; the two configurations name ritsu's URLs; and `.github/workflows/docs.yml`
 runs only by hand. When Zensical is in `.venv`, it runs `build.sh` into a copy of `website/` and
 looks at the tree it builds. `crates/ritsu/tests/playground.rs` holds the playground, as its page
-says, and each language's own tests hold its site (dandori's README says how).
+says, and each language's own tests hold its site (rulec's and dandori's READMEs say how).
 
 ## Publishing
 

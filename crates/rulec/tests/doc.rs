@@ -5,12 +5,18 @@
 //! not form a partition, it must not say "partitions exactly"; it must not put text that is not in
 //! the source into a table; and it must not render a rule that fails the check prettily.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+/// The root of ritsu's workspace, two directories above this crate: rulec's site is there, at
+/// website/rulec.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
 }
 
 fn run(args: &[&str]) -> (i32, String, String) {
@@ -424,11 +430,11 @@ fn out_で書き出せる() {
 #[test]
 fn 資料の抜粋は実物と一致する() {
     for (page, rule, lang, heading) in [
-        ("website/docs/checks.md", "tests/corpus/yupack_base_fee.rule", "en", "## Groups\n"),
-        ("website/docs-ja/checks.md", "tests/corpus/ゆうパック運賃.rule", "ja", "## グループ\n"),
+        ("website/rulec/docs/checks.md", "tests/corpus/yupack_base_fee.rule", "en", "## Groups\n"),
+        ("website/rulec/docs-ja/checks.md", "tests/corpus/ゆうパック運賃.rule", "ja", "## グループ\n"),
     ] {
         let (_, real, _) = run(&["doc", rule, "--lang", lang]);
-        let md = std::fs::read_to_string(root().join(page)).unwrap();
+        let md = std::fs::read_to_string(repo().join(page)).unwrap();
         let i = md.find(heading).unwrap_or_else(|| panic!("{page} に doc の抜粋が無い"));
         let j = md[i..].find("```").expect("抜粋が閉じていない") + i;
         for l in md[i..j].lines() {

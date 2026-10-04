@@ -49,7 +49,7 @@ jobs:
       # copies are not committed; the tests that walk the pages walk the copies.
       - name: Copy in the pages the sites share
         run: |
-          crates/rulec/website/sync.sh
+          website/rulec/sync.sh
           website/dandori/sync.sh
 
       - name: Build

@@ -12,12 +12,18 @@
 //!    that missed one would be the worst failure this command has: it would say "outside
 //!    this, they answer alike" about a case that does not.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use ritsu_testkit::TempDir;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+/// The root of ritsu's workspace, two directories above this crate: rulec's site is there, at
+/// website/rulec.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
 }
 
 fn rulec(args: &[&str]) -> (i32, String) {
@@ -380,12 +386,13 @@ fn 文書に載せた実演は_いまの出力と一致する() {
     let tmp = TempDir::new("vdiff-demo");
     let dir = tmp.path().to_path_buf();
 
-    // Each language's pages show the rule they are written in: the original on the Japanese
-    // pages, its English twin (tests/corpus/twins.tsv) on the English ones.
+    // Each language's pages show a rule written in it: the shipping fee on the Japanese pages,
+    // and on the English ones `parcel_rate`, a tariff written in English whose example inputs
+    // name no prefecture (its fuel rate for north_america goes from 5% to 6%).
     for (lang, pages, rule, old_name, new_name, old_cell, new_cell) in [
         (
             "ja",
-            ["website/docs-ja/compare.md", "website/docs-ja/scenarios.md"],
+            ["website/rulec/docs-ja/compare.md", "website/rulec/docs-ja/scenarios.md"],
             "tests/corpus/送料.rule",
             ("rule 送料(shipping_fee) v4", "rule 送料(shipping_fee) v3"),
             ("rule 送料(shipping_fee) v4", "rule 送料(shipping_fee) v4"),
@@ -394,15 +401,16 @@ fn 文書に載せた実演は_いまの出力と一致する() {
         ),
         (
             "en",
-            ["website/docs/compare.md", "website/docs/scenarios.md"],
-            "tests/corpus/member_shipping_fee.rule",
-            ("rule member_shipping_fee v4", "rule member_shipping_fee v3"),
-            ("rule member_shipping_fee v4", "rule member_shipping_fee v4"),
-            "| remote      | >2000g  | 1800JPY",
-            "| remote      | >2000g  | 2000JPY",
+            ["website/rulec/docs/compare.md", "website/rulec/docs/scenarios.md"],
+            "tests/corpus/parcel_rate.rule",
+            ("rule parcel_rate v1", "rule parcel_rate v3"),
+            ("rule parcel_rate v1", "rule parcel_rate v4"),
+            "| north_america | 5%                      |",
+            "| north_america | 6%                      |",
         ),
     ] {
         let src = std::fs::read_to_string(root().join(rule)).unwrap();
+        assert!(src.contains(old_name.0) && src.contains(old_cell), "{rule} has no `{}` or `{old_cell}` to change", old_name.0);
         let (a, b) = (dir.join(format!("{lang}-v3.rule")), dir.join(format!("{lang}-v4.rule")));
         std::fs::write(&a, src.replace(old_name.0, old_name.1)).unwrap();
         std::fs::write(&b, src.replace(new_name.0, new_name.1).replace(old_cell, new_cell)).unwrap();
@@ -416,7 +424,7 @@ fn 文書に載せた実演は_いまの出力と一致する() {
         // 一行目はファイルの名前を含むので飛ばす。文書は `送料@v3` と書いている。
         let body: Vec<&str> = got.lines().skip(1).collect();
         for doc in pages {
-            let page = std::fs::read_to_string(root().join(doc)).unwrap();
+            let page = std::fs::read_to_string(repo().join(doc)).unwrap();
             for line in &body {
                 assert!(
                     line.trim().is_empty() || page.contains(line),

@@ -306,7 +306,7 @@ jobs:
 
       - name: Copy in the pages the sites share
         run: |
-          crates/rulec/website/sync.sh
+          website/rulec/sync.sh
           website/dandori/sync.sh
 
       # The steps after the tests run the workspace's binaries (`target/debug/rulec` and the like).

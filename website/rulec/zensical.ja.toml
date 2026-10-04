@@ -1,0 +1,125 @@
+[project]
+site_name = "rulec"
+site_url = "https://i2y.github.io/ritsu/rulec/ja/"
+site_description = "業務ルールのための小さな言語。運賃表、クーポンの規約、適用の可否、税額表。小さいのはわざとで、どの入力にも答えがちょうど一つ決まることを証明してから、依存ゼロのコードを 12 の言語に出す。"
+site_author = "Yasushi Itoh"
+copyright = "Copyright &copy; 2026 Yasushi Itoh"
+
+# One of the sites inside ritsu's: website/build.sh builds it here and copies it to
+# website/build/rulec. `edit_uri` names this site's own docs directory in ritsu's repository.
+repo_url = "https://github.com/i2y/ritsu"
+repo_name = "i2y/ritsu"
+edit_uri = "edit/main/website/rulec/docs-ja"
+
+docs_dir = "docs-ja"
+site_dir = "build/ja"
+use_directory_urls = true
+
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+  { "ホーム" = "index.md" },
+  { "ブラウザで試す" = "playground.md" },
+  { "インストール" = "install.md" },
+  { "立場ごとの使い方" = "scenarios.md" },
+  { "ルール(.rule)を書く" = "tour.md" },
+  { "何を証明するか" = "checks.md" },
+  { "どうやって確かめているか" = "assurance.md" },
+  { "生成して呼ぶ" = "generate.md" },
+  { "突き合わせと再生" = "compare.md" },
+  { "例で見る" = "examples.md" },
+  { "自分のルールが入るか" = "fit.md" },
+  { "エージェント向け" = "agents.md" },
+  { "リファレンス" = [
+    { "文法" = "reference.md" },
+    { "診断コード" = "codes.md" },
+    { "生成物" = "generated-code.md" },
+    { "ほかの言語へ生成する" = "backends.md" },
+    { "形式" = "formats.md" },
+    { "互換性" = "compatibility.md" },
+  ] },
+]
+
+# ---- Language switcher ----------------------------------------------------
+
+[[project.extra.alternate]]
+name = "English"
+link = "/ritsu/rulec/"
+lang = "en"
+
+[[project.extra.alternate]]
+name = "日本語"
+link = "/ritsu/rulec/ja/"
+lang = "ja"
+
+[project.theme]
+variant = "modern"
+# The chrome the theme writes itself — search, the copy button, previous / next,
+# "edit this page" — comes from the theme's own Japanese pack. Without this the
+# Japanese site reads Japanese until the reader touches anything.
+language = "ja"
+icon.repo = "fontawesome/brands/github"
+# navigation.footer     previous / next at the foot of every page, so the
+#                       site reads in order without the sidebar
+# navigation.top        a back-to-top button on long pages
+# navigation.tracking   the address bar follows the section being read
+# content.code.copy     a copy button on every code block — every command
+#                       on this site is meant to be run
+features = [
+  "navigation.footer",
+  "navigation.top",
+  "navigation.tracking",
+  "content.code.copy",
+]
+logo = "images/logo.svg"
+favicon = "images/favicon.svg"
+
+# ---- Palette --------------------------------------------------------------
+
+# Ink and a proof mark. The tool's subject is a table someone signs off,
+# so the accent is the colour of a check in the margin, and the same pair
+# holds on both schemes.
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "black"
+accent = "indigo"
+toggle.icon = "lucide/moon"
+toggle.name = "ダークモードに切り替え"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "black"
+accent = "indigo"
+toggle.icon = "lucide/sun"
+toggle.name = "ライトモードに切り替え"
+
+# ---- Markdown extensions ---------------------------------------------------
+
+# Unicode-preserving heading anchors, so a Japanese heading slugs the way
+# GitHub slugs it and a link written against the repository still lands.
+[project.markdown_extensions.toc]
+slugify = { object = "pymdownx.slugs.slugify", kwds = { case = "lower" } }
+
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+
+# Colours a ```rule fence. The module is not really a Markdown extension: naming it
+# here is how it gets imported, and importing it is what registers the lexer with
+# Pygments. build.sh puts tools/ on PYTHONPATH.
+[project.markdown_extensions.rulelexer]
+
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"

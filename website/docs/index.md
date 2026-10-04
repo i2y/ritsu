@@ -24,7 +24,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 
 | | File | What it is for | Read more |
 |---|---|---|---|
-| rulec | `.rule` | business rules: tariffs, fees, eligibility, tax | [README](https://github.com/i2y/ritsu/blob/main/crates/rulec/README.md) |
+| rulec | `.rule` | business rules: tariffs, fees, eligibility, tax | [the rulec site](rulec/) |
 | dandori | `.flow` | the skeleton of a workflow | [the dandori site](dandori/) |
 | koyomi | `.cal` | dates: closing and payment days, business days, legal periods | [README](https://github.com/i2y/ritsu/blob/main/crates/koyomi/README.md) |
 | chobo | `.book` | ledgers: accounts, their bounds, transfers, holds | [README](https://github.com/i2y/ritsu/blob/main/crates/chobo/README.md) |

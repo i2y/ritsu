@@ -1,6 +1,7 @@
 //! The module the site loads answers what the binary answers (§15.48).
 //!
-//! `website/docs/playground/rulec.wasm` is committed, like the diagrams, so that building
+//! `website/rulec/docs/playground/rulec.wasm` (rulec's site, which ritsu's site holds at
+//! `website/rulec`) is committed, like the diagrams, so that building
 //! the site needs no Rust toolchain — which means it can go stale. So it is held the way
 //! every other target is held in this repository: driven over the same inputs and compared
 //! **byte for byte** against the tool itself. `check` in both languages, everything `gen`
@@ -10,7 +11,7 @@
 //! (§15.131). The rules are chosen to reach as much as they can without a file beside them.
 //!
 //! Needs `node` (for `WebAssembly`); skipped where there is none. Re-build the file with
-//! `website/tools/make_wasm.sh`.
+//! `website/rulec/tools/make_wasm.sh`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -20,12 +21,18 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// The root of ritsu's workspace, two directories above this crate: rulec's site is there, at
+/// website/rulec.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
+}
+
 fn have(cmd: &str) -> bool {
     Command::new(cmd).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
 fn wasm() -> PathBuf {
-    root().join("website/docs/playground/rulec.wasm")
+    repo().join("website/rulec/docs/playground/rulec.wasm")
 }
 
 /// The whole of the page's side of the boundary: allocate, write, call, read the length
@@ -116,9 +123,9 @@ fn yes(j: &rulec::json::Json, k: &str) -> bool {
 fn cases() -> Vec<(String, String)> {
     let mut out = Vec::new();
     for (name, rel) in
-        [("en", "website/tools/overview.rule"), ("ja", "website/tools/overview-ja.rule")]
+        [("en", "website/rulec/tools/overview.rule"), ("ja", "website/rulec/tools/overview-ja.rule")]
     {
-        let full = std::fs::read_to_string(root().join(rel)).unwrap();
+        let full = std::fs::read_to_string(repo().join(rel)).unwrap();
         let gap = full.trim_end().lines().collect::<Vec<_>>();
         let gap = gap[..gap.len() - 1].join("\n") + "\n";
         out.push((format!("{name}-full"), full));
@@ -162,7 +169,7 @@ fn 版がバイナリと同じ() {
     assert_eq!(
         got,
         env!("CARGO_PKG_VERSION"),
-        "website/docs/playground/rulec.wasm が古い。website/tools/make_wasm.sh を実行する"
+        "website/rulec/docs/playground/rulec.wasm が古い。website/rulec/tools/make_wasm.sh を実行する"
     );
 }
 

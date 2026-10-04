@@ -268,7 +268,9 @@ DESIGN.md         the design record, in Japanese: every decision, and what was d
 docs/             reference.md (the grammar), formats.md (machine-readable output),
                   generated-code.md, backends.md (targeting another language),
                   codes.md / codes.ja.md (every diagnostic, generated)
-website/          the documentation site (Zensical): docs/ English, docs-ja/ Japanese
+../../website/rulec/
+                  the documentation site (Zensical), one of the sites inside ritsu's:
+                  docs/ English, docs-ja/ Japanese
 skills/rulec/     an agent skill for using rulec — copy the folder into .claude/skills/
 ../../proofs/     the Lean 4 development, RulecCert in ritsu's one Lean package: what a table
                   means, the checks a certificate has to pass, the theorems that each check

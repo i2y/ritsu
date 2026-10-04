@@ -43,8 +43,9 @@ sed -e 's|\[`tests/corpus/ec261.rule`\](../tests/corpus/ec261.rule)|`ec261.rule`
     ../docs/backends.md > rulec/backends.md
 # The examples page ends in the site's own navigation buttons, which lead nowhere here.
 # Matched by where they point, not by what they are labelled: the label has been renamed
-# once already, and the cut failed silently when it was.
-sed -e '/^\[.*\](tour\.md)/,$d' ../website/docs/examples.md \
+# once already, and the cut failed silently when it was. The page is rulec's site's, which
+# ritsu's site holds at website/rulec, at the root of the workspace.
+sed -e '/^\[.*\](tour\.md)/,$d' ../../../website/rulec/docs/examples.md \
   | awk '{ a[n++] = $0 } END { while (n > 0 && (a[n-1] == "" || a[n-1] == "---")) n--
            for (i = 0; i < n; i++) print a[i] }' > rulec/examples.md
 

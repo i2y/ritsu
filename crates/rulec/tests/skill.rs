@@ -7,10 +7,16 @@
 //! if the committed files differ, which is the only thing that keeps a skill shipped to
 //! other people from describing a tool that no longer behaves that way.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+/// The root of ritsu's workspace, two directories above this crate: rulec's site is there, at
+/// website/rulec.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
 }
 
 fn read(rel: &str) -> String {
@@ -74,7 +80,7 @@ fn スキルはいまの文書から組み立てたものと同じ() {
     // The examples page loses the site's own navigation buttons.
     // Cut where the buttons point, not at what they are labelled: the label has been
     // renamed once, and matching on it made this test fail for the wrong reason.
-    let want = read("website/docs/examples.md");
+    let want = std::fs::read_to_string(repo().join("website/rulec/docs/examples.md")).expect("読めない: website/rulec/docs/examples.md");
     let want = want
         .lines()
         .take_while(|l| !(l.starts_with('[') && l.contains("](tour.md)")))

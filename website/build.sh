@@ -9,7 +9,7 @@ set -eu
 cd "$(dirname "$0")"
 # The sites of the languages, each a directory here with its own zensical.toml and build.sh, built
 # into <directory>/build and published at /ritsu/<directory>/.
-sites=(dandori)
+sites=(rulec dandori)
 ./sync.sh
 # The page cache is keyed on the Markdown, not on what renders it.
 rm -rf .cache

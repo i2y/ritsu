@@ -1,0 +1,443 @@
+# What it proves
+
+`rulec check` is the centre of the tool. Everything else — the code
+generation, the vectors, the replay — is downstream of it, and a rule
+that does not pass it does not generate.
+
+```console
+$ rulec check rules/
+note rules/yupack_base_fee.rule: 21 shadow pairs (21 structural, 0 equivalent, 0 needs review)
+ok rules/yupack_base_fee.rule
+```
+
+Exit codes are **0** (notes only), **1** (errors), **2** (bad arguments
+or an unreadable file). Read the exit code, not whether the output looks
+empty.
+
+## The seven
+
+| | |
+|---|---|
+| **Completeness** | if some input matches no row, it stops — **with that input** |
+| **Overlap** | under `policy unique`, an overlap is an error. Under `policy first`, structural shadowing (the staircase) is told apart from the pairs whose outputs differ and therefore deserve a decision |
+| **Dead rows** | a row nothing reaches. The message tells apart "earlier rows already cover it" from "the upstream table never emits the value it names" |
+| **Units** | adding yen to grams stops. So does tax-inclusive plus tax-exclusive |
+| **Rounding** | a numeric output must declare one. Without it, the message shows the money: "down(1JPY) gives 0JPY, half_up(1JPY) gives 0JPY and up(10JPY) gives 10JPY, so the rounding mode moves the result by up to 10JPY" |
+| **Overflow** | that every intermediate fits in int64, proved from the declared ranges and steps |
+| **Examples** | every example runs; a failure names the rows that fired; a missing output column stops |
+
+A `constraint` narrows what completeness quantifies over: no row is demanded for a
+combination declared not to happen, and the generated code refuses one at the door
+instead. In a rule that walks a sequence, the same completeness check asks whether
+**every verdict the table can produce has an arm** in the fold (E024).
+
+In a rule that binds an enum to a `.proto` with `import proto`,
+completeness reaches **across the contract**. Every `rulec check` reads
+that file: a set that no longer agrees is E032, and once the sets agree,
+a value that no row names and no `default` marks is E033. Adding a value
+to an enum is a compatible change on the wire, so the tools that guard
+the contract let it through — this is the check that stops it from
+passing quietly through a table with a `-` row.
+
+A rule whose inputs say where the caller's object holds them (`shape` and `from`) is held to
+that contract the same way. The path is resolved on every `rulec check`: one the contract does
+not have is **E121**, which says how far it got and which fields were there; a type that does
+not fit the input is **E120**; a contract nothing projects from is **W122**. None of this
+changes a check of the table — what comes out of a projection is a scalar input like any other
+— and what it stops is the glue between an application and a rule going stale in silence.
+How to write one is in [Write a rule](tour.md), and two worked rules are in
+[Examples](examples.md).
+
+The contract also says **which values** can come from there, and that is held to the input.
+Protovalidate's rules on a `.proto` field and a schema's `minimum`, `maxItems`, `enum` and
+`required` are compared with the input's `range`, its enum and the range of a `count`: a value
+the contract lets through and the input refuses is **E122** — a request the API itself
+accepted, refused at the door of the generated code. `fix.text` is the annotation to add to
+the contract. A row reached only by values the contract never lets through is **W123**. A
+proto3 number field with no rule lets 0 through, because that is what an unset field is, and
+that is the mismatch this finds most often. A message field that is not `required` may be left
+unset, and Protovalidate then validates nothing inside it: the value under it arrives as its
+default whatever its own rules say, so an input that refuses the default is E122 as well.
+
+A contract also relates **fields to each other** — a CEL expression on a `.proto` message such
+as `this.declared_jpy <= this.cover_jpy`, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`,
+`not` and `if`/`then` — and those conditions are read too. A `constraint` between two inputs of
+one contract that the contract does not keep is **E123**: some request passes the contract's
+validation and breaks the constraint, and the generated code refuses it at the door. The
+example is that request, and for a `.proto` `fix.text` is the `(buf.validate.message).cel` that
+would promise it. A row whose cells ask for a combination the contract never lets through —
+express above 5 kg where the contract caps express at 5 kg — is **W124**. What cannot be read of
+a condition (a remainder, a string function) is taken as true, so neither can miss. When the
+contract keeps everything the rule asks of these values, `rulec certificate` writes down why,
+case by case, and both re-checkers verify it — the Lean one on the theorem `included_sound`
+([How it is checked](assurance.md)).
+
+A rule that declares its documents with `source` and cites them with `@source fragment` is
+held to its copies: every cited fragment has a copy beside the rule and its digest pinned in
+the rule. No pin is E037, a pin that differs from the copy is E038 (naming the tables, clauses
+and rows that cite it), a missing copy is E039, a pin no citation uses is W119. `check` never
+reads the network: `rulec source fetch` brings the copies, `rulec source pin` writes the pins,
+and, for a statute, `rulec source outdated` asks e-Gov, the Japanese government's statute
+database, whether a later amendment changes the text of a cited fragment.
+
+**What is cited from a document is a table.** For a tariff sheet or a company rule, `@source
+table1` takes that table out of the document, writes it beside it, and holds the rule to that copy
+ever after (a sheet in a workbook, a table in a Word file, what it looks like in Markdown and
+CSV; for a PDF or a scan, hand an extractor to `--via`). That is where **one more check** comes
+in.
+
+- **E116** — an amount a row writes is nowhere in the copy it cites. This is the error no
+  check of the table alone can reach: `1100JPY` written as `1000JPY` sits on the rounding grid,
+  leaves no gap and overlaps nothing. Where the copy has a heading that says a word of the row
+  (`関東`), the amount is looked for in that heading's row and column, so the amount of the
+  next row, which is somewhere in the copy too, is caught as well.
+- **W120** — a number the copy states as a whole cell is used by no row, which is what **a row
+  that was never transcribed** looks like. Completeness cannot see it: the inputs of a dropped
+  row fall into one of the rows that remain.
+- **E119** — a boundary falls on the other side of itself from where the copy puts it: the copy
+  says `Under 18` and the row says `<=18`. Nothing else can see this either. The number 18 is
+  still used, so W120 is quiet; move both of the rows that share the boundary and the table is
+  still complete with no overlap; and exactly one input in the whole space changes hands.
+
+A threshold cannot be compared as text — it is rewritten as it is transcribed (`1,949,000円まで`
+becomes `<=1_949_000JPY`) — but one thing survives the rewriting: which of the two bands the
+boundary value itself falls in. `60cm以下` and `60cmを超え` agree that 60cm is in the band below,
+and so do `<=60cm` and `>60cm`, so a rule that writes a band from either end can still be held
+to the copy. The word is read beside the number (`60cm以下`, `Under 18`, `Not over $11,925`) or
+in a heading over its column (`円以上`, `円未満` — the shape a Japanese premium table takes). A
+boundary the copy words neither way, `18 to 20` or `60〜80`, is left alone: naming the numbers
+that bound a band does not say which band holds them. The approver's page quotes the copy under
+the table and adds two lines to what was verified: every amount in this table is a value the
+copy shows, and its boundaries fall on the side the copy puts them on.
+
+A rule that applies another (`apply`, the way a statute applies one provision to another case
+with its terms read differently) is held to the applied rule's digest (E040), has to substitute
+every input of the applied rule (E041) with agreeing types (E042), and has to keep what it
+passes inside the applied rule's ranges and constraints (E043, with a value outside them as the
+example). A rule that cannot be applied — it applies a rule itself, walks a sequence, or fails
+check — is E044. The applied rule's tables and clauses are expanded into the rule and checked
+with it; the rows this rule never reaches stay silent, and only a whole table none of whose
+rows is reached is W118.
+
+A rule in which two or more tables define the same output — a main rule and the special case
+that says `overrides` over it, a `clause` written as one line of prose among them — runs the
+first three checks over **those tables as one set**.
+Completeness is judged over their union. An overlap passes when a precedence is written and
+stops as E105 when none is. A row the rows taking precedence cover entirely is E102, and an
+`overrides` line whose rows meet none of its target's is W117. The approver's page says in one
+sentence which table is the exception to which.
+
+A rule that is one step of a state machine (`machine`) is checked for what **every sequence
+of calls** can do as well. A call that moves a case out of a `final` state is **E124**; a state
+a case can reach and never finish from is **E125**; a sequence that reaches a `never` state
+after its `after` state is **E126**; two calls in one case that answer what a `once` cell
+accepts is **E127**. The case each of them carries is a sequence of calls from the initial
+state — the shortest that breaks the claim, each call an input the rule takes. A state no
+sequence reaches is **W125**, and a row that applies only in such states **W126**. A
+`scenario`, an example several calls long, runs as the examples do.
+
+Every diagnostic writes its first line in the words of the business,
+**always carries a concrete case**, and states the fix down to the
+rewritten form.
+
+## Proved is not type-checked
+
+Type checking says a **value has the right shape**: a member of the enum, an integer, the unit
+it claims. APIs and models that return typed values are common now, which makes the two easy to
+run together. **A right shape says nothing about a right answer.**
+
+What `rulec check` proves is not a shape but a **property of the table**: every input in the
+declared range matches some row; no input matches two; every row can be reached; units never
+mix; every intermediate fits in int64. Those five are shown exhaustively — not sampled.
+
+**Why it can be exhaustive at all.** A cell only ever tests its own column (`<=2000g` is the
+weight column, `remote` the destination column), so a row is the product of its columns'
+conditions — one box of the input space — and a numeric column only has to be cut where the
+table itself cuts it. The declared range therefore falls into a **finite number of boxes**, and
+looking at all of them terminates. The cell language is kept narrow to keep that true. Nothing
+is waved through when it does not terminate either: over the budget, E109 stops.
+
+Four things it does **not** prove, and they are kept beside the word:
+
+1. **That the table matches reality.** What is proved is what can be said about the table *as
+   written*. Cite the document a table was transcribed from (`@source table1`) and an amount that
+   disagrees with the copy does fail (E116, W120) — but even then what is shown is agreement
+   with the copy, not with the world. With no citation, transcribe the tariff wrong and
+   everything stays green
+2. **That the generated code answers like the table.** That is a *test*: cases built from the
+   boundaries run through the reference evaluator and every generated language, compared byte
+   for byte. Strong evidence, not an equivalence proof
+3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
+   do not overlap" is not always provable, and the pairs where it was not are always named
+4. **That the checker itself is right.** The five above come out of rulec's own implementation,
+   and that implementation has not been proved correct. The evidence is 109 deliberately broken
+   rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
+   transcriptions of published terms and statutes among them — passing on every commit, and
+   the reference evaluator agreeing with twelve languages. **Evidence, not proof**
+
+For the Rust, a second tool reads what was generated: `gen` writes proof harnesses for
+[Kani](https://model-checking.github.io/kani/), and over every input in the declared domain
+they hold that no table falls through, that the guard of (3) never fires, that nothing
+overflows an `i64`, and that the rows of each `unique` table cover the domain exactly once.
+It shares no code with the checker above, so agreement is two unrelated tools saying the
+same thing, and disagreement comes back with the input that shows it
+([generate](generate.md#a-second-opinion-on-the-rust)).
+
+**The evidence can be handed over, and the checks behind it are proved.** `rulec
+certificate` writes out what the five proofs rest on — the tree that tiles the input space,
+the axis each pair of rows of a `unique` table parts on, a point that reaches every row
+with the values behind it, and the interval and the type of every computed value — together
+with where each cell stands in your file, down to the byte, and what stands there. Two
+programs re-check it: `tools/recheck.py`, one dependency-free file, and the program
+`proofs/` builds, a Lean 4 development in which the meaning of a table, the checks, and the
+theorems that each check settles its claim are all written down and machine-checked. That
+moves what (4) asks you to take on trust from 42,000 lines of Rust to a few hundred lines
+of checking whose soundness is proved — plus the reading of the document itself, which is
+not. It does not remove (4): whether the tool *produces* a right certificate is still
+evidence, the declared ranges and types and constraints in it are its own word, and five
+things are named in a run rather than proved. Both programs end by saying which. See
+[formats](formats.md) for the document, its limits, and both re-checkers.
+
+## Reading a diagnostic
+
+```
+error[E101]: Completeness gap: some input matches no row
+  --> rules/parcel_rate.rule:30 table base_rate
+   |
+30 | table base_rate
+   |       ^^^^^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: dest = overseas, size = small, weight = 1lb
+ hint: add a row that matches this input.
+ The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied
+ from the first row to give a shape that parses; they are not the right amounts. …
+```
+
+The witness is the part to reason about. `dest = overseas, size = small, weight = 1lb`
+is not an illustration — it is an input the checker constructed, and it
+is the sentence you hand to whoever knows the answer.
+
+### `--terse`, when there are many
+
+```console
+$ rulec check rules/ --terse
+error[E101]: Completeness gap: some input matches no row
+  --> rules/parcel_rate.rule:30 table base_rate
+  witness: dest = overseas, size = small, weight = 1
+note rules/parcel_rate.rule: 3 shadow pairs (3 structural, 0 equivalent, 0 needs review)
+details: rulec explain <code>
+```
+
+Heading, position, witness. The pointer to the rest is printed once, at
+the end of the run.
+
+### `--format json`, when a program is reading
+
+The same finding as data. The prose is still there, but nothing
+downstream has to take a sentence apart:
+
+```console
+$ rulec check rules/parcel_rate.rule --format json | jq -c 'select(.code=="E101") | {table:.where.table, witness:.witness.inputs, fix:.fix}'
+{"table":"base_rate","witness":{"dest":"overseas","size":"small","weight":1},"fix":{"kind":"add_row","text":"| overseas | small | 1lb | 6USD |"}}
+```
+
+`where` says which table and row, `witness` is an assignment of values
+in the canonical unit, `rows` names every row that takes part, and `fix`
+carries the rewritten form ready to paste. **`witness` and `fix` do not
+change with `--lang`** — only fields whose names say prose do. The full
+shape is in [Formats](formats.md#check).
+
+!!! warning "`fix.text` is a form, not a decision"
+
+    It parses, and it removes the code — both are tested. It does not
+    know the right amount, the right rounding direction or the right
+    grid. Those are business decisions, and the caveat sits in `notes`,
+    which is prose, because `fix.text` is bytes.
+
+## Looking a code up
+
+Every code has an entry: when it appears, how to fix it down to the
+rewritten form, the **smallest `.rule` that reproduces it**, and the
+codes next to it.
+
+```console
+$ rulec explain E101
+error[E101]: Completeness gap: some input matches no row
+
+When
+  The union of the rows does not cover the declared input space. …
+
+Fix
+  Add a row that matches the witness. If a new enum value caused it, …
+
+Smallest reproduction
+  rule t(t) v1
+
+  enum k(k) = a(a) | b(b) | c(c)
+  …
+
+Related codes: E102 E105 W111
+```
+
+`rulec explain --all --format markdown` prints every one of them — and is
+exactly what [Diagnostics](codes.md) on this site is built from. Every
+reproduction in it is run by the test suite, so an example cannot rot
+into something that reads well and is no longer true.
+
+## Only what is new
+
+```console
+$ rulec check rules/ --diff-base origin/main
+```
+
+Findings that were already present at that revision are hidden, and the
+count of what was hidden is printed. Pairs are matched on the canonical
+form of their cells rather than on line numbers, so inserting one row
+does not make everything look new.
+
+That is what makes warnings usable in CI: a table can carry an intended
+`policy first` shadowing for years without drowning the one overlap this
+change introduced.
+
+## When it cannot prove something
+
+It says so. It does not approximate and pass.
+
+- **E109** — the check ran out of its node budget, so completeness was
+  not proved. Split the table or raise `--budget`; nothing is assumed.
+- **W114** — two rows of a `unique` table might overlap, and the checker
+  could neither construct an input that proves it nor prove that none
+  exists. It warns, and **the generated code carries a guard** that
+  returns an error rather than silently picking the earlier row. If that
+  guard ever fires, the overlap was real. Two derived values that share
+  an input, and the thresholds inside a boolean definition, no longer
+  land here: those are decided by eliminating one variable at a time.
+  What is left is what that cannot decide because it works over the
+  rationals — a pair kept apart only by the values being whole.
+
+## Over the days a koyomi date comes to
+
+A date input can take its range from a date of a koyomi file:
+`pay_day : date  range from koyomi "payment_terms.cal" date payment`.
+koyomi computes the date on every input of its own range, so the days it
+comes to are known exactly, and the seven checks run over those days and
+no other: a table needs no row for the days between two payment days, a
+payment day no row takes is E101 with that day as the example, and a row
+that takes none of them is E102. The generated code refuses any other
+day at its door, and the certificate carries the days with the koyomi
+file's SHA-256. The days are read through ritsu, with koyomi joined
+(`ritsu rulec check`, `ritsu check`); a rulec with no koyomi does not
+check the rule over every day instead, and says so (E129). See
+[the reference](reference.md#range-from-koyomi--the-days-a-koyomi-date-comes-to).
+
+## Showing it to the person who approves
+
+```console
+$ rulec doc rules/yupack_base_fee.rule > fees.md
+```
+
+A `.rule` is already almost markdown, so transcribing its syntax is
+worth nothing. What `doc` adds is **the facts the checker knows that the
+text does not show**: that a group of six values and its complement of
+41 really do cover all 47, which rows shadow which, where a rounding was
+assumed rather than sourced.
+
+This is what `rulec doc` writes (excerpt; `--lang ja` asks for Japanese).
+
+```markdown
+
+## Groups
+
+A group is a named subset of an enum. One word written in a table cell stands for all the values below.
+
+- **kinki** (6 values) — 滋賀県, 京都府, 大阪府, 兵庫県, 奈良県, 和歌山県
+- **cs** (9 values) — 鳥取県, 島根県, 岡山県, 広島県, 山口県, 徳島県, 香川県, 愛媛県, 高知県
+- **okinawa** (1 value) — 沖縄県
+…
+
+These 6 groups partition the 47 values of 都道府県 exactly (counted from the declarations by this rendering).
+
+## Table fee_table (policy unique)
+
+Source: Japan Post, base fee table (Tokyo)
+
+| Column | Source |
+|---|---|
+| dest | Input |
+| size | Output of table size_of |
+| → fee | Output of this rule |
+…
+```
+
+Write `# Source: Japan Post, base fee table (Tokyo)` at the end of a row or of the `table` line, and
+those words appear in the document too. The approver's job turns from "read the whole table
+again" into "compare this row with that cell".
+
+### A page the approver can try a case on
+
+```console
+$ rulec doc rules/parcel_rate.rule --format html > parcel_rate.html
+```
+
+`--format html` renders the same document as one HTML page, laid out as a board. The form
+is on the left; the middle holds one card per **decider** — one table, one `derive`, one
+`define` — with that table itself inside the card. The approver types a case: the row that
+fired lights up inside the card it belongs to, the card says which row that was, the answer
+appears on the card that produced it, and the line the generated code would write to a log
+is shown as it is. The example buttons fill in the rule's own verified examples. The page is
+drawn light or dark, as the reader's browser is set.
+
+![The board for the parcel tariff. Example 2 (5 lb, 40 in, canada, no signature) is in the form on the left and the result reads fee = 13USD; the cards size, fuel and extra stand in a column, base beside them and fee on the right, with row 2 of size_of (up to 60 in, small), row 2 of base_rate (north_america, small, up to 160 oz), row 1 of fuel_rate (north_america, 5%) and row 2 of signature_fee lit](images/try-en-dark.png#only-dark)
+![The board for the parcel tariff. Example 2 (5 lb, 40 in, canada, no signature) is in the form on the left and the result reads fee = 13USD; the cards size, fuel and extra stand in a column, base beside them and fee on the right, with row 2 of size_of (up to 60 in, small), row 2 of base_rate (north_america, small, up to 160 oz), row 1 of fuel_rate (north_america, 5%) and row 2 of signature_fee lit](images/try-en.png#only-light)
+
+Selecting a card opens a dock below it: where that table's columns come from, and what
+`rulec check` verified about it. Only the selected card carries colour, so which one you
+are reading is never in doubt.
+
+![The same board with base selected: the card is in colour, and the dock below holds the "column / source" table of base_rate and what rulec check verified](images/try-dock-en-dark.png#only-dark)
+![The same board with base selected: the card is in colour, and the dock below holds the "column / source" table of base_rate and what rulec check verified](images/try-dock-en.png#only-light)
+
+What runs in the page is the generated JavaScript itself, so the page says nothing the code
+does not. The case and the card both stay in the page's address
+(`?weight=5&girth=40&dest=canada&…#t-base_rate`), so "look at this table on this case" is a link.
+
+
+There is one prohibition. **It writes no sentence that is not in the
+checker's output** — every line traces back to the source or to a check
+result, and the two are named apart ("rulec check confirmed" versus
+"this rendering counted it from the declarations"). It is never
+committed: CI renders it and pastes it into the PR, because a stale
+rendering that still looks authoritative is the danger it was designed
+against.
+
+---
+
+[All the diagnostic codes](codes.md){ .md-button .md-button--primary }
+[Generate and call](generate.md){ .md-button }
+
+## Showing it to the customer
+
+```console
+$ rulec doc rules/yupack_base_fee.rule --audience customer > fee-guide.md
+```
+
+The same rule as the article a help centre publishes. Aliases, declared
+ranges and diagnostic codes are left out; what is added is **the case on
+either side of every threshold**, taken from the boundary-pair vectors,
+so a reader — or a model reading a retrieved page — is never left to
+decide what `<=60cm` means for 61cm.
+
+```markdown
+## At the thresholds
+
+How the answer changes on either side of a threshold.
+
+- girth 60cm → fee 1410JPY; 61cm → fee 1710JPY (dest 北海道, weight 1g)
+- girth 80cm → fee 1710JPY; 81cm → fee 2020JPY (dest 北海道, weight 1g)
+…
+```
+
+---
+
+This page is one layer. [How it is checked](assurance.md) is the map of all of
+them — what each one reaches, and where each one stops.

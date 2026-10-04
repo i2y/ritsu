@@ -1,17 +1,20 @@
 //! ritsu's site (website/, DESIGN 13.2): ritsu's own pages in English and Japanese, and below them
 //! the site of each language that website/build.sh builds, each with its own configuration in a
-//! directory of its own (website/dandori), all built into one tree, website/build, which is
-//! published at https://i2y.github.io/ritsu/. This holds:
+//! directory of its own (website/rulec and website/dandori, the sites the two languages had in
+//! their own repositories), all built into one tree, website/build, which is published at
+//! https://i2y.github.io/ritsu/. This holds:
 //!
 //! - every relative link of ritsu's pages leads to one of its pages, or to the site of a language
 //!   that build.sh builds, and every `#anchor` to a heading of the page it names;
 //! - every link into ritsu's repository, on ritsu's pages and on the pages of every language's
 //!   site, names a file or a directory that is there, and no page links to the repository of one
-//!   language by itself;
+//!   language by itself (only to its releases, which still hand out rulec until ritsu's first
+//!   release takes them over);
 //! - the code on the index pages is the lines of files of the languages, `ritsu check` prints what
 //!   they show under it, and a command the prose names is one;
-//! - both index pages link to the site of every language build.sh builds, and each such site is
-//!   there, with its own build.sh and configurations;
+//! - build.sh builds rulec's site and dandori's; both index pages link to the site of every
+//!   language build.sh builds, and each such site is there, with its own build.sh and
+//!   configurations;
 //! - the configurations name the URL each site is published at, under /ritsu/, and ritsu's
 //!   repository;
 //! - .github/workflows/docs.yml runs only by hand;
@@ -32,6 +35,10 @@ use std::process::Command;
 
 /// Where the site is published.
 const PUBLISHED: &str = "https://i2y.github.io/ritsu/";
+
+/// The sites of the languages that ritsu's site holds: the ones rulec and dandori had in their own
+/// repositories, moved into website/<language> (DESIGN 13.2).
+const HELD: [&str; 2] = ["rulec", "dandori"];
 
 fn website() -> PathBuf {
     root().join("website")
@@ -194,11 +201,13 @@ fn the_links_into_the_repository_name_what_is_there() {
                 }
             }
             // The repository of a language by itself is not where the language is: only ritsu's is
-            // named.
+            // named. Its releases are another thing: until ritsu's first release takes them over,
+            // rulec's binaries, packages and action are still rulec's own releases (its install page).
             let mut rest = line;
             while let Some(i) = rest.find("github.com/i2y/") {
                 let repo: String = rest[i + 15..].chars().take_while(|c| c.is_alphanumeric() || *c == '-').collect();
-                if repo != "ritsu" {
+                let releases = rest[i + 15 + repo.len()..].starts_with("/releases");
+                if repo != "ritsu" && !releases {
                     wrong.push(format!("{name}:{}: names github.com/i2y/{repo}", n + 1));
                 }
                 rest = &rest[i + 15..];
@@ -233,7 +242,11 @@ fn the_code_on_the_index_is_from_the_files_and_ritsu_check_prints_what_it_shows(
 
 #[test]
 fn every_site_build_sh_builds_is_there_and_the_index_pages_link_to_it() {
-    for site in sites() {
+    let sites = sites();
+    for held in HELD {
+        assert!(sites.iter().any(|s| s == held), "build.sh does not build {held}'s site, which ritsu's site holds at website/{held}");
+    }
+    for site in sites {
         let dir = website().join(&site);
         for f in ["build.sh", "zensical.toml", "zensical.ja.toml", "docs/index.md", "docs-ja/index.md"] {
             assert!(dir.join(f).is_file(), "build.sh builds the site {site}, and website/{site}/{f} is not there");
@@ -324,6 +337,9 @@ fn build_sh_builds_the_tree_that_is_published() {
     let copy = t.path().join("website");
     copy_tree(&website(), &copy);
     std::os::unix::fs::symlink(website().join(".venv"), copy.join(".venv")).unwrap();
+    // rulec's sync.sh copies rulec's documents in from crates/rulec, beside website/, which it reads
+    // and does not write.
+    std::os::unix::fs::symlink(root().join("crates"), t.path().join("crates")).unwrap();
     let o = Command::new("bash").arg(copy.join("build.sh")).output().expect("could not run bash");
     assert!(o.status.success(), "build.sh failed:\n{}\n{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     let built = copy.join("build");
