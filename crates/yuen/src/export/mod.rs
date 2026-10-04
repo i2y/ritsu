@@ -117,6 +117,31 @@ pub struct Graph<'a> {
     /// The artifacts the links name, in the order they are first named.
     pub artifacts: Vec<Name>,
     pub rels: Vec<Rel>,
+    /// What the files of the rules and calendars the links name pin (DESIGN 3.3), which PROV
+    /// writes (`yuen:pins`).
+    pub pins: Pins,
+}
+
+/// The articles the files of the artifacts pin: each file that pins one (an artifact itself, or
+/// written as one more, with the hash of its bytes), each article it pins (a source of the
+/// project, or one more), and which file pins which.
+#[derive(Default)]
+pub struct Pins {
+    pub files: Vec<(Name, String)>,
+    pub sources: Vec<SourceNode>,
+    pub edges: Vec<(PinFile, PinSource)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PinFile {
+    Artifact(usize),
+    File(usize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PinSource {
+    Source(usize),
+    More(usize),
 }
 
 impl<'a> Graph<'a> {
@@ -206,7 +231,7 @@ pub fn graph<'a>(p: &'a Project, m: &'a Model) -> Graph<'a> {
                         sources.push(SourceNode { key, label: name.clone(), revision: None, pin: pin.clone(), lines: vec![], url: url.clone() });
                     }
                 }
-                Resolved::Borrowed { .. } | Resolved::Broken => {}
+                Resolved::NoPort { .. } | Resolved::Broken => {}
             }
         }
     }
@@ -260,5 +285,50 @@ pub fn graph<'a>(p: &'a Project, m: &'a Model) -> Graph<'a> {
             rels.push(Rel { kind: RelKind::Replaces, req: r, target: Target::Req(*t), state: None, k: 0 });
         }
     }
-    Graph { p, m, sources, artifacts, rels }
+    let pins = pins(p, &sources, &artifacts);
+    Graph { p, m, sources, artifacts, rels, pins }
+}
+
+/// What the files of the rules and calendars the links name pin.
+fn pins(p: &Project, sources: &[SourceNode], artifacts: &[Name]) -> Pins {
+    let mut out = Pins::default();
+    let mut files: Vec<Name> = Vec::new();
+    for a in artifacts {
+        let f = a.whole_file();
+        if !files.contains(&f) {
+            files.push(f);
+        }
+    }
+    for f in files {
+        let pinned = crate::sources::pinned_by(p, &f);
+        if pinned.is_empty() {
+            continue;
+        }
+        let from = match artifacts.iter().position(|a| *a == f) {
+            Some(i) => PinFile::Artifact(i),
+            None => {
+                let hash = std::fs::read(p.root.join(&f.path)).map(|b| sha256::short(&b)).unwrap_or_default();
+                out.files.push((f.clone(), hash));
+                PinFile::File(out.files.len() - 1)
+            }
+        };
+        for x in pinned {
+            let key = SourceKey::Law { db: x.db, id: x.id.clone(), asof: x.asof.clone(), fragment: x.fragment.clone() };
+            let to = match sources.iter().position(|s| s.key == key) {
+                Some(i) => PinSource::Source(i),
+                None => match out.sources.iter().position(|s| s.key == key) {
+                    Some(i) => PinSource::More(i),
+                    None => {
+                        let file = x.abs.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                        let lines = std::fs::read(&x.abs).ok().and_then(|b| String::from_utf8(b).ok()).map(|t| copies::quote_lines(x.db, &file, &t)).unwrap_or_default();
+                        let revision = x.abs.parent().and_then(copies::revision);
+                        out.sources.push(SourceNode { key, label: format!("{} {}", x.source, x.fragment), revision, pin: Some(x.pin.clone()), lines, url: None });
+                        PinSource::More(out.sources.len() - 1)
+                    }
+                },
+            };
+            out.edges.push((from, to));
+        }
+    }
+    out
 }

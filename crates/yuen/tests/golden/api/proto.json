@@ -1,0 +1,428 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/proto",
+  "files": [
+    {
+      "path": "在庫.req",
+      "name": "在庫",
+      "version": "1",
+      "sha256": "254f86ed2e45ed3a"
+    }
+  ],
+  "roles": [
+    {
+      "name": "倉庫",
+      "description": "在庫のサービスの約束を決める"
+    },
+    {
+      "name": "開発",
+      "description": ".proto を書いて直す"
+    }
+  ],
+  "sources": [
+    {
+      "file": "在庫.req",
+      "name": "約束",
+      "kind": "file",
+      "path": "約束.md",
+      "url": null,
+      "sha256": "6876e197cbb677f0",
+      "borrowed": null
+    }
+  ],
+  "requirements": [
+    {
+      "name": "在庫を押さえる",
+      "alias": "reserve",
+      "version": 1,
+      "file": "在庫.req",
+      "line": 11,
+      "text": "倉庫は、注文の一行ごとに在庫を押さえる。足りなければ、押さえずに足りないと答える",
+      "in_force": null,
+      "owner": "倉庫",
+      "replaces": [],
+      "sha256": "e10350fc1754b540",
+      "from": [
+        {
+          "line": 14,
+          "sources": [
+            {
+              "source": "約束",
+              "fragment": null,
+              "sha256": "6876e197cbb677f0"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "倉庫",
+            "up": [
+              "6876e197cbb677f0"
+            ],
+            "down": "e10350fc1754b540"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 16,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"warehouse.proto\" service StockService method Reserve",
+            "tool": "proto",
+            "path": "warehouse.proto",
+            "items": [
+              [
+                "service",
+                "StockService"
+              ],
+              [
+                "method",
+                "Reserve"
+              ]
+            ]
+          },
+          "sha256": "cadb2fc727e9af81",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "e10350fc1754b540"
+            ],
+            "down": "cadb2fc727e9af81"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 18,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"warehouse.proto\" enum Stock",
+            "tool": "proto",
+            "path": "warehouse.proto",
+            "items": [
+              [
+                "enum",
+                "Stock"
+              ]
+            ]
+          },
+          "sha256": "d7450e7503c905f7",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "e10350fc1754b540"
+            ],
+            "down": "d7450e7503c905f7"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 20,
+          "role": "verified",
+          "why": "この材料は、サービスを走らせる主張を持たない",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "倉庫",
+            "sha256": "e10350fc1754b540"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "押さえを放す",
+      "alias": "release",
+      "version": 1,
+      "file": "在庫.req",
+      "line": 23,
+      "text": "押さえた在庫は、押さえたときの番号で放せる",
+      "in_force": null,
+      "owner": "倉庫",
+      "replaces": [],
+      "sha256": "e4cf3d1ba8da98bf",
+      "from": [
+        {
+          "line": 26,
+          "sources": [
+            {
+              "source": "約束",
+              "fragment": null,
+              "sha256": "6876e197cbb677f0"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "倉庫",
+            "up": [
+              "6876e197cbb677f0"
+            ],
+            "down": "e4cf3d1ba8da98bf"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 28,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"warehouse.proto\" service StockService method Release",
+            "tool": "proto",
+            "path": "warehouse.proto",
+            "items": [
+              [
+                "service",
+                "StockService"
+              ],
+              [
+                "method",
+                "Release"
+              ]
+            ]
+          },
+          "sha256": "2a0912a66889e515",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "e4cf3d1ba8da98bf"
+            ],
+            "down": "2a0912a66889e515"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 30,
+          "role": "verified",
+          "why": "この材料は、サービスを走らせる主張を持たない",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "倉庫",
+            "sha256": "e4cf3d1ba8da98bf"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "出荷",
+      "alias": "fulfill",
+      "version": 1,
+      "file": "在庫.req",
+      "line": 33,
+      "text": "出荷は、注文を受けて始まり、押さえた在庫と追跡番号を答える",
+      "in_force": null,
+      "owner": "倉庫",
+      "replaces": [],
+      "sha256": "a56299dbcadd3c9f",
+      "from": [
+        {
+          "line": 36,
+          "sources": [
+            {
+              "source": "約束",
+              "fragment": null,
+              "sha256": "6876e197cbb677f0"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "倉庫",
+            "up": [
+              "6876e197cbb677f0"
+            ],
+            "down": "a56299dbcadd3c9f"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 38,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"fulfillment.proto\" service FulfillmentService method Fulfill",
+            "tool": "proto",
+            "path": "fulfillment.proto",
+            "items": [
+              [
+                "service",
+                "FulfillmentService"
+              ],
+              [
+                "method",
+                "Fulfill"
+              ]
+            ]
+          },
+          "sha256": "6c73e17bf5bedba7",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "a56299dbcadd3c9f"
+            ],
+            "down": "6c73e17bf5bedba7"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 40,
+          "role": "satisfied",
+          "artifact": {
+            "text": "proto \"fulfillment.proto\" message FulfillResponse field tracking_number",
+            "tool": "proto",
+            "path": "fulfillment.proto",
+            "items": [
+              [
+                "message",
+                "FulfillResponse"
+              ],
+              [
+                "field",
+                "tracking_number"
+              ]
+            ]
+          },
+          "sha256": "fb7f7e2617539e54",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "a56299dbcadd3c9f"
+            ],
+            "down": "fb7f7e2617539e54"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 42,
+          "role": "verified",
+          "why": "この材料は、サービスを走らせる主張を持たない",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "倉庫",
+            "sha256": "a56299dbcadd3c9f"
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "proto \"fulfillment.proto\" message FulfillResponse field tracking_number",
+      "tool": "proto",
+      "path": "fulfillment.proto",
+      "items": [
+        [
+          "message",
+          "FulfillResponse"
+        ],
+        [
+          "field",
+          "tracking_number"
+        ]
+      ],
+      "sha256": "fb7f7e2617539e54",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "proto \"fulfillment.proto\" service FulfillmentService method Fulfill",
+      "tool": "proto",
+      "path": "fulfillment.proto",
+      "items": [
+        [
+          "service",
+          "FulfillmentService"
+        ],
+        [
+          "method",
+          "Fulfill"
+        ]
+      ],
+      "sha256": "6c73e17bf5bedba7",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "proto \"warehouse.proto\" enum Stock",
+      "tool": "proto",
+      "path": "warehouse.proto",
+      "items": [
+        [
+          "enum",
+          "Stock"
+        ]
+      ],
+      "sha256": "d7450e7503c905f7",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "proto \"warehouse.proto\" service StockService method Release",
+      "tool": "proto",
+      "path": "warehouse.proto",
+      "items": [
+        [
+          "service",
+          "StockService"
+        ],
+        [
+          "method",
+          "Release"
+        ]
+      ],
+      "sha256": "2a0912a66889e515",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "proto \"warehouse.proto\" service StockService method Reserve",
+      "tool": "proto",
+      "path": "warehouse.proto",
+      "items": [
+        [
+          "service",
+          "StockService"
+        ],
+        [
+          "method",
+          "Reserve"
+        ]
+      ],
+      "sha256": "cadb2fc727e9af81",
+      "end": "item",
+      "pins": []
+    }
+  ],
+  "scopes": [
+    {
+      "file": "在庫.req",
+      "line": 9,
+      "text": "proto \"warehouse.proto\" service StockService method",
+      "artifacts": 2,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/proto: ok — 3 requirements, whose 8 links and 3 waivers are as they were looked at; every requirement is met and checked, or waived; the 2 methods in scope all trace to a requirement",
+    "diagnostics": []
+  }
+}

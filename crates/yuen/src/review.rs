@@ -168,6 +168,11 @@ fn choose<'a>(p: &Project, states: &'a [LinkState], c: &Choice) -> Result<Vec<(&
 }
 
 pub fn review(args: &[String], root: Option<&str>, c: &Choice, by: &str, date: Option<&str>) -> Result<Outcome, Refusal> {
+    review_with(args, root, c, by, date, crate::suite::Suite::default())
+}
+
+/// [`review`], reading what another language holds through the ports `suite` joins.
+pub fn review_with(args: &[String], root: Option<&str>, c: &Choice, by: &str, date: Option<&str>, suite: crate::suite::Suite) -> Result<Outcome, Refusal> {
     if c.at.is_empty() && c.requirements.is_empty() && !c.all {
         return Err(Refusal(tr!("何を確かめたかを `--at`、`--requirement`、`--all` のどれかで選びます", "Choose what was looked at with `--at`, `--requirement` or `--all`")));
     }
@@ -175,7 +180,7 @@ pub fn review(args: &[String], root: Option<&str>, c: &Choice, by: &str, date: O
         Some(d) => Day::parse(d).ok_or_else(|| Refusal(tr!("`--date {d}` は日付（`2026-10-04` の形）ではありません", "`--date {d}` is not a date (`2026-10-04`)")))?,
         None => crate::date::today(),
     };
-    let checked: Checked = check::check(args, root)?;
+    let checked: Checked = check::check_with(args, root, suite)?;
     let Some(m) = checked.model.as_ref() else {
         return Ok(Outcome { lines: vec![tr!("構文か名前にエラーがあるので、何も書きません", "Nothing was written: the words or the names have errors")], diags: checked.diags, exit: 1 });
     };

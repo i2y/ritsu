@@ -1,0 +1,4 @@
+enum warehouse.v1.Stock
+  unspecified = 0
+  secured = 1
+  short = 2

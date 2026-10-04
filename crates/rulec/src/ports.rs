@@ -379,6 +379,33 @@ fn from_root(file: &str, written: &str) -> Option<String> {
     ritsu_base::paths::join(&ritsu_base::paths::parent(file), written).ok()
 }
 
+impl ritsu_ports::Sources for Engine {
+    /// The sources the rule file declares itself (not one an `apply` brings in: the other file
+    /// declares it, and its copies sit beside that file), each with its pins, when the rule
+    /// passes the whole of check, which holds every copy to its pin (§15.68).
+    fn sources(&self, file: &Path) -> Result<Vec<ritsu_ports::Source>, Vec<Said>> {
+        let (_, _, got) = self.rule(file)?;
+        let (f, _) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        Ok(f.sources
+            .iter()
+            .filter(|s| s.base.is_none())
+            .map(|s| ritsu_ports::Source {
+                name: s.name.text.clone(),
+                line: s.span.line,
+                kind: match &s.kind {
+                    SourceKind::Law { db, id, asof } => ritsu_ports::SourceKind::Law {
+                        db: db.word().to_string(),
+                        id: id.clone(),
+                        asof: asof.clone(),
+                        pins: s.pins.iter().map(|p| (p.fragment.clone(), p.hash.clone())).collect(),
+                    },
+                    SourceKind::File { path, url, hash } => ritsu_ports::SourceKind::File { path: path.clone(), url: url.clone(), pin: hash.clone() },
+                },
+            })
+            .collect())
+    }
+}
+
 impl ritsu_ports::Items for Engine {
     /// Each input, output, enum (and each of its values), table, clause, define, derive,
     /// machine and source the file writes itself (what an `apply` brings in is the other file's).

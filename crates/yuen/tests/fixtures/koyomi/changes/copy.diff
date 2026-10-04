@@ -1,0 +1,14 @@
+diff --git a/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml b/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml
+index 6f2fa7f..42918a0 100644
+--- a/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml
++++ b/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml
+@@ -3,7 +3,7 @@
+             <Paragraph Num="1">
+               <ParagraphNum/>
+               <ParagraphSentence>
+-                <Sentence Num="1" WritingMode="vertical">期間の末日が日曜日、国民の祝日に関する法律（昭和二十三年法律第百七十八号）に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する。</Sentence>
++                <Sentence Num="1" WritingMode="vertical">期間の末日が日曜日、国民の祝日に関する法律（昭和二十三年法律第百七十八号）に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌々日に満了する。</Sentence>
+               </ParagraphSentence>
+             </Paragraph>
+           </Article>
+\ No newline at end of file

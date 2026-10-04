@@ -1,0 +1,3 @@
+text 20 日締め翌月 10 日払い。支払日が休みなら、その前の営業日に払う
+from file calendars/data/syukujitsu.csv sha256:cec37a743c96995c
+in force 2026-10-01..

@@ -1311,6 +1311,17 @@ spaces around it, the blank lines and the comments left out). Nothing is
 run. The command line, its exit codes, its output and its JSON did not
 change.
 
+In the last part of ritsu's stage D, the port of claims also answers what a
+diff comes to for a spec's claims (`affected`): yuen follows the claims it
+touches to the requirements that name them (yuen's DESIGN 8). The answer is
+the one `geas affected` prints, from the same function (`answer_for`):
+which side of the change each record is of, the claims the change touches
+and the lines, the changed lines no claim runs, and the files deleted,
+outside the source and of the spec. Reading a unified diff moved into
+ritsu-base (`ritsu_base::udiff`), since yuen reads diffs too; what a side's
+git blob is stays here (`src/diff.rs`). The command line, its exit codes,
+its output and its JSON did not change.
+
 ## 14. Distribution through the agent channel
 
 The skill is the other half of §0's division of labor: the person reads

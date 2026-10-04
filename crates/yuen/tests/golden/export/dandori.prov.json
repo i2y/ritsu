@@ -1,0 +1,411 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/物流": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "物流",
+      "yuen:description": "配送の手順を決める"
+    },
+    "y:role/開発": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "開発",
+      "yuen:description": "ワークフローを書いて直す"
+    }
+  },
+  "entity": {
+    "y:source/89a53365ef8c61d8fc1906affdd906f7": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "手順",
+      "yuen:file": "配送の手順.md",
+      "yuen:sha256": "b3d6f4b8ced5716c"
+    },
+    "y:artifact/e49b5c29ad58411a90605e606e550624": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dandori \"arrange_delivery.ja.flow\" task 翌日便を頼む",
+      "yuen:sha256": "3c19313a3f633021",
+      "yuen:end": "item"
+    },
+    "y:artifact/9309b36ebca5edca3ca5aee99fb7bf5a": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dandori \"arrange_delivery.ja.flow\" task 通常便を頼む",
+      "yuen:sha256": "fb518dde20b90816",
+      "yuen:end": "item"
+    },
+    "y:artifact/48f6c801264c46c901c612d78203baeb": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dandori \"arrange_delivery.ja.flow\" record 集荷 field 追跡番号",
+      "yuen:sha256": "69aa90b09002e1fc",
+      "yuen:end": "item"
+    },
+    "y:artifact/caa16500771893363d3269cb4cc34450": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dandori \"arrange_delivery.ja.flow\" output 追跡番号",
+      "yuen:sha256": "69aa90b09002e1fc",
+      "yuen:end": "item"
+    },
+    "y:requirement/next_day/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "翌日便",
+      "yuen:version": "1",
+      "yuen:text": "翌日便は運送会社に集荷を頼む。車が空いていなければ、そう言って止める",
+      "yuen:sha256": "14807ac1afa3333a"
+    },
+    "y:requirement/regular/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "通常便",
+      "yuen:version": "1",
+      "yuen:text": "通常便は郵便に小包を頼む",
+      "yuen:sha256": "907ce7d3f631812e"
+    },
+    "y:requirement/tracking_number/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "追跡番号",
+      "yuen:version": "1",
+      "yuen:text": "どちらの便でも、追跡番号を返す",
+      "yuen:sha256": "6fc243c572acc9d4"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/next_day/v1",
+      "prov:agent": "y:role/物流",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r12": {
+      "prov:entity": "y:requirement/regular/v1",
+      "prov:agent": "y:role/物流",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r23": {
+      "prov:entity": "y:requirement/tracking_number/v1",
+      "prov:agent": "y:role/物流",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/next_day/v1",
+      "prov:usedEntity": "y:source/89a53365ef8c61d8fc1906affdd906f7",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r13": {
+      "prov:generatedEntity": "y:requirement/regular/v1",
+      "prov:usedEntity": "y:source/89a53365ef8c61d8fc1906affdd906f7",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r24": {
+      "prov:generatedEntity": "y:requirement/tracking_number/v1",
+      "prov:usedEntity": "y:source/89a53365ef8c61d8fc1906affdd906f7",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/e49b5c29ad58411a90605e606e550624",
+      "prov:influencer": "y:requirement/next_day/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r14": {
+      "prov:influencee": "y:artifact/9309b36ebca5edca3ca5aee99fb7bf5a",
+      "prov:influencer": "y:requirement/regular/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r25": {
+      "prov:influencee": "y:artifact/48f6c801264c46c901c612d78203baeb",
+      "prov:influencer": "y:requirement/tracking_number/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r26": {
+      "prov:influencee": "y:artifact/caa16500771893363d3269cb4cc34450",
+      "prov:influencer": "y:requirement/tracking_number/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/2babd3e3e4436a1725040b4041363ff1": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "b3d6f4b8ced5716c",
+      "yuen:down": "14807ac1afa3333a",
+      "yuen:status": "ok"
+    },
+    "y:review/94c8e9011d7064835bb698c3adafc3b4": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "14807ac1afa3333a",
+      "yuen:down": "3c19313a3f633021",
+      "yuen:status": "ok"
+    },
+    "y:waiver/b4edcad04050c7e3e373cd1f95b21b4f": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "この材料は、ワークフローを走らせる主張を持たない",
+      "yuen:sha256": "14807ac1afa3333a",
+      "yuen:status": "ok"
+    },
+    "y:review/043c10447c37d60d160c1f647bf7119f": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "b3d6f4b8ced5716c",
+      "yuen:down": "907ce7d3f631812e",
+      "yuen:status": "ok"
+    },
+    "y:review/af2434a18b5741b098336b1f3d71c839": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "907ce7d3f631812e",
+      "yuen:down": "fb518dde20b90816",
+      "yuen:status": "ok"
+    },
+    "y:waiver/466cc76d54da124d8f0df829d02af442": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "この材料は、ワークフローを走らせる主張を持たない",
+      "yuen:sha256": "907ce7d3f631812e",
+      "yuen:status": "ok"
+    },
+    "y:review/bce0632f71883de46cfdaa5b76ff031d": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "b3d6f4b8ced5716c",
+      "yuen:down": "6fc243c572acc9d4",
+      "yuen:status": "ok"
+    },
+    "y:review/95c990f3a2f2a7e48dc99b2cd5ccb6ec": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "6fc243c572acc9d4",
+      "yuen:down": "69aa90b09002e1fc",
+      "yuen:status": "ok"
+    },
+    "y:review/0798c57cfacadbaf21b2a51b1941deb9": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "6fc243c572acc9d4",
+      "yuen:down": "69aa90b09002e1fc",
+      "yuen:status": "ok"
+    },
+    "y:waiver/bddf06ea257307cef52fba7b58f2c515": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "この材料は、ワークフローを走らせる主張を持たない",
+      "yuen:sha256": "6fc243c572acc9d4",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r4": {
+      "prov:activity": "y:review/2babd3e3e4436a1725040b4041363ff1",
+      "prov:entity": "y:source/89a53365ef8c61d8fc1906affdd906f7"
+    },
+    "_:r5": {
+      "prov:activity": "y:review/2babd3e3e4436a1725040b4041363ff1",
+      "prov:entity": "y:requirement/next_day/v1"
+    },
+    "_:r7": {
+      "prov:activity": "y:review/94c8e9011d7064835bb698c3adafc3b4",
+      "prov:entity": "y:requirement/next_day/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/94c8e9011d7064835bb698c3adafc3b4",
+      "prov:entity": "y:artifact/e49b5c29ad58411a90605e606e550624"
+    },
+    "_:r10": {
+      "prov:activity": "y:waiver/b4edcad04050c7e3e373cd1f95b21b4f",
+      "prov:entity": "y:requirement/next_day/v1"
+    },
+    "_:r15": {
+      "prov:activity": "y:review/043c10447c37d60d160c1f647bf7119f",
+      "prov:entity": "y:source/89a53365ef8c61d8fc1906affdd906f7"
+    },
+    "_:r16": {
+      "prov:activity": "y:review/043c10447c37d60d160c1f647bf7119f",
+      "prov:entity": "y:requirement/regular/v1"
+    },
+    "_:r18": {
+      "prov:activity": "y:review/af2434a18b5741b098336b1f3d71c839",
+      "prov:entity": "y:requirement/regular/v1"
+    },
+    "_:r19": {
+      "prov:activity": "y:review/af2434a18b5741b098336b1f3d71c839",
+      "prov:entity": "y:artifact/9309b36ebca5edca3ca5aee99fb7bf5a"
+    },
+    "_:r21": {
+      "prov:activity": "y:waiver/466cc76d54da124d8f0df829d02af442",
+      "prov:entity": "y:requirement/regular/v1"
+    },
+    "_:r27": {
+      "prov:activity": "y:review/bce0632f71883de46cfdaa5b76ff031d",
+      "prov:entity": "y:source/89a53365ef8c61d8fc1906affdd906f7"
+    },
+    "_:r28": {
+      "prov:activity": "y:review/bce0632f71883de46cfdaa5b76ff031d",
+      "prov:entity": "y:requirement/tracking_number/v1"
+    },
+    "_:r30": {
+      "prov:activity": "y:review/95c990f3a2f2a7e48dc99b2cd5ccb6ec",
+      "prov:entity": "y:requirement/tracking_number/v1"
+    },
+    "_:r31": {
+      "prov:activity": "y:review/95c990f3a2f2a7e48dc99b2cd5ccb6ec",
+      "prov:entity": "y:artifact/48f6c801264c46c901c612d78203baeb"
+    },
+    "_:r33": {
+      "prov:activity": "y:review/0798c57cfacadbaf21b2a51b1941deb9",
+      "prov:entity": "y:requirement/tracking_number/v1"
+    },
+    "_:r34": {
+      "prov:activity": "y:review/0798c57cfacadbaf21b2a51b1941deb9",
+      "prov:entity": "y:artifact/caa16500771893363d3269cb4cc34450"
+    },
+    "_:r36": {
+      "prov:activity": "y:waiver/bddf06ea257307cef52fba7b58f2c515",
+      "prov:entity": "y:requirement/tracking_number/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r6": {
+      "prov:activity": "y:review/2babd3e3e4436a1725040b4041363ff1",
+      "prov:agent": "y:role/物流"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/94c8e9011d7064835bb698c3adafc3b4",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r11": {
+      "prov:activity": "y:waiver/b4edcad04050c7e3e373cd1f95b21b4f",
+      "prov:agent": "y:role/物流"
+    },
+    "_:r17": {
+      "prov:activity": "y:review/043c10447c37d60d160c1f647bf7119f",
+      "prov:agent": "y:role/物流"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/af2434a18b5741b098336b1f3d71c839",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r22": {
+      "prov:activity": "y:waiver/466cc76d54da124d8f0df829d02af442",
+      "prov:agent": "y:role/物流"
+    },
+    "_:r29": {
+      "prov:activity": "y:review/bce0632f71883de46cfdaa5b76ff031d",
+      "prov:agent": "y:role/物流"
+    },
+    "_:r32": {
+      "prov:activity": "y:review/95c990f3a2f2a7e48dc99b2cd5ccb6ec",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r35": {
+      "prov:activity": "y:review/0798c57cfacadbaf21b2a51b1941deb9",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r37": {
+      "prov:activity": "y:waiver/bddf06ea257307cef52fba7b58f2c515",
+      "prov:agent": "y:role/物流"
+    }
+  }
+}

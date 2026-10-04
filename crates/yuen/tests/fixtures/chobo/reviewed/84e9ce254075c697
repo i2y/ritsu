@@ -1,0 +1,66 @@
+{
+  "accounts": {
+    "返金できる残り": {
+      "description": "その注文でまだ返金できる額",
+      "lower": {
+        "refused_as": "返金超過",
+        "value": 0
+      },
+      "outside": false,
+      "params": [
+        "注文"
+      ],
+      "unit": "円",
+      "upper": null
+    },
+    "返金済み": {
+      "description": null,
+      "lower": null,
+      "outside": true,
+      "params": [],
+      "unit": "円",
+      "upper": null
+    }
+  },
+  "description": "承認を待つあいだ押さえる。承認されたら確定し、却下されたら取り消す",
+  "key": [
+    "申請"
+  ],
+  "moves": [
+    {
+      "amount": {
+        "param": "額"
+      },
+      "from": {
+        "account": "返金できる残り",
+        "args": [
+          {
+            "param": "注文"
+          }
+        ]
+      },
+      "to": {
+        "account": "返金済み",
+        "args": []
+      }
+    }
+  ],
+  "params": [
+    {
+      "name": "申請",
+      "type": "string"
+    },
+    {
+      "name": "注文",
+      "type": "string"
+    },
+    {
+      "name": "額",
+      "type": "amount",
+      "unit": "円"
+    }
+  ],
+  "pending": {
+    "expires_after_seconds": 604800
+  }
+}

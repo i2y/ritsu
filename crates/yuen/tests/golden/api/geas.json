@@ -1,0 +1,454 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/geas",
+  "files": [
+    {
+      "path": "greeter.req",
+      "name": "greeter",
+      "version": "1",
+      "sha256": "80bfa762f96e9636"
+    }
+  ],
+  "roles": [
+    {
+      "name": "api",
+      "description": "decides what the service answers"
+    },
+    {
+      "name": "dev",
+      "description": "writes the server"
+    }
+  ],
+  "sources": [
+    {
+      "file": "greeter.req",
+      "name": "contract",
+      "kind": "file",
+      "path": "contract.md",
+      "url": null,
+      "sha256": "129685aad10b7b82",
+      "borrowed": null
+    }
+  ],
+  "requirements": [
+    {
+      "name": "greets_by_name",
+      "alias": null,
+      "version": 1,
+      "file": "greeter.req",
+      "line": 11,
+      "text": "GET /greet?name=<name> answers 200 with the message Hello, <name>",
+      "in_force": null,
+      "owner": "api",
+      "replaces": [],
+      "sha256": "4e3719f3a07dc096",
+      "from": [
+        {
+          "line": 14,
+          "sources": [
+            {
+              "source": "contract",
+              "fragment": null,
+              "sha256": "129685aad10b7b82"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "api",
+            "up": [
+              "129685aad10b7b82"
+            ],
+            "down": "4e3719f3a07dc096"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 16,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"greeter/server.py\"",
+            "tool": "file",
+            "path": "greeter/server.py",
+            "items": []
+          },
+          "sha256": "331e02e26d128e8c",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "dev",
+            "up": [
+              "4e3719f3a07dc096"
+            ],
+            "down": "331e02e26d128e8c"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 18,
+          "role": "verified",
+          "artifact": {
+            "text": "geas \"greeter/greeter.geas\" claim \"greets by name\"",
+            "tool": "geas",
+            "path": "greeter/greeter.geas",
+            "items": [
+              [
+                "claim",
+                "greets by name"
+              ]
+            ]
+          },
+          "sha256": "2b4e11c2cc191431",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "dev",
+            "up": [
+              "4e3719f3a07dc096"
+            ],
+            "down": "2b4e11c2cc191431"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    },
+    {
+      "name": "rejects_an_empty_name",
+      "alias": null,
+      "version": 1,
+      "file": "greeter.req",
+      "line": 21,
+      "text": "GET /greet with an empty name answers 400",
+      "in_force": null,
+      "owner": "api",
+      "replaces": [],
+      "sha256": "70ec5112e96e51a9",
+      "from": [
+        {
+          "line": 24,
+          "sources": [
+            {
+              "source": "contract",
+              "fragment": null,
+              "sha256": "129685aad10b7b82"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "api",
+            "up": [
+              "129685aad10b7b82"
+            ],
+            "down": "70ec5112e96e51a9"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [
+        {
+          "date": "2026-10-03",
+          "by": "api",
+          "why": "an empty name is a client error, not a greeting"
+        }
+      ],
+      "links": [
+        {
+          "line": 27,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"greeter/server.py\"",
+            "tool": "file",
+            "path": "greeter/server.py",
+            "items": []
+          },
+          "sha256": "331e02e26d128e8c",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "dev",
+            "up": [
+              "70ec5112e96e51a9"
+            ],
+            "down": "331e02e26d128e8c"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 29,
+          "role": "verified",
+          "artifact": {
+            "text": "geas \"greeter/greeter.geas\" claim \"rejects an empty name\"",
+            "tool": "geas",
+            "path": "greeter/greeter.geas",
+            "items": [
+              [
+                "claim",
+                "rejects an empty name"
+              ]
+            ]
+          },
+          "sha256": "3f7c8d1b2bbcc309",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "dev",
+            "up": [
+              "70ec5112e96e51a9"
+            ],
+            "down": "3f7c8d1b2bbcc309"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    },
+    {
+      "name": "totals_accumulate",
+      "alias": null,
+      "version": 1,
+      "file": "greeter.req",
+      "line": 32,
+      "text": "POST /add adds its body to a total that GET /total answers, and POST /reset sets it to 0",
+      "in_force": null,
+      "owner": "api",
+      "replaces": [],
+      "sha256": "6b134f42eed9f18a",
+      "from": [
+        {
+          "line": 35,
+          "sources": [
+            {
+              "source": "contract",
+              "fragment": null,
+              "sha256": "129685aad10b7b82"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "api",
+            "up": [
+              "129685aad10b7b82"
+            ],
+            "down": "6b134f42eed9f18a"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 37,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"greeter/server.py\"",
+            "tool": "file",
+            "path": "greeter/server.py",
+            "items": []
+          },
+          "sha256": "331e02e26d128e8c",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "dev",
+            "up": [
+              "6b134f42eed9f18a"
+            ],
+            "down": "331e02e26d128e8c"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 39,
+          "role": "verified",
+          "artifact": {
+            "text": "geas \"greeter/greeter.geas\" claim \"totals accumulate across requests\"",
+            "tool": "geas",
+            "path": "greeter/greeter.geas",
+            "items": [
+              [
+                "claim",
+                "totals accumulate across requests"
+              ]
+            ]
+          },
+          "sha256": "d653be1c06f5c8b1",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "dev",
+            "up": [
+              "6b134f42eed9f18a"
+            ],
+            "down": "d653be1c06f5c8b1"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    },
+    {
+      "name": "unknown_paths_are_404",
+      "alias": null,
+      "version": 1,
+      "file": "greeter.req",
+      "line": 42,
+      "text": "Any other path answers 404",
+      "in_force": null,
+      "owner": "api",
+      "replaces": [],
+      "sha256": "132fa5fd5426ca87",
+      "from": [
+        {
+          "line": 45,
+          "sources": [
+            {
+              "source": "contract",
+              "fragment": null,
+              "sha256": "129685aad10b7b82"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "api",
+            "up": [
+              "129685aad10b7b82"
+            ],
+            "down": "132fa5fd5426ca87"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 47,
+          "role": "satisfied",
+          "artifact": {
+            "text": "file \"greeter/server.py\"",
+            "tool": "file",
+            "path": "greeter/server.py",
+            "items": []
+          },
+          "sha256": "331e02e26d128e8c",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "dev",
+            "up": [
+              "132fa5fd5426ca87"
+            ],
+            "down": "331e02e26d128e8c"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 49,
+          "role": "verified",
+          "artifact": {
+            "text": "geas \"greeter/greeter.geas\" claim \"unknown paths are 404\"",
+            "tool": "geas",
+            "path": "greeter/greeter.geas",
+            "items": [
+              [
+                "claim",
+                "unknown paths are 404"
+              ]
+            ]
+          },
+          "sha256": "1950201e8644bc57",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "dev",
+            "up": [
+              "132fa5fd5426ca87"
+            ],
+            "down": "1950201e8644bc57"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "geas \"greeter/greeter.geas\" claim \"greets by name\"",
+      "tool": "geas",
+      "path": "greeter/greeter.geas",
+      "items": [
+        [
+          "claim",
+          "greets by name"
+        ]
+      ],
+      "sha256": "2b4e11c2cc191431",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "geas \"greeter/greeter.geas\" claim \"rejects an empty name\"",
+      "tool": "geas",
+      "path": "greeter/greeter.geas",
+      "items": [
+        [
+          "claim",
+          "rejects an empty name"
+        ]
+      ],
+      "sha256": "3f7c8d1b2bbcc309",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "geas \"greeter/greeter.geas\" claim \"totals accumulate across requests\"",
+      "tool": "geas",
+      "path": "greeter/greeter.geas",
+      "items": [
+        [
+          "claim",
+          "totals accumulate across requests"
+        ]
+      ],
+      "sha256": "d653be1c06f5c8b1",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "geas \"greeter/greeter.geas\" claim \"unknown paths are 404\"",
+      "tool": "geas",
+      "path": "greeter/greeter.geas",
+      "items": [
+        [
+          "claim",
+          "unknown paths are 404"
+        ]
+      ],
+      "sha256": "1950201e8644bc57",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "file \"greeter/server.py\"",
+      "tool": "file",
+      "path": "greeter/server.py",
+      "items": [],
+      "sha256": "331e02e26d128e8c",
+      "end": "file",
+      "pins": []
+    }
+  ],
+  "scopes": [
+    {
+      "file": "greeter.req",
+      "line": 9,
+      "text": "file \"greeter/server.py\"",
+      "artifacts": 1,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/geas: ok — 4 requirements, whose 12 links are as they were looked at; every requirement is met and checked, or waived; the file in scope traces to a requirement",
+    "diagnostics": []
+  }
+}

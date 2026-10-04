@@ -1,0 +1,5 @@
+エラー[E203]: tests/mutants/E203_検査を通らない規則/例.req:8:16: rulec が rulec "a.rule" table fees について答えられません
+     8 |   satisfied by rulec "a.rule" table fees
+  = rulec の診断: [E101] tests/mutants/E203_検査を通らない規則/a.rule:9: 完全性の欠落: どの行にも当てはまらない入力があります
+  = そのファイルが rulec の検査を通るように直します。通らないファイルからは、端を作れません。
+tests/mutants/E203_検査を通らない規則: エラー 1 件

@@ -9,7 +9,7 @@
 //! (`prov:Revision`); its owner is an attribution; a decision influences it; an artifact that
 //! meets it or checks it is influenced by it.
 
-use super::{Graph, RelKind, SourceKey, Target, digits};
+use super::{Graph, PinFile, PinSource, RelKind, SourceKey, SourceNode, Target, digits};
 use serde_json::{Map, Value, json};
 
 /// yuen's types and attributes.
@@ -84,8 +84,13 @@ fn records(g: &Graph) -> Vec<Rec> {
             out.push(Rec { kind: "agent", args: vec![Some(role_id(&r.name))], attrs });
         }
     }
-    // Entities: the sources, the artifacts, the requirement versions.
-    for (i, s) in g.sources.iter().enumerate() {
+    // Entities: the sources, the artifacts, the requirement versions. The articles the files of
+    // the artifacts pin and no `.req` declares come after the sources, and those files, when no
+    // link names them whole, after the artifacts.
+    let more_sources: Vec<String> = g.pins.sources.iter().map(|s| format!("y:source/{}", s.key.digits())).collect();
+    let pin_files: Vec<String> = g.pins.files.iter().map(|(f, _)| format!("y:artifact/{}", digits("artifact", &[&f.text()]))).collect();
+    let all_sources: Vec<(&SourceNode, &String)> = g.sources.iter().zip(&ids.sources).chain(g.pins.sources.iter().zip(&more_sources)).collect();
+    for (s, sid) in all_sources {
         let mut attrs = vec![("prov:type", Val::QName("yuen:Source")), ("prov:label", Val::Str(s.label.clone()))];
         match &s.key {
             SourceKey::Law { db, id, asof, .. } => {
@@ -105,7 +110,7 @@ fn records(g: &Graph) -> Vec<Rec> {
         if let Some(pin) = &s.pin {
             attrs.push(("yuen:sha256", Val::Str(pin.clone())));
         }
-        out.push(Rec { kind: "entity", args: vec![Some(ids.sources[i].clone())], attrs });
+        out.push(Rec { kind: "entity", args: vec![Some(sid.clone())], attrs });
     }
     for (i, a) in g.artifacts.iter().enumerate() {
         let mut attrs = vec![("prov:type", Val::QName("yuen:Artifact")), ("prov:label", Val::Str(a.text()))];
@@ -114,6 +119,10 @@ fn records(g: &Graph) -> Vec<Rec> {
         }
         attrs.push(("yuen:end", Val::Str(if a.items.is_empty() { "file".into() } else { "item".into() })));
         out.push(Rec { kind: "entity", args: vec![Some(ids.artifacts[i].clone())], attrs });
+    }
+    for ((f, hash), fid) in g.pins.files.iter().zip(&pin_files) {
+        let attrs = vec![("prov:type", Val::QName("yuen:Artifact")), ("prov:label", Val::Str(f.text())), ("yuen:sha256", Val::Str(hash.clone())), ("yuen:end", Val::Str("file".into()))];
+        out.push(Rec { kind: "entity", args: vec![Some(fid.clone())], attrs });
     }
     for r in 0..p.reqs.len() {
         let d = p.decl(r);
@@ -251,6 +260,18 @@ fn records(g: &Graph) -> Vec<Rec> {
                 out.push(Rec { kind: "wasAssociatedWith", args: vec![Some(wid), Some(role_id(&rc.by)), None], attrs: vec![] });
             }
         }
+    }
+    // What the files of the rules and calendars pin (DESIGN 3.3).
+    for (from, to) in &g.pins.edges {
+        let f = match from {
+            PinFile::Artifact(i) => ids.artifacts[*i].clone(),
+            PinFile::File(i) => pin_files[*i].clone(),
+        };
+        let t = match to {
+            PinSource::Source(i) => ids.sources[*i].clone(),
+            PinSource::More(i) => more_sources[*i].clone(),
+        };
+        out.push(Rec { kind: "wasInfluencedBy", args: vec![Some(f), Some(t)], attrs: vec![("prov:type", Val::QName("yuen:pins"))] });
     }
     out
 }

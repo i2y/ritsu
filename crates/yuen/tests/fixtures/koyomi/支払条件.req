@@ -1,0 +1,17 @@
+requirements 支払条件 v1
+description "koyomi の例「支払_20日締め翌月10日払い.cal」の支払日を書いたテストの材料。休みの日の出典は、カレンダーのファイルが固定している祝日の表を借りる。支払の条件は、この材料のために書いたもの"
+
+role 経理 "支払の条件を決める"
+
+source 祝日 = koyomi "calendars/東京の営業日.cal" source 祝日
+
+requirement 支払日(payment_day)
+  text "20 日締め翌月 10 日払い。支払日が休みなら、その前の営業日に払う"
+  in force 2026-10-01..
+  owner 経理
+  from @祝日
+    reviewed 2026-10-04 by 経理 sha256:cec37a743c96995c -> sha256:870271e179a7d233
+  satisfied by koyomi "支払_20日締め翌月10日払い.cal" date 支払日
+    reviewed 2026-10-04 by 経理 sha256:870271e179a7d233 -> sha256:feb9535fb9350ecc
+  verified by koyomi "支払_20日締め翌月10日払い.cal" claim 営業日に払う
+    reviewed 2026-10-04 by 経理 sha256:870271e179a7d233 -> sha256:3cf8fc3fb2dda9d9

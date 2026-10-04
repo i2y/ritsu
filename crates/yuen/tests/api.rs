@@ -50,3 +50,23 @@ fn no_api_for_a_project_whose_names_are_wrong() {
     assert!(r.stdout.is_empty());
     assert!(r.stderr.contains("error[E008]"), "{}", r.stderr);
 }
+
+/// The api of each project that names the things of another language, read through ritsu's ports
+/// (DESIGN 11): every artifact with its end (`file` or `item`) and the articles its file pins, and
+/// a borrowed source with the naming of the file it is borrowed from.
+#[test]
+fn the_api_of_the_fixtures_that_read_another_language() {
+    let mut failures = Vec::new();
+    for name in ["rulec", "koyomi", "chobo", "geas", "proto", "dandori", "sakai"] {
+        let dir = format!("tests/fixtures/{name}");
+        let r = common::run(&["api", &dir, "--root", &dir]);
+        assert_eq!(r.code, 0, "{name}: {}", r.stderr);
+        common::golden(&format!("tests/golden/api/{name}.json"), &r.stdout, &mut failures);
+        let v: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
+        assert_eq!(v["check"]["ok"], true, "{name}");
+        for a in v["artifacts"].as_array().unwrap() {
+            assert_eq!(a["end"], if a["items"].as_array().unwrap().is_empty() { "file" } else { "item" }, "{name}: {a}");
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

@@ -1,0 +1,13 @@
+diff --git a/sources/law/332AC0000000026@2026-04-01/MainProvision-Article_91.xml b/sources/law/332AC0000000026@2026-04-01/MainProvision-Article_91.xml
+index 279d3b3..093c60f 100644
+--- a/sources/law/332AC0000000026@2026-04-01/MainProvision-Article_91.xml
++++ b/sources/law/332AC0000000026@2026-04-01/MainProvision-Article_91.xml
+@@ -13,7 +13,7 @@
+                     <Sentence Num="1">十万円を超え五十万円以下のもの</Sentence>
+                   </Column>
+                   <Column Num="2">
+-                    <Sentence Num="1">二百円</Sentence>
++                    <Sentence Num="1">三百円</Sentence>
+                   </Column>
+                 </ItemSentence>
+               </Item>

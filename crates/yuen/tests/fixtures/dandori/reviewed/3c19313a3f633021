@@ -1,0 +1,6 @@
+task 翌日便を頼む(注文ID: string, 宛名: string?) -> 集荷
+  http POST "https://next-day.example.com/v1/pickups"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/next-day/2a3b4c"
+  errors 空きなし = 409
+  key
+  retry 2 times every 5 seconds

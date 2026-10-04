@@ -1,0 +1,7 @@
+diff: tests/fixtures/koyomi/changes/text.diff
+requirements the diff changes (tests/fixtures/koyomi/民法の期間.req):
+  満了日_142条: its text or period changes, so its links are to be looked at again
+changes no requirement reaches: none
+requirements touched:
+  満了日_142条 (tests/fixtures/koyomi/民法の期間.req:33): owner 法務; from 民法 第142条; decided 2026-10-03 by 法務: "「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。この材料のために決めたもので、法令の読み方を示すものではない"
+1 requirement touched; ask 法務

@@ -1,0 +1,2 @@
+text POST /add adds its body to a total that GET /total answers, and POST /reset sets it to 0
+from file contract.md sha256:129685aad10b7b82

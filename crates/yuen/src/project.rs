@@ -72,6 +72,9 @@ pub struct Project {
     /// The aliases, each to its requirement's name.
     pub aliases: BTreeMap<String, String>,
     pub names: Names,
+    /// The languages yuen reads through ritsu's ports (`suite.rs`): none for the binary of yuen's
+    /// own crate, every one for `ritsu yuen`.
+    pub suite: crate::suite::Suite,
 }
 
 /// What stops a command before anything is checked: exit 2.
@@ -121,8 +124,13 @@ pub fn expand(arg: &str) -> Vec<String> {
 }
 
 /// Read and parse every file the paths stand for. The diagnostics are the first stage's
-/// (E001–E006); the project comes back only when there are none.
+/// (E001–E006); the project comes back only when there are none. No other language is joined.
 pub fn load(args: &[String], root_flag: Option<&str>) -> Result<(Option<Project>, Vec<Diag>), Refusal> {
+    load_with(args, root_flag, crate::suite::Suite::default())
+}
+
+/// [`load`], with the languages `suite` joins.
+pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::Suite) -> Result<(Option<Project>, Vec<Diag>), Refusal> {
     let Some(first) = args.first() else {
         return Err(Refusal(tr!(".req のファイルかディレクトリを渡します", "Give .req files or directories")));
     };
@@ -176,7 +184,7 @@ pub fn load(args: &[String], root_flag: Option<&str>) -> Result<(Option<Project>
         return Ok((None, diags));
     }
     let label = args.join(", ");
-    Ok((Some(Project { root, root_shown, cwd, label, args: args.to_vec(), root_flag: root_flag.map(|r| r.to_string()), files, reqs: vec![], by_name: BTreeMap::new(), aliases: BTreeMap::new(), names: Names::default() }), diags))
+    Ok((Some(Project { root, root_shown, cwd, label, args: args.to_vec(), root_flag: root_flag.map(|r| r.to_string()), files, reqs: vec![], by_name: BTreeMap::new(), aliases: BTreeMap::new(), names: Names::default(), suite }), diags))
 }
 
 impl Project {
@@ -199,6 +207,16 @@ impl Project {
     pub fn shown(&self, rel: &str) -> String {
         let given = self.args.first().map(String::as_str).unwrap_or(".");
         ritsu_base::paths::Shown::run_in(&self.root, &self.cwd, given).path(rel)
+    }
+
+    /// A path another language gave (absolute, or as yuen named the file), as the text shows a
+    /// path: from where yuen runs when it is under the root.
+    pub fn shown_any(&self, path: &str) -> String {
+        let p = std::path::Path::new(path);
+        match p.strip_prefix(&self.root) {
+            Ok(rel) if p.is_absolute() => self.shown(&rel.to_string_lossy().replace('\\', "/")),
+            _ => path.to_string(),
+        }
     }
 
     pub fn err(&self, fi: usize, code: &'static str, s: Span, msg: Text) -> Diag {

@@ -10,15 +10,27 @@ mod common;
 use common::TempDir;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 use std::process::Command;
 
-/// The projects made of yuen's own requirements alone (the suite's tools are read in a later
-/// stage): sources copied by yuen, artifacts that are files.
-const PROJECTS: [(&str, &str); 3] = [("period", "tests/fixtures/period"), ("ecfr", "tests/fixtures/ecfr"), ("payment", "tests/fixtures/payment")];
+/// Every test project: the ones of yuen's own requirements alone (sources copied by yuen,
+/// artifacts that are files), and the ones that name the things of another language — a rule, a
+/// calendar, a book, a spec, a `.proto`, a workflow, a context — read through ritsu's ports.
+const PROJECTS: [(&str, &str); 10] = [
+    ("period", "tests/fixtures/period"),
+    ("ecfr", "tests/fixtures/ecfr"),
+    ("payment", "tests/fixtures/payment"),
+    ("rulec", "tests/fixtures/rulec"),
+    ("koyomi", "tests/fixtures/koyomi"),
+    ("chobo", "tests/fixtures/chobo"),
+    ("geas", "tests/fixtures/geas"),
+    ("proto", "tests/fixtures/proto"),
+    ("dandori", "tests/fixtures/dandori"),
+    ("sakai", "tests/fixtures/sakai"),
+];
 
+/// The command with every language joined, as `ritsu yuen` runs it.
 fn run(args: &[&str]) -> common::Ran {
-    common::yuen(Path::new("."), args)
+    common::run(args)
 }
 
 fn export(what: &str, dir: &str, more: &[&str]) -> String {
@@ -204,6 +216,34 @@ fn prov_counts(a: &Value) -> BTreeMap<String, usize> {
         add("Usage", decided * cited.len() + looked_from.iter().map(|f| uppers(f) + 1).sum::<usize>() + looked_links * 2 + waivers.len());
     }
     add("Derivation", versions.values().map(|n| n - 1).sum());
+    // What the files of the rules and calendars pin (DESIGN 3.3): each file once (an entity of
+    // its own when no link names it whole), each article it pins, and the articles no `.req`
+    // declares.
+    let mut sources: BTreeSet<String> = BTreeSet::new();
+    for s in arr(&a["sources"]) {
+        for p in s["pins"].as_array().into_iter().flatten() {
+            sources.insert(format!("{} {} {} {}", s["db"], s["id"], s["asof"], p["fragment"]));
+        }
+    }
+    let mut files: BTreeMap<String, &Value> = BTreeMap::new();
+    for art in arr(&a["artifacts"]) {
+        if !arr(&art["pins"]).is_empty() {
+            files.entry(art["path"].as_str().unwrap().to_string()).or_insert(art);
+        }
+    }
+    let mut more: BTreeSet<String> = BTreeSet::new();
+    for (path, art) in &files {
+        let whole = arr(&a["artifacts"]).iter().any(|x| x["path"] == path.as_str() && arr(&x["items"]).is_empty());
+        add("Entity", usize::from(!whole));
+        add("Influence", arr(&art["pins"]).len());
+        for p in arr(&art["pins"]) {
+            let key = format!("{} {} {} {}", p["db"], p["id"], p["asof"], p["fragment"]);
+            if !sources.contains(&key) {
+                more.insert(key);
+            }
+        }
+    }
+    add("Entity", more.len());
     c.retain(|_, n| *n > 0);
     c
 }

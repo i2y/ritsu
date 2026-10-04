@@ -1,0 +1,5 @@
+task 通常便を頼む(注文ID: string, 宛名: string?, 付帯: json) -> 集荷
+  http POST "https://post.example.com/v1/parcels"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/post/3b4c5d"
+  key
+  retry 2 times every 5 seconds

@@ -23,6 +23,9 @@ pub enum Repro {
     Dir { files: Vec<(&'static str, &'static str)>, command: Vec<&'static str> },
     /// None yet: the code is not printed yet, or what prints it is read in a later stage.
     Later,
+    /// None: the code is retired. Nothing prints it any more, and its number is given to
+    /// nothing else (DESIGN 7.10); why, and since when.
+    Retired(Text),
 }
 
 #[derive(Clone, Debug)]
@@ -59,6 +62,22 @@ impl Entry {
         self.repro = Repro::Later;
         self
     }
+
+    /// The same entry, retired ([`Repro::Retired`]): why, and since when.
+    pub fn retired(mut self, why: Text) -> Entry {
+        self.repro = Repro::Retired(why);
+        self
+    }
+
+    /// Whether the code is retired.
+    pub fn is_retired(&self) -> bool {
+        matches!(self.repro, Repro::Retired(_))
+    }
+}
+
+/// What a retired entry says where its reproduction would be: why it was retired, and when.
+fn retired_text(why: &Text, lang: Lang) -> String {
+    why.get(lang).to_string()
 }
 
 /// A language's ledger and how it is written out.
@@ -117,6 +136,7 @@ impl Ledger {
         o.push_str(&format!("{when}: {}\n\n{fix}: {}\n\n{repro}:\n", e.when.get(lang), e.fix.get(lang)));
         match &e.repro {
             Repro::Later => o.push_str(&format!("    {}\n", self.later_text.get(lang))),
+            Repro::Retired(why) => o.push_str(&format!("    {}\n", retired_text(why, lang))),
             Repro::File { body, beside } => {
                 for l in body.lines() {
                     o.push_str(&format!("    {l}\n"));
@@ -158,6 +178,7 @@ impl Ledger {
         o.push_str(&format!("**{when}**: {}\n\n**{fix}**: {}\n\n**{repro}**:", e.when.get(lang), e.fix.get(lang)));
         match &e.repro {
             Repro::Later => o.push_str(&format!(" {}\n", self.later_markdown.get(lang))),
+            Repro::Retired(why) => o.push_str(&format!(" {}\n", retired_text(why, lang))),
             Repro::File { body, beside } => {
                 o.push_str(&format!("\n\n```{}\n{body}```\n", self.fence));
                 for (name, bytes) in beside.iter() {
@@ -202,6 +223,7 @@ impl Ledger {
     pub fn to_json(&self, e: &Entry, lang: Lang) -> Json {
         let repro = match &e.repro {
             Repro::Later => Json::Null,
+            Repro::Retired(why) => Json::obj([("retired", Json::str(why.get(lang)))]),
             Repro::File { body, beside } => {
                 let mut files = vec![Json::obj([("path", Json::str(self.example_file)), ("text", Json::str(*body))])];
                 for (name, bytes) in beside.iter() {
@@ -236,7 +258,7 @@ impl Ledger {
             std::fs::write(p, bytes)
         };
         match &e.repro {
-            Repro::Later => Ok(()),
+            Repro::Later | Repro::Retired(_) => Ok(()),
             Repro::File { body, beside } => {
                 for (name, bytes) in beside.iter() {
                     write(name, bytes)?;
@@ -255,11 +277,11 @@ impl Ledger {
 
 /// Every reproduction prints its code: each is laid out in a fresh directory under `scratch`
 /// and handed to `run`, which answers the codes it printed. The failures, one a line (an entry
-/// that is [`Repro::Later`] is passed over). The directories are removed.
+/// that is [`Repro::Later`] or [`Repro::Retired`] is passed over). The directories are removed.
 pub fn check_every(ledger: &Ledger, scratch: &Path, mut run: impl FnMut(&Entry, &Path) -> Vec<String>) -> Vec<String> {
     let mut failures = Vec::new();
     for e in &ledger.entries {
-        if matches!(e.repro, Repro::Later) {
+        if matches!(e.repro, Repro::Later | Repro::Retired(_)) {
             continue;
         }
         let dir = scratch.join(e.code);

@@ -1,0 +1,5 @@
+error[E202]: tests/mutants/E202_名前が変わった/返金.req:15:16: tests/mutants/E202_名前が変わった/refunds.ja.book has no transfer 返金
+    15 |   satisfied by chobo "refunds.ja.book" transfer 返金
+  = It looks renamed: these have the definition that was looked at.
+  = Did you mean: chobo "refunds.ja.book" transfer 返金の申請
+tests/mutants/E202_名前が変わった: 1 error

@@ -5,6 +5,7 @@
 use crate::ast::*;
 use crate::copies;
 use crate::diag::{Diag, DiagExt};
+use ritsu_base::text::Text;
 use crate::names::Name;
 use crate::project::Project;
 use ritsu_base::sha256;
@@ -25,12 +26,26 @@ pub struct Article {
 
 #[derive(Clone, Debug)]
 pub enum Resolved {
-    Law { db: LawDb, id: String, asof: String, dir: PathBuf, revision: Option<String>, articles: Vec<Article> },
-    File { name: Name, abs: PathBuf, url: Option<String>, pin: Option<String>, bytes: Option<Vec<u8>> },
-    /// A source a rule or a calendar pins (DESIGN 1.4, 3.3), read through the tool's JSON.
-    Borrowed { name: Name },
-    /// The naming of a borrowed source or the path of a file source did not resolve (stage 2).
+    /// A law, copied an article at a time. `borrowed` is the source of a rule or a calendar it is
+    /// borrowed from (DESIGN 1.4, 3.3): then the copies and the pins are that file's, and its
+    /// language's check holds them.
+    Law { db: LawDb, id: String, asof: String, dir: PathBuf, revision: Option<String>, articles: Vec<Article>, borrowed: Option<Name> },
+    File { name: Name, abs: PathBuf, url: Option<String>, pin: Option<String>, bytes: Option<Vec<u8>>, borrowed: Option<Name> },
+    /// A borrowed source whose language is not handed to yuen: `ritsu yuen` reads it (exit 2).
+    NoPort { name: Name },
+    /// The naming of a borrowed source or the path of a file source did not resolve (stage 2),
+    /// or the source could not be borrowed (E106, E203).
     Broken,
+}
+
+impl Resolved {
+    /// The source of a rule or a calendar it is borrowed from.
+    pub fn borrowed(&self) -> Option<&Name> {
+        match self {
+            Resolved::Law { borrowed, .. } | Resolved::File { borrowed, .. } => borrowed.as_ref(),
+            _ => None,
+        }
+    }
 }
 
 /// The sources of every file, in the order they are declared.
@@ -89,7 +104,81 @@ impl Sources {
                 let hash = sha256::short(&bytes);
                 Some(vec![Cited { line: format!("from file {} sha256:{hash}", name.path), hash, bytes, label: source.to_string(), law: None }])
             }
-            Resolved::Borrowed { .. } | Resolved::Broken => None,
+            Resolved::NoPort { .. } | Resolved::Broken => None,
+        }
+    }
+}
+
+/// A source a rule or a calendar pins, borrowed (DESIGN 1.4, 3.3): its pins and its copies are
+/// that file's, as its language answers for it (`Sources`, which answers only for a file that
+/// passes its check). The copies sit beside the file, where the language keeps them.
+fn borrow(p: &Project, fi: usize, s: &SourceDecl, n: &Name, diags: &mut Vec<Diag>) -> Resolved {
+    let tool = n.tool;
+    let wanted = n.items.first().map(|(_, v)| v.clone()).unwrap_or_default();
+    let abs = p.root.join(&n.path);
+    let t = n.text();
+    let e106 = |msg: Text| p.err(fi, "E106", s.span, msg);
+    if !abs.is_file() {
+        diags.push(e106(tr!("{t} の {} がありません", "{} of {t} is not there", p.shown(&n.path))));
+        return Resolved::Broken;
+    }
+    if !p.suite.reads(tool) {
+        return Resolved::NoPort { name: n.clone() };
+    }
+    let declared = match p.suite.sources(tool, &abs) {
+        Some(Ok(d)) => d,
+        Some(Err(said)) => {
+            diags.push(crate::check::refused(p, fi, s.span, n, &said));
+            return Resolved::Broken;
+        }
+        None => return Resolved::NoPort { name: n.clone() },
+    };
+    let Some(src) = declared.iter().find(|x| x.name == wanted) else {
+        let have: Vec<&str> = declared.iter().map(|x| x.name.as_str()).collect();
+        let (ja, en) = (have.join("、"), have.join(", "));
+        let shown = p.shown(&n.path);
+        let mut d = e106(tr!("{shown} は出典「{wanted}」を宣言していません", "{shown} declares no source {wanted}"));
+        d = d.note(if have.is_empty() {
+            tr!("{shown} が宣言している出典はありません。", "{shown} declares no source at all.")
+        } else {
+            tr!("{shown} が宣言している出典: {ja}", "The sources {shown} declares: {en}")
+        });
+        diags.push(d);
+        return Resolved::Broken;
+    };
+    let dir_rel = ritsu_base::paths::parent(&n.path);
+    match &src.kind {
+        ritsu_ports::SourceKind::Law { db, id, asof, pins } => {
+            let db = if db == "ecfr" { LawDb::Ecfr } else { LawDb::Egov };
+            let copy_dir = copies::copy_dir(id, asof);
+            let dir = abs.parent().map(|d| d.join(&copy_dir)).unwrap_or_default();
+            let mut articles = Vec::new();
+            for (fragment, pin) in pins {
+                let Some(file) = copies::fragment_file(db, fragment) else { continue };
+                let rel = ritsu_base::paths::join(&dir_rel, &format!("{copy_dir}/{file}")).unwrap_or_else(|_| format!("{copy_dir}/{file}"));
+                let copy = dir.join(&file);
+                // the language's check holds the copy to its pin; one that does not match is not read
+                let bytes = std::fs::read(&copy).ok().filter(|b| sha256::short(b) == *pin);
+                if bytes.is_none() {
+                    let (shown, fr) = (p.shown(&rel), fragment);
+                    diags.push(e106(tr!("{t} の {fr} の写し {shown} を読めないか、固定と違います", "the copy {shown} of {fr} of {t} cannot be read, or does not match its pin")));
+                }
+                articles.push(Article { fragment: fragment.clone(), rel, abs: copy, pin: Some(pin.clone()), bytes, span: s.span });
+            }
+            Resolved::Law { db, id: id.clone(), asof: asof.clone(), revision: copies::revision(&dir), dir, articles, borrowed: Some(n.clone()) }
+        }
+        ritsu_ports::SourceKind::File { path, url, pin } => {
+            let Ok(rel) = ritsu_base::paths::join(&dir_rel, path) else {
+                diags.push(e106(tr!("{t} の写しのパス `{path}` はルートの外に出ます", "the path `{path}` of the copy of {t} goes outside the root")));
+                return Resolved::Broken;
+            };
+            let copy = p.root.join(&rel);
+            let bytes = std::fs::read(&copy).ok().filter(|b| pin.as_deref() == Some(sha256::short(b).as_str()));
+            if bytes.is_none() {
+                let shown = p.shown(&rel);
+                diags.push(e106(tr!("{t} の写し {shown} を読めないか、固定と違います", "the copy {shown} of {t} cannot be read, or does not match its pin")));
+            }
+            Resolved::File { name: Name { tool: crate::names::Tool::File, path: rel, items: vec![] }, abs: copy, url: url.clone(), pin: pin.clone(), bytes, borrowed: Some(n.clone()) }
         }
     }
 }
@@ -160,7 +249,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                         }
                         articles.push(a);
                     }
-                    Resolved::Law { db: *db, id: id.clone(), asof, revision: copies::revision(&dir), dir, articles }
+                    Resolved::Law { db: *db, id: id.clone(), asof, revision: copies::revision(&dir), dir, articles, borrowed: None }
                 }
                 SourceKind::File { url, pin, .. } => match &p.names.sources[fi][si] {
                     None => Resolved::Broken,
@@ -204,11 +293,11 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                 }
                             }
                         }
-                        Resolved::File { name: name.clone(), abs, url: url.clone(), pin: pin.clone(), bytes }
+                        Resolved::File { name: name.clone(), abs, url: url.clone(), pin: pin.clone(), bytes, borrowed: None }
                     }
                 },
                 SourceKind::Borrowed { .. } => match &p.names.sources[fi][si] {
-                    Some(n) => Resolved::Borrowed { name: n.clone() },
+                    Some(n) => borrow(p, fi, s, n, &mut diags),
                     None => Resolved::Broken,
                 },
             };
@@ -273,7 +362,34 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                             )));
                         }
                     }
-                    SourceKind::Borrowed { .. } => {}
+                    SourceKind::Borrowed { .. } => match sources.get(fi, source) {
+                        Some(Resolved::Law { articles, borrowed: Some(n), .. }) => {
+                            if fragments.is_empty() {
+                                diags.push(p.err(fi, "E105", *source_span, tr!(
+                                    "法令は条の単位で写すので、`@{source} 第140条` のように、どこを引いたかを書きます",
+                                    "A law is copied an article at a time, so say which one: `@{source} 第140条`"
+                                )));
+                                continue;
+                            }
+                            for (fr, sp) in fragments {
+                                if !articles.iter().any(|a| &a.fragment == fr) {
+                                    let t = n.text();
+                                    let pinned: Vec<&str> = articles.iter().map(|a| a.fragment.as_str()).collect();
+                                    diags.push(p.err(fi, "E106", *sp, tr!("{t} は {fr} を固定していません", "{t} does not pin {fr}")).note(if pinned.is_empty() {
+                                        tr!("借りた出典の条は、それを宣言しているファイルが固定しているものだけを引けます。", "Only the articles the file that declares the source pins can be cited.")
+                                    } else {
+                                        tr!("固定している条: {}。ほかの条を引くなら、そのファイルに固定の行を足します。", "The articles it pins: {}. To cite another, add its pin to that file.", pinned.join("、"); pinned.join(", "))
+                                    }));
+                                }
+                            }
+                        }
+                        Some(Resolved::File { .. }) => {
+                            if let Some((fr, sp)) = fragments.first() {
+                                diags.push(p.err(fi, "E105", *sp, tr!("出典「{source}」はファイルを丸ごと固定しているので、`{fr}` のように箇所を引けません", "The source {source} pins a whole file, so no part of it such as `{fr}` can be cited")));
+                            }
+                        }
+                        _ => {}
+                    },
                 }
             }
         }
@@ -293,4 +409,112 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
     }
     diags.sort_by(|a, b| (a.file.as_str(), a.line, a.col).cmp(&(b.file.as_str(), b.line, b.col)));
     (sources, diags)
+}
+
+/// An article a rule or a calendar pins (DESIGN 3.3): the source's name in that file, the law,
+/// the article, its pin, and its copy beside that file.
+#[derive(Clone, Debug)]
+pub struct Pinned {
+    pub source: String,
+    pub db: LawDb,
+    pub id: String,
+    pub asof: String,
+    pub fragment: String,
+    pub pin: String,
+    /// The copy, from the root.
+    pub rel: String,
+    pub abs: PathBuf,
+}
+
+/// The articles the file of an artifact pins, when it is a rule or a calendar whose language
+/// answers for it (`Sources`); none otherwise.
+pub fn pinned_by(p: &Project, n: &Name) -> Vec<Pinned> {
+    use crate::names::Tool;
+    if !matches!(n.tool, Tool::Rulec | Tool::Koyomi) {
+        return vec![];
+    }
+    let abs = p.root.join(&n.path);
+    let Some(Ok(declared)) = p.suite.sources(n.tool, &abs) else { return vec![] };
+    let dir_rel = ritsu_base::paths::parent(&n.path);
+    let mut out = Vec::new();
+    for src in declared {
+        let ritsu_ports::SourceKind::Law { db, id, asof, pins } = &src.kind else { continue };
+        let db = if db == "ecfr" { LawDb::Ecfr } else { LawDb::Egov };
+        let copy_dir = copies::copy_dir(id, asof);
+        for (fragment, pin) in pins {
+            let Some(file) = copies::fragment_file(db, fragment) else { continue };
+            let Ok(rel) = ritsu_base::paths::join(&dir_rel, &format!("{copy_dir}/{file}")) else { continue };
+            out.push(Pinned { source: src.name.clone(), db, id: id.clone(), asof: asof.clone(), fragment: fragment.clone(), pin: pin.clone(), abs: p.root.join(&rel), rel });
+        }
+    }
+    out
+}
+
+/// E107 (DESIGN 3.3): a requirement cites an article, and a rule or a calendar that meets it pins
+/// the same article (the same database, law and article) in copies none of which has the text of
+/// the requirement's copy — what the requirement was read from and what the rule copied differ,
+/// and one of the two is old. The texts are compared, not the bytes: e-Gov rewrites attributes
+/// of an article that did not change.
+pub fn mismatches(p: &Project, s: &Sources) -> Vec<Diag> {
+    use crate::names::Tool;
+    let mut diags = Vec::new();
+    for r in 0..p.reqs.len() {
+        let fi = p.reqs[r].file;
+        let d = p.decl(r);
+        let mut metby: Vec<Name> = Vec::new();
+        for (li, l) in d.links.iter().enumerate() {
+            if l.side != Side::Satisfied {
+                continue;
+            }
+            if let Some(n) = &p.names.links[r][li]
+                && matches!(n.tool, Tool::Rulec | Tool::Koyomi)
+            {
+                let file = Name { tool: n.tool, path: n.path.clone(), items: vec![] };
+                if !metby.contains(&file) {
+                    metby.push(file);
+                }
+            }
+        }
+        if metby.is_empty() {
+            continue;
+        }
+        let pins: Vec<(Name, Vec<Pinned>)> = metby.iter().map(|n| (n.clone(), pinned_by(p, n))).collect();
+        for f in &d.from {
+            let FromWhat::Cite { source, fragments, .. } = &f.what else { continue };
+            let Some(Resolved::Law { db, id, articles, .. }) = s.get(fi, source) else { continue };
+            for (fr, sp) in fragments {
+                let Some(a) = articles.iter().find(|a| &a.fragment == fr) else { continue };
+                let Some(mine) = &a.bytes else { continue };
+                let mine_text = copies::xml_text(&String::from_utf8_lossy(mine));
+                for (n, ps) in &pins {
+                    let theirs: Vec<&Pinned> = ps.iter().filter(|x| x.db == *db && x.id == *id && x.fragment == *fr).collect();
+                    if theirs.is_empty() || theirs.iter().any(|x| x.abs == a.abs) {
+                        continue;
+                    }
+                    let texts: Vec<(&Pinned, String)> = theirs.iter().filter_map(|x| std::fs::read(&x.abs).ok().map(|b| (*x, copies::xml_text(&String::from_utf8_lossy(&b))))).collect();
+                    if texts.iter().any(|(_, t)| *t == mine_text) {
+                        continue;
+                    }
+                    let Some((first, other)) = texts.first() else { continue };
+                    let me = p.req_label(r);
+                    let t = n.text();
+                    let (mine_shown, theirs_shown) = (p.shown(&a.rel), p.shown(&first.rel));
+                    let (dl, more) = crate::diff::unified(&mine_text, other);
+                    let mut dg = p
+                        .err(fi, "E107", *sp, tr!("{me} が読んだ {source} {fr} と、{t} が固定している {fr} の本文が違います", "{me} reads {source} {fr}, and {t} pins {fr} with another text"))
+                        .note(tr!("要件の写しは {mine_shown}、{t} の写しは {theirs_shown}（{} 時点）です。", "The requirement's copy is {mine_shown}; the copy of {t} is {theirs_shown} (as of {}).", first.asof; first.asof))
+                        .diff(tr!("要件の写しから {t} の写しへの差分", "from the requirement's copy to the copy of {t}"), dl);
+                    if more > 0 {
+                        dg = dg.note(tr!("差分はほかに {more} 行あります。", "{more} more lines of the diff are not shown."));
+                    }
+                    dg = dg.note(tr!(
+                        "どちらかの写しが古いということです。改正を確かめ、古いほうを取り直して固定し直します（yuen source fetch と yuen source pin、または規則やカレンダーの source fetch と source pin）。",
+                        "One of the copies is old: check the amendments, and fetch and pin the older one again (yuen source fetch and yuen source pin, or the rule's or the calendar's source fetch and source pin)."
+                    ));
+                    diags.push(dg);
+                }
+            }
+        }
+    }
+    diags
 }

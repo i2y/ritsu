@@ -6,6 +6,7 @@
     "items": []
   },
   "in_scope": true,
+  "pins": [],
   "requirements": [
     {
       "name": "起算日",
@@ -70,7 +71,8 @@
             ],
             "down": "c9b94eecde23e6b5"
           },
-          "status": "ok"
+          "status": "ok",
+          "pins": []
         },
         {
           "line": 23,
@@ -168,7 +170,8 @@
             ],
             "down": "c9b94eecde23e6b5"
           },
-          "status": "ok"
+          "status": "ok",
+          "pins": []
         },
         {
           "line": 34,
@@ -255,7 +258,8 @@
             ],
             "down": "c9b94eecde23e6b5"
           },
-          "status": "ok"
+          "status": "ok",
+          "pins": []
         },
         {
           "line": 46,

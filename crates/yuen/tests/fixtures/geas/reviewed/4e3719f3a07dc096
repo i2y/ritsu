@@ -1,0 +1,2 @@
+text GET /greet?name=<name> answers 200 with the message Hello, <name>
+from file contract.md sha256:129685aad10b7b82

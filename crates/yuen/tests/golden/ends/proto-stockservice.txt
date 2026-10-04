@@ -1,0 +1,17 @@
+service warehouse.v1.StockService
+rpc warehouse.v1.StockService.Reserve(warehouse.v1.ReserveRequest) returns (warehouse.v1.ReserveResponse)
+rpc warehouse.v1.StockService.Release(warehouse.v1.ReleaseRequest) returns (warehouse.v1.ReleaseResponse)
+message warehouse.v1.ReleaseRequest
+  string id = 1
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  string sku = 1
+  int32 quantity = 2
+message warehouse.v1.ReserveResponse
+  string sku = 1
+  warehouse.v1.Stock stock = 2
+  optional string id = 3
+enum warehouse.v1.Stock
+  unspecified = 0
+  secured = 1
+  short = 2

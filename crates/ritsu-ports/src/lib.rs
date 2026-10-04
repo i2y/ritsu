@@ -12,9 +12,12 @@
 //!   takes over its whole range, and the days from an input to a value.
 //! - [`Books`]: a book's units, accounts and transfers, the life of a hold, and a [`Ledger`] to
 //!   run operations on.
-//! - [`Claims`]: a geas spec's claims, and the record `geas map` keeps of the lines they ran.
+//! - [`Claims`]: a geas spec's claims, the record `geas map` keeps of the lines they ran, and
+//!   what a diff comes to for them (geas's `affected`).
 //! - [`Items`] and [`References`]: what a file holds and what it names outside itself, by the
 //!   naming of DESIGN 6.2; every language gives them.
+//! - [`Sources`]: the sources a rule or a calendar copies and pins, which yuen borrows and holds
+//!   its own copies to.
 //!
 //! Every check across a border answers with an [`Answer`]: shown to hold, an example where it
 //! does not, or why it cannot be decided (P5). A question that asks for a value answers with a
@@ -25,9 +28,11 @@ mod claims;
 mod dates;
 mod index;
 mod rules;
+mod sources;
 
 pub use books::{Account, Balance, BookCall, BookFacts, BookOutcome, BookUnit, Bound, Books, Expiry, Ledger, Move, MoveAmount, MoveRef, Transfer, TransferParam};
-pub use claims::{Claim, Claims, MapRecord, RecordClaim, RecordFile, RecordRan};
+pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, RecordRan, Touched, TouchedLines, Untouched};
+pub use sources::{Source, SourceKind, Sources};
 pub use dates::{DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet};
 pub use index::{Item, Items, Reference, References};
 pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};

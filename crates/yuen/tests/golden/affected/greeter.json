@@ -1,0 +1,148 @@
+{
+  "diff": "tests/fixtures/geas/changes/change.diff",
+  "root": "tests/fixtures/geas",
+  "requirement_files": [],
+  "copies": [],
+  "specs": [
+    {
+      "spec": {
+        "text": "geas \"greeter/greeter.geas\"",
+        "tool": "geas",
+        "path": "greeter/greeter.geas",
+        "items": []
+      },
+      "records": [
+        {
+          "path": "greeter/.geas/greeter.map.jsonl",
+          "side": "before"
+        },
+        {
+          "path": "changes/after.map.jsonl",
+          "side": "after"
+        }
+      ],
+      "claims": [
+        {
+          "name": "rejects an empty name",
+          "status": "ok",
+          "lines": [
+            {
+              "file": "greeter/server.py",
+              "side": "after",
+              "lines": "26",
+              "how": "ran",
+              "startup": null
+            },
+            {
+              "file": "greeter/server.py",
+              "side": "before",
+              "lines": "26",
+              "how": "ran",
+              "startup": null
+            }
+          ],
+          "requirements": [
+            {
+              "name": "rejects_an_empty_name",
+              "version": 1,
+              "role": "verified"
+            }
+          ]
+        }
+      ],
+      "spec_changed": [],
+      "unclaimed": [],
+      "deleted": [],
+      "baseline_changed": false,
+      "refused": null
+    }
+  ],
+  "files": [
+    {
+      "artifact": {
+        "text": "file \"greeter/server.py\"",
+        "tool": "file",
+        "path": "greeter/server.py",
+        "items": []
+      },
+      "requirements": [
+        {
+          "name": "greets_by_name",
+          "version": 1,
+          "role": "satisfied"
+        },
+        {
+          "name": "rejects_an_empty_name",
+          "version": 1,
+          "role": "satisfied"
+        },
+        {
+          "name": "totals_accumulate",
+          "version": 1,
+          "role": "satisfied"
+        },
+        {
+          "name": "unknown_paths_are_404",
+          "version": 1,
+          "role": "satisfied"
+        }
+      ]
+    }
+  ],
+  "unreached": [],
+  "others": [],
+  "requirements": [
+    {
+      "name": "greets_by_name",
+      "version": 1,
+      "file": "greeter.req",
+      "line": 11,
+      "owner": "api",
+      "from": [
+        "contract"
+      ],
+      "decided": null
+    },
+    {
+      "name": "rejects_an_empty_name",
+      "version": 1,
+      "file": "greeter.req",
+      "line": 21,
+      "owner": "api",
+      "from": [
+        "contract"
+      ],
+      "decided": {
+        "date": "2026-10-03",
+        "by": "api",
+        "why": "an empty name is a client error, not a greeting"
+      }
+    },
+    {
+      "name": "totals_accumulate",
+      "version": 1,
+      "file": "greeter.req",
+      "line": 32,
+      "owner": "api",
+      "from": [
+        "contract"
+      ],
+      "decided": null
+    },
+    {
+      "name": "unknown_paths_are_404",
+      "version": 1,
+      "file": "greeter.req",
+      "line": 42,
+      "owner": "api",
+      "from": [
+        "contract"
+      ],
+      "decided": null
+    }
+  ],
+  "owners": [
+    "api"
+  ],
+  "exit": 0
+}

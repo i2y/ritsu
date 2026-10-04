@@ -16,6 +16,8 @@
 //!   e-Gov and the eCFR that bring them.
 //! - [`docpage`]: the frame of an approver's page — the HTML head and the palette.
 //! - [`json`]: a JSON value whose objects keep their order and whose integers are exact.
+//! - [`udiff`]: unified diffs, as `git diff` and `diff -u` write them, and whether a file on disk
+//!   is one side of one.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
@@ -29,3 +31,4 @@ pub mod paths;
 pub mod sha256;
 pub mod sources;
 pub mod text;
+pub mod udiff;

@@ -1,0 +1,26 @@
+requirements 受注の用語 v1
+description "sakai の例のコンテキスト「受注.ctx」の語を、用語集のどこから来たかで名指したテストの材料"
+
+role 受注 "受注の用語を決める"
+
+source 用語集 = file "用語集.md" sha256:ada090e1ea2e7b68
+
+requirement 注文(order)
+  text "注文は、客が確定させた購入の申し込みで、取り消されても消えない"
+  owner 受注
+  from @用語集
+    reviewed 2026-10-04 by 受注 sha256:ada090e1ea2e7b68 -> sha256:1f47e05b6d46c563
+  satisfied by sakai "contexts/受注.ctx" term 注文
+    reviewed 2026-10-04 by 受注 sha256:1f47e05b6d46c563 -> sha256:1b2bb352a123c296
+  not verified "この材料は、語の使われ方を確かめる主張を持たない"
+    approved 2026-10-04 by 受注 sha256:1f47e05b6d46c563
+
+requirement キャンセル(cancel)
+  text "キャンセルは、出荷の前に、客の申し出で注文を取り消すこと"
+  owner 受注
+  from @用語集
+    reviewed 2026-10-04 by 受注 sha256:ada090e1ea2e7b68 -> sha256:a622512a90fba0e5
+  satisfied by sakai "contexts/受注.ctx" term キャンセル
+    reviewed 2026-10-04 by 受注 sha256:a622512a90fba0e5 -> sha256:dbfd211b7e4cef4b
+  not verified "この材料は、語の使われ方を確かめる主張を持たない"
+    approved 2026-10-04 by 受注 sha256:a622512a90fba0e5

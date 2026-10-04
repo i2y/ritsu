@@ -1,0 +1,7 @@
+dates 例(example) v1
+
+inputs
+  起点(origin) : date  range >=2026-01-01 <=2026-12-31
+
+date 翌日(next_day) = 起点
+  + 1 day

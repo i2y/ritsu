@@ -1,0 +1,13 @@
+diff --git a/greeter/server.py b/greeter/server.py
+index 58cb96d..6e077c5 100644
+--- a/greeter/server.py
++++ b/greeter/server.py
+@@ -23,7 +23,7 @@ class H(BaseHTTPRequestHandler):
+         if u.path == "/greet":
+             name = parse_qs(u.query).get("name", [""])[0]
+             if not name:
+-                self._send(400, "name required")
++                self._send(400, "a name is required")
+                 return
+             self._send(200, json.dumps({"message": f"Hello, {name}"}),
+                        "application/json")

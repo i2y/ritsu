@@ -259,21 +259,22 @@ fn a_file_source_is_held_to_its_url() {
     assert_eq!(common::codes(&r.stdout).len(), 9, "the nine links outdated counted are marked: {}", r.stdout);
 }
 
+/// A borrowed source is the rule's or the calendar's to fetch and to pin: `fetch` and `pin` say
+/// which command does it. `outdated` asks about it from the calendar's pins and copies, which
+/// only `ritsu yuen` can read (the binary of this crate is told so, exit 2); `crates/ritsu/tests`
+/// asks it of the test's own e-Gov.
 #[test]
 fn a_borrowed_source_is_its_tools_to_fetch() {
-    let t = TempDir::new("borrowed");
-    t.write(
-        "t.req",
-        "requirements t v1\nrole 法務\n\nsource 民法 = koyomi \"民法の期間.cal\" source 民法\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"y\"\n  not verified \"z\"\n".as_bytes(),
-    );
-    let r = common::yuen(t.path(), &["source", "fetch", ".", "--root", "."]);
+    let t = common::fixture("koyomi");
+    let r = common::yuen(t.path(), &["source", "fetch", "koyomi", "--root", "koyomi"]);
     assert_eq!(r.code, 0, "{}", r.stderr);
     assert!(r.stdout.contains("民法: borrowed from a koyomi file, so yuen does not fetch it; koyomi source fetch does"), "{}", r.stdout);
-    let r = common::yuen(t.path(), &["source", "pin", ".", "--root", "."]);
+    let r = common::yuen(t.path(), &["source", "pin", "koyomi", "--root", "koyomi"]);
     assert!(r.stdout.contains("koyomi source pin does"), "{}", r.stdout);
-    let r = common::yuen(t.path(), &["source", "outdated", ".", "--root", "."]);
+    let r = common::yuen(t.path(), &["source", "outdated", "koyomi", "--root", "koyomi"]);
     assert_eq!(r.code, 2, "{}", r.stdout);
-    assert!(r.stderr.contains("yuen cannot read borrowed sources yet"), "{}", r.stderr);
+    assert!(r.stderr.contains("this yuen cannot read koyomi sources: koyomi \"calendars/東京の営業日.cal\" source 祝日"), "{}", r.stderr);
+    assert!(r.stderr.contains("`ritsu yuen source outdated koyomi --root koyomi`"), "{}", r.stderr);
 }
 
 #[test]

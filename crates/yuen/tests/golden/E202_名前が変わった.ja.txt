@@ -1,0 +1,5 @@
+エラー[E202]: tests/mutants/E202_名前が変わった/返金.req:15:16: tests/mutants/E202_名前が変わった/refunds.ja.book に transfer 返金 はありません
+    15 |   satisfied by chobo "refunds.ja.book" transfer 返金
+  = 名前が変わったようです。確かめたときと同じ定義のものがあります。
+  = 候補: chobo "refunds.ja.book" transfer 返金の申請
+tests/mutants/E202_名前が変わった: エラー 1 件

@@ -104,10 +104,15 @@ dependencies = [
 name = "ritsu"
 version = "0.1.0"
 dependencies = [
+ "chobo",
  "dandori",
+ "geas",
+ "koyomi",
  "ritsu-base",
  "ritsu-testkit",
  "rulec",
+ "sakai",
+ "yuen",
 ]
 
 [[package]]
@@ -246,9 +251,16 @@ dependencies = [
 name = "yuen"
 version = "0.1.0"
 dependencies = [
+ "chobo",
+ "dandori",
+ "geas",
+ "koyomi",
  "ritsu-base",
  "ritsu-ports",
+ "ritsu-proto",
  "ritsu-testkit",
+ "rulec",
+ "sakai",
  "serde_json",
 ]
 

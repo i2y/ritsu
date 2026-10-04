@@ -122,6 +122,44 @@ fn article(p: &Project, m: &Model, fi: usize, e: &EndInfo) -> (Text, Vec<String>
     }
 }
 
+/// The articles the file of an artifact pins (DESIGN 3.3), a line each under it, and as JSON.
+/// With the requirement the artifact meets or checks, whether the requirement's copy of the same
+/// article has the same text (E107's way: the text, not the bytes).
+fn pins(p: &Project, m: &Model, file: &Name, r: Option<usize>, depth: usize, o: &mut Out) -> Vec<Value> {
+    let mut out = Vec::new();
+    for x in crate::sources::pinned_by(p, file) {
+        let same = r.and_then(|r| {
+            let fi = p.reqs[r].file;
+            p.decl(r).from.iter().find_map(|fl| {
+                let FromWhat::Cite { source, fragments, .. } = &fl.what else { return None };
+                if !fragments.iter().any(|(fr, _)| *fr == x.fragment) {
+                    return None;
+                }
+                let Some(Resolved::Law { db, id, articles, .. }) = m.sources.get(fi, source) else { return None };
+                if *db != x.db || *id != x.id {
+                    return None;
+                }
+                let a = articles.iter().find(|a| a.fragment == x.fragment)?;
+                if a.abs == x.abs {
+                    return Some(true);
+                }
+                let mine = a.bytes.as_ref()?;
+                let theirs = std::fs::read(&x.abs).ok()?;
+                Some(copies::xml_text(&String::from_utf8_lossy(mine)) == copies::xml_text(&String::from_utf8_lossy(&theirs)))
+            })
+        });
+        let (t, src, fr, dbt, id, asof, pin) = (file.text(), &x.source, &x.fragment, x.db.title(), &x.id, &x.asof, &x.pin);
+        let tail = match same {
+            Some(true) => tr!("。要件の写しと同じ本文", "; the text of the requirement's copy"),
+            Some(false) => tr!("。要件の写しと本文が違う（E107）", "; not the text of the requirement's copy (E107)"),
+            None => Text::default(),
+        };
+        o.push(depth, tr!("{t} が固定している条: {src} {fr}（{dbt} {id}、{asof} 時点、sha256:{pin}{}）", "pinned by {t}: {src} {fr} ({dbt} {id} as of {asof}, sha256:{pin}{})", tail.ja; tail.en));
+        out.push(json!({"source": src, "db": x.db.word(), "id": id, "asof": asof, "fragment": fr, "sha256": pin, "copy": x.rel, "same_text": same}));
+    }
+    out
+}
+
 /// A requirement's trace, into `o` at `depth`, and as JSON.
 fn requirement(p: &Project, m: &Model, r: usize, depth: usize, o: &mut Out, seen: &mut Vec<usize>) -> Value {
     let d = p.decl(r);
@@ -201,6 +239,7 @@ fn requirement(p: &Project, m: &Model, r: usize, depth: usize, o: &mut Out, seen
         }
     }
     let mut links = Vec::new();
+    let mut pinned_shown: Vec<Name> = Vec::new();
     for side in [Side::Satisfied, Side::Verified] {
         for (i, l) in d.links.iter().enumerate().filter(|(_, l)| l.side == side) {
             let st = crate::check::state(m, r, LinkKind::To(i));
@@ -213,7 +252,16 @@ fn requirement(p: &Project, m: &Model, r: usize, depth: usize, o: &mut Out, seen
                 Side::Verified => tr!("確かめるもの: {a} — {}", "checked by {a} — {}", status.ja; status.en),
             };
             o.push(depth + 1, line);
-            links.push(json!({"line": l.span.line, "role": side.word(), "artifact": name.map(|n| crate::diag::value(&n.to_json())), "reviewed": rec.map(record_json), "status": st.map(|s| s.status.word())}));
+            // what the file of a rule or a calendar pins, once for the requirement (DESIGN 3.3)
+            let mut pinned = Vec::new();
+            if let Some(n) = name {
+                let file = n.whole_file();
+                if !pinned_shown.contains(&file) {
+                    pinned = pins(p, m, &file, Some(r), depth + 2, o);
+                    pinned_shown.push(file);
+                }
+            }
+            links.push(json!({"line": l.span.line, "role": side.word(), "artifact": name.map(|n| crate::diag::value(&n.to_json())), "reviewed": rec.map(record_json), "status": st.map(|s| s.status.word()), "pins": pinned}));
         }
         for (i, w) in d.waivers.iter().enumerate().filter(|(_, w)| w.side == side) {
             let st = crate::check::state(m, r, LinkKind::Waiver(i));
@@ -291,6 +339,10 @@ pub fn trace(c: &Checked, start: &Start) -> Result<Traced, Refusal> {
                 return Err(Refusal(tr!("{label} を名指すリンクも範囲もありません", "No link or scope names {label}")));
             }
             o.push(0, Text::same(label.clone()));
+            // the articles its file pins: said under each requirement's link, with whether the
+            // requirement's copy has the same text; here only when no requirement names it
+            let mut aside = Out { lines: vec![] };
+            let pinned = pins(p, m, &n.whole_file(), None, 1, if found.is_empty() { &mut o } else { &mut aside });
             if found.is_empty() {
                 o.push(1, tr!("範囲にありますが、どの要件からも辿れません（E404）", "in scope, and no requirement leads to it (E404)"));
             }
@@ -299,7 +351,7 @@ pub fn trace(c: &Checked, start: &Start) -> Result<Traced, Refusal> {
                 let mut seen = Vec::new();
                 out.push(requirement(p, m, r, 1, &mut o, &mut seen));
             }
-            json!({"artifact": crate::diag::value(&n.to_json()), "in_scope": in_scope, "requirements": out})
+            json!({"artifact": crate::diag::value(&n.to_json()), "in_scope": in_scope, "pins": pinned, "requirements": out})
         }
         Start::Source(spec) => {
             let s = spec.trim().strip_prefix('@').unwrap_or(spec.trim());
@@ -355,7 +407,28 @@ pub fn trace(c: &Checked, start: &Start) -> Result<Traced, Refusal> {
                     o.push(0, Text::same(format!("{name} {fragment}").trim().to_string()));
                     o.push(1, tr!("どの要件も引いていません", "no requirement cites it"));
                 }
-                out.push(json!({"file": f.rel, "article": art, "requirements": reqs}));
+                // the rules and calendars the links name that pin the same article (DESIGN 3.3)
+                let mut pinned_by = Vec::new();
+                if let Some(Resolved::Law { db, id, .. }) = m.sources.get(fi, name) {
+                    let mut files: Vec<Name> = Vec::new();
+                    for n in p.names.links.iter().flatten().flatten() {
+                        let file = n.whole_file();
+                        if !files.contains(&file) {
+                            files.push(file);
+                        }
+                    }
+                    for file in files {
+                        for x in crate::sources::pinned_by(p, &file).into_iter().filter(|x| x.db == *db && x.id == *id && x.fragment == fragment) {
+                            if pinned_by.is_empty() {
+                                o.push(0, tr!("固定している成果物:", "pinned by:"));
+                            }
+                            let (t, pin, copy) = (file.text(), &x.pin, p.shown(&x.rel));
+                            o.push(1, tr!("{t}（sha256:{pin}、写しは {copy}）", "{t} (sha256:{pin}; the copy {copy})"));
+                            pinned_by.push(json!({"artifact": crate::diag::value(&file.to_json()), "sha256": pin, "copy": x.rel}));
+                        }
+                    }
+                }
+                out.push(json!({"file": f.rel, "article": art, "requirements": reqs, "pinned_by": pinned_by}));
             }
             if !any {
                 return Err(Refusal(tr!("出典「{name}」はこのプロジェクトで宣言されていません", "The source {name} is not declared in this project")));

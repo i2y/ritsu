@@ -1,0 +1,556 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/api": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "api",
+      "yuen:description": "decides what the service answers"
+    },
+    "y:role/dev": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dev",
+      "yuen:description": "writes the server"
+    }
+  },
+  "entity": {
+    "y:source/3054bb85bf60ce225e173002cb527554": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "contract",
+      "yuen:file": "contract.md",
+      "yuen:sha256": "129685aad10b7b82"
+    },
+    "y:artifact/df1faa09b9b18e500fb0e3100dcc8cb5": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "file \"greeter/server.py\"",
+      "yuen:sha256": "331e02e26d128e8c",
+      "yuen:end": "file"
+    },
+    "y:artifact/1c6d3f41fb1e1254f8881f72a2eaa72c": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "geas \"greeter/greeter.geas\" claim \"greets by name\"",
+      "yuen:sha256": "2b4e11c2cc191431",
+      "yuen:end": "item"
+    },
+    "y:artifact/a80a8b1a215a9eb8b9048b2d0afc0e3a": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "geas \"greeter/greeter.geas\" claim \"rejects an empty name\"",
+      "yuen:sha256": "3f7c8d1b2bbcc309",
+      "yuen:end": "item"
+    },
+    "y:artifact/a7e43358a2934c0dceb96eb2fbc16d4a": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "geas \"greeter/greeter.geas\" claim \"totals accumulate across requests\"",
+      "yuen:sha256": "d653be1c06f5c8b1",
+      "yuen:end": "item"
+    },
+    "y:artifact/3726eb8281cb8e383dee31dc48642ac4": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "geas \"greeter/greeter.geas\" claim \"unknown paths are 404\"",
+      "yuen:sha256": "1950201e8644bc57",
+      "yuen:end": "item"
+    },
+    "y:requirement/greets_by_name/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "greets_by_name",
+      "yuen:version": "1",
+      "yuen:text": "GET /greet?name=<name> answers 200 with the message Hello, <name>",
+      "yuen:sha256": "4e3719f3a07dc096"
+    },
+    "y:requirement/rejects_an_empty_name/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rejects_an_empty_name",
+      "yuen:version": "1",
+      "yuen:text": "GET /greet with an empty name answers 400",
+      "yuen:sha256": "70ec5112e96e51a9"
+    },
+    "y:requirement/totals_accumulate/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "totals_accumulate",
+      "yuen:version": "1",
+      "yuen:text": "POST /add adds its body to a total that GET /total answers, and POST /reset sets it to 0",
+      "yuen:sha256": "6b134f42eed9f18a"
+    },
+    "y:requirement/unknown_paths_are_404/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "unknown_paths_are_404",
+      "yuen:version": "1",
+      "yuen:text": "Any other path answers 404",
+      "yuen:sha256": "132fa5fd5426ca87"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/greets_by_name/v1",
+      "prov:agent": "y:role/api",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r14": {
+      "prov:entity": "y:requirement/rejects_an_empty_name/v1",
+      "prov:agent": "y:role/api",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r30": {
+      "prov:entity": "y:requirement/totals_accumulate/v1",
+      "prov:agent": "y:role/api",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r43": {
+      "prov:entity": "y:requirement/unknown_paths_are_404/v1",
+      "prov:agent": "y:role/api",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/greets_by_name/v1",
+      "prov:usedEntity": "y:source/3054bb85bf60ce225e173002cb527554",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r15": {
+      "prov:generatedEntity": "y:requirement/rejects_an_empty_name/v1",
+      "prov:usedEntity": "y:source/3054bb85bf60ce225e173002cb527554",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r31": {
+      "prov:generatedEntity": "y:requirement/totals_accumulate/v1",
+      "prov:usedEntity": "y:source/3054bb85bf60ce225e173002cb527554",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r44": {
+      "prov:generatedEntity": "y:requirement/unknown_paths_are_404/v1",
+      "prov:usedEntity": "y:source/3054bb85bf60ce225e173002cb527554",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/df1faa09b9b18e500fb0e3100dcc8cb5",
+      "prov:influencer": "y:requirement/greets_by_name/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r4": {
+      "prov:influencee": "y:artifact/1c6d3f41fb1e1254f8881f72a2eaa72c",
+      "prov:influencer": "y:requirement/greets_by_name/v1",
+      "prov:type": {
+        "$": "yuen:verifies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r17": {
+      "prov:influencee": "y:requirement/rejects_an_empty_name/v1",
+      "prov:influencer": "y:decision/9dc3701143b6df3d766fb718d57b7c03"
+    },
+    "_:r19": {
+      "prov:influencee": "y:artifact/df1faa09b9b18e500fb0e3100dcc8cb5",
+      "prov:influencer": "y:requirement/rejects_an_empty_name/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r20": {
+      "prov:influencee": "y:artifact/a80a8b1a215a9eb8b9048b2d0afc0e3a",
+      "prov:influencer": "y:requirement/rejects_an_empty_name/v1",
+      "prov:type": {
+        "$": "yuen:verifies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r32": {
+      "prov:influencee": "y:artifact/df1faa09b9b18e500fb0e3100dcc8cb5",
+      "prov:influencer": "y:requirement/totals_accumulate/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r33": {
+      "prov:influencee": "y:artifact/a7e43358a2934c0dceb96eb2fbc16d4a",
+      "prov:influencer": "y:requirement/totals_accumulate/v1",
+      "prov:type": {
+        "$": "yuen:verifies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r45": {
+      "prov:influencee": "y:artifact/df1faa09b9b18e500fb0e3100dcc8cb5",
+      "prov:influencer": "y:requirement/unknown_paths_are_404/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r46": {
+      "prov:influencee": "y:artifact/3726eb8281cb8e383dee31dc48642ac4",
+      "prov:influencer": "y:requirement/unknown_paths_are_404/v1",
+      "prov:type": {
+        "$": "yuen:verifies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/d696013d27f842cc44a2bf0613d6f6f7": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "129685aad10b7b82",
+      "yuen:down": "4e3719f3a07dc096",
+      "yuen:status": "ok"
+    },
+    "y:review/fc3073b4f16cb394efccc4dbcfea97a8": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "4e3719f3a07dc096",
+      "yuen:down": "331e02e26d128e8c",
+      "yuen:status": "ok"
+    },
+    "y:review/fa3815095cd98d5c0f9acad2003281f9": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "verified by",
+      "yuen:up": "4e3719f3a07dc096",
+      "yuen:down": "2b4e11c2cc191431",
+      "yuen:status": "ok"
+    },
+    "y:decision/9dc3701143b6df3d766fb718d57b7c03": {
+      "prov:startTime": "2026-10-03T00:00:00",
+      "prov:type": {
+        "$": "yuen:Decision",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:why": "an empty name is a client error, not a greeting"
+    },
+    "y:review/c645e23330a7be1399d3617f5e8cc3da": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "129685aad10b7b82",
+      "yuen:down": "70ec5112e96e51a9",
+      "yuen:status": "ok"
+    },
+    "y:review/8df2439482a7b2fd775ed4743bd1428a": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "70ec5112e96e51a9",
+      "yuen:down": "331e02e26d128e8c",
+      "yuen:status": "ok"
+    },
+    "y:review/4b30c6c2075ef8dd9d1f53953d2f1813": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "verified by",
+      "yuen:up": "70ec5112e96e51a9",
+      "yuen:down": "3f7c8d1b2bbcc309",
+      "yuen:status": "ok"
+    },
+    "y:review/37874cf6d6bb95cf6fecd773752e4b2d": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "129685aad10b7b82",
+      "yuen:down": "6b134f42eed9f18a",
+      "yuen:status": "ok"
+    },
+    "y:review/7cda929b8f8c3f8d392f49b8babbf5be": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "6b134f42eed9f18a",
+      "yuen:down": "331e02e26d128e8c",
+      "yuen:status": "ok"
+    },
+    "y:review/5aa809afd1c6d47b47d99c015bf468dc": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "verified by",
+      "yuen:up": "6b134f42eed9f18a",
+      "yuen:down": "d653be1c06f5c8b1",
+      "yuen:status": "ok"
+    },
+    "y:review/4d7b8ce9ed42bebdc9ed7ccbba0f4dfe": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "129685aad10b7b82",
+      "yuen:down": "132fa5fd5426ca87",
+      "yuen:status": "ok"
+    },
+    "y:review/9a3ad8e4cdbc2a52129f472b17586993": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "132fa5fd5426ca87",
+      "yuen:down": "331e02e26d128e8c",
+      "yuen:status": "ok"
+    },
+    "y:review/73d688e4978692882e01be7f193c3c94": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "verified by",
+      "yuen:up": "132fa5fd5426ca87",
+      "yuen:down": "1950201e8644bc57",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r5": {
+      "prov:activity": "y:review/d696013d27f842cc44a2bf0613d6f6f7",
+      "prov:entity": "y:source/3054bb85bf60ce225e173002cb527554"
+    },
+    "_:r6": {
+      "prov:activity": "y:review/d696013d27f842cc44a2bf0613d6f6f7",
+      "prov:entity": "y:requirement/greets_by_name/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/fc3073b4f16cb394efccc4dbcfea97a8",
+      "prov:entity": "y:requirement/greets_by_name/v1"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/fc3073b4f16cb394efccc4dbcfea97a8",
+      "prov:entity": "y:artifact/df1faa09b9b18e500fb0e3100dcc8cb5"
+    },
+    "_:r11": {
+      "prov:activity": "y:review/fa3815095cd98d5c0f9acad2003281f9",
+      "prov:entity": "y:requirement/greets_by_name/v1"
+    },
+    "_:r12": {
+      "prov:activity": "y:review/fa3815095cd98d5c0f9acad2003281f9",
+      "prov:entity": "y:artifact/1c6d3f41fb1e1254f8881f72a2eaa72c"
+    },
+    "_:r18": {
+      "prov:activity": "y:decision/9dc3701143b6df3d766fb718d57b7c03",
+      "prov:entity": "y:source/3054bb85bf60ce225e173002cb527554"
+    },
+    "_:r21": {
+      "prov:activity": "y:review/c645e23330a7be1399d3617f5e8cc3da",
+      "prov:entity": "y:source/3054bb85bf60ce225e173002cb527554"
+    },
+    "_:r22": {
+      "prov:activity": "y:review/c645e23330a7be1399d3617f5e8cc3da",
+      "prov:entity": "y:requirement/rejects_an_empty_name/v1"
+    },
+    "_:r24": {
+      "prov:activity": "y:review/8df2439482a7b2fd775ed4743bd1428a",
+      "prov:entity": "y:requirement/rejects_an_empty_name/v1"
+    },
+    "_:r25": {
+      "prov:activity": "y:review/8df2439482a7b2fd775ed4743bd1428a",
+      "prov:entity": "y:artifact/df1faa09b9b18e500fb0e3100dcc8cb5"
+    },
+    "_:r27": {
+      "prov:activity": "y:review/4b30c6c2075ef8dd9d1f53953d2f1813",
+      "prov:entity": "y:requirement/rejects_an_empty_name/v1"
+    },
+    "_:r28": {
+      "prov:activity": "y:review/4b30c6c2075ef8dd9d1f53953d2f1813",
+      "prov:entity": "y:artifact/a80a8b1a215a9eb8b9048b2d0afc0e3a"
+    },
+    "_:r34": {
+      "prov:activity": "y:review/37874cf6d6bb95cf6fecd773752e4b2d",
+      "prov:entity": "y:source/3054bb85bf60ce225e173002cb527554"
+    },
+    "_:r35": {
+      "prov:activity": "y:review/37874cf6d6bb95cf6fecd773752e4b2d",
+      "prov:entity": "y:requirement/totals_accumulate/v1"
+    },
+    "_:r37": {
+      "prov:activity": "y:review/7cda929b8f8c3f8d392f49b8babbf5be",
+      "prov:entity": "y:requirement/totals_accumulate/v1"
+    },
+    "_:r38": {
+      "prov:activity": "y:review/7cda929b8f8c3f8d392f49b8babbf5be",
+      "prov:entity": "y:artifact/df1faa09b9b18e500fb0e3100dcc8cb5"
+    },
+    "_:r40": {
+      "prov:activity": "y:review/5aa809afd1c6d47b47d99c015bf468dc",
+      "prov:entity": "y:requirement/totals_accumulate/v1"
+    },
+    "_:r41": {
+      "prov:activity": "y:review/5aa809afd1c6d47b47d99c015bf468dc",
+      "prov:entity": "y:artifact/a7e43358a2934c0dceb96eb2fbc16d4a"
+    },
+    "_:r47": {
+      "prov:activity": "y:review/4d7b8ce9ed42bebdc9ed7ccbba0f4dfe",
+      "prov:entity": "y:source/3054bb85bf60ce225e173002cb527554"
+    },
+    "_:r48": {
+      "prov:activity": "y:review/4d7b8ce9ed42bebdc9ed7ccbba0f4dfe",
+      "prov:entity": "y:requirement/unknown_paths_are_404/v1"
+    },
+    "_:r50": {
+      "prov:activity": "y:review/9a3ad8e4cdbc2a52129f472b17586993",
+      "prov:entity": "y:requirement/unknown_paths_are_404/v1"
+    },
+    "_:r51": {
+      "prov:activity": "y:review/9a3ad8e4cdbc2a52129f472b17586993",
+      "prov:entity": "y:artifact/df1faa09b9b18e500fb0e3100dcc8cb5"
+    },
+    "_:r53": {
+      "prov:activity": "y:review/73d688e4978692882e01be7f193c3c94",
+      "prov:entity": "y:requirement/unknown_paths_are_404/v1"
+    },
+    "_:r54": {
+      "prov:activity": "y:review/73d688e4978692882e01be7f193c3c94",
+      "prov:entity": "y:artifact/3726eb8281cb8e383dee31dc48642ac4"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r7": {
+      "prov:activity": "y:review/d696013d27f842cc44a2bf0613d6f6f7",
+      "prov:agent": "y:role/api"
+    },
+    "_:r10": {
+      "prov:activity": "y:review/fc3073b4f16cb394efccc4dbcfea97a8",
+      "prov:agent": "y:role/dev"
+    },
+    "_:r13": {
+      "prov:activity": "y:review/fa3815095cd98d5c0f9acad2003281f9",
+      "prov:agent": "y:role/dev"
+    },
+    "_:r16": {
+      "prov:activity": "y:decision/9dc3701143b6df3d766fb718d57b7c03",
+      "prov:agent": "y:role/api"
+    },
+    "_:r23": {
+      "prov:activity": "y:review/c645e23330a7be1399d3617f5e8cc3da",
+      "prov:agent": "y:role/api"
+    },
+    "_:r26": {
+      "prov:activity": "y:review/8df2439482a7b2fd775ed4743bd1428a",
+      "prov:agent": "y:role/dev"
+    },
+    "_:r29": {
+      "prov:activity": "y:review/4b30c6c2075ef8dd9d1f53953d2f1813",
+      "prov:agent": "y:role/dev"
+    },
+    "_:r36": {
+      "prov:activity": "y:review/37874cf6d6bb95cf6fecd773752e4b2d",
+      "prov:agent": "y:role/api"
+    },
+    "_:r39": {
+      "prov:activity": "y:review/7cda929b8f8c3f8d392f49b8babbf5be",
+      "prov:agent": "y:role/dev"
+    },
+    "_:r42": {
+      "prov:activity": "y:review/5aa809afd1c6d47b47d99c015bf468dc",
+      "prov:agent": "y:role/dev"
+    },
+    "_:r49": {
+      "prov:activity": "y:review/4d7b8ce9ed42bebdc9ed7ccbba0f4dfe",
+      "prov:agent": "y:role/api"
+    },
+    "_:r52": {
+      "prov:activity": "y:review/9a3ad8e4cdbc2a52129f472b17586993",
+      "prov:agent": "y:role/dev"
+    },
+    "_:r55": {
+      "prov:activity": "y:review/73d688e4978692882e01be7f193c3c94",
+      "prov:agent": "y:role/dev"
+    }
+  }
+}

@@ -183,8 +183,22 @@ fn e081(file: &str, e: std::io::Error) -> Problem {
 }
 
 fn answer(spec_file: &str, diff_arg: &str, o: &Opts) -> Result<Answer, Vec<Problem>> {
+    // the diff
+    let (diff_shown, bytes) = if diff_arg == "-" {
+        let mut b = Vec::new();
+        std::io::stdin().read_to_end(&mut b).map_err(|e| vec![e081("-", e)])?;
+        ("<stdin>".to_string(), b)
+    } else {
+        (diff_arg.to_string(), std::fs::read(diff_arg).map_err(|e| vec![e081(diff_arg, e)])?)
+    };
+    answer_for(spec_file, o.root, o.maps, diff_shown, bytes)
+}
+
+/// What a diff (its bytes, and the name it is shown by) comes to for a spec, from its records:
+/// what `geas affected` prints, and what ritsu's port of claims hands over (`ports.rs`).
+fn answer_for(spec_file: &str, root: Option<&str>, maps: &[String], diff_shown: String, bytes: Vec<u8>) -> Result<Answer, Vec<Problem>> {
     let (root, spec_rel) =
-        map::root_and_spec(spec_file, o.root).map_err(|d| vec![(spec_file.to_string(), d, String::new())])?;
+        map::root_and_spec(spec_file, root).map_err(|d| vec![(spec_file.to_string(), d, String::new())])?;
     let spec_path = Path::new(spec_file);
     let stem = spec_path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "spec".into());
     // beside the spec, as `check` writes its journal
@@ -196,10 +210,10 @@ fn answer(spec_file: &str, diff_arg: &str, o: &Opts) -> Result<Answer, Vec<Probl
     let baseline_rel = format!("{dir_rel}.geas/{stem}.baseline.jsonl");
 
     // the records
-    let given: Vec<String> = if o.maps.is_empty() {
+    let given: Vec<String> = if maps.is_empty() {
         vec![geas_dir.join(format!("{stem}.map.jsonl")).display().to_string()]
     } else {
-        o.maps.to_vec()
+        maps.to_vec()
     };
     let mut recs = Vec::new();
     let mut problems = Vec::new();
@@ -213,14 +227,6 @@ fn answer(spec_file: &str, diff_arg: &str, o: &Opts) -> Result<Answer, Vec<Probl
         return Err(problems);
     }
 
-    // the diff
-    let (diff_shown, bytes) = if diff_arg == "-" {
-        let mut b = Vec::new();
-        std::io::stdin().read_to_end(&mut b).map_err(|e| vec![e081("-", e)])?;
-        ("<stdin>".to_string(), b)
-    } else {
-        (diff_arg.to_string(), std::fs::read(diff_arg).map_err(|e| vec![e081(diff_arg, e)])?)
-    };
     let diff_text = String::from_utf8_lossy(&bytes).into_owned();
     let e064 = |line: usize, msg: Text, notes: Vec<Text>| {
         let mut d = diag::error("E064", line, 0, msg);
@@ -777,17 +783,75 @@ fn to_text(a: &Answer, lang: Lang) -> String {
     out
 }
 
-fn to_json(a: &Answer, spec: &str, diff_arg: &str) -> String {
-    let records: Vec<String> =
-        a.records.iter().map(|(f, s)| format!("{{\"file\":{},\"side\":\"{s}\"}}", json::quote(f))).collect();
+/// The lines of the change each touched claim ran, grouped by file, side (after first), how
+/// and startup target: what the JSON lists under each claim, in its order.
+type ClaimLines = BTreeMap<(String, std::cmp::Reverse<Side>, bool, Option<String>), Lines>;
+
+fn touched_claims(a: &Answer) -> Vec<(usize, ClaimLines)> {
     let touched: BTreeSet<usize> = a.touches.iter().map(|t| t.claim).collect();
-    let claims: Vec<String> = touched
+    touched
         .iter()
         .map(|c| {
-            let mut m: BTreeMap<(String, std::cmp::Reverse<Side>, bool, Option<String>), Lines> = BTreeMap::new();
+            let mut m: ClaimLines = BTreeMap::new();
             for t in a.touches.iter().filter(|t| t.claim == *c) {
                 m.entry((t.file.clone(), std::cmp::Reverse(t.side), t.near, t.startup.clone())).or_default().insert(t.line);
             }
+            (*c, m)
+        })
+        .collect()
+}
+
+/// The changed lines no claim runs, grouped by file, side and why.
+fn unclaimed_lines(a: &Answer) -> BTreeMap<(String, std::cmp::Reverse<Side>, Why), Lines> {
+    let mut um: BTreeMap<(String, std::cmp::Reverse<Side>, Why), Lines> = BTreeMap::new();
+    for u in &a.unclaimed {
+        um.entry((u.file.clone(), std::cmp::Reverse(u.side), u.why)).or_default().insert(u.line);
+    }
+    um
+}
+
+fn why_word(why: Why) -> &'static str {
+    match why {
+        Why::NotRun => "not run",
+        Why::NotReported => "not reported",
+    }
+}
+
+/// What a diff comes to for a spec, as ritsu's port of claims hands it over (ritsu's DESIGN
+/// 3.2): the answer `geas affected --json` prints, as types; or, when geas refuses to answer
+/// (no record, a record of other code, a diff it cannot read), what it says.
+pub(crate) fn for_port(spec_file: &str, root: Option<&str>, maps: &[String], diff_shown: &str, bytes: &[u8]) -> Result<ritsu_ports::Affected, Vec<ritsu_ports::Said>> {
+    match answer_for(spec_file, root, maps, diff_shown.to_string(), bytes.to_vec()) {
+        Err(problems) => Err(problems.into_iter().map(|(file, d, _)| ritsu_ports::Said { code: d.code.to_string(), file, line: d.line, message: d.message.clone() }).collect()),
+        Ok(a) => Ok(ritsu_ports::Affected {
+            records: a.records.clone(),
+            claims: touched_claims(&a)
+                .into_iter()
+                .map(|(c, m)| ritsu_ports::Touched {
+                    name: a.claims[c].name.clone(),
+                    status: a.claims[c].status.clone(),
+                    lines: m
+                        .into_iter()
+                        .map(|((file, side, near, startup), l)| ritsu_ports::TouchedLines { file, side: side.0.word().into(), lines: lines::to_ranges(&l), how: if near { "near" } else { "ran" }.into(), startup })
+                        .collect(),
+                })
+                .collect(),
+            unclaimed: unclaimed_lines(&a).into_iter().map(|((file, side, why), l)| ritsu_ports::Untouched { file, side: side.0.word().into(), lines: lines::to_ranges(&l), why: why_word(why).into() }).collect(),
+            deleted: a.deleted.clone(),
+            outside: a.outside.clone(),
+            spec_changed: a.spec_changed.clone(),
+            baseline_changed: a.baseline_changed.is_some(),
+        }),
+    }
+}
+
+fn to_json(a: &Answer, spec: &str, diff_arg: &str) -> String {
+    let records: Vec<String> =
+        a.records.iter().map(|(f, s)| format!("{{\"file\":{},\"side\":\"{s}\"}}", json::quote(f))).collect();
+    let claims: Vec<String> = touched_claims(a)
+        .iter()
+        .map(|(c, m)| {
+            let c = *c;
             let lines: Vec<String> = m
                 .iter()
                 .map(|((file, side, near, startup), l)| {
@@ -801,7 +865,7 @@ fn to_json(a: &Answer, spec: &str, diff_arg: &str) -> String {
                     )
                 })
                 .collect();
-            let rc = &a.claims[*c];
+            let rc = &a.claims[c];
             format!(
                 "{{\"index\":{},\"name\":{},\"status\":{},\"lines\":[{}]}}",
                 c + 1,
@@ -811,11 +875,7 @@ fn to_json(a: &Answer, spec: &str, diff_arg: &str) -> String {
             )
         })
         .collect();
-    let mut um: BTreeMap<(String, std::cmp::Reverse<Side>, Why), Lines> = BTreeMap::new();
-    for u in &a.unclaimed {
-        um.entry((u.file.clone(), std::cmp::Reverse(u.side), u.why)).or_default().insert(u.line);
-    }
-    let unclaimed: Vec<String> = um
+    let unclaimed: Vec<String> = unclaimed_lines(a)
         .iter()
         .map(|((file, side, why), l)| {
             format!(
@@ -823,10 +883,7 @@ fn to_json(a: &Answer, spec: &str, diff_arg: &str) -> String {
                 json::quote(file),
                 side.0.word(),
                 lines::to_ranges(l),
-                match why {
-                    Why::NotRun => "not run",
-                    Why::NotReported => "not reported",
-                }
+                why_word(*why)
             )
         })
         .collect();

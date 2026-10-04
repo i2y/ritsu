@@ -1,9 +1,10 @@
 //! `ritsu`: the one command of the toolchain (DESIGN 8.1). In stage D it has its least form
-//! (DESIGN 8.6): `ritsu dandori …` runs dandori's command with rulec's answer to the port of rules
-//! joined in, so that a workflow reads its rules in the same process — what the dandori binary of
-//! its own crate cannot do, since that crate holds no other language (DESIGN 2.3). The rest of
-//! DESIGN 8.1 (`ritsu check`, `ritsu run`, `ritsu gen`, `ritsu explain`, `ritsu <language>` for
-//! every language) comes in stage E.
+//! (DESIGN 8.6): the languages that read others run with the ports joined — `ritsu dandori …`
+//! with rulec's answer to the port of rules, so that a workflow reads its rules in the same
+//! process, and `ritsu yuen …` with every language yuen reads. What the binaries of their own
+//! crates cannot do, since those crates hold no other language (DESIGN 2.3). The rest of DESIGN
+//! 8.1 (`ritsu check`, `ritsu run`, `ritsu gen`, `ritsu explain`, `ritsu <language>` for every
+//! language) comes in stage E.
 
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
@@ -11,22 +12,45 @@ use std::io::Write;
 use std::process::ExitCode;
 use std::rc::Rc;
 
-/// The languages whose commands `ritsu <language>` will run (DESIGN 8.2), but for dandori's run as
-/// their own commands until stage E.
-const ON_THEIR_OWN: [&str; 6] = ["rulec", "koyomi", "chobo", "geas", "yuen", "sakai"];
+/// The languages whose commands `ritsu <language>` will run (DESIGN 8.2), but for the ones that
+/// read others (dandori, yuen, sakai), run as their own commands until stage E: they read no other
+/// language, so their own binaries do all they do.
+const ON_THEIR_OWN: [&str; 4] = ["rulec", "koyomi", "chobo", "geas"];
+
+/// Every language yuen reads, joined through the ports (yuen's DESIGN 3.1): what a file holds
+/// (`Items`), the sources a rule or a calendar pins (`Sources`), the aliases of a rule's and a dates
+/// file's names (`Rules`, `Dates`), and the claims of a spec with their records (`Claims`).
+fn yuen_suite() -> yuen::suite::Suite {
+    let rules = Rc::new(rulec::ports::Engine::new());
+    let dates = Rc::new(koyomi::ports::Engine);
+    let claims = Rc::new(geas::ports::Engine);
+    let mut s = yuen::suite::Suite::default();
+    s.items.insert("rulec".into(), rules.clone());
+    s.items.insert("koyomi".into(), dates.clone());
+    s.items.insert("chobo".into(), Rc::new(chobo::ports::Engine));
+    s.items.insert("geas".into(), claims.clone());
+    s.items.insert("dandori".into(), Rc::new(dandori::ports::Engine));
+    s.items.insert("sakai".into(), Rc::new(sakai::ports::Engine));
+    s.sources.insert("rulec".into(), rules.clone());
+    s.sources.insert("koyomi".into(), dates.clone());
+    s.rules = Some(rules);
+    s.dates = Some(dates);
+    s.claims = Some(claims);
+    s
+}
 
 fn help(lang: Lang) -> String {
     let v = env!("CARGO_PKG_VERSION");
     let t = tr!(
         "ritsu {v} — 七つの小さな言語（rulec、dandori、koyomi、chobo、geas、yuen、sakai）を一つにまとめる処理系\n\n\
-         使い方:\n  ritsu dandori <コマンド> ...   dandori のコマンド。フローが使う規則を同じプロセスの中で読む\n  ritsu --help | --version\n\n\
-         ほかの言語は、いまはそれぞれのコマンドで走らせます（rulec、koyomi、chobo、geas、yuen、sakai）。\n\
-         --lang ja|en でこの画面の言語を選びます（無ければ環境変数 RITSU_LANG、それも無ければ en）。`ritsu dandori` の言語は dandori が選びます。\n\
+         使い方:\n  ritsu dandori <コマンド> ...   dandori のコマンド。フローが使う規則を同じプロセスの中で読む\n  ritsu yuen <コマンド> ...      yuen のコマンド。要件が名指すほかの言語のもの、借りた出典、主張の記録を同じプロセスの中で読む\n  ritsu --help | --version\n\n\
+         ほかの言語は、いまはそれぞれのコマンドで走らせます（rulec、koyomi、chobo、geas、sakai）。\n\
+         --lang ja|en でこの画面の言語を選びます（無ければ環境変数 RITSU_LANG、それも無ければ en）。`ritsu dandori` と `ritsu yuen` の言語は、その言語が選びます。\n\
          exit code: 言語のコマンドのもの / 2 ritsu に無いコマンド\n",
         "ritsu {v} — one toolchain for seven small languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai)\n\n\
-         Usage:\n  ritsu dandori <command> ...   dandori's commands, reading the rules a flow uses in the same process\n  ritsu --help | --version\n\n\
-         The other languages run as their own commands for now (rulec, koyomi, chobo, geas, yuen, sakai).\n\
-         --lang ja|en chooses the language of this page (else the RITSU_LANG environment variable, else en); `ritsu dandori` lets dandori choose its own.\n\
+         Usage:\n  ritsu dandori <command> ...   dandori's commands, reading the rules a flow uses in the same process\n  ritsu yuen <command> ...      yuen's commands, reading in the same process what requirements name of the other languages, the sources they borrow and the records of claims\n  ritsu --help | --version\n\n\
+         The other languages run as their own commands for now (rulec, koyomi, chobo, geas, sakai).\n\
+         --lang ja|en chooses the language of this page (else the RITSU_LANG environment variable, else en); `ritsu dandori` and `ritsu yuen` let the language choose its own.\n\
          Exit codes: the language's command's / 2 a command ritsu does not have\n"
     );
     t.get(lang).to_string()
@@ -81,6 +105,12 @@ fn main() -> ExitCode {
             let rules = Rc::new(rulec::ports::Engine::new());
             let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
             let code = dandori::cli::run(&args[at + 1..], rules, &mut out, &mut err);
+            let _ = out.flush();
+            ExitCode::from(code)
+        }
+        "yuen" => {
+            let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
+            let code = yuen::run::run(&args[at + 1..], yuen_suite(), &mut out, &mut err);
             let _ = out.flush();
             ExitCode::from(code)
         }

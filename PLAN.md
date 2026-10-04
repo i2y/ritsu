@@ -430,6 +430,24 @@ yuen の PLAN の C.1〜C.9 を、子プロセスと JSON ではなく口で作�
 - E203（ツールがファイルを読めない）と E204（ツールの JSON が知らない形）は、出す側の検査のエラーを名指す形に意味を替えるか、退かせる（DESIGN 7.10）。
 - テストの例と確かめた記録（`.req` のハッシュ）を取り直す。yuen の DESIGN の「形の案」のうち、8 章と 11 章を実物にする。
 
+D.7 でしたこと（2026-10-04、D の最後の部分）：
+
+- yuen の PLAN の C.1〜C.9 を、口で作る計画に書き直してから作った（書き直す前の計画の要点は、各項の「前の計画」に残した）。yuen は読む言語を `yuen::suite::Suite`（言語ごとの `Items` と `Sources`、それに `Rules`、`Dates`、`Claims`）として渡され、コマンドを関数（`yuen::run::run`）にした。`ritsu yuen`（DESIGN 8.6）がすべての言語をつなぎ、yuen のクレートのバイナリは何もつながず、ほかの言語のものを名指すプロジェクトには `ritsu yuen` に同じコマンドを続けた形を言って exit 2 で終わる。
+- 口を二つ足した（DESIGN 3.2）。`Sources`（rulec と koyomi が答える。ファイルが写して固定している出典。検査を通らないファイルには検査の診断を返す）と、`Claims::affected`（geas が答える。geas の `affected` と同じ関数）。
+- 端は、言語が `Items` で渡す定義の文になった（DESIGN 6.4、yuen の DESIGN 3.2）。定義の文が空なら端にせず E203。端のハッシュは取り直した（ファイルの端と chobo の端は A の段階の値のまま。koyomi の日付と条件、rulec の表と節、geas の主張、proto の要素、dandori のタスク、sakai の語の値は、yuen の PLAN の C.13 と DESIGN 19 章）。DESIGN 4.3 の例は、印が五本から三本になった（日付の端が、ファイル全体からその日付の定義の文になった）。
+- 借りた出典と E107 は `Sources` で読む。`source outdated` は借りた出典も問い（取り直すのは借りた先の言語だと言う）、条が変われば、その条を固定している成果物も言う。`trace`（リンクごとの `pins`）、`api`（成果物の `pins`）、PROV（`yuen:pins`）も、成果物のファイルが固定している条を出す。
+- `affected` を作った（yuen の DESIGN 8 章を実物にした）。統一形式の差分の読み手は、geas の `src/diff.rs` の読む部分を ritsu-base の `udiff` に移して、geas と yuen で一つにした（DESIGN 4.14。geas の振る舞いは変わらない）。`yuen api` を実物にした（11 章）。
+- 台帳：E203 の意味を替え、E204 と W201 を退かせた。退いたコードを書く形（`Repro::Retired`）を ritsu-base の台帳に足した（DESIGN 4.3）。E106、E107、E202、E203、E205 に再現と変異を足した。
+- テストの材料を七つ足した（`tests/fixtures/` の rulec、koyomi、chobo、geas、proto、dandori、sakai）。確かめた記録は `ritsu yuen review` で書いた。geas の記録は `geas map` で一度だけ取ってテストの材料に置き、テストは python3 を走らせない。yuen のテストは六つの言語のクレートを dev-dependency に持ち、同じプロセスの中でつなぐ（DESIGN 3.3）。新しいテストは `tests/suite.rs`（19 本）と、`crates/ritsu/tests/yuen.rs`（3 本）。
+- 決めたこと（★）：
+  - `Sources` を `Rules` と `Dates` の事実に入れず、別の口にした（DESIGN 3.2 の段落）。
+  - yuen のクレートのバイナリが断るときの終了コードは 2 で、言う文は `ritsu yuen` に同じコマンドを続けた形にした（ツールが見つからないときと同じく、走らせる場所の問題として）。
+  - `affected` で、どの主張も走らせない行でも、そのファイルをリンクが名指していれば要件に届くとした。届かない変更（exit 1）は、どのリンクも名指さないファイルの行と、範囲の中でどの要件にも辿れないファイルだけにした（yuen の DESIGN 8 章）。
+  - ReqIF には、成果物のファイルが固定している条を書かない（PROV だけ。yuen の DESIGN 12 章）。PROV では、固定をファイルの entity から引く（リンクがファイルを名指していなければ足す）。
+  - `trace --format json` の、リンクごとの `pins` は、規則とカレンダーでなくても空の並びで出す（キーの形を一つにするため。前の golden も取り直した）。
+  - 名前の変わった成果物の候補が一つで、確かめたときの中身があれば、差分を見せる（yuen の DESIGN 4.5）。
+- 確かめたこと：yuen のテストは全部通り、SKIP は 0。替える前の yuen のバイナリと替えたあとの `ritsu yuen` で、テストの材料と変異の全部のコマンドの出力（1,026 回）を比べた。違った 258 回は、どれも決めて変えたものだった。ほかの言語のものを名指すプロジェクトを読むようになったこと（新しいテストの材料と変異の 173 回）、`--help` と引数の無い `yuen`（`affected` が入った。exit 2 の説明）と `explain --all`（台帳の変わり）の 13 回、`trace --format json` の `pins` の 72 回である（yuen の DESIGN 16.1）。rulec、koyomi、geas は口を足しただけで、出力は変わらない（geas と koyomi のテストの全部が通る）。
+
 ### D.8 sakai の一式の読み込み
 
 sakai の PLAN の C.1〜C.5 を、口で作るように書き直してから作る。

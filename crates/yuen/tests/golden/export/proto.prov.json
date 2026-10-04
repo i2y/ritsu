@@ -1,0 +1,451 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/倉庫": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "倉庫",
+      "yuen:description": "在庫のサービスの約束を決める"
+    },
+    "y:role/開発": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "開発",
+      "yuen:description": ".proto を書いて直す"
+    }
+  },
+  "entity": {
+    "y:source/785abb82b4326e0aac99a032923df2d9": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "約束",
+      "yuen:file": "約束.md",
+      "yuen:sha256": "6876e197cbb677f0"
+    },
+    "y:artifact/a40f3e22dcefb347d37c827223035888": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "proto \"warehouse.proto\" service StockService method Reserve",
+      "yuen:sha256": "cadb2fc727e9af81",
+      "yuen:end": "item"
+    },
+    "y:artifact/1ad693bd2a1768a16c7f43682f982a0e": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "proto \"warehouse.proto\" enum Stock",
+      "yuen:sha256": "d7450e7503c905f7",
+      "yuen:end": "item"
+    },
+    "y:artifact/6fc44ff09a91be9bf9ddada40e4b5e3c": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "proto \"warehouse.proto\" service StockService method Release",
+      "yuen:sha256": "2a0912a66889e515",
+      "yuen:end": "item"
+    },
+    "y:artifact/d4052b90d5ac7ac6554a02ccd88adf4a": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "proto \"fulfillment.proto\" service FulfillmentService method Fulfill",
+      "yuen:sha256": "6c73e17bf5bedba7",
+      "yuen:end": "item"
+    },
+    "y:artifact/00e7cd8dcfb69fc50fd90fd1e2c27aa7": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "proto \"fulfillment.proto\" message FulfillResponse field tracking_number",
+      "yuen:sha256": "fb7f7e2617539e54",
+      "yuen:end": "item"
+    },
+    "y:requirement/reserve/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "在庫を押さえる",
+      "yuen:version": "1",
+      "yuen:text": "倉庫は、注文の一行ごとに在庫を押さえる。足りなければ、押さえずに足りないと答える",
+      "yuen:sha256": "e10350fc1754b540"
+    },
+    "y:requirement/release/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "押さえを放す",
+      "yuen:version": "1",
+      "yuen:text": "押さえた在庫は、押さえたときの番号で放せる",
+      "yuen:sha256": "e4cf3d1ba8da98bf"
+    },
+    "y:requirement/fulfill/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "出荷",
+      "yuen:version": "1",
+      "yuen:text": "出荷は、注文を受けて始まり、押さえた在庫と追跡番号を答える",
+      "yuen:sha256": "a56299dbcadd3c9f"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/reserve/v1",
+      "prov:agent": "y:role/倉庫",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r16": {
+      "prov:entity": "y:requirement/release/v1",
+      "prov:agent": "y:role/倉庫",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r27": {
+      "prov:entity": "y:requirement/fulfill/v1",
+      "prov:agent": "y:role/倉庫",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/reserve/v1",
+      "prov:usedEntity": "y:source/785abb82b4326e0aac99a032923df2d9",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r17": {
+      "prov:generatedEntity": "y:requirement/release/v1",
+      "prov:usedEntity": "y:source/785abb82b4326e0aac99a032923df2d9",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r28": {
+      "prov:generatedEntity": "y:requirement/fulfill/v1",
+      "prov:usedEntity": "y:source/785abb82b4326e0aac99a032923df2d9",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/a40f3e22dcefb347d37c827223035888",
+      "prov:influencer": "y:requirement/reserve/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r4": {
+      "prov:influencee": "y:artifact/1ad693bd2a1768a16c7f43682f982a0e",
+      "prov:influencer": "y:requirement/reserve/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r18": {
+      "prov:influencee": "y:artifact/6fc44ff09a91be9bf9ddada40e4b5e3c",
+      "prov:influencer": "y:requirement/release/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r29": {
+      "prov:influencee": "y:artifact/d4052b90d5ac7ac6554a02ccd88adf4a",
+      "prov:influencer": "y:requirement/fulfill/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r30": {
+      "prov:influencee": "y:artifact/00e7cd8dcfb69fc50fd90fd1e2c27aa7",
+      "prov:influencer": "y:requirement/fulfill/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/e33e0ec0ba14a5764d1a15bec09a1da1": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "6876e197cbb677f0",
+      "yuen:down": "e10350fc1754b540",
+      "yuen:status": "ok"
+    },
+    "y:review/e9c5390c9e876c9159c7e616a7059ae2": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "e10350fc1754b540",
+      "yuen:down": "cadb2fc727e9af81",
+      "yuen:status": "ok"
+    },
+    "y:review/06b7eb504c4e375850c9ff6a4ba89747": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "e10350fc1754b540",
+      "yuen:down": "d7450e7503c905f7",
+      "yuen:status": "ok"
+    },
+    "y:waiver/f60dede2b9a6c1c43e8855935d99a373": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "この材料は、サービスを走らせる主張を持たない",
+      "yuen:sha256": "e10350fc1754b540",
+      "yuen:status": "ok"
+    },
+    "y:review/2427ac45a43bcfe0751ab7460179faa2": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "6876e197cbb677f0",
+      "yuen:down": "e4cf3d1ba8da98bf",
+      "yuen:status": "ok"
+    },
+    "y:review/fb6c3d10c72227e51153ccfeebd153b7": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "e4cf3d1ba8da98bf",
+      "yuen:down": "2a0912a66889e515",
+      "yuen:status": "ok"
+    },
+    "y:waiver/e13218c174b64c24a3f18eb61e0e3976": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "この材料は、サービスを走らせる主張を持たない",
+      "yuen:sha256": "e4cf3d1ba8da98bf",
+      "yuen:status": "ok"
+    },
+    "y:review/20b5a29c3c064641504b0e38e348eb4c": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "6876e197cbb677f0",
+      "yuen:down": "a56299dbcadd3c9f",
+      "yuen:status": "ok"
+    },
+    "y:review/a96be171af015538f9ed04d78793b93f": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "a56299dbcadd3c9f",
+      "yuen:down": "6c73e17bf5bedba7",
+      "yuen:status": "ok"
+    },
+    "y:review/e1e5fb3ed6400b56a62d85ebbcb59ca9": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "a56299dbcadd3c9f",
+      "yuen:down": "fb7f7e2617539e54",
+      "yuen:status": "ok"
+    },
+    "y:waiver/b73a6826fd85d937fdde82b46bd90a28": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "この材料は、サービスを走らせる主張を持たない",
+      "yuen:sha256": "a56299dbcadd3c9f",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r5": {
+      "prov:activity": "y:review/e33e0ec0ba14a5764d1a15bec09a1da1",
+      "prov:entity": "y:source/785abb82b4326e0aac99a032923df2d9"
+    },
+    "_:r6": {
+      "prov:activity": "y:review/e33e0ec0ba14a5764d1a15bec09a1da1",
+      "prov:entity": "y:requirement/reserve/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/e9c5390c9e876c9159c7e616a7059ae2",
+      "prov:entity": "y:requirement/reserve/v1"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/e9c5390c9e876c9159c7e616a7059ae2",
+      "prov:entity": "y:artifact/a40f3e22dcefb347d37c827223035888"
+    },
+    "_:r11": {
+      "prov:activity": "y:review/06b7eb504c4e375850c9ff6a4ba89747",
+      "prov:entity": "y:requirement/reserve/v1"
+    },
+    "_:r12": {
+      "prov:activity": "y:review/06b7eb504c4e375850c9ff6a4ba89747",
+      "prov:entity": "y:artifact/1ad693bd2a1768a16c7f43682f982a0e"
+    },
+    "_:r14": {
+      "prov:activity": "y:waiver/f60dede2b9a6c1c43e8855935d99a373",
+      "prov:entity": "y:requirement/reserve/v1"
+    },
+    "_:r19": {
+      "prov:activity": "y:review/2427ac45a43bcfe0751ab7460179faa2",
+      "prov:entity": "y:source/785abb82b4326e0aac99a032923df2d9"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/2427ac45a43bcfe0751ab7460179faa2",
+      "prov:entity": "y:requirement/release/v1"
+    },
+    "_:r22": {
+      "prov:activity": "y:review/fb6c3d10c72227e51153ccfeebd153b7",
+      "prov:entity": "y:requirement/release/v1"
+    },
+    "_:r23": {
+      "prov:activity": "y:review/fb6c3d10c72227e51153ccfeebd153b7",
+      "prov:entity": "y:artifact/6fc44ff09a91be9bf9ddada40e4b5e3c"
+    },
+    "_:r25": {
+      "prov:activity": "y:waiver/e13218c174b64c24a3f18eb61e0e3976",
+      "prov:entity": "y:requirement/release/v1"
+    },
+    "_:r31": {
+      "prov:activity": "y:review/20b5a29c3c064641504b0e38e348eb4c",
+      "prov:entity": "y:source/785abb82b4326e0aac99a032923df2d9"
+    },
+    "_:r32": {
+      "prov:activity": "y:review/20b5a29c3c064641504b0e38e348eb4c",
+      "prov:entity": "y:requirement/fulfill/v1"
+    },
+    "_:r34": {
+      "prov:activity": "y:review/a96be171af015538f9ed04d78793b93f",
+      "prov:entity": "y:requirement/fulfill/v1"
+    },
+    "_:r35": {
+      "prov:activity": "y:review/a96be171af015538f9ed04d78793b93f",
+      "prov:entity": "y:artifact/d4052b90d5ac7ac6554a02ccd88adf4a"
+    },
+    "_:r37": {
+      "prov:activity": "y:review/e1e5fb3ed6400b56a62d85ebbcb59ca9",
+      "prov:entity": "y:requirement/fulfill/v1"
+    },
+    "_:r38": {
+      "prov:activity": "y:review/e1e5fb3ed6400b56a62d85ebbcb59ca9",
+      "prov:entity": "y:artifact/00e7cd8dcfb69fc50fd90fd1e2c27aa7"
+    },
+    "_:r40": {
+      "prov:activity": "y:waiver/b73a6826fd85d937fdde82b46bd90a28",
+      "prov:entity": "y:requirement/fulfill/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r7": {
+      "prov:activity": "y:review/e33e0ec0ba14a5764d1a15bec09a1da1",
+      "prov:agent": "y:role/倉庫"
+    },
+    "_:r10": {
+      "prov:activity": "y:review/e9c5390c9e876c9159c7e616a7059ae2",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r13": {
+      "prov:activity": "y:review/06b7eb504c4e375850c9ff6a4ba89747",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r15": {
+      "prov:activity": "y:waiver/f60dede2b9a6c1c43e8855935d99a373",
+      "prov:agent": "y:role/倉庫"
+    },
+    "_:r21": {
+      "prov:activity": "y:review/2427ac45a43bcfe0751ab7460179faa2",
+      "prov:agent": "y:role/倉庫"
+    },
+    "_:r24": {
+      "prov:activity": "y:review/fb6c3d10c72227e51153ccfeebd153b7",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r26": {
+      "prov:activity": "y:waiver/e13218c174b64c24a3f18eb61e0e3976",
+      "prov:agent": "y:role/倉庫"
+    },
+    "_:r33": {
+      "prov:activity": "y:review/20b5a29c3c064641504b0e38e348eb4c",
+      "prov:agent": "y:role/倉庫"
+    },
+    "_:r36": {
+      "prov:activity": "y:review/a96be171af015538f9ed04d78793b93f",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r39": {
+      "prov:activity": "y:review/e1e5fb3ed6400b56a62d85ebbcb59ca9",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r41": {
+      "prov:activity": "y:waiver/b73a6826fd85d937fdde82b46bd90a28",
+      "prov:agent": "y:role/倉庫"
+    }
+  }
+}

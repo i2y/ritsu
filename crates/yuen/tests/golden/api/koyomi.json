@@ -1,0 +1,715 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/koyomi",
+  "files": [
+    {
+      "path": "支払条件.req",
+      "name": "支払条件",
+      "version": "1",
+      "sha256": "fd740fd35534eb5e"
+    },
+    {
+      "path": "民法の期間.req",
+      "name": "民法の期間",
+      "version": "1",
+      "sha256": "429c3f8856633f48"
+    }
+  ],
+  "roles": [
+    {
+      "name": "経理",
+      "description": "支払の条件を決める"
+    },
+    {
+      "name": "法務",
+      "description": "条文の読み方を決める"
+    },
+    {
+      "name": "開発",
+      "description": "koyomi のファイルを書いて直す"
+    }
+  ],
+  "sources": [
+    {
+      "file": "支払条件.req",
+      "name": "祝日",
+      "kind": "file",
+      "path": "calendars/data/syukujitsu.csv",
+      "url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+      "sha256": "cec37a743c96995c",
+      "borrowed": {
+        "text": "koyomi \"calendars/東京の営業日.cal\" source 祝日",
+        "tool": "koyomi",
+        "path": "calendars/東京の営業日.cal",
+        "items": [
+          [
+            "source",
+            "祝日"
+          ]
+        ]
+      }
+    },
+    {
+      "file": "民法の期間.req",
+      "name": "民法",
+      "kind": "law",
+      "db": "egov",
+      "id": "129AC0000000089",
+      "asof": "2026-10-01",
+      "revision": "129AC0000000089_20260624_508AC0000000045",
+      "borrowed": {
+        "text": "koyomi \"民法の期間.cal\" source 民法",
+        "tool": "koyomi",
+        "path": "民法の期間.cal",
+        "items": [
+          [
+            "source",
+            "民法"
+          ]
+        ]
+      },
+      "pins": [
+        {
+          "fragment": "第140条",
+          "sha256": "e880059021fbb67d"
+        },
+        {
+          "fragment": "第141条",
+          "sha256": "0575c131b9f08063"
+        },
+        {
+          "fragment": "第142条",
+          "sha256": "fc8c35a0769d3b35"
+        },
+        {
+          "fragment": "第143条",
+          "sha256": "6950bdfb988439b6"
+        }
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "name": "支払日",
+      "alias": "payment_day",
+      "version": 1,
+      "file": "支払条件.req",
+      "line": 8,
+      "text": "20 日締め翌月 10 日払い。支払日が休みなら、その前の営業日に払う",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "経理",
+      "replaces": [],
+      "sha256": "870271e179a7d233",
+      "from": [
+        {
+          "line": 12,
+          "sources": [
+            {
+              "source": "祝日",
+              "fragment": null,
+              "sha256": "cec37a743c96995c"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "経理",
+            "up": [
+              "cec37a743c96995c"
+            ],
+            "down": "870271e179a7d233"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 14,
+          "role": "satisfied",
+          "artifact": {
+            "text": "koyomi \"支払_20日締め翌月10日払い.cal\" date 支払日",
+            "tool": "koyomi",
+            "path": "支払_20日締め翌月10日払い.cal",
+            "items": [
+              [
+                "date",
+                "支払日"
+              ]
+            ]
+          },
+          "sha256": "feb9535fb9350ecc",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "経理",
+            "up": [
+              "870271e179a7d233"
+            ],
+            "down": "feb9535fb9350ecc"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 16,
+          "role": "verified",
+          "artifact": {
+            "text": "koyomi \"支払_20日締め翌月10日払い.cal\" claim 営業日に払う",
+            "tool": "koyomi",
+            "path": "支払_20日締め翌月10日払い.cal",
+            "items": [
+              [
+                "claim",
+                "営業日に払う"
+              ]
+            ]
+          },
+          "sha256": "3cf8fc3fb2dda9d9",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "経理",
+            "up": [
+              "870271e179a7d233"
+            ],
+            "down": "3cf8fc3fb2dda9d9"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    },
+    {
+      "name": "起算日",
+      "alias": "first_day",
+      "version": 1,
+      "file": "民法の期間.req",
+      "line": 11,
+      "text": "日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。ただし、その期間が午前零時から始まるときは、この限りでない",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "法務",
+      "replaces": [],
+      "sha256": "a9ebc73907faddc8",
+      "from": [
+        {
+          "line": 15,
+          "sources": [
+            {
+              "source": "民法",
+              "fragment": "第140条",
+              "sha256": "e880059021fbb67d"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "法務",
+            "up": [
+              "e880059021fbb67d"
+            ],
+            "down": "a9ebc73907faddc8"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 17,
+          "role": "satisfied",
+          "artifact": {
+            "text": "koyomi \"民法の期間.cal\" date 起算日",
+            "tool": "koyomi",
+            "path": "民法の期間.cal",
+            "items": [
+              [
+                "date",
+                "起算日"
+              ]
+            ]
+          },
+          "sha256": "15aa6c91d6aaae80",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "a9ebc73907faddc8"
+            ],
+            "down": "15aa6c91d6aaae80"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 19,
+          "role": "verified",
+          "why": "初日を算入しないことは、koyomi doc のページで、条文と言い直しを見比べて確かめる。この材料に、それを確かめる条件は無い",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "法務",
+            "sha256": "a9ebc73907faddc8"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "満了日",
+      "alias": "last_day",
+      "version": 1,
+      "file": "民法の期間.req",
+      "line": 22,
+      "text": "月によって期間を定めたときは、最後の月においてその起算日に応当する日の前日の終わりに満了する。応当する日がないときは、その月の末日の終わりに満了する",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "法務",
+      "replaces": [],
+      "sha256": "465b83ed8c251406",
+      "from": [
+        {
+          "line": 26,
+          "sources": [
+            {
+              "source": "民法",
+              "fragment": "第141条",
+              "sha256": "0575c131b9f08063"
+            },
+            {
+              "source": "民法",
+              "fragment": "第143条",
+              "sha256": "6950bdfb988439b6"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "法務",
+            "up": [
+              "0575c131b9f08063",
+              "6950bdfb988439b6"
+            ],
+            "down": "465b83ed8c251406"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 28,
+          "role": "satisfied",
+          "artifact": {
+            "text": "koyomi \"民法の期間.cal\" date 満了日",
+            "tool": "koyomi",
+            "path": "民法の期間.cal",
+            "items": [
+              [
+                "date",
+                "満了日"
+              ]
+            ]
+          },
+          "sha256": "23441fd408f07548",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "465b83ed8c251406"
+            ],
+            "down": "23441fd408f07548"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 30,
+          "role": "verified",
+          "artifact": {
+            "text": "koyomi \"民法の期間.cal\" claim 満了日は起点より後",
+            "tool": "koyomi",
+            "path": "民法の期間.cal",
+            "items": [
+              [
+                "claim",
+                "満了日は起点より後"
+              ]
+            ]
+          },
+          "sha256": "5e7bb0ed51835dc7",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "465b83ed8c251406"
+            ],
+            "down": "5e7bb0ed51835dc7"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    },
+    {
+      "name": "満了日_142条",
+      "alias": "last_day_142",
+      "version": 1,
+      "file": "民法の期間.req",
+      "line": 33,
+      "text": "期間の末日が日曜日、国民の祝日に関する法律に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する",
+      "in_force": {
+        "from": "2026-10-01",
+        "to": null
+      },
+      "owner": "法務",
+      "replaces": [],
+      "sha256": "d4f2d2a67322df17",
+      "from": [
+        {
+          "line": 37,
+          "sources": [
+            {
+              "source": "民法",
+              "fragment": "第142条",
+              "sha256": "fc8c35a0769d3b35"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "法務",
+            "up": [
+              "fc8c35a0769d3b35"
+            ],
+            "down": "d4f2d2a67322df17"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [
+        {
+          "date": "2026-10-03",
+          "by": "法務",
+          "why": "「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。この材料のために決めたもので、法令の読み方を示すものではない"
+        }
+      ],
+      "links": [
+        {
+          "line": 40,
+          "role": "satisfied",
+          "artifact": {
+            "text": "koyomi \"民法の期間.cal\" date 満了日_142条",
+            "tool": "koyomi",
+            "path": "民法の期間.cal",
+            "items": [
+              [
+                "date",
+                "満了日_142条"
+              ]
+            ]
+          },
+          "sha256": "bba4761410179e6e",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "d4f2d2a67322df17"
+            ],
+            "down": "bba4761410179e6e"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 42,
+          "role": "verified",
+          "artifact": {
+            "text": "koyomi \"民法の期間.cal\" claim 142条の満了日は満了日以後",
+            "tool": "koyomi",
+            "path": "民法の期間.cal",
+            "items": [
+              [
+                "claim",
+                "142条の満了日は満了日以後"
+              ]
+            ]
+          },
+          "sha256": "7c616f5dcc9503a8",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "d4f2d2a67322df17"
+            ],
+            "down": "7c616f5dcc9503a8"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": []
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "koyomi \"支払_20日締め翌月10日払い.cal\" claim 営業日に払う",
+      "tool": "koyomi",
+      "path": "支払_20日締め翌月10日払い.cal",
+      "items": [
+        [
+          "claim",
+          "営業日に払う"
+        ]
+      ],
+      "sha256": "3cf8fc3fb2dda9d9",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "koyomi \"支払_20日締め翌月10日払い.cal\" date 支払日",
+      "tool": "koyomi",
+      "path": "支払_20日締め翌月10日払い.cal",
+      "items": [
+        [
+          "date",
+          "支払日"
+        ]
+      ],
+      "sha256": "feb9535fb9350ecc",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "koyomi \"民法の期間.cal\" claim 142条の満了日は満了日以後",
+      "tool": "koyomi",
+      "path": "民法の期間.cal",
+      "items": [
+        [
+          "claim",
+          "142条の満了日は満了日以後"
+        ]
+      ],
+      "sha256": "7c616f5dcc9503a8",
+      "end": "item",
+      "pins": [
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第140条",
+          "sha256": "e880059021fbb67d"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第141条",
+          "sha256": "0575c131b9f08063"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第142条",
+          "sha256": "fc8c35a0769d3b35"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第143条",
+          "sha256": "6950bdfb988439b6"
+        }
+      ]
+    },
+    {
+      "text": "koyomi \"民法の期間.cal\" claim 満了日は起点より後",
+      "tool": "koyomi",
+      "path": "民法の期間.cal",
+      "items": [
+        [
+          "claim",
+          "満了日は起点より後"
+        ]
+      ],
+      "sha256": "5e7bb0ed51835dc7",
+      "end": "item",
+      "pins": [
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第140条",
+          "sha256": "e880059021fbb67d"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第141条",
+          "sha256": "0575c131b9f08063"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第142条",
+          "sha256": "fc8c35a0769d3b35"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第143条",
+          "sha256": "6950bdfb988439b6"
+        }
+      ]
+    },
+    {
+      "text": "koyomi \"民法の期間.cal\" date 満了日",
+      "tool": "koyomi",
+      "path": "民法の期間.cal",
+      "items": [
+        [
+          "date",
+          "満了日"
+        ]
+      ],
+      "sha256": "23441fd408f07548",
+      "end": "item",
+      "pins": [
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第140条",
+          "sha256": "e880059021fbb67d"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第141条",
+          "sha256": "0575c131b9f08063"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第142条",
+          "sha256": "fc8c35a0769d3b35"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第143条",
+          "sha256": "6950bdfb988439b6"
+        }
+      ]
+    },
+    {
+      "text": "koyomi \"民法の期間.cal\" date 満了日_142条",
+      "tool": "koyomi",
+      "path": "民法の期間.cal",
+      "items": [
+        [
+          "date",
+          "満了日_142条"
+        ]
+      ],
+      "sha256": "bba4761410179e6e",
+      "end": "item",
+      "pins": [
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第140条",
+          "sha256": "e880059021fbb67d"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第141条",
+          "sha256": "0575c131b9f08063"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第142条",
+          "sha256": "fc8c35a0769d3b35"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第143条",
+          "sha256": "6950bdfb988439b6"
+        }
+      ]
+    },
+    {
+      "text": "koyomi \"民法の期間.cal\" date 起算日",
+      "tool": "koyomi",
+      "path": "民法の期間.cal",
+      "items": [
+        [
+          "date",
+          "起算日"
+        ]
+      ],
+      "sha256": "15aa6c91d6aaae80",
+      "end": "item",
+      "pins": [
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第140条",
+          "sha256": "e880059021fbb67d"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第141条",
+          "sha256": "0575c131b9f08063"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第142条",
+          "sha256": "fc8c35a0769d3b35"
+        },
+        {
+          "db": "egov",
+          "id": "129AC0000000089",
+          "asof": "2026-10-01",
+          "fragment": "第143条",
+          "sha256": "6950bdfb988439b6"
+        }
+      ]
+    }
+  ],
+  "scopes": [
+    {
+      "file": "民法の期間.req",
+      "line": 9,
+      "text": "koyomi \"民法の期間.cal\" date",
+      "artifacts": 3,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/koyomi: ok — 4 requirements, whose 11 links and 1 waiver are as they were looked at; every requirement is met and checked, or waived; the 3 dates in scope all trace to a requirement",
+    "diagnostics": []
+  }
+}

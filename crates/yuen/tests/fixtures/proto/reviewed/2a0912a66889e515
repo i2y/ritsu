@@ -1,0 +1,4 @@
+rpc warehouse.v1.StockService.Release(warehouse.v1.ReleaseRequest) returns (warehouse.v1.ReleaseResponse)
+message warehouse.v1.ReleaseRequest
+  string id = 1
+message warehouse.v1.ReleaseResponse

@@ -111,25 +111,92 @@ pub fn requirement_end(p: &Project, r: usize, ups: &[Option<Upper>], ends: &[Opt
 }
 
 /// What an artifact is, when it cannot be read.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Unread {
     /// The file is not there, or is a directory (E201).
     Missing { dir: bool },
-    /// Reading this tool's artifacts is not built yet: the suite's JSON is read by the next
-    /// stage of yuen (PLAN C).
-    NotYet(Tool),
+    /// The language of the file is not handed to yuen (the binary of yuen's own crate):
+    /// `ritsu yuen` runs it with every language joined (exit 2).
+    NoPort(Tool),
+    /// The language cannot answer for the file: it does not pass the language's check, or does
+    /// not read (E203). What the language says.
+    Refused(Vec<ritsu_ports::Said>),
+    /// The file holds no such thing (E202): the things of the same kind it holds, each with its
+    /// end, for the candidates.
+    NoSuchName { same_kind: Vec<(Name, End)> },
+    /// A `.proto` that does not read (E205): the file, and why.
+    Proto(String, ritsu_base::text::Text),
 }
 
-/// The end of an artifact this stage reads: a `file`, its bytes.
+/// The end of an artifact (DESIGN 3.2): a file's bytes; a thing of a file of rulec, koyomi,
+/// chobo, geas, dandori or sakai, its definition as its language gives it (`Items`); an element
+/// of a `.proto`, the text of DESIGN 3.4. A file of rulec or koyomi is held to its language's
+/// check first (`Sources`, which answers only for a file that passes it), and a file of the
+/// others to its language reading it (`Items`).
 pub fn artifact_end(p: &Project, n: &Name) -> Result<End, Unread> {
+    let abs = if n.path == "." { p.root.clone() } else { p.root.join(&n.path) };
+    if abs.is_dir() {
+        return Err(Unread::Missing { dir: true });
+    }
+    if !abs.is_file() {
+        return Err(Unread::Missing { dir: false });
+    }
+    let bytes = || std::fs::read(&abs).map(End::of).map_err(|_| Unread::Missing { dir: false });
     match n.tool {
-        Tool::File => {
-            let abs = p.root.join(&n.path);
-            if abs.is_dir() || n.path == "." {
-                return Err(Unread::Missing { dir: true });
+        Tool::File => bytes(),
+        Tool::Proto => {
+            let ps = crate::proto::load(&p.root, &n.path).map_err(|(f, why)| Unread::Proto(f, why))?;
+            if n.items.is_empty() {
+                return bytes();
             }
-            std::fs::read(&abs).map(End::of).map_err(|_| Unread::Missing { dir: false })
+            crate::proto::end_text(&ps, n).map(|t| End::of(t.into_bytes())).map_err(|_| {
+                let kind = n.kind().unwrap_or("");
+                let same_kind = crate::proto::gather(&ps, &Name { tool: n.tool, path: n.path.clone(), items: n.items[..n.items.len() - 1].to_vec() }, kind)
+                    .into_iter()
+                    .filter_map(|m| crate::proto::end_text(&ps, &m).ok().map(|t| (m, End::of(t.into_bytes()))))
+                    .collect();
+                Unread::NoSuchName { same_kind }
+            })
         }
-        t => Err(Unread::NotYet(t)),
+        t if crate::suite::Suite::READ.contains(&t) => {
+            if !p.suite.reads(t) {
+                return Err(Unread::NoPort(t));
+            }
+            if matches!(t, Tool::Rulec | Tool::Koyomi)
+                && let Some(Err(said)) = p.suite.sources(t, &abs)
+            {
+                return Err(Unread::Refused(said));
+            }
+            let items = match p.suite.items(t, &p.root, &n.path) {
+                Some(Ok(items)) => items,
+                Some(Err(said)) => return Err(Unread::Refused(said)),
+                None => return Err(Unread::NoPort(t)),
+            };
+            if n.items.is_empty() {
+                return bytes();
+            }
+            match items.iter().find(|i| i.naming == *n) {
+                // a definition with nothing in it is no end to hold a link to (ritsu's PLAN 7.6)
+                Some(i) if i.text.is_empty() => Err(Unread::Refused(vec![ritsu_ports::Said {
+                    code: String::new(),
+                    file: n.path.clone(),
+                    line: Some(i.lines.0),
+                    message: tr!("{} は定義の文を渡しません", "{} gives no definition", n.text()),
+                }])),
+                Some(i) => Ok(End::of(i.text.clone().into_bytes())),
+                None => {
+                    let parent = &n.items[..n.items.len() - 1];
+                    let kind = n.kind().unwrap_or("");
+                    let same_kind = items
+                        .iter()
+                        .filter(|i| i.naming.items.len() == n.items.len() && i.naming.items[..parent.len()] == *parent && i.kind() == kind && !i.text.is_empty())
+                        .map(|i| (i.naming.clone(), End::of(i.text.clone().into_bytes())))
+                        .collect();
+                    Err(Unread::NoSuchName { same_kind })
+                }
+            }
+        }
+        // yuen's own namings are refused with E012 before anything is read
+        t => Err(Unread::NoPort(t)),
     }
 }

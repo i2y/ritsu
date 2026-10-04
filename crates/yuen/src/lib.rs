@@ -6,6 +6,7 @@
 #[macro_use]
 extern crate ritsu_base;
 
+pub mod affected;
 pub mod api;
 pub mod ast;
 pub mod check;
@@ -28,6 +29,11 @@ pub mod parse;
 /// ritsu's ports, as yuen answers them (ritsu's DESIGN 3.2).
 pub mod ports;
 pub mod project;
+pub mod proto;
 pub mod review;
+/// The `yuen` command, as a function.
+pub mod run;
 pub mod sources;
+/// The languages yuen reads through ritsu's ports.
+pub mod suite;
 pub mod trace;

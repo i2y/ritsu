@@ -1,0 +1,217 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/sakai",
+  "files": [
+    {
+      "path": "受注の用語.req",
+      "name": "受注の用語",
+      "version": "1",
+      "sha256": "bf6be2b78c0ba210"
+    }
+  ],
+  "roles": [
+    {
+      "name": "受注",
+      "description": "受注の用語を決める"
+    }
+  ],
+  "sources": [
+    {
+      "file": "受注の用語.req",
+      "name": "用語集",
+      "kind": "file",
+      "path": "用語集.md",
+      "url": null,
+      "sha256": "ada090e1ea2e7b68",
+      "borrowed": null
+    }
+  ],
+  "requirements": [
+    {
+      "name": "注文",
+      "alias": "order",
+      "version": 1,
+      "file": "受注の用語.req",
+      "line": 8,
+      "text": "注文は、客が確定させた購入の申し込みで、取り消されても消えない",
+      "in_force": null,
+      "owner": "受注",
+      "replaces": [],
+      "sha256": "1f47e05b6d46c563",
+      "from": [
+        {
+          "line": 11,
+          "sources": [
+            {
+              "source": "用語集",
+              "fragment": null,
+              "sha256": "ada090e1ea2e7b68"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "受注",
+            "up": [
+              "ada090e1ea2e7b68"
+            ],
+            "down": "1f47e05b6d46c563"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 13,
+          "role": "satisfied",
+          "artifact": {
+            "text": "sakai \"contexts/受注.ctx\" term 注文",
+            "tool": "sakai",
+            "path": "contexts/受注.ctx",
+            "items": [
+              [
+                "term",
+                "注文"
+              ]
+            ]
+          },
+          "sha256": "1b2bb352a123c296",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "受注",
+            "up": [
+              "1f47e05b6d46c563"
+            ],
+            "down": "1b2bb352a123c296"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 15,
+          "role": "verified",
+          "why": "この材料は、語の使われ方を確かめる主張を持たない",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "受注",
+            "sha256": "1f47e05b6d46c563"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "キャンセル",
+      "alias": "cancel",
+      "version": 1,
+      "file": "受注の用語.req",
+      "line": 18,
+      "text": "キャンセルは、出荷の前に、客の申し出で注文を取り消すこと",
+      "in_force": null,
+      "owner": "受注",
+      "replaces": [],
+      "sha256": "a622512a90fba0e5",
+      "from": [
+        {
+          "line": 21,
+          "sources": [
+            {
+              "source": "用語集",
+              "fragment": null,
+              "sha256": "ada090e1ea2e7b68"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "受注",
+            "up": [
+              "ada090e1ea2e7b68"
+            ],
+            "down": "a622512a90fba0e5"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 23,
+          "role": "satisfied",
+          "artifact": {
+            "text": "sakai \"contexts/受注.ctx\" term キャンセル",
+            "tool": "sakai",
+            "path": "contexts/受注.ctx",
+            "items": [
+              [
+                "term",
+                "キャンセル"
+              ]
+            ]
+          },
+          "sha256": "dbfd211b7e4cef4b",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "受注",
+            "up": [
+              "a622512a90fba0e5"
+            ],
+            "down": "dbfd211b7e4cef4b"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 25,
+          "role": "verified",
+          "why": "この材料は、語の使われ方を確かめる主張を持たない",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "受注",
+            "sha256": "a622512a90fba0e5"
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "sakai \"contexts/受注.ctx\" term キャンセル",
+      "tool": "sakai",
+      "path": "contexts/受注.ctx",
+      "items": [
+        [
+          "term",
+          "キャンセル"
+        ]
+      ],
+      "sha256": "dbfd211b7e4cef4b",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "sakai \"contexts/受注.ctx\" term 注文",
+      "tool": "sakai",
+      "path": "contexts/受注.ctx",
+      "items": [
+        [
+          "term",
+          "注文"
+        ]
+      ],
+      "sha256": "1b2bb352a123c296",
+      "end": "item",
+      "pins": []
+    }
+  ],
+  "scopes": [],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/sakai: ok — 2 requirements, whose 4 links and 2 waivers are as they were looked at; every requirement is met and checked, or waived",
+    "diagnostics": []
+  }
+}

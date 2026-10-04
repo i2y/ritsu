@@ -1,0 +1,10 @@
+error[E107]: tests/mutants/E107_同じ条の違う本文/例.req:10:12: r1 reads 民法 第142条, and koyomi "cal/a.cal" pins 第142条 with another text
+    10 |   from @民法 第142条
+  = The requirement's copy is tests/mutants/E107_同じ条の違う本文/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml; the copy of koyomi "cal/a.cal" is tests/mutants/E107_同じ条の違う本文/cal/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml (as of 2026-10-01).
+  = One of the copies is old: check the amendments, and fetch and pin the older one again (yuen source fetch and yuen source pin, or the rule's or the calendar's source fetch and source pin).
+  from the requirement's copy to the copy of koyomi "cal/a.cal":
+      @@ -1,2 +1,2 @@
+        第百四十二条
+      - 期間の末日が日曜日、国民の祝日に関する法律（昭和二十三年法律第百七十八号）に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌々日に満了する。
+      + 期間の末日が日曜日、国民の祝日に関する法律（昭和二十三年法律第百七十八号）に規定する休日その他の休日に当たるときは、その日に取引をしない慣習がある場合に限り、期間は、その翌日に満了する。
+tests/mutants/E107_同じ条の違う本文: 1 error

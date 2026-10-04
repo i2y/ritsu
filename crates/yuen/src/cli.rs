@@ -50,7 +50,7 @@ pub fn commands() -> Vec<Cmd> {
             exits: vec![
                 (0, tr!("エラーなし（警告はありうる）", "no errors (there may be warnings)")),
                 (1, tr!("エラーが一つ以上（印の付いたリンクも）", "at least one error (a marked link is one)")),
-                (2, tr!("引数の誤り、読めないファイル、まだ読めない成果物", "bad arguments, a file that cannot be read, or an artifact yuen does not read yet")),
+                (2, tr!("引数の誤り、読めないファイル、つながっていない言語の成果物（yuen のクレートのバイナリ。ritsu yuen で走らせる）", "bad arguments, a file that cannot be read, or an artifact of a language not joined (the binary of yuen's own crate: run it as ritsu yuen)")),
             ],
             examples: vec!["yuen check tests/fixtures/period", "yuen check tests/fixtures/period --format json --lang ja"],
             codes: every_code(),
@@ -103,6 +103,44 @@ pub fn commands() -> Vec<Cmd> {
                 (2, tr!("引数の誤り（三つのどれか一つを渡す。無い要件や成果物）、読めないファイル", "bad arguments (give exactly one of the three; one that does not exist), or a file that cannot be read")),
             ],
             examples: vec!["yuen trace tests/fixtures/period --requirement 満了日_142条 --lang ja", "yuen trace tests/fixtures/period --source '@民法 第142条'"],
+            codes: vec![],
+        },
+        Cmd {
+            usage: None,
+            name: "affected",
+            args: "<path>...",
+            purpose: tr!(
+                "差分が触る要件と、その持ち主、出どころ、最後に決めたことを答える。コードは geas の記録から主張を通って要件までたどる",
+                "answer which requirements a diff touches, with their owners, where they come from and the last decision on them; code is followed through geas's records to the claims, and on to the requirements"
+            ),
+            params: vec![("<path>...", tr!("{}", "{}", PATHS.0; PATHS.1))],
+            flags: vec![
+                flag("--diff", Some("<file|->"), tr!("統一形式の差分（git diff か diff -u）。- なら標準入力。要る", "a unified diff (git diff or diff -u); - reads standard input; required")),
+                flag(
+                    "--map",
+                    Some("<spec.geas>=<record>"),
+                    tr!(
+                        "その spec の記録（geas map が書く .map.jsonl）。二度書けば、変更の前と後の記録。無ければ spec の隣の .geas/ の記録",
+                        "a record of that spec (the .map.jsonl geas map writes); give it twice for the records before and after the change; without it, the record in .geas/ beside the spec"
+                    ),
+                )
+                .repeats(),
+                flag("--format", Some("json"), tr!("同じ答えを JSON で", "the same answer as JSON")).choices(&["json"]),
+            ],
+            exits: vec![
+                (0, tr!("答えた。要件の届かない変更は無い", "answered; no change is out of every requirement's reach")),
+                (
+                    1,
+                    tr!(
+                        "要件の届かない変更がある（どの主張も走らせず、どのリンクも名指さないコード、範囲の中でどの要件にも辿れないファイル）。構文か名前にエラーがある",
+                        "some change no requirement reaches (code no claim runs and no link names, a file of a scope no requirement leads to); or the words or names have errors"
+                    ),
+                ),
+                (2, tr!("引数の誤り、読めない差分、geas が記録を断った、読めないファイル", "bad arguments, a diff that cannot be read, geas refusing a record, or a file that cannot be read")),
+            ],
+            examples: vec![
+                "yuen affected tests/fixtures/geas --diff tests/fixtures/geas/changes/change.diff --map tests/fixtures/geas/greeter/greeter.geas=tests/fixtures/geas/greeter/.geas/greeter.map.jsonl --map tests/fixtures/geas/greeter/greeter.geas=tests/fixtures/geas/changes/after.map.jsonl",
+            ],
             codes: vec![],
         },
         Cmd {
@@ -186,8 +224,8 @@ pub fn commands() -> Vec<Cmd> {
                 (
                     2,
                     tr!(
-                        "引数の誤り、読めないファイル、書けないファイル、curl の失敗、まだ読めない借りた出典（outdated）",
-                        "bad arguments, a file that cannot be read or written, curl failing, or a borrowed source yuen does not read yet (outdated)"
+                        "引数の誤り、読めないファイル、書けないファイル、curl の失敗、つながっていない言語から借りた出典（outdated。ritsu yuen で走らせる）",
+                        "bad arguments, a file that cannot be read or written, curl failing, or a source borrowed from a language not joined (outdated: run it as ritsu yuen)"
                     ),
                 ),
             ],

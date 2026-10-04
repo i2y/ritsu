@@ -1,6 +1,7 @@
 //! ritsu's ports, as geas answers them (ritsu's DESIGN 3.2): [`Engine`] implements the port of
-//! claims (`ritsu_ports::Claims`) — the claims of a spec, and the record `geas map` keeps of the
-//! lines each claim ran — and gives what a `.geas` holds (`Items`). Nothing here runs a claim.
+//! claims (`ritsu_ports::Claims`) — the claims of a spec, the record `geas map` keeps of the
+//! lines each claim ran, and what a diff comes to for them (`geas affected`) — and gives what a
+//! `.geas` holds (`Items`). Nothing here runs a claim.
 
 use crate::map::Record;
 use ritsu_base::naming::{Name as Naming, Tool};
@@ -77,6 +78,13 @@ impl ritsu_ports::Claims for Engine {
             files: r.files.iter().map(|f| RecordFile { path: f.path.clone(), blob: f.blob.clone() }).collect(),
             ran: r.ran.iter().map(|x| RecordRan { claim: r.claims[x.claim].name.clone(), target: x.target.clone(), file: x.file.clone(), lines: ranges(&x.lines) }).collect(),
         }))
+    }
+
+    /// `geas affected`'s answer, as types: the same function the command prints (nothing runs).
+    fn affected(&self, file: &Path, root: Option<&Path>, diff: &[u8], diff_shown: &str, records: &[String]) -> Result<ritsu_ports::Affected, Vec<Said>> {
+        let spec = file.to_string_lossy().to_string();
+        let root = root.map(|r| r.to_string_lossy().to_string());
+        crate::affected::for_port(&spec, root.as_deref(), records, diff_shown, diff)
     }
 }
 

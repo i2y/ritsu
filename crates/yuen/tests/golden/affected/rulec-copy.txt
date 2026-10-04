@@ -1,0 +1,7 @@
+diff: tests/fixtures/rulec/changes/copy.diff
+copies of sources the diff touches:
+  tests/fixtures/rulec/sources/law/332AC0000000026@2026-04-01/MainProvision-Article_91.xml (措置法 第91条): cited by 軽減税率; pinned by rulec "rules/印紙税の本則と軽減.rule"
+changes no requirement reaches: none
+requirements touched:
+  軽減税率 (tests/fixtures/rulec/印紙税.req:27): owner 税務; from 措置法 第91条
+1 requirement touched; ask 税務

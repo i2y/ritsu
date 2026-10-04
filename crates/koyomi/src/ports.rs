@@ -181,6 +181,38 @@ impl ritsu_ports::Dates for Engine {
     }
 }
 
+impl ritsu_ports::Sources for Engine {
+    /// The sources a `.cal` declares — the laws a dates file cites, the table of holidays a
+    /// calendar reads — each with its pins, when the file passes `koyomi check`, which holds every
+    /// copy to its pin. A dates file and a calendar answer alike.
+    fn sources(&self, file: &Path) -> Result<Vec<ritsu_ports::Source>, Vec<Said>> {
+        let path = file.to_string_lossy().to_string();
+        let out = check::check_file(&path, &Options::default(), &mut Loader::default()).map_err(|e| vec![Said::unreadable(&path, &e)])?;
+        if out.has_errors() || out.checked.is_none() {
+            return Err(out.diags.iter().filter(|d| d.is_error()).map(Said::of).collect());
+        }
+        let src = std::fs::read_to_string(file).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+        let p = crate::parse::parse(&path, &src);
+        let f = p.file.ok_or_else(|| p.diags.iter().filter(|d| d.is_error()).map(Said::of).collect::<Vec<_>>())?;
+        Ok(f.sources
+            .iter()
+            .map(|s| ritsu_ports::Source {
+                name: s.name.clone(),
+                line: s.span.line,
+                kind: match &s.kind {
+                    SourceKind::Law { id, asof, pins } => ritsu_ports::SourceKind::Law {
+                        db: "egov".into(),
+                        id: id.clone(),
+                        asof: asof.to_string(),
+                        pins: pins.iter().filter_map(|p| p.pin.as_ref().map(|h| (p.fragment.clone(), h.clone()))).collect(),
+                    },
+                    SourceKind::File { path, url, pin, .. } => ritsu_ports::SourceKind::File { path: path.clone(), url: url.clone(), pin: pin.clone() },
+                },
+            })
+            .collect())
+    }
+}
+
 /// A line of a `.cal` as its definition counts it: without its comment and the spaces around it.
 fn plain(line: &str) -> String {
     let mut out = String::new();

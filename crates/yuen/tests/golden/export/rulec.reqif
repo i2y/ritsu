@@ -1,0 +1,735 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <THE-HEADER>
+    <REQ-IF-HEADER IDENTIFIER="_5fa22da07c0b0e5ad95d84d1a01578e5">
+      <CREATION-TIME>2026-10-04T00:00:00Z</CREATION-TIME>
+      <REQ-IF-TOOL-ID>yuen 0.1.0</REQ-IF-TOOL-ID>
+      <REQ-IF-VERSION>1.0</REQ-IF-VERSION>
+      <SOURCE-TOOL-ID>yuen 0.1.0</SOURCE-TOOL-ID>
+      <TITLE>fire_extinguishers, 印紙税</TITLE>
+    </REQ-IF-HEADER>
+  </THE-HEADER>
+  <CORE-CONTENT>
+    <REQ-IF-CONTENT>
+      <DATATYPES>
+        <DATATYPE-DEFINITION-STRING IDENTIFIER="_32be546f997c9c83dced94b60229c8a6" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen string" MAX-LENGTH="100000"/>
+        <DATATYPE-DEFINITION-XHTML IDENTIFIER="_263168489adb4427155ad11893c9b71a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen xhtml"/>
+      </DATATYPES>
+      <SPEC-TYPES>
+        <SPEC-OBJECT-TYPE IDENTIFIER="_78405f0d7ed8bcbb711673cc8c4a4bb4" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen requirement">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_0e55a1623323e7efaa94ed254185f196" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.ForeignID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_86e2773d004ee20e74aa766f2ce351f3" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Name">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_53c969acbb77c12b793b52095a0ca59c" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Text">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_ca9ff16428087823eedc317e47afc0da" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.inForce">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_3066d61d13e61978b5093daf3448f446" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.owner">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_10b2c8aa7aa8351e17bc9aa38f52880f" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.decided">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_7ffe71e9e8ed2f78b159d299efe86c10" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.waived">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_3053884aad8bf228da5264102c7adaac" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.sha256">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_13771252e733d3434da73527976c1b22" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-OBJECT-TYPE IDENTIFIER="_82a6d3ab90a94a7ccf25b592606a5115" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen source">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_d25e08f6214748c0cd1d68fa1f87b80a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.ForeignID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_0b9aa24442f3ad57982a28447861b522" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Name">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_4fc7e75843037eb57c34609682b06ec8" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Text">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_1e09bce460a4dd79730f1f5407f250c8" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.law">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_136496664827b3bec533a03b9e4fd398" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.asof">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_f41e83db6af06a69d5804e09da82ad7b" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.revision">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_98a6b0f0202d9d6c4ee8d655ae4513ff" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.file">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_8a03008e174c00bb0e5a0ff55f022312" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.url">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_7314c50b9580cb3fab0eadf2fd681a6e" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.sha256">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-OBJECT-TYPE IDENTIFIER="_9ead4f4f276c9201130bf5c65e31cf9b" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen artifact">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_a0b93a2cd2f3c84d917442e8738a29f2" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.ForeignID">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-XHTML IDENTIFIER="_1f6096fffb5ed2006bc20f2e3d15382d" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="ReqIF.Name">
+              <TYPE><DATATYPE-DEFINITION-XHTML-REF>_263168489adb4427155ad11893c9b71a</DATATYPE-DEFINITION-XHTML-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-XHTML>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_0b735c9a0ac4d4a3d4349fc9d3d39210" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.sha256">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c905983964f6577658e837ff98752643" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.end">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-OBJECT-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_38ebadf3c7922dafd9bd709143b69410" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen from">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_309e5c9fc4d3093cabfe553f89398883" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedOn">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_de5a8b06f4ed15039cb9a8ce229e3882" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedBy">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_0412d94d758f9f274f57ea3801ecc1a5" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.up">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c4d6a9290a375591cd9afdab52a93f83" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.down">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_444acc8a6cf372af8a7a57ed2c063fe4" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-RELATION-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_43a798f0336eb0c0267b2c2c301a56a5" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen satisfied by">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_806b8ccc2a866d34cf305899d9f530f4" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedOn">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_f4b120327cf8e7466ec4aeb959fd4626" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedBy">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_b87a9ec95e675e99db67fa27f368682f" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.up">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_919e85b662746a5174590e7f97557d28" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.down">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_8b9b83b089a55c5fecbe786a836bffdb" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-RELATION-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_d16e2a866476b8b92a72e406745c9245" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen verified by">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_66d0775a01c0f55cd7e34bb43522a70d" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedOn">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c32c02714dad87e97bbd0639a88bfb3f" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.reviewedBy">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_65c7b8ae9aa05c66641aea9ac0930814" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.up">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_6eca6b127176dcf39ed8de7edb908604" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.down">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_711ab6b8a373db2b8a1e266b430a76e0" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.status">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPEC-RELATION-TYPE>
+        <SPEC-RELATION-TYPE IDENTIFIER="_1a0507407285a092120bc7a69ff8862a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen replaces"/>
+        <SPECIFICATION-TYPE IDENTIFIER="_820590da3b6bc96b1abc4c87219e99d1" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen requirements">
+          <SPEC-ATTRIBUTES>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_c044e086f813f00e08a35f6d1fe57d1d" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.file">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_4d29b822c24952edd439e093b5d3165a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.version">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="_a839768f26076ff8651b726d23c1ccaa" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen.description">
+              <TYPE><DATATYPE-DEFINITION-STRING-REF>_32be546f997c9c83dced94b60229c8a6</DATATYPE-DEFINITION-STRING-REF></TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+          </SPEC-ATTRIBUTES>
+        </SPECIFICATION-TYPE>
+        <SPECIFICATION-TYPE IDENTIFIER="_cbcb5eb37af5fd6294167ff3a8a1c59a" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen list"/>
+        <RELATION-GROUP-TYPE IDENTIFIER="_241f53b5261e61efa600e572ce116499" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="yuen relation group"/>
+      </SPEC-TYPES>
+      <SPEC-OBJECTS>
+        <SPEC-OBJECT IDENTIFIER="_6bbdc4bb5abc1c24f17131a2559ce3fc" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="travel_distance v1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0e55a1623323e7efaa94ed254185f196</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_86e2773d004ee20e74aa766f2ce351f3</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>travel_distance</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_53c969acbb77c12b793b52095a0ca59c</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>Portable fire extinguishers for Class A hazards are placed so that the travel distance to any extinguisher is 75 feet or less, and for Class B hazards 50 feet or less</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01..">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_ca9ff16428087823eedc317e47afc0da</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="safety">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3066d61d13e61978b5093daf3448f446</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "rulec checks that the table covers every hazard; this fixture names no claim"</xhtml:p><xhtml:p>approved 2026-10-04 by safety sha256:849dc53f1d112c23</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="849dc53f1d112c23">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_13771252e733d3434da73527976c1b22</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_78405f0d7ed8bcbb711673cc8c4a4bb4</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_b3fb9a80097e2067846fc3af58b405fe" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="base_tax v1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0e55a1623323e7efaa94ed254185f196</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_86e2773d004ee20e74aa766f2ce351f3</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>本則の税額</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_53c969acbb77c12b793b52095a0ca59c</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>不動産の譲渡に関する契約書の印紙税額は、記載された契約金額に応じて、別表第一の第1号文書の欄の税率による。契約金額が1万円未満のものは課税しない</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-04-01..">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_ca9ff16428087823eedc317e47afc0da</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="税務">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3066d61d13e61978b5093daf3448f446</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "表が契約金額のすべてを覆い、行が重ならないことは rulec の検査が確かめる。この材料は、それを名指す主張を持たない"</xhtml:p><xhtml:p>approved 2026-10-04 by 税務 sha256:56d4ef0ae01ebb19</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="56d4ef0ae01ebb19">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_13771252e733d3434da73527976c1b22</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_78405f0d7ed8bcbb711673cc8c4a4bb4</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_2d8f25b73a93c36be5b98b118e918145" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="reduced_rate v1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0e55a1623323e7efaa94ed254185f196</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_86e2773d004ee20e74aa766f2ce351f3</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>軽減税率</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_53c969acbb77c12b793b52095a0ca59c</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>令和9年3月31日までに作成される不動産の譲渡に関する契約書の印紙税額は、租税特別措置法第91条の軽減された税率による</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-04-01..">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_ca9ff16428087823eedc317e47afc0da</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="税務">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3066d61d13e61978b5093daf3448f446</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "軽減の表が本則の表より先に当たることは rulec の検査が確かめる。この材料は、それを名指す主張を持たない"</xhtml:p><xhtml:p>approved 2026-10-04 by 税務 sha256:c3fbde1529c44e2e</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="c3fbde1529c44e2e">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_13771252e733d3434da73527976c1b22</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_78405f0d7ed8bcbb711673cc8c4a4bb4</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_7e4bbf45001c614fa29502d3bc2fa12e" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="osha §1910.157">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_d25e08f6214748c0cd1d68fa1f87b80a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_0b9aa24442f3ad57982a28447861b522</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>osha §1910.157</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_4fc7e75843037eb57c34609682b06ec8</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>§ 1910.157 Portable fire extinguishers.</xhtml:p><xhtml:p>(a) Scope and application. The requirements of this section apply to the placement, use, maintenance, and testing of portable fire extinguishers provided for the use of employees. Paragraph (d) of this section does not apply to extinguishers provided for employee use on the outside of workplace buildings or structures. Where extinguishers are provided but are not intended for employee use and the employer has an emergency action plan and a fire prevention plan that meet the requirements of 29 CFR 1910.38 and 29 CFR 1910.39 respectively, then only the requirements of paragraphs (e) and (f) of this section apply.</xhtml:p><xhtml:p>(b) Exemptions. (1) Where the employer has established and implemented a written fire safety policy which requires the immediate and total evacuation of employees from the workplace upon the sounding of a fire alarm signal and which includes an emergency action plan and a fire prevention plan which meet the requirements of 29 CFR 1910.38 and 29 CFR 1910.39 respectively, and when extinguishers are not available in the workplace, the employer is exempt from all requirements of this section unless a specific standard in part 1910 requires that a portable fire extinguisher be provided.</xhtml:p><xhtml:p>(2) Where the employer has an emergency action plan meeting the requirements of § 1910.38 which designates certain employees to be the only employees authorized to use the available portable fire extinguishers, and which requires all other employees in the fire area to immediately evacuate the affected work area upon the sounding of the fire alarm, the employer is exempt from the distribution requirements in paragraph (d) of this section.</xhtml:p><xhtml:p>(c) General requirements. (1) The employer shall provide portable fire extinguishers and shall mount, locate and identify them so that they are readily accessible to employees without subjecting the employees to possible injury.</xhtml:p><xhtml:p>(2) Only approved portable fire extinguishers shall be used to meet the requirements of this section.</xhtml:p><xhtml:p>(3) The employer shall not provide or make available in the workplace portable fire extinguishers using carbon tetrachloride or chlorobromomethane extinguishing agents.</xhtml:p><xhtml:p>(4) The employer shall assure that portable fire extinguishers are maintained in a fully charged and operable condition and kept in their designated places at all times except during use.</xhtml:p><xhtml:p>(5) The employer shall remove from service all soldered or riveted shell self-generating soda acid or self-generating foam or gas cartridge water type portable fire extinguishers which are operated by inverting the extinguisher to rupture the cartridge or to initiate an uncontrollable pressure generating chemical reaction to expel the agent.</xhtml:p><xhtml:p>(d) Selection and distribution. (1) Portable fire extinguishers shall be provided for employee use and selected and distributed based on the classes of anticipated workplace fires and on the size and degree of hazard which would affect their use.</xhtml:p><xhtml:p>(2) The employer shall distribute portable fire extinguishers for use by employees on Class A fires so that the travel distance for employees to any extinguisher is 75 feet (22.9 m) or less.</xhtml:p><xhtml:p>(3) The employer may use uniformly spaced standpipe systems or hose stations connected to a sprinkler system installed for emergency use by employees instead of Class A portable fire extinguishers, provided that such systems meet the respective requirements of § 1910.158 or § 1910.159, that they provide total coverage of the area to be protected, and that employees are trained at least annually in their use.</xhtml:p><xhtml:p>(4) The employer shall distribute portable fire extinguishers for use by employees on Class B fires so that the travel distance from the Class B hazard area to any extinguisher is 50 feet (15.2 m) or less.</xhtml:p><xhtml:p>(5) The employer shall distribute portable fire extinguishers used for Class C hazards on the basis of the appropriate pattern for the existing Class A or Class B hazards.</xhtml:p><xhtml:p>(6) The employer shall distribute portable fire extinguishers or other containers of Class D extinguishing agent for use by employees so that the travel distance from the combustible metal working area to any extinguishing agent is 75 feet (22.9 m) or less. Portable fire extinguishers for Class D hazards are required in those combustible metal working areas where combustible metal powders, flakes, shavings, or similarly sized products are generated at least once every two weeks.</xhtml:p><xhtml:p>(e) Inspection, maintenance and testing. (1) The employer shall be responsible for the inspection, maintenance and testing of all portable fire extinguishers in the workplace.</xhtml:p><xhtml:p>(2) Portable extinguishers or hose used in lieu thereof under paragraph (d)(3) of this section shall be visually inspected monthly.</xhtml:p><xhtml:p>(3) The employer shall assure that portable fire extinguishers are subjected to an annual maintenance check. Stored pressure extinguishers do not require an internal examination. The employer shall record the annual maintenance date and retain this record for one year after the last entry or the life of the shell, whichever is less. The record shall be available to the Assistant Secretary upon request.</xhtml:p><xhtml:p>(4) The employer shall assure that stored pressure dry chemical extinguishers that require a 12-year hydrostatic test are emptied and subjected to applicable maintenance procedures every 6 years. Dry chemical extinguishers having non-refillable disposable containers are exempt from this requirement. When recharging or hydrostatic testing is performed, the 6-year requirement begins from that date.</xhtml:p><xhtml:p>(5) The employer shall assure that alternate equivalent protection is provided when portable fire extinguishers are removed from service for maintenance and recharging.</xhtml:p><xhtml:p>(f) Hydrostatic testing. (1) The employer shall assure that hydrostatic testing is performed by trained persons with suitable testing equipment and facilities.</xhtml:p><xhtml:p>(2) The employer shall assure that portable extinguishers are hydrostatically tested at the intervals listed in Table L-1 of this section, except under any of the following conditions:</xhtml:p><xhtml:p>(i) When the unit has been repaired by soldering, welding, brazing, or use of patching compounds;</xhtml:p><xhtml:p>(ii) When the cylinder or shell threads are damaged;</xhtml:p><xhtml:p>(iii) When there is corrosion that has caused pitting, including corrosion under removable name plate assemblies;</xhtml:p><xhtml:p>(iv) When the extinguisher has been burned in a fire; or</xhtml:p><xhtml:p>(v) When a calcium chloride extinguishing agent has been used in a stainless steel shell.</xhtml:p><xhtml:p>(3) In addition to an external visual examination, the employer shall assure that an internal examination of cylinders and shells to be tested is made prior to the hydrostatic tests.</xhtml:p><xhtml:p>Table L-1</xhtml:p><xhtml:p>Type of extinguishers</xhtml:p><xhtml:p>Test interval (years)</xhtml:p><xhtml:p>Soda acid (soldered brass shells) (until 1/1/82)</xhtml:p><xhtml:p>(1)</xhtml:p><xhtml:p>Soda acid (stainless steel shell)</xhtml:p><xhtml:p>5</xhtml:p><xhtml:p>Cartridge operated water and/or antifreeze</xhtml:p><xhtml:p>5</xhtml:p><xhtml:p>Stored pressure water and/or antifreeze</xhtml:p><xhtml:p>5</xhtml:p><xhtml:p>Wetting agent</xhtml:p><xhtml:p>5</xhtml:p><xhtml:p>Foam (soldered brass shells) (until 1/1/82)</xhtml:p><xhtml:p>(1)</xhtml:p><xhtml:p>Foam (stainless steel shell)</xhtml:p><xhtml:p>5</xhtml:p><xhtml:p>Aqueous Film Forming foam (AFFF)</xhtml:p><xhtml:p>5</xhtml:p><xhtml:p>Loaded stream</xhtml:p><xhtml:p>5</xhtml:p><xhtml:p>Dry chemical with stainless steel</xhtml:p><xhtml:p>5</xhtml:p><xhtml:p>Carbon dioxide</xhtml:p><xhtml:p>5</xhtml:p><xhtml:p>Dry chemical, stored pressure, with mild steel, brazed brass or aluminum shells</xhtml:p><xhtml:p>12</xhtml:p><xhtml:p>Dry chemical, cartridge or cylinder operated, with mild steel shells</xhtml:p><xhtml:p>12</xhtml:p><xhtml:p>Halon 1211</xhtml:p><xhtml:p>12</xhtml:p><xhtml:p>Halon 1301</xhtml:p><xhtml:p>12</xhtml:p><xhtml:p>Dry powder, cartridge or cylinder operated with mild steel shells</xhtml:p><xhtml:p>12</xhtml:p><xhtml:p>1 Extinguishers having shells constructed of copper or brass joined by soft solder or rivets shall not be hydrostatically tested and shall be removed from service by January 1, 1982. (Not permitted)</xhtml:p><xhtml:p>(4) The employer shall assure that portable fire extinguishers are hydrostatically tested whenever they show new evidence of corrosion or mechanical injury, except under the conditions listed in paragraphs (f)(2)(i)-(v) of this section.</xhtml:p><xhtml:p>(5) The employer shall assure that hydrostatic tests are performed on extinguisher hose assemblies which are equipped with a shut-off nozzle at the discharge end of the hose. The test interval shall be the same as specified for the extinguisher on which the hose is installed.</xhtml:p><xhtml:p>(6) The employer shall assure that carbon dioxide hose assemblies with a shut-off nozzle are hydrostatically tested at 1,250 psi (8,620 kPa).</xhtml:p><xhtml:p>(7) The employer shall assure that dry chemical and dry powder hose assemblies with a shut-off nozzle are hydrostatically tested at 300 psi (2,070 kPa).</xhtml:p><xhtml:p>(8) Hose assemblies passing a hydrostatic test do not require any type of recording or stamping.</xhtml:p><xhtml:p>(9) The employer shall assure that hose assemblies for carbon dioxide extinguishers that require a hydrostatic test are tested within a protective cage device.</xhtml:p><xhtml:p>(10) The employer shall assure that carbon dioxide extinguishers and nitrogen or carbon dioxide cylinders used with wheeled extinguishers are tested every 5 years at 5/3 of the service pressure as stamped into the cylinder. Nitrogen cylinders which comply with 49 CFR 173.34(e)(15) may be hydrostatically tested every 10 years.</xhtml:p><xhtml:p>(11) The employer shall assure that all stored pressure and Halon 1211 types of extinguishers are hydrostatically tested at the factory test pressure not to exceed two times the service pressure.</xhtml:p><xhtml:p>(12) The employer shall assure that acceptable self-generating type soda acid and foam extinguishers are tested at 350 psi (2,410 kPa).</xhtml:p><xhtml:p>(13) Air or gas pressure may not be used for hydrostatic testing.</xhtml:p><xhtml:p>(14) Extinguisher shells, cylinders, or cartridges which fail a hydrostatic pressure test, or which are not fit for testing shall be removed from service and from the workplace.</xhtml:p><xhtml:p>(15)(i) The equipment for testing compressed gas type cylinders shall be of the water jacket type. The equipment shall be provided with an expansion indicator which operates with an accuracy within one percent of the total expansion or .1cc (.1mL) of liquid.</xhtml:p><xhtml:p>(ii) The equipment for testing non-compressed gas type cylinders shall consist of the following:</xhtml:p><xhtml:p>(A) A hydrostatic test pump, hand or power operated, capable of producing not less than 150 percent of the test pressure, which shall include appropriate check valves and fittings;</xhtml:p><xhtml:p>(B) A flexible connection for attachment to fittings to test through the extinguisher nozzle, test bonnet, or hose outlet, as is applicable; and</xhtml:p><xhtml:p>(C) A protective cage or barrier for personal protection of the tester, designed to provide visual observation of the extinguisher under test.</xhtml:p><xhtml:p>(16) The employer shall maintain and provide upon request to the Assistant Secretary evidence that the required hydrostatic testing of fire extinguishers has been performed at the time intervals shown in Table L-1. Such evidence shall be in the form of a certification record which includes the date of the test, the signature of the person who performed the test and the serial number, or other identifier, of the fire extinguisher that was tested. Such records shall be kept until the extinguisher is hydrostatically retested at the time interval specified in Table L-1 or until the extinguisher is taken out of service, whichever comes first.</xhtml:p><xhtml:p>(g) Training and education. (1) Where the employer has provided portable fire extinguishers for employee use in the workplace, the employer shall also provide an educational program to familiarize employees with the general principles of fire extinguisher use and the hazards involved with incipient stage fire fighting.</xhtml:p><xhtml:p>(2) The employer shall provide the education required in paragraph (g)(1) of this section upon initial employment and at least annually thereafter.</xhtml:p><xhtml:p>(3) The employer shall provide employees who have been designated to use fire fighting equipment as part of an emergency action plan with training in the use of the appropriate equipment.</xhtml:p><xhtml:p>(4) The employer shall provide the training required in paragraph (g)(3) of this section upon initial assignment to the designated group of employees and at least annually thereafter.</xhtml:p><xhtml:p>[45 FR 60708, Sept. 12, 1980; 46 FR 24557, May 1, 1981, as amended at 51 FR 34560, Sept. 29, 1986; 61 FR 9239, Mar. 7, 1996; 67 FR 67964, Nov. 7, 2002]</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ecfr 29 CFR 1910">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_1e09bce460a4dd79730f1f5407f250c8</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-01-01">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_136496664827b3bec533a03b9e4fd398</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="c2a9ce966c7e2269">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7314c50b9580cb3fab0eadf2fd681a6e</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_82a6d3ab90a94a7ccf25b592606a5115</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_1308f9c555c0edbb0f009b291f0524a8" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="法 別表第一">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_d25e08f6214748c0cd1d68fa1f87b80a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_0b9aa24442f3ad57982a28447861b522</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>法 別表第一</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_4fc7e75843037eb57c34609682b06ec8</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>別表第一</xhtml:p><xhtml:p>課税物件表（第二条―第五条、第七条、第十二条関係）</xhtml:p><xhtml:p>課税物件表の適用に関する通則</xhtml:p><xhtml:p>１</xhtml:p><xhtml:p>この表における文書の所属の決定は、この表の各号の規定による。この場合において、当該各号の規定により所属を決定することができないときは、２及び３に定めるところによる。</xhtml:p><xhtml:p>２</xhtml:p><xhtml:p>一の文書でこの表の二以上の号に掲げる文書により証されるべき事項又はこの表の一若しくは二以上の号に掲げる文書により証されるべき事項とその他の事項とが併記され、又は混合して記載されているものその他一の文書でこれに記載されている事項がこの表の二以上の号に掲げる文書により証されるべき事項に該当するものは、当該各号に掲げる文書に該当する文書とする。</xhtml:p><xhtml:p>３</xhtml:p><xhtml:p>一の文書が２の規定によりこの表の各号のうち二以上の号に掲げる文書に該当することとなる場合には、次に定めるところによりその所属を決定する。</xhtml:p><xhtml:p>イ</xhtml:p><xhtml:p>第一号又は第二号に掲げる文書と第三号から第十七号までに掲げる文書とに該当する文書は、第一号又は第二号に掲げる文書とする。ただし、第一号又は第二号に掲げる文書で契約金額の記載のないものと第七号に掲げる文書とに該当する文書は、同号に掲げる文書とし、第一号又は第二号に掲げる文書と第十七号に掲げる文書とに該当する文書のうち、当該文書に売上代金（同号の定義の欄１に規定する売上代金をいう。以下この通則において同じ。）に係る受取金額（百万円を超えるものに限る。）の記載があるもので、当該受取金額が当該文書に記載された契約金額（当該金額が二以上ある場合には、その合計額）を超えるもの又は契約金額の記載のないものは、同号に掲げる文書とする。</xhtml:p><xhtml:p>ロ</xhtml:p><xhtml:p>第一号に掲げる文書と第二号に掲げる文書とに該当する文書は、第一号に掲げる文書とする。ただし、当該文書に契約金額の記載があり、かつ、当該契約金額を第一号及び第二号に掲げる文書のそれぞれにより証されるべき事項ごとに区分することができる場合において、第一号に掲げる文書により証されるべき事項に係る金額として記載されている契約金額（当該金額が二以上ある場合には、その合計額。以下このロにおいて同じ。）が第二号に掲げる文書により証されるべき事項に係る金額として記載されている契約金額に満たないときは、同号に掲げる文書とする。</xhtml:p><xhtml:p>ハ</xhtml:p><xhtml:p>第三号から第十七号までに掲げる文書のうち二以上の号に掲げる文書に該当する文書は、当該二以上の号のうち最も号数の少ない号に掲げる文書とする。ただし、当該文書に売上代金に係る受取金額（百万円を超えるものに限る。）の記載があるときは、第十七号に掲げる文書とする。</xhtml:p><xhtml:p>ニ</xhtml:p><xhtml:p>ホに規定する場合を除くほか、第十八号から第二十号までに掲げる文書と第一号から第十七号までに掲げる文書とに該当する文書は、第十八号から第二十号までに掲げる文書とする。</xhtml:p><xhtml:p>ホ</xhtml:p><xhtml:p>第十九号若しくは第二十号に掲げる文書と第一号に掲げる文書とに該当する文書で同号に掲げる文書に係る記載された契約金額が十万円を超えるもの、第十九号若しくは第二十号に掲げる文書と第二号に掲げる文書とに該当する文書で同号に掲げる文書に係る記載された契約金額が百万円を超えるもの又は第十九号若しくは第二十号に掲げる文書と第十七号に掲げる文書とに該当する文書で同号に掲げる文書に係る記載された売上代金に係る受取金額が百万円を超えるものは、それぞれ、第一号、第二号又は第十七号に掲げる文書とする。</xhtml:p><xhtml:p>４</xhtml:p><xhtml:p>この表の課税標準及び税率の欄の税率又は非課税物件の欄の金額が契約金額、券面金額その他当該文書により証されるべき事項に係る金額（以下この４において「契約金額等」という。）として当該文書に記載された金額（以下この４において「記載金額」という。）を基礎として定められている場合における当該金額の計算については、次に定めるところによる。</xhtml:p><xhtml:p>イ</xhtml:p><xhtml:p>当該文書に二以上の記載金額があり、かつ、これらの金額が同一の号に該当する文書により証されるべき事項に係るものである場合には、これらの金額の合計額を当該文書の記載金額とする。</xhtml:p><xhtml:p>ロ</xhtml:p><xhtml:p>当該文書が２の規定によりこの表の二以上の号に該当する文書である場合には、次に定めるところによる。</xhtml:p><xhtml:p>（一）</xhtml:p><xhtml:p>当該文書の記載金額を当該二以上の号のそれぞれに掲げる文書により証されるべき事項ごとに区分することができるときは、当該文書が３の規定によりこの表のいずれの号に掲げる文書に所属することとなるかに応じ、その所属する号に掲げる文書により証されるべき事項に係る金額を当該文書の記載金額とする。</xhtml:p><xhtml:p>（二）</xhtml:p><xhtml:p>当該文書の記載金額を当該二以上の号のそれぞれに掲げる文書により証されるべき事項ごとに区分することができないときは、当該金額（当該金額のうちに、当該文書が３の規定によりこの表のいずれかの号に所属することとなる場合における当該所属する号に掲げる文書により証されるべき事項に係る金額以外の金額として明らかにされている部分があるときは、当該明らかにされている部分の金額を除く。）を当該文書の記載金額とする。</xhtml:p><xhtml:p>ハ</xhtml:p><xhtml:p>当該文書が第十七号に掲げる文書（３の規定により同号に掲げる文書となるものを含む。）のうち同号の物件名の欄１に掲げる受取書である場合には、税率の適用に関しては、イ又はロの規定にかかわらず、次に定めるところによる。</xhtml:p><xhtml:p>（一）</xhtml:p><xhtml:p>当該受取書の記載金額を売上代金に係る金額とその他の金額に区分することができるときは、売上代金に係る金額を当該受取書の記載金額とする。</xhtml:p><xhtml:p>（二）</xhtml:p><xhtml:p>当該受取書の記載金額を売上代金に係る金額とその他の金額に区分することができないときは、当該記載金額（当該金額のうちに売上代金に係る金額以外の金額として明らかにされている部分があるときは、当該明らかにされている部分の金額を除く。）を当該受取書の記載金額とする。</xhtml:p><xhtml:p>ニ</xhtml:p><xhtml:p>契約金額等の変更の事実を証すべき文書について、当該文書に係る契約についての変更前の契約金額等の記載のある文書が作成されていることが明らかであり、かつ、変更の事実を証すべき文書により変更金額（変更前の契約金額等と変更後の契約金額等の差額に相当する金額をいう。以下同じ。）が記載されている場合（変更前の契約金額等と変更後の契約金額等が記載されていることにより変更金額を明らかにすることができる場合を含む。）には、当該変更金額が変更前の契約金額等を増加させるものであるときは、当該変更金額を当該文書の記載金額とし、当該変更金額が変更前の契約金額等を減少させるものであるときは、当該文書の記載金額の記載はないものとする。</xhtml:p><xhtml:p>ホ</xhtml:p><xhtml:p>次の（一）から（三）までの規定に該当する文書の記載金額については、それぞれ（一）から（三）までに定めるところによる。</xhtml:p><xhtml:p>（一）</xhtml:p><xhtml:p>当該文書に記載されている単価及び数量、記号その他によりその契約金額等の計算をすることができるときは、その計算により算出した金額を当該文書の記載金額とする。</xhtml:p><xhtml:p>（二）</xhtml:p><xhtml:p>第一号又は第二号に掲げる文書に当該文書に係る契約についての契約金額又は単価、数量、記号その他の記載のある見積書、注文書その他これらに類する文書（この表に掲げる文書を除く。）の名称、発行の日、記号、番号その他の記載があることにより、当事者間において当該契約についての契約金額が明らかであるとき又は当該契約についての契約金額の計算をすることができるときは、当該明らかである契約金額又は当該計算により算出した契約金額を当該第一号又は第二号に掲げる文書の記載金額とする。</xhtml:p><xhtml:p>（三）</xhtml:p><xhtml:p>第十七号に掲げる文書のうち売上代金として受け取る有価証券の受取書に当該有価証券の発行者の名称、発行の日、記号、番号その他の記載があること、又は同号に掲げる文書のうち売上代金として受け取る金銭若しくは有価証券の受取書に当該売上代金に係る受取金額の記載のある支払通知書、請求書その他これらに類する文書の名称、発行の日、記号、番号その他の記載があることにより、当事者間において当該売上代金に係る受取金額が明らかであるときは、当該明らかである受取金額を当該受取書の記載金額とする。</xhtml:p><xhtml:p>ヘ</xhtml:p><xhtml:p>当該文書の記載金額が外国通貨により表示されている場合には、当該文書を作成した日における外国為替及び外国貿易法（昭和二十四年法律第二百二十八号）第七条第一項（外国為替相場）の規定により財務大臣が定めた基準外国為替相場又は裁定外国為替相場により当該記載金額を本邦通貨に換算した金額を当該文書についての記載金額とする。</xhtml:p><xhtml:p>５</xhtml:p><xhtml:p>この表の第一号、第二号、第七号及び第十二号から第十五号までにおいて「契約書」とは、契約証書、協定書、約定書その他名称のいかんを問わず、契約（その予約を含む。以下同じ。）の成立若しくは更改又は契約の内容の変更若しくは補充の事実（以下「契約の成立等」という。）を証すべき文書をいい、念書、請書その他契約の当事者の一方のみが作成する文書又は契約の当事者の全部若しくは一部の署名を欠く文書で、当事者間の了解又は商慣習に基づき契約の成立等を証することとされているものを含むものとする。</xhtml:p><xhtml:p>６ １から５までに規定するもののほか、この表の規定の適用に関し必要な事項は、政令で定める。</xhtml:p><xhtml:p>番号</xhtml:p><xhtml:p>課税物件</xhtml:p><xhtml:p>課税標準及び税率</xhtml:p><xhtml:p>非課税物件</xhtml:p><xhtml:p>物件名</xhtml:p><xhtml:p>定義</xhtml:p><xhtml:p>一</xhtml:p><xhtml:p>１ 不動産、鉱業権、貯留権、二酸化炭素の貯留事業に関する法律（令和六年法律第三十八号）第二条第八項（定義）に規定する試掘権、無体財産権、船舶若しくは航空機又は営業の譲渡に関する契約書</xhtml:p><xhtml:p>２ 地上権又は土地の賃借権の設定又は譲渡に関する契約書</xhtml:p><xhtml:p>３ 消費貸借に関する契約書</xhtml:p><xhtml:p>４ 運送に関する契約書（傭よう船契約書を含む。）</xhtml:p><xhtml:p>１ 不動産には、法律の規定により不動産とみなされるもののほか、鉄道財団、軌道財団及び自動車交通事業財団を含むものとする。</xhtml:p><xhtml:p>２ 無体財産権とは、特許権、実用新案権、商標権、意匠権、回路配置利用権、育成者権、商号及び著作権をいう。</xhtml:p><xhtml:p>３ 運送に関する契約書には、乗車券、乗船券、航空券及び送り状を含まないものとする。</xhtml:p><xhtml:p>４ 傭船契約書には、航空機の傭船契約書を含むものとし、裸傭船契約書を含まないものとする。</xhtml:p><xhtml:p>１ 契約金額の記載のある契約書</xhtml:p><xhtml:p>次に掲げる契約金額の区分に応じ、一通につき、次に掲げる税率とする。</xhtml:p><xhtml:p>十万円以下のもの 二百円</xhtml:p><xhtml:p>十万円を超え五十万円以下のもの 四百円</xhtml:p><xhtml:p>五十万円を超え百万円以下のもの 千円</xhtml:p><xhtml:p>百万円を超え五百万円以下のもの 二千円</xhtml:p><xhtml:p>五百万円を超え千万円以下のもの 一万円</xhtml:p><xhtml:p>千万円を超え五千万円以下のもの 二万円</xhtml:p><xhtml:p>五千万円を超え一億円以下のもの 六万円</xhtml:p><xhtml:p>一億円を超え五億円以下のもの 十万円</xhtml:p><xhtml:p>五億円を超え十億円以下のもの 二十万円</xhtml:p><xhtml:p>十億円を超え五十億円以下のもの 四十万円</xhtml:p><xhtml:p>五十億円を超えるもの 六十万円</xhtml:p><xhtml:p>２ 契約金額の記載のない契約書</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>１ 契約金額の記載のある契約書（課税物件表の適用に関する通則３イの規定が適用されることによりこの号に掲げる文書となるものを除く。）のうち、当該契約金額が一万円未満のもの</xhtml:p><xhtml:p>二</xhtml:p><xhtml:p>請負に関する契約書</xhtml:p><xhtml:p>１ 請負には、職業野球の選手、映画の俳優その他これらに類する者で政令で定めるものの役務の提供を約することを内容とする契約を含むものとする。</xhtml:p><xhtml:p>１ 契約金額の記載のある契約書</xhtml:p><xhtml:p>次に掲げる契約金額の区分に応じ、一通につき、次に掲げる税率とする。</xhtml:p><xhtml:p>百万円以下のもの 二百円</xhtml:p><xhtml:p>百万円を超え二百万円以下のもの 四百円</xhtml:p><xhtml:p>二百万円を超え三百万円以下のもの 千円</xhtml:p><xhtml:p>三百万円を超え五百万円以下のもの 二千円</xhtml:p><xhtml:p>五百万円を超え千万円以下のもの 一万円</xhtml:p><xhtml:p>千万円を超え五千万円以下のもの 二万円</xhtml:p><xhtml:p>五千万円を超え一億円以下のもの 六万円</xhtml:p><xhtml:p>一億円を超え五億円以下のもの 十万円</xhtml:p><xhtml:p>五億円を超え十億円以下のもの 二十万円</xhtml:p><xhtml:p>十億円を超え五十億円以下のもの 四十万円</xhtml:p><xhtml:p>五十億円を超えるもの 六十万円</xhtml:p><xhtml:p>２ 契約金額の記載のない契約書</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>１ 契約金額の記載のある契約書（課税物件表の適用に関する通則３イの規定が適用されることによりこの号に掲げる文書となるものを除く。）のうち、当該契約金額が一万円未満のもの</xhtml:p><xhtml:p>三</xhtml:p><xhtml:p>約束手形又は為替手形</xhtml:p><xhtml:p>１ ２に掲げる手形以外の手形</xhtml:p><xhtml:p>次に掲げる手形金額の区分に応じ、一通につき、次に掲げる税率とする。</xhtml:p><xhtml:p>百万円以下のもの 二百円</xhtml:p><xhtml:p>百万円を超え二百万円以下のもの 四百円</xhtml:p><xhtml:p>二百万円を超え三百万円以下のもの 六百円</xhtml:p><xhtml:p>三百万円を超え五百万円以下のもの 千円</xhtml:p><xhtml:p>五百万円を超え千万円以下のもの 二千円</xhtml:p><xhtml:p>千万円を超え二千万円以下のもの 四千円</xhtml:p><xhtml:p>二千万円を超え三千万円以下のもの 六千円</xhtml:p><xhtml:p>三千万円を超え五千万円以下のもの 一万円</xhtml:p><xhtml:p>五千万円を超え一億円以下のもの 二万円</xhtml:p><xhtml:p>一億円を超え二億円以下のもの 四万円</xhtml:p><xhtml:p>二億円を超え三億円以下のもの 六万円</xhtml:p><xhtml:p>三億円を超え五億円以下のもの 十万円</xhtml:p><xhtml:p>五億円を超え十億円以下のもの 十五万円</xhtml:p><xhtml:p>十億円を超えるもの 二十万円</xhtml:p><xhtml:p>１ 手形金額が十万円未満の手形</xhtml:p><xhtml:p>２ 手形金額の記載のない手形</xhtml:p><xhtml:p>３ 手形の複本又は謄本</xhtml:p><xhtml:p>２ 次に掲げる手形</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>イ 一覧払の手形（手形法（昭和七年法律第二十号）第三十四条第二項（一覧払の為替手形の呈示開始期日の定め）（同法第七十七条第一項第二号（約束手形への準用）において準用する場合を含む。）の定めをするものを除く。）</xhtml:p><xhtml:p>ロ 日本銀行又は銀行その他政令で定める金融機関を振出人及び受取人とする手形（振出人である銀行その他当該政令で定める金融機関を受取人とするものを除く。）</xhtml:p><xhtml:p>ハ 外国通貨により手形金額が表示される手形</xhtml:p><xhtml:p>ニ 外国為替及び外国貿易法第六条第一項第六号（定義）に規定する非居住者の本邦にある同法第十六条の二（支払等の制限）に規定する銀行等（以下この号において「銀行等」という。）に対する本邦通貨をもつて表示される勘定を通ずる方法により決済される手形で政令で定めるもの</xhtml:p><xhtml:p>ホ 本邦から貨物を輸出し又は本邦に貨物を輸入する外国為替及び外国貿易法第六条第一項第五号（定義）に規定する居住者が本邦にある銀行等を支払人として振り出す本邦通貨により手形金額が表示される手形で政令で定めるもの</xhtml:p><xhtml:p>ヘ ホに掲げる手形及び外国の法令に準拠して外国において銀行業を営む者が本邦にある銀行等を支払人として振り出した本邦通貨により手形金額が表示される手形で政令で定めるものを担保として、銀行等が自己を支払人として振り出す本邦通貨により手形金額が表示される手形で政令で定めるもの</xhtml:p><xhtml:p>四</xhtml:p><xhtml:p>株券、出資証券若しくは社債券又は投資信託、貸付信託、特定目的信託若しくは受益証券発行信託の受益証券</xhtml:p><xhtml:p>１ 出資証券とは、相互会社（保険業法（平成七年法律第百五号）第二条第五項（定義）に規定する相互会社をいう。以下同じ。）の作成する基金証券及び法人の社員又は出資者たる地位を証する文書（投資信託及び投資法人に関する法律（昭和二十六年法律第百九十八号）に規定する投資証券を含む。）をいう。</xhtml:p><xhtml:p>２ 社債券には、特別の法律により法人の発行する債券及び相互会社の社債券を含むものとする。</xhtml:p><xhtml:p>次に掲げる券面金額（券面金額の記載のない証券で株数又は口数の記載のあるものにあつては、一株又は一口につき政令で定める金額に当該株数又は口数を乗じて計算した金額）の区分に応じ、一通につき、次に掲げる税率とする。</xhtml:p><xhtml:p>五百万円以下のもの 二百円</xhtml:p><xhtml:p>五百万円を超え千万円以下のもの 千円</xhtml:p><xhtml:p>千万円を超え五千万円以下のもの 二千円</xhtml:p><xhtml:p>五千万円を超え一億円以下のもの 一万円</xhtml:p><xhtml:p>一億円を超えるもの 二万円</xhtml:p><xhtml:p>１ 日本銀行その他特別の法律により設立された法人で政令で定めるものの作成する出資証券（協同組織金融機関の優先出資に関する法律（平成五年法律第四十四号）に規定する優先出資証券を除く。）</xhtml:p><xhtml:p>２ 受益権を他の投資信託の受託者に取得させることを目的とする投資信託の受益証券で政令で定めるもの</xhtml:p><xhtml:p>五</xhtml:p><xhtml:p>合併契約書又は吸収分割契約書若しくは新設分割計画書</xhtml:p><xhtml:p>１ 合併契約書とは、会社法（平成十七年法律第八十六号）第七百四十八条（合併契約の締結）に規定する合併契約（保険業法第百五十九条第一項（相互会社と株式会社の合併）に規定する合併契約を含む。）を証する文書（当該合併契約の変更又は補充の事実を証するものを含む。）をいう。</xhtml:p><xhtml:p>２ 吸収分割契約書とは、会社法第七百五十七条（吸収分割契約の締結）に規定する吸収分割契約を証する文書（当該吸収分割契約の変更又は補充の事実を証するものを含む。）をいう。</xhtml:p><xhtml:p>３ 新設分割計画書とは、会社法第七百六十二条第一項（新設分割計画の作成）に規定する新設分割計画を証する文書（当該新設分割計画の変更又は補充の事実を証するものを含む。）をいう。</xhtml:p><xhtml:p>一通につき 四万円</xhtml:p><xhtml:p>六</xhtml:p><xhtml:p>定款</xhtml:p><xhtml:p>１ 定款は、会社（相互会社を含む。）の設立のときに作成される定款の原本に限るものとする。</xhtml:p><xhtml:p>一通につき 四万円</xhtml:p><xhtml:p>１ 株式会社又は相互会社の定款のうち、公証人法第五十八条第三項（書面の定款の認証）の規定により公証人の保存するもの以外のもの</xhtml:p><xhtml:p>七</xhtml:p><xhtml:p>継続的取引の基本となる契約書（契約期間の記載のあるもののうち、当該契約期間が三月以内であり、かつ、更新に関する定めのないものを除く。）</xhtml:p><xhtml:p>１ 継続的取引の基本となる契約書とは、特約店契約書、代理店契約書、銀行取引約定書その他の契約書で、特定の相手方との間に継続的に生ずる取引の基本となるもののうち、政令で定めるものをいう。</xhtml:p><xhtml:p>一通につき 四千円</xhtml:p><xhtml:p>八</xhtml:p><xhtml:p>預貯金証書</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>１ 信用金庫その他政令で定める金融機関の作成する預貯金証書で、記載された預入額が一万円未満のもの</xhtml:p><xhtml:p>九</xhtml:p><xhtml:p>倉荷証券、船荷証券又は複合運送証券</xhtml:p><xhtml:p>１ 倉荷証券には、商法（明治三十二年法律第四十八号）第六百一条（倉荷証券の記載事項）の記載事項の一部を欠く証書で、倉荷証券と類似の効用を有するものを含むものとする。</xhtml:p><xhtml:p>２ 船荷証券又は複合運送証券には、商法第七百五十八条（船荷証券の記載事項）（同法第七百六十九条第二項（複合運送証券）において準用する場合を含む。）の記載事項の一部を欠く証書で、これらの証券と類似の効用を有するものを含むものとする。</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>十</xhtml:p><xhtml:p>保険証券</xhtml:p><xhtml:p>１ 保険証券とは、保険証券その他名称のいかんを問わず、保険法（平成二十年法律第五十六号）第六条第一項（損害保険契約の締結時の書面交付）、第四十条第一項（生命保険契約の締結時の書面交付）又は第六十九条第一項（傷害疾病定額保険契約の締結時の書面交付）その他の法令の規定により、保険契約に係る保険者が当該保険契約を締結したときに当該保険契約に係る保険契約者に対して交付する書面（当該保険契約者からの再交付の請求により交付するものを含み、保険業法第三条第五項第三号（免許）に掲げる保険に係る保険契約その他政令で定める保険契約に係るものを除く。）をいう。</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>十一</xhtml:p><xhtml:p>信用状</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>十二</xhtml:p><xhtml:p>信託行為に関する契約書</xhtml:p><xhtml:p>１ 信託行為に関する契約書には、信託証書を含むものとする。</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>１ 公益信託に関する法律（令和六年法律第三十号）第二条第一項第一号（定義）に規定する公益信託の信託行為に関する契約書（同法第六条（公益信託の効力）の規定による行政庁の認可又は同法第二十二条第一項（公益信託の併合等の認可）の規定による行政庁の認可（併合に係るものに限る。）を受けた後に作成されるものに限る。）</xhtml:p><xhtml:p>十三</xhtml:p><xhtml:p>債務の保証に関する契約書（主たる債務の契約書に併記するものを除く。）</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>１ 身元保証ニ関スル法律（昭和八年法律第四十二号）に定める身元保証に関する契約書</xhtml:p><xhtml:p>十四</xhtml:p><xhtml:p>金銭又は有価証券の寄託に関する契約書</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>十五</xhtml:p><xhtml:p>債権譲渡又は債務引受けに関する契約書</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>１ 契約金額の記載のある契約書のうち、当該契約金額が一万円未満のもの</xhtml:p><xhtml:p>十六</xhtml:p><xhtml:p>配当金領収証又は配当金振込通知書</xhtml:p><xhtml:p>１ 配当金領収証とは、配当金領収書その他名称のいかんを問わず、配当金の支払を受ける権利を表彰する証書又は配当金の受領の事実を証するための証書をいう。</xhtml:p><xhtml:p>２ 配当金振込通知書とは、配当金振込票その他名称のいかんを問わず、配当金が銀行その他の金融機関にある株主の預貯金口座その他の勘定に振込済みである旨を株主に通知する文書をいう。</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>１ 記載された配当金額が三千円未満の証書又は文書</xhtml:p><xhtml:p>十七</xhtml:p><xhtml:p>１ 売上代金に係る金銭又は有価証券の受取書</xhtml:p><xhtml:p>２ 金銭又は有価証券の受取書で１に掲げる受取書以外のもの</xhtml:p><xhtml:p>１ 売上代金に係る金銭又は有価証券の受取書とは、資産を譲渡し若しくは使用させること（当該資産に係る権利を設定することを含む。）又は役務を提供することによる対価（手付けを含み、金融商品取引法（昭和二十三年法律第二十五号）第二条第一項（定義）に規定する有価証券その他これに準ずるもので政令で定めるものの譲渡の対価、保険料その他政令で定めるものを除く。以下「売上代金」という。）として受け取る金銭又は有価証券の受取書をいい、次に掲げる受取書を含むものとする。</xhtml:p><xhtml:p>イ 当該受取書に記載されている受取金額の一部に売上代金が含まれている金銭又は有価証券の受取書及び当該受取金額の全部又は一部が売上代金であるかどうかが当該受取書の記載事項により明らかにされていない金銭又は有価証券の受取書</xhtml:p><xhtml:p>ロ 他人の事務の委託を受けた者（以下この欄において「受託者」という。）が当該委託をした者（以下この欄において「委託者」という。）に代わつて売上代金を受け取る場合に作成する金銭又は有価証券の受取書（銀行その他の金融機関が作成する預貯金口座への振込金の受取書その他これに類するもので政令で定めるものを除く。ニにおいて同じ。）</xhtml:p><xhtml:p>１ 売上代金に係る金銭又は有価証券の受取書で受取金額の記載のあるもの</xhtml:p><xhtml:p>次に掲げる受取金額の区分に応じ、一通につき、次に掲げる税率とする。</xhtml:p><xhtml:p>百万円以下のもの 二百円</xhtml:p><xhtml:p>百万円を超え二百万円以下のもの 四百円</xhtml:p><xhtml:p>二百万円を超え三百万円以下のもの 六百円</xhtml:p><xhtml:p>三百万円を超え五百万円以下のもの 千円</xhtml:p><xhtml:p>五百万円を超え千万円以下のもの 二千円</xhtml:p><xhtml:p>千万円を超え二千万円以下のもの 四千円</xhtml:p><xhtml:p>二千万円を超え三千万円以下のもの 六千円</xhtml:p><xhtml:p>三千万円を超え五千万円以下のもの 一万円</xhtml:p><xhtml:p>五千万円を超え一億円以下のもの 二万円</xhtml:p><xhtml:p>一億円を超え二億円以下のもの 四万円</xhtml:p><xhtml:p>二億円を超え三億円以下のもの 六万円</xhtml:p><xhtml:p>三億円を超え五億円以下のもの 十万円</xhtml:p><xhtml:p>五億円を超え十億円以下のもの 十五万円</xhtml:p><xhtml:p>十億円を超えるもの 二十万円</xhtml:p><xhtml:p>２ １に掲げる受取書以外の受取書</xhtml:p><xhtml:p>一通につき 二百円</xhtml:p><xhtml:p>１ 記載された受取金額が五万円未満の受取書</xhtml:p><xhtml:p>２ 営業（会社以外の法人で、法令の規定又は定款の定めにより利益金又は剰余金の配当又は分配をすることができることとなつているものが、その出資者以外の者に対して行う事業を含み、当該出資者がその出資をした法人に対して行う営業を除く。）に関しない受取書</xhtml:p><xhtml:p>３ 有価証券又は第八号、第十二号、第十四号若しくは前号に掲げる文書に追記した受取書</xhtml:p><xhtml:p>ハ 受託者が委託者に代わつて受け取る売上代金の全部又は一部に相当する金額を委託者が受託者から受け取る場合に作成する金銭又は有価証券の受取書</xhtml:p><xhtml:p>ニ 受託者が委託者に代わつて支払う売上代金の全部又は一部に相当する金額を委託者から受け取る場合に作成する金銭又は有価証券の受取書</xhtml:p><xhtml:p>十八</xhtml:p><xhtml:p>預貯金通帳、信託行為に関する通帳、銀行若しくは無尽会社の作成する掛金通帳、生命保険会社の作成する保険料通帳又は生命共済の掛金通帳</xhtml:p><xhtml:p>１ 生命共済の掛金通帳とは、農業協同組合その他の法人が生命共済に係る契約に関し作成する掛金通帳で、政令で定めるものをいう。</xhtml:p><xhtml:p>一冊につき 二百円</xhtml:p><xhtml:p>１ 信用金庫その他政令で定める金融機関の作成する預貯金通帳</xhtml:p><xhtml:p>２ 所得税法第九条第一項第二号（非課税所得）に規定する預貯金に係る預貯金通帳その他政令で定める普通預金通帳</xhtml:p><xhtml:p>十九</xhtml:p><xhtml:p>第一号、第二号、第十四号又は第十七号に掲げる文書により証されるべき事項を付け込んで証明する目的をもつて作成する通帳（前号に掲げる通帳を除く。）</xhtml:p><xhtml:p>一冊につき 四百円</xhtml:p><xhtml:p>二十</xhtml:p><xhtml:p>判取帳</xhtml:p><xhtml:p>１ 判取帳とは、第一号、第二号、第十四号又は第十七号に掲げる文書により証されるべき事項につき二以上の相手方から付込証明を受ける目的をもつて作成する帳簿をいう。</xhtml:p><xhtml:p>一冊につき 四千円</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="egov 342AC0000000023">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_1e09bce460a4dd79730f1f5407f250c8</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-04-01">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_136496664827b3bec533a03b9e4fd398</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="342AC0000000023_20260401_507AC0000000052">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f41e83db6af06a69d5804e09da82ad7b</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="0ba69792e960021e">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7314c50b9580cb3fab0eadf2fd681a6e</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_82a6d3ab90a94a7ccf25b592606a5115</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_b542ed48946e97f3ad219139315541d0" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="措置法 第91条">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_d25e08f6214748c0cd1d68fa1f87b80a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_0b9aa24442f3ad57982a28447861b522</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>措置法 第91条</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_4fc7e75843037eb57c34609682b06ec8</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div><xhtml:p>（不動産の譲渡に関する契約書等に係る印紙税の税率の特例）</xhtml:p><xhtml:p>第九十一条　平成二十六年四月一日から令和九年三月三十一日までの間に作成される印紙税法別表第一第一号の物件名の欄１に掲げる不動産の譲渡に関する契約書（一の文書が当該契約書と当該契約書以外の同号に掲げる契約書とに該当する場合における当該一の文書を含む。以下この項及び次条第一項において「不動産譲渡契約書」という。）のうち、当該不動産譲渡契約書に記載された契約金額が十万円を超えるものに係る印紙税の税率は、同号の規定にかかわらず、次の各号に掲げる契約金額の区分に応じ、一通につき、当該各号に定める金額とする。</xhtml:p><xhtml:p>一　十万円を超え五十万円以下のもの　二百円</xhtml:p><xhtml:p>二　五十万円を超え百万円以下のもの　五百円</xhtml:p><xhtml:p>三　百万円を超え五百万円以下のもの　千円</xhtml:p><xhtml:p>四　五百万円を超え千万円以下のもの　五千円</xhtml:p><xhtml:p>五　千万円を超え五千万円以下のもの　一万円</xhtml:p><xhtml:p>六　五千万円を超え一億円以下のもの　三万円</xhtml:p><xhtml:p>七　一億円を超え五億円以下のもの　六万円</xhtml:p><xhtml:p>八　五億円を超え十億円以下のもの　十六万円</xhtml:p><xhtml:p>九　十億円を超え五十億円以下のもの　三十二万円</xhtml:p><xhtml:p>十　五十億円を超えるもの　四十八万円</xhtml:p><xhtml:p>２　平成二十六年四月一日から令和九年三月三十一日までの間に作成される印紙税法別表第一第二号に掲げる請負に関する契約書（建設業法第二条第一項に規定する建設工事の請負に係る契約に基づき作成されるものに限る。以下この項及び次条第一項において「建設工事請負契約書」という。）のうち、当該建設工事請負契約書に記載された契約金額が百万円を超えるものに係る印紙税の税率は、同号の規定にかかわらず、次の各号に掲げる契約金額の区分に応じ、一通につき、当該各号に定める金額とする。</xhtml:p><xhtml:p>一　百万円を超え二百万円以下のもの　二百円</xhtml:p><xhtml:p>二　二百万円を超え三百万円以下のもの　五百円</xhtml:p><xhtml:p>三　三百万円を超え五百万円以下のもの　千円</xhtml:p><xhtml:p>四　五百万円を超え千万円以下のもの　五千円</xhtml:p><xhtml:p>五　千万円を超え五千万円以下のもの　一万円</xhtml:p><xhtml:p>六　五千万円を超え一億円以下のもの　三万円</xhtml:p><xhtml:p>七　一億円を超え五億円以下のもの　六万円</xhtml:p><xhtml:p>八　五億円を超え十億円以下のもの　十六万円</xhtml:p><xhtml:p>九　十億円を超え五十億円以下のもの　三十二万円</xhtml:p><xhtml:p>十　五十億円を超えるもの　四十八万円</xhtml:p><xhtml:p>３　前二項の規定の適用がある場合における印紙税法第四条第四項及び別表第一の課税物件表の適用に関する通則３の規定の適用については、同項第一号中「十万円」とあるのは「十万円（当該課税文書が租税特別措置法（昭和三十二年法律第二十六号）第九十一条第一項に規定する不動産譲渡契約書である場合にあつては、五十万円）」と、同項第二号中「百万円」とあるのは「百万円（当該課税文書が租税特別措置法第九十一条第二項に規定する建設工事請負契約書である場合にあつては、二百万円）」と、同法別表第一の課税物件表の適用に関する通則３ホ中「十万円」とあるのは「十万円（同号に掲げる文書が租税特別措置法第九十一条第一項に規定する不動産譲渡契約書である場合にあつては、五十万円）」と、「契約金額が百万円」とあるのは「契約金額が百万円（同号に掲げる文書が同条第二項に規定する建設工事請負契約書である場合にあつては、二百万円）」とする。</xhtml:p></xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="egov 332AC0000000026">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_1e09bce460a4dd79730f1f5407f250c8</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-04-01">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_136496664827b3bec533a03b9e4fd398</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="332AC0000000026_20260401_508AC0000000012">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f41e83db6af06a69d5804e09da82ad7b</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="85faf53f6f6e8196">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_7314c50b9580cb3fab0eadf2fd681a6e</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_82a6d3ab90a94a7ccf25b592606a5115</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_63835dcb3c1071e83c453ccf9e56cd21" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec &quot;rules/osha_extinguisher.rule&quot; table distance">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>rulec "rules/osha_extinguisher.rule" table distance</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="5681500476af8a56">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="item">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_b34530d5260888337db760b46f7c625d" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec &quot;rules/印紙税の本則と軽減.rule&quot; table 本則">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>rulec "rules/印紙税の本則と軽減.rule" table 本則</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="21432c19a67fe72e">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="item">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_964734816e18a5498e1f92f624a978e9" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec &quot;rules/印紙税の本則と軽減.rule&quot; clause 非課税">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>rulec "rules/印紙税の本則と軽減.rule" clause 非課税</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="5bc61581e0c31022">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="item">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_c6c3ca0cf03477df7dd7e8c879185bd1" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec &quot;rules/印紙税の本則と軽減.rule&quot; table 軽減">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>rulec "rules/印紙税の本則と軽減.rule" table 軽減</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="4ba4c2dec2c8262b">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="item">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+        <SPEC-OBJECT IDENTIFIER="_267961841802502c318f51cc0189e0ae" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec &quot;rules/印紙税の本則と軽減.rule&quot; define 軽減期間">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a0b93a2cd2f3c84d917442e8738a29f2</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-XHTML>
+              <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_1f6096fffb5ed2006bc20f2e3d15382d</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
+              <THE-VALUE><xhtml:div>rulec "rules/印紙税の本則と軽減.rule" define 軽減期間</xhtml:div></THE-VALUE>
+            </ATTRIBUTE-VALUE-XHTML>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="b5b30cefd66e58d6">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0b735c9a0ac4d4a3d4349fc9d3d39210</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="item">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c905983964f6577658e837ff98752643</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TYPE><SPEC-OBJECT-TYPE-REF>_9ead4f4f276c9201130bf5c65e31cf9b</SPEC-OBJECT-TYPE-REF></TYPE>
+        </SPEC-OBJECT>
+      </SPEC-OBJECTS>
+      <SPEC-RELATIONS>
+        <SPEC-RELATION IDENTIFIER="_d98c88a38826f9bbcc1b40f6e3c63944" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="safety">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="c2a9ce966c7e2269">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="849dc53f1d112c23">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_6bbdc4bb5abc1c24f17131a2559ce3fc</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_7e4bbf45001c614fa29502d3bc2fa12e</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_2a8bc952f67e6f93c16eb54e73419f62" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="dev">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="849dc53f1d112c23">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="5681500476af8a56">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_6bbdc4bb5abc1c24f17131a2559ce3fc</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_63835dcb3c1071e83c453ccf9e56cd21</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_d35d41617ed206c65221fbeeab50cd19" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="税務">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="0ba69792e960021e">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="56d4ef0ae01ebb19">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_b3fb9a80097e2067846fc3af58b405fe</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_1308f9c555c0edbb0f009b291f0524a8</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_a9d4a1940fa2e3fa24ce876616d1ee7a" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="開発">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="56d4ef0ae01ebb19">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="21432c19a67fe72e">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_b3fb9a80097e2067846fc3af58b405fe</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_b34530d5260888337db760b46f7c625d</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_e7e18275d1c9bae1a0f7ae4fb86dddc8" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="開発">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="56d4ef0ae01ebb19">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="5bc61581e0c31022">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_b3fb9a80097e2067846fc3af58b405fe</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_964734816e18a5498e1f92f624a978e9</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_6f66263e5e07a5153314a23bfa8bd717" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_309e5c9fc4d3093cabfe553f89398883</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="税務">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_de5a8b06f4ed15039cb9a8ce229e3882</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="85faf53f6f6e8196">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_0412d94d758f9f274f57ea3801ecc1a5</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="c3fbde1529c44e2e">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c4d6a9290a375591cd9afdab52a93f83</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_444acc8a6cf372af8a7a57ed2c063fe4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_2d8f25b73a93c36be5b98b118e918145</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_b542ed48946e97f3ad219139315541d0</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_38ebadf3c7922dafd9bd709143b69410</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_dab6c95c9c8f8be2591e7baa70eafbad" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="開発">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="c3fbde1529c44e2e">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="4ba4c2dec2c8262b">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_2d8f25b73a93c36be5b98b118e918145</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_c6c3ca0cf03477df7dd7e8c879185bd1</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+        <SPEC-RELATION IDENTIFIER="_3e43bb7d0790dce129f3403c117c2e25" LAST-CHANGE="2026-10-04T00:00:00Z">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="2026-10-04">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_806b8ccc2a866d34cf305899d9f530f4</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="開発">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_f4b120327cf8e7466ec4aeb959fd4626</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="c3fbde1529c44e2e">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_b87a9ec95e675e99db67fa27f368682f</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="b5b30cefd66e58d6">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_919e85b662746a5174590e7f97557d28</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="ok">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_8b9b83b089a55c5fecbe786a836bffdb</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <SOURCE><SPEC-OBJECT-REF>_2d8f25b73a93c36be5b98b118e918145</SPEC-OBJECT-REF></SOURCE>
+          <TARGET><SPEC-OBJECT-REF>_267961841802502c318f51cc0189e0ae</SPEC-OBJECT-REF></TARGET>
+          <TYPE><SPEC-RELATION-TYPE-REF>_43a798f0336eb0c0267b2c2c301a56a5</SPEC-RELATION-TYPE-REF></TYPE>
+        </SPEC-RELATION>
+      </SPEC-RELATIONS>
+      <SPECIFICATIONS>
+        <SPECIFICATION IDENTIFIER="_6894ff957fe07aa9f95f2c880a57e720" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="fire_extinguishers">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="fire_extinguishers.req">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c044e086f813f00e08a35f6d1fe57d1d</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="Where the distances of the rulec corpus rule osha_extinguisher.rule come from: 29 CFR 1910.157(d), borrowed from the copy the rule pins. A test fixture; it does not say how the regulation is to be read">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_3aab153573a843b52044522e1bd91d87" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_6bbdc4bb5abc1c24f17131a2559ce3fc</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_820590da3b6bc96b1abc4c87219e99d1</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+        <SPECIFICATION IDENTIFIER="_cc0f987c57d43ffea9401d414fd8cc22" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="印紙税">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="印紙税.req">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_c044e086f813f00e08a35f6d1fe57d1d</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec のコーパスの規則「印紙税の本則と軽減.rule」の表が、印紙税法と租税特別措置法のどこから来たかを書いたテストの材料。出典は自分で写して固定し（写しは規則の写しと同じバイト列）、成果物は規則の表と節を一つずつ名指す。例として書いたもので、法令の読み方を示すものではない">
+              <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_989f928f4f2f0f318e3484a93f9e1171" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_b3fb9a80097e2067846fc3af58b405fe</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_908cf1755ac761dbb628b6c80a83739c" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_2d8f25b73a93c36be5b98b118e918145</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_820590da3b6bc96b1abc4c87219e99d1</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+        <SPECIFICATION IDENTIFIER="_2660d37bb6c2f8242d385db43f0c8a74" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="sources">
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_f4a14c55c3120a2edd3b0f1f347e35c0" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_7e4bbf45001c614fa29502d3bc2fa12e</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_e7a8eb8682cf2d1f46908466b0716b10" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_1308f9c555c0edbb0f009b291f0524a8</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_e518cf11801f3114a260a97332049f13" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_b542ed48946e97f3ad219139315541d0</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_cbcb5eb37af5fd6294167ff3a8a1c59a</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+        <SPECIFICATION IDENTIFIER="_d60e4f94b2559d660006737835481a50" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="artifacts">
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="_c565bf8d86d1eef08d8dec0d12fffe0d" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_63835dcb3c1071e83c453ccf9e56cd21</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_8fe7812e520d807c9ba34664c9f04f9e" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_b34530d5260888337db760b46f7c625d</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_f2c5d217f828214e3e4b508715f0653d" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_964734816e18a5498e1f92f624a978e9</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_72ec0437b9b28db8b5e0afeb49252fe1" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_c6c3ca0cf03477df7dd7e8c879185bd1</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+            <SPEC-HIERARCHY IDENTIFIER="_b8e4250d8349b50d5308096e6aec80b0" LAST-CHANGE="2026-10-04T00:00:00Z">
+              <OBJECT><SPEC-OBJECT-REF>_267961841802502c318f51cc0189e0ae</SPEC-OBJECT-REF></OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+          <TYPE><SPECIFICATION-TYPE-REF>_cbcb5eb37af5fd6294167ff3a8a1c59a</SPECIFICATION-TYPE-REF></TYPE>
+        </SPECIFICATION>
+      </SPECIFICATIONS>
+      <SPEC-RELATION-GROUPS>
+        <RELATION-GROUP IDENTIFIER="_eb1f48cd52a68a6886e007e0811b39e1" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="fire_extinguishers -> sources">
+          <SOURCE-SPECIFICATION><SPECIFICATION-REF>_6894ff957fe07aa9f95f2c880a57e720</SPECIFICATION-REF></SOURCE-SPECIFICATION>
+          <SPEC-RELATIONS>
+            <SPEC-RELATION-REF>_d98c88a38826f9bbcc1b40f6e3c63944</SPEC-RELATION-REF>
+          </SPEC-RELATIONS>
+          <TARGET-SPECIFICATION><SPECIFICATION-REF>_2660d37bb6c2f8242d385db43f0c8a74</SPECIFICATION-REF></TARGET-SPECIFICATION>
+          <TYPE><RELATION-GROUP-TYPE-REF>_241f53b5261e61efa600e572ce116499</RELATION-GROUP-TYPE-REF></TYPE>
+        </RELATION-GROUP>
+        <RELATION-GROUP IDENTIFIER="_7f2005e6309ba38ff848874271081533" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="fire_extinguishers -> artifacts">
+          <SOURCE-SPECIFICATION><SPECIFICATION-REF>_6894ff957fe07aa9f95f2c880a57e720</SPECIFICATION-REF></SOURCE-SPECIFICATION>
+          <SPEC-RELATIONS>
+            <SPEC-RELATION-REF>_2a8bc952f67e6f93c16eb54e73419f62</SPEC-RELATION-REF>
+          </SPEC-RELATIONS>
+          <TARGET-SPECIFICATION><SPECIFICATION-REF>_d60e4f94b2559d660006737835481a50</SPECIFICATION-REF></TARGET-SPECIFICATION>
+          <TYPE><RELATION-GROUP-TYPE-REF>_241f53b5261e61efa600e572ce116499</RELATION-GROUP-TYPE-REF></TYPE>
+        </RELATION-GROUP>
+        <RELATION-GROUP IDENTIFIER="_b5fd08b9c82c78361a85490502436e35" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="印紙税 -> sources">
+          <SOURCE-SPECIFICATION><SPECIFICATION-REF>_cc0f987c57d43ffea9401d414fd8cc22</SPECIFICATION-REF></SOURCE-SPECIFICATION>
+          <SPEC-RELATIONS>
+            <SPEC-RELATION-REF>_d35d41617ed206c65221fbeeab50cd19</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_6f66263e5e07a5153314a23bfa8bd717</SPEC-RELATION-REF>
+          </SPEC-RELATIONS>
+          <TARGET-SPECIFICATION><SPECIFICATION-REF>_2660d37bb6c2f8242d385db43f0c8a74</SPECIFICATION-REF></TARGET-SPECIFICATION>
+          <TYPE><RELATION-GROUP-TYPE-REF>_241f53b5261e61efa600e572ce116499</RELATION-GROUP-TYPE-REF></TYPE>
+        </RELATION-GROUP>
+        <RELATION-GROUP IDENTIFIER="_1410e1283bbf2104e9f654f7bba05ebe" LAST-CHANGE="2026-10-04T00:00:00Z" LONG-NAME="印紙税 -> artifacts">
+          <SOURCE-SPECIFICATION><SPECIFICATION-REF>_cc0f987c57d43ffea9401d414fd8cc22</SPECIFICATION-REF></SOURCE-SPECIFICATION>
+          <SPEC-RELATIONS>
+            <SPEC-RELATION-REF>_a9d4a1940fa2e3fa24ce876616d1ee7a</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_e7e18275d1c9bae1a0f7ae4fb86dddc8</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_dab6c95c9c8f8be2591e7baa70eafbad</SPEC-RELATION-REF>
+            <SPEC-RELATION-REF>_3e43bb7d0790dce129f3403c117c2e25</SPEC-RELATION-REF>
+          </SPEC-RELATIONS>
+          <TARGET-SPECIFICATION><SPECIFICATION-REF>_d60e4f94b2559d660006737835481a50</SPECIFICATION-REF></TARGET-SPECIFICATION>
+          <TYPE><RELATION-GROUP-TYPE-REF>_241f53b5261e61efa600e572ce116499</RELATION-GROUP-TYPE-REF></TYPE>
+        </RELATION-GROUP>
+      </SPEC-RELATION-GROUPS>
+    </REQ-IF-CONTENT>
+  </CORE-CONTENT>
+</REQ-IF>

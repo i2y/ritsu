@@ -1,11 +1,52 @@
-//! What the tests share: running the `yuen` binary, copying a fixture to change it (PLAN 0.1),
-//! and the outside tools. A directory that is removed when the test is done, copying a tree,
-//! golden files, finding a tool and the SKIP line are ritsu-testkit's.
+//! What the tests share: the command run in this process with every language joined (as
+//! `ritsu yuen` runs it), the `yuen` binary of this crate (which joins none), copying a fixture to
+//! change it (PLAN 0.1), and the outside tools. A directory that is removed when the test is done,
+//! copying a tree, golden files, finding a tool and the SKIP line are ritsu-testkit's.
 
 #![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::rc::Rc;
+
+/// Every language yuen reads, joined through the ports, each language's own engine (ritsu's
+/// DESIGN 3.3): what `ritsu yuen` hands it.
+pub fn suite() -> yuen::suite::Suite {
+    let rules = Rc::new(rulec::ports::Engine::new());
+    let dates = Rc::new(koyomi::ports::Engine);
+    let claims = Rc::new(geas::ports::Engine);
+    let mut s = yuen::suite::Suite::default();
+    s.items.insert("rulec".into(), rules.clone());
+    s.items.insert("koyomi".into(), dates.clone());
+    s.items.insert("chobo".into(), Rc::new(chobo::ports::Engine));
+    s.items.insert("geas".into(), claims.clone());
+    s.items.insert("dandori".into(), Rc::new(dandori::ports::Engine));
+    s.items.insert("sakai".into(), Rc::new(sakai::ports::Engine));
+    s.sources.insert("rulec".into(), rules.clone());
+    s.sources.insert("koyomi".into(), dates.clone());
+    s.rules = Some(rules);
+    s.dates = Some(dates);
+    s.claims = Some(claims);
+    s
+}
+
+/// The command, in this process, with every language joined (`ritsu yuen`), run where the tests
+/// run (the crate's directory): paths are written from there, or absolute. English unless the
+/// arguments say otherwise, whatever the environment says.
+pub fn run(args: &[&str]) -> Ran {
+    let mut args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    if !args.iter().any(|a| a == "--lang" || a.starts_with("--lang=")) {
+        args.extend(["--lang".to_string(), "en".to_string()]);
+    }
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = yuen::run::run(&args, suite(), &mut out, &mut err);
+    Ran { code: code as i32, stdout: String::from_utf8_lossy(&out).to_string(), stderr: String::from_utf8_lossy(&err).to_string() }
+}
+
+/// [`yuen::check::check`], with every language joined.
+pub fn check(path: &str) -> yuen::check::Checked {
+    yuen::check::check_with(&[path.to_string()], Some(path), suite()).unwrap()
+}
 
 /// A directory under the system's temporary directory, removed on drop, its path through its
 /// symbolic links (macOS's /var), so paths compare with what yuen sees.

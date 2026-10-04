@@ -1,0 +1,18 @@
+requirements 返金 v1
+description "振替の名前を、リンクを直さずに変えた帳簿"
+
+role 経理 "返金の方針を決める"
+role 開発 "帳簿を書いて直す"
+
+source 方針 = file "返金の方針.md" sha256:4a847d6d9b3e4853
+
+requirement 承認まで押さえる(hold_until_approved)
+  text "返金は、担当者が承認するまで確定しない。承認を待つあいだ、その額を押さえる"
+  in force 2026-10-01..
+  owner 経理
+  from @方針
+    reviewed 2026-10-04 by 経理 sha256:4a847d6d9b3e4853 -> sha256:b13e498e17a4fd86
+  satisfied by chobo "refunds.ja.book" transfer 返金
+    reviewed 2026-10-04 by 開発 sha256:b13e498e17a4fd86 -> sha256:84e9ce254075c697
+  not verified "押さえた額が期限で戻ることは chobo のシナリオが確かめる。この材料は、それを名指す主張を持たない"
+    approved 2026-10-04 by 経理 sha256:b13e498e17a4fd86

@@ -9,7 +9,7 @@ fn run(args: &[&str]) -> common::Ran {
     common::yuen(Path::new("."), args)
 }
 
-const COMMANDS: &[&str] = &["check", "review", "trace", "api", "export", "source", "explain"];
+const COMMANDS: &[&str] = &["check", "review", "trace", "affected", "api", "export", "source", "explain"];
 
 #[test]
 fn every_command_has_its_help_page() {
@@ -28,8 +28,8 @@ fn every_command_has_its_help_page() {
     for c in COMMANDS {
         assert!(r.stdout.contains(&format!("  yuen {c} ")), "{c} is listed");
     }
-    // The commands of the next stages are not in the table yet.
-    for c in ["affected", "doc"] {
+    // The command of the next stage is not in the table yet.
+    for c in ["doc"] {
         assert!(!r.stdout.contains(&format!("  yuen {c} ")), "{c} is not built yet");
         assert_eq!(run(&[c]).code, 2, "{c}");
     }
@@ -122,16 +122,28 @@ fn a_root_above_where_yuen_runs() {
     assert!(r.stdout.contains("(the copy sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml)"), "{}", r.stdout);
 }
 
+/// The binary of this crate holds no other language (ritsu's DESIGN 2.3): a project that names
+/// what only another language reads is refused with exit 2, and told to run through `ritsu yuen`,
+/// rather than passed unchecked. The same project, with every language joined, is checked.
 #[test]
-fn a_tool_this_yuen_does_not_read_yet_is_refused_not_passed() {
-    let t = common::TempDir::new("notyet");
+fn the_binary_of_this_crate_reads_no_other_language() {
+    let t = common::TempDir::new("noport");
     t.write(
         "t.req",
-        "requirements t v1\nrole 経理\n\nrequirement r1\n  text \"x\"\n  owner 経理\n  decided 2026-10-03 by 経理 \"y\"\n  satisfied by koyomi \"支払条件.cal\" date 支払日\n  not verified \"z\"\n".as_bytes(),
+        "requirements t v1\nrole 経理\n\nrequirement r1\n  text \"x\"\n  owner 経理\n  decided 2026-10-03 by 経理 \"y\"\n  satisfied by koyomi \"a.cal\" date 翌日\n  not verified \"z\"\n".as_bytes(),
     );
+    t.write("a.cal", "dates 例(example) v1\n\ninputs\n  起点(origin) : date  range >=2026-01-01 <=2026-12-31\n\ndate 翌日(next_day) = 起点\n  + 1 day\n".as_bytes());
     let r = common::yuen(t.path(), &["check", ".", "--root", "."]);
     assert_eq!(r.code, 2);
-    assert!(r.stderr.contains("yuen cannot read koyomi artifacts yet"), "{}", r.stderr);
+    assert_eq!(r.stderr, "error: this yuen cannot read koyomi artifacts: koyomi \"a.cal\" date 翌日 (./t.req:8); run it with every language joined, through ritsu: `ritsu yuen check . --root .`\n");
+    let ja = common::yuen(t.path(), &["check", ".", "--root", ".", "--lang", "ja"]);
+    assert!(ja.stderr.contains("すべての言語をつないだ `ritsu yuen check . --root . --lang ja`"), "{}", ja.stderr);
+    let path = t.path().to_string_lossy().to_string();
+    let joined = common::run(&["check", &path, "--root", &path]);
+    assert_eq!(joined.code, 1, "{}{}", joined.stdout, joined.stderr);
+    assert_eq!(common::codes(&joined.stdout), ["E301", "E304"], "{}", joined.stdout);
+    // a `.proto` and a file are read by yuen itself
+    assert_eq!(run(&["check", "tests/fixtures/proto", "--root", "tests/fixtures/proto"]).code, 0);
 }
 
 #[test]
@@ -144,8 +156,11 @@ fn explain_prints_every_code() {
     assert_eq!(md.stdout.matches("<a id=\"").count(), 43);
     let one = run(&["explain", "E302"]);
     assert!(one.stdout.starts_with("E302 (error) — The upper end changed after the link was looked at\n"), "{}", one.stdout);
-    let later = run(&["explain", "E107"]);
-    assert!(later.stdout.contains("it is added when yuen reads them"), "{}", later.stdout);
+    let e107 = run(&["explain", "E107"]);
+    assert!(e107.stdout.contains("Example:\n    requirements 例 v1\n"), "{}", e107.stdout);
+    assert!(e107.stdout.contains("beside it: cal/a.cal"), "{}", e107.stdout);
+    let retired = run(&["explain", "E204"]);
+    assert!(retired.stdout.contains("Example:\n    Retired in ritsu 0.23.0"), "{}", retired.stdout);
 }
 
 /// `check` and the commands that read what it found never read the network (DESIGN 7, P4):

@@ -1,0 +1,10 @@
+requirements 例 v1
+role 法務
+
+requirement r1
+  text "x"
+  owner 法務
+  decided 2026-10-03 by 法務 "例"
+  satisfied by proto "a.proto" message Orders
+  not verified "例なので置かない"
+    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f

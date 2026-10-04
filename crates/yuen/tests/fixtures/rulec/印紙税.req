@@ -1,0 +1,38 @@
+requirements 印紙税 v1
+description "rulec のコーパスの規則「印紙税の本則と軽減.rule」の表が、印紙税法と租税特別措置法のどこから来たかを書いたテストの材料。出典は自分で写して固定し（写しは規則の写しと同じバイト列）、成果物は規則の表と節を一つずつ名指す。例として書いたもので、法令の読み方を示すものではない"
+
+role 税務 "条文の読み方を決める"
+role 開発 "規則を書いて直す"
+
+source 法 = law "342AC0000000023" asof 2026-04-01
+  別表第一 sha256:0ba69792e960021e
+source 措置法 = law "332AC0000000026" asof 2026-04-01
+  第91条 sha256:85faf53f6f6e8196
+
+scope rulec "rules/印紙税の本則と軽減.rule" table
+
+requirement 本則の税額(base_tax)
+  text "不動産の譲渡に関する契約書の印紙税額は、記載された契約金額に応じて、別表第一の第1号文書の欄の税率による。契約金額が1万円未満のものは課税しない"
+  in force 2026-04-01..
+  owner 税務
+  from @法 別表第一
+    reviewed 2026-10-04 by 税務 sha256:0ba69792e960021e -> sha256:56d4ef0ae01ebb19
+  satisfied by rulec "rules/印紙税の本則と軽減.rule" table 本則
+    reviewed 2026-10-04 by 開発 sha256:56d4ef0ae01ebb19 -> sha256:21432c19a67fe72e
+  satisfied by rulec "rules/印紙税の本則と軽減.rule" clause 非課税
+    reviewed 2026-10-04 by 開発 sha256:56d4ef0ae01ebb19 -> sha256:5bc61581e0c31022
+  not verified "表が契約金額のすべてを覆い、行が重ならないことは rulec の検査が確かめる。この材料は、それを名指す主張を持たない"
+    approved 2026-10-04 by 税務 sha256:56d4ef0ae01ebb19
+
+requirement 軽減税率(reduced_rate)
+  text "令和9年3月31日までに作成される不動産の譲渡に関する契約書の印紙税額は、租税特別措置法第91条の軽減された税率による"
+  in force 2026-04-01..
+  owner 税務
+  from @措置法 第91条
+    reviewed 2026-10-04 by 税務 sha256:85faf53f6f6e8196 -> sha256:c3fbde1529c44e2e
+  satisfied by rulec "rules/印紙税の本則と軽減.rule" table 軽減
+    reviewed 2026-10-04 by 開発 sha256:c3fbde1529c44e2e -> sha256:4ba4c2dec2c8262b
+  satisfied by rulec "rules/印紙税の本則と軽減.rule" define 軽減期間
+    reviewed 2026-10-04 by 開発 sha256:c3fbde1529c44e2e -> sha256:b5b30cefd66e58d6
+  not verified "軽減の表が本則の表より先に当たることは rulec の検査が確かめる。この材料は、それを名指す主張を持たない"
+    approved 2026-10-04 by 税務 sha256:c3fbde1529c44e2e

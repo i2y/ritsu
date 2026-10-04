@@ -1,0 +1,365 @@
+{
+  "yuen": "0.1.0",
+  "root": "tests/fixtures/dandori",
+  "files": [
+    {
+      "path": "配送.req",
+      "name": "配送",
+      "version": "1",
+      "sha256": "144d5b3ea1c9ecfb"
+    }
+  ],
+  "roles": [
+    {
+      "name": "物流",
+      "description": "配送の手順を決める"
+    },
+    {
+      "name": "開発",
+      "description": "ワークフローを書いて直す"
+    }
+  ],
+  "sources": [
+    {
+      "file": "配送.req",
+      "name": "手順",
+      "kind": "file",
+      "path": "配送の手順.md",
+      "url": null,
+      "sha256": "b3d6f4b8ced5716c",
+      "borrowed": null
+    }
+  ],
+  "requirements": [
+    {
+      "name": "翌日便",
+      "alias": "next_day",
+      "version": 1,
+      "file": "配送.req",
+      "line": 11,
+      "text": "翌日便は運送会社に集荷を頼む。車が空いていなければ、そう言って止める",
+      "in_force": null,
+      "owner": "物流",
+      "replaces": [],
+      "sha256": "14807ac1afa3333a",
+      "from": [
+        {
+          "line": 14,
+          "sources": [
+            {
+              "source": "手順",
+              "fragment": null,
+              "sha256": "b3d6f4b8ced5716c"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "物流",
+            "up": [
+              "b3d6f4b8ced5716c"
+            ],
+            "down": "14807ac1afa3333a"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 16,
+          "role": "satisfied",
+          "artifact": {
+            "text": "dandori \"arrange_delivery.ja.flow\" task 翌日便を頼む",
+            "tool": "dandori",
+            "path": "arrange_delivery.ja.flow",
+            "items": [
+              [
+                "task",
+                "翌日便を頼む"
+              ]
+            ]
+          },
+          "sha256": "3c19313a3f633021",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "14807ac1afa3333a"
+            ],
+            "down": "3c19313a3f633021"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 18,
+          "role": "verified",
+          "why": "この材料は、ワークフローを走らせる主張を持たない",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "物流",
+            "sha256": "14807ac1afa3333a"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "通常便",
+      "alias": "regular",
+      "version": 1,
+      "file": "配送.req",
+      "line": 21,
+      "text": "通常便は郵便に小包を頼む",
+      "in_force": null,
+      "owner": "物流",
+      "replaces": [],
+      "sha256": "907ce7d3f631812e",
+      "from": [
+        {
+          "line": 24,
+          "sources": [
+            {
+              "source": "手順",
+              "fragment": null,
+              "sha256": "b3d6f4b8ced5716c"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "物流",
+            "up": [
+              "b3d6f4b8ced5716c"
+            ],
+            "down": "907ce7d3f631812e"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 26,
+          "role": "satisfied",
+          "artifact": {
+            "text": "dandori \"arrange_delivery.ja.flow\" task 通常便を頼む",
+            "tool": "dandori",
+            "path": "arrange_delivery.ja.flow",
+            "items": [
+              [
+                "task",
+                "通常便を頼む"
+              ]
+            ]
+          },
+          "sha256": "fb518dde20b90816",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "907ce7d3f631812e"
+            ],
+            "down": "fb518dde20b90816"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 28,
+          "role": "verified",
+          "why": "この材料は、ワークフローを走らせる主張を持たない",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "物流",
+            "sha256": "907ce7d3f631812e"
+          },
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "name": "追跡番号",
+      "alias": "tracking_number",
+      "version": 1,
+      "file": "配送.req",
+      "line": 31,
+      "text": "どちらの便でも、追跡番号を返す",
+      "in_force": null,
+      "owner": "物流",
+      "replaces": [],
+      "sha256": "6fc243c572acc9d4",
+      "from": [
+        {
+          "line": 34,
+          "sources": [
+            {
+              "source": "手順",
+              "fragment": null,
+              "sha256": "b3d6f4b8ced5716c"
+            }
+          ],
+          "requirement": null,
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "物流",
+            "up": [
+              "b3d6f4b8ced5716c"
+            ],
+            "down": "6fc243c572acc9d4"
+          },
+          "status": "ok"
+        }
+      ],
+      "decided": [],
+      "links": [
+        {
+          "line": 36,
+          "role": "satisfied",
+          "artifact": {
+            "text": "dandori \"arrange_delivery.ja.flow\" record 集荷 field 追跡番号",
+            "tool": "dandori",
+            "path": "arrange_delivery.ja.flow",
+            "items": [
+              [
+                "record",
+                "集荷"
+              ],
+              [
+                "field",
+                "追跡番号"
+              ]
+            ]
+          },
+          "sha256": "69aa90b09002e1fc",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "6fc243c572acc9d4"
+            ],
+            "down": "69aa90b09002e1fc"
+          },
+          "status": "ok"
+        },
+        {
+          "line": 38,
+          "role": "satisfied",
+          "artifact": {
+            "text": "dandori \"arrange_delivery.ja.flow\" output 追跡番号",
+            "tool": "dandori",
+            "path": "arrange_delivery.ja.flow",
+            "items": [
+              [
+                "output",
+                "追跡番号"
+              ]
+            ]
+          },
+          "sha256": "69aa90b09002e1fc",
+          "reviewed": {
+            "date": "2026-10-04",
+            "by": "開発",
+            "up": [
+              "6fc243c572acc9d4"
+            ],
+            "down": "69aa90b09002e1fc"
+          },
+          "status": "ok"
+        }
+      ],
+      "waivers": [
+        {
+          "line": 40,
+          "role": "verified",
+          "why": "この材料は、ワークフローを走らせる主張を持たない",
+          "approved": {
+            "date": "2026-10-04",
+            "by": "物流",
+            "sha256": "6fc243c572acc9d4"
+          },
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "text": "dandori \"arrange_delivery.ja.flow\" output 追跡番号",
+      "tool": "dandori",
+      "path": "arrange_delivery.ja.flow",
+      "items": [
+        [
+          "output",
+          "追跡番号"
+        ]
+      ],
+      "sha256": "69aa90b09002e1fc",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "dandori \"arrange_delivery.ja.flow\" record 集荷 field 追跡番号",
+      "tool": "dandori",
+      "path": "arrange_delivery.ja.flow",
+      "items": [
+        [
+          "record",
+          "集荷"
+        ],
+        [
+          "field",
+          "追跡番号"
+        ]
+      ],
+      "sha256": "69aa90b09002e1fc",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "dandori \"arrange_delivery.ja.flow\" task 翌日便を頼む",
+      "tool": "dandori",
+      "path": "arrange_delivery.ja.flow",
+      "items": [
+        [
+          "task",
+          "翌日便を頼む"
+        ]
+      ],
+      "sha256": "3c19313a3f633021",
+      "end": "item",
+      "pins": []
+    },
+    {
+      "text": "dandori \"arrange_delivery.ja.flow\" task 通常便を頼む",
+      "tool": "dandori",
+      "path": "arrange_delivery.ja.flow",
+      "items": [
+        [
+          "task",
+          "通常便を頼む"
+        ]
+      ],
+      "sha256": "fb518dde20b90816",
+      "end": "item",
+      "pins": []
+    }
+  ],
+  "scopes": [
+    {
+      "file": "配送.req",
+      "line": 9,
+      "text": "dandori \"arrange_delivery.ja.flow\" task",
+      "artifacts": 2,
+      "untraced": []
+    }
+  ],
+  "check": {
+    "ok": true,
+    "summary": "tests/fixtures/dandori: ok — 3 requirements, whose 7 links and 3 waivers are as they were looked at; every requirement is met and checked, or waived; the 2 tasks in scope all trace to a requirement",
+    "diagnostics": []
+  }
+}

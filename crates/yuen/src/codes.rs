@@ -5,9 +5,10 @@
 use ritsu_base::ledger::{Entry, Ledger, Repro};
 use ritsu_base::text::Text;
 
-/// An entry whose example is the smallest `.req` that gets the code. One whose reproduction
-/// needs the suite's tools or a `.proto`, which yuen reads from the stage after this one (PLAN
-/// C), has no example yet ([`Entry::later`]).
+/// An entry whose example is the smallest `.req` that gets the code, with what has to be beside
+/// it. Some need another language to come out (a rule, a calendar): those are checked with every
+/// language joined, as `ritsu yuen` runs them. A retired code keeps its entry, and its number is
+/// given to nothing else ([`Entry::retired`], ritsu's DESIGN 7.10).
 fn e(code: &'static str, title: Text, when: Text, fix: Text, example: &'static str, related: &'static [&'static str]) -> Entry {
     Entry::new(code, title, when, fix, Repro::File { body: example, beside: &[] }, related)
 }
@@ -25,6 +26,22 @@ const B_TXT: (&str, &[u8]) = ("b.txt", b"b\n");
 const OLD_X: (&str, &[u8]) = ("reviewed/f1e653e8ce72c16f", b"text the old x\n");
 /// What `a.txt` was when the link was looked at.
 const OLD_A: (&str, &[u8]) = ("reviewed/0263829989b6fd95", b"b\n");
+
+// ── What the examples of the codes that read another language need beside them ──
+
+const E106_CAL: (&str, &[u8]) = ("a.cal", include_bytes!("../tests/mutants/E106_宣言されていない出典を借りる/a.cal"));
+const CHANGED_142: (&str, &[u8]) = (
+    "sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml",
+    include_bytes!("../tests/mutants/E107_同じ条の違う本文/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml"),
+);
+const E107_CAL: (&str, &[u8]) = ("cal/a.cal", include_bytes!("../tests/mutants/E107_同じ条の違う本文/cal/a.cal"));
+const E107_CAL_142: (&str, &[u8]) = (
+    "cal/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml",
+    include_bytes!("../tests/mutants/E107_同じ条の違う本文/cal/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml"),
+);
+const E202_PROTO: (&str, &[u8]) = ("a.proto", include_bytes!("../tests/mutants/E202_無いメッセージ/a.proto"));
+const E203_RULE: (&str, &[u8]) = ("a.rule", include_bytes!("../tests/mutants/E203_検査を通らない規則/a.rule"));
+const E205_PROTO: (&str, &[u8]) = ("a.proto", include_bytes!("../tests/mutants/E205_読めないproto/a.proto"));
 
 pub fn ledger() -> Ledger {
     let entries = vec![
@@ -214,8 +231,30 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @商法 第1条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E102"],
         ),
-        e("E106", tr!("借りた出典が使えません", "A borrowed source cannot be used"), tr!("借りた出典がツールの api に無いか、その条をツールが固定していないとき。", "The tool's api has no such source, or the tool does not pin that article."), tr!("ツールが宣言して固定している出典と条を書きます。", "Write a source and an article the tool declares and pins."), "", &["E105"]).later(),
-        e("E107", tr!("要件と成果物が、同じ条の違う本文を読んでいます", "A requirement and what meets it read different texts of one article"), tr!("要件が引く条を、それを満たす成果物も固定していて、どの写しも要件の写しと本文が違うとき。どちらかが古い写しです。", "What meets a requirement pins an article the requirement cites, and none of its copies has the text of the requirement's copy: one of them is old."), tr!("本文の差分を読み、古いほうの写しを取り直して固定し直します。", "Read the diff of the texts, then fetch and pin the older copy again."), "", &["E103"]).later(),
+        e(
+            "E106",
+            tr!("借りた出典が使えません", "A borrowed source cannot be used"),
+            tr!(
+                "借りた出典を、名指したファイルが宣言していないか、引いた条を固定していないとき。ファイルが無いとき、写しが読めないか固定と違うときも。",
+                "The file named declares no such source, or does not pin the article cited; also when the file is not there, or a copy cannot be read or does not match its pin."
+            ),
+            tr!("そのファイルが宣言して固定している出典と条を書きます。ほかの条を引くなら、そのファイルに固定の行を足します。", "Write a source and an article the file declares and pins; to cite another article, add its pin to that file."),
+            include_str!("../tests/mutants/E106_宣言されていない出典を借りる/例.req"),
+            &["E105", "E203"],
+        )
+        .beside(&[E106_CAL]),
+        e(
+            "E107",
+            tr!("要件と成果物が、同じ条の違う本文を読んでいます", "A requirement and what meets it read different texts of one article"),
+            tr!(
+                "要件が引く条を、それを満たす規則かカレンダーのファイルも固定していて、どの写しも要件の写しと本文が違うとき。どちらかが古い写しです。",
+                "A rule or a calendar that meets a requirement pins an article the requirement cites, and none of its copies has the text of the requirement's copy: one of them is old."
+            ),
+            tr!("本文の差分を読み、古いほうの写しを取り直して固定し直します。", "Read the diff of the texts, then fetch and pin the older copy again."),
+            include_str!("../tests/mutants/E107_同じ条の違う本文/例.req"),
+            &["E103"],
+        )
+        .beside(&[CHANGED_142, E107_CAL, E107_CAL_142]),
         e(
             "W101",
             tr!("固定した条が、どの要件からも引かれていません", "A pinned article is cited by no requirement"),
@@ -234,11 +273,63 @@ pub fn ledger() -> Ledger {
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"missing.txt\"\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E013"],
         ),
-        e("E202", tr!("成果物の名前が、そのファイルにありません", "The name of an artifact is not in its file"), tr!("名指した名前が、ツールの JSON にないとき。別名で書いたときと、名前が変わったときも（候補を添えます）。", "The name is not in the tool's JSON: written by its alias, or renamed (the candidates are given)."), tr!("ツールの JSON の `name` で書きます。", "Write the `name` the tool's JSON gives."), "", &["E201"]).later(),
-        e("E203", tr!("ツールがファイルを読めません", "The tool cannot read the file"), tr!("ツールが exit 0 で終わらないとき。ツールの検査を通らないファイルには、ツールが api を出しません。", "The tool does not end with exit 0: it gives no api for a file that fails its own check."), tr!("ツールの検査を通るように直します（注にツールの出力があります）。", "Make it pass the tool's check (the note has what the tool printed)."), "", &["E204"]).later(),
-        e("E204", tr!("ツールの JSON が知らない形です", "The tool's JSON is not of a known shape"), tr!("ツールの JSON に、yuen が読むキーが無いとき。", "The tool's JSON lacks a key yuen reads."), tr!("ツールのバージョンを確かめます。", "Check the tool's version."), "", &["E203"]).later(),
-        e("E205", tr!("proto が読めません", "A .proto cannot be read"), tr!("`.proto` が yuen の読む範囲の proto3 として読めないとき。", "The `.proto` cannot be read as the proto3 yuen reads."), tr!("`.proto` を直します。", "Correct the `.proto`."), "", &["E201"]).later(),
-        e("W201", tr!("geas の記録が無いので、主張があるかを確かめていません", "No geas record, so whether the claim exists is not checked"), tr!("`geas map` の記録が無く、spec のファイルがあることしか確かめられないとき。", "There is no `geas map` record, so only that the spec file exists can be checked."), tr!("`geas map <spec>` を走らせて記録を作ります。", "Run `geas map <spec>` to make the record."), "", &["E202"]).later(),
+        e(
+            "E202",
+            tr!("成果物の名前が、そのファイルにありません", "The name of an artifact is not in its file"),
+            tr!(
+                "名指した名前が、そのファイルに無いとき（その言語が渡す中のものに無い、`.proto` に無い）。別名で書いたときと、名前が変わったときも（候補を添えます）。",
+                "The name is not in the file (among the things its language gives, or in the `.proto`): written by its alias, or renamed (the candidates are given)."
+            ),
+            tr!("その言語の名前（別名ではなく）で書きます。名前が変わったのなら、リンクも直します。", "Write the name the language gives (not its alias); if it was renamed, correct the link."),
+            include_str!("../tests/mutants/E202_無いメッセージ/例.req"),
+            &["E201"],
+        )
+        .beside(&[E202_PROTO]),
+        e(
+            "E203",
+            tr!("名指したものの言語が、そのファイルについて答えられません", "The language of what is named cannot answer for its file"),
+            tr!(
+                "名指したファイルが、その言語の検査を通らないか、読めないとき。検査を通らないファイルからは端を作りません。注に、その言語の診断を並べます。",
+                "The file named does not pass its language's check, or does not read; no end is made from a file that does not pass. The notes give what the language says."
+            ),
+            tr!("そのファイルが、その言語の検査を通るように直します。", "Make the file pass its language's check."),
+            include_str!("../tests/mutants/E203_検査を通らない規則/例.req"),
+            &["E106", "E202"],
+        )
+        .beside(&[E203_RULE]),
+        e(
+            "E204",
+            tr!("ツールの JSON が知らない形です", "The tool's JSON is not of a known shape"),
+            tr!("出しません。ツールの JSON に、yuen が読むキーが無いときのためのコードでした。", "Never: it was for a tool's JSON lacking a key yuen reads."),
+            tr!("直すものはありません。", "Nothing to fix."),
+            "",
+            &["E203"],
+        )
+        .retired(tr!(
+            "ritsu 0.23.0 で退きました。ほかの言語を子プロセスの JSON で読む予定のころに決めたコードで、いまは ritsu の口で型のまま読むので、JSON を読みません。",
+            "Retired in ritsu 0.23.0: it was set aside for reading the other languages from the JSON of child processes, and yuen reads them through ritsu's ports, as types, and reads no JSON."
+        )),
+        e(
+            "E205",
+            tr!("proto が読めません", "A .proto cannot be read"),
+            tr!("`.proto` が ritsu の `.proto` の読み手で読めないとき（proto3 として読めない、import の先が読めない）。", "The `.proto` cannot be read by ritsu's reader of `.proto` files (not proto3, or an import that does not read)."),
+            tr!("`.proto` を直します。", "Correct the `.proto`."),
+            include_str!("../tests/mutants/E205_読めないproto/例.req"),
+            &["E201"],
+        )
+        .beside(&[E205_PROTO]),
+        e(
+            "W201",
+            tr!("geas の記録が無いので、主張があるかを確かめていません", "No geas record, so whether the claim exists is not checked"),
+            tr!("出しません。`geas map` の記録が無く、spec のファイルがあることしか確かめられないときのためのコードでした。", "Never: it was for a spec with no `geas map` record, where only the file could be checked."),
+            tr!("直すものはありません。", "Nothing to fix."),
+            "",
+            &["E202", "E404"],
+        )
+        .retired(tr!(
+            "ritsu 0.23.0 で退きました。geas の主張は geas の口が spec から読むので、記録が無くても主張があるかを確かめます。記録が無いために辿れない範囲のファイルは、E404 の注が言います。",
+            "Retired in ritsu 0.23.0: geas's port reads the claims from the spec, so whether a claim exists is checked with no record; a file of a scope that cannot be traced for want of a record is said in a note of E404."
+        )),
         // ── Links and hashes ──
         e(
             "E301",
@@ -380,7 +471,8 @@ pub fn ledger() -> Ledger {
         )
         .beside(&[A_TXT]),
     ];
-    let later = tr!("（再現には一式のツールが要ります。yuen がツールを読むようになったら足します。）", "(The reproduction needs the suite's tools; it is added when yuen reads them.)");
+    // every code that is printed has its example; the words are for one that has none yet
+    let later = tr!("（再現はまだありません。）", "(No example yet.)");
     Ledger {
         tool: "yuen",
         example_file: "example.req",

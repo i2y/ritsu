@@ -236,7 +236,7 @@ ritsu/
 - 言語のクレートは、いまの `[[bin]]`（`rulec` など）を残す。開発と、そのクレートのテストが使う。
 - すべての言語をつなぐバイナリは `crates/ritsu` の `ritsu` だけである。
 - リリースで配るのは `ritsu` 一つで、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai` はそれを指すリンクにする。リンクの名前で呼ばれたら、その言語のコマンドとして、すべての口をつないで動く（8.2）。Cargo のバイナリの名前は、ワークスペースの中で重ならない（言語のクレートの `rulec` と、リリースのリンクの `rulec` は、作られる場所が違う）。
-- 受け取る側（dandori、yuen、sakai）のクレートのバイナリは、D の段階からほかの言語を読めない（ほかの言語のクレートに依存しないため）。ほかの言語を読むところに来たら、`ritsu <言語>` で走らせるよう言う診断を出す。dandori のクレートのバイナリは、規則を使わないフローならいまと同じに動く。D の二つ目の部分で dandori をそうした。規則を読む口に、何も読まない口（`dandori::sources::NoRules`）を渡し、`use rule` のところで E005 が `ritsu dandori …` で走らせるよう言う。`ritsu dandori` は、D で先に作った入口の最小の形にある（8.6）。
+- 受け取る側（dandori、yuen、sakai）のクレートのバイナリは、D の段階からほかの言語を読めない（ほかの言語のクレートに依存しないため）。ほかの言語を読むところに来たら、`ritsu <言語>` で走らせるよう言う診断を出す。dandori のクレートのバイナリは、規則を使わないフローならいまと同じに動く。D の二つ目の部分で dandori をそうした。規則を読む口に、何も読まない口（`dandori::sources::NoRules`）を渡し、`use rule` のところで E005 が `ritsu dandori …` で走らせるよう言う。`ritsu dandori` は、D で先に作った入口の最小の形にある（8.6）。D の最後の部分で yuen もそうした。yuen のクレートのバイナリは何もつながない口の束（`yuen::suite::Suite` の空のもの）を渡され、ほかの言語のものを名指すプロジェクトには、`ritsu yuen` に同じコマンドを続けた形を言って exit 2 で終わる。
 
 ## 3. 依存の決まり
 
@@ -271,9 +271,10 @@ ritsu/
 | `Rules` | rulec | dandori、yuen、sakai、ritsu-cross | 入力と出力（名前、別名、単位の付いた型、範囲、率の刻み）、列挙（値の名前と、Connect のワイヤでの名前と番号）、ステートマシン（軸、行が受け付ける座標、遷移、書く値、held）、前提（`constraint`・`sum`・`length`）、Connect のサービスの形、生成したコードの呼び方、`rulec doc` が描いたもの。問いは「この範囲の値で、前提は必ず成り立つか」と「この入力の値をこの集合に限ったとき、表は完全で、重なりが無く、当てはまらない行が無いか」。評価は入力から出力 |
 | `Dates` | koyomi | dandori、rulec、ritsu-cross | 関数、引数の型と範囲、カレンダーとデータの範囲、`at` の時刻と UTC オフセット、条件の名前と文。問いは「入力の範囲で、関数がとりうる値の集合」と「入力から値までの日数の最小と最大」。評価 |
 | `Books` | chobo | dandori、ritsu-cross | 単位（ritsu の単位の型。D.9）、勘定と境界と断る理由、振替の種類（引数と単位、キー、仮押さえと有効期限、移動）、仮押さえのステートマシン。問いは「額がこの範囲のとき、どの操作が、どの理由で断られうるか」。評価（帳簿の状態を持つ） |
-| `Claims` | geas | yuen、ritsu-cross | 主張の一覧（名前、行、書いたとおりの手順）。map の記録の読み方 |
+| `Claims` | geas | yuen、ritsu-cross | 主張の一覧（名前、行、書いたとおりの手順）。map の記録の読み方。差分が主張に何をもたらすか（geas の `affected`。D.7 で足した） |
 | `Items` | 七つ全部 | yuen、sakai、LSP | 中のもの（種類、名前、行の範囲、定義の文）。6.4 |
 | `References` | 七つ全部 | sakai、yuen、LSP | 参照（行、先の名指し、参照の仕方）。6.4 |
+| `Sources` | rulec、koyomi | yuen | ファイルが宣言して写している出典（法令の ID と時点と条ごとの固定、文書のパスと url と固定）。検査を通るファイルにだけ答える。D.7 で足した（下の段落） |
 
 どの問いの答えも、P5 の三つのどれかになる。値を尋ねる問い（koyomi の日付がとりうる値の集合など）は、その値か、決められない理由かの二つになる。
 
@@ -294,7 +295,8 @@ pub trait Rules {
 pub trait Dates { fn facts(..) -> DateFacts; fn values(.., date) -> Found<DaySet>; fn days(.., date) -> Found<(i64, i64)>; fn eval(.., inputs) -> Vec<(String, DateValue)>; }
 pub trait Books { fn facts(..) -> BookFacts; fn refusals(.., transfer, amounts) -> Found<Vec<(op, reasons)>>; fn open(..) -> Box<dyn Ledger>; }
 pub trait Ledger { fn apply(&mut self, &BookCall) -> Result<BookOutcome, Text>; fn pass(&mut self, seconds) -> expired; fn balance(&self, account, args) -> Balance; }
-pub trait Claims { fn claims(..) -> Vec<Claim>; fn map_record(..) -> Option<MapRecord>; }
+pub trait Claims { fn claims(..) -> Vec<Claim>; fn map_record(..) -> Option<MapRecord>; fn affected(.., root, diff, diff_shown, records) -> Affected; }
+pub trait Sources { fn sources(..) -> Vec<Source>; }   // Source { name, line, kind: Law { db, id, asof, pins } | File { path, url, pin } }
 pub trait Items { fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, Vec<Said>>; }       // Item { naming, lines, text }
 pub trait References { fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>>; } // Reference { line, target, how }
 ```
@@ -316,8 +318,14 @@ pub trait References { fn references(&self, root: &Path, file: &str) -> Result<V
 | `Rules`（rulec） | `facts`、`doc`、`eval`（参照評価器。生成したコードが入口で断る入力、つまり型と列挙と範囲と入力どうしの関係を破るものは断る）、`preconditions_hold` のうち入力どうしの関係（範囲の箱のいちばん厳しい角で決まる。成り立たなければその角が例） | `preconditions_hold` のうち並びの合計と長さの上限（問いが並びの長さの範囲を持たない）、`checked_over`（rulec の検査が日付の集合を軸に置く形を持たない。E の X3 (b)） |
 | `Dates`（koyomi） | `facts`、`values`、`days`、`eval`（範囲のすべての入力で計算する） | 入力の組み合わせが koyomi の確かめる数を超えるとき、途中で計算が止まる入力があるときは、決められないと言う |
 | `Books`（chobo） | `facts`、`open`（参照インタプリタの帳簿。操作、時間を進める、残高） | `refusals`（chobo の検査は額を決まった値でしか試さない。E の X4） |
-| `Claims`（geas） | `claims`、`map_record` | — |
+| `Claims`（geas） | `claims`、`map_record`、`affected`（D.7） | — |
+| `Sources`（rulec、koyomi） | `sources`（D.7。検査を通らないファイルには、その検査の診断を返す） | — |
 | `Items`、`References` | rulec、koyomi、chobo（中のものだけ）、geas（中のものだけ）、yuen、sakai、dandori（D の二つ目の部分。D.6） | — |
+
+**D の最後の部分で足したもの**（PLAN の D.7）。yuen が一式を口で読むために、口を二つ足した。
+
+- `Sources`：yuen が借りる出典（規則とカレンダーが写して固定しているもの）と、E107 で比べる写しの固定を渡す。取り込む前の yuen は `rulec api` と `koyomi api` の `sources` を読むつもりだった。`Rules` と `Dates` の事実に入れずに別の口にしたのは、受け取るのが yuen だけで、`RuleFacts` と `DateFacts` を作るより軽く答えられ（rulec は規則を読み直さずに覚えたものから、koyomi は検査を通したあとで出典の行だけを読み直す）、検査を通らないファイルに答えないこと（その検査の診断を返すこと）が、yuen の E203 にそのままつながるからである。
+- `Claims::affected`：差分（バイト列と、見せるときの名前）と記録から、geas の `affected` の答え（記録がどちら側のものか、触る主張と行、どの主張も走らせない行、消えるファイル、ソースでないファイル、spec と基準の変わり）を渡す。geas の `affected` のコマンドと同じ関数（`answer_for`）が答えるので、二つが食い違わない。
 
 中のものの定義の文は、6.4 の表のとおりにした。rulec は `rulec fmt` が書く形の行、koyomi は `date … =` の塊の行と条件の行（コメントと前後の空白を除く）、chobo は yuen の DESIGN 3.2 の形の JSON（yuen の試作が計算したハッシュと同じになる）、geas は主張の塊の行、dandori はタスク・案件・レコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3）である。表に無かった yuen は要件の端の中身（yuen の DESIGN 4.1）と出典の固定の行、sakai はコンテキストのファイルの行と語の塊の行にした。
 
@@ -327,7 +335,7 @@ pub trait References { fn references(&self, root: &Path, file: &str) -> Result<V
 
 受け取る側のクレートのテストのうち、いまバイナリを走らせて規則などを読むもの（dandori の `tests/examples.rs` など）は、D の段階で、CLI を関数として呼ぶ形（`dandori::cli::run(引数, 口, 標準出力, 標準エラー)`）に替える。すべてをつないだバイナリを走らせるテストは、`crates/ritsu/tests/` に置く。
 
-D の二つ目の部分で、dandori をそうした。dandori のテストは rulec を `[dev-dependencies]` に持ち、規則を `rulec::ports::Engine` から同じプロセスの中で読む。ライブラリを呼ぶテストは、読む口をスレッドに置いて（`dandori::sources::with_rules`）呼び、バイナリを走らせていたテストは `dandori::cli::run` を呼ぶ。テストが要る `rulec gen` の出力は、rulec の `gen` の本体をライブラリに移した `rulec::codegen::generate`（コマンドと同じ関数。出力は変わらない）で作り、`rulec vectors` の出力は `rulec::vectors` で作る。規則を読むだけのテストは、rulec のバイナリが要らなくなったので `fast` の段でも走る。
+D の二つ目の部分で、dandori をそうした。D の最後の部分で、yuen も rulec、koyomi、chobo、geas、dandori、sakai を `[dev-dependencies]` に持ち、`ritsu yuen` と同じにつないで、コマンドを関数（`yuen::run::run`）として呼ぶようになった。環境変数を変えて走らせるもの（テストの中の e-Gov に問う `source outdated`）は、ritsu のバイナリを走らせる `crates/ritsu/tests/yuen.rs` に置いた。dandori のテストは rulec を `[dev-dependencies]` に持ち、規則を `rulec::ports::Engine` から同じプロセスの中で読む。ライブラリを呼ぶテストは、読む口をスレッドに置いて（`dandori::sources::with_rules`）呼び、バイナリを走らせていたテストは `dandori::cli::run` を呼ぶ。テストが要る `rulec gen` の出力は、rulec の `gen` の本体をライブラリに移した `rulec::codegen::generate`（コマンドと同じ関数。出力は変わらない）で作り、`rulec vectors` の出力は `rulec::vectors` で作る。規則を読むだけのテストは、rulec のバイナリが要らなくなったので `fast` の段でも走る。
 
 土台の層の `ritsu-proto` と `ritsu-emit` のテストは、言語の側が移るまでのあいだだけ、rulec（`ritsu-proto` は dandori も）を `[dev-dependencies]` に持ち、言語のいまの読み手と表を、土台のものと生のまま比べる（C.9、C.10）。決まり 2 の例外で、移したあとに残しておく理由は無い。言語の側が土台のものを使うようになるとき（表は C.11、読み手は D.10）に、比べる部分とその dev-dependency を消し、golden と比べるテストだけを残す。そのままにすると依存が輪になり、比べる相手も土台のものになって、比べる意味が無くなる。`cargo xtask deps` は dev-dependency を決まり 1〜3 の外に置くので、この例外はこの節で守る。
 
@@ -370,6 +378,8 @@ JSON は、キーを英語で固定し、`code`、`severity`、`file`、`line`�
 ### 4.3 診断の台帳と explain
 
 `Entry`（コード、重さ、一行の題、いつ出るか、直し方、最小の再現、隣に置くファイル、関連するコード）と、`find`、テキストと Markdown（コードごとのアンカーつき）と JSON の書き出し、そしてどの再現も自分のコードを出すことを確かめるテストの共通部分を置く。台帳の中身は言語ごとに残す。`docs/codes.md` と `docs/codes.ja.md` は、どの言語も `explain --all --format markdown` の出力そのものにする（いまもそうしている五つの形）。dandori の台帳と `explain` は D の二つ目の部分で足した（dandori の `src/codes.rs`）。dandori の診断コードの一覧は、サイトの一行ずつの表（`website/docs/reference/codes.md`）のままで、`explain` の Markdown にはまだしていない（サイトを ritsu に移す F で決める）。
+
+退いたコードは、台帳に残して引けるようにし、番号を使い回さない（7.10）。D の最後の部分で、再現の代わりに退いた理由と版を持つ形（`Repro::Retired`、`Entry::retired`）を足した。`explain` は再現の見出しの下に理由を書き、再現を走らせるテスト（`check_every`）は退いたコードを飛ばす。yuen の E204 と W201 が最初に使った。
 
 ### 4.4 CLI の表
 
@@ -461,6 +471,10 @@ C.9 で `ritsu-proto` を作り、sakai をこれに替えた（rulec と dandor
 - dandori：import をたどる部分は dandori に残した。ファイルを、ディスクからも、ブラウザで試すページが持つファイル（`Sources`）からも探すからである。たどった一つずつのファイルを `ritsu_proto::read` で読み、型の名前は `Protos` で、見えるファイル（自分、import した先、`import public` の先）だけから引く。proto2 と editions は断る。読めなかった import があるときは、引けない名前を書いたまま持つ（その import の先の型を、無い型として断らない）。`src/proto.rs` は 1,145 行から 551 行になった（1.2 の表の 1,153 行は元のリポジトリのもので、C で単体テストの一時ディレクトリを替えて 1,145 行になっていた）。読めないファイルの文の形が変わった（dandori の DESIGN 0.3）が、例と `tests/flows` の出力は 701 回とも変わらない。
 - `ritsu-proto` の文：何が要るか（`Problem::Expected` の `what`）を、英語の語から二つの言語の文にした。日本語の文に英語の語が混ざっていた（「a name が要るところに」）のが、「名前が要るところに」になる。sakai の E106 の日本語の文はこれで変わるが、sakai の golden には当たるものが無かった。`tests/golden/sakai.txt` の一行を取り直した。
 - 三つの読み手と生のまま比べるのはやめ、`tests/readers.rs` は三つの golden と比べる形だけを残した（3.3）。比べるのをやめる前に、替えたあとの rulec と dandori の読み方と生のまま比べて、三つの golden の全部と同じことを確かめた。
+
+### 4.14 統一形式の差分（`ritsu_base::udiff`、D の最後の部分で足した）
+
+`git diff` と `diff -u` が書く差分の読み手を、土台に一つ置く。geas の `affected`（差分がどの主張に触るか）と yuen の `affected`（差分がどの要件に触るか）が、同じ差分を読むからである。geas の `src/diff.rs` の読む部分（ファイルの前と後のパス、引用符で書いたパス、改名と追加と削除、`index` の行の blob、二進のファイル、ハンクとその行、「末尾に改行が無い」の行）と、ディスクのファイルが差分の前と後のどちらに合うかを決める部分（`Content`、`fits`、`other_side`）を、中身を変えずに移した。blob のハッシュ（git の blob の形）は geas に残した。geas はそれを `pub use` で使い、振る舞いは変わらない（geas の `affected` のテストの golden がそのまま通る）。yuen は、`.req` のどの行が変わったかを、ディスクのファイルが差分のどちら側かを決めてから読む（yuen の DESIGN 8 章）。
 
 ## 5. 単位の型
 
@@ -706,7 +720,7 @@ dandori に、期日と帳簿を読む宣言を足す（E の段階。dandori �
 
 ### 7.10 yuen、sakai、名指し（X8〜X10）
 
-- **yuen**：段階 C で止めていた「一式の読み込み」（yuen の PLAN の C.1〜C.9）を、子プロセスと JSON ではなく、`Rules`・`Dates`・`Books`・`Claims`・`Items` の口で作る。端は 6.4 の定義の文になり、表や日付の関数や主張の一つ一つを追える。借りた出典は土台の出典（4.6）から読み、E107 も同じ手続きで比べる。`affected` は geas の記録を geas の口で読む。
+- **yuen**：段階 C で止めていた「一式の読み込み」（yuen の PLAN の C.1〜C.9）を、子プロセスと JSON ではなく、`Rules`・`Dates`・`Books`・`Claims`・`Items` の口で作る。端は 6.4 の定義の文になり、表や日付の関数や主張の一つ一つを追える。借りた出典は土台の出典（4.6）から読み、E107 も同じ手続きで比べる。`affected` は geas の記録を geas の口で読む。D の最後の部分で、そう作った（PLAN の D.7）。読むのは `Items`（中のものと定義の文）、`Sources`（規則とカレンダーの出典。D.7 で足した口）、`Rules` と `Dates`（別名だけ）、`Claims`（記録と、D.7 で足した `affected`）で、`Books` は読まない（chobo の中のものと定義の文は `Items` が渡す）。E203 は「名指したものの言語が、そのファイルについて答えられない」に意味を替え、E204 と、記録で主張の名前を確かめていた W201 を退かせた（yuen の DESIGN 6.2）。
 - **sakai**：止めていた C.1〜C.5 を、`References` と `Rules` の列挙（`connect.enums` にあたるもの）で作る。dandori の参照も読めるので、N101 は要らなくなる。sakai の DESIGN 4.7 が挙げていた四つの検査（規則の同梱が境界を越える、`connect` で呼ぶサービスが上流の公開ホストサービスでない、`implements` するサービスが自分の公表された言語に無い、子の `.flow` が境界の向こうのもの）を足す。子の `.flow` の扱い（sakai の DESIGN 4.7 の最後の段落）は、そのとき sakai の DESIGN に決める。
 - **名指し**：プロジェクトのどこに書いた名指しも、索引のものを指すかを確かめる。いまは yuen と sakai がそれぞれ確かめている（yuen の E202 など）。言語ごとのコードと文はそのまま残し、引き方だけを索引に替える。子プロセスと JSON のためのコード（yuen の E203「ツールがファイルを読めない」と E204「ツールの JSON が知らない形」、sakai の E104「ツールが無い」と E105「ツールの api が失敗した」）は、出す側の検査のエラーを名指すもの（6.1）に意味を替えるか、退かせる。退かせるコードは台帳に退いたと書いて残し、番号を使い回さない（rulec の docs/compatibility.md と同じ決まり）。
 
@@ -778,6 +792,8 @@ D.3 で、dandori のクレートは rulec を読まなくなり、そのバイ�
 ブラウザで試すページは困らない。wasm のモジュールは初めから rulec を持たず、規則の答えを記録して持つからである（D.3 で、記録を口の答えにした）。
 
 **決定（★）**：入口の最小の形を D で先に作る。`crates/ritsu` のバイナリ `ritsu` が持つのは、`ritsu dandori <引数>…`（dandori のコマンドを、rulec の規則の口をつないで走らせる）と、`--help`、`--version` だけである。ほかの言語の名前（`ritsu rulec` など）には、まだ無いと言って 2 で終わる。それらの言語は、これまでどおり自分のクレートのバイナリで動く（rulec・koyomi・chobo・geas はほかの言語を読まない。yuen と sakai がほかの言語を子プロセスで呼ぶところは、D.7 と D.8 で口に替える）。`ritsu check`、`ritsu run`、`ritsu gen`、`ritsu explain`、すべての言語の `ritsu <言語>`、リンクの名前で呼ばれたときの振る舞い（2.3）は、E で作る。
+
+D の最後の部分で、`ritsu yuen <引数>…` を足した（PLAN の D.7）。yuen のコマンドを、yuen が読むすべての言語の口（rulec、koyomi、chobo、geas、dandori、sakai の `Items`、rulec と koyomi の `Sources`、rulec の `Rules`、koyomi の `Dates`、geas の `Claims`）をつないで走らせる。テストは `crates/ritsu/tests/yuen.rs`（ほかの言語のものを名指す yuen のテストの材料の全部が通ること、`affected`、借りた出典の `source outdated`）。
 
 待つ費用が大きく、作る費用が小さいからである。待てば、規則を使う例をコマンドで走らせる手段が E まで無く、README に書ける手順も無い。作るのは、dandori のコマンドを関数（`dandori::cli::run`）にしたので、引数を渡すだけで済む（`src/main.rs` は 90 行）。入口は何に依存してもよく（3.1）、`cargo xtask deps` も通る。テストは `crates/ritsu/tests/dandori.rs` に置いた（すべてをつないだバイナリを走らせるテストの置き場所。3.3）。規則を使うフローを `ritsu dandori check` と `doc` が読むこと（英語と日本語）と、`ritsu` が持たないコマンドに 2 で終わることを見る。
 

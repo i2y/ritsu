@@ -39,14 +39,16 @@ pub fn api(c: &Checked, label: &str, lang: Lang) -> Option<Value> {
     for (fi, f) in p.files.iter().enumerate() {
         for (name, r) in &m.sources.files[fi] {
             sources.push(match r {
-                Resolved::Law { db, id, asof, revision, articles, .. } => json!({
-                    "file": f.rel, "name": name, "kind": "law", "db": db.word(), "id": id, "asof": asof, "revision": revision, "borrowed": null,
+                Resolved::Law { db, id, asof, revision, articles, borrowed, .. } => json!({
+                    "file": f.rel, "name": name, "kind": "law", "db": db.word(), "id": id, "asof": asof, "revision": revision,
+                    "borrowed": borrowed.as_ref().map(|n| crate::diag::value(&n.to_json())),
                     "pins": articles.iter().map(|a| json!({"fragment": a.fragment, "sha256": a.pin})).collect::<Vec<_>>(),
                 }),
-                Resolved::File { name: n, url, pin, .. } => json!({
-                    "file": f.rel, "name": name, "kind": "file", "path": n.path, "url": url, "sha256": pin, "borrowed": null,
+                Resolved::File { name: n, url, pin, borrowed, .. } => json!({
+                    "file": f.rel, "name": name, "kind": "file", "path": n.path, "url": url, "sha256": pin,
+                    "borrowed": borrowed.as_ref().map(|b| crate::diag::value(&b.to_json())),
                 }),
-                Resolved::Borrowed { name: n } => json!({"file": f.rel, "name": name, "kind": "borrowed", "borrowed": crate::diag::value(&n.to_json())}),
+                Resolved::NoPort { name: n } => json!({"file": f.rel, "name": name, "kind": null, "borrowed": crate::diag::value(&n.to_json())}),
                 Resolved::Broken => json!({"file": f.rel, "name": name, "kind": null, "borrowed": null}),
             });
         }
@@ -125,7 +127,12 @@ pub fn api(c: &Checked, label: &str, lang: Lang) -> Option<Value> {
             let o = j.as_object_mut().unwrap();
             o.insert("sha256".into(), json!(e.as_ref().ok().map(|e| e.hash.clone())));
             o.insert("end".into(), json!(if n.items.is_empty() { "file" } else { "item" }));
-            o.insert("pins".into(), json!([]));
+            // the articles the artifact's file pins (DESIGN 3.3): a rule's or a calendar's
+            let pins: Vec<Value> = crate::sources::pinned_by(p, &n.whole_file())
+                .iter()
+                .map(|x| json!({"db": x.db.word(), "id": x.id, "asof": x.asof, "fragment": x.fragment, "sha256": x.pin}))
+                .collect();
+            o.insert("pins".into(), Value::Array(pins));
             j
         })
         .collect();

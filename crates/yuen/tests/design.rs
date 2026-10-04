@@ -1,10 +1,11 @@
 //! What DESIGN.md shows a command printing is what the command prints. Every fenced block
-//! that starts with `$ yuen …` is run from the root of the repository and compared, except
-//! the blocks still marked 形の案 (a proposal for a later stage) within three lines of them,
-//! and the commands that read the network (`source fetch` and `source outdated`): the tests
-//! never do, and what DESIGN.md shows of them was taken from a real run on the day it says.
+//! that starts with `$ yuen …` is run from the crate's directory and compared, with every
+//! language joined (as `ritsu yuen` runs it, since some name a rule or a calendar), except the
+//! blocks still marked 形の案 (a proposal for a later stage) within three lines of them, and the
+//! commands that read the network (`source fetch` and `source outdated`): the tests never do,
+//! and what DESIGN.md shows of them was taken from a real run on the day it says.
 
-use std::process::Command;
+mod common;
 
 #[test]
 fn every_command_in_design_prints_what_design_shows() {
@@ -42,8 +43,8 @@ fn every_command_in_design_prints_what_design_shows() {
                 continue;
             }
             let args = split(&cmd);
-            let o = Command::new(env!("CARGO_BIN_EXE_yuen")).args(&args[1..]).env_remove("YUEN_LANG").env_remove("RITSU_LANG").output().unwrap();
-            let got = String::from_utf8_lossy(&o.stdout).to_string();
+            let words: Vec<&str> = args[1..].iter().map(|a| a.as_str()).collect();
+            let got = common::run(&words).stdout;
             if got != want {
                 failures.push(format!("$ {cmd}\n--- DESIGN.md shows\n{want}--- it prints\n{got}"));
             }

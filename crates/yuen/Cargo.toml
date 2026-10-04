@@ -9,8 +9,17 @@ repository = "https://github.com/i2y/yuen"
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
 ritsu-ports = { path = "../ritsu-ports" }
+ritsu-proto = { path = "../ritsu-proto" }
 # preserve_order: `yuen api` and `--format json` print their keys in the order DESIGN.md writes them
 serde_json = { version = "1", features = ["preserve_order"] }
 
+# The languages yuen reads, each through its own engine of ritsu's ports: the tests join them
+# as `ritsu yuen` does (ritsu's DESIGN 3.3). yuen's own code holds none of them.
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
+chobo = { path = "../chobo" }
+dandori = { path = "../dandori" }
+geas = { path = "../geas" }
+koyomi = { path = "../koyomi" }
+rulec = { path = "../rulec" }
+sakai = { path = "../sakai" }

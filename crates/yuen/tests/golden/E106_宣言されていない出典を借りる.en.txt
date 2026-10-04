@@ -1,0 +1,4 @@
+error[E106]: tests/mutants/E106_宣言されていない出典を借りる/例.req:4:8: tests/mutants/E106_宣言されていない出典を借りる/a.cal declares no source 民法
+     4 | source 民法 = koyomi "a.cal" source 民法
+  = tests/mutants/E106_宣言されていない出典を借りる/a.cal declares no source at all.
+tests/mutants/E106_宣言されていない出典を借りる: 1 error

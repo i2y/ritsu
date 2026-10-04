@@ -1,0 +1,2 @@
+キャンセル "出荷の前に、客の申し出で注文を取り消すこと"
+means enum OrderStatus value ORDER_STATUS_CANCELLED

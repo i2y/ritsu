@@ -63,7 +63,8 @@
             ],
             "down": "c9b94eecde23e6b5"
           },
-          "status": "ok"
+          "status": "ok",
+          "pins": []
         },
         {
           "line": 23,

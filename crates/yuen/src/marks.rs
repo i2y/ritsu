@@ -601,8 +601,9 @@ fn mark_diag(p: &Project, ctx: &Ctx, by_req: &BTreeMap<usize, Vec<&LinkState>>, 
                             }
                             Some(b) => match text_diff(&b, e) {
                                 Some((dl, more)) => {
+                                    // a file by its path, a thing in it by its naming (DESIGN 3.2)
                                     let path = match &e.thing {
-                                        Thing::Artifact(n) => p.shown(&n.path),
+                                        Thing::Artifact(n) if n.items.is_empty() => p.shown(&n.path),
                                         _ => a.clone(),
                                     };
                                     d = d.diff(tr!("{path} の変わったところ", "what changed in {path}"), dl);

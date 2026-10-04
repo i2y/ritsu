@@ -1,0 +1,13 @@
+diff: tests/fixtures/geas/changes/change.diff
+the claims the change touches (geas "greeter/greeter.geas"; records: tests/fixtures/geas/greeter/.geas/greeter.map.jsonl (before), tests/fixtures/geas/changes/after.map.jsonl (after)):
+  claim "rejects an empty name": tests/fixtures/geas/greeter/server.py 26 (after), 26 (before)
+    checked by rejects_an_empty_name
+files that requirements name, that the diff touches:
+  file "greeter/server.py": met by greets_by_name, rejects_an_empty_name, totals_accumulate, unknown_paths_are_404
+changes no requirement reaches: none
+requirements touched:
+  greets_by_name (tests/fixtures/geas/greeter.req:11): owner api; from contract
+  rejects_an_empty_name (tests/fixtures/geas/greeter.req:21): owner api; from contract; decided 2026-10-03 by api: "an empty name is a client error, not a greeting"
+  totals_accumulate (tests/fixtures/geas/greeter.req:32): owner api; from contract
+  unknown_paths_are_404 (tests/fixtures/geas/greeter.req:42): owner api; from contract
+4 requirements touched; ask api

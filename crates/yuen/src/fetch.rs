@@ -442,126 +442,196 @@ fn diff_lines(old: &str, new: &str, lines: &mut Vec<Text>) {
     }
 }
 
-/// `yuen source outdated`.
+/// The rules and calendars the links name that pin an article (DESIGN 3.3): they are to be
+/// looked at when it changes, as the requirements that cite it are.
+fn pinned_by(p: &Project, db: LawDb, id: &str, fragment: &str) -> Vec<String> {
+    let mut files: Vec<crate::names::Name> = Vec::new();
+    for n in p.names.links.iter().flatten().flatten() {
+        let file = n.whole_file();
+        if !files.contains(&file) {
+            files.push(file);
+        }
+    }
+    files.into_iter().filter(|f| crate::sources::pinned_by(p, f).iter().any(|x| x.db == db && x.id == id && x.fragment == fragment)).map(|f| f.text()).collect()
+}
+
+/// Where a source is read from, for `outdated`: one of the project's own, or one a rule or a
+/// calendar pins, which is to be fetched and pinned again there.
+enum Whose<'a> {
+    Own,
+    Borrowed(&'a crate::names::Name),
+}
+
+/// One law, as of its `asof`, against every revision that comes into force after it: the
+/// articles (each with its copy's file), the copies' directory, and whose they are.
+#[allow(clippy::too_many_arguments)]
+fn law_outdated(p: &Project, fi: usize, name: &str, db: LawDb, id: &str, asof: &str, files: &[(String, String)], cdir: &Path, whose: Whose, net: &mut Net, lines: &mut Vec<Text>) -> Result<bool, Text> {
+    let mut changed = false;
+    let later = match db {
+        LawDb::Egov => egov().later_revisions(id, asof).map_err(cap)?,
+        LawDb::Ecfr => ecfr().amendments(id, asof, &files.iter().map(|(_, file)| file.trim_end_matches(".xml").to_string()).collect::<Vec<_>>()).map_err(cap)?.into_iter().map(|(d, _)| (d, String::new())).collect(),
+    };
+    if later.is_empty() {
+        lines.push(match db {
+            LawDb::Egov => tr!("{name}: {asof} より後に施行される版はありません", "{name}: no revision comes into force after {asof}"),
+            LawDb::Ecfr => tr!("{name}: {asof} より後の改正はありません", "{name}: no amendment after {asof}"),
+        });
+        return Ok(false);
+    }
+    // Each date is held to the text of the date before it, starting from the copy, so an
+    // amendment is said once, on the day it comes into force.
+    let mut differs: BTreeMap<String, Vec<(String, String, String)>> = BTreeMap::new();
+    for (fr, file) in files {
+        let Ok(mut prev) = std::fs::read(cdir.join(file)) else {
+            lines.push(match whose {
+                Whose::Own => tr!("{name}: {fr} の写しが無いので比べられません。先に yuen source fetch を走らせます", "{name}: there is no copy of {fr} to compare; run yuen source fetch first"),
+                Whose::Borrowed(n) => {
+                    let t = n.text();
+                    tr!("{name}: {t} の {fr} の写しが無いので比べられません", "{name}: there is no copy of {fr} of {t} to compare")
+                }
+            });
+            continue;
+        };
+        for (date, _) in &later {
+            let (xml, _) = net.article(db, id, date, file)?;
+            if !same_text(&prev, &xml) {
+                let (a, b) = (copies::xml_text(&String::from_utf8_lossy(&prev)), copies::xml_text(&String::from_utf8_lossy(&xml)));
+                differs.entry(date.clone()).or_default().push((fr.clone(), a, b));
+            }
+            prev = xml;
+        }
+    }
+    for (date, rid) in &later {
+        let rev = if rid.is_empty() { Text::default() } else { tr!("（{rid}）", " ({rid})") };
+        match differs.get(date) {
+            None => lines.push(match db {
+                LawDb::Egov => tr!("{name}: {date} 施行の版{}では、引いている条は変わりません", "{name}: the revision in force from {date}{} leaves the cited articles as they are", rev.ja; rev.en),
+                LawDb::Ecfr => tr!("{name}: {date} の改正では、引いている条は変わりません", "{name}: the amendment of {date} leaves the cited sections as they are"),
+            }),
+            Some(frs) => {
+                changed = true;
+                let names: Vec<&str> = frs.iter().map(|(f, _, _)| f.as_str()).collect();
+                lines.push(match db {
+                    LawDb::Egov => tr!("{name}: {date} 施行の版{}で {} が変わります", "{name}: the revision in force from {date}{} changes {}", rev.ja, names.join("、"); rev.en, names.join(", ")),
+                    LawDb::Ecfr => tr!("{name}: {date} の改正で {} が変わります", "{name}: the amendment of {date} changes {}", names.join("、"); names.join(", ")),
+                });
+                for (fr, a, b) in frs {
+                    lines.push(tr!("  {fr} の本文の差分:", "  what changed in the text of {fr}:"));
+                    diff_lines(a, b, lines);
+                    reach_lines(p, &reach(p, fi, name, Some(fr)), lines);
+                    let pinned = pinned_by(p, db, id, fr);
+                    if !pinned.is_empty() {
+                        lines.push(tr!("  固定している成果物: {}", "  pinned by: {}", pinned.join("、"); pinned.join(", ")));
+                    }
+                }
+                lines.push(match whose {
+                    Whose::Own => tr!(
+                        "  asof を {date} に進めて yuen source fetch と yuen source pin を走らせると、yuen check がこれらに印を付けます",
+                        "  move asof to {date}, then run yuen source fetch and yuen source pin; yuen check then marks these"
+                    ),
+                    Whose::Borrowed(n) => {
+                        let (t, tool) = (n.text(), n.tool.word());
+                        tr!(
+                            "  {t} で asof を {date} に進めて {tool} source fetch と {tool} source pin を走らせると、yuen check がこれらに印を付けます",
+                            "  in {t}, move asof to {date}, then run {tool} source fetch and {tool} source pin; yuen check then marks these"
+                        )
+                    }
+                });
+            }
+        }
+    }
+    Ok(changed)
+}
+
+/// A file source against its `url` (DESIGN 14): unchanged, or what changed from the copy, and
+/// who it reaches.
+#[allow(clippy::too_many_arguments)]
+fn file_outdated(p: &Project, fi: usize, name: &str, url: Option<&str>, pin: Option<&str>, copy_rel: &str, whose: Whose, lines: &mut Vec<Text>) -> Result<bool, Text> {
+    let Some(url) = url else {
+        lines.push(tr!("{name}: url が無いので、元が変わったかを問えません", "{name}: no url, so there is nothing to ask whether it moved on"));
+        return Ok(false);
+    };
+    let body = curl(url)?;
+    let h = sha256::short(&body);
+    if pin == Some(h.as_str()) {
+        lines.push(tr!("{name}: 変わっていません（{url} は sha256:{h} で、固定と同じ）", "{name}: unchanged ({url} is sha256:{h}, as pinned)"));
+        return Ok(false);
+    }
+    let was = pin.map(|x| format!("sha256:{x}")).unwrap_or_else(|| "-".into());
+    lines.push(tr!("{name}: {url} が変わりました（固定は {was}、いまは sha256:{h}）", "{name}: {url} moved on (pinned {was}, now sha256:{h})"));
+    let copy = std::fs::read(p.root.join(copy_rel)).ok();
+    if let (Some(old), Ok(new)) = (copy.as_deref().and_then(|b| std::str::from_utf8(b).ok()), std::str::from_utf8(&body))
+        && old.len() <= 1 << 20
+        && new.len() <= 1 << 20
+    {
+        let path = p.shown(copy_rel);
+        lines.push(tr!("  写し {path} からの差分:", "  what changed from the copy {path}:"));
+        diff_lines(old, new, lines);
+    }
+    reach_lines(p, &reach(p, fi, name, None), lines);
+    lines.push(match whose {
+        Whose::Own => tr!(
+            "  読んでから yuen source fetch で取り直して yuen source pin で固定すると、yuen check がこれらに印を付けます",
+            "  read it, then yuen source fetch takes it and yuen source pin pins it; yuen check then marks these"
+        ),
+        Whose::Borrowed(n) => {
+            let (t, tool) = (n.text(), n.tool.word());
+            tr!(
+                "  読んでから {t} で {tool} source fetch と {tool} source pin を走らせると、yuen check がこれらに印を付けます",
+                "  read it, then run {tool} source fetch and {tool} source pin in {t}; yuen check then marks these"
+            )
+        }
+    });
+    Ok(true)
+}
+
+/// `yuen source outdated`. A borrowed source is asked about as its own are, from the pins and
+/// the copies of the rule or the calendar it is borrowed from (`Sources`); it is fetched and
+/// pinned again there.
 pub fn outdated(p: &Project) -> Result<Outcome, Text> {
     let mut out = Vec::new();
     let mut changed = false;
     let mut net = Net::default();
+    let resolved = crate::sources::check_sources(p).0;
     for (fi, f) in p.files.iter().enumerate() {
         let req_dir = f.abs.parent().map(Path::to_path_buf).unwrap_or_default();
         let mut lines = Vec::new();
         for (si, s) in f.ast.sources.iter().enumerate() {
             let name = &s.name;
             match &s.kind {
-                SourceKind::Borrowed { .. } => {}
+                SourceKind::Borrowed { .. } => match resolved.get(fi, name) {
+                    Some(crate::sources::Resolved::Law { db, id, asof, dir, articles, borrowed: Some(n), .. }) => {
+                        let files: Vec<(String, String)> = articles.iter().filter_map(|a| copies::fragment_file(*db, &a.fragment).map(|file| (a.fragment.clone(), file))).collect();
+                        changed |= law_outdated(p, fi, name, *db, id, asof, &files, dir, Whose::Borrowed(n), &mut net, &mut lines)?;
+                    }
+                    Some(crate::sources::Resolved::File { name: copy, url, pin, borrowed: Some(n), .. }) => {
+                        changed |= file_outdated(p, fi, name, url.as_deref(), pin.as_deref(), &copy.path, Whose::Borrowed(n), &mut lines)?;
+                    }
+                    Some(crate::sources::Resolved::NoPort { name: n }) => {
+                        let (t, tool) = (n.text(), n.tool.word());
+                        let at = format!("{}:{}", f.display, s.span.line);
+                        let cmd = crate::check::with_ritsu(p);
+                        return Err(tr!(
+                            "この yuen は {tool} の出典を読めません: {t}（{at}）。ほかの言語を読むところは、すべての言語をつないだ `{cmd}` のように ritsu で走らせます",
+                            "this yuen cannot read {tool} sources: {t} ({at}); run it with every language joined, through ritsu: `{cmd}`"
+                        ));
+                    }
+                    _ => lines.push(tr!("{name}: 借りた出典を読めないので、問えません（理由は yuen check が言います）", "{name}: the borrowed source cannot be read, so it cannot be asked about (yuen check says why)")),
+                },
                 SourceKind::File { url, pin, .. } => {
                     let Some(n) = &p.names.sources[fi][si] else { continue };
-                    let Some(url) = url else {
-                        lines.push(tr!("{name}: url が無いので、元が変わったかを問えません", "{name}: no url, so there is nothing to ask whether it moved on"));
-                        continue;
-                    };
-                    let body = curl(url)?;
-                    let h = sha256::short(&body);
-                    if pin.as_deref() == Some(h.as_str()) {
-                        lines.push(tr!("{name}: 変わっていません（{url} は sha256:{h} で、固定と同じ）", "{name}: unchanged ({url} is sha256:{h}, as pinned)"));
-                        continue;
-                    }
-                    changed = true;
-                    let was = pin.as_deref().map(|x| format!("sha256:{x}")).unwrap_or_else(|| "-".into());
-                    lines.push(tr!("{name}: {url} が変わりました（固定は {was}、いまは sha256:{h}）", "{name}: {url} moved on (pinned {was}, now sha256:{h})"));
-                    let copy = std::fs::read(p.root.join(&n.path)).ok();
-                    if let (Some(old), Ok(new)) = (copy.as_deref().and_then(|b| std::str::from_utf8(b).ok()), std::str::from_utf8(&body))
-                        && old.len() <= 1 << 20
-                        && new.len() <= 1 << 20
-                    {
-                        let path = p.shown(&n.path);
-                        lines.push(tr!("  写し {path} からの差分:", "  what changed from the copy {path}:"));
-                        diff_lines(old, new, &mut lines);
-                    }
-                    reach_lines(p, &reach(p, fi, name, None), &mut lines);
-                    lines.push(tr!(
-                        "  読んでから yuen source fetch で取り直して yuen source pin で固定すると、yuen check がこれらに印を付けます",
-                        "  read it, then yuen source fetch takes it and yuen source pin pins it; yuen check then marks these"
-                    ));
+                    changed |= file_outdated(p, fi, name, url.as_deref(), pin.as_deref(), &n.path, Whose::Own, &mut lines)?;
                 }
                 SourceKind::Law { db, id, asof, pins } => {
                     let asof = asof.to_string();
                     let frs = fragments(&f.ast, name, pins);
                     let files: Vec<(String, String)> = frs.iter().filter_map(|fr| copies::fragment_file(*db, fr).map(|file| (fr.clone(), file))).collect();
-                    let later = match db {
-                        LawDb::Egov => egov().later_revisions(id, &asof).map_err(cap)?,
-                        LawDb::Ecfr => ecfr().amendments(id, &asof, &files.iter().map(|(_, file)| file.trim_end_matches(".xml").to_string()).collect::<Vec<_>>()).map_err(cap)?.into_iter().map(|(d, _)| (d, String::new())).collect(),
-                    };
-                    if later.is_empty() {
-                        lines.push(match db {
-                            LawDb::Egov => tr!("{name}: {asof} より後に施行される版はありません", "{name}: no revision comes into force after {asof}"),
-                            LawDb::Ecfr => tr!("{name}: {asof} より後の改正はありません", "{name}: no amendment after {asof}"),
-                        });
-                        continue;
-                    }
                     let cdir = req_dir.join(copies::copy_dir(id, &asof));
-                    // Each date is held to the text of the date before it, starting from the
-                    // copy, so an amendment is said once, on the day it comes into force.
-                    let mut differs: BTreeMap<String, Vec<(String, String, String)>> = BTreeMap::new();
-                    for (fr, file) in &files {
-                        let Ok(mut prev) = std::fs::read(cdir.join(file)) else {
-                            lines.push(tr!("{name}: {fr} の写しが無いので比べられません。先に yuen source fetch を走らせます", "{name}: there is no copy of {fr} to compare; run yuen source fetch first"));
-                            continue;
-                        };
-                        for (date, _) in &later {
-                            let (xml, _) = net.article(*db, id, date, file)?;
-                            if !same_text(&prev, &xml) {
-                                let (a, b) = (copies::xml_text(&String::from_utf8_lossy(&prev)), copies::xml_text(&String::from_utf8_lossy(&xml)));
-                                differs.entry(date.clone()).or_default().push((fr.clone(), a, b));
-                            }
-                            prev = xml;
-                        }
-                    }
-                    for (date, rid) in &later {
-                        let rev = if rid.is_empty() { Text::default() } else { tr!("（{rid}）", " ({rid})") };
-                        match differs.get(date) {
-                            None => lines.push(match db {
-                                LawDb::Egov => tr!("{name}: {date} 施行の版{}では、引いている条は変わりません", "{name}: the revision in force from {date}{} leaves the cited articles as they are", rev.ja; rev.en),
-                                LawDb::Ecfr => tr!("{name}: {date} の改正では、引いている条は変わりません", "{name}: the amendment of {date} leaves the cited sections as they are"),
-                            }),
-                            Some(frs) => {
-                                changed = true;
-                                let names: Vec<&str> = frs.iter().map(|(f, _, _)| f.as_str()).collect();
-                                lines.push(match db {
-                                    LawDb::Egov => tr!("{name}: {date} 施行の版{}で {} が変わります", "{name}: the revision in force from {date}{} changes {}", rev.ja, names.join("、"); rev.en, names.join(", ")),
-                                    LawDb::Ecfr => tr!("{name}: {date} の改正で {} が変わります", "{name}: the amendment of {date} changes {}", names.join("、"); names.join(", ")),
-                                });
-                                for (fr, a, b) in frs {
-                                    lines.push(tr!("  {fr} の本文の差分:", "  what changed in the text of {fr}:"));
-                                    diff_lines(a, b, &mut lines);
-                                    reach_lines(p, &reach(p, fi, name, Some(fr)), &mut lines);
-                                }
-                                lines.push(tr!(
-                                    "  asof を {date} に進めて yuen source fetch と yuen source pin を走らせると、yuen check がこれらに印を付けます",
-                                    "  move asof to {date}, then run yuen source fetch and yuen source pin; yuen check then marks these"
-                                ));
-                            }
-                        }
-                    }
+                    changed |= law_outdated(p, fi, name, *db, id, &asof, &files, &cdir, Whose::Own, &mut net, &mut lines)?;
                 }
             }
         }
         under(p, fi, lines, &mut out);
     }
     Ok(Outcome { lines: out, changed })
-}
-
-/// The `.req` files of a project that borrow a source: what `outdated` cannot ask about yet,
-/// since a borrowed source's pins are read from its tool's JSON (PLAN C.7).
-pub fn borrowed(p: &Project) -> Option<(usize, usize, String)> {
-    for (fi, f) in p.files.iter().enumerate() {
-        for (si, s) in f.ast.sources.iter().enumerate() {
-            if let SourceKind::Borrowed { .. } = &s.kind
-                && let Some(n) = &p.names.sources[fi][si]
-            {
-                return Some((fi, s.span.line, n.text()));
-            }
-        }
-    }
-    None
 }

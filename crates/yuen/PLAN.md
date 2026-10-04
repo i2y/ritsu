@@ -4,7 +4,7 @@ DESIGN.md を仕様として、yuen を三つの段階（B・C・D）で作る�
 
 この計画を書いた A の段階では、本体のコードは書いていない。リポジトリに置いたのは DESIGN.md とこの PLAN.md だけである（LICENSE-MIT と LICENSE-APACHE は前からある）。端のハッシュの値は、DESIGN の定義どおりに組んだ使い捨ての Python の試作で計算し、DESIGN 1.1・3.2・4.1・19 章と、下の完了の条件に写した。試作はリポジトリに残していない。B と C の yuen が同じ値を出すことを、完了の条件にした。
 
-この計画は、yuen が yurai という名前で自分のリポジトリにあったときに書いた。いまは ritsu の `crates/yuen` にあり、ritsu の段階 C の最初に名前を yuen に改めた（ritsu の DESIGN.md 2.2）。0 章の決まりと機械の扱いのうち、ritsu の PLAN.md と食い違うところは ritsu の PLAN.md に従う。C の残り（一式の読み込み）と D は、ritsu の PLAN の D.7 と F.1 で書き直してから作る。
+この計画は、yuen が yurai という名前で自分のリポジトリにあったときに書いた。いまは ritsu の `crates/yuen` にあり、ritsu の段階 C の最初に名前を yuen に改めた（ritsu の DESIGN.md 2.2）。0 章の決まりと機械の扱いのうち、ritsu の PLAN.md と食い違うところは ritsu の PLAN.md に従う。C の残り（一式の読み込み）は、ritsu の口で作るように書き直し（下の C.1〜C.9）、ritsu の PLAN の D.7 で作った。D は ritsu の PLAN の F.1 で書き直してから作る。
 
 ## 0. 全部の段階に共通の決まり
 
@@ -14,7 +14,7 @@ DESIGN.md を仕様として、yuen を三つの段階（B・C・D）で作る�
 - git のコミットと push をしない。書くのは ritsu の木の中だけにする。元のリポジトリ（前の名前の `~/yurai` と、`~/rulec`・`~/dandori`・`~/koyomi`・`~/chobo`・`~/geas`・`~/sakai`）は読むだけで、そこでビルドも git もしない。
 - Rust は edition 2024 で、手元の stable 1.94.1 で通すこと。依存は `serde_json = { version = "1", features = ["preserve_order"] }` だけ。
 - 診断は英語が既定で、`--lang ja` で日本語。golden は両方の言語で取る。
-- テストは `cargo test`。外のツール（rulec、koyomi、chobo、geas、xmllint とスキーマ、Python の venv、python3、curl、Chrome）が無いときは、`SKIP: <理由>` を一行出して通す。報告の前に `cargo test -- --nocapture 2>&1 | grep SKIP` で SKIP の行を読み、数を報告に書く。
+- テストは `cargo test`。外のツール（xmllint とスキーマ、Python の venv、curl、Chrome）が無いときは、`SKIP: <理由>` を一行出して通す。ほかの言語（rulec、koyomi、chobo、geas、dandori、sakai）は、ritsu のワークスペースのクレートを dev-dependency に持ち、同じプロセスの中でつなぐので SKIP しない（ritsu の DESIGN 3.3）。報告の前に `cargo test -- --nocapture 2>&1 | grep SKIP` で SKIP の行を読み、数を報告に書く。
 - golden の取り直しは `YUEN_BLESS=1 cargo test`。取り直したら差分を読んでから報告する。
 - サーバー（HTTP、Chrome）を立てたまま終わらない。テストは止める処理を Drop に置き、一時ディレクトリを消す。
 - 成果物（文書、golden、生成物、例の `.req` と `reviewed/`）に、手元の絶対パス、ユーザー名、マシン名を入れない。
@@ -22,7 +22,7 @@ DESIGN.md を仕様として、yuen を三つの段階（B・C・D）で作る�
 
 ### 0.2 作者の機械で気をつけること（macOS arm64）
 
-- 一式のツールのバイナリ：rulec 0.22.1 は作業場所の `bin/rulec` に写してある。koyomi・chobo・geas は `cargo install --locked --path ~/<名前> --root <作業場所>/yuen/tools --target-dir <作業場所>/yuen/target-tools` で入れる。**`--target-dir` を必ず付ける**。`cargo install --path` は、`--target-dir` が無ければ、そのクレートの木の `target/` でビルドするので、読むだけのはずの木に書くことになる。テストには `YUEN_RULEC`・`YUEN_KOYOMI`・`YUEN_CHOBO`・`YUEN_GEAS` で場所を渡す。
+- （取り込む前の手順。ritsu の中では、ほかの言語はワークスペースのクレートで、テストがつなぐ）一式のツールのバイナリ：rulec 0.22.1 は作業場所の `bin/rulec` に写してある。koyomi・chobo・geas は `cargo install --locked --path ~/<名前> --root <作業場所>/yuen/tools --target-dir <作業場所>/yuen/target-tools` で入れる。**`--target-dir` を必ず付ける**。`cargo install --path` は、`--target-dir` が無ければ、そのクレートの木の `target/` でビルドするので、読むだけのはずの木に書くことになる。テストには `YUEN_RULEC`・`YUEN_KOYOMI`・`YUEN_CHOBO`・`YUEN_GEAS` で場所を渡す。
 - macOS には `timeout` コマンドが無い。子プロセスの時間切れは、テストの Rust の側で `Child::try_wait` を回して決め、超えたら kill する。
 - Python の venv は `uv venv --python 3.13 <場所>`。Homebrew の 3.14 の venv には pip が入らない。`prov==3.2.2` と `reqif==0.1.0` を入れる（`tools/requirements.txt`。A の段階で、この組み合わせが Python 3.13.11 で動くことを確かめた）。venv の `python` はシンボリックリンクなので、テストはリンクのまま渡す（たどると venv の外の Python になり、`prov` が見えない）。
 - ReqIF のスキーマは `tools/reqif/fetch.sh [<dir>]` で取る。既定の置き場所は `tools/reqif/xsd`（git に入れない）で、ほかの場所に置いたらテストに `YUEN_REQIF_XSD=<dir>` で渡す。C の段階では、venv とスキーマを作業場所に置いて `YUEN_PYTHON` と `YUEN_REQIF_XSD` で渡し、終わったら消した。
@@ -52,7 +52,7 @@ DESIGN.md を仕様として、yuen を三つの段階（B・C・D）で作る�
 - **診断のコード**（DESIGN 6.2）：番号と意味。増やすときは番台の末尾に。
 - **コマンドの表**（DESIGN 7 章）：まだ作っていないコマンドは、表に載せない（その段階で足す）。
 - **api の JSON**（DESIGN 11 章）：キーの名前と順。
-- **環境変数**：`YUEN_LANG`、`YUEN_BLESS`、`YUEN_RULEC`、`YUEN_KOYOMI`、`YUEN_CHOBO`、`YUEN_GEAS`、`YUEN_SAKAI`、`YUEN_PYTHON`（`prov` と `reqif` の入った Python）、`YUEN_XMLLINT`（無ければ PATH の `xmllint`）、`YUEN_REQIF_XSD`（`tools/reqif/fetch.sh` が取ったスキーマとカタログの置き場所。無ければ `tools/reqif/xsd`）、`YUEN_EGOV`、`YUEN_ECFR`、`YUEN_NET`、`YUEN_CHROME`。
+- **環境変数**：`YUEN_LANG`、`YUEN_BLESS`、`YUEN_PYTHON`（`prov` と `reqif` の入った Python）、`YUEN_XMLLINT`（無ければ PATH の `xmllint`）、`YUEN_REQIF_XSD`（`tools/reqif/fetch.sh` が取ったスキーマとカタログの置き場所。無ければ `tools/reqif/xsd`）、`YUEN_EGOV`、`YUEN_ECFR`、`YUEN_NET`、`YUEN_CHROME`。ほかの言語を子プロセスで呼ぶために予定していた `YUEN_RULEC`・`YUEN_KOYOMI`・`YUEN_CHOBO`・`YUEN_GEAS`・`YUEN_SAKAI` は、口で読むようになったので作らない（ritsu の DESIGN 8.2）。
 
 ## 1. ディレクトリ
 
@@ -80,19 +80,21 @@ src/
   trace.rs         なぜこうなっているかをたどる（B。成果物が固定している条は C）
   diag.rs  codes.rs                                               （B）
   api.rs                                                          （B）
-  tools/  mod.rs（子プロセス、場所、まとめて一度）rulec.rs koyomi.rs chobo.rs geas.rs   （C）
-  proto.rs         .proto の読み手と決まった形の文（C）
-  borrowed.rs      借りた出典、成果物が固定している条、E106 と E107（C）
-  affected.rs      差分の読み手と、差分 → 要件（C）
+  suite.rs         ほかの言語の口（Items、Sources、Rules、Dates、Claims）と、一回の実行で覚えた答え（C。ritsu の D.7）
+  run.rs           コマンドを関数にしたもの（main.rs と ritsu yuen が呼ぶ）（C）
+  ports.rs         yuen が ritsu の口に答える（ritsu の D.2。D.7 で、つないだ言語を持つ）
+  proto.rs         .proto の端の文（ritsu-proto で読む）（C）
+  sources.rs       借りた出典、成果物が固定している条、E106 と E107（C。B の出典の検査と同じファイル）
+  affected.rs      差分 → 主張と要件（差分は ritsu-base の udiff で読む）（C）
   export/  mod.rs（二つの書き出しが読むグラフ、識別子のハッシュ） reqif.rs prov.rs   （C）
   fetch.rs         source fetch・pin・outdated、curl の呼び方（C）
   doc/  mod.rs markdown.rs html.rs                                 （D）
 tests/
   common/mod.rs（一時ディレクトリ、yuen を走らせる、golden、B.7 の変更）  （B。ツールの場所と SKIP は C）
   syntax.rs project.rs names.rs copies.rs ends.rs marks.rs periods.rs coverage.rs review.rs trace.rs mutants.rs codes.rs cli.rs api.rs design.rs   （B）
-  tools.rs proto.rs borrowed.rs affected.rs export.rs fetch.rs   （C）
+  suite.rs（C.1〜C.9 と dandori、sakai） ports.rs export.rs fetch.rs   （C）
   doc.rs docs.rs skill.rs examples.rs                            （D）
-  fixtures/（naming.tsv、period/、ecfr/、payment/）  mutants/  golden/（marks/、trace/、api/、export/ を含む）
+  fixtures/（period/、ecfr/、payment/。C で rulec/、koyomi/、chobo/、geas/、proto/、dandori/、sakai/）  mutants/  golden/（marks/、trace/、api/、export/、ends/、affected/ を含む）
 tools/requirements.txt（prov==3.2.2、reqif==0.1.0）  tools/reqif/fetch.sh  tools/reqif/README.md   （C）
 examples/<例>/                                                    （D）
 docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
@@ -227,72 +229,83 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 
 ## 3. 段階 C：一式の読み込み、affected、書き出し、出典のコマンド
 
-一式のツールの JSON（rulec、koyomi、chobo、geas）と proto を読み、借りた出典と食い違いの検査、名前の変わった成果物、`affected`、ReqIF と PROV の書き出し、`source fetch | pin | outdated` を作る。
+一式の言語が持つものと proto を読み、借りた出典と食い違いの検査、名前の変わった成果物、`affected`、ReqIF と PROV の書き出し、`source fetch | pin | outdated` を作る。
 
-**C は二つに分けて進めている（2026-10-03）。** 作者が一式の言語を一つの処理系にまとめるかを考えていて、まとめるなら一式の読み込みは JSON ではなく型の付いた呼び出しで作ることになる。そこで、一式の読み込み（C.1〜C.9：ツールの JSON、proto、借りた出典と E107、名前の変わった成果物、`affected`）は決まるまで止め、yuen の要件だけで作れる C.10〜C.12（ReqIF、PROV、出典のコマンド）を先に作った。止めているあいだ、B の「まだ読めない」と exit 2 で断る振る舞い（`src/check.rs` の `not_yet`）はそのまま残し、借りた出典の `source outdated` も同じく exit 2 で断る。C.10〜C.12 のテストは、出典が yuen の写しで、成果物を名指さないか `file` だけを名指すテストの材料（`period`、`ecfr`、`payment`）で行う。どこまで済んだかは C.13 にある。
+**C は二つに分けて進めた。** 作者が一式の言語を一つの処理系（ritsu）にまとめるかを考えていたので、一式の読み込み（C.1〜C.9）はそれが決まるまで止め、yuen の要件だけで作れる C.10〜C.12（ReqIF、PROV、出典のコマンド）を 2026-10-03 に先に作った。まとめると決まり、yuen は ritsu の `crates/yuen` になった。C.1〜C.9 は、子プロセスでツールの CLI を呼んで JSON を読む計画だったものを、ritsu の口（ritsu の DESIGN 3.2）で読むように書き直し（下の C.1〜C.9 がその計画）、ritsu の PLAN の D.7 で作った（2026-10-04）。書き直す前の計画の要点は、それぞれの項の最後に「前の計画」として残した。
 
-### C.1 ツールを呼ぶ（`src/tools/mod.rs`）
+### C.1 口をつなぐ（`src/suite.rs`、`src/run.rs`、`src/ends.rs`）
 
-- DESIGN 3.1：場所は `YUEN_RULEC`・`YUEN_KOYOMI`・`YUEN_CHOBO`・`YUEN_GEAS`、無ければ PATH。要るのに無ければ、何が要るかを言って exit 2。
-- そのファイルのディレクトリで、ファイルの名前を渡して呼ぶ。一回の実行の中で、同じファイルの同じコマンドは一度だけ（結果を覚えておく）。
-- exit 0 でなければ E203（標準エラーの初めの数行を注に）。JSON に要るキーが無ければ E204（ツールの名前と、出していればバージョン）。
-- テスト（`tests/tools.rs`）：ツールが無いときの exit 2、E203（rulec の変異 `m_e038.rule` を写したもの、koyomi の `民法の期間_読み方の比較.cal` を写したもの）、E204（JSON を差し替えた偽のツール。小さなシェルスクリプトを一時ディレクトリに書いて `YUEN_RULEC` に渡す）。
+- yuen は、読む言語を `Suite`（言語ごとの `Items` と `Sources`、それに `Rules`、`Dates`、`Claims`）として渡される。yuen はほかの言語のクレートを知らない。`ritsu yuen`（ritsu の `crates/ritsu`）はすべての言語をつないで渡し、yuen のクレートのバイナリは何も渡さない（ritsu の DESIGN 2.3）。
+- コマンドを関数にする（`yuen::run::run(引数, Suite, 標準出力, 標準エラー)`）。クレートのバイナリはそれを呼ぶだけにする。
+- 一回の実行の中で、同じファイルを同じ口に二度尋ねない（`Suite` が答えを覚える）。
+- 言語がつながっていなければ、何を読めないかと、`ritsu yuen` に同じコマンドを続けた形を言って exit 2。言語が答えられなければ E203（その言語の診断を注に）。中のものの定義の文が空なら、空の文のハッシュを端にせず E203（ritsu の PLAN 7.6）。E204 は退かせる（JSON を読まない）。
+- 端（DESIGN 3.2）：ファイルを名指したらバイト列、中のものを名指したら、その言語が渡す定義の文。rulec と koyomi のファイルは、`Sources` がそのファイルの検査を通してから答えるので、検査を通らないものからは端を作らない。
+- テスト（`tests/suite.rs`、`tests/cli.rs`）：クレートのバイナリが、六つの言語のどれを名指すプロジェクトも exit 2 で断り、`ritsu yuen check …` を言い、同じプロジェクトをすべての言語をつないで走らせれば通ること。一つの規則のファイルに六本のリンクがあっても、口に一度だけ尋ねること（数える口を挟む）。定義の文の空のものが E203 になること（空の文を渡す口を挟む）。検査を通らないカレンダー（koyomi の例 `民法の期間_読み方の比較.cal`）を名指せば E203 で、koyomi の診断が注に出ること。
+- 前の計画：ツールを `YUEN_RULEC` などか PATH から探し、そのファイルのディレクトリで呼び、exit 0 でなければ E203、JSON にキーが無ければ E204、偽のツールのシェルスクリプトで E204 を試す、だった。
 
-### C.2 rulec（`src/tools/rulec.rs`）
+### C.2 rulec
 
-- `rulec api` から `source_sha256`、`sources`（`law` の `db`・`id`・`asof`・`pins`、`file` の `path`・`url`・`sha256`・`pins`）。`rulec graph` から種類（DESIGN 2.3 の表：`input`、`output`、`table`、`clause`、`define`、`derive`）。名前が別名に当たれば E202 で名前を示す。
-- 端の中身はファイル全体（DESIGN 3.2）。ハッシュは `source_sha256` の先頭 16 桁。
-- 成果物のファイルが固定している条（DESIGN 3.3）を、グラフに足す（C.7）。
-- テストの材料：`tests/fixtures/rulec/` に、rulec の `tests/corpus/印紙税の本則と軽減.rule` と、その写し（`sources/law/342AC0000000023@2026-04-01/`、`sources/law/332AC0000000026@2026-04-01/`）、`osha_extinguisher.rule` と `sources/law/29-CFR-1910@2026-01-01/1910.157.xml` を写す。
-- テスト：`印紙税の本則と軽減.rule` の `output 印紙税額`、`table 本則`、`table 軽減`、`clause 非課税`、`define 軽減期間`、`input 契約金額` があると分かり、`output tax`（別名）は E202、`table 無い表` は E202。端が `dc176eebd83f26e3`、`osha_extinguisher.rule` の端が `a52e955b88af88d6`。固定している条が、`法 別表第一 0ba69792e960021e`、`措置法 第91条 85faf53f6f6e8196`、`osha "§1910.157" c2a9ce966c7e2269`。
+- 中のもの（`input`、`output`、`enum` と `value`、`table`、`clause`、`define`、`derive`、`machine`、`source`）は rulec の `Items` で、別名は `Rules` の事実（入力、出力、列挙、値の別名）で、規則が固定している出典は `Sources` で読む。
+- テストの材料：`tests/fixtures/rulec/`。rulec のコーパスの `印紙税の本則と軽減.rule` と `osha_extinguisher.rule` を `rules/` に、その写しを `rules/sources/law/` に写す。要件の側には、同じ条を自分で写して固定した `印紙税.req`（写しは規則の写しと同じバイト列）と、規則の出典を借りる `fire_extinguishers.req` を置く。
+- テスト：`output 印紙税額`、`input 契約金額`、`table 本則`、`table 軽減`、`clause 非課税`、`define 軽減期間` があると分かり、`output tax`（別名）は E202 で名前を候補に示し、`table 無い表` は E202。ファイルを名指したときの端が `dc176eebd83f26e3` と `a52e955b88af88d6`。表と節と `define` の端（取り直した値は C.13）。`yuen api` の成果物の `pins` が、`法 別表第一 0ba69792e960021e`、`措置法 第91条 85faf53f6f6e8196`、`osha "§1910.157" c2a9ce966c7e2269`。
+- 前の計画：`rulec api` と `rulec graph` の JSON から読み、端はファイル全体（`source_sha256`）にする、だった。
 
-### C.3 koyomi（`src/tools/koyomi.rs`）
+### C.3 koyomi
 
-- `koyomi api` から `kind`、`source_sha256`、`inputs`・`dates`・`claims`・`sources`（dates のファイル）、`calendar`（`calendar.sources`）。
-- 端の中身：ファイル、`input`、`date` はファイル全体。`claim` は `claims[]` の一つから `name` を除いた決まった形の JSON（DESIGN 3.2）。
-- テストの材料：`tests/fixtures/koyomi/` に、koyomi の `examples/` から `民法の期間.cal`、`支払_20日締め翌月10日払い.cal`、`calendars/民法142条の休日.cal`、`calendars/東京の営業日.cal`、`calendars/data/syukujitsu.csv`、`sources/law/129AC0000000089@2026-10-01/` を写す。
-- テスト：`民法の期間.cal` の `date 満了日_142条` の端が `c9b94eecde23e6b5`。条件の端が、`142条の満了日は満了日以後` `825aa6c6f7ccf314`、`満了日は単調` `447d80ca751bd681`、`142条の満了日も単調` `2a8e130e4c527692`、`満了日は起点より後` `0b951fef68a36592`。`calendars/東京の営業日.cal` の出典 `祝日` が、固定 `cec37a743c96995c` の `file` の出典として読める。
+- 中のもの（`input`、`date`、`claim`、`source`）は koyomi の `Items` で、別名は `Dates` の事実で、日付のファイルとカレンダーのファイルが固定している出典は `Sources` で読む。
+- テストの材料：`tests/fixtures/koyomi/`。koyomi の `examples/` から `民法の期間.cal`、`支払_20日締め翌月10日払い.cal`、`calendars/民法142条の休日.cal`、`calendars/東京の営業日.cal`、`calendars/data/syukujitsu.csv`、`sources/law/129AC0000000089@2026-10-01/` を写す。要件は、民法を借りる `民法の期間.req`（日付と条件を一つずつ名指し、範囲は `scope koyomi "民法の期間.cal" date`）と、カレンダーの祝日の表（`file` の出典）を借りる `支払条件.req`。
+- テスト：日付 `起算日`・`満了日`・`満了日_142条` と条件の端（取り直した値は C.13）。条件 `142条の満了日は満了日以後` の端の中身が、その条件の行であること。`calendars/東京の営業日.cal` の出典 `祝日` が、固定 `cec37a743c96995c` の `file` の出典として読めること。カレンダーの 142 条の写しを一文字変えて固定し直すと、印が付くのは `満了日_142条` の三本だけであること（DESIGN 4.3）。
+- 前の計画：`koyomi api` の JSON から読み、日付の端はファイル全体、条件の端は `claims[]` の一つから `name` を除いた JSON にする、だった。
 
-### C.4 chobo（`src/tools/chobo.rs`）
+### C.4 chobo
 
-- `chobo api` から `source_sha256`、`units`、`accounts`、`transfers`。
-- 端の中身（DESIGN 3.2）：`unit` は `name` と `ledger` を除いたもの、`account` は `name` と `code` を除いたもの、`transfer` は `name`・`code`・`definition`・`operations` を除き、移動が触る勘定を名前をキーにした `accounts` として足したもの。どれも決まった形の JSON。
-- テストの材料：`tests/fixtures/chobo/` に、chobo の `examples/refunds/refunds.ja.book` を写す。
-- テスト：`transfer 返金` の端が `84e9ce254075c697`（1,206 バイト）、`transfer 売上計上` が `851ab806078168fe`、`account 返金できる残り` が `9f9b0d74872f62a4`、`account 売上` と `account 返金済み` がどちらも `35a4ec5a2ee5eb06`。`返金` の端の中身が、A の段階の試作が出した中身と一字一句同じ（golden）。
+- 中のもの（`unit`、`account`、`transfer`）は chobo の `Items` で読む。定義の文は、A の段階に決めた形の JSON（DESIGN 3.2）を chobo が作る。
+- テストの材料：`tests/fixtures/chobo/` に、chobo の `examples/refunds/refunds.ja.book` を写す。出典は、テストのために書いた返金の方針の文書（`file` の出典）。
+- テスト：`transfer 返金` の端が `84e9ce254075c697`（1,206 バイト）、`transfer 売上計上` が `851ab806078168fe`、`account 返金できる残り` が `9f9b0d74872f62a4`、`account 売上` と `account 返金済み` がどちらも `35a4ec5a2ee5eb06`。`返金` の端の中身が golden（`tests/golden/ends/chobo-返金.json`）と一字一句同じ。
+- 前の計画：`chobo api` の JSON から、名前とコードを除いて yuen が組み立てる、だった。
 
-### C.5 geas（`src/tools/geas.rs`）
+### C.5 geas
 
-- 記録は `<spec のディレクトリ>/.geas/<stem>.map.jsonl`。一行め（`geas_map`、`spec`、`root`、`claims`）で主張の名前を確かめる（無い名前は E202）。記録が無ければ W201 で、spec のファイルがあることだけを確かめる。
-- 範囲の 4（DESIGN 5.3）：`{"claim", "target", "file", "ran"}` の行から、主張が走らせたファイルを集める。パスは一行めの `root`（spec のディレクトリからの相対）から読み、yuen のルートからの相対に直す。
-- 端の中身は spec 全体。
-- テストの材料：`tests/fixtures/geas/greeter/` に、geas の `examples/greeter/` の `greeter.geas`、`greeter.ja.geas`、`server.py` を写す。記録はテストの中で `geas map greeter.geas --root <一時ディレクトリ>` で作る（python3 が要る。無ければ SKIP）。
-- テスト：記録があるとき、四つの主張（`greets by name`、`rejects an empty name`、`totals accumulate across requests`、`unknown paths are 404`）が名前で分かり、`claim "no such claim"` は E202。記録が無いとき W201。`scope file "server.py"` が、`verified by geas "greeter.geas" claim "rejects an empty name"` だけを書いた要件から、記録を通って辿れる。`server_refactored.py` は記録で `code` が null（どのランタイムも報告しない）なので、範囲に入れると E404 になる。
+- 主張は geas の `Items`（spec そのものから。記録は要らない）で、記録は `Claims` の `map_record` で読む。W201 は退かせる。
+- 範囲の 4（DESIGN 5.3）：記録の、主張ごとに走らせたファイルを集める。パスは記録の一行めの `root`（spec のディレクトリからの相対）から読み、yuen のルートからの相対に直す。記録の無い spec があれば、範囲の `file` の成果物の E404 に注で添える。
+- テストの材料：`tests/fixtures/geas/`。geas の `examples/greeter/` の `greeter.geas`、`greeter.ja.geas`、`server.py`、`server_refactored.py` を `greeter/` に写し、`geas map greeter/greeter.geas --root .` で一度だけ取った記録を `greeter/.geas/greeter.map.jsonl` に、`server.py` の空の名前を断るときの文言を一行変えた差分と、その変更のあとに取った記録を `changes/` に置く。要件は、テストのために書いた契約の文書を出典にした `greeter.req`。
+- テスト：四つの主張が名前で分かり、`claim "no such claim"` は E202。`scope file "greeter/server.py"` が、`verified by geas "greeter/greeter.geas" claim "rejects an empty name"` だけを書いた要件から、記録を通って辿れる。記録を消すと E404 で、記録が無いことを注で言う。`server_refactored.py` は記録で `code` が null（どのランタイムも報告しない）なので、範囲に入れると E404。
+- 前の計画：記録の一行めで主張の名前を確かめ、記録が無ければ W201、記録はテストの中で `geas map` を走らせて作る（python3 が無ければ SKIP）、だった。
 
 ### C.6 proto（`src/proto.rs`）
 
-- DESIGN 3.4：dandori の `src/proto.rs` と同じ範囲を読む（`package`、`import`、入れ子の `message`、`enum`、`service` と `rpc`、オプション）。読めなければ E205。
-- 種類（`service`、`method`、`message`、`enum`）と、端の中身（コメントと空白を落とした決まった形の文。`method` は入力と出力からたどれる `message` と `enum` の全部を、完全な名前の順に足す）。見つからない `import` は、読めなかったものとして名前だけを書く。
+- ritsu の `.proto` の読み手（ritsu-proto）で、ファイルと、それが読み込むファイルを読む（DESIGN 3.4）。読めなければ E205。
+- 種類（`service`、`method`、`message`、`field`、`enum`、`value`）と、端の中身（コメントと空白を落とした決まった形の文。`method` は入力と出力からたどれる `message` と `enum` の全部を、完全な名前の順に足す）。見つからない `import` の型は、書いたとおりの名前で入る。
 - テストの材料：dandori の `examples/fulfillment/specs/warehouse.proto` と `fulfillment.proto` を `tests/fixtures/proto/` に写す。
-- テスト：`warehouse.proto` の `service StockService method Reserve`、`method Release`、`message ReserveRequest`、`enum Stock` が分かる。`method Release` を `service` の外に書けば E012。`ReserveRequest` にフィールドを一つ足すと、`method Reserve` と `service StockService` の端は変わり、`method Release` の端は変わらない。コメントだけを書き換えても、どの端も変わらない。`fulfillment.proto` の `import "dandori/v1/options.proto"` は、ファイルが無いので読めなかったものとして端の中身に名前が入る。端の中身の golden。
+- テスト：`warehouse.proto` の `service StockService method Reserve`、`method Release`、`enum Stock` が分かる。`method Release` を `service` の外に書けば E012。`ReserveRequest` にフィールドを一つ足すと、`method Reserve` と `service StockService` の端は変わり、`method Release` の端は変わらない。コメントだけを書き換えても、どの端も変わらない。端の中身の golden（`tests/golden/ends/proto-*.txt`。`fulfillment.proto` の `Fulfill` は、読めない `import "dandori/v1/options.proto"` のオプションを書いたとおりに持つ）。
+- 前の計画：dandori の `src/proto.rs` と同じ範囲を yuen が自分で読む、だった。
 
-### C.7 借りた出典と食い違い（`src/borrowed.rs`）
+### C.7 借りた出典と食い違い（`src/sources.rs`）
 
-- 借りた出典（DESIGN 1.4、3.3）：ツールの api の `sources` から名前を引き、固定を読み、写しはツールのファイルの隣の `sources/law/…` から読む。無ければ E106。
-- 成果物のファイルが固定している条を、グラフに足す（`trace`、`affected`、`source outdated`、`doc` が使う）。
-- 食い違い（E107）：要件の `from @… 第N条` と、その要件を満たす成果物のファイルの固定が同じ条（データベース、ID、条）を指すとき、写しの `xml_text` を比べる。成果物がその条を固定しているのに、どの写しも本文が違えば E107（本文の差分つき）。
-- `trace` に、成果物のファイルが固定している条を足す（DESIGN 9 章）。
-- テスト（`tests/borrowed.rs`）：B.14 の `period` の `.req` を、出典を `source 民法 = koyomi "民法の期間.cal" source 民法` に替え、成果物を `koyomi "民法の期間.cal" date …` に替えたものが、B と同じ要件の端（`a9ebc73907faddc8`、`465b83ed8c251406`、`d4f2d2a67322df17`）を出し、`check` が通る。koyomi が固定していない条を引けば E106。`tests/fixtures/rulec/` に、自分で写した `source 法 = law "342AC0000000023" asof 2026-04-01` と `source 措置法 = law "332AC0000000026" asof 2026-04-01`（写しは rulec の写しと同じバイト列）を引く要件を置くと、E107 は出ない。yuen の側の写しの本文を一文字変えて固定し直すと、E107 が出る。
+- 借りた出典（DESIGN 1.4、3.3）：借りた先の言語の `Sources` から名前を引き、固定を読み、写しはそのファイルの隣の `sources/law/…` から読む。ファイルが無い、出典を宣言していない、条を固定していない、写しが読めないか固定と違う、のどれも E106。言語が答えられなければ E203。
+- 成果物のファイルが固定している条を、グラフに足す（`trace`、`affected`、`source outdated`、PROV、`api` の `pins` が使う）。
+- 食い違い（E107）：要件の `from @… 第N条` と、その要件を満たす規則やカレンダーのファイルの固定が同じ条（データベース、ID、条）を指すとき、写しの本文を比べる。成果物がその条を固定しているのに、どの写しも本文が違えば E107（本文の差分つき）。
+- テスト（`tests/suite.rs`）：借りた出典で書いた `tests/fixtures/koyomi` の `民法の期間.req` が、自分で写した `period` と同じ要件の端（`a9ebc73907faddc8`、`465b83ed8c251406`、`d4f2d2a67322df17`）を出し、`check` が通る。koyomi が固定していない条（`第144条`）を引けば E106 で、固定している条を注に並べる。`tests/fixtures/rulec/` の、自分で写した `法` と `措置法` を引く要件では E107 は出ず、yuen の側の写しの本文を一文字変えて固定し直すと E107 が出る。
+- 前の計画：ツールの api の `sources` から読む、だった。
 
 ### C.8 名前の変わった成果物（DESIGN 4.5）
 
-- E202 のとき、同じファイルの同じ種類のもので、今の端が記録のリンク先のハッシュと同じものを、候補として添える。端がファイル全体の種類では、どのリンクも指していない同じ種類のものを並べ、確かめたときのファイルとの差分を見せる。
-- テスト：chobo の帳簿で `transfer 返金` の名前を `返金の申請` に変えた写しを作ると、候補に `返金の申請` が一つ出る。`account 返金済み` を指していて、その名前を変えたときは、候補に新しい名前と `売上` の二つが出る（DESIGN 3.2）。koyomi の日付の名前を変えたときは、どのリンクも指していない日付が候補に出て、差分が出る。
+- E202 のとき、同じファイルの同じ種類のもので、今の端が記録のリンク先のハッシュと同じものを、候補として添える。端に名前が入る種類では、どのリンクも名指していない同じ種類のものを並べ、候補が一つで、確かめたときの中身が `reviewed/` にあれば、その差分を見せる。
+- テスト（`tests/suite.rs` と変異 `E202_名前が変わった`）：chobo の帳簿で `transfer 返金` の名前を `返金の申請` に変えると、候補に `返金の申請` が一つ出る。`account 返金済み` を `返した額` に変えると、候補に `売上` と `返した額` の二つが出る（DESIGN 3.2）。koyomi の日付 `起算日` の名前を変えると、どのリンクも名指していない日付が候補に出て、名前の行だけが変わった差分が出る。
 
 ### C.9 affected（`src/affected.rs`）
 
-- DESIGN 8 章。統一形式の差分（`git diff` と `diff -u`。`diff --git`、`---`/`+++`、`a/`・`b/`、改名、ファイルの追加と削除）を読み、ファイルごとに、`.req`（差分の行が入る要件のブロック）、出典の写し、成果物のファイル、コード（geas の spec ごとに `geas affected <spec> <差分> --json`。`--map <spec>=<記録>` を `--map <記録>` で渡す）、そのほか、に分ける。
-- 答えの文面（英語と日本語）と `--format json`。exit code は 0・1・2（DESIGN 8 章）。
-- テスト（`tests/affected.rs`。geas と python3 が無ければ SKIP）：`tests/fixtures/geas/greeter/` の写しに、A の段階と同じ差分（`server.py` の `"name required"` を `"a name is required"` に）を当て、変更の前と後の記録を渡すと、主張 `rejects an empty name` と、それを確かめる要件と持ち主が出る（exit 0）。前の記録だけを渡すと、geas の E063 を注に言って exit 2。`.req` の要件の文を変える差分、法令の写しを変える差分（その条を引く要件と、固定している成果物が出る）、`.rule` を変える差分（その規則を名指す要件が出る）の golden。
+- DESIGN 8 章。統一形式の差分（`git diff` と `diff -u`。`diff --git`、`---`/`+++`、`a/`・`b/`、引用符で書いたパス、改名、ファイルの追加と削除）を読み、ファイルごとに、`.req`（差分の行が入る要件のブロック）、出典の写し、成果物のファイル、コード（geas の spec ごとに geas の `Claims` の `affected` に尋ねる。`--map <spec>=<記録>` はその spec の記録）、範囲のファイル、そのほか、に分ける。差分の読み手は、geas の `src/diff.rs` の読む部分を ritsu-base（`udiff`）に移して、geas と yuen で一つにする（geas の振る舞いは変えない）。
+- 答えの文面（英語と日本語）と `--format json`。exit code は 0・1・2（DESIGN 8 章）。コマンドの表に `affected` を足す（`--diff`、何度でも書ける `--map`、`--format json`）。
+- テスト（`tests/suite.rs`）：`tests/fixtures/geas` に A の段階と同じ差分を当て、変更の前と後の記録を渡すと、主張 `rejects an empty name` と、それを確かめる要件と持ち主が出る（exit 0。英語、日本語、JSON の golden）。前の記録だけを渡すと、geas の E063 を主張の節に言って exit 2。`.req` の要件の文を変える差分、借りた出典の写しを変える差分（その条を引く要件と、固定している成果物が出る）、規則を変える差分（その規則を名指す要件が出る）、自分で写した条の写しを変える差分（同じ条を固定している規則も出る）の golden（`tests/golden/affected/`）。範囲の中でどの要件にも辿れないファイルを変える差分は exit 1。読めない差分と、どのリンクも名指していない spec の `--map` は exit 2。
+- 前の計画：geas の `affected` を子プロセスで呼び（`geas affected <spec> <差分> --json`）、差分は yuen が自分で読む、だった。
+
+### dandori と sakai
+
+C.1〜C.9 の計画には無かったが、ritsu の D.6 で dandori が中のものを口で渡すようになったので、同じ形で読む。
+
+- テストの材料：`tests/fixtures/dandori/`（dandori の例 `fulfillment/arrange_delivery.ja.flow` と、テストのために書いた配送の手順の文書）、`tests/fixtures/sakai/`（sakai の例の `contexts/受注.ctx` と、テストのために書いた用語集）。
+- テスト：dandori のタスク `翌日便を頼む` の端が、そのタスクの宣言の塊の行で `3c19313a3f633021`。`record 集荷 field 追跡番号` と `output 追跡番号` の端が、どちらも `追跡番号 : string`。sakai の語 `キャンセル` の端が、その語の塊の行で `dbfd211b7e4cef4b`。
 
 ### C.10 ReqIF（`src/export/reqif.rs`）
 
@@ -326,11 +339,11 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
   | `11b510f8a116b937b20b13339fbf33bbc9bc133e917ee3df4f3b5abba3f63fc2` | `…/xhtml-table-1.xsd` |
   | `527da2d8384ea77159648dc85e81703d402b9dbe5ae099816c61ff9994a3ca5d` | `…/xhtml-text-1.xsd` |
 
-- テスト（`tests/export.rs`）：テストの材料のプロジェクト（いまは `period`、`ecfr`、`payment`。一式の読み込みを作ったら `rulec`、`koyomi`、`chobo`、`geas` を足す）ごとに ReqIF を書き出し、次を確かめる。`XML_CATALOG_FILES=<スキーマ>/catalog.xml xmllint --nonet --noout --schema …/reqif.xsd` が `validates` を出して exit 0（スキーマが無ければ SKIP）。`reqif validate` と `reqif validate --use-reqif-schema` が exit 0（`YUEN_PYTHON` の venv が無ければ SKIP）。yuen のテストが自分で、すべての `-REF` が、その名前の要素（`<X-REF>` なら `X`）の `IDENTIFIER` を指していることと、`IDENTIFIER` が `_` と 32 桁の 16 進数で重ならないことを確かめる（これは SKIP しない。壊した参照を見つけることも確かめる）。同じプロジェクトを二度書き出して、バイト列が同じ。要件の数、つながりの数、`SPEC-HIERARCHY` の数が `yuen api` の数と合う。golden（`tests/golden/export/<名前>.reqif`）。止まるとき：1〜4 の段のエラーで exit 1（何も書かない）、印は状態として書く、日付が一つも無ければ `--time` を求めて exit 2、`--time` を渡せば `CREATION-TIME` になる、長すぎる文字列と XML に書けない文字で exit 2、`--format` と `--time` を逆の形に渡せば exit 2、`--out`。
+- テスト（`tests/export.rs`）：テストの材料のプロジェクト（`period`、`ecfr`、`payment` と、一式の読み込みで足した `rulec`、`koyomi`、`chobo`、`geas`、`proto`、`dandori`、`sakai`）ごとに ReqIF を書き出し、次を確かめる。`XML_CATALOG_FILES=<スキーマ>/catalog.xml xmllint --nonet --noout --schema …/reqif.xsd` が `validates` を出して exit 0（スキーマが無ければ SKIP）。`reqif validate` と `reqif validate --use-reqif-schema` が exit 0（`YUEN_PYTHON` の venv が無ければ SKIP）。yuen のテストが自分で、すべての `-REF` が、その名前の要素（`<X-REF>` なら `X`）の `IDENTIFIER` を指していることと、`IDENTIFIER` が `_` と 32 桁の 16 進数で重ならないことを確かめる（これは SKIP しない。壊した参照を見つけることも確かめる）。同じプロジェクトを二度書き出して、バイト列が同じ。要件の数、つながりの数、`SPEC-HIERARCHY` の数が `yuen api` の数と合う。golden（`tests/golden/export/<名前>.reqif`）。止まるとき：1〜4 の段のエラーで exit 1（何も書かない）、印は状態として書く、日付が一つも無ければ `--time` を求めて exit 2、`--time` を渡せば `CREATION-TIME` になる、長すぎる文字列と XML に書けない文字で exit 2、`--format` と `--time` を逆の形に渡せば exit 2、`--out`。
 
 ### C.11 PROV（`src/export/prov.rs`）
 
-- DESIGN 13 章の写し方。PROV-N（既定）と PROV-JSON（`--format json`）。
+- DESIGN 13 章の写し方。PROV-N（既定）と PROV-JSON（`--format json`）。成果物のファイルが固定している条（`yuen:pins`）は、一式の読み込み（ritsu の D.7）で足した。
 - テスト（`tests/export.rs`）：同じテストの材料のプロジェクトごとに、`prov` 3.2.2 で PROV-N（`profile="strict"`）と PROV-JSON の両方を読み（`ProvDocument.deserialize`）、二つが等しいこと（`==`）、種類ごとの記録の数が `yuen api` から数えた数と合うことを確かめる（`YUEN_PYTHON` が無ければ SKIP）。`hadPrimarySource` の項を書かないこと。二度書き出して同じバイト列になること。golden（`tests/golden/export/<名前>.provn` と `.prov.json`）。
 
 ### C.12 出典のコマンド（`src/fetch.rs`）
@@ -339,22 +352,46 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 - `fetch`：本文が前の写しと同じなら書き換えない。`revision.txt`。借りた出典は取らずに、ツールのコマンドを言う。
 - `pin`：16 桁だけを書き換え、ほかは一字も変えない。足りない固定の行を足す。
 - `outdated`：後の版の本文を一つ前の本文と比べ、変わる条ごとに、施行日、版、本文の差分、引く要件と持ち主、確かめ直しになるリンクの数、その条を固定している成果物を言う。`file` の出典は `url` のもののハッシュを固定と比べる。
-- テスト（`tests/fetch.rs`）：テストの中に `std::net::TcpListener`（`127.0.0.1:0`）で小さな HTTP サーバーを立て、e-Gov の `law_data` と `law_revisions`、eCFR の `full` と `versions` に用意したレスポンスを返す。用意するのは、民法 140〜143 条（`period` の写しを base64 にしたもの）と後の版が五つある `law_revisions`、29 CFR 1910.157（`tests/fixtures/ecfr/` の写し。一式の読み込みを作れば `tests/fixtures/rulec/` にも同じ写しが入る）と、後の版を一つ持つ `versions`（中身の変わらない版と、`substantive` が偽の版も混ぜる）。確かめること：`fetch` が写しと同じバイト列を書く。`pin` のあとの `.req` が、16 桁のほかは一字も変わらない（CR LF のファイルでも）。`outdated` が、変わらない版では exit 0、ある版の 142 条の本文を一文字変えたレスポンスでは、その施行日と、`満了日_142条` と持ち主 `法務` と確かめ直しになるリンクの数を言って exit 1、属性だけを変えたレスポンスでは exit 0。`file` の出典は `file://` の URL で（`payment` の `約款`）、変わらなければ exit 0、変われば exit 1 で、写しとの差分、それを引く要件とそれを元にした要件、確かめ直すリンクの数を言い、`fetch` と `pin` のあとの `check` が、その数だけ印を付ける。借りた出典は、`fetch` と `pin` がツールのコマンドを言い、`outdated` が exit 2 で断る。curl が無ければ試し直さずに exit 2。`YUEN_NET=1` のときだけ、本物の e-Gov と eCFR に `outdated` を走らせ、走らせないときは `not asked:` の行を出す。
+- テスト（`tests/fetch.rs`）：テストの中に `std::net::TcpListener`（`127.0.0.1:0`）で小さな HTTP サーバーを立て、e-Gov の `law_data` と `law_revisions`、eCFR の `full` と `versions` に用意したレスポンスを返す。用意するのは、民法 140〜143 条（`period` の写しを base64 にしたもの）と後の版が五つある `law_revisions`、29 CFR 1910.157（`tests/fixtures/ecfr/` の写し。一式の読み込みを作れば `tests/fixtures/rulec/` にも同じ写しが入る）と、後の版を一つ持つ `versions`（中身の変わらない版と、`substantive` が偽の版も混ぜる）。確かめること：`fetch` が写しと同じバイト列を書く。`pin` のあとの `.req` が、16 桁のほかは一字も変わらない（CR LF のファイルでも）。`outdated` が、変わらない版では exit 0、ある版の 142 条の本文を一文字変えたレスポンスでは、その施行日と、`満了日_142条` と持ち主 `法務` と確かめ直しになるリンクの数を言って exit 1、属性だけを変えたレスポンスでは exit 0。`file` の出典は `file://` の URL で（`payment` の `約款`）、変わらなければ exit 0、変われば exit 1 で、写しとの差分、それを引く要件とそれを元にした要件、確かめ直すリンクの数を言い、`fetch` と `pin` のあとの `check` が、その数だけ印を付ける。借りた出典は、`fetch` と `pin` が借りた先の言語のコマンドを言い、`outdated` は、yuen のクレートのバイナリなら `ritsu yuen source outdated …` を言って exit 2 で断り、`ritsu yuen` なら借りた先の固定と写しで問う（ritsu の D.7。`crates/ritsu/tests/yuen.rs` が、テストの中の e-Gov で確かめる）。curl が無ければ試し直さずに exit 2。`YUEN_NET=1` のときだけ、本物の e-Gov と eCFR に `outdated` を走らせ、走らせないときは `not asked:` の行を出す。
 - `check` が通信しないこと：PATH から `curl` を外しても `check`・`trace`・`api`・`export` が通る（`tests/cli.rs` に足す）。
 
 ### C.13 C の完了の条件
 
-- `cargo test -- --nocapture` が全部通り、この機械で SKIP が 0（rulec・koyomi・chobo・geas の場所、`tools/reqif/xsd`、`YUEN_PYTHON` の venv を用意して回す）。
-- C.2〜C.4 の端のハッシュ（`dc176eebd83f26e3`、`a52e955b88af88d6`、`c9b94eecde23e6b5`、`825aa6c6f7ccf314`・`447d80ca751bd681`・`2a8e130e4c527692`・`0b951fef68a36592`、`84e9ce254075c697`・`851ab806078168fe`・`9f9b0d74872f62a4`・`35a4ec5a2ee5eb06`）が出る。違えば、DESIGN 3.2 の定義と照らし、A の段階の試作の側が誤っていたなら DESIGN の値を直して報告する。
-- C.7 の、借りた出典で書いた `period` が、B と同じ要件の端を出す。
+- `cargo test -- --nocapture` が全部通り、この機械で SKIP が 0（`tools/reqif/xsd` と `YUEN_PYTHON` の venv を用意して回す。ほかの言語は同じプロセスの中でつなぐので、SKIP にならない）。
+- C.2〜C.4 の端のハッシュが出る。ファイルを名指したときの端は、A の段階の値のまま（`印紙税の本則と軽減.rule` `dc176eebd83f26e3`、`osha_extinguisher.rule` `a52e955b88af88d6`）。chobo の端も A の段階の値のまま（`84e9ce254075c697`、`851ab806078168fe`、`9f9b0d74872f62a4`、`35a4ec5a2ee5eb06`）。koyomi の日付と条件、rulec の表と節は、言語が渡す定義の文が端になったので取り直した（下の表。A の段階の試作の値 `c9b94eecde23e6b5`、`825aa6c6f7ccf314`・`447d80ca751bd681`・`2a8e130e4c527692`・`0b951fef68a36592` は、ファイル全体と `koyomi api` の JSON から作る端の値で、もう出ない）。
+- C.7 の、借りた出典で書いた `民法の期間.req` が、B と同じ要件の端を出す。
 - C.9 の `affected` が、greeter の差分で主張から要件と持ち主まで答える。
-- C.10 と C.11 の書き出しが、xmllint、`reqif validate`、`prov` のどれでも通る。
-- DESIGN 6.2 のうち C で再現を足したコード（E106、E107、E202、E203、E204、E205、W201）に変異と再現があり、英語と日本語の golden と一致する。
-- 報告に、ツールのバージョン（rulec、koyomi、chobo、geas、xmllint、Python と `prov` と `reqif`）と、テスト全体の時間を書く。DESIGN の形の案のうち、C で実物に差し替えたもの（8 章の affected、14 章の outdated、11 章の api の rulec・koyomi・chobo の部分）を挙げる。
+- C.10 と C.11 の書き出しが、xmllint、`reqif validate`、`prov` のどれでも通る（十のプロジェクト）。
+- DESIGN 6.2 のうち C で再現を足したコード（E106、E107、E202、E203、E205）に変異と再現があり、英語と日本語の golden と一致する。E204 と W201 は退いたコードとして台帳に残る。
+- 報告に、ツールのバージョンと、テスト全体の時間を書く。DESIGN の形の案のうち、C で実物に差し替えたもの（8 章の affected、11 章の api）を挙げる。
 
-**2026-10-03 に満たしたもの**（書き出しと出典のコマンドの部分）：`cargo test -- --nocapture` が全部通り、この機械で SKIP が 0（スキーマと venv を `YUEN_REQIF_XSD` と `YUEN_PYTHON` で渡して。一式のツールを使うテストは、まだ無い）。C.10 と C.11 の書き出しが、xmllint、`reqif validate`（`--use-reqif-schema` も）、`prov` のどれでも通る（`period`、`ecfr`、`payment`）。DESIGN 14 章の outdated を、本物の e-Gov に一度問い合わせた出力に差し替えた（12 章と 13 章も実物にした）。
+**2026-10-03 に満たしたもの**（書き出しと出典のコマンドの部分）：`cargo test -- --nocapture` が全部通り、この機械で SKIP が 0（スキーマと venv を `YUEN_REQIF_XSD` と `YUEN_PYTHON` で渡して）。C.10 と C.11 の書き出しが、xmllint、`reqif validate`（`--use-reqif-schema` も）、`prov` のどれでも通る（`period`、`ecfr`、`payment`）。DESIGN 14 章の outdated を、本物の e-Gov に一度問い合わせた出力に差し替えた（12 章と 13 章も実物にした）。
 
-**残したもの**（一式の読み込みを止めているため）：C.2〜C.4 の端のハッシュ、C.7 の借りた出典で書いた `period`、C.9 の `affected`、C で再現を足すコード（E106、E107、E202〜E205、W201）、テストの材料 `rulec`・`koyomi`・`chobo`・`geas` の書き出しと、その ReqIF と PROV の確かめ、借りた出典の `source outdated`、条を固定している成果物を `outdated` と PROV（`yuen:pins`）で挙げること、DESIGN 8 章と 11 章の形の案、報告に一式のツールのバージョンを書くこと。
+**2026-10-04 に満たしたもの**（一式の読み込み。ritsu の D.7）：上の条件の全部。yuen のテスト（19 のファイルと単体テスト）が全部通り、SKIP は 0。DESIGN 3 章を口で読む形に書き直し、8 章と 11 章を実物にし、14 章に借りた出典の `outdated` の出力を足し、19 章に取り直したハッシュを書いた。取り直したハッシュ（`tests/suite.rs` が確かめる）：
+
+| 成果物 | 端 |
+|---|---|
+| `rulec "rules/印紙税の本則と軽減.rule" table 本則` | `21432c19a67fe72e` |
+| `… clause 非課税` | `5bc61581e0c31022` |
+| `… table 軽減` | `4ba4c2dec2c8262b` |
+| `… define 軽減期間` | `b5b30cefd66e58d6` |
+| `rulec "rules/osha_extinguisher.rule" table distance` | `5681500476af8a56` |
+| `koyomi "民法の期間.cal" date 起算日` | `15aa6c91d6aaae80` |
+| `… date 満了日` | `23441fd408f07548` |
+| `… date 満了日_142条` | `bba4761410179e6e` |
+| `… claim 142条の満了日は満了日以後` | `7c616f5dcc9503a8` |
+| `… claim 満了日は単調` | `53b5eb9afcef2219` |
+| `… claim 142条の満了日も単調` | `44569913a3f84e29` |
+| `… claim 満了日は起点より後` | `5e7bb0ed51835dc7` |
+| `koyomi "支払_20日締め翌月10日払い.cal" date 支払日` | `feb9535fb9350ecc` |
+| `… claim 営業日に払う` | `3cf8fc3fb2dda9d9` |
+| `geas "greeter/greeter.geas" claim "rejects an empty name"` | `3f7c8d1b2bbcc309` |
+| `proto "warehouse.proto" service StockService method Reserve` | `cadb2fc727e9af81` |
+| `… service StockService method Release` | `2a0912a66889e515` |
+| `dandori "arrange_delivery.ja.flow" task 翌日便を頼む` | `3c19313a3f633021` |
+| `sakai "contexts/受注.ctx" term キャンセル` | `dbfd211b7e4cef4b` |
+
+ほかの言語のものの端の全部は DESIGN 19 章にある。
 
 ## 4. 段階 D：doc、例、README、スキル
 
@@ -441,3 +478,10 @@ DESIGN 15 章の七つを作る。写したファイルの元（リポジトリ�
 - `source outdated` が借りた出典で exit 2 にするところは `src/main.rs` の `source_cmd`（`yuen::fetch::borrowed`）。借りた出典の固定はツールの api の `sources[].pins` から、写しはツールのファイルの隣から読む（C.7）。条を固定している成果物は、`src/fetch.rs` の `reach_lines` に一行足せば言える。
 - 診断と `trace` と `source` のコマンドが言うファイルのパスは、走らせたディレクトリからの相対にした（DESIGN 2.2。`Project::shown`）。ツールのファイルや proto のパスを文面に出すときも、`shown` を通す。JSON はルートからの相対のまま。
 - 本物の e-Gov には、2026-10-03 10:38 に一度だけ問い合わせた（DESIGN 19 章）。eCFR には問い合わせていない。`YUEN_NET=1 cargo test --test fetch -- --nocapture` で両方に問い合わせられる。
+
+### 5.4 C の後半（ritsu の D.7）から次へ
+
+- C は済んだ。残りは D（doc、例、README、スキル）で、ritsu の PLAN の F.1 で書き直してから作る。doc（DESIGN 10 章）は、ほかの言語のものの名前と端を `Suite` から読み、規則やカレンダーのページを埋め込まずに名前とファイルを書く（10 章の「捨てたもの」のとおり）。
+- ほかの言語を読むところは `src/suite.rs`（口と、一回の実行の中で覚えた答え）、`src/ends.rs` の `artifact_end`、`src/coverage.rs` の `gather` と `ran_by_claims`、`src/sources.rs` の `borrow` と `pinned_by` に集めてある。言語が新しい種類を口で渡すようになっても、yuen の側は名指しの表（ritsu-base）に種類が入れば読める。
+- テストは、ほかの言語のクレートを dev-dependency に持ち、`tests/common/mod.rs` の `suite()` と `run()` で、`ritsu yuen` と同じにつないで同じプロセスの中で走らせる。環境変数を変えて走らせるテスト（テストの中の e-Gov など）で、ほかの言語も要るものは、`crates/ritsu/tests/yuen.rs` に置く（ritsu のバイナリを走らせる）。
+- `ritsu yuen` に同じコマンドを続けて言うために、`run` が引数を `check::COMMAND`（スレッドに一つ）に置く。ライブラリの関数を直接呼んだときは、`check` と渡したパスから組み立てる。

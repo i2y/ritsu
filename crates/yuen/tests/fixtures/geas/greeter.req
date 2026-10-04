@@ -1,0 +1,50 @@
+requirements greeter v1
+description "What geas's example greeter answers, for the tests: met by its server, checked by the claims of its spec, and read from a contract written for the tests"
+
+role api "decides what the service answers"
+role dev "writes the server"
+
+source contract = file "contract.md" sha256:129685aad10b7b82
+
+scope file "greeter/server.py"
+
+requirement greets_by_name
+  text "GET /greet?name=<name> answers 200 with the message Hello, <name>"
+  owner api
+  from @contract
+    reviewed 2026-10-04 by api sha256:129685aad10b7b82 -> sha256:4e3719f3a07dc096
+  satisfied by file "greeter/server.py"
+    reviewed 2026-10-04 by dev sha256:4e3719f3a07dc096 -> sha256:331e02e26d128e8c
+  verified by geas "greeter/greeter.geas" claim "greets by name"
+    reviewed 2026-10-04 by dev sha256:4e3719f3a07dc096 -> sha256:2b4e11c2cc191431
+
+requirement rejects_an_empty_name
+  text "GET /greet with an empty name answers 400"
+  owner api
+  from @contract
+    reviewed 2026-10-04 by api sha256:129685aad10b7b82 -> sha256:70ec5112e96e51a9
+  decided 2026-10-03 by api "an empty name is a client error, not a greeting"
+  satisfied by file "greeter/server.py"
+    reviewed 2026-10-04 by dev sha256:70ec5112e96e51a9 -> sha256:331e02e26d128e8c
+  verified by geas "greeter/greeter.geas" claim "rejects an empty name"
+    reviewed 2026-10-04 by dev sha256:70ec5112e96e51a9 -> sha256:3f7c8d1b2bbcc309
+
+requirement totals_accumulate
+  text "POST /add adds its body to a total that GET /total answers, and POST /reset sets it to 0"
+  owner api
+  from @contract
+    reviewed 2026-10-04 by api sha256:129685aad10b7b82 -> sha256:6b134f42eed9f18a
+  satisfied by file "greeter/server.py"
+    reviewed 2026-10-04 by dev sha256:6b134f42eed9f18a -> sha256:331e02e26d128e8c
+  verified by geas "greeter/greeter.geas" claim "totals accumulate across requests"
+    reviewed 2026-10-04 by dev sha256:6b134f42eed9f18a -> sha256:d653be1c06f5c8b1
+
+requirement unknown_paths_are_404
+  text "Any other path answers 404"
+  owner api
+  from @contract
+    reviewed 2026-10-04 by api sha256:129685aad10b7b82 -> sha256:132fa5fd5426ca87
+  satisfied by file "greeter/server.py"
+    reviewed 2026-10-04 by dev sha256:132fa5fd5426ca87 -> sha256:331e02e26d128e8c
+  verified by geas "greeter/greeter.geas" claim "unknown paths are 404"
+    reviewed 2026-10-04 by dev sha256:132fa5fd5426ca87 -> sha256:1950201e8644bc57

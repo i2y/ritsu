@@ -1,0 +1,10 @@
+dates 例(example) v1
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第142条 sha256:fc8c35a0769d3b35
+
+inputs
+  起点(origin) : date  range >=2026-01-01 <=2026-12-31
+
+date 満了日(last_day) = 起点  @民法 第142条
+  + 1 day

@@ -1,0 +1,15 @@
+requirements 例 v1
+role 法務
+
+source 民法 = law "129AC0000000089" asof 2026-10-01
+  第142条 sha256:54a319e4148c24c7
+
+requirement r1
+  text "x"
+  owner 法務
+  from @民法 第142条
+    reviewed 2026-10-04 by 法務 sha256:54a319e4148c24c7 -> sha256:f0db3717ffd12ba0
+  satisfied by koyomi "cal/a.cal" date 満了日
+    reviewed 2026-10-04 by 法務 sha256:f0db3717ffd12ba0 -> sha256:3c4a7518c3f1dead
+  not verified "例なので置かない"
+    approved 2026-10-04 by 法務 sha256:f0db3717ffd12ba0

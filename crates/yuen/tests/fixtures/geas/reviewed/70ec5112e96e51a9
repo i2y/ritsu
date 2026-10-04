@@ -1,0 +1,2 @@
+text GET /greet with an empty name answers 400
+from file contract.md sha256:129685aad10b7b82

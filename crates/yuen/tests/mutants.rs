@@ -1,12 +1,18 @@
 //! The mutants (PLAN B.12): every `tests/mutants/<CODE>_<what>/` gives its code, and what
 //! `yuen check` prints for it, in English and in Japanese, is its golden file in
 //! `tests/golden/`. Each mutant is its own root, so the golden files do not depend on where
-//! the repository is. `YUEN_BLESS=1 cargo test` writes the golden files again; read the diff.
+//! the repository is. They are checked with every language joined, as `ritsu yuen` checks them
+//! (some name a rule or a calendar). `YUEN_BLESS=1 cargo test` writes the golden files again;
+//! read the diff.
 
 mod common;
 
-use yuen::check::{check, render};
+use yuen::check::render;
 use ritsu_base::text::Lang;
+
+fn check(paths: &[String], root: Option<&str>) -> Result<yuen::check::Checked, yuen::project::Refusal> {
+    yuen::check::check_with(paths, root, common::suite())
+}
 
 fn mutants() -> Vec<String> {
     let mut v: Vec<String> = std::fs::read_dir("tests/mutants").unwrap().filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().to_string()).collect();
@@ -37,7 +43,7 @@ fn every_mutant_gives_its_code_and_says_what_its_golden_files_say() {
         }
         n += 1;
     }
-    assert!(n >= 36, "{n} mutants");
+    assert!(n >= 41, "{n} mutants");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

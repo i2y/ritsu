@@ -9,15 +9,26 @@ use ritsu_base::naming::{Name as Naming, Tool};
 use ritsu_ports::{Item, Reference, Said};
 use std::path::Path;
 
-/// yuen, as the ports reach it.
+/// yuen, as the ports reach it, with the languages a `.req` borrows sources from and names
+/// things of joined (`ritsu yuen` joins every one; the default joins none, and a requirement
+/// read from a borrowed source then has no definition).
 #[derive(Default)]
-pub struct Engine;
+pub struct Engine {
+    suite: crate::suite::Suite,
+}
+
+impl Engine {
+    /// yuen with the languages `suite` joins.
+    pub fn with(suite: crate::suite::Suite) -> Engine {
+        Engine { suite }
+    }
+}
 
 /// The file, read as a project of its own under `root`, with its names resolved.
-fn load(root: &Path, file: &str) -> Result<Project, Vec<Said>> {
+fn load(root: &Path, file: &str, suite: &crate::suite::Suite) -> Result<Project, Vec<Said>> {
     let disk = ritsu_base::paths::on_disk(root, file).to_string_lossy().to_string();
     let r = root.to_string_lossy().to_string();
-    match project::load(std::slice::from_ref(&disk), Some(&r)) {
+    match project::load_with(std::slice::from_ref(&disk), Some(&r), suite.clone()) {
         Err(project::Refusal(t)) => Err(vec![Said { code: String::new(), file: disk, line: None, message: t }]),
         Ok((None, diags)) => Err(diags.iter().filter(|d| d.is_error()).map(Said::of).collect()),
         Ok((Some(mut p), _)) => {
@@ -64,7 +75,7 @@ impl ritsu_ports::Items for Engine {
     /// the end cannot be made (an upper end that cannot be read, a ring of `from`s). A source's is
     /// a line for each article it pins, as a `from` line writes it, in the order written.
     fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, Vec<Said>> {
-        let p = load(root, file)?;
+        let p = load(root, file, &self.suite)?;
         let (srcs, _) = crate::sources::check_sources(&p);
         let (_, in_cycle) = crate::graph::cycles(&p);
         let ends = crate::ends::requirement_ends(&p, &srcs, &in_cycle);
@@ -101,7 +112,7 @@ impl ritsu_ports::References for Engine {
     /// (`satisfied by`, `verified by`), what a `scope` gathers, a source a rule or a calendar
     /// pins, and the file a `file` source copies.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
-        let p = load(root, file)?;
+        let p = load(root, file, &self.suite)?;
         let f = &p.files[0];
         let mut out = Vec::new();
         for (r, v) in p.reqs.iter().enumerate().filter(|(_, v)| v.file == 0) {

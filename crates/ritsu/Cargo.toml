@@ -7,12 +7,18 @@ repository.workspace = true
 description = "The one command of ritsu: the languages run with every port joined, so that what one language checks, the next reads as it is"
 publish = false
 
-# An entry may depend on every layer (DESIGN 3.1). In stage D it holds dandori and rulec only: the
-# least of `ritsu <language>` that runs a workflow reading its rules in the same process (DESIGN 8.6).
+# An entry may depend on every layer (DESIGN 3.1). In stage D it holds the languages the receiving
+# ones read: the least of `ritsu <language>` that runs dandori, yuen and sakai with every port
+# joined (DESIGN 8.6).
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
+chobo = { path = "../chobo" }
 dandori = { path = "../dandori" }
+geas = { path = "../geas" }
+koyomi = { path = "../koyomi" }
 rulec = { path = "../rulec" }
+sakai = { path = "../sakai" }
+yuen = { path = "../yuen" }
 
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }

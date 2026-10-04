@@ -1,0 +1,41 @@
+requirements 配送 v1
+description "dandori の例「arrange_delivery.ja.flow」のタスクとレコードを、配送の手順のどこから来たかで名指したテストの材料"
+
+role 物流 "配送の手順を決める"
+role 開発 "ワークフローを書いて直す"
+
+source 手順 = file "配送の手順.md" sha256:b3d6f4b8ced5716c
+
+scope dandori "arrange_delivery.ja.flow" task
+
+requirement 翌日便(next_day)
+  text "翌日便は運送会社に集荷を頼む。車が空いていなければ、そう言って止める"
+  owner 物流
+  from @手順
+    reviewed 2026-10-04 by 物流 sha256:b3d6f4b8ced5716c -> sha256:14807ac1afa3333a
+  satisfied by dandori "arrange_delivery.ja.flow" task 翌日便を頼む
+    reviewed 2026-10-04 by 開発 sha256:14807ac1afa3333a -> sha256:3c19313a3f633021
+  not verified "この材料は、ワークフローを走らせる主張を持たない"
+    approved 2026-10-04 by 物流 sha256:14807ac1afa3333a
+
+requirement 通常便(regular)
+  text "通常便は郵便に小包を頼む"
+  owner 物流
+  from @手順
+    reviewed 2026-10-04 by 物流 sha256:b3d6f4b8ced5716c -> sha256:907ce7d3f631812e
+  satisfied by dandori "arrange_delivery.ja.flow" task 通常便を頼む
+    reviewed 2026-10-04 by 開発 sha256:907ce7d3f631812e -> sha256:fb518dde20b90816
+  not verified "この材料は、ワークフローを走らせる主張を持たない"
+    approved 2026-10-04 by 物流 sha256:907ce7d3f631812e
+
+requirement 追跡番号(tracking_number)
+  text "どちらの便でも、追跡番号を返す"
+  owner 物流
+  from @手順
+    reviewed 2026-10-04 by 物流 sha256:b3d6f4b8ced5716c -> sha256:6fc243c572acc9d4
+  satisfied by dandori "arrange_delivery.ja.flow" record 集荷 field 追跡番号
+    reviewed 2026-10-04 by 開発 sha256:6fc243c572acc9d4 -> sha256:69aa90b09002e1fc
+  satisfied by dandori "arrange_delivery.ja.flow" output 追跡番号
+    reviewed 2026-10-04 by 開発 sha256:6fc243c572acc9d4 -> sha256:69aa90b09002e1fc
+  not verified "この材料は、ワークフローを走らせる主張を持たない"
+    approved 2026-10-04 by 物流 sha256:6fc243c572acc9d4

@@ -50,21 +50,80 @@ fn files_under(root: &Path, rel: &str, ext: Option<&str>) -> Vec<String> {
     out
 }
 
-/// What a scope gathers (DESIGN 1.8). This stage reads `file` scopes, and the files of a
-/// tool by their extension.
+/// What a scope gathers (DESIGN 1.8). Without a kind, the files: the file named, or every file
+/// of the tool under the directory (`file` takes any). With a kind, the things of that kind in
+/// those files, under the pairs written before it (`scope proto "x.proto" service S method`):
+/// read through the tool's language (`Items`), or for a `.proto` by yuen itself (DESIGN 3.4).
 pub fn gather(p: &Project, n: &Name, kind: Option<&str>) -> Result<Vec<Name>, Unread> {
-    if n.tool != Tool::File || kind.is_some() {
-        return Err(Unread::NotYet(n.tool));
-    }
     let abs = if n.path == "." { p.root.clone() } else { p.root.join(&n.path) };
     if !abs.exists() {
         return Err(Unread::Missing { dir: false });
     }
-    if abs.is_dir() {
-        Ok(files_under(&p.root, &n.path, n.tool.extension()).into_iter().map(|path| Name { tool: n.tool, path, items: vec![] }).collect())
-    } else {
-        Ok(vec![n.clone()])
+    let files: Vec<String> = if abs.is_dir() { files_under(&p.root, &n.path, n.tool.extension()) } else { vec![n.path.clone()] };
+    let Some(kind) = kind else {
+        return Ok(files.into_iter().map(|path| Name { tool: n.tool, path, items: vec![] }).collect());
+    };
+    let mut out = Vec::new();
+    if n.tool == Tool::Proto {
+        for f in &files {
+            let ps = crate::proto::load(&p.root, f).map_err(|(file, why)| Unread::Proto(file, why))?;
+            out.extend(crate::proto::gather(&ps, &Name { tool: n.tool, path: f.clone(), items: n.items.clone() }, kind));
+        }
+        return Ok(out);
     }
+    if !p.suite.reads(n.tool) {
+        return Err(Unread::NoPort(n.tool));
+    }
+    for f in &files {
+        let items = match p.suite.items(n.tool, &p.root, f) {
+            Some(Ok(items)) => items,
+            Some(Err(said)) => return Err(Unread::Refused(said)),
+            None => return Err(Unread::NoPort(n.tool)),
+        };
+        out.extend(items.into_iter().filter(|i| i.kind() == kind && i.naming.items.len() == n.items.len() + 1 && i.naming.items[..n.items.len()] == n.items[..]).map(|i| i.naming));
+    }
+    Ok(out)
+}
+
+/// The files the claims the links name ran (DESIGN 5.3, rule 4), from the records geas keeps of
+/// them (`geas map`), each from the root; and the specs a link names that have no record.
+#[derive(Default)]
+pub struct Ran {
+    pub files: std::collections::BTreeSet<String>,
+    pub unrecorded: Vec<String>,
+}
+
+/// What the claims a link names ran: a link to a claim takes that claim's files, a link to a spec
+/// every claim's. The record's paths are from its root, written from the spec's directory.
+pub fn ran_by_claims(p: &Project) -> Ran {
+    let mut ran = Ran::default();
+    let Some(claims) = &p.suite.claims else { return ran };
+    let mut specs: Vec<(String, Option<String>)> = Vec::new();
+    for n in p.names.links.iter().flatten().flatten().filter(|n| n.tool == Tool::Geas) {
+        let claim = n.items.first().map(|(_, c)| c.clone());
+        if !specs.contains(&(n.path.clone(), claim.clone())) {
+            specs.push((n.path.clone(), claim));
+        }
+    }
+    for (spec, claim) in &specs {
+        match claims.map_record(&p.root.join(spec)) {
+            Ok(Some(rec)) => {
+                let dir = ritsu_base::paths::parent(spec);
+                let base = ritsu_base::paths::join(&dir, &rec.root).unwrap_or(dir);
+                for r in rec.ran.iter().filter(|r| claim.as_ref().is_none_or(|c| *c == r.claim)) {
+                    if let Ok(f) = ritsu_base::paths::join(&base, &r.file) {
+                        ran.files.insert(f);
+                    }
+                }
+            }
+            _ => {
+                if !ran.unrecorded.contains(spec) {
+                    ran.unrecorded.push(spec.clone());
+                }
+            }
+        }
+    }
+    ran
 }
 
 /// Whether an artifact traces to a requirement (DESIGN 5.3): a link names it, names what
@@ -113,7 +172,7 @@ pub fn coverage(p: &Project) -> Vec<Diag> {
 }
 
 /// E404 for the artifacts of the scopes no requirement reaches.
-pub fn scope_diags(p: &Project, scopes: &[ScopeResult]) -> Vec<Diag> {
+pub fn scope_diags(p: &Project, scopes: &[ScopeResult], ran: &Ran) -> Vec<Diag> {
     let mut diags = Vec::new();
     for s in scopes {
         let decl = &p.files[s.file].ast.scopes[s.idx];
@@ -130,6 +189,14 @@ pub fn scope_diags(p: &Project, scopes: &[ScopeResult]) -> Vec<Diag> {
                 } else {
                     tr!("範囲のほかのものは辿れます: {ja}", "The rest of the scope is reached: {en}")
                 });
+            }
+            if a.tool == Tool::File && !ran.unrecorded.is_empty() {
+                let specs: Vec<String> = ran.unrecorded.iter().map(|s| Name { tool: Tool::Geas, path: s.clone(), items: vec![] }.text()).collect();
+                let (ja, en) = (specs.join("、"), specs.join(", "));
+                d = d.note(tr!(
+                    "{ja} には geas の記録がありません。`geas map` で記録を作れば、その主張が走らせたファイルは要件に辿れます。",
+                    "{en} has no geas record; with one (`geas map`), the files its claims run trace to their requirements."
+                ));
             }
             d = d.note(tr!("`satisfied by` か `verified by` でこれを名指す要件を足すか、範囲を狭めます。", "Add a requirement whose `satisfied by` or `verified by` names it, or narrow the scope."));
             diags.push(d);

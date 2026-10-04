@@ -1,0 +1,11 @@
+requirements 例 v1
+role 法務
+
+source 民法 = koyomi "a.cal" source 民法
+
+requirement r1
+  text "x"
+  owner 法務
+  from @民法 第142条
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"

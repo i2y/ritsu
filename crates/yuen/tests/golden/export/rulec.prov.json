@@ -1,0 +1,535 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/safety": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "safety",
+      "yuen:description": "decides how the regulation reads"
+    },
+    "y:role/dev": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "dev",
+      "yuen:description": "writes and corrects the rule"
+    },
+    "y:role/税務": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "税務",
+      "yuen:description": "条文の読み方を決める"
+    },
+    "y:role/開発": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "開発",
+      "yuen:description": "規則を書いて直す"
+    }
+  },
+  "entity": {
+    "y:source/7e4bbf45001c614fa29502d3bc2fa12e": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "osha §1910.157",
+      "yuen:law": "ecfr 29 CFR 1910",
+      "yuen:asof": "2026-01-01",
+      "yuen:sha256": "c2a9ce966c7e2269"
+    },
+    "y:source/1308f9c555c0edbb0f009b291f0524a8": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "法 別表第一",
+      "yuen:law": "egov 342AC0000000023",
+      "yuen:asof": "2026-04-01",
+      "yuen:revision": "342AC0000000023_20260401_507AC0000000052",
+      "yuen:sha256": "0ba69792e960021e"
+    },
+    "y:source/b542ed48946e97f3ad219139315541d0": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "措置法 第91条",
+      "yuen:law": "egov 332AC0000000026",
+      "yuen:asof": "2026-04-01",
+      "yuen:revision": "332AC0000000026_20260401_508AC0000000012",
+      "yuen:sha256": "85faf53f6f6e8196"
+    },
+    "y:artifact/63835dcb3c1071e83c453ccf9e56cd21": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/osha_extinguisher.rule\" table distance",
+      "yuen:sha256": "5681500476af8a56",
+      "yuen:end": "item"
+    },
+    "y:artifact/b34530d5260888337db760b46f7c625d": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/印紙税の本則と軽減.rule\" table 本則",
+      "yuen:sha256": "21432c19a67fe72e",
+      "yuen:end": "item"
+    },
+    "y:artifact/964734816e18a5498e1f92f624a978e9": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/印紙税の本則と軽減.rule\" clause 非課税",
+      "yuen:sha256": "5bc61581e0c31022",
+      "yuen:end": "item"
+    },
+    "y:artifact/c6c3ca0cf03477df7dd7e8c879185bd1": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/印紙税の本則と軽減.rule\" table 軽減",
+      "yuen:sha256": "4ba4c2dec2c8262b",
+      "yuen:end": "item"
+    },
+    "y:artifact/267961841802502c318f51cc0189e0ae": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/印紙税の本則と軽減.rule\" define 軽減期間",
+      "yuen:sha256": "b5b30cefd66e58d6",
+      "yuen:end": "item"
+    },
+    "y:artifact/25da50e6586089200b4ac3bcbb6864b2": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/osha_extinguisher.rule\"",
+      "yuen:sha256": "a52e955b88af88d6",
+      "yuen:end": "file"
+    },
+    "y:artifact/e6119e69e276b1608630815a9a637027": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "rulec \"rules/印紙税の本則と軽減.rule\"",
+      "yuen:sha256": "dc176eebd83f26e3",
+      "yuen:end": "file"
+    },
+    "y:requirement/travel_distance/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "travel_distance",
+      "yuen:version": "1",
+      "yuen:text": "Portable fire extinguishers for Class A hazards are placed so that the travel distance to any extinguisher is 75 feet or less, and for Class B hazards 50 feet or less",
+      "yuen:inForce": "2026-01-01..",
+      "yuen:sha256": "849dc53f1d112c23"
+    },
+    "y:requirement/base_tax/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "本則の税額",
+      "yuen:version": "1",
+      "yuen:text": "不動産の譲渡に関する契約書の印紙税額は、記載された契約金額に応じて、別表第一の第1号文書の欄の税率による。契約金額が1万円未満のものは課税しない",
+      "yuen:inForce": "2026-04-01..",
+      "yuen:sha256": "56d4ef0ae01ebb19"
+    },
+    "y:requirement/reduced_rate/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "軽減税率",
+      "yuen:version": "1",
+      "yuen:text": "令和9年3月31日までに作成される不動産の譲渡に関する契約書の印紙税額は、租税特別措置法第91条の軽減された税率による",
+      "yuen:inForce": "2026-04-01..",
+      "yuen:sha256": "c3fbde1529c44e2e"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/travel_distance/v1",
+      "prov:agent": "y:role/safety",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r12": {
+      "prov:entity": "y:requirement/base_tax/v1",
+      "prov:agent": "y:role/税務",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r27": {
+      "prov:entity": "y:requirement/reduced_rate/v1",
+      "prov:agent": "y:role/税務",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/travel_distance/v1",
+      "prov:usedEntity": "y:source/7e4bbf45001c614fa29502d3bc2fa12e",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r13": {
+      "prov:generatedEntity": "y:requirement/base_tax/v1",
+      "prov:usedEntity": "y:source/1308f9c555c0edbb0f009b291f0524a8",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r28": {
+      "prov:generatedEntity": "y:requirement/reduced_rate/v1",
+      "prov:usedEntity": "y:source/b542ed48946e97f3ad219139315541d0",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/63835dcb3c1071e83c453ccf9e56cd21",
+      "prov:influencer": "y:requirement/travel_distance/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r14": {
+      "prov:influencee": "y:artifact/b34530d5260888337db760b46f7c625d",
+      "prov:influencer": "y:requirement/base_tax/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r15": {
+      "prov:influencee": "y:artifact/964734816e18a5498e1f92f624a978e9",
+      "prov:influencer": "y:requirement/base_tax/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r29": {
+      "prov:influencee": "y:artifact/c6c3ca0cf03477df7dd7e8c879185bd1",
+      "prov:influencer": "y:requirement/reduced_rate/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r30": {
+      "prov:influencee": "y:artifact/267961841802502c318f51cc0189e0ae",
+      "prov:influencer": "y:requirement/reduced_rate/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r42": {
+      "prov:influencee": "y:artifact/25da50e6586089200b4ac3bcbb6864b2",
+      "prov:influencer": "y:source/7e4bbf45001c614fa29502d3bc2fa12e",
+      "prov:type": {
+        "$": "yuen:pins",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r43": {
+      "prov:influencee": "y:artifact/e6119e69e276b1608630815a9a637027",
+      "prov:influencer": "y:source/1308f9c555c0edbb0f009b291f0524a8",
+      "prov:type": {
+        "$": "yuen:pins",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r44": {
+      "prov:influencee": "y:artifact/e6119e69e276b1608630815a9a637027",
+      "prov:influencer": "y:source/b542ed48946e97f3ad219139315541d0",
+      "prov:type": {
+        "$": "yuen:pins",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/a3971503ea52325fbe2e537512a733c1": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "c2a9ce966c7e2269",
+      "yuen:down": "849dc53f1d112c23",
+      "yuen:status": "ok"
+    },
+    "y:review/b5a13af048945651353719e7fdfac31c": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "849dc53f1d112c23",
+      "yuen:down": "5681500476af8a56",
+      "yuen:status": "ok"
+    },
+    "y:waiver/5bdeda3051ac0cb1663b946bfbf5e652": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "rulec checks that the table covers every hazard; this fixture names no claim",
+      "yuen:sha256": "849dc53f1d112c23",
+      "yuen:status": "ok"
+    },
+    "y:review/dd02e83d69581bf4e4056375dd8b261f": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "0ba69792e960021e",
+      "yuen:down": "56d4ef0ae01ebb19",
+      "yuen:status": "ok"
+    },
+    "y:review/71f24993aa7e94ce3a8b264cfcedd467": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "56d4ef0ae01ebb19",
+      "yuen:down": "21432c19a67fe72e",
+      "yuen:status": "ok"
+    },
+    "y:review/e5af45342308a6106785e961a417a20e": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "56d4ef0ae01ebb19",
+      "yuen:down": "5bc61581e0c31022",
+      "yuen:status": "ok"
+    },
+    "y:waiver/c19c179329ae48c51625b1de824c132e": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "表が契約金額のすべてを覆い、行が重ならないことは rulec の検査が確かめる。この材料は、それを名指す主張を持たない",
+      "yuen:sha256": "56d4ef0ae01ebb19",
+      "yuen:status": "ok"
+    },
+    "y:review/1449e3f1b868b51eeedd690a779673f6": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "85faf53f6f6e8196",
+      "yuen:down": "c3fbde1529c44e2e",
+      "yuen:status": "ok"
+    },
+    "y:review/8944df3a61e19ab0a73ba38c0324a684": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "c3fbde1529c44e2e",
+      "yuen:down": "4ba4c2dec2c8262b",
+      "yuen:status": "ok"
+    },
+    "y:review/31da465ca49e3c001faa79f1891c49f9": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "c3fbde1529c44e2e",
+      "yuen:down": "b5b30cefd66e58d6",
+      "yuen:status": "ok"
+    },
+    "y:waiver/b3297453047192d8115d87699b457d2e": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "軽減の表が本則の表より先に当たることは rulec の検査が確かめる。この材料は、それを名指す主張を持たない",
+      "yuen:sha256": "c3fbde1529c44e2e",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r4": {
+      "prov:activity": "y:review/a3971503ea52325fbe2e537512a733c1",
+      "prov:entity": "y:source/7e4bbf45001c614fa29502d3bc2fa12e"
+    },
+    "_:r5": {
+      "prov:activity": "y:review/a3971503ea52325fbe2e537512a733c1",
+      "prov:entity": "y:requirement/travel_distance/v1"
+    },
+    "_:r7": {
+      "prov:activity": "y:review/b5a13af048945651353719e7fdfac31c",
+      "prov:entity": "y:requirement/travel_distance/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/b5a13af048945651353719e7fdfac31c",
+      "prov:entity": "y:artifact/63835dcb3c1071e83c453ccf9e56cd21"
+    },
+    "_:r10": {
+      "prov:activity": "y:waiver/5bdeda3051ac0cb1663b946bfbf5e652",
+      "prov:entity": "y:requirement/travel_distance/v1"
+    },
+    "_:r16": {
+      "prov:activity": "y:review/dd02e83d69581bf4e4056375dd8b261f",
+      "prov:entity": "y:source/1308f9c555c0edbb0f009b291f0524a8"
+    },
+    "_:r17": {
+      "prov:activity": "y:review/dd02e83d69581bf4e4056375dd8b261f",
+      "prov:entity": "y:requirement/base_tax/v1"
+    },
+    "_:r19": {
+      "prov:activity": "y:review/71f24993aa7e94ce3a8b264cfcedd467",
+      "prov:entity": "y:requirement/base_tax/v1"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/71f24993aa7e94ce3a8b264cfcedd467",
+      "prov:entity": "y:artifact/b34530d5260888337db760b46f7c625d"
+    },
+    "_:r22": {
+      "prov:activity": "y:review/e5af45342308a6106785e961a417a20e",
+      "prov:entity": "y:requirement/base_tax/v1"
+    },
+    "_:r23": {
+      "prov:activity": "y:review/e5af45342308a6106785e961a417a20e",
+      "prov:entity": "y:artifact/964734816e18a5498e1f92f624a978e9"
+    },
+    "_:r25": {
+      "prov:activity": "y:waiver/c19c179329ae48c51625b1de824c132e",
+      "prov:entity": "y:requirement/base_tax/v1"
+    },
+    "_:r31": {
+      "prov:activity": "y:review/1449e3f1b868b51eeedd690a779673f6",
+      "prov:entity": "y:source/b542ed48946e97f3ad219139315541d0"
+    },
+    "_:r32": {
+      "prov:activity": "y:review/1449e3f1b868b51eeedd690a779673f6",
+      "prov:entity": "y:requirement/reduced_rate/v1"
+    },
+    "_:r34": {
+      "prov:activity": "y:review/8944df3a61e19ab0a73ba38c0324a684",
+      "prov:entity": "y:requirement/reduced_rate/v1"
+    },
+    "_:r35": {
+      "prov:activity": "y:review/8944df3a61e19ab0a73ba38c0324a684",
+      "prov:entity": "y:artifact/c6c3ca0cf03477df7dd7e8c879185bd1"
+    },
+    "_:r37": {
+      "prov:activity": "y:review/31da465ca49e3c001faa79f1891c49f9",
+      "prov:entity": "y:requirement/reduced_rate/v1"
+    },
+    "_:r38": {
+      "prov:activity": "y:review/31da465ca49e3c001faa79f1891c49f9",
+      "prov:entity": "y:artifact/267961841802502c318f51cc0189e0ae"
+    },
+    "_:r40": {
+      "prov:activity": "y:waiver/b3297453047192d8115d87699b457d2e",
+      "prov:entity": "y:requirement/reduced_rate/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r6": {
+      "prov:activity": "y:review/a3971503ea52325fbe2e537512a733c1",
+      "prov:agent": "y:role/safety"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/b5a13af048945651353719e7fdfac31c",
+      "prov:agent": "y:role/dev"
+    },
+    "_:r11": {
+      "prov:activity": "y:waiver/5bdeda3051ac0cb1663b946bfbf5e652",
+      "prov:agent": "y:role/safety"
+    },
+    "_:r18": {
+      "prov:activity": "y:review/dd02e83d69581bf4e4056375dd8b261f",
+      "prov:agent": "y:role/税務"
+    },
+    "_:r21": {
+      "prov:activity": "y:review/71f24993aa7e94ce3a8b264cfcedd467",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r24": {
+      "prov:activity": "y:review/e5af45342308a6106785e961a417a20e",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r26": {
+      "prov:activity": "y:waiver/c19c179329ae48c51625b1de824c132e",
+      "prov:agent": "y:role/税務"
+    },
+    "_:r33": {
+      "prov:activity": "y:review/1449e3f1b868b51eeedd690a779673f6",
+      "prov:agent": "y:role/税務"
+    },
+    "_:r36": {
+      "prov:activity": "y:review/8944df3a61e19ab0a73ba38c0324a684",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r39": {
+      "prov:activity": "y:review/31da465ca49e3c001faa79f1891c49f9",
+      "prov:agent": "y:role/開発"
+    },
+    "_:r41": {
+      "prov:activity": "y:waiver/b3297453047192d8115d87699b457d2e",
+      "prov:agent": "y:role/税務"
+    }
+  }
+}

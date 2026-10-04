@@ -1,0 +1,26 @@
+context 受注(ordering) v1
+description "注文を受け付け、在庫を押さえ、配送に渡し、届くまでを見届ける"
+owner "受注チーム"
+
+owns
+  dir "../ordering", "../proto/shop/ordering"
+  dir "../py/ordering", "../py/shop/ordering", "../ts/ordering", "../ts/shop/ordering"
+  dir "../java/src/main/java/ordering", "../java/src/main/java/shop/ordering"
+  dir "../go/ordering", "../go/shop/ordering"
+
+published language shop.ordering.v1
+  proto "../proto/shop/ordering/v1/order.proto", "../proto/shop/ordering/v1/fulfillment.proto"
+  open host service OrderService, FulfillmentService
+  generated dir "../py/shop/ordering/v1", "../ts/shop/ordering/v1"
+  generated dir "../java/src/main/java/shop/ordering/v1", "../go/shop/ordering/v1"
+
+terms
+  注文 "客が確定させた購入の申し込み。取り消されても消えない"
+    means message Order
+  キャンセル "出荷の前に、客の申し出で注文を取り消すこと"
+    means enum OrderStatus value ORDER_STATUS_CANCELLED
+
+upstream 在庫 conformist
+  through warehouse.v1
+
+partnership with 配送

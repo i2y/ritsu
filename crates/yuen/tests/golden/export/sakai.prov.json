@@ -1,0 +1,255 @@
+{
+  "prefix": {
+    "yuen": "https://github.com/i2y/yuen/ns#",
+    "y": "urn:yuen:"
+  },
+  "agent": {
+    "y:role/受注": {
+      "prov:type": {
+        "$": "yuen:Role",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "受注",
+      "yuen:description": "受注の用語を決める"
+    }
+  },
+  "entity": {
+    "y:source/0574ec05f2327f3dfa7d1a7a506411d5": {
+      "prov:type": {
+        "$": "yuen:Source",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "用語集",
+      "yuen:file": "用語集.md",
+      "yuen:sha256": "ada090e1ea2e7b68"
+    },
+    "y:artifact/fd078526654c505815cbc55d17cea1e8": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "sakai \"contexts/受注.ctx\" term 注文",
+      "yuen:sha256": "1b2bb352a123c296",
+      "yuen:end": "item"
+    },
+    "y:artifact/9a93586aed6fe6d07f11def9363c6732": {
+      "prov:type": {
+        "$": "yuen:Artifact",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "sakai \"contexts/受注.ctx\" term キャンセル",
+      "yuen:sha256": "dbfd211b7e4cef4b",
+      "yuen:end": "item"
+    },
+    "y:requirement/order/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "注文",
+      "yuen:version": "1",
+      "yuen:text": "注文は、客が確定させた購入の申し込みで、取り消されても消えない",
+      "yuen:sha256": "1f47e05b6d46c563"
+    },
+    "y:requirement/cancel/v1": {
+      "prov:type": {
+        "$": "yuen:Requirement",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "prov:label": "キャンセル",
+      "yuen:version": "1",
+      "yuen:text": "キャンセルは、出荷の前に、客の申し出で注文を取り消すこと",
+      "yuen:sha256": "a622512a90fba0e5"
+    }
+  },
+  "wasAttributedTo": {
+    "_:r1": {
+      "prov:entity": "y:requirement/order/v1",
+      "prov:agent": "y:role/受注",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r12": {
+      "prov:entity": "y:requirement/cancel/v1",
+      "prov:agent": "y:role/受注",
+      "prov:type": {
+        "$": "yuen:owner",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasDerivedFrom": {
+    "_:r2": {
+      "prov:generatedEntity": "y:requirement/order/v1",
+      "prov:usedEntity": "y:source/0574ec05f2327f3dfa7d1a7a506411d5",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r13": {
+      "prov:generatedEntity": "y:requirement/cancel/v1",
+      "prov:usedEntity": "y:source/0574ec05f2327f3dfa7d1a7a506411d5",
+      "prov:type": {
+        "$": "prov:PrimarySource",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "wasInfluencedBy": {
+    "_:r3": {
+      "prov:influencee": "y:artifact/fd078526654c505815cbc55d17cea1e8",
+      "prov:influencer": "y:requirement/order/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    },
+    "_:r14": {
+      "prov:influencee": "y:artifact/9a93586aed6fe6d07f11def9363c6732",
+      "prov:influencer": "y:requirement/cancel/v1",
+      "prov:type": {
+        "$": "yuen:satisfies",
+        "type": "prov:QUALIFIED_NAME"
+      }
+    }
+  },
+  "activity": {
+    "y:review/0d726d3e5a1b3bbd1334d1679f0d4f1e": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "ada090e1ea2e7b68",
+      "yuen:down": "1f47e05b6d46c563",
+      "yuen:status": "ok"
+    },
+    "y:review/95178901544bde34a203b86e4884b97c": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "1f47e05b6d46c563",
+      "yuen:down": "1b2bb352a123c296",
+      "yuen:status": "ok"
+    },
+    "y:waiver/8395d65569ee1bbdd640d54d2c449c92": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "この材料は、語の使われ方を確かめる主張を持たない",
+      "yuen:sha256": "1f47e05b6d46c563",
+      "yuen:status": "ok"
+    },
+    "y:review/d47a8cccf1543165d9455c3d93b3af3f": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "from",
+      "yuen:up": "ada090e1ea2e7b68",
+      "yuen:down": "a622512a90fba0e5",
+      "yuen:status": "ok"
+    },
+    "y:review/1e18bafd3ff179e643db221ef4998d6e": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Review",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:link": "satisfied by",
+      "yuen:up": "a622512a90fba0e5",
+      "yuen:down": "dbfd211b7e4cef4b",
+      "yuen:status": "ok"
+    },
+    "y:waiver/97184c8a0942320a68d5572650aaae90": {
+      "prov:startTime": "2026-10-04T00:00:00",
+      "prov:type": {
+        "$": "yuen:Waiver",
+        "type": "prov:QUALIFIED_NAME"
+      },
+      "yuen:side": "not verified",
+      "yuen:why": "この材料は、語の使われ方を確かめる主張を持たない",
+      "yuen:sha256": "a622512a90fba0e5",
+      "yuen:status": "ok"
+    }
+  },
+  "used": {
+    "_:r4": {
+      "prov:activity": "y:review/0d726d3e5a1b3bbd1334d1679f0d4f1e",
+      "prov:entity": "y:source/0574ec05f2327f3dfa7d1a7a506411d5"
+    },
+    "_:r5": {
+      "prov:activity": "y:review/0d726d3e5a1b3bbd1334d1679f0d4f1e",
+      "prov:entity": "y:requirement/order/v1"
+    },
+    "_:r7": {
+      "prov:activity": "y:review/95178901544bde34a203b86e4884b97c",
+      "prov:entity": "y:requirement/order/v1"
+    },
+    "_:r8": {
+      "prov:activity": "y:review/95178901544bde34a203b86e4884b97c",
+      "prov:entity": "y:artifact/fd078526654c505815cbc55d17cea1e8"
+    },
+    "_:r10": {
+      "prov:activity": "y:waiver/8395d65569ee1bbdd640d54d2c449c92",
+      "prov:entity": "y:requirement/order/v1"
+    },
+    "_:r15": {
+      "prov:activity": "y:review/d47a8cccf1543165d9455c3d93b3af3f",
+      "prov:entity": "y:source/0574ec05f2327f3dfa7d1a7a506411d5"
+    },
+    "_:r16": {
+      "prov:activity": "y:review/d47a8cccf1543165d9455c3d93b3af3f",
+      "prov:entity": "y:requirement/cancel/v1"
+    },
+    "_:r18": {
+      "prov:activity": "y:review/1e18bafd3ff179e643db221ef4998d6e",
+      "prov:entity": "y:requirement/cancel/v1"
+    },
+    "_:r19": {
+      "prov:activity": "y:review/1e18bafd3ff179e643db221ef4998d6e",
+      "prov:entity": "y:artifact/9a93586aed6fe6d07f11def9363c6732"
+    },
+    "_:r21": {
+      "prov:activity": "y:waiver/97184c8a0942320a68d5572650aaae90",
+      "prov:entity": "y:requirement/cancel/v1"
+    }
+  },
+  "wasAssociatedWith": {
+    "_:r6": {
+      "prov:activity": "y:review/0d726d3e5a1b3bbd1334d1679f0d4f1e",
+      "prov:agent": "y:role/受注"
+    },
+    "_:r9": {
+      "prov:activity": "y:review/95178901544bde34a203b86e4884b97c",
+      "prov:agent": "y:role/受注"
+    },
+    "_:r11": {
+      "prov:activity": "y:waiver/8395d65569ee1bbdd640d54d2c449c92",
+      "prov:agent": "y:role/受注"
+    },
+    "_:r17": {
+      "prov:activity": "y:review/d47a8cccf1543165d9455c3d93b3af3f",
+      "prov:agent": "y:role/受注"
+    },
+    "_:r20": {
+      "prov:activity": "y:review/1e18bafd3ff179e643db221ef4998d6e",
+      "prov:agent": "y:role/受注"
+    },
+    "_:r22": {
+      "prov:activity": "y:waiver/97184c8a0942320a68d5572650aaae90",
+      "prov:agent": "y:role/受注"
+    }
+  }
+}

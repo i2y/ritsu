@@ -1,0 +1,8 @@
+diff: tests/fixtures/rulec/changes/rule.diff
+files that requirements name, that the diff touches:
+  rulec "rules/印紙税の本則と軽減.rule": met by 本則の税額, 軽減税率
+changes no requirement reaches: none
+requirements touched:
+  本則の税額 (tests/fixtures/rulec/印紙税.req:14): owner 税務; from 法 別表第一
+  軽減税率 (tests/fixtures/rulec/印紙税.req:27): owner 税務; from 措置法 第91条
+2 requirements touched; ask 税務

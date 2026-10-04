@@ -1,0 +1,4 @@
+エラー[E106]: tests/mutants/E106_宣言されていない出典を借りる/例.req:4:8: tests/mutants/E106_宣言されていない出典を借りる/a.cal は出典「民法」を宣言していません
+     4 | source 民法 = koyomi "a.cal" source 民法
+  = tests/mutants/E106_宣言されていない出典を借りる/a.cal が宣言している出典はありません。
+tests/mutants/E106_宣言されていない出典を借りる: エラー 1 件
